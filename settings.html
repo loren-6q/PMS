@@ -2,11 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings & Property Manager</title>
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Property Setup</title>
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
@@ -14,26 +12,36 @@
         @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Condensed:wght@400;700;900&display=swap');
         
         @layer components {
-            .input-base { @apply w-full bg-slate-50 border border-slate-300 font-bold text-sm px-2 py-1.5 rounded outline-none focus:ring-2 focus:ring-blue-500 uppercase; }
-            .label-base { @apply text-[11px] font-black text-slate-500 mb-1 uppercase tracking-widest block; }
-            .btn-action { @apply px-4 py-2 text-white rounded shadow font-black uppercase flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all cursor-pointer; }
-            .tab-btn { @apply px-4 py-2 font-black text-sm uppercase rounded-t-lg transition-colors border-b-4 border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-200 cursor-pointer; }
-            .tab-btn.active { @apply text-blue-700 bg-white border-blue-600; }
+            .btn-action { @apply px-2 py-1 text-white rounded shadow text-xs font-black uppercase flex items-center gap-1 hover:brightness-110 active:scale-95 transition-all cursor-pointer; }
+            .btn-modal { @apply px-6 py-2 rounded-lg font-black text-sm uppercase transition-colors cursor-pointer; }
+            .input-base { @apply w-full bg-slate-50 border border-slate-300 font-bold text-[11px] px-1.5 py-1 rounded outline-none focus:ring-2 focus:ring-blue-500 uppercase; }
+            .label-base { @apply text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest block; }
+            .tab-btn { @apply px-4 py-2 font-black text-[11px] uppercase rounded-t-lg transition-colors border-b-4 border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-200 cursor-pointer tracking-wider; }
+            .tab-btn.active { @apply text-blue-700 bg-white border-blue-600 shadow-[0_-2px_4px_rgba(0,0,0,0.05)]; }
         }
 
-        body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; }
+        body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; font-size: 1.2rem; overscroll-behavior-y: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
         .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
         .loading-overlay.active { opacity: 1; pointer-events: auto; }
         .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        .alert-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 200; pointer-events: auto;}
+        .alert-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 200; pointer-events: auto;}
         .alert-modal-overlay.active { display: flex; }
+        
+        .drag-handle { cursor: grab; opacity: 0.5; transition: opacity 0.2s; }
+        .drag-handle:hover { opacity: 1; color: #2563eb; }
+        .dragging { opacity: 0.5; background: #e2e8f0; }
+        .drag-over { border-top: 2px solid #3b82f6; }
     </style>
 </head>
-<body class="p-2 sm:p-4 h-screen flex flex-col overflow-hidden">
+<body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
     
     <div id="loader" class="loading-overlay active">
         <div class="spinner"></div>
@@ -43,12 +51,12 @@
     <!-- Alert Modal -->
     <div id="alert-modal" class="alert-modal-overlay">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
-            <div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Attention</div>
+            <div id="alert-header" class="bg-slate-900 p-2 text-white font-bold uppercase text-center text-xs tracking-widest">Attention</div>
             <div class="p-6 text-center">
-                <p id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></p>
+                <p id="alert-message" class="font-black text-slate-700 leading-tight text-sm whitespace-pre-wrap"></p>
                 <div class="mt-6 flex gap-2 justify-center">
-                    <button id="alert-cancel" onclick="window.closeAlert()" class="hidden px-6 py-2 rounded-lg font-black text-sm uppercase bg-slate-200 text-slate-700">Cancel</button>
-                    <button id="alert-confirm" onclick="window.closeAlert()" class="px-10 py-2 rounded-lg font-black text-sm uppercase bg-blue-600 text-white">Okay</button>
+                    <button id="alert-cancel" onclick="window.closeAlert()" class="hidden px-6 py-2 rounded font-black text-xs uppercase bg-slate-200 text-slate-700">Cancel</button>
+                    <button id="alert-confirm" onclick="window.closeAlert()" class="px-10 py-2 rounded font-black text-xs uppercase bg-blue-600 text-white shadow-md">Okay</button>
                 </div>
             </div>
         </div>
@@ -56,17 +64,21 @@
 
     <!-- Bulk Import Modal -->
     <div id="bulk-import-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col max-h-[90vh]">
-            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm flex items-center justify-between">
-                <div class="flex items-center gap-2"><i data-lucide="wand-2" class="w-4 h-4 text-purple-400"></i> AI Bulk Generator</div>
-                <button onclick="window.closeBulkImportModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col">
+            <div class="bg-slate-900 p-2 text-white font-bold uppercase flex justify-between items-center text-xs tracking-widest">
+                <span>Room Generator</span>
+                <button type="button" onclick="window.closeBulkImportModal()" class="cursor-pointer hover:text-red-400"><i data-lucide="x" size="16"></i></button>
             </div>
-            <div class="p-4 flex-1 overflow-auto flex flex-col">
-                <p class="text-xs font-bold text-slate-500 uppercase mb-2">Paste your list (Room Name followed by Number of Beds/Rooms on the next line):</p>
-                <textarea id="bulk-import-text" class="w-full flex-1 min-h-[200px] bg-slate-50 border border-slate-300 font-bold text-sm p-3 rounded outline-none focus:ring-2 focus:ring-purple-500 whitespace-pre" placeholder="Deluxe&#10;2&#10;Room A mixed&#10;18"></textarea>
-                <div class="mt-4 flex gap-2 justify-end shrink-0">
-                    <button onclick="window.closeBulkImportModal()" class="px-4 py-2 rounded font-black text-xs uppercase bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors">Cancel</button>
-                    <button onclick="window.processBulkImport()" class="px-6 py-2 rounded font-black text-xs uppercase bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center gap-2 shadow"><i data-lucide="zap" class="w-4 h-4"></i> Generate Rooms</button>
+            <div class="p-4 flex flex-col gap-3">
+                <p class="text-[11px] font-bold text-slate-500 leading-tight">Paste a list to rapidly generate your room layout.<br>Use asterisks for categories (e.g. *Superior Mixed*).<br>Format: [Room ID] [Count]</p>
+                <textarea id="bulk-import-text" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2 !normal-case" placeholder="*Standard Quad Dorm*
+C301
+4
+C302
+4"></textarea>
+                <div class="flex gap-2 justify-end mt-2">
+                    <button onclick="window.closeBulkImportModal()" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700 !text-xs !py-1.5">Cancel</button>
+                    <button onclick="window.processBulkImport()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1 !text-xs !py-1.5 shadow">Generate</button>
                 </div>
             </div>
         </div>
@@ -74,371 +86,215 @@
 
     <!-- Clone Modal -->
     <div id="clone-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-slate-800 flex flex-col">
-            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm flex items-center justify-between">
-                <div class="flex items-center gap-2"><i data-lucide="copy" class="w-4 h-4 text-sky-400"></i> Clone Settings</div>
-                <button onclick="window.closeCloneModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-2 text-white font-bold uppercase text-center text-xs tracking-widest flex items-center justify-center gap-2">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i> Clone Property
             </div>
             <div class="p-6">
-                <p class="text-xs font-bold text-slate-500 uppercase mb-4 text-center">Copy configurations from another property into this one.</p>
-                
+                <p class="font-bold text-slate-500 text-[11px] mb-4 leading-tight">Copy configuration data from an existing property to <span class="text-blue-600 font-black" id="clone-target-name">THIS PROPERTY</span>.</p>
                 <div class="mb-4">
-                    <label class="label-base text-slate-800">Source Property (Copy From)</label>
-                    <select id="clone-source" class="input-base">
+                    <label class="label-base">Source Property</label>
+                    <select id="clone-source" class="input-base !py-1.5 cursor-pointer"></select>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 p-3 rounded mb-6 space-y-2">
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="clone-opt-general" class="w-3.5 h-3.5 accent-sky-600"><span class="font-bold text-[11px] text-slate-700 uppercase">General Settings</span></label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="clone-opt-events" class="w-3.5 h-3.5 accent-sky-600" checked><span class="font-bold text-[11px] text-slate-700 uppercase">Events / FMP Dates</span></label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="clone-opt-rooms" class="w-3.5 h-3.5 accent-red-600"><span class="font-bold text-[11px] text-slate-700 uppercase text-red-700">Room Categories (Overwrites)</span></label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="clone-opt-rates" class="w-3.5 h-3.5 accent-red-600"><span class="font-bold text-[11px] text-slate-700 uppercase text-red-700">Rate Plans (Overwrites)</span></label>
+                </div>
+                <div class="flex gap-2 justify-center">
+                    <button onclick="window.closeCloneModal()" class="px-6 py-1.5 rounded font-black text-xs uppercase bg-slate-200 text-slate-700 hover:bg-slate-300">Cancel</button>
+                    <button onclick="window.executeClone()" class="px-6 py-1.5 rounded font-black text-xs uppercase bg-sky-600 text-white hover:bg-sky-700 shadow">Start Clone</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+        <!-- TOP HEADER (UNIFIED PMS THEME) -->
+        <div class="bg-white px-1 sm:px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50">
+            <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+                <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
+                    <!-- LOGO FIXED TO WWicon.png -->
+                    <img src="https://loren-6q.github.io/SWIMSPMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
+                </a>
+                <div class="flex flex-col min-w-0 border-l border-slate-200 pl-3">
+                    <select id="property-switcher" onchange="window.handlePropertySwitch(this.value)" class="bg-transparent font-black uppercase tracking-widest text-[11px] sm:text-sm text-slate-800 leading-none outline-none cursor-pointer border-none pb-0.5 truncate appearance-none">
                         <!-- Populated dynamically -->
                     </select>
-                </div>
-
-                <div class="bg-slate-50 border border-slate-200 p-3 rounded mb-6 space-y-2">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" id="clone-opt-general" class="w-4 h-4 accent-sky-600">
-                        <span class="font-bold text-sm text-slate-700 uppercase">General Settings (Features, Currency)</span>
-                    </label>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" id="clone-opt-events" class="w-4 h-4 accent-sky-600" checked>
-                        <span class="font-bold text-sm text-slate-700 uppercase">Special Events Calendar (FMP Dates)</span>
-                    </label>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" id="clone-opt-rooms" class="w-4 h-4 accent-red-600">
-                        <span class="font-bold text-sm text-slate-700 uppercase text-red-700">Room Categories & Beds (Will overwrite!)</span>
-                    </label>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" id="clone-opt-rates" class="w-4 h-4 accent-red-600">
-                        <span class="font-bold text-sm text-slate-700 uppercase text-red-700">Rate Plans (Will overwrite!)</span>
-                    </label>
-                </div>
-
-                <div class="flex gap-2 justify-center">
-                    <button onclick="window.closeCloneModal()" class="px-6 py-2 rounded-lg font-black text-sm uppercase bg-slate-200 text-slate-700 hover:bg-slate-300">Cancel</button>
-                    <button onclick="window.executeClone()" class="px-6 py-2 rounded-lg font-black text-sm uppercase bg-sky-600 text-white hover:bg-sky-700 shadow">Start Clone</button>
+                    <p class="text-[9px] text-purple-600 font-bold uppercase tracking-widest">Property Setup</p>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Header -->
-    <div class="flex items-center justify-between bg-slate-900 p-3 sm:p-4 rounded-t-xl shrink-0 text-white shadow-lg z-10 flex-wrap gap-2">
-        <div class="flex items-center gap-3">
-            <div class="bg-purple-500 p-1.5 rounded"><i data-lucide="building-2" class="text-white"></i></div>
-            <div class="flex flex-col min-w-0">
-                <select id="property-switcher" onchange="window.handlePropertySwitch(this.value)" class="bg-transparent font-black uppercase tracking-widest text-lg sm:text-xl leading-none outline-none cursor-pointer border-b border-dashed border-slate-600 pb-0.5 truncate appearance-none pr-4">
-                    <!-- Populated dynamically -->
-                </select>
-                <p class="text-[10px] text-purple-300 font-bold uppercase tracking-widest mt-1">SaaS Multi-Tenant Engine</p>
-            </div>
-        </div>
-        <div class="flex items-center gap-2 sm:gap-4 shrink-0 ml-auto">
-            <button onclick="window.openCloneModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 px-3 py-1.5 rounded font-black text-xs uppercase shadow flex items-center gap-2 transition-colors whitespace-nowrap">
-                <i data-lucide="copy" size="14"></i> <span class="hidden sm:inline">Clone</span>
-            </button>
-            <button onclick="window.saveToCloud()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 sm:py-2 rounded font-black text-xs sm:text-sm uppercase shadow flex items-center gap-2 transition-colors whitespace-nowrap">
-                <i data-lucide="cloud-upload" size="16"></i> Save
-            </button>
-            <a href="index.html" class="text-[10px] sm:text-xs font-bold text-slate-400 hover:text-white uppercase transition-colors whitespace-nowrap">← Back to PMS</a>
-        </div>
-    </div>
-
-    <div class="flex-1 flex flex-col bg-white border-x border-b border-slate-300 rounded-b-xl shadow-xl min-h-0 overflow-hidden">
-        
-        <!-- Tabs -->
-        <div class="flex px-4 pt-2 bg-slate-100 border-b border-slate-300 shrink-0 gap-2 overflow-x-auto no-scrollbar">
-            <button onclick="window.switchTab('general')" id="tab-general" class="tab-btn active shrink-0">General</button>
-            <button onclick="window.switchTab('rooms')" id="tab-rooms" class="tab-btn shrink-0">Room Editor</button>
-            <button onclick="window.switchTab('events')" id="tab-events" class="tab-btn shrink-0">Events / FMP</button>
-            <button onclick="window.switchTab('rates')" id="tab-rates" class="tab-btn shrink-0">Rates & Pricing</button>
-            <button onclick="window.switchTab('integrations')" id="tab-integrations" class="tab-btn shrink-0 text-blue-600"><i data-lucide="plug" class="inline w-4 h-4 mb-0.5"></i> Integrations</button>
-        </div>
-
-        <div class="flex-1 overflow-auto bg-slate-50 relative p-4 sm:p-6">
             
-            <!-- GENERAL SETTINGS -->
-            <div id="view-general" class="max-w-2xl mx-auto space-y-6 block">
-                <div class="bg-white p-6 border border-slate-200 rounded-xl shadow-sm">
-                    <h2 class="text-lg font-black uppercase text-slate-800 mb-4 border-b border-slate-200 pb-2">Property Profile</h2>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="label-base">Property ID (Database Key)</label>
-                            <input type="text" id="prop-id" value="swims_resort" class="input-base border-purple-300 text-purple-800 bg-purple-50" readonly>
-                            <p class="text-[10px] text-slate-400 mt-1 font-bold">This is the unique database identifier. It cannot be changed after creation.</p>
-                        </div>
-                        <div>
-                            <label class="label-base">Display Name</label>
-                            <input type="text" id="prop-name" value="SWIMS! a Social Beach Resort" class="input-base">
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="label-base">Timezone</label>
-                                <input type="text" id="prop-tz" value="Asia/Bangkok" class="input-base">
-                            </div>
-                            <div>
-                                <label class="label-base">Currency Symbol</label>
-                                <input type="text" id="prop-currency" value="฿" class="input-base">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white p-6 border border-slate-200 rounded-xl shadow-sm">
-                    <h2 class="text-lg font-black uppercase text-slate-800 mb-4 border-b border-slate-200 pb-2">Features</h2>
-                    <div class="space-y-3">
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" id="feat-longterm" class="w-5 h-5 accent-blue-600 cursor-pointer">
-                            <span class="font-bold text-sm text-slate-700 uppercase">Enable Long-Term / Monthly Rentals (Apartments)</span>
-                        </label>
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" id="feat-volunteers" class="w-5 h-5 accent-blue-600 cursor-pointer">
-                            <span class="font-bold text-sm text-slate-700 uppercase">Enable Volunteer Management Layout</span>
-                        </label>
-                    </div>
-                </div>
+            <div class="flex items-center gap-2 shrink-0 ml-auto">
+                <button onclick="window.openCloneModal()" class="btn-action bg-slate-800 hover:bg-slate-700"><i data-lucide="copy" size="12"></i> Clone</button>
+                <button onclick="window.saveToCloud()" class="btn-action bg-blue-600 hover:bg-blue-700 px-4 py-1.5"><i data-lucide="cloud-upload" size="14"></i> Save</button>
+                <a href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors whitespace-nowrap ml-2">← PMS</a>
             </div>
-
-            <!-- ROOM EDITOR -->
-            <div id="view-rooms" class="max-w-5xl mx-auto hidden flex-col h-full">
-                <div class="flex justify-between items-center mb-4 shrink-0">
-                    <div>
-                        <h2 class="text-lg font-black uppercase text-slate-800 leading-none">Room Layout Manager</h2>
-                        <p class="text-xs font-bold text-slate-500 uppercase mt-1">Configure your physical inventory to match OTA mapping.</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="window.openBulkImportModal()" class="btn-action bg-purple-600 hover:bg-purple-700 text-xs"><i data-lucide="wand-2" size="14"></i> Bulk Generator</button>
-                        <button onclick="window.addRoomRow()" class="btn-action bg-green-600 hover:bg-green-700 text-xs"><i data-lucide="plus-square" size="14"></i> Add New Room</button>
-                    </div>
-                </div>
-
-                <div class="flex-1 overflow-auto bg-white border border-slate-300 rounded-lg shadow-sm">
-                    <table class="w-full text-left border-collapse">
-                        <thead class="sticky top-0 z-10 bg-slate-800 text-white shadow-sm">
-                            <tr class="text-xs font-black uppercase tracking-widest">
-                                <th class="p-2 w-10 text-center">Del</th>
-                                <th class="p-2 border-r border-slate-700 w-24">Room ID</th>
-                                <th class="p-2 border-r border-slate-700">Room Category / Type</th>
-                                <th class="p-2 border-r border-slate-700 w-24">Bed Type</th>
-                                <th class="p-2 border-r border-slate-700 w-24 text-center">Floor</th>
-                                <th class="p-2 border-r border-slate-700 w-24 text-center">Sort Order</th>
-                            </tr>
-                        </thead>
-                        <tbody id="rooms-body" class="text-sm">
-                            <!-- Rooms injected here -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- EVENTS / FMP -->
-            <div id="view-events" class="max-w-2xl mx-auto hidden flex-col h-full">
-                <div class="bg-white p-6 border border-slate-200 rounded-xl shadow-sm h-full flex flex-col">
-                    <div class="flex justify-between items-center mb-4 shrink-0 border-b border-slate-200 pb-2">
-                        <div>
-                            <h2 class="text-lg font-black uppercase text-slate-800 leading-none">Special Events Calendar</h2>
-                            <p class="text-[10px] font-bold text-slate-500 uppercase mt-1">Full Moon Parties & Peak Dates</p>
-                        </div>
-                        <button onclick="window.addEventRow()" class="btn-action bg-amber-500 hover:bg-amber-600 text-xs text-white"><i data-lucide="calendar-plus" size="14"></i> Add Date</button>
-                    </div>
-                    <div class="flex-1 overflow-y-auto pr-2" id="events-container">
-                        <!-- Events injected here -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- RATES & PRICING -->
-            <div id="view-rates" class="max-w-4xl mx-auto hidden flex-col h-full">
-                <div class="flex justify-between items-center mb-4 shrink-0">
-                    <div>
-                        <h2 class="text-lg font-black uppercase text-slate-800 leading-none">Rate Plan Manager</h2>
-                        <p class="text-xs font-bold text-slate-500 uppercase mt-1">Set Base, High Season, and Full Moon Party pricing for the direct booking engine.</p>
-                    </div>
-                    <button onclick="window.refreshRateRows()" class="btn-action bg-blue-600 hover:bg-blue-700 text-xs text-white"><i data-lucide="refresh-cw" size="14"></i> Update Rows From Rooms</button>
-                </div>
-
-                <div class="flex-1 overflow-auto bg-white border border-slate-300 rounded-lg shadow-sm">
-                    <table class="w-full text-left border-collapse min-w-[700px]">
-                        <thead class="sticky top-0 z-10 bg-slate-800 text-white shadow-sm">
-                            <tr class="text-xs font-black uppercase tracking-widest">
-                                <th class="p-2 border-r border-slate-700">Room Category</th>
-                                <th class="p-2 border-r border-slate-700 w-32 text-center bg-slate-700">Base Rate (฿)</th>
-                                <th class="p-2 border-r border-slate-700 w-32 text-center bg-blue-900">High Season (฿)</th>
-                                <th class="p-2 border-r border-slate-700 w-32 text-center bg-pink-900">FMP Premium (฿)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="rates-body" class="text-sm">
-                            <!-- Rates injected here -->
-                        </tbody>
-                    </table>
-                </div>
-                <p class="text-[10px] text-slate-500 mt-2 font-bold uppercase text-right">Rows are automatically generated based on the Categories defined in the Room Editor.</p>
-            </div>
-
-            <!-- INTEGRATIONS (CHANNEX) -->
-            <div id="view-integrations" class="max-w-2xl mx-auto hidden flex-col h-full space-y-6">
-                <div class="bg-white p-6 border border-slate-200 rounded-xl shadow-sm">
-                    <div class="flex items-center gap-2 mb-4 border-b border-slate-200 pb-2">
-                        <i data-lucide="plug" class="text-blue-600"></i>
-                        <h2 class="text-lg font-black uppercase text-slate-800 leading-none">Channex.io Integration</h2>
-                    </div>
-                    <p class="text-xs font-bold text-slate-500 uppercase mb-4">Connect this specific property to your Channex Channel Manager.</p>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="label-base text-blue-600">Channex API Key (Global)</label>
-                            <input type="password" id="chan-api-key" placeholder="Enter secure API Key when ready..." class="input-base !normal-case font-mono focus:!ring-blue-600">
-                        </div>
-                        <div>
-                            <label class="label-base text-blue-600">Channex Property ID (For this property)</label>
-                            <input type="text" id="chan-prop-id" placeholder="e.g. c2f5b8a..." class="input-base !normal-case font-mono focus:!ring-blue-600">
-                        </div>
-                    </div>
-                    
-                    <div class="mt-6 bg-slate-50 border border-slate-200 rounded p-4">
-                        <h3 class="text-[11px] font-black uppercase text-slate-600 mb-2 border-b border-slate-200 pb-1">Room Mapping Guide</h3>
-                        <p class="text-[10px] font-bold text-slate-500 mb-3">Once you activate Channex, you will need to map your PMS Room Categories to the Channex Room Types using the exact names configured in the <a href="#" onclick="window.switchTab('rooms')" class="text-blue-500 underline">Room Editor</a> tab.</p>
-                        <div class="flex items-center justify-between text-[10px] font-black uppercase text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded">
-                            <span class="flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Sync Status: OFF</span>
-                            <span>Pending API Keys</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
+
+        <main class="flex-1 flex flex-col bg-white border-x border-b border-slate-300 rounded-none sm:rounded-b-xl shadow-xl min-h-0 overflow-hidden">
+            <!-- Tabs -->
+            <div class="flex px-4 pt-0 bg-slate-100 border-b border-slate-300 shrink-0 gap-2 overflow-x-auto no-scrollbar items-end mt-1">
+                <button onclick="window.switchTab('general')" id="tab-general" class="tab-btn active shrink-0">General</button>
+                <button onclick="window.switchTab('rooms')" id="tab-rooms" class="tab-btn shrink-0">Inventory & Rooms</button>
+                <button onclick="window.switchTab('events')" id="tab-events" class="tab-btn shrink-0">Events / FMP</button>
+                <button onclick="window.switchTab('integrations')" id="tab-integrations" class="tab-btn shrink-0 text-blue-600"><i data-lucide="plug" class="inline w-3.5 h-3.5 mb-0.5"></i> Channex OTA</button>
+            </div>
+
+            <div class="flex-1 overflow-auto bg-slate-50 relative p-3 sm:p-6">
+                <!-- GENERAL SETTINGS -->
+                <div id="view-general" class="max-w-2xl mx-auto space-y-4 block">
+                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
+                        <h2 class="text-sm font-black uppercase text-slate-800 mb-3 border-b border-slate-100 pb-1 tracking-widest">Property Profile</h2>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="label-base">Property ID (Database Key)</label>
+                                <input type="text" id="prop-id" value="swims_resort" class="input-base border-purple-300 text-purple-800 bg-purple-50" readonly>
+                            </div>
+                            <div><label class="label-base">Display Name</label><input type="text" id="prop-name" class="input-base"></div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div><label class="label-base">Timezone</label><input type="text" id="prop-tz" value="Asia/Bangkok" class="input-base text-slate-500" readonly></div>
+                                <div><label class="label-base">Currency Symbol</label><input type="text" id="prop-currency" value="฿" class="input-base text-slate-500" readonly></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ROOM EDITOR -->
+                <div id="view-rooms" class="max-w-4xl mx-auto hidden flex-col h-full">
+                    <div class="flex justify-between items-center mb-2 shrink-0">
+                        <div>
+                            <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Inventory Layout</h2>
+                            <p class="text-[10px] font-bold text-slate-500 uppercase mt-0.5">Drag rows to sort, or auto-group by category.</p>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="window.autoSortRooms()" class="btn-action bg-slate-700 hover:bg-slate-800 text-[10px] !px-3"><i data-lucide="arrow-down-a-z" size="12"></i> Sort & Group</button>
+                            <button onclick="window.openBulkImportModal()" class="btn-action bg-purple-600 hover:bg-purple-700 text-[10px] !px-3"><i data-lucide="wand-2" size="12"></i> Bulk Add</button>
+                            <button onclick="window.addRoomRow()" class="btn-action bg-green-600 hover:bg-green-700 text-[10px] !px-3"><i data-lucide="plus" size="12"></i> Add 1</button>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-auto bg-white border border-slate-300 rounded shadow-sm relative">
+                        <table class="w-full text-left border-collapse whitespace-nowrap">
+                            <thead class="sticky top-0 z-10 bg-slate-200 text-slate-600 shadow-sm border-b border-slate-300">
+                                <tr class="text-[10px] font-black uppercase tracking-widest">
+                                    <th class="p-1 w-6 text-center"></th>
+                                    <th class="p-1 w-8 text-center border-r border-slate-300">Del</th>
+                                    <th class="p-1 w-16 border-r border-slate-300">Room ID</th>
+                                    <th class="p-1 border-r border-slate-300">Category / Type</th>
+                                    <th class="p-1 w-20 border-r border-slate-300 text-center">Bed</th>
+                                    <th class="p-1 w-12 text-center">Floor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rooms-body" class="text-[11px]" ondragover="window.dragOver(event)">
+                                <!-- Rooms injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- EVENTS / FMP -->
+                <div id="view-events" class="max-w-2xl mx-auto hidden flex-col h-full">
+                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm h-full flex flex-col">
+                        <div class="flex justify-between items-center mb-3 shrink-0 border-b border-slate-100 pb-2">
+                            <div><h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Special Events Calendar</h2><p class="text-[10px] font-bold text-slate-500 uppercase mt-0.5">Full Moon Parties & Peak Dates</p></div>
+                            <button onclick="window.addEventRow()" class="btn-action bg-orange-500 hover:bg-orange-600 text-white"><i data-lucide="calendar-plus" size="12"></i> Add Date</button>
+                        </div>
+                        <div class="flex-1 overflow-y-auto pr-2" id="events-container"></div>
+                    </div>
+                </div>
+
+                <!-- INTEGRATIONS (CHANNEX) -->
+                <div id="view-integrations" class="max-w-2xl mx-auto hidden flex-col h-full space-y-4">
+                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
+                        <div class="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                            <i data-lucide="plug" class="text-blue-600 w-4 h-4"></i>
+                            <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Channex.io OTA Sync</h2>
+                        </div>
+                        <div class="space-y-3">
+                            <div><label class="label-base text-blue-600">Channex API Key (Global)</label><input type="password" id="chan-api-key" placeholder="Enter secure API Key..." class="input-base !normal-case font-mono"></div>
+                            <div><label class="label-base text-blue-600">Channex Property ID (For this property)</label><input type="text" id="chan-prop-id" placeholder="e.g. c2f5b8a..." class="input-base !normal-case font-mono"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase Configuration
-        const firebaseConfig = { 
-            apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", 
-            authDomain: "swimspms.firebaseapp.com", 
-            projectId: "swimspms", 
-            storageBucket: "swimspms.firebasestorage.app", 
-            messagingSenderId: "989960113115", 
-            appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" 
-        };
+        const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
         const app = initializeApp(firebaseConfig); 
         const auth = getAuth(app); 
         const db = getFirestore(app); 
         const appId = 'hotel-pms-v1';
 
-        // LEGACY FALLBACK DATA
-        const legacyRawRooms = "B01|Oceanfront King|KING|2|101^A01|Oceanfront King|KING|1|102^A02|Oceanfront King|KING|1|103^B02|Oceanfront Twin|TWIN|2|201^B03|Oceanview King Room|KING|2|301^B05|Oceanview King Room|KING|2|302^B07|Oceanview King Room|KING|2|303^A03|Oceanview King Room|KING|1|304^A04|Oceanview King Room|KING|1|305^A06|Oceanview King Room|KING|1|306^A08|Oceanview King Room|KING|1|307^A10|Oceanview King Room|KING|1|308^A12|Oceanview King Room|KING|1|309^C206|Oceanview King Room|KING|2|310^C306|Oceanview King Room|KING|3|311^C311|Oceanview King Room|KING|3|312^B04|Oceanview Twin Room|TWIN|2|401^B06|Oceanview Twin Room|TWIN|2|402^B08|Oceanview Twin Room|TWIN|2|403^C212|Oceanview Twin Room|TWIN|2|404^A05|Partial Oceanview King Room|KING|1|501^A07|Partial Oceanview King Room|KING|1|502^A09|Partial Oceanview King Room|KING|1|503^A11|Partial Oceanview King Room|KING|1|504^C203|Partial Oceanview King Room|KING|2|505^C204|Partial Oceanview King Room|KING|2|506^C205|Partial Oceanview King Room|KING|2|507^B09|Gardenview King Room|KING|2|601^B11|Gardenview King Room|KING|2|602^B13|Gardenview King Room|KING|2|603^B15|Gardenview King Room|KING|2|604^B17|Gardenview King Room|KING|2|605^B19|Gardenview King Room|KING|2|606^B21|Gardenview King Room|KING|2|607^B22|Gardenview King Room|KING|2|608^B10|Gardenview Twin Room|TWIN|2|701^B12|Gardenview Twin Room|TWIN|2|702^B14|Gardenview Twin Room|TWIN|2|703^B16|Gardenview Twin Room|TWIN|2|704^B18|Gardenview Twin Room|TWIN|2|705^B20|Gardenview Twin Room|TWIN|2|706^C201|Gardenview Twin Room|TWIN|2|707^C202|Gardenview Twin Room|TWIN|2|708^C207|Gardenview Twin Room|TWIN|2|709^C208|Gardenview Twin Room|TWIN|2|710^C209|Gardenview Twin Room|TWIN|2|711^C210|Gardenview Twin Room|TWIN|2|712^C211|Gardenview Twin Room|TWIN|2|713^C101|Gardenview Twin Room|TWIN|1|714^C307|Partial Oceanview Triple (Bunk+Twin)|BUNK+T|3|801^C308|Partial Oceanview Triple (Bunk+Twin)|BUNK+T|3|802^C305|Partial Oceanview Triple (King+Twin)|K+T|3|803^C309|Partial Oceanview Triple (King+Twin)|K+T|3|804^C310|Partial Oceanview Triple (King+Twin)|K+T|3|805^C301-1|Standard Quad Dorm|QUAD|3|901^C301-2|Standard Quad Dorm|QUAD|3|902^C301-3|Standard Quad Dorm|QUAD|3|903^C301-4|Standard Quad Dorm|QUAD|3|904^C302-1|Standard Quad Dorm|QUAD|3|905^C302-2|Standard Quad Dorm|QUAD|3|906^C302-3|Standard Quad Dorm|QUAD|3|907^C302-4|Standard Quad Dorm|QUAD|3|908^C303-1|Standard Quad Dorm|QUAD|3|909^C303-2|Standard Quad Dorm|QUAD|3|910^C303-3|Standard Quad Dorm|QUAD|3|911^C303-4|Standard Quad Dorm|QUAD|3|912^C304-1|Standard Quad Dorm|QUAD|3|913^C304-2|Standard Quad Dorm|QUAD|3|914^C304-3|Standard Quad Dorm|QUAD|3|915^C304-4|Standard Quad Dorm|QUAD|3|916^D01|BUNGALOWS||1|1001^D02|BUNGALOWS||1|1002^D03|BUNGALOWS||1|1003^D04|BUNGALOWS||1|1004^D05|BUNGALOWS||1|1005^D06|BUNGALOWS||1|1006^D07|BUNGALOWS||1|1007^D08|BUNGALOWS||1|1008^D09|BUNGALOWS||1|1009^D10|BUNGALOWS||1|1010^D11|BUNGALOWS||1|1011";
-        const legacyFmpDates = ["2026-01-03", "2026-02-02", "2026-03-03", "2026-04-02", "2026-05-01", "2026-06-01", "2026-06-29", "2026-07-31", "2026-08-28", "2026-09-26", "2026-10-27", "2026-11-24", "2026-12-24", "2026-12-31", "2027-01-22", "2027-02-22", "2027-03-22", "2027-04-21", "2027-05-21", "2027-06-19", "2027-07-20", "2027-08-17", "2027-09-15", "2027-10-16", "2027-11-13", "2027-12-13", "2027-12-31"];
-
         let windowPropertiesList = [];
-        let currentConfig = {
-            id: 'swims_resort', 
-            name: 'SWIMS! a Social Beach Resort', 
-            timezone: 'Asia/Bangkok', 
-            currency: '฿', 
-            features: { longTerm: false, volunteers: false }, 
-            rooms: [], 
-            events: [], 
-            rates: {},
-            channex: { apiKey: '', propId: '' }
-        };
+        let currentConfig = { id: 'swims_resort', name: 'SWIMS! a Social Beach Resort', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' } };
 
         const init = async () => {
             try {
                 await signInAnonymously(auth);
-                
-                // Fetch all available properties to populate the switcher
-                const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
-                const propsSnap = await getDocs(propsRef);
+                const propsSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
                 windowPropertiesList = [];
-                
-                propsSnap.forEach(docSnap => {
-                    windowPropertiesList.push({ id: docSnap.id, ...docSnap.data() });
-                });
+                propsSnap.forEach(d => windowPropertiesList.push({ id: d.id, ...d.data() }));
 
-                // Populate Switcher Dropdown
                 const switcher = document.getElementById('property-switcher');
                 let optionsHtml = '';
-                
                 if (windowPropertiesList.length > 0) {
-                    // Look for SWIMS as default, or pick the first one
                     currentConfig = windowPropertiesList.find(p => p.id === 'swims_resort') || windowPropertiesList[0];
-                    windowPropertiesList.forEach(p => {
-                        optionsHtml += `<option value="${p.id}" class="text-black">${(p.name || p.id).toUpperCase()}</option>`;
-                    });
+                    windowPropertiesList.forEach(p => optionsHtml += `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`);
                 } else {
-                    // Fresh system fallback
-                    optionsHtml += `<option value="swims_resort" class="text-black">SWIMS! A SOCIAL BEACH RESORT</option>`;
-                    currentConfig.rooms = legacyRawRooms.split('^').map(r => { 
-                        const p = r.split('|'); 
-                        return { id: p[0], type: p[1], bed: p[2] || '', floor: parseInt(p[3]) || 1, order: parseInt(p[4]) || 9999 }; 
-                    });
-                    currentConfig.events = legacyFmpDates;
-                    setTimeout(() => {
-                        window.showAlert(`Database Migrator\n\nWe did not find a Cloud Configuration for this property ID.\n\nThe app has loaded your hardcoded default rooms. Please review them and click "SAVE" to create your master property database.`);
-                    }, 1000);
+                    optionsHtml += `<option value="swims_resort">SWIMS! A SOCIAL BEACH RESORT</option>`;
                 }
-
-                optionsHtml += `<option value="_new_" class="text-black font-black bg-slate-100">+ ADD NEW PROPERTY</option>`;
-                switcher.innerHTML = optionsHtml;
-                switcher.value = currentConfig.id || 'swims_resort';
+                optionsHtml += `<option value="_new_" class="font-black bg-slate-200">+ ADD NEW PROPERTY</option>`;
+                switcher.innerHTML = optionsHtml; switcher.value = currentConfig.id || 'swims_resort';
 
                 populateUI();
                 document.getElementById('loader').classList.remove('active');
-                
             } catch (err) {
                 console.error("Init Error:", err);
-                document.getElementById('sync-status').innerText = "AUTH / DB ERROR";
-                window.showAlert("Database connection failed. Please check your rules or connection.");
+                document.getElementById('sync-status').innerText = "DB ERROR";
             }
         };
 
         window.handlePropertySwitch = (val) => {
             if (val === '_new_') {
-                currentConfig = {
-                    id: '', 
-                    name: 'NEW PROPERTY', 
-                    timezone: 'Asia/Bangkok', 
-                    currency: '฿', 
-                    features: { longTerm: false, volunteers: false }, 
-                    rooms: [], 
-                    events: [], 
-                    rates: {},
-                    channex: { apiKey: '', propId: '' }
-                };
+                currentConfig = { id: '', name: 'NEW PROPERTY', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' } };
             } else {
                 const found = windowPropertiesList.find(p => p.id === val);
                 if (found) currentConfig = found;
             }
-            populateUI();
-            window.switchTab('general');
+            populateUI(); window.switchTab('general');
         };
 
         window.switchTab = (tab) => {
-            ['general', 'rooms', 'events', 'rates', 'integrations'].forEach(t => {
-                document.getElementById(`view-${t}`).style.display = t === tab ? (t === 'general' ? 'block' : 'flex') : 'none';
-                document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+            ['general', 'rooms', 'events', 'integrations'].forEach(t => {
+                const el = document.getElementById(`view-${t}`);
+                if (el) el.style.display = t === tab ? (t === 'general' ? 'block' : 'flex') : 'none';
+                const tabEl = document.getElementById(`tab-${t}`);
+                if (tabEl) tabEl.classList.toggle('active', t === tab);
             });
         };
 
         const populateUI = () => {
             const isNew = currentConfig.id === '';
             const propIdInput = document.getElementById('prop-id');
-            
             propIdInput.value = currentConfig.id || '';
             propIdInput.readOnly = !isNew;
             if (isNew) {
                 propIdInput.classList.remove('border-purple-300', 'text-purple-800', 'bg-purple-50');
-                propIdInput.classList.add('border-slate-300', 'bg-white', 'text-slate-800');
-                propIdInput.placeholder = "e.g. sunset_beach";
+                propIdInput.classList.add('border-blue-400', 'bg-white', 'text-slate-800');
+                propIdInput.placeholder = "e.g. wet_pool_party";
             } else {
                 propIdInput.classList.add('border-purple-300', 'text-purple-800', 'bg-purple-50');
-                propIdInput.classList.remove('border-slate-300', 'bg-white', 'text-slate-800');
+                propIdInput.classList.remove('border-blue-400', 'bg-white', 'text-slate-800');
             }
-
             document.getElementById('prop-name').value = currentConfig.name || '';
-            document.getElementById('prop-tz').value = currentConfig.timezone || 'Asia/Bangkok';
-            document.getElementById('prop-currency').value = currentConfig.currency || '฿';
-            document.getElementById('feat-longterm').checked = currentConfig.features?.longTerm || false;
-            document.getElementById('feat-volunteers').checked = currentConfig.features?.volunteers || false;
-            
             document.getElementById('chan-api-key').value = currentConfig.channex?.apiKey || '';
             document.getElementById('chan-prop-id').value = currentConfig.channex?.propId || '';
 
@@ -448,404 +304,175 @@
                 const sortedRooms = [...(currentConfig.rooms || [])].sort((a,b) => a.order - b.order);
                 sortedRooms.forEach(r => window.addRoomRow(r));
             }
-
             const evContainer = document.getElementById('events-container');
             if (evContainer) {
                 evContainer.innerHTML = '';
                 const sortedEvents = [...(currentConfig.events || [])].sort();
                 sortedEvents.forEach(e => window.addEventRow(e));
             }
-            
-            const ratesBody = document.getElementById('rates-body');
-            if (ratesBody) {
-                ratesBody.innerHTML = '';
-                // Use the saved rates structure to populate the rows
-                const savedRates = currentConfig.rates || {};
-                
-                Object.keys(savedRates).sort().forEach(type => {
-                    const r = savedRates[type];
-                    const tr = document.createElement('tr');
-                    tr.className = "border-b border-slate-200 hover:bg-slate-50 rate-row";
-                    tr.innerHTML = `
-                        <td class="p-2 border-r border-slate-200 font-bold text-slate-700 rate-type">${type}</td>
-                        <td class="p-1 border-r border-slate-200 bg-slate-50">
-                            <input type="number" class="rate-base input-base !px-2 !py-2 !text-sm !bg-transparent border-none focus:!bg-white focus:!border-blue-300 text-slate-800 text-center font-black" value="${r.base || 0}" placeholder="0">
-                        </td>
-                        <td class="p-1 border-r border-slate-200 bg-blue-50/50">
-                            <input type="number" class="rate-high input-base !px-2 !py-2 !text-sm !bg-transparent border-none focus:!bg-white focus:!border-blue-300 text-blue-800 text-center font-black" value="${r.high || 0}" placeholder="0">
-                        </td>
-                        <td class="p-1 border-r border-slate-200 bg-pink-50/50">
-                            <input type="number" class="rate-fmp input-base !px-2 !py-2 !text-sm !bg-transparent border-none focus:!bg-white focus:!border-blue-300 text-pink-800 text-center font-black" value="${r.fmp || 0}" placeholder="0">
-                        </td>
-                    `;
-                    ratesBody.appendChild(tr);
-                });
-            }
-
             lucide.createIcons();
+        };
+
+        let draggedRow = null;
+        window.dragStart = (e) => {
+            draggedRow = e.target.closest('tr');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedRow.innerHTML);
+            setTimeout(() => draggedRow.classList.add('dragging'), 0);
+        };
+        window.dragOver = (e) => {
+            e.preventDefault();
+            const targetRow = e.target.closest('tr');
+            if(targetRow && targetRow !== draggedRow) {
+                const tbody = document.getElementById('rooms-body');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const draggedIdx = rows.indexOf(draggedRow);
+                const targetIdx = rows.indexOf(targetRow);
+                if(draggedIdx < targetIdx) targetRow.after(draggedRow); else targetRow.before(draggedRow);
+            }
+        };
+        window.dragEnd = (e) => {
+            if(draggedRow) draggedRow.classList.remove('dragging');
+            draggedRow = null;
+            window.recalculateOrder();
+        };
+        window.recalculateOrder = () => {
+            const rows = document.querySelectorAll('#rooms-body tr');
+            rows.forEach((row, index) => {
+                const orderInput = row.querySelector('.room-order');
+                if(orderInput) orderInput.value = (index + 1) * 10;
+            });
+        };
+
+        window.autoSortRooms = () => {
+            const tbody = document.getElementById('rooms-body');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => {
+                const typeA = a.querySelector('.room-type').value.toLowerCase();
+                const typeB = b.querySelector('.room-type').value.toLowerCase();
+                if (typeA < typeB) return -1; if (typeA > typeB) return 1;
+                const idA = a.querySelector('.room-id').value.toLowerCase();
+                const idB = b.querySelector('.room-id').value.toLowerCase();
+                if (idA < idB) return -1; if (idA > idB) return 1;
+                return 0;
+            });
+            rows.forEach(r => tbody.appendChild(r));
+            window.recalculateOrder();
         };
 
         window.addRoomRow = (r = {id: '', type: '', bed: '', floor: 1, order: 9999}) => {
             const tbody = document.getElementById('rooms-body');
-            if (!tbody) return;
             const tr = document.createElement('tr');
-            tr.className = "border-b border-slate-200 hover:bg-slate-50 room-row group";
+            tr.className = "border-b border-slate-200 hover:bg-slate-100 bg-white transition-colors";
+            tr.draggable = true; tr.ondragstart = window.dragStart; tr.ondragend = window.dragEnd;
+            // STRIPPED ALL PADDING: Changed p-0.5 to p-0.5 or px-1 py-0
             tr.innerHTML = `
-                <td class="p-1 text-center">
-                    <button onclick="this.closest('tr').remove()" class="text-slate-300 hover:text-red-500 transition-colors p-1"><i data-lucide="trash-2" size="16"></i></button>
-                </td>
-                <td class="p-1 border-r border-slate-200">
-                    <input type="text" class="room-id input-base !px-1 !py-1 !text-xs !bg-transparent border-none focus:!bg-white focus:!border-blue-300 font-black text-slate-800" value="${r.id}" placeholder="ID">
-                </td>
-                <td class="p-1 border-r border-slate-200">
-                    <input type="text" class="room-type input-base !px-1 !py-1 !text-xs !bg-transparent border-none focus:!bg-white focus:!border-blue-300 text-slate-600" value="${r.type}" placeholder="Category Name">
-                </td>
-                <td class="p-1 border-r border-slate-200">
-                    <input type="text" class="room-bed input-base !px-1 !py-1 !text-xs !bg-transparent border-none focus:!bg-white focus:!border-blue-300 text-slate-600 text-center" value="${r.bed}" placeholder="Bed">
-                </td>
-                <td class="p-1 border-r border-slate-200">
-                    <input type="number" class="room-floor input-base !px-1 !py-1 !text-xs !bg-transparent border-none focus:!bg-white focus:!border-blue-300 text-slate-600 text-center" value="${r.floor}" min="1" max="9">
-                </td>
-                <td class="p-1 border-r border-slate-200">
-                    <input type="number" class="room-order input-base !px-1 !py-1 !text-xs !bg-transparent border-none focus:!bg-white focus:!border-blue-300 text-slate-400 text-center" value="${r.order}">
-                </td>
+                <td class="px-0.5 py-0.5 text-center"><i data-lucide="grip-vertical" class="w-3 h-3 drag-handle mx-auto"></i></td>
+                <td class="px-0.5 py-0.5 text-center border-r border-slate-200"><button onclick="this.closest('tr').remove()" class="text-slate-300 hover:text-red-500 transition-colors p-1"><i data-lucide="trash-2" size="14"></i></button></td>
+                <td class="px-0.5 py-0.5 border-r border-slate-200"><input type="text" class="room-id w-full bg-transparent font-black text-slate-800 outline-none px-1 uppercase" value="${r.id}" placeholder="ID"></td>
+                <td class="px-0.5 py-0.5 border-r border-slate-200"><input type="text" class="room-type w-full bg-transparent font-bold text-slate-600 outline-none px-1 uppercase" value="${r.type}" placeholder="CATEGORY"></td>
+                <td class="px-0.5 py-0.5 border-r border-slate-200"><input type="text" class="room-bed w-full bg-transparent font-bold text-slate-600 outline-none text-center uppercase" value="${r.bed}" placeholder="BED"></td>
+                <td class="px-0.5 py-0.5 border-r border-slate-200"><input type="number" class="room-floor w-full bg-transparent font-bold text-slate-600 outline-none text-center" value="${r.floor}" min="1" max="9">
+                <input type="hidden" class="room-order" value="${r.order}"></td>
             `;
-            tbody.appendChild(tr);
-            lucide.createIcons();
+            tbody.appendChild(tr); lucide.createIcons(); window.recalculateOrder();
         };
 
         window.addEventRow = (dateStr = "") => {
             const container = document.getElementById('events-container');
-            if (!container) return;
             const div = document.createElement('div');
-            div.className = "flex items-center gap-2 mb-2 event-row";
-            div.innerHTML = `
-                <input type="date" class="event-date input-base max-w-[200px]" value="${dateStr}">
-                <button onclick="this.parentElement.remove()" class="p-2 text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 rounded transition-colors border border-slate-200">
-                    <i data-lucide="trash-2" size="16"></i>
-                </button>
-            `;
-            container.appendChild(div);
-            lucide.createIcons();
-        };
-        
-        window.refreshRateRows = () => {
-            // First, gather existing rates so we don't lose them
-            let existingRates = {};
-            document.querySelectorAll('.rate-row').forEach(tr => {
-                const type = tr.querySelector('.rate-type').innerText.trim();
-                existingRates[type] = {
-                    base: parseInt(tr.querySelector('.rate-base').value) || 0,
-                    high: parseInt(tr.querySelector('.rate-high').value) || 0,
-                    fmp: parseInt(tr.querySelector('.rate-fmp').value) || 0
-                };
-            });
-
-            // Gather all room types from the Room Editor currently on screen
-            let activeTypes = new Set();
-            document.querySelectorAll('.room-row').forEach(tr => {
-                const type = tr.querySelector('.room-type').value.trim();
-                if (type) activeTypes.add(type);
-            });
-            
-            // Re-render the rate rows
-            const ratesBody = document.getElementById('rates-body');
-            ratesBody.innerHTML = '';
-            
-            const uniqueTypes = [...activeTypes].sort();
-            
-            if (uniqueTypes.length === 0) {
-                ratesBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400 font-bold italic">No room categories found. Please add rooms in the Room Editor first.</td></tr>`;
-                return;
-            }
-            
-            uniqueTypes.forEach(type => {
-                const r = existingRates[type] || { base: 0, high: 0, fmp: 0 };
-                const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-200 hover:bg-slate-50 rate-row";
-                tr.innerHTML = `
-                    <td class="p-2 border-r border-slate-200 font-bold text-slate-700 rate-type">${type}</td>
-                    <td class="p-1 border-r border-slate-200 bg-slate-50">
-                        <input type="number" class="rate-base input-base !px-2 !py-2 !text-sm !bg-transparent border-none focus:!bg-white focus:!border-blue-300 text-slate-800 text-center font-black" value="${r.base}" placeholder="0">
-                    </td>
-                    <td class="p-1 border-r border-slate-200 bg-blue-50/50">
-                        <input type="number" class="rate-high input-base !px-2 !py-2 !text-sm !bg-transparent border-none focus:!bg-white focus:!border-blue-300 text-blue-800 text-center font-black" value="${r.high}" placeholder="0">
-                    </td>
-                    <td class="p-1 border-r border-slate-200 bg-pink-50/50">
-                        <input type="number" class="rate-fmp input-base !px-2 !py-2 !text-sm !bg-transparent border-none focus:!bg-white focus:!border-blue-300 text-pink-800 text-center font-black" value="${r.fmp}" placeholder="0">
-                    </td>
-                `;
-                ratesBody.appendChild(tr);
-            });
-            
-            window.showAlert("Rate rows refreshed based on current Room Categories.\n\nDon't forget to hit Save to Cloud!", false);
+            div.className = "flex items-center gap-2 mb-1.5 event-row";
+            div.innerHTML = `<input type="date" class="event-date input-base max-w-[150px] !py-0.5" value="${dateStr}"><button onclick="this.parentElement.remove()" class="p-1 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded border border-slate-200"><i data-lucide="trash-2" size="14"></i></button>`;
+            container.appendChild(div); lucide.createIcons();
         };
 
         window.saveToCloud = async () => {
             document.getElementById('loader').classList.add('active');
-            document.getElementById('sync-status').innerText = 'SAVING CONFIGURATION...';
-
             try {
-                // Ensure ID is present and formatted
                 const propId = document.getElementById('prop-id').value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
-                if (!propId) {
-                    throw new Error("Property ID cannot be blank.");
-                }
+                if (!propId) throw new Error("Property ID cannot be blank.");
 
-                // Gather General Info
                 const newConfig = {
-                    id: propId,
-                    name: document.getElementById('prop-name').value.trim(),
-                    timezone: document.getElementById('prop-tz').value.trim(),
-                    currency: document.getElementById('prop-currency').value.trim(),
-                    features: {
-                        longTerm: document.getElementById('feat-longterm').checked,
-                        volunteers: document.getElementById('feat-volunteers').checked
-                    },
-                    channex: {
-                        apiKey: document.getElementById('chan-api-key').value.trim(),
-                        propId: document.getElementById('chan-prop-id').value.trim()
-                    },
-                    rooms: [],
-                    events: [],
-                    rates: {}
+                    id: propId, name: document.getElementById('prop-name').value.trim(),
+                    timezone: document.getElementById('prop-tz').value.trim(), currency: document.getElementById('prop-currency').value.trim(),
+                    channex: { apiKey: document.getElementById('chan-api-key').value.trim(), propId: document.getElementById('chan-prop-id').value.trim() },
+                    rooms: [], events: [], rates: currentConfig.rates || {}
                 };
 
-                // Gather Rooms
-                document.querySelectorAll('.room-row').forEach(tr => {
+                document.querySelectorAll('#rooms-body tr').forEach(tr => {
                     const id = tr.querySelector('.room-id').value.trim().toUpperCase();
-                    if (!id) return; // Skip blank rows
-                    
-                    newConfig.rooms.push({
-                        id: id,
-                        type: tr.querySelector('.room-type').value.trim(),
-                        bed: tr.querySelector('.room-bed').value.trim().toUpperCase(),
-                        floor: parseInt(tr.querySelector('.room-floor').value) || 1,
-                        order: parseInt(tr.querySelector('.room-order').value) || 9999
-                    });
+                    if (id) newConfig.rooms.push({ id, type: tr.querySelector('.room-type').value.trim(), bed: tr.querySelector('.room-bed').value.trim().toUpperCase(), floor: parseInt(tr.querySelector('.room-floor').value) || 1, order: parseInt(tr.querySelector('.room-order').value) || 9999 });
                 });
 
-                // Gather Events
                 document.querySelectorAll('.event-row').forEach(div => {
                     const d = div.querySelector('.event-date').value;
                     if (d) newConfig.events.push(d);
                 });
-                
-                // Gather Rates
-                document.querySelectorAll('.rate-row').forEach(tr => {
-                    const type = tr.querySelector('.rate-type').innerText.trim();
-                    newConfig.rates[type] = {
-                        base: parseInt(tr.querySelector('.rate-base').value) || 0,
-                        high: parseInt(tr.querySelector('.rate-high').value) || 0,
-                        fmp: parseInt(tr.querySelector('.rate-fmp').value) || 0
-                    };
-                });
-                
-                // Deduplicate and Sort Events
                 newConfig.events = [...new Set(newConfig.events)].sort();
 
-                // Save to Firestore using the dynamic propId
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId);
-                await setDoc(docRef, newConfig);
-
-                currentConfig = newConfig; // Update local state
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), newConfig);
+                currentConfig = newConfig; 
                 
-                // Refresh local property list if this is a new property
                 if (!windowPropertiesList.find(p => p.id === propId)) {
                     windowPropertiesList.push(newConfig);
                     const switcher = document.getElementById('property-switcher');
-                    
                     let optionsHtml = '';
-                    windowPropertiesList.forEach(p => {
-                        optionsHtml += `<option value="${p.id}" class="text-black">${(p.name || p.id).toUpperCase()}</option>`;
-                    });
-                    optionsHtml += `<option value="_new_" class="text-black font-black bg-slate-100">+ ADD NEW PROPERTY</option>`;
-                    switcher.innerHTML = optionsHtml;
-                    switcher.value = propId;
-                    populateUI(); // Lock the ID field now that it's saved
+                    windowPropertiesList.forEach(p => optionsHtml += `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`);
+                    optionsHtml += `<option value="_new_" class="font-black bg-slate-200">+ ADD NEW PROPERTY</option>`;
+                    switcher.innerHTML = optionsHtml; switcher.value = propId;
                 }
                 
                 document.getElementById('loader').classList.remove('active');
-                window.showAlert("Success!\n\nYour property settings have been permanently saved to the cloud.");
-
+                window.showAlert("Success!\nSettings permanently saved to cloud.");
             } catch (err) {
-                console.error("Save Error:", err);
                 document.getElementById('loader').classList.remove('active');
                 window.showAlert("Failed to save: " + err.message);
             }
         };
 
-        // Standard Modal Handlers
-        window.showAlert = (msg, isConfirm = false, onConfirm = null) => { 
-            const modal = document.getElementById('alert-modal'); 
-            document.getElementById('alert-message').innerText = msg; 
-            
-            const confirmBtn = document.getElementById('alert-confirm'); 
-            const cancelBtn = document.getElementById('alert-cancel'); 
-            
-            if (isConfirm) {
-                cancelBtn.className = 'px-6 py-2 rounded-lg font-black text-sm uppercase bg-slate-200 text-slate-700'; 
-                confirmBtn.innerText = 'Yes'; 
-                confirmBtn.className = 'px-10 py-2 rounded-lg font-black text-sm uppercase bg-red-600 text-white'; 
-            } else {
-                cancelBtn.className = 'hidden'; 
-                confirmBtn.innerText = 'Okay'; 
-                confirmBtn.className = 'px-10 py-2 rounded-lg font-black text-sm uppercase bg-blue-600 text-white'; 
-            }
-            
-            confirmBtn.onclick = () => { 
-                if (onConfirm) onConfirm(); 
-                window.closeAlert(); 
-            }; 
-            
-            modal.style.display = 'flex'; 
-        };
-        
-        window.closeAlert = () => { 
-            document.getElementById('alert-modal').style.display = 'none'; 
-        };
+        window.showAlert = (msg) => { document.getElementById('alert-message').innerText = msg; document.getElementById('alert-modal').style.display = 'flex'; };
+        window.closeAlert = () => { document.getElementById('alert-modal').style.display = 'none'; };
 
-        window.openBulkImportModal = () => {
-            document.getElementById('bulk-import-modal').style.display = 'flex';
-            document.getElementById('bulk-import-text').value = '';
-            setTimeout(() => document.getElementById('bulk-import-text').focus(), 100);
-        };
-
-        window.closeBulkImportModal = () => {
-            document.getElementById('bulk-import-modal').style.display = 'none';
-        };
+        window.openBulkImportModal = () => { document.getElementById('bulk-import-modal').style.display = 'flex'; document.getElementById('bulk-import-text').value = ''; setTimeout(() => document.getElementById('bulk-import-text').focus(), 100); };
+        window.closeBulkImportModal = () => { document.getElementById('bulk-import-modal').style.display = 'none'; };
 
         window.processBulkImport = () => {
             const text = document.getElementById('bulk-import-text').value.trim();
             if (!text) return window.closeBulkImportModal();
-
             const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
-            let orderTracker = document.querySelectorAll('.room-row').length * 10;
-            let generatedCount = 0;
-            
-            let currentCategory = "General Dorm"; // Fallback category
-            
+            let currentCategory = "General Dorm"; 
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i];
-                
-                // Detect Category Headers (e.g., *Superior Mixed...*)
-                if (line.startsWith('*') && line.endsWith('*')) {
-                    currentCategory = line.replace(/\*/g, '').trim();
-                    continue;
-                }
-                
-                // If it's not a header, we assume it's a Room definition line
-                let roomLine = line;
-                let bedCountStr = (i + 1 < lines.length) ? lines[i + 1] : "1";
-                let count = parseInt(bedCountStr);
-                
-                // Check if the next line is actually a number. If not, maybe it's just a 1-bed room.
-                if (isNaN(count)) {
-                    count = 1;
-                } else {
-                    i++; // Skip the next line since we consumed it as the count
-                }
-
-                // Extract base Room ID and Floor (the first word/number, e.g., "301", "205↑", "P1⬇")
-                let rawRoomId = roomLine.split(' ')[0].toUpperCase();
-                
-                let floorNum = 1;
-                if (rawRoomId.includes('↑')) {
-                    floorNum = 2;
-                }
-                
-                // Clean the arrow from the final database ID
+                if (line.startsWith('*') && line.endsWith('*')) { currentCategory = line.replace(/\*/g, '').trim(); continue; }
+                let count = parseInt((i + 1 < lines.length) ? lines[i + 1] : "1");
+                if (isNaN(count)) count = 1; else i++; 
+                let rawRoomId = line.split(' ')[0].toUpperCase();
+                let floorNum = rawRoomId.includes('↑') ? 2 : 1;
                 let baseRoomId = rawRoomId.replace(/[↑⬇]/g, '');
-
-                for (let j = 1; j <= count; j++) {
-                    let finalId = count > 1 ? `${baseRoomId}-${j}` : baseRoomId;
-                    
-                    window.addRoomRow({
-                        id: finalId,
-                        type: currentCategory,
-                        bed: 'SINGLE', // All dorms
-                        floor: floorNum,
-                        order: orderTracker
-                    });
-                    orderTracker += 10;
-                    generatedCount++;
-                }
+                for (let j = 1; j <= count; j++) window.addRoomRow({ id: count > 1 ? `${baseRoomId}-${j}` : baseRoomId, type: currentCategory, bed: 'SINGLE', floor: floorNum, order: 9999 });
             }
-
+            window.recalculateOrder();
             window.closeBulkImportModal();
-            window.showAlert(`Successfully generated ${generatedCount} beds/rooms!\n\nPlease review them and hit Save to Cloud to lock them into the database.`);
         };
         
-        // Clone Features
         window.openCloneModal = () => {
-            const select = document.getElementById('clone-source');
-            let options = '';
-            
-            // Populate with all other properties
-            windowPropertiesList.forEach(p => {
-                if (p.id !== currentConfig.id) {
-                    options += `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`;
-                }
-            });
-            
-            if (options === '') {
-                window.showAlert("There are no other saved properties to clone from.");
-                return;
-            }
-            
-            select.innerHTML = options;
-            document.getElementById('clone-modal').style.display = 'flex';
+            const select = document.getElementById('clone-source'); let options = '';
+            windowPropertiesList.forEach(p => { if (p.id !== currentConfig.id) options += `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`; });
+            if (options === '') return window.showAlert("No other saved properties to clone from.");
+            select.innerHTML = options; document.getElementById('clone-target-name').innerText = currentConfig.name || currentConfig.id; document.getElementById('clone-modal').style.display = 'flex';
         };
-        
-        window.closeCloneModal = () => {
-            document.getElementById('clone-modal').style.display = 'none';
-        };
+        window.closeCloneModal = () => { document.getElementById('clone-modal').style.display = 'none'; };
         
         window.executeClone = () => {
-            const sourceId = document.getElementById('clone-source').value;
-            const sourceProp = windowPropertiesList.find(p => p.id === sourceId);
-            
-            if (!sourceProp) {
-                window.showAlert("Source property not found.");
-                return;
-            }
-            
-            let cloneSummary = [];
-            
-            if (document.getElementById('clone-opt-general').checked) {
-                currentConfig.timezone = sourceProp.timezone || 'Asia/Bangkok';
-                currentConfig.currency = sourceProp.currency || '฿';
-                currentConfig.features = JSON.parse(JSON.stringify(sourceProp.features || {}));
-                cloneSummary.push("General Settings");
-            }
-            
-            if (document.getElementById('clone-opt-events').checked) {
-                currentConfig.events = JSON.parse(JSON.stringify(sourceProp.events || []));
-                cloneSummary.push("Events/FMP Dates");
-            }
-            
-            if (document.getElementById('clone-opt-rooms').checked) {
-                currentConfig.rooms = JSON.parse(JSON.stringify(sourceProp.rooms || []));
-                cloneSummary.push("Room Layout");
-            }
-            
-            if (document.getElementById('clone-opt-rates').checked) {
-                currentConfig.rates = JSON.parse(JSON.stringify(sourceProp.rates || {}));
-                cloneSummary.push("Rate Plans");
-            }
-            
-            if (cloneSummary.length === 0) {
-                window.showAlert("Please select at least one module to clone.");
-                return;
-            }
-            
-            // Re-render UI with new cloned data in memory
-            populateUI();
-            window.closeCloneModal();
-            window.showAlert(`Successfully cloned: \n- ${cloneSummary.join('\n- ')}\n\nDon't forget to hit "Save" to push these changes to the database!`);
+            const sourceProp = windowPropertiesList.find(p => p.id === document.getElementById('clone-source').value);
+            if (!sourceProp) return;
+            if (document.getElementById('clone-opt-general').checked) { currentConfig.timezone = sourceProp.timezone || 'Asia/Bangkok'; currentConfig.currency = sourceProp.currency || '฿'; }
+            if (document.getElementById('clone-opt-events').checked) currentConfig.events = JSON.parse(JSON.stringify(sourceProp.events || []));
+            if (document.getElementById('clone-opt-rooms').checked) currentConfig.rooms = JSON.parse(JSON.stringify(sourceProp.rooms || []));
+            if (document.getElementById('clone-opt-rates').checked) currentConfig.rates = JSON.parse(JSON.stringify(sourceProp.rates || {}));
+            populateUI(); window.closeCloneModal(); window.showAlert("Cloned successfully! Hit Save to commit changes.");
         };
 
-        // Boot
         init();
     </script>
 </body>
