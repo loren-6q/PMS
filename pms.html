@@ -110,6 +110,7 @@
 </head>
 
 <body class="bg-slate-100 p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
+    <!-- Boot Loader -->
     <div id="boot-loader" class="loading-overlay"><div class="spinner"></div><div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4"><span id="sync-status">Authenticating...</span></div></div>
 
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
@@ -117,7 +118,6 @@
         <div class="bg-white px-1 sm:px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50 unselectable w-full">
             
             <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
-                <!-- UPDATED LOGO -->
                 <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
                     <img src="https://loren-6q.github.io/SWIMSPMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
                 </a>
@@ -398,8 +398,8 @@
         };
 
         const STATUS_CYCLE = [
-            { val: 'new', bg: '#ec4899', txt: '#fff' },
             { val: 'future', bg: '#7fc6f5', txt: '#1e293b' },
+            { val: 'new', bg: '#ec4899', txt: '#fff' },
             { val: 'here', bg: '#059669', txt: '#fff' },
             { val: 'left', bg: '#aba39d', txt: '#1e293b' },
             { val: 'unconfirmed', bg: '#8b5cf6', txt: '#fff' },
@@ -508,7 +508,7 @@
                     hotelRooms = []; fmpDates = [];
                 }
 
-                roomTypes = [...new Set(hotelRooms.map(r => r.type))];
+                roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
 
                 const drop = $('db-room-dropdown'); 
                 if(drop) { 
@@ -782,22 +782,60 @@
             }
             
             hotelRooms.forEach((r, idx, arr) => {
-                if (r.type !== (idx > 0 ? arr[idx-1].type : null)) tRows.push({ isDivider: true, label: r.type });
-                tRows.push({ isRoom: true, id: r.id, type: r.type, bed: r.bed, floor: r.floor, bookings: actStaff.filter(s => { const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []); return rL.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC; }) });
+                if (!r.type || !r.id) return; // Safely skip malformed room records
+                if (r.type !== (idx > 0 && arr[idx-1] ? arr[idx-1].type : null)) tRows.push({ isDivider: true, label: r.type });
+                
+                const hasDash = r.id.includes('-');
+                if (hasDash) {
+                    const parts = r.id.split('-');
+                    const baseRoom = parts[0];
+                    const bedName = parts.slice(1).join('-');
+                    
+                    const prevRoom = idx > 0 ? arr[idx-1] : null;
+                    const prevBaseRoom = (prevRoom && prevRoom.type === r.type && prevRoom.id && prevRoom.id.includes('-')) ? prevRoom.id.split('-')[0] : null;
+                    
+                    if (baseRoom !== prevBaseRoom) {
+                        tRows.push({ isSubHeader: true, label: baseRoom, floor: r.floor });
+                    }
+                    
+                    tRows.push({ isRoom: true, isBed: true, id: r.id, displayId: bedName, type: r.type, bed: r.bed, floor: '', icon: r.icon, bookings: actStaff.filter(s => { const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []); return rL.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC; }) });
+                } else {
+                    tRows.push({ isRoom: true, isPrivate: true, id: r.id, displayId: r.id, type: r.type, bed: r.bed, floor: r.floor, icon: r.icon, bookings: actStaff.filter(s => { const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []); return rL.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC; }) });
+                }
             });
 
             const tt = $('custom-tooltip'); let cGrp = '';
+            
+            const getFloorIcon = (f) => {
+                if (!f) return '';
+                let fStr = String(f).toLowerCase().trim();
+                if (fStr === '1' || fStr === 'down' || fStr === 'downstairs' || fStr === 'floor-down') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0" title="Downstairs"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
+                if (fStr === '2' || fStr === 'up' || fStr === 'upstairs' || fStr === 'floor-up') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0" title="Upstairs"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
+                if (fStr === '3' || fStr === 'double') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0" title="Double Floor"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></svg>`;
+                return ''; 
+            };
+
+            const getBunkIcon = (b) => {
+                if (!b) return '';
+                let bStr = String(b).toLowerCase().trim();
+                if (bStr === 'bottom' || bStr === 'bot' || bStr === 'bunk-bottom') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Bottom Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
+                if (bStr === 'top' || bStr === 'bunk-top') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
+                return '';
+            };
+
             tRows.forEach(rD => {
                 if (rD.isDivider) {
-                    cGrp = rD.label.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase(); 
+                    cGrp = (rD.label || 'UNKNOWN').replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase(); 
                     let isDCol = cGrp === 'unassigned-unconfirmed';
                     const hRow = document.createElement('div'); hRow.className = `timeline-grid ${rD.isUnconfirmedZone ? 'mt-4' : ''} cursor-pointer transition-colors unselectable group-header`; hRow.dataset.group = cGrp;
+                    
                     if (rD.isUnconfirmedZone) {
                         hRow.innerHTML = `<div class="unassigned-header bg-amber-200 hover:bg-amber-300 text-slate-800 p-0.5 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-md" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span>${rD.label}</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}" style="${isDCol ? 'transform: rotate(180deg);' : ''}"></i></div>`;
                         return body.appendChild(hRow);
                     } else {
                         hRow.innerHTML = `<div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-[var(--sidebar-w)]" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span class="truncate pr-1">${rD.label}</span><div class="flex items-center gap-1 shrink-0"><span id="state-${cGrp}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div></div>`;
                         body.appendChild(hRow);
+                        
                         const tRIds = hotelRooms.filter(hr => hr.type === rD.label).map(hr => hr.id), cap = tRIds.length;
                         const aRow = document.createElement('div'); aRow.className = `timeline-grid avail-row-${cGrp} h-[20px]`; aRow.style.display = 'none';
                         let cHtml = `<div class="bg-slate-900 border-r border-slate-700 flex items-center justify-end pr-2 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-[var(--sidebar-w)] text-[9px] text-slate-400 font-black uppercase tracking-widest unselectable">AVAIL &rarr;</div>`;
@@ -817,14 +855,46 @@
                     }
                 }
 
-                const row = document.createElement('div'); row.className = `timeline-grid bed-row group-${cGrp} ${rD.isRoom && rD.id.endsWith('-4') ? '!border-b-[3px] !border-slate-400' : ''}`;
+                if (rD.isSubHeader) {
+                    const sRow = document.createElement('div'); sRow.className = `timeline-grid group-${cGrp} h-[22px]`;
+                    sRow.innerHTML = `
+                        <div class="bg-slate-200 border-y border-slate-300 flex items-center px-2 sticky left-0 z-20 shadow-sm unselectable" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;">
+                            <div class="flex items-center gap-1 sticky left-0 bg-slate-200 pr-2">
+                                <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">Room ${rD.label}</span>
+                                ${getFloorIcon(rD.floor)}
+                            </div>
+                        </div>
+                    `;
+                    return body.appendChild(sRow);
+                }
+
+                const row = document.createElement('div'); row.className = `timeline-grid bed-row group-${cGrp}`;
                 if (cGrp === 'unassigned-unconfirmed') row.style.display = 'none';
 
-                let fNum = 1;
-                const nid = (rD.id||'').toUpperCase();
-                if (/^[AB]\d+$/.test(nid)) fNum = parseInt(nid.replace(/\D/g, '') || '0') % 2 !== 0 ? 1 : 2; else if (nid.startsWith('C1')) fNum = 1; else if (nid.startsWith('C2')) fNum = 2; else if (nid.startsWith('C3')) fNum = 3; else if (nid.startsWith('D')) fNum = 1;
-                let fIco = fNum === 1 ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>` : (fNum === 2 ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>` : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-purple-500 shrink-0"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></svg>`);
-                const hHtml = rD.isRoom ? `<div class="flex items-center justify-between px-1 w-full gap-1"><div class="flex items-center gap-0.5 shrink-0"><span class="text-[13px] font-black text-slate-700">${rD.id}</span>${fIco}</div><span class="text-[10px] font-bold text-slate-600 text-right leading-none tracking-tighter truncate">${rD.bed}</span></div>` : `<span class="text-[11px] font-black text-amber-700">${rD.label}</span>`;
+                let hHtml = '';
+                if (rD.isUnassigned) {
+                    hHtml = `<span class="text-[11px] font-black text-amber-700">${rD.label}</span>`;
+                } else if (rD.isBed) {
+                    hHtml = `
+                        <div class="flex items-center justify-between px-1 w-full gap-1 pl-3">
+                            <div class="flex items-center gap-0.5 shrink-0">
+                                <span class="text-[12px] font-bold text-slate-600">Bed ${rD.displayId}</span>
+                                ${getBunkIcon(rD.icon)}
+                            </div>
+                            <span class="text-[9px] font-bold text-slate-500 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' ? '' : (rD.bed || '')}</span>
+                        </div>`;
+                } else {
+                    hHtml = `
+                        <div class="flex items-center justify-between px-1 w-full gap-1">
+                            <div class="flex items-center gap-0.5 shrink-0">
+                                <span class="text-[13px] font-black text-slate-700">${rD.displayId}</span>
+                                ${getFloorIcon(rD.floor)}
+                                ${getBunkIcon(rD.icon)}
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-600 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' ? '' : (rD.bed || '')}</span>
+                        </div>`;
+                }
+
                 row.innerHTML = `<div class="border-r border-slate-400 ${rD.isUnassigned ? 'bg-amber-100' : 'bg-slate-50'} flex items-center justify-center uppercase overflow-hidden shrink-0 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.05)] unselectable w-[var(--sidebar-w)]">${hHtml}</div>`;
                 
                 for(let i=0; i<dShow; i++) { 
@@ -962,7 +1032,7 @@
             const c = $('assigned-rooms-container'); const w = document.createElement('div'); const sel = document.createElement('select'); 
             w.className = "flex items-stretch gap-1 w-full"; sel.className = "assigned-room-select flex-1 min-w-0 bg-white border border-blue-300 text-xs font-bold uppercase text-blue-800 rounded px-1 py-1 outline-none shadow-sm cursor-pointer focus:ring-2 focus:ring-blue-500 text-ellipsis"; sel.innerHTML = `<option value="">-- UNASSIGNED --</option>`; sel.onchange = window.updateAvailableRooms; 
             let cg = '', og = null; 
-            hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; let fNum = 1; const nid = r.id.toUpperCase(); if (/^[AB]\d+$/.test(nid)) fNum = parseInt(nid.replace(/\D/g, '') || '0') % 2 !== 0 ? 1 : 2; else if (nid.startsWith('C1')) fNum = 1; else if (nid.startsWith('C2')) fNum = 2; else if (nid.startsWith('C3')) fNum = 3; else if (nid.startsWith('D')) fNum = 1; opt.innerText = `${r.id} - Room ${fNum === 1 ? '↓' : (fNum === 2 ? '↑' : '⇈')} (${r.bed || '?'})`; og.appendChild(opt); }); 
+            hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; let fNum = 1; const nid = (r.id||'').toUpperCase(); if (/^[AB]\d+$/.test(nid)) fNum = parseInt(nid.replace(/\D/g, '') || '0') % 2 !== 0 ? 1 : 2; else if (nid.startsWith('C1')) fNum = 1; else if (nid.startsWith('C2')) fNum = 2; else if (nid.startsWith('C3')) fNum = 3; else if (nid.startsWith('D')) fNum = 1; opt.innerText = `${r.id} - Room ${fNum === 1 ? '↓' : (fNum === 2 ? '↑' : '⇈')} (${r.bed || '?'})`; og.appendChild(opt); }); 
             sel.value = val; const del = document.createElement('button'); del.type = "button"; del.className = "w-6 flex justify-center items-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 flex-shrink-0 shadow-sm transition-colors cursor-pointer"; del.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>`; del.onclick = () => { w.remove(); if(c.children.length === 0) window.addRoomSelect(); window.updateAvailableRooms(); }; 
             w.appendChild(sel); w.appendChild(del); c.appendChild(w); window.updateAvailableRooms();
         };
@@ -993,7 +1063,7 @@
             const isN = !s.id; const f = $('guest-form'); if(f) f.reset(); const mC = $('guest-modal-content'); mC.style.position = 'relative'; mC.style.left = 'auto'; mC.style.top = 'auto'; mC.style.margin = '0'; 
             const bcc = $('bad-cc-box'); bcc.dataset.bad = s.badCC ? 'true' : 'false'; bcc.innerHTML = s.badCC ? '<span class="text-white text-[10px] font-black">X</span>' : ''; bcc.className = `w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center ${s.badCC ? 'bg-red-500 border-red-600' : ''}`; 
             [ ['guest-id', s.id], ['first-name', s.firstName], ['last-name', s.lastName], ['phone', s.phone], ['email', s.email], ['booked-type', s.bookedType], ['check-in', s.checkIn], ['check-out', s.checkOut], ['booking-date', s.bookDate], ['booking-id', s.bookId], ['link-code', s.linkedId], ['guest-country', s.country], ['pax-count', s.pax || 1], ['booking-source', s.source || 'direct'], ['guest-notes', s.notes], ['total-price', Number(s.totalPrice || 0).toFixed(2)], ['net-price', Number(s.netPrice || 0).toFixed(2)] ].forEach(([id, val]) => { const el = $(id); if(el) el.value = val || ""; }); 
-            let pSt = s.status || "future"; $('guest-status-hidden').value = pSt; let sObj = STATUS_CYCLE.find(x => x.val === pSt) || STATUS_CYCLE[1]; let sBtn = $('status-cycle-btn'); sBtn.dataset.value = sObj.val; sBtn.innerText = sObj.val; sBtn.style.background = sObj.bg; sBtn.style.color = sObj.txt;
+            let pSt = s.status || "future"; $('guest-status-hidden').value = pSt; let sObj = STATUS_CYCLE.find(x => x.val === pSt) || STATUS_CYCLE[0]; let sBtn = $('status-cycle-btn'); sBtn.dataset.value = sObj.val; sBtn.innerText = sObj.val; sBtn.style.background = sObj.bg; sBtn.style.color = sObj.txt;
             $('net-price').dataset.override = s.netOverride ? 'true' : 'false'; 
             $('assigned-rooms-container').innerHTML = ''; const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : (isN ? [] : [""])); if(rL.length > 0) { rL.forEach(r => window.addRoomSelect(r)); } else { window.addRoomSelect(""); } 
             $('payments-list').innerHTML = ''; if(s.payments) s.payments.forEach(p => window.addPaymentRow(p.date, Number(p.amt || 0).toFixed(2), p.method, true));
