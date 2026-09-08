@@ -326,8 +326,23 @@
         </div>
     </div>
 
-    <!-- Additional Modals -->
-    <div id="email-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Data Import</span><button type="button" onclick="window.closeModal('email-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><p class="text-xs font-bold text-slate-500 leading-tight">Paste a confirmation email from Booking.com, Airbnb, or Hostelworld.</p><div class="flex flex-col"><label class="label-base hidden">Select Source Format</label><select id="import-format-select" class="input-base cursor-pointer !text-sm !p-2 hidden"><option value="auto">Auto-Detect / Select Source</option><option value="bdc-extranet">Booking.com</option><option value="airbnb-email">Airbnb</option><option value="hw-web">Hostelworld</option></select></div><textarea id="email-textarea" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2" placeholder="Paste text here..."></textarea><div class="flex gap-2 justify-end mt-2"><button onclick="window.closeModal('email-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button><button onclick="window.parseEmail()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1">Extract</button></div></div></div></div>
+    <div id="email-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm">
+                <span>Data Import</span>
+                <button type="button" onclick="window.closeModal('email-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button>
+            </div>
+            <div class="p-4 flex flex-col gap-3">
+                <p class="text-xs font-bold text-slate-500 leading-tight">Paste a confirmation email from Booking.com, Airbnb, or Hostelworld.</p>
+                <textarea id="email-textarea" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2" placeholder="Paste text here..."></textarea>
+                <div class="flex gap-2 justify-end mt-2">
+                    <button onclick="window.closeModal('email-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button>
+                    <button onclick="window.parseEmail()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1">Extract</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <div id="price-check-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Quick Price Check</span><button type="button" onclick="window.closeModal('price-check-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><div class="grid grid-cols-2 gap-3"><div class="col-span-2"><label class="field-label">Check-In</label><input type="date" id="pc-checkin" class="input-base !p-2 !text-sm"></div><div><label class="field-label">Nights</label><input type="number" id="pc-nights" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div><div><label class="field-label">PAX</label><input type="number" id="pc-pax" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div></div><button onclick="window.runPriceCheck()" class="w-full mt-2 btn-modal bg-pink-600 hover:bg-pink-700 text-white flex justify-center items-center gap-2"><i data-lucide="external-link" size="16"></i> Check BDC</button></div></div></div>
     <div id="alert-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Attention</div><div class="p-6 text-center"><p id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></p><div id="alert-actions" class="mt-6 flex gap-2 justify-center"><button id="alert-cancel" onclick="window.closeAlert()" class="hidden btn-modal bg-slate-200 text-slate-700">Cancel</button><button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button></div></div></div></div>
     <div id="split-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Split Stay</div><div class="p-6 text-center"><p class="font-black text-slate-700 leading-tight text-md mb-4">Select date and room to split booking.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Creates a zero-balance linked segment to move guests mid-stay.</span></p><input type="date" id="split-date" class="input-base !text-lg !p-2 mb-4"><div id="split-room-dropdown-container" class="mb-6"></div><div class="flex gap-2 justify-center"><button onclick="window.closeModal('split-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button><button onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10">Split</button></div></div></div></div>
@@ -337,7 +352,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const $ = id => document.getElementById(id), $$ = s => document.querySelectorAll(s);
@@ -383,7 +398,6 @@
         let roomTypes = [];
         let fmpDates = [];
 
-        // SVGs Array
         const SVGS = {
             upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
             upPaid: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#4ade80" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -504,8 +518,9 @@
                 if (propToLoad) {
                     hotelRooms = (propToLoad.rooms || []).sort((a,b) => a.order - b.order);
                     fmpDates = propToLoad.events || [];
+                    window.propertyOtaMap = propToLoad.otaMap || [];
                 } else {
-                    hotelRooms = []; fmpDates = [];
+                    hotelRooms = []; fmpDates = []; window.propertyOtaMap = [];
                 }
 
                 roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
@@ -548,7 +563,16 @@
 
             const bypassLogin = async () => {
                 try {
-                    await signInAnonymously(auth);
+                    if (typeof window.__initial_auth_token !== 'undefined') {
+                        try {
+                            await signInWithCustomToken(auth, window.__initial_auth_token);
+                        } catch (tokenErr) {
+                            console.warn("Custom token failed (likely expired), falling back to anonymous login:", tokenErr);
+                            await signInAnonymously(auth);
+                        }
+                    } else {
+                        await signInAnonymously(auth);
+                    }
                     currentUserRole = 'admin'; 
                     currentUserEmail = 'admin'; // Fits failsafe
                     $('boot-loader').style.display = 'none'; 
@@ -559,7 +583,10 @@
                         $('boot-loader').style.display = 'none'; 
                     });
                     loadRates();
-                } catch (e) { $('sync-status').innerText = "Auth Error"; }
+                } catch (e) { 
+                    console.error(e);
+                    $('sync-status').innerText = "Auth Error"; 
+                }
             };
 
             if (typeof window.__initial_auth_token !== 'undefined' || !REQUIRE_LOGIN) {
@@ -789,7 +816,7 @@
                 if (hasDash) {
                     const parts = r.id.split('-');
                     const baseRoom = parts[0];
-                    const bedName = parts.slice(1).join('-');
+                    const bedName = r.id;
                     
                     const prevRoom = idx > 0 ? arr[idx-1] : null;
                     const prevBaseRoom = (prevRoom && prevRoom.type === r.type && prevRoom.id && prevRoom.id.includes('-')) ? prevRoom.id.split('-')[0] : null;
@@ -1159,7 +1186,7 @@
             btn.innerHTML = originalText; btn.disabled = false; lucide.createIcons();
         };
 
-        window.saveBooking = async () => {
+        window.saveBooking = async (keepOpen = false) => {
             if(currentUserRole === 'staff') return; const sB = $('save-btn'); if(sB.disabled) return; sB.disabled = true; sB.innerHTML = 'SAVING...';
             try {
                 const cI = $('check-in').value, cO = $('check-out').value; 
@@ -1191,7 +1218,8 @@
                 const savePromise = setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), ent);
                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 15000));
                 
-                await Promise.race([savePromise, timeoutPromise]); window.closeGuestModal();
+                await Promise.race([savePromise, timeoutPromise]); 
+                if (!keepOpen) window.closeGuestModal();
             } catch (err) { console.error("Save Error:", err); window.showAlert("Save process timed out or encountered an error. Please verify your connection.\n\nError: " + err.message); } finally { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons(); }
         };
 
@@ -1200,7 +1228,7 @@
         window.requestSplit = () => { if(currentUserRole === 'staff') return; const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; const sd = $('split-date'); sd.value = ""; sd.min = s.checkIn; sd.max = s.checkOut; const c = $('split-room-dropdown-container'); const sel = document.createElement('select'); sel.id = 'split-room-select'; sel.className = "input-base text-lg !p-2 cursor-pointer"; sel.innerHTML = `<option value="">-- SELECT NEW ROOM --</option>`; let cg = '', og = null; hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; opt.innerText = `${r.id} - ${r.type}`; og.appendChild(opt); }); c.innerHTML = ''; c.appendChild(sel); $('split-modal').style.display = 'flex'; };
         window.confirmSplit = async () => { const sD = $('split-date').value; const newRoom = $('split-room-select').value; const s = staff.find(x => x.id === $('guest-id').value); if (!sD || sD <= s.checkIn || sD >= s.checkOut) return window.showAlert("Invalid split date."); if (!newRoom) return window.showAlert("Please select a new room for the split."); let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); let nId = Math.random().toString(36).substr(2, 9); let dbR = (s.rooms || []).map(uiToDbRoom); let nDbRoom = uiToDbRoom(newRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, checkOut: sD, linkedId: lC }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, checkIn: sD, room: nDbRoom, rooms: [nDbRoom], linkedId: lC, totalPrice: 0, netPrice: 0, payments: [], extended: false, notes: "Split segment for mid-stay room change. Master folio kept on original booking.\n" + (s.notes || ""), auditLog: [] }); $('split-modal').style.display = 'none'; window.closeGuestModal(); };
         window.requestMerge = () => { if(currentUserRole === 'staff') return; const cId = $('guest-id').value; if (!cId) return window.showAlert("Please save this booking first before merging."); const c = staff.find(x => x.id === cId); if (!c) return; const sel = $('merge-target'); sel.innerHTML = '<option value="">-- SELECT BOOKING --</option>'; [...staff].filter(s => s.property === currentPropertyId && s.id !== cId && s.status !== 'cancelled' && s.status !== 'noshow').sort((a,b) => (a.lastName === c.lastName ? -1 : (b.lastName === c.lastName ? 1 : a.checkIn.localeCompare(b.checkIn)))).forEach(s => { const opt = document.createElement('option'); opt.value = s.id; opt.innerText = `${s.lastName}, ${s.firstName} (${s.checkIn.substr(5)} to ${s.checkOut.substr(5)})`; if (s.lastName === c.lastName) opt.className = "text-indigo-600 font-black"; sel.appendChild(opt); }); $('merge-modal').style.display = 'flex'; };
-        window.confirmMerge = async () => { const tId = $('merge-target').value; if(!tId) return window.showAlert("Please select a booking to merge."); const t = staff.find(s => s.id === tId), c = staff.find(s => s.id === $('guest-id').value); if(!t || !c) return; const btn = $('merge-confirm-btn'); btn.innerHTML = 'MERGING...'; btn.disabled = true; try { let mNotes = ($('guest-notes').value || "") + `\n\n--- MERGED WITH BOOKING ${t.bookId || tId} ---\n` + (t.notes || ""); [ { id: 'first-name', tVal: t.firstName, lbl: 'First Name' }, { id: 'last-name', tVal: t.lastName, lbl: 'Last Name' }, { id: 'phone', tVal: t.phone, lbl: 'Phone' }, { id: 'email', tVal: t.email, lbl: 'Email' }, { id: 'guest-country', tVal: t.country, lbl: 'Country' }, { id: 'booked-type', tVal: t.bookedType, lbl: 'Booked Type' }, { id: 'booking-source', tVal: t.source, lbl: 'Source' }, { id: 'booking-date', tVal: t.bookDate, lbl: 'Book Date' }, { id: 'booking-id', tVal: t.bookId, lbl: 'Book ID' } ].forEach(f => { const el = $(f.id); if (!el) return; if (!el.value && f.tVal) el.value = f.tVal; else if (el.value && f.tVal && el.value.toString().trim().toLowerCase() !== f.tVal.toString().trim().toLowerCase()) mNotes += `\n[Merged ${f.lbl}]: ${f.tVal}`; }); $('check-in').value = c.checkIn < t.checkIn ? c.checkIn : t.checkIn; $('check-out').value = c.checkOut > t.checkOut ? c.checkOut : t.checkOut; $('total-price').value = Number(c.totalPrice || 0) + Number(t.totalPrice || 0); $('net-price').value = Number(c.netPrice || 0) + Number(t.netPrice || 0); $('guest-notes').value = mNotes.trim(); $('pax-count').value = Math.max(c.pax || 1, t.pax || 1); (t.payments || []).forEach(p => window.addPaymentRow(p.date, Number(p.amt||0).toFixed(2), p.method, true)); const cR = Array.from(new Set([...Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean), ...(t.rooms || []).filter(Boolean)])); $('assigned-rooms-container').innerHTML = ''; if (cR.length > 0) cR.forEach(r => window.addRoomSelect(r)); else window.addRoomSelect(""); window.calcFinancials(); window.updateAvailableRooms(); await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', t.id)); $('merge-modal').style.display = 'none'; window.saveBooking(); } catch(err) { window.showAlert("Merge error, please check connection."); } finally { btn.innerHTML = 'Merge'; btn.disabled = false; } };
+        window.confirmMerge = async () => { const tId = $('merge-target').value; if(!tId) return window.showAlert("Please select a booking to merge."); const t = staff.find(s => s.id === tId), c = staff.find(s => s.id === $('guest-id').value); if(!t || !c) return; const btn = $('merge-confirm-btn'); btn.innerHTML = 'MERGING...'; btn.disabled = true; try { let mNotes = ($('guest-notes').value || "") + `\n\n--- MERGED WITH BOOKING ${t.bookId || tId} ---\n` + (t.notes || ""); [ { id: 'first-name', tVal: t.firstName, lbl: 'First Name' }, { id: 'last-name', tVal: t.lastName, lbl: 'Last Name' }, { id: 'phone', tVal: t.phone, lbl: 'Phone' }, { id: 'email', tVal: t.email, lbl: 'Email' }, { id: 'guest-country', tVal: t.country, lbl: 'Country' }, { id: 'booked-type', tVal: t.bookedType, lbl: 'Booked Type' }, { id: 'booking-source', tVal: t.source, lbl: 'Source' }, { id: 'booking-date', tVal: t.bookDate, lbl: 'Book Date' }, { id: 'booking-id', tVal: t.bookId, lbl: 'Book ID' } ].forEach(f => { const el = $(f.id); if (!el) return; if (!el.value && f.tVal) el.value = f.tVal; else if (el.value && f.tVal && el.value.toString().trim().toLowerCase() !== f.tVal.toString().trim().toLowerCase()) mNotes += `\n[Merged ${f.lbl}]: ${f.tVal}`; }); $('check-in').value = c.checkIn < t.checkIn ? c.checkIn : t.checkIn; $('check-out').value = c.checkOut > t.checkOut ? c.checkOut : t.checkOut; $('total-price').value = Number(c.totalPrice || 0) + Number(t.totalPrice || 0); $('net-price').value = Number(c.netPrice || 0) + Number(t.netPrice || 0); $('guest-notes').value = mNotes.trim(); $('pax-count').value = Math.max(c.pax || 1, t.pax || 1); (t.payments || []).forEach(p => window.addPaymentRow(p.date, Number(p.amt||0).toFixed(2), p.method, true)); const cR = Array.from(new Set([...Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean), ...(t.rooms || []).filter(Boolean)])); $('assigned-rooms-container').innerHTML = ''; if (cR.length > 0) cR.forEach(r => window.addRoomSelect(r)); else window.addRoomSelect(""); window.calcFinancials(); window.updateAvailableRooms(); await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', t.id)); $('merge-modal').style.display = 'none'; window.saveBooking(true); } catch(err) { window.showAlert("Merge error, please check connection."); } finally { btn.innerHTML = 'Merge'; btn.disabled = false; } };
 
         window.openPriceCheckModal = () => { const d = new Date(); d.setHours(12,0,0,0); $('pc-checkin').value = getLocalYMD(d); $('price-check-modal').style.display = 'flex'; };
         window.runPriceCheck = () => { const cI = $('pc-checkin').value, n = parseInt($('pc-nights').value)||1, p = parseInt($('pc-pax').value)||1; if(!cI) return; const d = new Date(cI + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); const cO = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`; window.open(`https://www.booking.com/hotel/th/swims-a-social-beach-resort.html?checkin=${cI}&checkout=${cO}&group_adults=${p}&group_children=0&no_rooms=1`, '_blank'); window.closeModal('price-check-modal'); };
@@ -1213,9 +1241,288 @@
             if (Object.keys(newRates).length > 0) { dailyRates = newRates; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_rates', 'current'), { rates: newRates, updated: new Date().toISOString() }); $('rates-textarea').value = ''; if ($('dashboard-view').style.display === 'flex') window.renderDashboard(); window.showAlert(`Successfully extracted and saved lowest rates for ${Object.keys(newRates).length} room categories!`); } catch(e) { window.showAlert("Failed to save rates."); } } else { window.showAlert("No matching rates found in the text."); }
         };
 
-        window.openEmailParserModal = () => { $('email-textarea').value = ''; $('email-modal').style.display = 'flex'; };
-        window.parseEmail = () => { window.showAlert("Parsing emails..."); $('email-modal').style.display='none'; };
+        window.openEmailParserModal = () => { $('email-textarea').value = ''; $('email-modal').style.display = 'flex'; setTimeout(() => $('email-textarea').focus(), 50); };
+        
+        window.parseEmail = () => {
+            const raw = $('email-textarea').value.trim();
+            if (!raw) return window.showAlert("Please paste booking text first.");
+            
+            let rawLines = raw.split('\n').map(l => l.trim());
+            let lines = rawLines.filter(Boolean); 
+            
+            let s = { source: 'other', pax: 1, payments: [] };
+            let rawLower = raw.toLowerCase();
 
+            // 1. Identify Source
+            if (rawLower.includes('hostelworld')) s.source = 'hostelworld';
+            else if (rawLower.includes('booking.com')) s.source = 'booking.com';
+            else if (rawLower.includes('expedia')) s.source = 'expedia';
+            else if (rawLower.includes('agoda')) s.source = 'agoda';
+            else if (rawLower.includes('airbnb')) s.source = 'airbnb';
+            else if (rawLower.includes('trip.com') || rawLower.includes('ctrip')) s.source = 'ctrip';
+
+            // ---------------------------------------------------------
+            // HOSTELWORLD PARSER (Dense Row Logic)
+            // ---------------------------------------------------------
+            if (s.source === 'hostelworld') {
+                
+                const parseHWDate = (str) => {
+                    if (!str) return "";
+                    let m = str.match(/(\d+)[a-z]*\s+([a-zA-Z]+)\s+.*?(\d{2,4})/i);
+                    if (m) {
+                        let y = m[3].length === 2 ? '20' + m[3] : m[3];
+                        let mo = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}[m[2].toLowerCase().substring(0,3)] || '01';
+                        let d = m[1].padStart(2, '0');
+                        return `${y}-${mo}-${d}`; 
+                    }
+                    return "";
+                };
+
+                let refIdx = lines.findIndex(l => l === 'Reference' || l.includes('Reference'));
+                if (refIdx > -1) {
+                    s.bookId = lines[refIdx + 1];
+                    let nameParts = (lines[refIdx + 2] || '').split(' ');
+                    s.firstName = nameParts[0] || '';
+                    s.lastName = nameParts.slice(1).join(' ');
+                    s.country = lines[refIdx + 3];
+                    
+                    let l4 = lines[refIdx + 4] || '';
+                    let l5 = lines[refIdx + 5] || '';
+                    if (l4.includes('@')) s.email = l4; else if (l5.includes('@')) s.email = l5;
+                    
+                    let p4 = l4.replace(/[\s+]/g, ''); let p5 = l5.replace(/[\s+]/g, '');
+                    if (p4.length >= 8 && !isNaN(p4)) s.phone = l4; else if (p5.length >= 8 && !isNaN(p5)) s.phone = l5;
+                }
+                
+                let bookedIdx = lines.findIndex(l => l === 'Booked' || l === 'Booking Date');
+                if (bookedIdx > -1) s.bookDate = parseHWDate(lines[bookedIdx + 1]);
+                
+                // Targeted regex to extract Date, Room, Pax, Currency, Price from the dense row
+                // Matches: "8th Sep ´26Gardenview Room: 1 King OR 2 Twin Beds Promo 20THB 305.82"
+                let hwDenseRegex = /^(\d{1,2}[a-z]{0,2}\s+[a-zA-Z]{3}\s+[`'´]?\d{2,4})(.*?)(\d{1,2})\s*(THB|USD|EUR|GBP|AUD)\s*([\d,.]+)$/i;
+                for (let i = 0; i < lines.length; i++) {
+                    let m = lines[i].match(hwDenseRegex);
+                    if (m) {
+                        s.checkIn = parseHWDate(m[1]);
+                        s.bookedType = m[2].trim();
+                        let paxStr = m[3];
+                        // E.g. "20" (Adults/Children format) -> extract the first digit for PAX
+                        let paxVal = parseInt(paxStr.length > 1 ? paxStr.charAt(0) : paxStr); 
+                        if (!isNaN(paxVal) && paxVal > 0) s.pax = paxVal;
+                        break;
+                    }
+                }
+
+                // Nights calculation for Check-out
+                let nightMatch = raw.match(/(\d+)\s*Nights?/i);
+                if (nightMatch && s.checkIn) {
+                    let nights = parseInt(nightMatch[1]);
+                    let d = new Date(s.checkIn + "T12:00:00Z");
+                    d.setUTCDate(d.getUTCDate() + nights);
+                    s.checkOut = d.toISOString().split('T')[0];
+                }
+                
+                // Financials
+                let subIdx = lines.findIndex(l => l.includes('Subtotal') || l === 'Total');
+                if (subIdx > -1 && lines.length > subIdx + 1) {
+                    let amtStr = lines[subIdx + 1] || lines[subIdx];
+                    s.totalPrice = parseFloat(amtStr.replace(/[^\d.]/g, ''));
+                }
+                
+                let depIdx = lines.findIndex(l => l.includes('Hostelworld Deposit') || l.includes('Deposit'));
+                if (depIdx > -1 && lines.length > depIdx + 1) {
+                    let depositAmt = parseFloat((lines[depIdx + 1] || lines[depIdx]).replace(/[^\d.]/g, ''));
+                    if (!isNaN(depositAmt)) s.payments.push({ date: s.checkIn || getLocalYMD(new Date()), amt: depositAmt, method: 'hw-kp' });
+                }
+
+            // ---------------------------------------------------------
+            // BOOKING.COM PARSER
+            // ---------------------------------------------------------
+            } else if (s.source === 'booking.com') {
+                s.email = lines.find(l => l.includes('@guest.booking.com')) || '';
+                s.phone = lines.find(l => /^\+?\d{8,15}$/.test(l.replace(/\s/g, ''))) || '';
+
+                // Name and Country Extraction
+                let gnIdx = lines.findIndex(l => l === 'Guest name:');
+                if (gnIdx > -1 && lines.length > gnIdx + 1) {
+                    let nameLine = lines[gnIdx + 1].trim();
+                    
+                    // Strip the "GENIUS" tag
+                    nameLine = nameLine.replace(/\bGENIUS\b/i, '').trim();
+                    let nameParts = nameLine.split(/\s+/).filter(Boolean);
+                    
+                    s.firstName = nameParts[0] || '';
+                    s.lastName = nameParts.slice(1).join(' ');
+
+                    // Check the line 2 spaces down for country code
+                    if (lines.length > gnIdx + 2) {
+                        let potentialCountryLine = lines[gnIdx + 2].trim();
+                        // If it's not the email line, it's the flag line
+                        if (!potentialCountryLine.includes('@')) {
+                            // Extract the very last 2 letters of this line (ignoring the flag emoji)
+                            let match = potentialCountryLine.match(/([a-zA-Z]{2})$/);
+                            if (match) {
+                                let cc = match[1].toUpperCase();
+                                const countryMap = { 'IL': 'Israel', 'US': 'United States', 'GB': 'United Kingdom', 'UK': 'United Kingdom', 'FR': 'France', 'DE': 'Germany', 'AU': 'Australia', 'NL': 'Netherlands', 'ES': 'Spain', 'IT': 'Italy', 'CH': 'Switzerland', 'CA': 'Canada', 'SE': 'Sweden', 'DK': 'Denmark', 'RU': 'Russia', 'TH': 'Thailand', 'BE': 'Belgium', 'AT': 'Austria', 'IE': 'Ireland', 'NO': 'Norway', 'FI': 'Finland', 'BR': 'Brazil', 'AR': 'Argentina', 'KR': 'South Korea', 'JP': 'Japan', 'CN': 'China', 'IN': 'India', 'MX': 'Mexico', 'NZ': 'New Zealand', 'ZA': 'South Africa', 'PT': 'Portugal', 'GR': 'Greece' };
+                                s.country = countryMap[cc] || cc;
+                            }
+                        }
+                    }
+                }
+
+                // Dates
+                let ciIdx = lines.findIndex(l => l === 'Check-in');
+                if (ciIdx > -1 && lines.length > ciIdx + 1) {
+                    let d = new Date(lines[ciIdx + 1]);
+                    if (!isNaN(d)) s.checkIn = getLocalYMD(d);
+                }
+
+                let coIdx = lines.findIndex(l => l === 'Check-out');
+                if (coIdx > -1 && lines.length > coIdx + 1) {
+                    let d = new Date(lines[coIdx + 1]);
+                    if (!isNaN(d)) s.checkOut = getLocalYMD(d);
+                }
+
+                // Pax
+                let paxIdx = lines.findIndex(l => l === 'Total guests:' || l === 'Guests:');
+                if (lines.some(l => l.includes('Payment is facilitated via Payments by Booking.com') || l.includes('Paid online'))) {
+                    s.payments.push({ date: s.checkIn || getLocalYMD(new Date()), amt: s.totalPrice, method: 'bdc-pay' });
+                }
+
+            } else if (raw.toLowerCase().includes('agoda')) {
+                s.source = 'agoda';
+                
+                // Flatten text for reliable regex extraction across weird email line breaks
+                let flatRaw = raw.replace(/\n/g, ' ');
+
+                let bIdMatch = flatRaw.match(/Booking ID\s*(\d+)/i);
+                if (bIdMatch) s.bookId = bIdMatch[1];
+                
+                // Extract Book Date from Gmail headers (e.g., "Sep 5, 2026" or "Sat, Sep 5")
+                let bdMatch = raw.match(/<no-reply@agoda\.com>[\s\S]{1,100}?((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:,\s+\d{4})?)/i);
+                if (bdMatch) {
+                    let dStr = bdMatch[1];
+                    if (!/\d{4}/.test(dStr)) dStr += `, ${new Date().getFullYear()}`; // Append current year if missing
+                    let d = new Date(dStr);
+                    if (!isNaN(d)) s.bookDate = getLocalYMD(d);
+                }
+                
+                let fNameMatch = flatRaw.match(/Customer First Name\s*(.*?)\s*Customer Last Name/i);
+                if (fNameMatch) s.firstName = fNameMatch[1].trim();
+                
+                let lNameMatch = flatRaw.match(/Customer Last Name\s*(.*?)\s*Country of Residence/i);
+                if (lNameMatch) s.lastName = lNameMatch[1].trim();
+                
+                let countryMatch = flatRaw.match(/Country of Residence\s*(.*?)\s*Check-in/i);
+                if (countryMatch) s.country = countryMatch[1].trim();
+                
+                let ciMatch = flatRaw.match(/Check-in\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})/i);
+                if (ciMatch) {
+                    let d = new Date(ciMatch[1]);
+                    if (!isNaN(d)) s.checkIn = getLocalYMD(d);
+                }
+                
+                let coMatch = flatRaw.match(/Check-out\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})/i);
+                if (coMatch) {
+                    let d = new Date(coMatch[1]);
+                    if (!isNaN(d)) s.checkOut = getLocalYMD(d);
+                }
+                
+                let paxMatch = flatRaw.match(/(\d+)\s*Adult/i);
+                if (paxMatch) s.pax = parseInt(paxMatch[1]);
+                
+                let roomMatch = flatRaw.match(/No\. of Extra Bed\s*(.*?)(?=\d{1,2}\s*(?:Adult|Child|Rate Plan))/i);
+                if (roomMatch) {
+                    // Strips out "(null)" and trailing numbers (room quantities)
+                    s.bookedType = roomMatch[1].replace(/\(null\)/gi, '').trim().replace(/\d$/, '').trim();
+                }
+                
+                let sellRateMatch = flatRaw.match(/Reference sell rate.*?(?:THB|USD|EUR|GBP|฿|\$|€|£)\s*([\d,.]+)/i);
+                let netRateMatch = flatRaw.match(/Net rate.*?(?:THB|USD|EUR|GBP|฿|\$|€|£)\s*([\d,.]+)/i);
+                
+                if (sellRateMatch) s.totalPrice = parseFloat(sellRateMatch[1].replace(/,/g, ''));
+                let netRate = netRateMatch ? parseFloat(netRateMatch[1].replace(/,/g, '')) : s.totalPrice;
+                if (!s.totalPrice && netRate) s.totalPrice = netRate; 
+                
+                if (s.totalPrice && netRate) {
+                    let commAmt = s.totalPrice - netRate;
+                    let payDate = s.checkIn || getLocalYMD(new Date());
+                    
+                    // Agoda payouts map to KP for Commission, and PAY for the Net Rate they owe us
+                    if (commAmt > 0) s.payments.push({ date: payDate, amt: Number(commAmt.toFixed(2)), method: 'agoda-kp' });
+                    if (netRate > 0) s.payments.push({ date: payDate, amt: Number(netRate.toFixed(2)), method: 'agoda-pay' });
+                }
+
+            } else if (raw.toLowerCase().includes('airbnb')) {
+                s.source = 'airbnb';
+            }
+
+            // REFUNDABILITY CHECK (Explicit Word + 7-Day Rule)
+            let isNonRef = rawLower.includes('non-refundable') || rawLower.includes('non refundable') || rawLower.includes('charged the total price of the reservation if they cancel at any time');
+            s.refundability = isNonRef ? 'non-ref' : 'ref';
+            
+            if (s.checkIn) {
+                let ciDate = new Date(s.checkIn + "T12:00:00Z");
+                let today = new Date();
+                today.setHours(0, 0, 0, 0); // Normalize to midnight
+                let diffDays = (ciDate - today) / (1000 * 60 * 60 * 24);
+                
+                // Auto-override to Non-Refundable if check-in is within 7 days
+                if (diffDays <= 7) {
+                    s.refundability = 'non-ref';
+                }
+            }
+
+            // AUTO-ASSIGN VIA OTA MAPPING (Fuzzy Keyword Match + Availability Check)
+            if (s.bookedType && window.propertyOtaMap && window.propertyOtaMap.length > 0) {
+                const bookedTypeLower = s.bookedType.toLowerCase();
+                
+                // Sort mapping by most specific (longest) rule first so "Partial Oceanview" beats "Oceanview"
+                const sortedMap = [...window.propertyOtaMap].sort((a, b) => b.otaName.length - a.otaName.length);
+                
+                // Fuzzy matching: e.g. "Garden Twin" checks if BOTH "garden" and "twin" are anywhere in the string
+                const match = sortedMap.find(m => {
+                    const keywords = m.otaName.toLowerCase().split(' ').filter(Boolean);
+                    return keywords.every(kw => bookedTypeLower.includes(kw));
+                });
+                
+                if (match) {
+                    s.bookedType = match.pmsCategory; // Clean up the name in the UI to match the PMS
+                    
+                    if (s.checkIn && s.checkOut) {
+                        const sU = parseYMD(s.checkIn);
+                        const eU = parseYMD(s.checkOut);
+                        const occ = new Set();
+                        let unitsNeeded = s.units || 1;
+                        s.autoRooms = [];
+                        
+                        // 1. Scan live calendar for overlapping dates to find occupied rooms
+                        staff.forEach(st => {
+                            if (st.status === 'cancelled' || st.status === 'noshow' || st.status === 'unconfirmed' || st.status === 'charged' || st.property !== currentPropertyId) return;
+                            if (sU < parseYMD(st.checkOut) && parseYMD(st.checkIn) < eU) {
+                                (st.rooms?.length ? st.rooms : (st.room ? [st.room] : [])).forEach(r => { if(r) occ.add(r); });
+                            }
+                        });
+                        
+                        // 2. Find empty rooms in this category
+                        const availableBeds = hotelRooms.filter(r => r.type === match.pmsCategory && !occ.has(r.id)).map(r => r.id);
+                        for (let i = 0; i < Math.min(unitsNeeded, availableBeds.length); i++) {
+                            s.autoRooms.push(availableBeds[i]);
+                        }
+                        
+                        if (s.autoRooms.length > 0) {
+                            s.room = s.autoRooms[0]; // Fallback for single room displays
+                            s.rooms = [...s.autoRooms];
+                        }
+                    }
+                }
+            }
+
+            window.populateStaffForm(s);
+            window.closeModal('email-modal');
+        };
+
+        // KICKSTART THE APP
         init();
     </script>
 </body>
