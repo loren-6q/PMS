@@ -269,6 +269,18 @@ C302
                             <div><label class="label-base text-blue-600">Channex Property ID (For this property)</label><input type="text" id="chan-prop-id" placeholder="e.g. c2f5b8a..." class="input-base !normal-case font-mono"></div>
                         </div>
                     </div>
+                    
+                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
+                        <div class="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="arrow-right-left" class="text-emerald-600 w-4 h-4"></i>
+                                <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">OTA Room Mapping</h2>
+                            </div>
+                            <button onclick="window.addOtaMapRow()" class="btn-action bg-emerald-600 hover:bg-emerald-700 !px-3"><i data-lucide="plus" size="12"></i> Add Rule</button>
+                        </div>
+                        <p class="text-[10px] font-bold text-slate-500 uppercase mb-3">Map incoming OTA room names from emails to your internal PMS categories. Drag to reorder priority.</p>
+                        <div id="ota-map-container" class="space-y-2" ondragover="window.otaDragOver(event)"></div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -286,7 +298,7 @@ C302
         const appId = 'hotel-pms-v1';
 
         let windowPropertiesList = [];
-        let currentConfig = { id: 'swims_resort', name: 'SWIMS! a Social Beach Resort', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' } };
+        let currentConfig = { id: 'swims_resort', name: 'SWIMS! a Social Beach Resort', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' }, otaMap: [] };
 
         const init = async () => {
             try {
@@ -316,7 +328,7 @@ C302
 
         window.handlePropertySwitch = (val) => {
             if (val === '_new_') {
-                currentConfig = { id: '', name: 'NEW PROPERTY', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' } };
+                currentConfig = { id: '', name: 'NEW PROPERTY', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' }, otaMap: [] };
             } else {
                 const found = windowPropertiesList.find(p => p.id === val);
                 if (found) currentConfig = found;
@@ -361,6 +373,12 @@ C302
                 evContainer.innerHTML = '';
                 const sortedEvents = [...(currentConfig.events || [])].sort();
                 sortedEvents.forEach(e => window.addEventRow(e));
+            }
+            
+            const otaContainer = document.getElementById('ota-map-container');
+            if (otaContainer) {
+                otaContainer.innerHTML = '';
+                (currentConfig.otaMap || []).forEach(rule => window.addOtaMapRow(rule));
             }
             lucide.createIcons();
         };
@@ -513,12 +531,63 @@ C302
             window.closeCategoryModal();
         };
 
+        let draggedOtaRow = null;
+        window.otaDragStart = (e) => {
+            draggedOtaRow = e.target.closest('.ota-map-row');
+            e.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => draggedOtaRow.classList.add('opacity-50', 'bg-emerald-50'), 0);
+        };
+        window.otaDragOver = (e) => {
+            e.preventDefault();
+            const targetRow = e.target.closest('.ota-map-row');
+            if(targetRow && targetRow !== draggedOtaRow) {
+                const container = document.getElementById('ota-map-container');
+                const rows = Array.from(container.querySelectorAll('.ota-map-row'));
+                const draggedIdx = rows.indexOf(draggedOtaRow);
+                const targetIdx = rows.indexOf(targetRow);
+                if(draggedIdx < targetIdx) targetRow.after(draggedOtaRow); else targetRow.before(draggedOtaRow);
+            }
+        };
+        window.otaDragEnd = (e) => {
+            if(draggedOtaRow) draggedOtaRow.classList.remove('opacity-50', 'bg-emerald-50');
+            draggedOtaRow = null;
+        };
+
         window.addEventRow = (dateStr = "") => {
             const container = document.getElementById('events-container');
             const div = document.createElement('div');
             div.className = "flex items-center gap-2 mb-1.5 event-row";
             div.innerHTML = `<input type="date" class="event-date input-base max-w-[150px] !py-0.5" value="${dateStr}"><button onclick="this.parentElement.remove()" class="p-1 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded border border-slate-200"><i data-lucide="trash-2" size="14"></i></button>`;
             container.appendChild(div); lucide.createIcons();
+        };
+
+        window.addOtaMapRow = (rule = { otaName: '', pmsCategory: '' }) => {
+            const container = document.getElementById('ota-map-container');
+            const div = document.createElement('div');
+            div.className = "flex items-center gap-2 ota-map-row bg-slate-50 p-2 border border-slate-200 rounded transition-colors";
+            div.draggable = true;
+            div.ondragstart = window.otaDragStart;
+            div.ondragend = window.otaDragEnd;
+            
+            const cats = [...new Set((currentConfig.rooms || []).map(r => r.type))].filter(Boolean);
+            let catOptions = cats.map(c => `<option value="${c}" ${c === rule.pmsCategory ? 'selected' : ''}>${c}</option>`).join('');
+
+            div.innerHTML = `
+                <i data-lucide="grip-vertical" class="text-slate-400 w-4 h-4 shrink-0 drag-handle cursor-grab hover:text-emerald-500"></i>
+                <div class="flex-1">
+                    <input type="text" class="ota-name-input input-base !normal-case" placeholder="OTA Room Name (e.g. Gardenview Promo)" value="${rule.otaName}">
+                </div>
+                <i data-lucide="arrow-right" class="text-slate-400 w-4 h-4 shrink-0"></i>
+                <div class="flex-1">
+                    <select class="ota-cat-input input-base cursor-pointer">
+                        <option value="">-- SELECT PMS CATEGORY --</option>
+                        ${catOptions}
+                    </select>
+                </div>
+                <button onclick="this.parentElement.remove()" class="p-1.5 text-slate-400 hover:text-red-500 bg-white hover:bg-red-50 rounded border border-slate-200 shadow-sm shrink-0"><i data-lucide="trash-2" size="14"></i></button>
+            `;
+            container.appendChild(div);
+            lucide.createIcons();
         };
 
         window.saveToCloud = async () => {
@@ -531,7 +600,7 @@ C302
                     id: propId, name: document.getElementById('prop-name').value.trim(),
                     timezone: document.getElementById('prop-tz').value.trim(), currency: document.getElementById('prop-currency').value.trim(),
                     channex: { apiKey: document.getElementById('chan-api-key').value.trim(), propId: document.getElementById('chan-prop-id').value.trim() },
-                    rooms: [], events: [], rates: currentConfig.rates || {}
+                    rooms: [], events: [], rates: currentConfig.rates || {}, otaMap: []
                 };
 
                 document.querySelectorAll('#rooms-body tr').forEach(tr => {
@@ -551,6 +620,14 @@ C302
                     if (d) newConfig.events.push(d);
                 });
                 newConfig.events = [...new Set(newConfig.events)].sort();
+
+                document.querySelectorAll('.ota-map-row').forEach(row => {
+                    const otaName = row.querySelector('.ota-name-input').value.trim();
+                    const pmsCategory = row.querySelector('.ota-cat-input').value.trim();
+                    if (otaName && pmsCategory) {
+                        newConfig.otaMap.push({ otaName, pmsCategory });
+                    }
+                });
 
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), newConfig);
                 currentConfig = newConfig; 
@@ -691,7 +768,7 @@ C302
         window.executeClone = () => {
             const sourceProp = windowPropertiesList.find(p => p.id === document.getElementById('clone-source').value);
             if (!sourceProp) return;
-            if (document.getElementById('clone-opt-general').checked) { currentConfig.timezone = sourceProp.timezone || 'Asia/Bangkok'; currentConfig.currency = sourceProp.currency || '฿'; }
+            if (document.getElementById('clone-opt-general').checked) { currentConfig.timezone = sourceProp.timezone || 'Asia/Bangkok'; currentConfig.currency = sourceProp.currency || '฿'; currentConfig.otaMap = JSON.parse(JSON.stringify(sourceProp.otaMap || [])); }
             if (document.getElementById('clone-opt-events').checked) currentConfig.events = JSON.parse(JSON.stringify(sourceProp.events || []));
             if (document.getElementById('clone-opt-rooms').checked) currentConfig.rooms = JSON.parse(JSON.stringify(sourceProp.rooms || []));
             if (document.getElementById('clone-opt-rates').checked) currentConfig.rates = JSON.parse(JSON.stringify(sourceProp.rates || {}));
