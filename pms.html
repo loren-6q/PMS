@@ -1661,6 +1661,8 @@
             }
 
             // AUTO-ASSIGN VIA OTA MAPPING (Fuzzy Keyword Match + Availability Check)
+            let originalBookedType = s.bookedType || 'Unknown';
+
             if (s.bookedType && window.propertyOtaMap && window.propertyOtaMap.length > 0) {
                 const bookedTypeLower = s.bookedType.toLowerCase();
                 
@@ -1704,6 +1706,30 @@
                     }
                 }
             }
+
+            // --- BUILD ORIGINAL OTA SUMMARY ---
+            let nights = 1;
+            let avgNightly = 0;
+            if (s.checkIn && s.checkOut) {
+                const ms = parseYMD(s.checkOut) - parseYMD(s.checkIn);
+                nights = Math.round(ms / 86400000);
+                if (nights < 1) nights = 1;
+            }
+            if (s.totalPrice) {
+                avgNightly = (s.totalPrice / nights).toFixed(2);
+            }
+
+            let summary = `--- ORIGINAL OTA BOOKING ---`;
+            summary += `\nSource: ${s.source.toUpperCase()}`;
+            if (s.bookId) summary += `\nBook ID: ${s.bookId}`;
+            summary += `\nDates: ${s.checkIn} to ${s.checkOut} (${nights} Night${nights !== 1 ? 's' : ''})`;
+            summary += `\nBooked: ${originalBookedType}`;
+            summary += `\nPax: ${s.pax || 1}`;
+            summary += `\nTotal: ฿${Number(s.totalPrice||0).toFixed(2)}`;
+            if (nights > 0) summary += `\nAvg Nightly: ฿${avgNightly}`;
+            summary += `\n----------------------------\n`;
+            
+            s.notes = summary;
 
             window.populateStaffForm(s);
             window.closeModal('email-modal');
