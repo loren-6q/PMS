@@ -327,6 +327,20 @@
         let viewMode = 'queue';
         let currentPropFilter = 'ALL';
         
+        const urlParams = new URLSearchParams(window.location.search);
+        const pParam = urlParams.get('p');
+        if (pParam) {
+            let pClean = pParam.toUpperCase();
+            if (pClean === 'LOUD_SAMUI') pClean = 'LOUD';
+            if (pClean === 'WET_POOL') pClean = 'WET';
+            if (pClean === 'SWIMS_RESORT') pClean = 'SWIMS';
+            currentPropFilter = pClean;
+            document.addEventListener('DOMContentLoaded', () => {
+                const f = document.getElementById('property-filter');
+                if (f) f.value = currentPropFilter;
+            });
+        }
+        
         let searchTerm = '';
         let sortCol = 'createdAt'; 
         let sortDesc = true;
