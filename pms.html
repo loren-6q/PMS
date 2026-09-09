@@ -173,6 +173,7 @@
                                 <a href="index.html" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="layout-grid" size="14" class="text-sky-600"></i> App Portal</a>
                                 <a href="bulk.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="sheet" size="14" class="text-indigo-600"></i> Bulk Import</a>
                                 <a href="accounting.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="dollar-sign" size="14" class="text-green-600"></i> Accounting</a>
+                                <button type="button" id="channex-sync-btn" onclick="window.pushChannexInventory(this)" class="w-full text-left flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-blue-700 hidden"><i data-lucide="zap" size="14" class="text-blue-600"></i> Sync Channex ARI</button>
                                 <div class="border-t border-slate-100 my-1"></div>
                                 <a href="settings.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-slate-600"><i data-lucide="settings" size="14" class="text-purple-600"></i> Settings</a>
                             </div>
@@ -493,6 +494,140 @@
             }
         };
 
+        // CHANNEX INVENTORY SYNC (Outbound 365 Days)
+        window.pushChannexInventory = async (btn, silent = false) => {
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" size="14" class="animate-spin inline"></i> SYNCING...';
+            btn.disabled = true;
+            
+            try {
+                if (!window.channexConfig || !window.channexConfig.apiKey || !window.channexConfig.propId) {
+                    throw new Error("Channex API Key or Property ID missing. Please check Settings.");
+                }
+                if (!window.channexMap || window.channexMap.length === 0) {
+                    throw new Error("No Channex Room Mapping found. Please map rooms in Settings.");
+                }
+
+                const payloadValues = [];
+                const pmsCapacities = {};
+                
+                // Calculate absolute max capacity per category
+                hotelRooms.forEach(r => { 
+                    if(r.type) {
+                        const t = r.type.toUpperCase().trim();
+                        pmsCapacities[t] = (pmsCapacities[t] || 0) + 1; 
+                    }
+                });
+
+                window.channexMap.forEach(mapRule => {
+                    const pmsCat = (mapRule.pmsCategory || "").toUpperCase().trim();
+                    const chanId = mapRule.channexId;
+                    const maxCap = pmsCapacities[pmsCat] || 0;
+
+                    let dTemp = new Date();
+                    let currentDate = new Date(dTemp.getFullYear(), dTemp.getMonth(), dTemp.getDate(), 12, 0, 0);
+                    
+                    let rangeStart = null;
+                    let currentAvail = -1;
+
+                    for (let i = 0; i < 365; i++) {
+                        const d = new Date(currentDate);
+                        d.setDate(d.getDate() + i);
+                        const dMs = d.getTime();
+                        const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+                        let occupied = 0;
+                        staff.forEach(s => {
+                            if(s.property !== currentPropertyId || ['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(s.status)) return;
+                            
+                            let sIn = parseYMD(s.checkIn);
+                            let sOut = parseYMD(s.checkOut);
+                            
+                            if (dMs >= sIn && dMs < sOut) {
+                                const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
+                                let isOccupied = false;
+                                rL.forEach(r => {
+                                    if (r) {
+                                        const hRoom = hotelRooms.find(hr => hr.id === r);
+                                        if (hRoom && (hRoom.type || "").toUpperCase().trim() === pmsCat) isOccupied = true;
+                                    } else if ((s.bookedType || "").toUpperCase().trim() === pmsCat) {
+                                        isOccupied = true;
+                                    }
+                                });
+                                if (isOccupied) occupied++;
+                            }
+                        });
+
+                        let availToday = Math.max(0, maxCap - occupied);
+
+                        if (availToday !== currentAvail) {
+                            if (rangeStart !== null) {
+                                const prevD = new Date(d);
+                                prevD.setDate(prevD.getDate() - 1);
+                                const prevDStr = `${prevD.getFullYear()}-${String(prevD.getMonth()+1).padStart(2,'0')}-${String(prevD.getDate()).padStart(2,'0')}`;
+                                payloadValues.push({ property_id: window.channexConfig.propId, room_type_id: chanId, date_from: rangeStart, date_to: prevDStr, availability: currentAvail });
+                            }
+                            rangeStart = dStr;
+                            currentAvail = availToday;
+                        }
+                        
+                        if (i === 364) {
+                            payloadValues.push({ property_id: window.channexConfig.propId, room_type_id: chanId, date_from: rangeStart, date_to: dStr, availability: currentAvail });
+                        }
+                    }
+                });
+
+                const response = await fetch("https://staging.channex.io/api/v1/availability", {
+                    method: "POST",
+                    headers: { "user-api-key": window.channexConfig.apiKey, "Content-Type": "application/json" },
+                    body: JSON.stringify({ values: payloadValues })
+                });
+
+                let responseData;
+                try { responseData = await response.json(); } catch(e) { responseData = { error: "Unparseable response from Channex" }; }
+                
+                if (!response.ok) {
+                    let errMsg = "Unknown Error";
+                    if (responseData.errors && responseData.errors.length > 0) {
+                        errMsg = responseData.errors[0].title || responseData.errors[0].detail || JSON.stringify(responseData.errors[0]);
+                    } else if (responseData.error) {
+                        errMsg = responseData.error;
+                    }
+                    throw new Error(errMsg + "\n\nRaw Payload Response: " + JSON.stringify(responseData));
+                }
+                
+                if (!silent) window.showAlert(`✅ ARI Sync Successful!\n\nPushed 365 days of availability to Channex for ${window.channexMap.length} room types.`);
+
+            } catch (err) {
+                console.error(err);
+                if (!silent) window.showAlert("❌ Sync Failed:\n\n" + err.message);
+            } finally {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        };
+
+        window.triggerAutoSync = () => {
+            if (window.channexConfig && window.channexConfig.apiKey) {
+                const cxBtn = document.getElementById('channex-sync-btn');
+                if (cxBtn) {
+                    const origHtml = cxBtn.innerHTML;
+                    cxBtn.innerHTML = '<i data-lucide="loader-2" size="14" class="animate-spin inline"></i> SYNCING...';
+                    setTimeout(async () => {
+                        try {
+                            await window.pushChannexInventory(cxBtn, true); // true = silent/background mode
+                        } catch(e) {
+                            console.error("Auto-sync failed", e);
+                        } finally {
+                            cxBtn.innerHTML = origHtml;
+                            lucide.createIcons();
+                        }
+                    }, 1000); // Slight delay ensures Firebase state matches
+                }
+            }
+        };
+
         const loadPropertyConfig = async () => {
             try {
                 const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
@@ -519,8 +654,16 @@
                     hotelRooms = (propToLoad.rooms || []).sort((a,b) => a.order - b.order);
                     fmpDates = propToLoad.events || [];
                     window.propertyOtaMap = propToLoad.otaMap || [];
+                    window.channexMap = propToLoad.channexMap || [];
+                    window.channexConfig = propToLoad.channex || {};
+                    
+                    const cxBtn = document.getElementById('channex-sync-btn');
+                    if (cxBtn) {
+                        if (window.channexConfig.apiKey && window.channexConfig.propId) cxBtn.classList.remove('hidden');
+                        else cxBtn.classList.add('hidden');
+                    }
                 } else {
-                    hotelRooms = []; fmpDates = []; window.propertyOtaMap = [];
+                    hotelRooms = []; fmpDates = []; window.propertyOtaMap = []; window.channexMap = []; window.channexConfig = {};
                 }
 
                 roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
@@ -684,6 +827,16 @@
         window.dismissAlert = async (id) => { 
             try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), { alertDismissed: true }, { merge: true }); let s = staff.find(x=>x.id===id); if(s) s.alertDismissed = true; window.renderDashboard(); } catch(e) {} 
         };
+
+        window.showAlert = (msg, isConfirm = false, onConfirm = null) => { 
+            const m = $('alert-modal'), c = $('alert-cancel'), b = $('alert-confirm'); 
+            $('alert-message').innerText = msg; 
+            if (isConfirm) { c.style.display = 'block'; c.classList.remove('hidden'); b.onclick = () => { window.closeAlert(); if(onConfirm) onConfirm(); }; } 
+            else { c.style.display = 'none'; c.classList.add('hidden'); b.onclick = window.closeAlert; } 
+            m.classList.add('active'); 
+        };
+        
+        window.closeAlert = () => $('alert-modal').classList.remove('active');
 
         window.renderDashboard = () => {
             const todayStr = getLocalYMD(new Date()); 
@@ -1079,7 +1232,7 @@
                 const s = staff.find(x => x.id === $('guest-id').value); if (!s) return window.showAlert("Error: Please save booking first before splitting."); 
                 let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); const nId = Math.random().toString(36).substr(2, 9); const selRoom = extRoomSel.value; const dbRoom = uiToDbRoom(selRoom); 
                 const newBooking = { ...s, id: nId, checkIn: cO, checkOut: nCo, room: dbRoom, rooms: [dbRoom], linkedId: lC, totalPrice: Number(aP), netPrice: Number(aP), netOverride: false, payments: [], extended: true, notes: "Extended segment from multi-room booking.\n" + (s.notes || ""), createdAt: new Date().toISOString(), createdBy: currentUserEmail, auditLog: [] }; 
-                try { const sB = $('save-btn'); sB.disabled = true; sB.innerHTML = 'SAVING...'; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, linkedId: lC, extended: true }, { merge: true }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), newBooking); window.showAlert(`Room ${selRoom} extended by ${days} day(s) as a new linked booking.\n\nOriginal booking preserved.`); window.closeGuestModal(); } catch(e) { window.showAlert("Extension failed due to database rules."); } return;
+                try { const sB = $('save-btn'); sB.disabled = true; sB.innerHTML = 'SAVING...'; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, linkedId: lC, extended: true }, { merge: true }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), newBooking); window.showAlert(`Room ${selRoom} extended by ${days} day(s) as a new linked booking.\n\nOriginal booking preserved.`); window.triggerAutoSync(); window.closeGuestModal(); } catch(e) { window.showAlert("Extension failed due to database rules."); } return;
             }
             $('check-out').value = nCo; $('total-price').value = ((Number($('total-price').value) || 0) + Number(aP)).toFixed(2); setMulti('ext-btn', 1, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
             const todayStr = new Date().toLocaleDateString('en-GB').slice(0,5); const extMsg = `\n[EXTENDED on ${todayStr}] Added ${days} day(s). Added ฿${aP} to total.`; $('guest-notes').value = ($('guest-notes').value + extMsg).trim();
@@ -1192,6 +1345,20 @@
                 const cI = $('check-in').value, cO = $('check-out').value; 
                 if (cI >= cO) { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons(); return window.showAlert("INVALID DATES:\nDeparture must be after arrival."); }
                 const idI = $('guest-id'), id = idI.value || Math.random().toString(36).substr(2, 9); idI.value = id;
+                
+                // --- DUPLICATE CHECK LOGIC ---
+                const bId = $('booking-id').value.trim();
+                if (bId) {
+                    const dupe = staff.find(s => s.property === currentPropertyId && s.bookId === bId && s.id !== id && s.status !== 'cancelled' && s.status !== 'noshow');
+                    if (dupe) {
+                        sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons();
+                        window.showAlert(`Duplicate Blocked:\nBooking ID ${bId} already exists in the system!\n\nOpening original record now...`);
+                        setTimeout(() => { window.closeAlert(); window.editStaff(dupe.id); }, 2500);
+                        return;
+                    }
+                }
+                // -----------------------------
+
                 let rL = Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean); const dbRL = rL.map(uiToDbRoom);
                 const stat = $('guest-status-hidden').value; const sU = parseYMD(cI), eU = parseYMD(cO);
 
@@ -1208,7 +1375,7 @@
                 const ext = staff.find(s => s.id === id), now = new Date().toISOString();
                 const ent = { 
                     id, 
-                    property: currentPropertyId, // TAGS IT TO THE ACTIVE PROPERTY AUTOMATICALLY
+                    property: currentPropertyId, 
                     firstName: $('first-name').value.trim().toUpperCase(), lastName: $('last-name').value.trim().toUpperCase(), status: stat, bookedType: $('booked-type').value, room: dbRL[0] || "", rooms: dbRL, checkIn: cI, checkOut: cO, pax: parseInt($('pax-count').value) || 1, country: $('guest-country').value, phone: $('phone').value, email: $('email').value, source: $('booking-source').value, bookDate: $('booking-date').value, bookId: $('booking-id').value, linkedId: $('link-code').value.trim().toUpperCase(), totalPrice: Number($('total-price').value) || 0, netPrice: Number($('net-price').value) || 0, netOverride: $('net-price').dataset.override === 'true', badCC: $('bad-cc-box').dataset.bad === 'true', 
                     payments: Array.from($$('.payment-row')).map(r => ({ date: r.querySelector('.pay-date').value, amt: Number(r.querySelector('.pay-amt').value) || 0, method: r.querySelector('.pay-method').value })), 
                     emailConfirm: parseInt($('email-confirm-btn')?.dataset?.state || 0) === 1, emailPrePost: parseInt($('email-prepost-btn')?.dataset?.state || 0) > 0 ? (parseInt($('email-prepost-btn')?.dataset?.state) === 1 ? 'sent' : 'confirmed') : false, emailSpecial: parseInt($('email-special-btn')?.dataset?.state || 0) === 1, refundability: parseInt($('refund-btn')?.dataset?.state || 0) == 1 ? 'non-ref' : (parseInt($('refund-btn')?.dataset?.state || 0) == 2 ? 'ref' : 'unknown'), upgrade: parseInt($('upgrade-btn')?.dataset?.state || 0) > 0 ? (parseInt($('upgrade-btn')?.dataset?.state) === 1 ? 'free' : 'paid') : 'none', rating: parseInt($('rating-btn')?.dataset?.state || 0) > 0 ? (parseInt($('rating-btn')?.dataset?.state) === 1 ? 'good' : 'bad') : 'none', extended: parseInt($('ext-btn')?.dataset?.state || 0) === 1, notes: $('guest-notes').value, createdAt: ext?.createdAt || now, createdBy: ext?.createdBy || currentUserEmail, lastEditedAt: now, lastEditedBy: currentUserEmail, auditLog: Array.isArray(ext?.auditLog) ? ext.auditLog : [] 
@@ -1219,14 +1386,15 @@
                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 15000));
                 
                 await Promise.race([savePromise, timeoutPromise]); 
+                window.triggerAutoSync(); // Silently push inventory to Channex
                 if (!keepOpen) window.closeGuestModal();
             } catch (err) { console.error("Save Error:", err); window.showAlert("Save process timed out or encountered an error. Please verify your connection.\n\nError: " + err.message); } finally { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons(); }
         };
 
-        window.requestDelete = () => { if(currentUserRole === 'staff') return; window.showAlert(`Permanently delete this record?`, true, async () => { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', $('guest-id').value)); window.closeGuestModal(); } catch (e) { window.showAlert("Delete blocked by Firebase Rules."); } }); };
-        window.requestDuplicate = async () => { if(currentUserRole === 'staff') return; try { const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; let lC = $('link-code').value.trim().toUpperCase() || s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); if(!s.linkedId) { let dbR = (s.rooms || []).map(uiToDbRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, linkedId: lC }); } const nId = Math.random().toString(36).substr(2, 9); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, room: "", rooms: [""], linkedId: lC, payments: [], extended: false, createdAt: new Date().toISOString(), createdBy: currentUserEmail, lastEditedAt: null, lastEditedBy: null, auditLog: [] }); window.closeGuestModal(); } catch (e) { window.showAlert("Duplicate blocked by Firebase Rules."); } };
+        window.requestDelete = () => { if(currentUserRole === 'staff') return; window.showAlert(`Permanently delete this record?`, true, async () => { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', $('guest-id').value)); window.triggerAutoSync(); window.closeGuestModal(); } catch (e) { window.showAlert("Delete blocked by Firebase Rules."); } }); };
+        window.requestDuplicate = async () => { if(currentUserRole === 'staff') return; try { const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; let lC = $('link-code').value.trim().toUpperCase() || s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); if(!s.linkedId) { let dbR = (s.rooms || []).map(uiToDbRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, linkedId: lC }); } const nId = Math.random().toString(36).substr(2, 9); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, room: "", rooms: [""], linkedId: lC, payments: [], extended: false, createdAt: new Date().toISOString(), createdBy: currentUserEmail, lastEditedAt: null, lastEditedBy: null, auditLog: [] }); window.triggerAutoSync(); window.closeGuestModal(); } catch (e) { window.showAlert("Duplicate blocked by Firebase Rules."); } };
         window.requestSplit = () => { if(currentUserRole === 'staff') return; const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; const sd = $('split-date'); sd.value = ""; sd.min = s.checkIn; sd.max = s.checkOut; const c = $('split-room-dropdown-container'); const sel = document.createElement('select'); sel.id = 'split-room-select'; sel.className = "input-base text-lg !p-2 cursor-pointer"; sel.innerHTML = `<option value="">-- SELECT NEW ROOM --</option>`; let cg = '', og = null; hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; opt.innerText = `${r.id} - ${r.type}`; og.appendChild(opt); }); c.innerHTML = ''; c.appendChild(sel); $('split-modal').style.display = 'flex'; };
-        window.confirmSplit = async () => { const sD = $('split-date').value; const newRoom = $('split-room-select').value; const s = staff.find(x => x.id === $('guest-id').value); if (!sD || sD <= s.checkIn || sD >= s.checkOut) return window.showAlert("Invalid split date."); if (!newRoom) return window.showAlert("Please select a new room for the split."); let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); let nId = Math.random().toString(36).substr(2, 9); let dbR = (s.rooms || []).map(uiToDbRoom); let nDbRoom = uiToDbRoom(newRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, checkOut: sD, linkedId: lC }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, checkIn: sD, room: nDbRoom, rooms: [nDbRoom], linkedId: lC, totalPrice: 0, netPrice: 0, payments: [], extended: false, notes: "Split segment for mid-stay room change. Master folio kept on original booking.\n" + (s.notes || ""), auditLog: [] }); $('split-modal').style.display = 'none'; window.closeGuestModal(); };
+        window.confirmSplit = async () => { const sD = $('split-date').value; const newRoom = $('split-room-select').value; const s = staff.find(x => x.id === $('guest-id').value); if (!sD || sD <= s.checkIn || sD >= s.checkOut) return window.showAlert("Invalid split date."); if (!newRoom) return window.showAlert("Please select a new room for the split."); let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); let nId = Math.random().toString(36).substr(2, 9); let dbR = (s.rooms || []).map(uiToDbRoom); let nDbRoom = uiToDbRoom(newRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, checkOut: sD, linkedId: lC }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, checkIn: sD, room: nDbRoom, rooms: [nDbRoom], linkedId: lC, totalPrice: 0, netPrice: 0, payments: [], extended: false, notes: "Split segment for mid-stay room change. Master folio kept on original booking.\n" + (s.notes || ""), auditLog: [] }); $('split-modal').style.display = 'none'; window.triggerAutoSync(); window.closeGuestModal(); };
         window.requestMerge = () => { if(currentUserRole === 'staff') return; const cId = $('guest-id').value; if (!cId) return window.showAlert("Please save this booking first before merging."); const c = staff.find(x => x.id === cId); if (!c) return; const sel = $('merge-target'); sel.innerHTML = '<option value="">-- SELECT BOOKING --</option>'; [...staff].filter(s => s.property === currentPropertyId && s.id !== cId && s.status !== 'cancelled' && s.status !== 'noshow').sort((a,b) => (a.lastName === c.lastName ? -1 : (b.lastName === c.lastName ? 1 : a.checkIn.localeCompare(b.checkIn)))).forEach(s => { const opt = document.createElement('option'); opt.value = s.id; opt.innerText = `${s.lastName}, ${s.firstName} (${s.checkIn.substr(5)} to ${s.checkOut.substr(5)})`; if (s.lastName === c.lastName) opt.className = "text-indigo-600 font-black"; sel.appendChild(opt); }); $('merge-modal').style.display = 'flex'; };
         window.confirmMerge = async () => { const tId = $('merge-target').value; if(!tId) return window.showAlert("Please select a booking to merge."); const t = staff.find(s => s.id === tId), c = staff.find(s => s.id === $('guest-id').value); if(!t || !c) return; const btn = $('merge-confirm-btn'); btn.innerHTML = 'MERGING...'; btn.disabled = true; try { let mNotes = ($('guest-notes').value || "") + `\n\n--- MERGED WITH BOOKING ${t.bookId || tId} ---\n` + (t.notes || ""); [ { id: 'first-name', tVal: t.firstName, lbl: 'First Name' }, { id: 'last-name', tVal: t.lastName, lbl: 'Last Name' }, { id: 'phone', tVal: t.phone, lbl: 'Phone' }, { id: 'email', tVal: t.email, lbl: 'Email' }, { id: 'guest-country', tVal: t.country, lbl: 'Country' }, { id: 'booked-type', tVal: t.bookedType, lbl: 'Booked Type' }, { id: 'booking-source', tVal: t.source, lbl: 'Source' }, { id: 'booking-date', tVal: t.bookDate, lbl: 'Book Date' }, { id: 'booking-id', tVal: t.bookId, lbl: 'Book ID' } ].forEach(f => { const el = $(f.id); if (!el) return; if (!el.value && f.tVal) el.value = f.tVal; else if (el.value && f.tVal && el.value.toString().trim().toLowerCase() !== f.tVal.toString().trim().toLowerCase()) mNotes += `\n[Merged ${f.lbl}]: ${f.tVal}`; }); $('check-in').value = c.checkIn < t.checkIn ? c.checkIn : t.checkIn; $('check-out').value = c.checkOut > t.checkOut ? c.checkOut : t.checkOut; $('total-price').value = Number(c.totalPrice || 0) + Number(t.totalPrice || 0); $('net-price').value = Number(c.netPrice || 0) + Number(t.netPrice || 0); $('guest-notes').value = mNotes.trim(); $('pax-count').value = Math.max(c.pax || 1, t.pax || 1); (t.payments || []).forEach(p => window.addPaymentRow(p.date, Number(p.amt||0).toFixed(2), p.method, true)); const cR = Array.from(new Set([...Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean), ...(t.rooms || []).filter(Boolean)])); $('assigned-rooms-container').innerHTML = ''; if (cR.length > 0) cR.forEach(r => window.addRoomSelect(r)); else window.addRoomSelect(""); window.calcFinancials(); window.updateAvailableRooms(); await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', t.id)); $('merge-modal').style.display = 'none'; window.saveBooking(true); } catch(err) { window.showAlert("Merge error, please check connection."); } finally { btn.innerHTML = 'Merge'; btn.disabled = false; } };
 
