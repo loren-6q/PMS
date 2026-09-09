@@ -265,16 +265,54 @@ C302
                             <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Channex.io OTA Sync</h2>
                         </div>
                         <div class="space-y-3">
-                            <div><label class="label-base text-blue-600">Channex API Key (Global)</label><input type="password" id="chan-api-key" placeholder="Enter secure API Key..." class="input-base !normal-case font-mono"></div>
-                            <div><label class="label-base text-blue-600">Channex Property ID (For this property)</label><input type="text" id="chan-prop-id" placeholder="e.g. c2f5b8a..." class="input-base !normal-case font-mono"></div>
+                            <div>
+                                <label class="label-base text-blue-600">Channex API Key (Global)</label>
+                                <input type="password" id="chan-api-key" placeholder="Enter secure API Key..." class="input-base !normal-case font-mono">
+                            </div>
+                            <div>
+                                <label class="label-base text-blue-600">Channex Property ID (For this property)</label>
+                                <input type="text" id="chan-prop-id" placeholder="e.g. c2f5b8a..." class="input-base !normal-case font-mono">
+                            </div>
+                            <button onclick="window.testChannexConnection()" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase text-xs py-2 rounded shadow transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                                <i data-lucide="zap" size="14"></i> Test Connection
+                            </button>
+
+                            <div class="mt-4 pt-4 border-t border-slate-100">
+                                <label class="label-base text-purple-600 flex justify-between items-end">
+                                    <span>2-Way Sync Webhook URL</span>
+                                    <span class="text-[9px] text-slate-400 normal-case tracking-normal">Receives Bookings</span>
+                                </label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="webhook-url" value="https://asia-southeast1-swimspms.cloudfunctions.net/channexWebhook" class="input-base !normal-case font-mono bg-slate-100 text-slate-500 cursor-copy select-all" readonly onclick="this.select(); document.execCommand('copy'); window.showAlert('Webhook URL copied to clipboard!');">
+                                    <button onclick="document.getElementById('webhook-url').click()" class="bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 rounded shadow-sm transition-colors cursor-pointer text-xs font-black uppercase flex items-center shrink-0"><i data-lucide="copy" class="w-4 h-4"></i></button>
+                                </div>
+                                <p class="text-[10px] text-slate-500 font-bold leading-tight mt-1.5">Paste this URL into your Channex Dashboard under <span class="text-slate-700 font-black">Webhooks</span>. Select <span class="text-slate-700 font-black">booking_new</span>, <span class="text-slate-700 font-black">booking_modify</span>, and <span class="text-slate-700 font-black">booking_cancel</span> events.</p>
+                            </div>
                         </div>
                     </div>
                     
                     <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
                         <div class="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
                             <div class="flex items-center gap-2">
-                                <i data-lucide="arrow-right-left" class="text-emerald-600 w-4 h-4"></i>
-                                <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">OTA Room Mapping</h2>
+                                <i data-lucide="arrow-right-left" class="text-purple-600 w-4 h-4"></i>
+                                <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Channex Room Mapping</h2>
+                            </div>
+                            <button onclick="window.fetchChannexRooms()" class="btn-action bg-purple-600 hover:bg-purple-700 !px-3">
+                                <i data-lucide="cloud-download" size="12"></i> Fetch Rooms
+                            </button>
+                        </div>
+                        <p class="text-[10px] font-bold text-slate-500 uppercase mb-3">Map your live Channex Room Types to your internal PMS categories.</p>
+                        <div id="channex-map-container" class="space-y-2">
+                            <!-- Channex rooms injected here -->
+                            <div class="text-center text-xs text-slate-400 italic py-4">Click "Fetch Rooms" to load mapping from Channex.</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
+                        <div class="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="mail" class="text-emerald-600 w-4 h-4"></i>
+                                <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Email OTA Mapping (Legacy)</h2>
                             </div>
                             <button onclick="window.addOtaMapRow()" class="btn-action bg-emerald-600 hover:bg-emerald-700 !px-3"><i data-lucide="plus" size="12"></i> Add Rule</button>
                         </div>
@@ -298,7 +336,7 @@ C302
         const appId = 'hotel-pms-v1';
 
         let windowPropertiesList = [];
-        let currentConfig = { id: 'swims_resort', name: 'SWIMS! a Social Beach Resort', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' }, otaMap: [] };
+        let currentConfig = { id: 'swims_resort', name: 'SWIMS! a Social Beach Resort', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' }, otaMap: [], channexMap: [] };
 
         const init = async () => {
             try {
@@ -328,7 +366,7 @@ C302
 
         window.handlePropertySwitch = (val) => {
             if (val === '_new_') {
-                currentConfig = { id: '', name: 'NEW PROPERTY', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' }, otaMap: [] };
+                currentConfig = { id: '', name: 'NEW PROPERTY', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' }, otaMap: [], channexMap: [] };
             } else {
                 const found = windowPropertiesList.find(p => p.id === val);
                 if (found) currentConfig = found;
@@ -380,6 +418,14 @@ C302
                 otaContainer.innerHTML = '';
                 (currentConfig.otaMap || []).forEach(rule => window.addOtaMapRow(rule));
             }
+            
+            // Build saved Channex map if exists
+            const chanContainer = document.getElementById('channex-map-container');
+            if (chanContainer && currentConfig.channexMap && currentConfig.channexMap.length > 0) {
+                chanContainer.innerHTML = '';
+                currentConfig.channexMap.forEach(rule => window.addChannexMapRow(rule.channexId, rule.channexTitle, rule.pmsCategory));
+            }
+
             lucide.createIcons();
         };
 
@@ -569,7 +615,7 @@ C302
             div.ondragstart = window.otaDragStart;
             div.ondragend = window.otaDragEnd;
             
-            const cats = [...new Set((currentConfig.rooms || []).map(r => r.type))].filter(Boolean);
+            const cats = [...new Set(Array.from(document.querySelectorAll('.room-type')).map(r => r.value))].filter(Boolean);
             let catOptions = cats.map(c => `<option value="${c}" ${c === rule.pmsCategory ? 'selected' : ''}>${c}</option>`).join('');
 
             div.innerHTML = `
@@ -590,6 +636,33 @@ C302
             lucide.createIcons();
         };
 
+        window.addChannexMapRow = (channexId, channexTitle, pmsCategory) => {
+            const container = document.getElementById('channex-map-container');
+            const div = document.createElement('div');
+            div.className = "flex items-center gap-2 channex-map-row bg-slate-50 p-2 border border-slate-200 rounded";
+            
+            const cats = [...new Set(Array.from(document.querySelectorAll('.room-type')).map(r => r.value))].filter(Boolean);
+            let catOptions = cats.map(c => `<option value="${c}" ${c === pmsCategory ? 'selected' : ''}>${c}</option>`).join('');
+
+            div.innerHTML = `
+                <div class="flex-1 min-w-0">
+                    <input type="hidden" class="cx-id" value="${channexId}">
+                    <input type="hidden" class="cx-title" value="${channexTitle}">
+                    <div class="text-xs font-black text-slate-800 truncate" title="${channexTitle}">${channexTitle}</div>
+                    <div class="text-[9px] font-mono text-slate-500 truncate">${channexId}</div>
+                </div>
+                <i data-lucide="arrow-right" class="text-slate-400 w-4 h-4 shrink-0"></i>
+                <div class="flex-1">
+                    <select class="cx-cat-input input-base cursor-pointer !border-purple-300 focus:ring-purple-500">
+                        <option value="">-- SELECT PMS CATEGORY --</option>
+                        ${catOptions}
+                    </select>
+                </div>
+            `;
+            container.appendChild(div);
+            lucide.createIcons();
+        };
+
         window.saveToCloud = async () => {
             document.getElementById('loader').classList.add('active');
             try {
@@ -600,7 +673,7 @@ C302
                     id: propId, name: document.getElementById('prop-name').value.trim(),
                     timezone: document.getElementById('prop-tz').value.trim(), currency: document.getElementById('prop-currency').value.trim(),
                     channex: { apiKey: document.getElementById('chan-api-key').value.trim(), propId: document.getElementById('chan-prop-id').value.trim() },
-                    rooms: [], events: [], rates: currentConfig.rates || {}, otaMap: []
+                    rooms: [], events: [], rates: currentConfig.rates || {}, otaMap: [], channexMap: []
                 };
 
                 document.querySelectorAll('#rooms-body tr').forEach(tr => {
@@ -626,6 +699,15 @@ C302
                     const pmsCategory = row.querySelector('.ota-cat-input').value.trim();
                     if (otaName && pmsCategory) {
                         newConfig.otaMap.push({ otaName, pmsCategory });
+                    }
+                });
+
+                document.querySelectorAll('.channex-map-row').forEach(row => {
+                    const channexId = row.querySelector('.cx-id').value;
+                    const channexTitle = row.querySelector('.cx-title').value;
+                    const pmsCategory = row.querySelector('.cx-cat-input').value;
+                    if (channexId && pmsCategory) {
+                        newConfig.channexMap.push({ channexId, channexTitle, pmsCategory });
                     }
                 });
 
@@ -773,6 +855,101 @@ C302
             if (document.getElementById('clone-opt-rooms').checked) currentConfig.rooms = JSON.parse(JSON.stringify(sourceProp.rooms || []));
             if (document.getElementById('clone-opt-rates').checked) currentConfig.rates = JSON.parse(JSON.stringify(sourceProp.rates || {}));
             populateUI(); window.closeCloneModal(); window.showAlert("Cloned successfully! Hit Save to commit changes.");
+        };
+
+        window.testChannexConnection = async () => {
+            const apiKey = document.getElementById('chan-api-key').value.trim();
+            const propId = document.getElementById('chan-prop-id').value.trim();
+            
+            if (!apiKey || !propId) return window.showAlert("Please enter both the API Key and Property ID first.");
+            
+            document.getElementById('loader').classList.add('active');
+            document.getElementById('sync-status').innerText = 'CONTACTING CHANNEX...';
+            
+            try {
+                // Endpoint for Channex Staging (Test Environment)
+                const url = `https://staging.channex.io/api/v1/properties/${propId}`;
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'user-api-key': apiKey,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                document.getElementById('loader').classList.remove('active');
+                
+                if (response.ok) {
+                    const propertyTitle = data.data?.attributes?.title || "Unknown Property";
+                    window.showAlert(`✅ CONNECTION SUCCESSFUL!\n\nSuccessfully connected to Channex Staging.\nProperty Name: ${propertyTitle}\n\nWe are ready to start syncing!`);
+                } else {
+                    window.showAlert(`❌ CONNECTION FAILED:\n\n${data.errors?.[0]?.title || 'Invalid Credentials'}`);
+                }
+                
+            } catch (err) {
+                document.getElementById('loader').classList.remove('active');
+                window.showAlert(`❌ NETWORK ERROR:\n\nFailed to reach Channex. Check console for details.`);
+                console.error("Channex Test Error:", err);
+            }
+        };
+
+        window.fetchChannexRooms = async () => {
+            const apiKey = document.getElementById('chan-api-key').value.trim();
+            const propId = document.getElementById('chan-prop-id').value.trim();
+            
+            if (!apiKey || !propId) return window.showAlert("Please test your API Key and Property ID first.");
+            
+            document.getElementById('loader').classList.add('active');
+            document.getElementById('sync-status').innerText = 'FETCHING ROOMS...';
+            
+            try {
+                const url = `https://staging.channex.io/api/v1/room_types?filter[property_id]=${propId}`;
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'user-api-key': apiKey,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                document.getElementById('loader').classList.remove('active');
+                
+                if (response.ok) {
+                    const rooms = data.data || [];
+                    if (rooms.length === 0) {
+                        return window.showAlert(`Connection OK, but no Room Types found on Channex for this property.\n\nPlease create your rooms in the Channex Dashboard first!`);
+                    }
+                    
+                    document.getElementById('channex-map-container').innerHTML = '';
+                    
+                    rooms.forEach(room => {
+                        const rId = room.id;
+                        const rTitle = room.attributes.title;
+                        
+                        // Check if we already have this mapped
+                        let savedCategory = '';
+                        if (currentConfig.channexMap) {
+                            const existingMap = currentConfig.channexMap.find(m => m.channexId === rId);
+                            if (existingMap) savedCategory = existingMap.pmsCategory;
+                        }
+                        
+                        window.addChannexMapRow(rId, rTitle, savedCategory);
+                    });
+                    
+                    window.showAlert(`✅ Successfully loaded ${rooms.length} rooms from Channex!\n\nPlease map them to your PMS categories and hit Save in the top right.`);
+                } else {
+                    window.showAlert(`❌ FETCH FAILED:\n\n${data.errors?.[0]?.title || 'Unknown Error'}`);
+                }
+                
+            } catch (err) {
+                document.getElementById('loader').classList.remove('active');
+                window.showAlert(`❌ NETWORK ERROR:\n\nFailed to fetch rooms from Channex.`);
+                console.error("Channex Room Fetch Error:", err);
+            }
         };
 
         init();
