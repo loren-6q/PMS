@@ -119,7 +119,7 @@
             
             <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
                 <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
-                    <img src="https://loren-6q.github.io/SWIMSPMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
+                    <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
                 </a>
                 
                 <div class="flex bg-slate-100 rounded sm:rounded-lg p-0.5 sm:p-1 items-center gap-0.5 shrink-0 border border-slate-200">
@@ -391,16 +391,6 @@
         let currentPropertyId = 'swims_resort';
         let windowPropertiesList = [];
         window.masterState = 0; 
-        
-        const urlParams = new URLSearchParams(window.location.search);
-        const pParam = urlParams.get('p') || urlParams.get('prop');
-        if (pParam) {
-            let pClean = pParam.toLowerCase();
-            if (pClean === 'loud') pClean = 'loud_samui';
-            if (pClean === 'wet') pClean = 'wet_pool';
-            if (pClean === 'swims') pClean = 'swims_resort';
-            currentPropertyId = pClean;
-        }
         
         const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
         
