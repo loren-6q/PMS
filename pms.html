@@ -392,6 +392,16 @@
         let windowPropertiesList = [];
         window.masterState = 0; 
         
+        const urlParams = new URLSearchParams(window.location.search);
+        const pParam = urlParams.get('p') || urlParams.get('prop');
+        if (pParam) {
+            let pClean = pParam.toLowerCase();
+            if (pClean === 'loud') pClean = 'loud_samui';
+            if (pClean === 'wet') pClean = 'wet_pool';
+            if (pClean === 'swims') pClean = 'swims_resort';
+            currentPropertyId = pClean;
+        }
+        
         const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
         
         let hotelRooms = [];
