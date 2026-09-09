@@ -1641,6 +1641,25 @@
                 }
             }
 
+            // --- IMMEDIATE DUPLICATE CHECK ON EXTRACT ---
+            if (s.bookId) {
+                const dupe = staff.find(x => x.property === currentPropertyId && x.bookId === s.bookId && x.status !== 'cancelled' && x.status !== 'noshow');
+                if (dupe) {
+                    window.closeModal('email-modal');
+                    window.showAlert(`Duplicate Found:\nBooking ID ${s.bookId} already exists in the system!\n\nOpening original record now...`);
+                    setTimeout(() => { window.closeAlert(); window.editStaff(dupe.id); }, 2500);
+                    return;
+                }
+            } else if (s.firstName && s.lastName && s.checkIn) {
+                const nameDupe = staff.find(x => x.property === currentPropertyId && x.firstName === s.firstName && x.lastName === s.lastName && x.checkIn === s.checkIn && x.status !== 'cancelled' && x.status !== 'noshow');
+                if (nameDupe) {
+                    window.closeModal('email-modal');
+                    window.showAlert(`Duplicate Found:\n${s.firstName} ${s.lastName} arriving on ${s.checkIn} already exists in the system!\n\nOpening original record now...`);
+                    setTimeout(() => { window.closeAlert(); window.editStaff(nameDupe.id); }, 2500);
+                    return;
+                }
+            }
+
             // AUTO-ASSIGN VIA OTA MAPPING (Fuzzy Keyword Match + Availability Check)
             if (s.bookedType && window.propertyOtaMap && window.propertyOtaMap.length > 0) {
                 const bookedTypeLower = s.bookedType.toLowerCase();
