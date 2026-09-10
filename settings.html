@@ -41,6 +41,7 @@
         .drag-over { border-top: 2px solid #3b82f6; }
     </style>
 </head>
+
 <body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
     
     <div id="loader" class="loading-overlay active">
@@ -91,11 +92,7 @@
             </div>
             <div class="p-4 flex flex-col gap-3">
                 <p class="text-[11px] font-bold text-slate-500 leading-tight">Paste a list to rapidly generate your room layout.<br>Use asterisks for categories (e.g. *Superior Mixed*).<br>Format: [Room ID] [Count]</p>
-                <textarea id="bulk-import-text" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2 !normal-case" placeholder="*Standard Quad Dorm*
-C301
-4
-C302
-4"></textarea>
+                <textarea id="bulk-import-text" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2 !normal-case" placeholder="*Standard Quad Dorm*&#10;C301&#10;4&#10;C302&#10;4"></textarea>
                 <div class="flex gap-2 justify-end mt-2">
                     <button onclick="window.closeBulkImportModal()" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700 !text-xs !py-1.5">Cancel</button>
                     <button onclick="window.processBulkImport()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1 !text-xs !py-1.5 shadow">Generate</button>
@@ -287,6 +284,10 @@ C302
                                     <button onclick="document.getElementById('webhook-url').click()" class="bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 rounded shadow-sm transition-colors cursor-pointer text-xs font-black uppercase flex items-center shrink-0"><i data-lucide="copy" class="w-4 h-4"></i></button>
                                 </div>
                                 <p class="text-[10px] text-slate-500 font-bold leading-tight mt-1.5">Paste this URL into your Channex Dashboard under <span class="text-slate-700 font-black">Webhooks</span>. Select <span class="text-slate-700 font-black">booking_new</span>, <span class="text-slate-700 font-black">booking_modify</span>, and <span class="text-slate-700 font-black">booking_cancel</span> events.</p>
+                                
+                                <button onclick="window.simulateChannexBooking()" class="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs py-2 rounded shadow transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                                    <i data-lucide="bot" size="14"></i> Simulate Test Booking
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -502,7 +503,6 @@ C302
             tbody.appendChild(tr); lucide.createIcons(); window.recalculateOrder();
         };
 
-        // Category Drag-and-Drop Modal Logic
         let draggedCategory = null;
         window.openCategoryModal = () => {
             const rows = Array.from(document.querySelectorAll('#rooms-body tr'));
@@ -949,6 +949,77 @@ C302
                 document.getElementById('loader').classList.remove('active');
                 window.showAlert(`❌ NETWORK ERROR:\n\nFailed to fetch rooms from Channex.`);
                 console.error("Channex Room Fetch Error:", err);
+            }
+        };
+
+        window.simulateChannexBooking = async () => {
+            const webhookUrl = document.getElementById('webhook-url').value;
+            const chanPropId = document.getElementById('chan-prop-id').value.trim();
+            
+            if (!chanPropId) return window.showAlert("Please enter your Channex Property ID first.");
+
+            // Grab a valid Channex Room ID from your mappings so the webhook doesn't throw a mapping error
+            let testRoomId = "UNMAPPED_TEST_ROOM";
+            if (currentConfig.channexMap && currentConfig.channexMap.length > 0) {
+                testRoomId = currentConfig.channexMap[0].channexId;
+            } else {
+                return window.showAlert("Please fetch and map at least one Channex room first so the test booking has a valid category to snap to.");
+            }
+
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 2); // 2 night stay
+
+            const mockPayload = {
+                event: "booking_new",
+                payload: {
+                    booking: {
+                        property_id: chanPropId,
+                        ota_reservation_code: "TEST-" + Math.floor(Math.random() * 100000),
+                        status: "new",
+                        channel_id: "booking_com",
+                        customer: {
+                            name: "CHANNEX",
+                            surname: "TESTER",
+                            phone: "+66123456789",
+                            mail: "test@swims.com",
+                            country: "TH"
+                        },
+                        rooms: [
+                            {
+                                amount: "1500.00",
+                                checkin_date: today.toISOString().split('T')[0],
+                                checkout_date: tomorrow.toISOString().split('T')[0],
+                                occupancy: 2,
+                                room_type_id: testRoomId
+                            }
+                        ],
+                        inserted_at: new Date().toISOString()
+                    }
+                }
+            };
+
+            document.getElementById('loader').classList.add('active');
+            document.getElementById('sync-status').innerText = 'FIRING WEBHOOK...';
+
+            try {
+                const res = await fetch(webhookUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(mockPayload)
+                });
+                
+                const data = await res.json();
+                document.getElementById('loader').classList.remove('active');
+
+                if (res.ok) {
+                    window.showAlert("✅ WEBHOOK RECEIVED!\n\nA fake booking for 'CHANNEX TESTER' was just caught by your live Firebase function.\n\nOpen your Master Dashboard and check if they popped up in neon pink!");
+                } else {
+                    window.showAlert("❌ TEST FAILED:\n\n" + (data.error || JSON.stringify(data)));
+                }
+            } catch (err) {
+                document.getElementById('loader').classList.remove('active');
+                window.showAlert(`❌ NETWORK ERROR:\n\nCould not reach the Webhook. Did you deploy functions to Firebase?`);
             }
         };
 
