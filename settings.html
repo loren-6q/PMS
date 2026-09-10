@@ -3,401 +3,335 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Property Setup</title>
+    <title>Property Configuration</title>
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    
     <style type="text/tailwindcss">
         @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Condensed:wght@400;700;900&display=swap');
         
         @layer components {
             .btn-action { @apply px-2 py-1 text-white rounded shadow text-xs font-black uppercase flex items-center gap-1 hover:brightness-110 active:scale-95 transition-all cursor-pointer; }
             .btn-modal { @apply px-6 py-2 rounded-lg font-black text-sm uppercase transition-colors cursor-pointer; }
-            .input-base { @apply w-full bg-slate-50 border border-slate-300 font-bold text-[11px] px-1.5 py-1 rounded outline-none focus:ring-2 focus:ring-blue-500 uppercase; }
-            .label-base { @apply text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest block; }
-            .tab-btn { @apply px-4 py-2 font-black text-[11px] uppercase rounded-t-lg transition-colors border-b-4 border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-200 cursor-pointer tracking-wider; }
-            .tab-btn.active { @apply text-blue-700 bg-white border-blue-600 shadow-[0_-2px_4px_rgba(0,0,0,0.05)]; }
+            .input-base { @apply w-full bg-white border border-slate-300 font-bold text-xs px-1.5 py-1 rounded outline-none focus:ring-2 focus:ring-blue-500 uppercase shadow-inner; }
+            .field-label { @apply text-[10px] font-black text-slate-500 uppercase block mb-[-2px] tracking-widest; }
+            .section-header { @apply bg-slate-200 hover:bg-slate-300 px-2 py-1 text-[0.75rem] font-black uppercase text-slate-600 cursor-pointer flex justify-between items-center border-y border-slate-300 transition-colors; }
+            .tab-btn { @apply px-3 py-1.5 font-black text-xs uppercase rounded transition-colors border border-transparent text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5; }
+            .tab-btn.active { @apply text-blue-700 bg-white border-slate-200 shadow-sm; }
+            .dash-card { @apply bg-white border border-slate-200 rounded-lg shadow-sm p-3 flex flex-col gap-2 overflow-hidden flex-1; }
+            .dash-title { @apply text-xs font-black uppercase text-slate-500 border-b border-slate-100 pb-1 flex items-center gap-2; }
         }
 
         body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; font-size: 1.2rem; overscroll-behavior-y: none; }
+        .unselectable { user-select: none; -webkit-user-select: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
-        .loading-overlay.active { opacity: 1; pointer-events: auto; }
+
+        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; }
         .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        .alert-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 200; pointer-events: auto;}
+        .alert-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 200; pointer-events: auto;}
         .alert-modal-overlay.active { display: flex; }
-        
-        .drag-handle { cursor: grab; opacity: 0.5; transition: opacity 0.2s; }
-        .drag-handle:hover { opacity: 1; color: #2563eb; }
-        .dragging { opacity: 0.5; background: #e2e8f0; }
-        .drag-over { border-top: 2px solid #3b82f6; }
+
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+        .dragging { opacity: 0.5; background: #f8fafc; }
     </style>
 </head>
-
 <body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
-    
-    <div id="loader" class="loading-overlay active">
+
+    <!-- Loading Overlay -->
+    <div id="loader" class="loading-overlay" style="display: flex;">
         <div class="spinner"></div>
-        <div id="sync-status" class="mt-4 font-black text-blue-800 uppercase tracking-widest text-center">INITIALIZING DB...</div>
+        <div id="sync-status" class="mt-4 font-black text-slate-800 uppercase tracking-widest text-sm">INITIALIZING...</div>
     </div>
 
-    <!-- Alert Modal -->
-    <div id="alert-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
-            <div id="alert-header" class="bg-slate-900 p-2 text-white font-bold uppercase text-center text-xs tracking-widest">Attention</div>
-            <div class="p-6 text-center">
-                <p id="alert-message" class="font-black text-slate-700 leading-tight text-sm whitespace-pre-wrap"></p>
-                <div class="mt-6 flex gap-2 justify-center">
-                    <button id="alert-cancel" onclick="window.closeAlert()" class="hidden px-6 py-2 rounded font-black text-xs uppercase bg-slate-200 text-slate-700">Cancel</button>
-                    <button id="alert-confirm" onclick="window.closeAlert()" class="px-10 py-2 rounded font-black text-xs uppercase bg-blue-600 text-white shadow-md">Okay</button>
+    <!-- Alert Modal (PMS Style) -->
+    <div id="custom-alert" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 text-center">
+            <div id="alert-header" class="bg-slate-900 p-2 text-white font-bold uppercase text-xs tracking-widest">System Alert</div>
+            <div class="p-6">
+                <p id="custom-alert-msg" class="font-black text-slate-700 leading-tight text-sm whitespace-pre-wrap mb-6"></p>
+                <div class="flex gap-2 justify-center">
+                    <button id="custom-alert-cancel" onclick="document.getElementById('custom-alert').classList.remove('active')" class="hidden px-6 py-2 rounded font-black text-xs uppercase bg-slate-200 text-slate-700 transition-colors">Cancel</button>
+                    <button id="custom-alert-confirm" onclick="document.getElementById('custom-alert').classList.remove('active')" class="px-10 py-2 rounded font-black text-xs uppercase bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-colors">Okay</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Category Reorder Modal -->
-    <div id="category-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col max-h-[80vh]">
-            <div class="bg-slate-900 p-2 text-white font-bold uppercase flex justify-between items-center text-xs tracking-widest">
-                <span>Reorder Categories</span>
-                <button type="button" onclick="window.closeCategoryModal()" class="cursor-pointer hover:text-red-400"><i data-lucide="x" size="16"></i></button>
-            </div>
-            <div class="p-4 flex flex-col gap-3 overflow-hidden">
-                <p class="text-[11px] font-bold text-slate-500 leading-tight">Drag and drop categories to set the master order of your timeline. Beds will be naturally sorted inside each category.</p>
-                <div id="category-drag-list" class="flex flex-col gap-1 overflow-y-auto no-scrollbar">
-                    <!-- Populated dynamically -->
-                </div>
-                <div class="flex gap-2 justify-end mt-2">
-                    <button onclick="window.closeCategoryModal()" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700 !text-xs !py-1.5">Cancel</button>
-                    <button onclick="window.applyCategoryOrder()" class="btn-modal bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 !text-xs !py-1.5 shadow">Apply Order</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bulk Import Modal -->
-    <div id="bulk-import-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col">
-            <div class="bg-slate-900 p-2 text-white font-bold uppercase flex justify-between items-center text-xs tracking-widest">
-                <span>Room Generator</span>
-                <button type="button" onclick="window.closeBulkImportModal()" class="cursor-pointer hover:text-red-400"><i data-lucide="x" size="16"></i></button>
-            </div>
-            <div class="p-4 flex flex-col gap-3">
-                <p class="text-[11px] font-bold text-slate-500 leading-tight">Paste a list to rapidly generate your room layout.<br>Use asterisks for categories (e.g. *Superior Mixed*).<br>Format: [Room ID] [Count]</p>
-                <textarea id="bulk-import-text" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2 !normal-case" placeholder="*Standard Quad Dorm*&#10;C301&#10;4&#10;C302&#10;4"></textarea>
-                <div class="flex gap-2 justify-end mt-2">
-                    <button onclick="window.closeBulkImportModal()" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700 !text-xs !py-1.5">Cancel</button>
-                    <button onclick="window.processBulkImport()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1 !text-xs !py-1.5 shadow">Generate</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Clone Modal -->
+    <!-- Property Clone Modal (PMS Style) -->
     <div id="clone-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
-            <div class="bg-slate-900 p-2 text-white font-bold uppercase text-center text-xs tracking-widest flex items-center justify-center gap-2">
-                <i data-lucide="copy" class="w-3.5 h-3.5"></i> Clone Property
-            </div>
-            <div class="p-6">
-                <p class="font-bold text-slate-500 text-[11px] mb-4 leading-tight">Copy configuration data from an existing property to <span class="text-blue-600 font-black" id="clone-target-name">THIS PROPERTY</span>.</p>
-                <div class="mb-4">
-                    <label class="label-base">Source Property</label>
-                    <select id="clone-source" class="input-base !py-1.5 cursor-pointer"></select>
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-2 text-white font-bold uppercase text-center text-xs tracking-widest">Clone Settings</div>
+            <div class="p-4 flex flex-col gap-4 text-center">
+                <p class="text-[11px] font-bold text-slate-500 leading-snug">Copy configuration from another property into this one. This action cannot be undone once saved.</p>
+                
+                <div class="bg-slate-50 p-3 rounded border border-slate-200 text-left flex flex-col gap-3">
+                    <div>
+                        <label class="field-label">Source Property</label>
+                        <select id="clone-source" class="input-base !text-sm cursor-pointer"></select>
+                    </div>
+                    <div>
+                        <label class="field-label mb-1">What to Copy</label>
+                        <div class="flex flex-col gap-1.5 bg-white p-2 rounded border border-slate-300">
+                            <label class="flex items-center gap-2 cursor-pointer text-[11px] font-black text-slate-700"><input type="checkbox" id="clone-opt-rooms" checked class="w-3.5 h-3.5 text-blue-600 rounded"> Room Inventory & Configuration</label>
+                            <label class="flex items-center gap-2 cursor-pointer text-[11px] font-black text-slate-700"><input type="checkbox" id="clone-opt-events" checked class="w-3.5 h-3.5 text-blue-600 rounded"> Special Event Dates</label>
+                            <label class="flex items-center gap-2 cursor-pointer text-[11px] font-black text-slate-700"><input type="checkbox" id="clone-opt-channex" class="w-3.5 h-3.5 text-blue-600 rounded"> Channex Setup & API Keys</label>
+                        </div>
+                    </div>
                 </div>
-                <div class="bg-slate-50 border border-slate-200 p-3 rounded mb-6 space-y-2">
-                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="clone-opt-general" class="w-3.5 h-3.5 accent-sky-600"><span class="font-bold text-[11px] text-slate-700 uppercase">General Settings</span></label>
-                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="clone-opt-events" class="w-3.5 h-3.5 accent-sky-600" checked><span class="font-bold text-[11px] text-slate-700 uppercase">Events / FMP Dates</span></label>
-                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="clone-opt-rooms" class="w-3.5 h-3.5 accent-red-600"><span class="font-bold text-[11px] text-slate-700 uppercase text-red-700">Room Categories (Overwrites)</span></label>
-                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="clone-opt-rates" class="w-3.5 h-3.5 accent-red-600"><span class="font-bold text-[11px] text-slate-700 uppercase text-red-700">Rate Plans (Overwrites)</span></label>
-                </div>
-                <div class="flex gap-2 justify-center">
-                    <button onclick="window.closeCloneModal()" class="px-6 py-1.5 rounded font-black text-xs uppercase bg-slate-200 text-slate-700 hover:bg-slate-300">Cancel</button>
-                    <button onclick="window.executeClone()" class="px-6 py-1.5 rounded font-black text-xs uppercase bg-sky-600 text-white hover:bg-sky-700 shadow">Start Clone</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Dorm Converter Modal -->
-    <div id="dorm-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
-            <div class="bg-slate-900 p-2 text-white font-bold uppercase text-center text-xs tracking-widest flex items-center justify-center gap-2">
-                <i data-lucide="wrench" class="w-3.5 h-3.5"></i> Dorm Converter Tool
-            </div>
-            <div class="p-6">
-                <p class="font-bold text-slate-500 text-[11px] mb-4 leading-tight">Automatically add dashes (A01 &rarr; A-01) and group private rooms into a dorm layout. <span class="text-red-600 font-black">All active bookings will be safely migrated.</span></p>
-                <div class="space-y-3 mb-6">
-                    <div>
-                        <label class="label-base text-purple-600">1. Target Category (To Convert)</label>
-                        <select id="dorm-source" class="input-base !py-1.5 cursor-pointer"></select>
-                    </div>
-                    <div>
-                        <label class="label-base text-sky-600">2. New Master Category</label>
-                        <input type="text" id="dorm-new-cat" class="input-base" placeholder="e.g. MIXED DORM">
-                    </div>
-                    <div>
-                        <label class="label-base text-sky-600">3. New Base Room Letter</label>
-                        <input type="text" id="dorm-new-base" class="input-base" placeholder="e.g. A">
-                    </div>
-                </div>
-                <div class="flex gap-2 justify-center">
-                    <button onclick="window.closeDormModal()" class="px-6 py-1.5 rounded font-black text-xs uppercase bg-slate-200 text-slate-700 hover:bg-slate-300">Cancel</button>
-                    <button onclick="window.executeDormConversion()" class="px-6 py-1.5 rounded font-black text-xs uppercase bg-purple-600 text-white hover:bg-purple-700 shadow">Migrate Now</button>
+                <div class="flex gap-2 justify-center mt-2">
+                    <button onclick="document.getElementById('clone-modal').classList.remove('active')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700 px-6">Cancel</button>
+                    <button onclick="window.executeClone()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-2 px-6"><i data-lucide="download" size="16"></i> Import</button>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
-        <!-- TOP HEADER (UNIFIED PMS THEME) -->
-        <div class="bg-white px-1 sm:px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50">
-            <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
-                <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
+        <!-- TOP HEADER (MATCHES PMS) -->
+        <div class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-2 shrink-0 z-50 unselectable w-full">
+            
+            <div class="flex items-center gap-3 shrink-0 min-w-0">
+                <a href="index.html" class="flex flex-col min-w-0 mr-3 hover:brightness-110 transition-all cursor-pointer hidden sm:block">
                     <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
                 </a>
-                <div class="flex flex-col min-w-0 border-l border-slate-200 pl-3">
-                    <select id="property-switcher" onchange="window.handlePropertySwitch(this.value)" class="bg-transparent font-black uppercase tracking-widest text-[11px] sm:text-sm text-slate-800 leading-none outline-none cursor-pointer border-none pb-0.5 truncate appearance-none">
+                
+                <div class="flex items-center gap-2">
+                    <h1 class="font-black uppercase tracking-widest text-sm sm:text-base text-slate-800 leading-none shrink-0">SETTINGS</h1>
+                    <select id="property-switcher" onchange="window.handlePropertySwitch(this.value)" class="bg-slate-100 text-blue-600 font-black uppercase tracking-widest text-xs outline-none cursor-pointer border border-slate-300 rounded px-2 py-0.5 max-w-[250px] shadow-sm">
                         <!-- Populated dynamically -->
                     </select>
-                    <p class="text-[9px] text-purple-600 font-bold uppercase tracking-widest">Property Setup</p>
                 </div>
             </div>
-            
-            <div class="flex items-center gap-2 shrink-0 ml-auto">
-                <button onclick="window.openCloneModal()" class="btn-action bg-slate-800 hover:bg-slate-700"><i data-lucide="copy" size="12"></i> Clone</button>
-                <button onclick="window.saveToCloud()" class="btn-action bg-blue-600 hover:bg-blue-700 px-4 py-1.5"><i data-lucide="cloud-upload" size="14"></i> Save</button>
-                <a href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors whitespace-nowrap ml-2">← PMS</a>
+
+            <div class="flex items-center gap-2 shrink-1 transition-opacity min-w-0 ml-auto">
+                <button onclick="window.createProperty()" class="p-1 sm:px-2 sm:py-1 bg-white border border-slate-300 rounded font-bold text-[9px] sm:text-xs uppercase hover:bg-slate-50 text-slate-600 shrink-0 cursor-pointer shadow-sm flex items-center gap-1" title="New Property">
+                    <i data-lucide="plus" size="14"></i> <span class="hidden sm:inline">New</span>
+                </button>
+                <button onclick="window.openCloneModal()" class="p-1 sm:px-2 sm:py-1 bg-white border border-slate-300 rounded font-bold text-[9px] sm:text-xs uppercase hover:bg-purple-50 text-purple-600 shrink-0 cursor-pointer shadow-sm flex items-center gap-1" title="Clone Data">
+                    <i data-lucide="copy" size="14"></i> <span class="hidden sm:inline">Clone</span>
+                </button>
+                <button onclick="window.saveConfig()" class="px-2 sm:px-4 py-1 sm:py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-black text-[10px] sm:text-xs uppercase shadow-md transition-colors flex items-center gap-1 cursor-pointer shrink-0">
+                    <i data-lucide="save" size="14"></i> Save
+                </button>
+                <a href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors hidden sm:block ml-2 shrink-0">← Back</a>
             </div>
         </div>
 
-        <main class="flex-1 flex flex-col bg-white border-x border-b border-slate-300 rounded-none sm:rounded-b-xl shadow-xl min-h-0 overflow-hidden">
-            <!-- Tabs -->
-            <div class="flex px-4 pt-0 bg-slate-100 border-b border-slate-300 shrink-0 gap-2 overflow-x-auto no-scrollbar items-end mt-1">
-                <button onclick="window.switchTab('general')" id="tab-general" class="tab-btn active shrink-0">General</button>
-                <button onclick="window.switchTab('rooms')" id="tab-rooms" class="tab-btn shrink-0">Inventory & Rooms</button>
-                <button onclick="window.switchTab('events')" id="tab-events" class="tab-btn shrink-0">Events / FMP</button>
-                <button onclick="window.switchTab('integrations')" id="tab-integrations" class="tab-btn shrink-0 text-blue-600"><i data-lucide="plug" class="inline w-3.5 h-3.5 mb-0.5"></i> Channex OTA</button>
+        <!-- MAIN CONTENT AREA -->
+        <div class="flex-1 flex flex-col min-h-0 bg-slate-100 sm:rounded-lg overflow-hidden border-y sm:border border-slate-300 shadow-sm">
+            
+            <!-- PMS Style Tabs -->
+            <div class="flex px-2 pt-2 bg-slate-200 border-b border-slate-300 shrink-0 gap-1 overflow-x-auto no-scrollbar unselectable shadow-inner">
+                <button onclick="window.switchTab('general')" id="tab-general" class="tab-btn active"><i data-lucide="info" size="14"></i> General</button>
+                <button onclick="window.switchTab('rooms')" id="tab-rooms" class="tab-btn"><i data-lucide="bed-double" size="14"></i> Inventory</button>
+                <button onclick="window.switchTab('events')" id="tab-events" class="tab-btn"><i data-lucide="calendar-star" size="14"></i> Events</button>
+                <button onclick="window.switchTab('channex')" id="tab-channex" class="tab-btn"><i data-lucide="network" size="14"></i> OTA Mapping</button>
             </div>
 
-            <div class="flex-1 overflow-auto bg-slate-50 relative p-3 sm:p-6">
-                <!-- GENERAL SETTINGS -->
-                <div id="view-general" class="max-w-2xl mx-auto space-y-4 block">
-                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
-                        <h2 class="text-sm font-black uppercase text-slate-800 mb-3 border-b border-slate-100 pb-1 tracking-widest">Property Profile</h2>
-                        <div class="space-y-3">
-                            <div>
-                                <label class="label-base">Property ID (Database Key)</label>
-                                <input type="text" id="prop-id" value="swims_resort" class="input-base border-purple-300 text-purple-800 bg-purple-50" readonly>
-                            </div>
-                            <div><label class="label-base">Display Name</label><input type="text" id="prop-name" class="input-base"></div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div><label class="label-base">Timezone</label><input type="text" id="prop-tz" value="Asia/Bangkok" class="input-base text-slate-500" readonly></div>
-                                <div><label class="label-base">Currency Symbol</label><input type="text" id="prop-currency" value="฿" class="input-base text-slate-500" readonly></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ROOM EDITOR -->
-                <div id="view-rooms" class="max-w-4xl mx-auto hidden flex-col h-full">
-                    <div class="flex justify-between items-center mb-2 shrink-0">
-                        <div>
-                            <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Inventory Layout</h2>
-                            <p class="text-[10px] font-bold text-slate-500 uppercase mt-0.5">Drag categories to order them, or auto-group.</p>
-                        </div>
-                        <div class="flex items-center gap-1.5 flex-wrap justify-end">
-                            <button onclick="window.openDormModal()" class="btn-action bg-purple-600 hover:bg-purple-700 text-[10px] !px-3"><i data-lucide="wrench" size="12"></i> Auto-Format Dorm</button>
-                            <button onclick="window.openCategoryModal()" class="btn-action bg-indigo-600 hover:bg-indigo-700 text-[10px] !px-3"><i data-lucide="list-ordered" size="12"></i> Category Order</button>
-                            <button onclick="window.autoSortRooms()" class="btn-action bg-slate-700 hover:bg-slate-800 text-[10px] !px-3"><i data-lucide="arrow-down-a-z" size="12"></i> Sort & Group</button>
-                            <button onclick="window.openBulkImportModal()" class="btn-action bg-sky-600 hover:bg-sky-700 text-[10px] !px-3"><i data-lucide="wand-2" size="12"></i> Bulk Add</button>
-                            <button onclick="window.addRoomRow()" class="btn-action bg-green-600 hover:bg-green-700 text-[10px] !px-3"><i data-lucide="plus" size="12"></i> Add 1</button>
-                        </div>
-                    </div>
-
-                    <div class="flex-1 overflow-auto bg-white border border-slate-300 rounded shadow-sm relative">
-                        <table class="w-full text-left border-collapse whitespace-nowrap">
-                            <thead class="sticky top-0 z-10 bg-slate-200 text-slate-600 shadow-sm border-b border-slate-300">
-                                <tr class="text-[10px] font-black uppercase tracking-widest">
-                                    <th class="p-1 w-6 text-center"></th>
-                                    <th class="p-1 w-8 text-center border-r border-slate-300">Del</th>
-                                    <th class="p-1 w-20 border-r border-slate-300">Room ID</th>
-                                    <th class="p-1 border-r border-slate-300">Category / Type</th>
-                                    <th class="p-1 w-16 border-r border-slate-300 text-center">Bed</th>
-                                    <th class="p-1 w-16 border-r border-slate-300 text-center">Floor</th>
-                                    <th class="p-1 w-20 text-center">Bunk</th>
-                                </tr>
-                            </thead>
-                            <tbody id="rooms-body" class="text-[11px]" ondragover="window.dragOver(event)">
-                                <!-- Rooms injected here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- EVENTS / FMP -->
-                <div id="view-events" class="max-w-2xl mx-auto hidden flex-col h-full">
-                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm h-full flex flex-col">
-                        <div class="flex justify-between items-center mb-3 shrink-0 border-b border-slate-100 pb-2">
-                            <div><h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Special Events Calendar</h2><p class="text-[10px] font-bold text-slate-500 uppercase mt-0.5">Full Moon Parties & Peak Dates</p></div>
-                            <button onclick="window.addEventRow()" class="btn-action bg-orange-500 hover:bg-orange-600 text-white"><i data-lucide="calendar-plus" size="12"></i> Add Date</button>
-                        </div>
-                        <div class="flex-1 overflow-y-auto pr-2" id="events-container"></div>
-                    </div>
-                </div>
-
-                <!-- INTEGRATIONS (CHANNEX) -->
-                <div id="view-integrations" class="max-w-2xl mx-auto hidden flex-col h-full space-y-4">
-                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
-                        <div class="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
-                            <i data-lucide="plug" class="text-blue-600 w-4 h-4"></i>
-                            <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Channex.io OTA Sync</h2>
-                        </div>
-                        <div class="space-y-3">
-                            <div>
-                                <label class="label-base text-blue-600">Channex API Key (Global)</label>
-                                <input type="password" id="chan-api-key" placeholder="Enter secure API Key..." class="input-base !normal-case font-mono">
+            <!-- Tab Content Containers -->
+            <div class="flex-1 overflow-y-auto p-2 sm:p-4 relative">
+                
+                <!-- GENERAL TAB -->
+                <div id="view-general" class="max-w-3xl mx-auto space-y-4">
+                    <div class="dash-card">
+                        <h2 class="dash-title"><i data-lucide="hotel" class="text-blue-500"></i> Property Details</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                            <div class="col-span-1 sm:col-span-2">
+                                <label class="field-label">Property Name</label>
+                                <input type="text" id="prop-name" class="input-base !text-sm !py-1.5" placeholder="e.g. SWIMS Resort">
                             </div>
                             <div>
-                                <label class="label-base text-blue-600">Channex Property ID (For this property)</label>
-                                <input type="text" id="chan-prop-id" placeholder="e.g. c2f5b8a..." class="input-base !normal-case font-mono">
+                                <label class="field-label">Timezone</label>
+                                <input type="text" id="prop-tz" class="input-base" value="Asia/Bangkok" placeholder="e.g. Asia/Bangkok">
                             </div>
-                            <button onclick="window.testChannexConnection()" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase text-xs py-2 rounded shadow transition-colors flex items-center justify-center gap-2 cursor-pointer">
-                                <i data-lucide="zap" size="14"></i> Test Connection
-                            </button>
-
-                            <div class="mt-4 pt-4 border-t border-slate-100">
-                                <label class="label-base text-purple-600 flex justify-between items-end">
-                                    <span>2-Way Sync Webhook URL</span>
-                                    <span class="text-[9px] text-slate-400 normal-case tracking-normal">Receives Bookings</span>
-                                </label>
-                                <div class="flex gap-2">
-                                    <input type="text" id="webhook-url" value="https://asia-southeast1-swimspms.cloudfunctions.net/channexWebhook" class="input-base !normal-case font-mono bg-slate-100 text-slate-500 cursor-copy select-all" readonly onclick="this.select(); document.execCommand('copy'); window.showAlert('Webhook URL copied to clipboard!');">
-                                    <button onclick="document.getElementById('webhook-url').click()" class="bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 rounded shadow-sm transition-colors cursor-pointer text-xs font-black uppercase flex items-center shrink-0"><i data-lucide="copy" class="w-4 h-4"></i></button>
-                                </div>
-                                <p class="text-[10px] text-slate-500 font-bold leading-tight mt-1.5">Paste this URL into your Channex Dashboard under <span class="text-slate-700 font-black">Webhooks</span>. Select <span class="text-slate-700 font-black">booking_new</span>, <span class="text-slate-700 font-black">booking_modify</span>, and <span class="text-slate-700 font-black">booking_cancel</span> events.</p>
-                                
-                                <button onclick="window.simulateChannexBooking()" class="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs py-2 rounded shadow transition-colors flex items-center justify-center gap-2 cursor-pointer">
-                                    <i data-lucide="bot" size="14"></i> Simulate Test Booking
-                                </button>
+                            <div>
+                                <label class="field-label">Base Currency</label>
+                                <input type="text" id="prop-currency" class="input-base" value="THB" placeholder="e.g. THB">
                             </div>
                         </div>
                     </div>
                     
-                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
-                            <div class="flex items-center gap-2">
-                                <i data-lucide="arrow-right-left" class="text-purple-600 w-4 h-4"></i>
-                                <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Channex Room Mapping</h2>
+                    <div class="dash-card border-red-200 bg-red-50/30">
+                        <h2 class="dash-title text-red-600 border-red-200"><i data-lucide="alert-triangle" size="14"></i> Danger Zone</h2>
+                        <p class="text-[10px] font-bold text-slate-600 mb-2">Deleting a property removes its configuration. It does NOT delete its bookings from the database. Use the Database Importer tool to purge booking records.</p>
+                        <button type="button" onclick="window.deleteProperty()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded font-black text-xs uppercase shadow-sm transition-colors flex items-center justify-center gap-1.5 w-fit cursor-pointer">
+                            <i data-lucide="trash-2" size="14"></i> Permanently Delete Property
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ROOMS TAB -->
+                <div id="view-rooms" class="hidden max-w-5xl mx-auto flex-col h-full">
+                    <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                        <div class="p-2 bg-slate-100 border-b border-slate-300 flex justify-between items-center shrink-0 unselectable">
+                            <h2 class="font-black text-slate-700 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="door-open" class="text-blue-500 w-4 h-4"></i> Physical Rooms & Beds</h2>
+                            <div class="flex gap-1.5">
+                                <button onclick="window.autoSortRooms()" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 rounded font-black text-[9px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1"><i data-lucide="arrow-down-a-z" size="12"></i> Auto-Sort</button>
+                                <button onclick="window.addRoomRow()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-black text-[9px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1"><i data-lucide="plus" size="12"></i> Add Room</button>
                             </div>
-                            <button onclick="window.fetchChannexRooms()" class="btn-action bg-purple-600 hover:bg-purple-700 !px-3">
-                                <i data-lucide="cloud-download" size="12"></i> Fetch Rooms
-                            </button>
                         </div>
-                        <p class="text-[10px] font-bold text-slate-500 uppercase mb-3">Map your live Channex Room Types to your internal PMS categories.</p>
-                        <div id="channex-map-container" class="space-y-2">
-                            <!-- Channex rooms injected here -->
-                            <div class="text-center text-xs text-slate-400 italic py-4">Click "Fetch Rooms" to load mapping from Channex.</div>
+                        <div class="flex-1 overflow-auto">
+                            <table class="w-full text-left border-collapse min-w-[700px]">
+                                <thead class="bg-slate-200 sticky top-0 z-10 shadow-sm border-b border-slate-300 text-[10px] font-black text-slate-600 uppercase tracking-wider unselectable">
+                                    <tr>
+                                        <th class="p-1.5 w-8 text-center"><i data-lucide="grip-vertical" size="12" class="mx-auto opacity-50"></i></th>
+                                        <th class="p-1.5 w-8 text-center">Del</th>
+                                        <th class="p-1.5 w-24 border-r border-slate-300">Room ID</th>
+                                        <th class="p-1.5 w-40 border-r border-slate-300">PMS Category</th>
+                                        <th class="p-1.5 w-28 border-r border-slate-300 bg-blue-100/50">Short Name</th>
+                                        <th class="p-1.5 w-24 border-r border-slate-300">Bed Type</th>
+                                        <th class="p-1.5 w-24 border-r border-slate-300">Floor</th>
+                                        <th class="p-1.5 w-24">Bunk Pos</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rooms-body" class="text-xs bg-white"></tbody>
+                            </table>
+                        </div>
+                        <div class="p-1.5 bg-slate-50 border-t border-slate-200 text-[9px] font-bold text-slate-500 text-center uppercase tracking-widest shrink-0">
+                            Drag rows to reorder. Order dictates Calendar UI display. Type Short Name to sync category.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- EVENTS TAB -->
+                <div id="view-events" class="hidden max-w-3xl mx-auto space-y-4">
+                    <div class="dash-card">
+                        <h2 class="dash-title"><i data-lucide="calendar-heart" class="text-pink-500"></i> Special Event Dates (FMP, NYE, etc.)</h2>
+                        <p class="text-[10px] font-bold text-slate-500 mb-2 leading-relaxed">
+                            These dates trigger the <span class="text-pink-600 font-black">Dual-Curve Pricing</span> logic in the Revenue Engine. 
+                            The engine will isolate special pricing strictly to +/- 6 days around these dates.
+                        </p>
+                        
+                        <div class="bg-slate-50 p-2 rounded border border-slate-200 shadow-inner">
+                            <div id="events-container" class="flex flex-col gap-1.5 max-h-[300px] overflow-y-auto no-scrollbar"></div>
+                            <div class="mt-2 pt-2 border-t border-slate-200">
+                                <button onclick="window.addEventRow()" class="w-full py-1.5 bg-white border border-dashed border-slate-300 hover:border-pink-400 hover:text-pink-600 hover:bg-pink-50 text-slate-500 rounded font-black text-[10px] uppercase transition-colors flex items-center justify-center gap-1 cursor-pointer"><i data-lucide="plus-circle" size="14"></i> Add Event Date</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CHANNEX TAB -->
+                <div id="view-channex" class="hidden max-w-4xl mx-auto space-y-3">
+                    <div class="dash-card bg-indigo-50/50 border-indigo-200">
+                        <h2 class="dash-title text-indigo-700 border-indigo-200"><i data-lucide="key-round" size="14"></i> Channex API Credentials</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                            <div>
+                                <label class="field-label text-indigo-600">Channex API Key</label>
+                                <input type="password" id="chan-api-key" class="input-base border-indigo-300" placeholder="e.g. a1b2c3d4e5f6g7h8i9j0">
+                            </div>
+                            <div>
+                                <label class="field-label text-indigo-600">Channex Property ID</label>
+                                <input type="text" id="chan-prop-id" class="input-base border-indigo-300" placeholder="e.g. 5d5a7d9b-...">
+                            </div>
                         </div>
                     </div>
 
-                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-sm">
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
-                            <div class="flex items-center gap-2">
-                                <i data-lucide="mail" class="text-emerald-600 w-4 h-4"></i>
-                                <h2 class="text-sm font-black uppercase text-slate-800 leading-none tracking-widest">Email OTA Mapping (Legacy)</h2>
-                            </div>
-                            <button onclick="window.addOtaMapRow()" class="btn-action bg-emerald-600 hover:bg-emerald-700 !px-3"><i data-lucide="plus" size="12"></i> Add Rule</button>
+                    <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-2 bg-slate-100 border-b border-slate-300 flex justify-between items-center shrink-0">
+                            <h2 class="font-black text-slate-700 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="arrow-left-right" class="text-emerald-500 w-4 h-4"></i> Room Type Mapping</h2>
+                            <button onclick="window.fetchChannexData()" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[9px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1"><i data-lucide="cloud-download" size="12"></i> Fetch Channex Data</button>
                         </div>
-                        <p class="text-[10px] font-bold text-slate-500 uppercase mb-3">Map incoming OTA room names from emails to your internal PMS categories. Drag to reorder priority.</p>
-                        <div id="ota-map-container" class="space-y-2" ondragover="window.otaDragOver(event)"></div>
+                        <div class="p-2 bg-slate-50" id="channex-mapping-container">
+                            <div class="text-center py-6 text-slate-400 font-bold text-xs italic">Enter API key and click Fetch to map rooms.</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg shadow-sm overflow-hidden flex flex-col hidden" id="channex-rate-mapping-card" style="display: none;">
+                        <div class="p-2 bg-amber-100/50 border-b border-amber-200 flex justify-between items-center shrink-0">
+                            <h2 class="font-black text-amber-800 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="tags" class="text-amber-600 w-4 h-4"></i> Rate Plan Mapping</h2>
+                        </div>
+                        <div class="p-2" id="channex-rate-mapping-container"></div>
+                    </div>
+                    
+                    <div class="dash-card border-slate-200 bg-white">
+                        <h2 class="dash-title"><i data-lucide="bug-play" class="text-rose-500"></i> Developer Tools & Testing</h2>
+                        <p class="text-[10px] font-bold text-slate-500 mb-2">Simulate an inbound webhook booking to prove end-to-end functionality for Channex Certification.</p>
+                        <button type="button" onclick="window.simulateWebhookBooking()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded font-black text-[10px] uppercase shadow-sm transition-colors flex items-center justify-center gap-1.5 w-fit cursor-pointer">
+                            <i data-lucide="webhook" size="14"></i> Simulate Inbound Booking
+                        </button>
                     </div>
                 </div>
+
             </div>
-        </main>
+        </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
-        const app = initializeApp(firebaseConfig); 
-        const auth = getAuth(app); 
-        const db = getFirestore(app); 
-        const appId = 'hotel-pms-v1';
+        const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app); const appId = 'hotel-pms-v1';
 
         let windowPropertiesList = [];
-        let currentConfig = { id: 'swims_resort', name: 'SWIMS! a Social Beach Resort', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' }, otaMap: [], channexMap: [] };
+        let currentConfig = { id: '', rooms: [], events: [], eventNotes: {}, otaMap: [], channexMap: [], channexRateMap: [], channex: {} };
+        let draggedRow = null;
 
-        const init = async () => {
-            try {
-                await signInAnonymously(auth);
-                const propsSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
-                windowPropertiesList = [];
-                propsSnap.forEach(d => windowPropertiesList.push({ id: d.id, ...d.data() }));
+        window.customAlert = (msg, isConfirm = false, onConfirm = null, type = 'info') => {
+            document.getElementById('custom-alert-msg').innerText = msg;
+            const cancelBtn = document.getElementById('custom-alert-cancel');
+            const confirmBtn = document.getElementById('custom-alert-confirm');
+            const header = document.getElementById('alert-header');
+            
+            header.innerText = type === 'danger' ? 'DANGER' : 'SYSTEM ALERT';
+            header.className = type === 'danger' ? 'bg-red-600 p-2 text-white font-bold uppercase text-xs tracking-widest' : 'bg-slate-900 p-2 text-white font-bold uppercase text-xs tracking-widest';
 
-                const switcher = document.getElementById('property-switcher');
-                let optionsHtml = '';
-                if (windowPropertiesList.length > 0) {
-                    currentConfig = windowPropertiesList.find(p => p.id === 'swims_resort') || windowPropertiesList[0];
-                    windowPropertiesList.forEach(p => optionsHtml += `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`);
-                } else {
-                    optionsHtml += `<option value="swims_resort">SWIMS! A SOCIAL BEACH RESORT</option>`;
-                }
-                optionsHtml += `<option value="_new_" class="font-black bg-slate-200">+ ADD NEW PROPERTY</option>`;
-                switcher.innerHTML = optionsHtml; switcher.value = currentConfig.id || 'swims_resort';
-
-                populateUI();
-                document.getElementById('loader').classList.remove('active');
-            } catch (err) {
-                console.error("Init Error:", err);
-                document.getElementById('sync-status').innerText = "DB ERROR";
-            }
-        };
-
-        window.handlePropertySwitch = (val) => {
-            if (val === '_new_') {
-                currentConfig = { id: '', name: 'NEW PROPERTY', timezone: 'Asia/Bangkok', currency: '฿', rooms: [], events: [], channex: { apiKey: '', propId: '' }, otaMap: [], channexMap: [] };
+            if (isConfirm) {
+                cancelBtn.style.display = 'block';
+                confirmBtn.innerText = type === 'danger' ? 'YES, PURGE' : 'Yes';
+                confirmBtn.className = type === 'danger' ? "px-10 py-2 rounded font-black text-xs uppercase bg-red-600 hover:bg-red-700 text-white shadow-md transition-colors" : "px-10 py-2 rounded font-black text-xs uppercase bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-colors";
             } else {
-                const found = windowPropertiesList.find(p => p.id === val);
-                if (found) currentConfig = found;
+                cancelBtn.style.display = 'none';
+                confirmBtn.innerText = 'Okay';
+                confirmBtn.className = "px-10 py-2 rounded font-black text-xs uppercase bg-slate-800 hover:bg-slate-700 text-white shadow-md transition-colors";
             }
-            populateUI(); window.switchTab('general');
+            confirmBtn.onclick = () => { if (onConfirm) onConfirm(); document.getElementById('custom-alert').classList.remove('active'); };
+            document.getElementById('custom-alert').classList.add('active');
         };
 
         window.switchTab = (tab) => {
-            ['general', 'rooms', 'events', 'integrations'].forEach(t => {
-                const el = document.getElementById(`view-${t}`);
-                if (el) el.style.display = t === tab ? (t === 'general' ? 'block' : 'flex') : 'none';
-                const tabEl = document.getElementById(`tab-${t}`);
-                if (tabEl) tabEl.classList.toggle('active', t === tab);
+            ['general', 'rooms', 'events', 'channex'].forEach(t => {
+                const view = document.getElementById(`view-${t}`);
+                if (view) {
+                    if (t === tab) {
+                        view.style.display = t === 'rooms' ? 'flex' : 'block';
+                    } else {
+                        view.style.display = 'none';
+                    }
+                }
+                const btn = document.getElementById(`tab-${t}`);
+                if (btn) btn.classList.toggle('active', t === tab);
             });
         };
 
-        const populateUI = () => {
-            const isNew = currentConfig.id === '';
-            const propIdInput = document.getElementById('prop-id');
-            propIdInput.value = currentConfig.id || '';
-            propIdInput.readOnly = !isNew;
-            if (isNew) {
-                propIdInput.classList.remove('border-purple-300', 'text-purple-800', 'bg-purple-50');
-                propIdInput.classList.add('border-blue-400', 'bg-white', 'text-slate-800');
-                propIdInput.placeholder = "e.g. wet_pool_party";
-            } else {
-                propIdInput.classList.add('border-purple-300', 'text-purple-800', 'bg-purple-50');
-                propIdInput.classList.remove('border-blue-400', 'bg-white', 'text-slate-800');
-            }
+        window.handlePropertySwitch = async (propId) => {
+            if (propId === currentConfig.id) return;
+            document.getElementById('loader').style.display = 'flex'; 
+            document.getElementById('sync-status').innerText = 'LOADING CONFIG...';
+            
+            try {
+                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
+                if (snap.exists()) {
+                    currentConfig = { id: snap.id, ...snap.data() };
+                    window.populateForm();
+                }
+            } catch(e) { console.error("Error loading property", e); window.customAlert("Failed to load property data."); }
+            document.getElementById('loader').style.display = 'none';
+        };
+
+        window.populateForm = () => {
             document.getElementById('prop-name').value = currentConfig.name || '';
+            document.getElementById('prop-tz').value = currentConfig.timezone || 'Asia/Bangkok';
+            document.getElementById('prop-currency').value = currentConfig.currency || 'THB';
             document.getElementById('chan-api-key').value = currentConfig.channex?.apiKey || '';
             document.getElementById('chan-prop-id').value = currentConfig.channex?.propId || '';
 
@@ -407,57 +341,98 @@
                 const sortedRooms = [...(currentConfig.rooms || [])].sort((a,b) => a.order - b.order);
                 sortedRooms.forEach(r => window.addRoomRow(r));
             }
+
             const evContainer = document.getElementById('events-container');
             if (evContainer) {
                 evContainer.innerHTML = '';
                 const sortedEvents = [...(currentConfig.events || [])].sort();
-                sortedEvents.forEach(e => window.addEventRow(e));
-            }
-            
-            const otaContainer = document.getElementById('ota-map-container');
-            if (otaContainer) {
-                otaContainer.innerHTML = '';
-                (currentConfig.otaMap || []).forEach(rule => window.addOtaMapRow(rule));
-            }
-            
-            // Build saved Channex map if exists
-            const chanContainer = document.getElementById('channex-map-container');
-            if (chanContainer && currentConfig.channexMap && currentConfig.channexMap.length > 0) {
-                chanContainer.innerHTML = '';
-                currentConfig.channexMap.forEach(rule => window.addChannexMapRow(rule.channexId, rule.channexTitle, rule.pmsCategory));
+                sortedEvents.forEach(e => window.addEventRow(e, currentConfig.eventNotes?.[e] || ""));
             }
 
-            lucide.createIcons();
+            window.renderChannexMapping();
         };
 
-        let draggedRow = null;
-        window.dragStart = (e) => {
-            draggedRow = e.target.closest('tr');
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', draggedRow.innerHTML);
-            setTimeout(() => draggedRow.classList.add('dragging'), 0);
+        window.createProperty = () => {
+            const newId = prompt("Enter a unique, lowercase ID for the new property (e.g. 'new_hostel'):");
+            if (!newId || newId.trim() === '') return;
+            const cleanId = newId.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+            
+            if (windowPropertiesList.find(p => p.id === cleanId)) return window.customAlert("Property ID already exists!");
+
+            currentConfig = { id: cleanId, name: cleanId.toUpperCase(), rooms: [], events: [], eventNotes: {}, otaMap: [], channexMap: [], channexRateMap: [], channex: {} };
+            
+            const select = document.getElementById('property-switcher');
+            const opt = document.createElement('option'); opt.value = cleanId; opt.innerText = currentConfig.name;
+            select.appendChild(opt); select.value = cleanId;
+            
+            windowPropertiesList.push(currentConfig);
+            window.populateForm();
         };
-        window.dragOver = (e) => {
-            e.preventDefault();
-            const targetRow = e.target.closest('tr');
-            if(targetRow && targetRow !== draggedRow) {
+
+        window.deleteProperty = () => {
+            if (windowPropertiesList.length <= 1) return window.customAlert("You cannot delete the last property in the system.");
+            window.customAlert(`PERMANENTLY DELETE [ ${currentConfig.id.toUpperCase()} ]?\n\nThis will wipe all configurations. Room inventory will be lost. (Bookings in the database will be orphaned, not deleted).`, true, async () => {
+                document.getElementById('loader').style.display = 'flex'; document.getElementById('sync-status').innerText = 'DELETING...';
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentConfig.id));
+                    windowPropertiesList = windowPropertiesList.filter(p => p.id !== currentConfig.id);
+                    await window.handlePropertySwitch(windowPropertiesList[0].id);
+                    document.getElementById('property-switcher').innerHTML = windowPropertiesList.map(p => `<option value="${p.id}" ${p.id === currentConfig.id ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`).join('');
+                } catch(e) { window.customAlert("Failed to delete."); }
+                document.getElementById('loader').style.display = 'none'; 
+            }, 'danger');
+        };
+
+        window.openCloneModal = () => {
+            const sel = document.getElementById('clone-source');
+            sel.innerHTML = windowPropertiesList.filter(p => p.id !== currentConfig.id).map(p => `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`).join('');
+            if (sel.options.length === 0) return window.customAlert("No other properties available to clone from.");
+            document.getElementById('clone-modal').classList.add('active');
+        };
+
+        window.executeClone = async () => {
+            const srcId = document.getElementById('clone-source').value;
+            const sourceProp = windowPropertiesList.find(p => p.id === srcId);
+            if (!sourceProp) return;
+
+            document.getElementById('clone-modal').classList.remove('active');
+            
+            if (document.getElementById('clone-opt-rooms').checked) currentConfig.rooms = JSON.parse(JSON.stringify(sourceProp.rooms || []));
+            if (document.getElementById('clone-opt-events').checked) { 
+                currentConfig.events = JSON.parse(JSON.stringify(sourceProp.events || []));
+                currentConfig.eventNotes = JSON.parse(JSON.stringify(sourceProp.eventNotes || {}));
+            }
+            if (document.getElementById('clone-opt-channex').checked) {
+                currentConfig.channex = JSON.parse(JSON.stringify(sourceProp.channex || {}));
+                currentConfig.channexMap = JSON.parse(JSON.stringify(sourceProp.channexMap || []));
+                currentConfig.channexRateMap = JSON.parse(JSON.stringify(sourceProp.channexRateMap || []));
+            }
+            
+            window.populateForm();
+            window.customAlert(`Data cloned from ${srcId.toUpperCase()}. Click Save to persist changes.`);
+        };
+
+        // --- ROOM INVENTORY LOGIC ---
+        window.dragStart = function(e) { draggedRow = this; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', this.outerHTML); this.classList.add('dragging'); };
+        window.dragEnd = function(e) { this.classList.remove('dragging'); window.recalculateOrder(); };
+        window.dragOver = function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return false; };
+        window.dragDrop = function(e) {
+            e.stopPropagation();
+            if (draggedRow !== this) {
                 const tbody = document.getElementById('rooms-body');
                 const rows = Array.from(tbody.querySelectorAll('tr'));
                 const draggedIdx = rows.indexOf(draggedRow);
-                const targetIdx = rows.indexOf(targetRow);
-                if(draggedIdx < targetIdx) targetRow.after(draggedRow); else targetRow.before(draggedRow);
+                const targetIdx = rows.indexOf(this);
+                if (draggedIdx < targetIdx) this.parentNode.insertBefore(draggedRow, this.nextSibling);
+                else this.parentNode.insertBefore(draggedRow, this);
             }
+            return false;
         };
-        window.dragEnd = (e) => {
-            if(draggedRow) draggedRow.classList.remove('dragging');
-            draggedRow = null;
-            window.recalculateOrder();
-        };
+
         window.recalculateOrder = () => {
-            const rows = document.querySelectorAll('#rooms-body tr');
-            rows.forEach((row, index) => {
-                const orderInput = row.querySelector('.room-order');
-                if(orderInput) orderInput.value = (index + 1) * 10;
+            document.querySelectorAll('#rooms-body tr').forEach((tr, index) => {
+                const oInp = tr.querySelector('.room-order');
+                if (oInp) oInp.value = index;
             });
         };
 
@@ -477,203 +452,254 @@
             window.recalculateOrder();
         };
 
-        window.addRoomRow = (r = {id: '', type: '', bed: '', floor: '', icon: '', order: 9999}) => {
+        window.syncShortNames = (input) => {
+            const row = input.closest('tr');
+            const cat = row.querySelector('.room-type').value.trim().toUpperCase();
+            const val = input.value;
+            if (!cat) return;
+            document.querySelectorAll('#rooms-body tr').forEach(tr => {
+                if (tr === row) return;
+                if (tr.querySelector('.room-type').value.trim().toUpperCase() === cat) {
+                    tr.querySelector('.room-short').value = val;
+                }
+            });
+        };
+
+        window.addRoomRow = (r = {id: '', type: '', short: '', bed: '', floor: '', icon: '', order: 9999}) => {
             const tbody = document.getElementById('rooms-body');
             const tr = document.createElement('tr');
-            tr.className = "border-b border-slate-200 hover:bg-slate-100 bg-white transition-colors";
+            tr.className = "border-b border-slate-200 hover:bg-slate-50 bg-white transition-colors";
             tr.draggable = true; tr.ondragstart = window.dragStart; tr.ondragend = window.dragEnd;
             tr.innerHTML = `
-                <td class="p-1 text-center"><i data-lucide="grip-vertical" class="w-3 h-3 drag-handle mx-auto"></i></td>
-                <td class="p-1 text-center border-r border-slate-200"><button onclick="this.closest('tr').remove()" class="text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="trash-2" size="14" class="mx-auto"></i></button></td>
+                <td class="p-1 text-center border-r border-slate-200"><i data-lucide="grip-vertical" class="w-3 h-3 drag-handle mx-auto text-slate-400"></i></td>
+                <td class="p-1 text-center border-r border-slate-200"><button onclick="this.closest('tr').remove()" class="text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 p-1 rounded border border-slate-200 transition-colors"><i data-lucide="trash-2" size="12" class="mx-auto"></i></button></td>
                 <td class="p-1 border-r border-slate-200"><input type="text" class="room-id w-full bg-transparent font-black text-slate-800 outline-none px-1 uppercase" value="${r.id}" placeholder="ID"></td>
                 <td class="p-1 border-r border-slate-200"><input type="text" class="room-type w-full bg-transparent font-bold text-slate-600 outline-none px-1 uppercase" value="${r.type}" placeholder="CATEGORY"></td>
+                <td class="p-1 border-r border-slate-200 bg-blue-50/50"><input type="text" class="room-short w-full bg-transparent font-black text-blue-700 outline-none px-1 uppercase text-center" value="${r.short || ''}" placeholder="e.g. OF KING" oninput="window.syncShortNames(this)"></td>
                 <td class="p-1 border-r border-slate-200"><input type="text" class="room-bed w-full bg-transparent font-bold text-slate-600 outline-none text-center uppercase" value="${r.bed}" placeholder="BED"></td>
-                <td class="p-1 border-r border-slate-200">
-                    <input type="text" class="room-floor w-full bg-transparent font-bold text-slate-600 outline-none text-center uppercase" value="${r.floor || ''}" placeholder="1, 2, 3...">
-                </td>
-                <td class="p-1 border-r border-slate-200">
-                    <select class="room-icon w-full bg-transparent font-bold text-slate-600 outline-none text-center cursor-pointer">
-                        <option value="" ${!r.icon ? 'selected' : ''}>--</option>
-                        <option value="top" ${r.icon === 'top' || r.icon === 'bunk-top' ? 'selected' : ''}>Top</option>
-                        <option value="bottom" ${r.icon === 'bottom' || r.icon === 'bunk-bottom' ? 'selected' : ''}>Bottom</option>
-                    </select>
-                    <input type="hidden" class="room-order" value="${r.order}">
-                </td>
+                <td class="p-1 border-r border-slate-200"><select class="room-floor w-full bg-transparent font-bold text-slate-600 outline-none uppercase text-center cursor-pointer"><option value="">--</option><option value="down" ${r.floor==='down'?'selected':''}>DOWN</option><option value="up" ${r.floor==='up'?'selected':''}>UP</option><option value="double" ${r.floor==='double'?'selected':''}>DOUBLE</option></select></td>
+                <td class="p-1"><select class="room-icon w-full bg-transparent font-bold text-slate-600 outline-none uppercase text-center cursor-pointer"><option value="">--</option><option value="bot" ${r.icon==='bot'?'selected':''}>BOT BUNK</option><option value="top" ${r.icon==='top'?'selected':''}>TOP BUNK</option></select><input type="hidden" class="room-order" value="${r.order}"></td>
             `;
-            tbody.appendChild(tr); lucide.createIcons(); window.recalculateOrder();
-        };
-
-        let draggedCategory = null;
-        window.openCategoryModal = () => {
-            const rows = Array.from(document.querySelectorAll('#rooms-body tr'));
-            const uniqueCats = [...new Set(rows.map(r => r.querySelector('.room-type').value.trim().toUpperCase()))].filter(Boolean);
-            
-            if (uniqueCats.length === 0) return window.showAlert("No categories found to sort.");
-            
-            const list = document.getElementById('category-drag-list');
-            list.innerHTML = uniqueCats.map(c => `
-                <div class="cat-drag-item bg-slate-50 border border-slate-300 rounded p-2 text-xs font-black uppercase text-slate-700 cursor-grab hover:bg-slate-100 flex items-center gap-2" draggable="true" ondragstart="window.catDragStart(event)" ondragend="window.catDragEnd(event)" ondragover="window.catDragOver(event)" data-cat="${c}">
-                    <i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-slate-400 pointer-events-none"></i> ${c}
-                </div>
-            `).join('');
+            tbody.appendChild(tr);
+            tr.addEventListener('dragover', window.dragOver); tr.addEventListener('drop', window.dragDrop);
             lucide.createIcons();
-            document.getElementById('category-modal').style.display = 'flex';
-        };
-        
-        window.closeCategoryModal = () => { document.getElementById('category-modal').style.display = 'none'; };
-
-        window.catDragStart = (e) => {
-            draggedCategory = e.target;
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', draggedCategory.dataset.cat);
-            setTimeout(() => draggedCategory.classList.add('opacity-50', 'bg-indigo-50'), 0);
-        };
-        
-        window.catDragOver = (e) => {
-            e.preventDefault();
-            const target = e.target.closest('.cat-drag-item');
-            if(target && target !== draggedCategory) {
-                const list = document.getElementById('category-drag-list');
-                const items = Array.from(list.querySelectorAll('.cat-drag-item'));
-                const draggedIdx = items.indexOf(draggedCategory);
-                const targetIdx = items.indexOf(target);
-                if(draggedIdx < targetIdx) target.after(draggedCategory); else target.before(draggedCategory);
-            }
-        };
-        
-        window.catDragEnd = (e) => {
-            if(draggedCategory) draggedCategory.classList.remove('opacity-50', 'bg-indigo-50');
-            draggedCategory = null;
-        };
-
-        window.applyCategoryOrder = () => {
-            const catOrder = Array.from(document.querySelectorAll('.cat-drag-item')).map(el => el.dataset.cat);
-            if (catOrder.length === 0) return window.closeCategoryModal();
-
-            const tbody = document.getElementById('rooms-body');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            const collator = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
-            
-            rows.sort((a, b) => {
-                const typeA = a.querySelector('.room-type').value.trim().toUpperCase();
-                const typeB = b.querySelector('.room-type').value.trim().toUpperCase();
-                
-                const idxA = catOrder.indexOf(typeA);
-                const idxB = catOrder.indexOf(typeB);
-                
-                if (idxA !== idxB) {
-                    if (idxA === -1) return 1;
-                    if (idxB === -1) return -1;
-                    return idxA - idxB;
-                }
-                
-                const idA = a.querySelector('.room-id').value;
-                const idB = b.querySelector('.room-id').value;
-                return collator.compare(idA, idB);
-            });
-            
-            rows.forEach(r => tbody.appendChild(r));
             window.recalculateOrder();
-            window.closeCategoryModal();
         };
 
-        let draggedOtaRow = null;
-        window.otaDragStart = (e) => {
-            draggedOtaRow = e.target.closest('.ota-map-row');
-            e.dataTransfer.effectAllowed = 'move';
-            setTimeout(() => draggedOtaRow.classList.add('opacity-50', 'bg-emerald-50'), 0);
-        };
-        window.otaDragOver = (e) => {
-            e.preventDefault();
-            const targetRow = e.target.closest('.ota-map-row');
-            if(targetRow && targetRow !== draggedOtaRow) {
-                const container = document.getElementById('ota-map-container');
-                const rows = Array.from(container.querySelectorAll('.ota-map-row'));
-                const draggedIdx = rows.indexOf(draggedOtaRow);
-                const targetIdx = rows.indexOf(targetRow);
-                if(draggedIdx < targetIdx) targetRow.after(draggedOtaRow); else targetRow.before(draggedOtaRow);
-            }
-        };
-        window.otaDragEnd = (e) => {
-            if(draggedOtaRow) draggedOtaRow.classList.remove('opacity-50', 'bg-emerald-50');
-            draggedOtaRow = null;
-        };
-
-        window.addEventRow = (dateStr = "") => {
+        // --- EVENTS LOGIC ---
+        window.addEventRow = (dateStr = "", noteStr = "") => {
             const container = document.getElementById('events-container');
             const div = document.createElement('div');
-            div.className = "flex items-center gap-2 mb-1.5 event-row";
-            div.innerHTML = `<input type="date" class="event-date input-base max-w-[150px] !py-0.5" value="${dateStr}"><button onclick="this.parentElement.remove()" class="p-1 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded border border-slate-200"><i data-lucide="trash-2" size="14"></i></button>`;
+            div.className = "flex items-center gap-1.5 event-row bg-white p-1 rounded border border-slate-200 shadow-sm";
+            div.innerHTML = `
+                <input type="date" class="event-date input-base max-w-[130px] !py-0.5 cursor-pointer shadow-none" value="${dateStr}">
+                <input type="text" class="event-note input-base flex-1 !py-0.5 text-slate-600 shadow-none" placeholder="Event Name (e.g. Full Moon)" value="${noteStr}">
+                <button onclick="this.parentElement.remove()" class="p-1 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded border border-slate-200 transition-colors shrink-0"><i data-lucide="trash-2" size="14"></i></button>
+            `;
             container.appendChild(div); lucide.createIcons();
         };
 
-        window.addOtaMapRow = (rule = { otaName: '', pmsCategory: '' }) => {
-            const container = document.getElementById('ota-map-container');
-            const div = document.createElement('div');
-            div.className = "flex items-center gap-2 ota-map-row bg-slate-50 p-2 border border-slate-200 rounded transition-colors";
-            div.draggable = true;
-            div.ondragstart = window.otaDragStart;
-            div.ondragend = window.otaDragEnd;
+        // --- CHANNEX MAPPING LOGIC ---
+        window.fetchChannexData = async () => {
+            const apiKey = document.getElementById('chan-api-key').value.trim();
+            const propId = document.getElementById('chan-prop-id').value.trim();
             
-            const cats = [...new Set(Array.from(document.querySelectorAll('.room-type')).map(r => r.value))].filter(Boolean);
-            let catOptions = cats.map(c => `<option value="${c}" ${c === rule.pmsCategory ? 'selected' : ''}>${c}</option>`).join('');
-
-            div.innerHTML = `
-                <i data-lucide="grip-vertical" class="text-slate-400 w-4 h-4 shrink-0 drag-handle cursor-grab hover:text-emerald-500"></i>
-                <div class="flex-1">
-                    <input type="text" class="ota-name-input input-base !normal-case" placeholder="OTA Room Name (e.g. Gardenview Promo)" value="${rule.otaName}">
-                </div>
-                <i data-lucide="arrow-right" class="text-slate-400 w-4 h-4 shrink-0"></i>
-                <div class="flex-1">
-                    <select class="ota-cat-input input-base cursor-pointer">
-                        <option value="">-- SELECT PMS CATEGORY --</option>
-                        ${catOptions}
-                    </select>
-                </div>
-                <button onclick="this.parentElement.remove()" class="p-1.5 text-slate-400 hover:text-red-500 bg-white hover:bg-red-50 rounded border border-slate-200 shadow-sm shrink-0"><i data-lucide="trash-2" size="14"></i></button>
-            `;
-            container.appendChild(div);
-            lucide.createIcons();
-        };
-
-        window.addChannexMapRow = (channexId, channexTitle, pmsCategory) => {
-            const container = document.getElementById('channex-map-container');
-            const div = document.createElement('div');
-            div.className = "flex items-center gap-2 channex-map-row bg-slate-50 p-2 border border-slate-200 rounded";
+            if (!apiKey || !propId) return window.customAlert("API Key and Property ID are required.");
             
-            const cats = [...new Set(Array.from(document.querySelectorAll('.room-type')).map(r => r.value))].filter(Boolean);
-            let catOptions = cats.map(c => `<option value="${c}" ${c === pmsCategory ? 'selected' : ''}>${c}</option>`).join('');
+            const btn = document.querySelector('button[onclick="window.fetchChannexData()"]');
+            btn.innerHTML = '<i data-lucide="loader-2" size="12" class="animate-spin inline"></i> FETCHING...'; btn.disabled = true;
 
-            div.innerHTML = `
-                <div class="flex-1 min-w-0">
-                    <input type="hidden" class="cx-id" value="${channexId}">
-                    <input type="hidden" class="cx-title" value="${channexTitle}">
-                    <div class="text-xs font-black text-slate-800 truncate" title="${channexTitle}">${channexTitle}</div>
-                    <div class="text-[9px] font-mono text-slate-500 truncate">${channexId}</div>
-                </div>
-                <i data-lucide="arrow-right" class="text-slate-400 w-4 h-4 shrink-0"></i>
-                <div class="flex-1">
-                    <select class="cx-cat-input input-base cursor-pointer !border-purple-300 focus:ring-purple-500">
-                        <option value="">-- SELECT PMS CATEGORY --</option>
-                        ${catOptions}
-                    </select>
-                </div>
-            `;
-            container.appendChild(div);
-            lucide.createIcons();
-        };
-
-        window.saveToCloud = async () => {
-            document.getElementById('loader').classList.add('active');
             try {
-                const propId = document.getElementById('prop-id').value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
-                if (!propId) throw new Error("Property ID cannot be blank.");
+                // Fetch Room Types
+                const rRes = await fetch(`https://staging.channex.io/api/v1/room_types?filter[property_id]=${propId}`, { headers: { "user-api-key": apiKey } });
+                if (!rRes.ok) throw new Error("Channex Rooms API returned " + rRes.status);
+                const rData = await rRes.json();
+                
+                // Fetch Rate Plans
+                const rateRes = await fetch(`https://staging.channex.io/api/v1/rate_plans?filter[property_id]=${propId}`, { headers: { "user-api-key": apiKey } });
+                if (!rateRes.ok) throw new Error("Channex Rates API returned " + rateRes.status);
+                const rateData = await rateRes.json();
 
+                window.renderChannexMappingUI(rData.data, rateData.data);
+
+            } catch (e) {
+                console.error(e); window.customAlert("Failed to fetch Channex configuration.\n\n" + e.message);
+            }
+            
+            btn.innerHTML = '<i data-lucide="cloud-download" size="12"></i> Fetch Channex Data'; btn.disabled = false; lucide.createIcons();
+        };
+
+        window.renderChannexMappingUI = (channexRooms, channexRates) => {
+            if (!channexRooms || channexRooms.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-4 text-red-500 font-bold text-xs'>No Room Types found in Channex for this Property.</div>";
+            
+            const roomTypes = [...new Set(Array.from(document.querySelectorAll('.room-type')).map(i => i.value.trim().toUpperCase()).filter(Boolean))];
+            if (roomTypes.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-4 text-orange-500 font-bold text-xs'>No PMS Room Categories found. Add rooms in the Inventory tab first!</div>";
+
+            const pmsOptions = `<option value="">-- DO NOT MAP --</option>` + roomTypes.map(t => `<option value="${t}">${t}</option>`).join('');
+            
+            // 1. Render Room Types Mapping
+            let html = '<div class="flex flex-col gap-1.5">';
+            channexRooms.forEach(cr => {
+                const existingMap = (currentConfig.channexMap || []).find(m => m.channexId === cr.id);
+                let selectedVal = existingMap ? existingMap.pmsCategory : '';
+                
+                html += `
+                    <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-chan-id="${cr.id}">
+                        <div class="flex-1 font-bold text-slate-700 text-[11px] truncate pl-1" title="${cr.attributes.title}">${cr.attributes.title}</div>
+                        <i data-lucide="arrow-right" size="12" class="text-emerald-500 shrink-0"></i>
+                        <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-pms-sel bg-slate-50 border-emerald-300 text-emerald-800 shadow-none">
+                            ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
+                        </select>
+                    </div>`;
+            });
+            html += '</div>';
+            document.getElementById('channex-mapping-container').innerHTML = html;
+
+            // 2. Render Rate Plans Mapping
+            if (channexRates && channexRates.length > 0) {
+                document.getElementById('channex-rate-mapping-card').classList.remove('hidden');
+                document.getElementById('channex-rate-mapping-card').style.display = 'flex';
+                let rHtml = '<div class="flex flex-col gap-1.5">';
+                channexRates.forEach(rate => {
+                    const existingMap = (currentConfig.channexRateMap || []).find(m => m.ratePlanId === rate.id);
+                    let selectedVal = existingMap ? existingMap.pmsCategory : '';
+                    
+                    rHtml += `
+                        <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${rate.id}" data-rate-title="${rate.attributes.title}">
+                            <div class="flex-1 flex flex-col min-w-0 pl-1">
+                                <span class="font-bold text-slate-800 text-[11px] truncate" title="${rate.attributes.title}">${rate.attributes.title}</span>
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
+                            </div>
+                            <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
+                            <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none">
+                                ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
+                            </select>
+                        </div>`;
+                });
+                rHtml += '</div>';
+                document.getElementById('channex-rate-mapping-container').innerHTML = rHtml;
+            } else {
+                document.getElementById('channex-rate-mapping-card').classList.add('hidden');
+                document.getElementById('channex-rate-mapping-card').style.display = 'none';
+            }
+
+            lucide.createIcons();
+            window.customAlert(`Successfully fetched ${channexRooms.length} Rooms and ${channexRates ? channexRates.length : 0} Rate Plans from Channex.\n\nPlease complete the mapping and hit SAVE.`);
+        };
+
+        window.renderChannexMapping = () => {
+            const mapContainer = document.getElementById('channex-mapping-container');
+            const map = currentConfig.channexMap || [];
+            if (map.length > 0) {
+                let html = '<div class="flex flex-col gap-1.5 opacity-70 hover:opacity-100 transition-opacity">';
+                map.forEach(m => {
+                    html += `
+                        <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-chan-id="${m.channexId}">
+                            <div class="flex-1 font-bold text-slate-700 text-[11px] truncate pl-1">${m.channexTitle || 'Mapped Room'}</div>
+                            <i data-lucide="arrow-right" size="12" class="text-emerald-500 shrink-0"></i>
+                            <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-pms-sel bg-slate-50 border-emerald-300 text-emerald-800 shadow-none"><option value="${m.pmsCategory}" selected>${m.pmsCategory}</option></select>
+                        </div>`;
+                });
+                html += '</div><div class="text-center mt-2"><button onclick="window.fetchChannexData()" class="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 underline uppercase">Refresh Live Mapping</button></div>';
+                mapContainer.innerHTML = html;
+            } else {
+                mapContainer.innerHTML = "<div class='text-center py-4 text-slate-400 font-bold text-xs italic'>Enter API key and click Fetch to map rooms.</div>";
+            }
+            
+            const rateContainer = document.getElementById('channex-rate-mapping-container');
+            
+            const rateMap = currentConfig.channexRateMap || [];
+            if (rateMap.length > 0) {
+                document.getElementById('channex-rate-mapping-card').classList.remove('hidden');
+                document.getElementById('channex-rate-mapping-card').style.display = 'flex';
+                let rHtml = '<div class="flex flex-col gap-1.5 opacity-70 hover:opacity-100 transition-opacity">';
+                rateMap.forEach(m => {
+                    rHtml += `
+                        <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${m.ratePlanId}" data-rate-title="${m.ratePlanTitle}">
+                            <div class="flex-1 flex flex-col min-w-0 pl-1">
+                                <span class="font-bold text-slate-800 text-[11px] truncate">${m.ratePlanTitle || 'Mapped Rate'}</span>
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
+                            </div>
+                            <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
+                            <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none"><option value="${m.pmsCategory}" selected>${m.pmsCategory}</option></select>
+                        </div>`;
+                });
+                rHtml += '</div>';
+                rateContainer.innerHTML = rHtml;
+            } else {
+                document.getElementById('channex-rate-mapping-card').classList.add('hidden');
+                document.getElementById('channex-rate-mapping-card').style.display = 'none';
+            }
+            lucide.createIcons();
+        };
+
+        window.simulateWebhookBooking = async () => {
+            const btn = document.querySelector('button[onclick="window.simulateWebhookBooking()"]');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" size="14" class="animate-spin inline"></i> FIRING...'; btn.disabled = true;
+
+            try {
+                if (!currentConfig.channex || !currentConfig.channex.propId) throw new Error("Please save your Channex Property ID first.");
+                if (!currentConfig.channexMap || currentConfig.channexMap.length === 0) throw new Error("Please map your rooms first so the webhook knows what to book.");
+
+                const randomMappedRoom = currentConfig.channexMap[Math.floor(Math.random() * currentConfig.channexMap.length)];
+                
+                const today = new Date();
+                const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+
+                const fakePayload = {
+                    event: "booking_new",
+                    payload: {
+                        booking: {
+                            id: "SIM_CX_" + Math.random().toString(36).substr(2, 6).toUpperCase(),
+                            property_id: currentConfig.channex.propId,
+                            channel_id: "booking_com",
+                            status: "new",
+                            inserted_at: new Date().toISOString(),
+                            customer: { name: "CERTIFICATION", surname: "TESTER", mail: "test@channex.io", phone: "+1234567890", country: "US" },
+                            rooms: [
+                                {
+                                    room_type_id: randomMappedRoom.channexId,
+                                    checkin_date: getLocalYMD(today),
+                                    checkout_date: getLocalYMD(tomorrow),
+                                    occupancy: 2,
+                                    amount: "999.00"
+                                }
+                            ]
+                        }
+                    }
+                };
+
+                const res = await fetch("https://asia-southeast1-swimspms.cloudfunctions.net/channexWebhook", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(fakePayload)
+                });
+
+                if (!res.ok) throw new Error("Webhook rejected request with status: " + res.status);
+                window.customAlert("✅ Webhook Simulated Successfully!\n\nA fake Certification Booking should now be in your PMS Dashboard.");
+
+            } catch (e) {
+                console.error(e);
+                window.customAlert("Simulation Failed:\n\n" + e.message, false, null, 'danger');
+            }
+
+            btn.innerHTML = originalHtml; btn.disabled = false; lucide.createIcons();
+        };
+
+        // --- MAIN SAVE FUNCTION ---
+        window.saveConfig = async () => {
+            const propId = currentConfig.id;
+            if (!propId) return window.customAlert("No active property to save.");
+            
+            document.getElementById('loader').style.display = 'flex'; document.getElementById('sync-status').innerText = 'SAVING CONFIG...';
+
+            try {
                 const newConfig = {
                     id: propId, name: document.getElementById('prop-name').value.trim(),
                     timezone: document.getElementById('prop-tz').value.trim(), currency: document.getElementById('prop-currency').value.trim(),
                     channex: { apiKey: document.getElementById('chan-api-key').value.trim(), propId: document.getElementById('chan-prop-id').value.trim() },
-                    rooms: [], events: [], rates: currentConfig.rates || {}, otaMap: [], channexMap: []
+                    rooms: [], events: [], eventNotes: {}, rates: currentConfig.rates || {}, otaMap: [], channexMap: [], channexRateMap: []
                 };
 
                 document.querySelectorAll('#rooms-body tr').forEach(tr => {
@@ -681,6 +707,7 @@
                     if (id) newConfig.rooms.push({ 
                         id, 
                         type: tr.querySelector('.room-type').value.trim(), 
+                        short: tr.querySelector('.room-short').value.trim(),
                         bed: tr.querySelector('.room-bed').value.trim().toUpperCase(), 
                         floor: tr.querySelector('.room-floor').value.trim(), 
                         icon: tr.querySelector('.room-icon').value, 
@@ -690,337 +717,65 @@
 
                 document.querySelectorAll('.event-row').forEach(div => {
                     const d = div.querySelector('.event-date').value;
-                    if (d) newConfig.events.push(d);
+                    const n = div.querySelector('.event-note').value.trim();
+                    if (d) {
+                        newConfig.events.push(d);
+                        if (n) newConfig.eventNotes[d] = n;
+                    }
                 });
                 newConfig.events = [...new Set(newConfig.events)].sort();
 
-                document.querySelectorAll('.ota-map-row').forEach(row => {
-                    const otaName = row.querySelector('.ota-name-input').value.trim();
-                    const pmsCategory = row.querySelector('.ota-cat-input').value.trim();
-                    if (otaName && pmsCategory) {
-                        newConfig.otaMap.push({ otaName, pmsCategory });
-                    }
+                document.querySelectorAll('.chan-map-row').forEach(row => {
+                    const cId = row.getAttribute('data-chan-id');
+                    const cTitle = row.querySelector('.font-bold').innerText;
+                    const pCat = row.querySelector('.chan-pms-sel').value;
+                    if (cId && pCat) newConfig.channexMap.push({ channexId: cId, channexTitle: cTitle, pmsCategory: pCat });
                 });
-
-                document.querySelectorAll('.channex-map-row').forEach(row => {
-                    const channexId = row.querySelector('.cx-id').value;
-                    const channexTitle = row.querySelector('.cx-title').value;
-                    const pmsCategory = row.querySelector('.cx-cat-input').value;
-                    if (channexId && pmsCategory) {
-                        newConfig.channexMap.push({ channexId, channexTitle, pmsCategory });
-                    }
+                
+                document.querySelectorAll('.chan-rate-map-row').forEach(row => {
+                    const rId = row.getAttribute('data-rate-id');
+                    const rTitle = row.getAttribute('data-rate-title');
+                    const pCat = row.querySelector('.chan-rate-pms-sel').value;
+                    if (rId && pCat) newConfig.channexRateMap.push({ ratePlanId: rId, ratePlanTitle: rTitle, pmsCategory: pCat });
                 });
 
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), newConfig);
-                currentConfig = newConfig; 
+                currentConfig = newConfig;
                 
-                if (!windowPropertiesList.find(p => p.id === propId)) {
-                    windowPropertiesList.push(newConfig);
-                    const switcher = document.getElementById('property-switcher');
-                    let optionsHtml = '';
-                    windowPropertiesList.forEach(p => optionsHtml += `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`);
-                    optionsHtml += `<option value="_new_" class="font-black bg-slate-200">+ ADD NEW PROPERTY</option>`;
-                    switcher.innerHTML = optionsHtml; switcher.value = propId;
-                }
-                
-                document.getElementById('loader').classList.remove('active');
-                window.showAlert("Success!\nSettings permanently saved to cloud.");
-            } catch (err) {
-                document.getElementById('loader').classList.remove('active');
-                window.showAlert("Failed to save: " + err.message);
-            }
+                const switcher = document.getElementById('property-switcher');
+                Array.from(switcher.options).forEach(opt => { if (opt.value === propId) opt.innerText = newConfig.name; });
+
+                window.customAlert("Configuration Saved Successfully!");
+
+            } catch (e) { console.error("Save failed", e); window.customAlert("Failed to save configuration."); }
+            document.getElementById('loader').style.display = 'none';
         };
 
-        window.showAlert = (msg) => { document.getElementById('alert-message').innerText = msg; document.getElementById('alert-modal').style.display = 'flex'; };
-        window.closeAlert = () => { document.getElementById('alert-modal').style.display = 'none'; };
+        const getLocalYMD = (d) => { const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)); return o.toISOString().split('T')[0]; };
 
-        window.openBulkImportModal = () => { document.getElementById('bulk-import-modal').style.display = 'flex'; document.getElementById('bulk-import-text').value = ''; setTimeout(() => document.getElementById('bulk-import-text').focus(), 100); };
-        window.closeBulkImportModal = () => { document.getElementById('bulk-import-modal').style.display = 'none'; };
-
-        window.openDormModal = () => {
-            const select = document.getElementById('dorm-source');
-            let categories = [...new Set((currentConfig.rooms || []).map(r => r.type))].filter(Boolean);
-            if (categories.length === 0) return window.showAlert("No categories found to convert.");
-            select.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
-            document.getElementById('dorm-new-cat').value = '';
-            document.getElementById('dorm-new-base').value = '';
-            document.getElementById('dorm-modal').style.display = 'flex';
-        };
-        window.closeDormModal = () => { document.getElementById('dorm-modal').style.display = 'none'; };
-
-        window.executeDormConversion = async () => {
-            const targetCat = document.getElementById('dorm-source').value;
-            const newCat = document.getElementById('dorm-new-cat').value.trim().toUpperCase();
-            const newBase = document.getElementById('dorm-new-base').value.trim().toUpperCase();
-            
-            if (!targetCat || !newCat || !newBase) return window.showAlert("Please fill out all fields.");
-            
-            document.getElementById('loader').classList.add('active');
-            document.getElementById('sync-status').innerText = 'MIGRATING DATABASE...';
-
-            try {
-                let conversionMap = {};
-                let updatedRooms = [];
+        const init = async () => {
+            try { 
+                await signInAnonymously(auth); 
+                const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
+                const propsSnap = await getDocs(propsRef);
+                windowPropertiesList = [];
+                propsSnap.forEach(docSnap => windowPropertiesList.push({ id: docSnap.id, ...docSnap.data() }));
                 
-                document.querySelectorAll('#rooms-body tr').forEach(tr => {
-                    let idInput = tr.querySelector('.room-id');
-                    let typeInput = tr.querySelector('.room-type');
-                    let oldId = idInput.value.trim().toUpperCase();
-                    let type = typeInput.value.trim().toUpperCase();
-                    
-                    if (type === targetCat.toUpperCase() && oldId && !oldId.includes('-')) {
-                        let numbers = oldId.replace(/\D/g, '');
-                        let newId = `${newBase}-${numbers}`;
-                        
-                        conversionMap[oldId] = newId;
-                        idInput.value = newId;
-                        typeInput.value = newCat;
-                    }
-                });
-
-                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), where("property", "==", currentConfig.id));
-                const snapshot = await getDocs(q);
-                
-                let updateCount = 0;
-                for (let document of snapshot.docs) {
-                    let data = document.data();
-                    let changed = false;
-                    let newRoom = data.room;
-                    let newRoomsArray = data.rooms || [];
-
-                    if (conversionMap[data.room]) {
-                        newRoom = conversionMap[data.room];
-                        changed = true;
-                    }
-                    for (let i = 0; i < newRoomsArray.length; i++) {
-                        if (conversionMap[newRoomsArray[i]]) {
-                            newRoomsArray[i] = conversionMap[newRoomsArray[i]];
-                            changed = true;
-                        }
-                    }
-
-                    if (changed) {
-                        await setDoc(document.ref, { room: newRoom, rooms: newRoomsArray }, { merge: true });
-                        updateCount++;
-                    }
+                if (windowPropertiesList.length === 0) {
+                    currentConfig = { id: 'default_hostel', name: 'DEFAULT HOSTEL', rooms: [], events: [], eventNotes: {}, otaMap: [], channexMap: [], channexRateMap: [], channex: {} };
+                    windowPropertiesList.push(currentConfig);
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentConfig.id), currentConfig);
                 }
 
-                window.closeDormModal();
-                document.getElementById('loader').classList.remove('active');
+                const switcher = document.getElementById('property-switcher');
+                switcher.innerHTML = windowPropertiesList.map(p => `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`).join('');
                 
-                window.showAlert(`Conversion Complete!\n\nSuccessfully formatted rooms and safely migrated ${updateCount} active bookings to their new room IDs.\n\n(Remember to click SAVE in the top right to finalize settings)`);
-            } catch (err) {
-                document.getElementById('loader').classList.remove('active');
-                window.showAlert("Migration failed: " + err.message);
-            }
-        };
+                await window.handlePropertySwitch(windowPropertiesList[0].id);
 
-        window.processBulkImport = () => {
-            const text = document.getElementById('bulk-import-text').value.trim();
-            if (!text) return window.closeBulkImportModal();
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
-            let currentCategory = "General Dorm"; 
-            for (let i = 0; i < lines.length; i++) {
-                let line = lines[i];
-                if (line.startsWith('*') && line.endsWith('*')) { currentCategory = line.replace(/\*/g, '').trim(); continue; }
-                let count = parseInt((i + 1 < lines.length) ? lines[i + 1] : "1");
-                if (isNaN(count)) count = 1; else i++; 
-                let rawRoomId = line.split(' ')[0].toUpperCase();
-                
-                let iconVal = '';
-                if (rawRoomId.includes('↑')) iconVal = 'top';
-                else if (rawRoomId.includes('↓')) iconVal = 'bottom';
-                else if (rawRoomId.includes('⇈')) iconVal = 'double';
-                
-                let baseRoomId = rawRoomId.replace(/[↑↓⇈]/g, '');
-                for (let j = 1; j <= count; j++) window.addRoomRow({ id: count > 1 ? `${baseRoomId}-${j}` : baseRoomId, type: currentCategory, bed: 'SINGLE', floor: '', icon: iconVal, order: 9999 });
-            }
-            window.recalculateOrder();
-            window.closeBulkImportModal();
-        };
-        
-        window.openCloneModal = () => {
-            const select = document.getElementById('clone-source'); let options = '';
-            windowPropertiesList.forEach(p => { if (p.id !== currentConfig.id) options += `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`; });
-            if (options === '') return window.showAlert("No other saved properties to clone from.");
-            select.innerHTML = options; document.getElementById('clone-target-name').innerText = currentConfig.name || currentConfig.id; document.getElementById('clone-modal').style.display = 'flex';
-        };
-        window.closeCloneModal = () => { document.getElementById('clone-modal').style.display = 'none'; };
-        
-        window.executeClone = () => {
-            const sourceProp = windowPropertiesList.find(p => p.id === document.getElementById('clone-source').value);
-            if (!sourceProp) return;
-            if (document.getElementById('clone-opt-general').checked) { currentConfig.timezone = sourceProp.timezone || 'Asia/Bangkok'; currentConfig.currency = sourceProp.currency || '฿'; currentConfig.otaMap = JSON.parse(JSON.stringify(sourceProp.otaMap || [])); }
-            if (document.getElementById('clone-opt-events').checked) currentConfig.events = JSON.parse(JSON.stringify(sourceProp.events || []));
-            if (document.getElementById('clone-opt-rooms').checked) currentConfig.rooms = JSON.parse(JSON.stringify(sourceProp.rooms || []));
-            if (document.getElementById('clone-opt-rates').checked) currentConfig.rates = JSON.parse(JSON.stringify(sourceProp.rates || {}));
-            populateUI(); window.closeCloneModal(); window.showAlert("Cloned successfully! Hit Save to commit changes.");
-        };
-
-        window.testChannexConnection = async () => {
-            const apiKey = document.getElementById('chan-api-key').value.trim();
-            const propId = document.getElementById('chan-prop-id').value.trim();
+            } catch (e) { console.warn("Using offline mode.", e); window.populateForm(); }
             
-            if (!apiKey || !propId) return window.showAlert("Please enter both the API Key and Property ID first.");
-            
-            document.getElementById('loader').classList.add('active');
-            document.getElementById('sync-status').innerText = 'CONTACTING CHANNEX...';
-            
-            try {
-                // Endpoint for Channex Staging (Test Environment)
-                const url = `https://staging.channex.io/api/v1/properties/${propId}`;
-                
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'user-api-key': apiKey,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const data = await response.json();
-                document.getElementById('loader').classList.remove('active');
-                
-                if (response.ok) {
-                    const propertyTitle = data.data?.attributes?.title || "Unknown Property";
-                    window.showAlert(`✅ CONNECTION SUCCESSFUL!\n\nSuccessfully connected to Channex Staging.\nProperty Name: ${propertyTitle}\n\nWe are ready to start syncing!`);
-                } else {
-                    window.showAlert(`❌ CONNECTION FAILED:\n\n${data.errors?.[0]?.title || 'Invalid Credentials'}`);
-                }
-                
-            } catch (err) {
-                document.getElementById('loader').classList.remove('active');
-                window.showAlert(`❌ NETWORK ERROR:\n\nFailed to reach Channex. Check console for details.`);
-                console.error("Channex Test Error:", err);
-            }
-        };
-
-        window.fetchChannexRooms = async () => {
-            const apiKey = document.getElementById('chan-api-key').value.trim();
-            const propId = document.getElementById('chan-prop-id').value.trim();
-            
-            if (!apiKey || !propId) return window.showAlert("Please test your API Key and Property ID first.");
-            
-            document.getElementById('loader').classList.add('active');
-            document.getElementById('sync-status').innerText = 'FETCHING ROOMS...';
-            
-            try {
-                const url = `https://staging.channex.io/api/v1/room_types?filter[property_id]=${propId}`;
-                
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'user-api-key': apiKey,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const data = await response.json();
-                document.getElementById('loader').classList.remove('active');
-                
-                if (response.ok) {
-                    const rooms = data.data || [];
-                    if (rooms.length === 0) {
-                        return window.showAlert(`Connection OK, but no Room Types found on Channex for this property.\n\nPlease create your rooms in the Channex Dashboard first!`);
-                    }
-                    
-                    document.getElementById('channex-map-container').innerHTML = '';
-                    
-                    rooms.forEach(room => {
-                        const rId = room.id;
-                        const rTitle = room.attributes.title;
-                        
-                        // Check if we already have this mapped
-                        let savedCategory = '';
-                        if (currentConfig.channexMap) {
-                            const existingMap = currentConfig.channexMap.find(m => m.channexId === rId);
-                            if (existingMap) savedCategory = existingMap.pmsCategory;
-                        }
-                        
-                        window.addChannexMapRow(rId, rTitle, savedCategory);
-                    });
-                    
-                    window.showAlert(`✅ Successfully loaded ${rooms.length} rooms from Channex!\n\nPlease map them to your PMS categories and hit Save in the top right.`);
-                } else {
-                    window.showAlert(`❌ FETCH FAILED:\n\n${data.errors?.[0]?.title || 'Unknown Error'}`);
-                }
-                
-            } catch (err) {
-                document.getElementById('loader').classList.remove('active');
-                window.showAlert(`❌ NETWORK ERROR:\n\nFailed to fetch rooms from Channex.`);
-                console.error("Channex Room Fetch Error:", err);
-            }
-        };
-
-        window.simulateChannexBooking = async () => {
-            const webhookUrl = document.getElementById('webhook-url').value;
-            const chanPropId = document.getElementById('chan-prop-id').value.trim();
-            
-            if (!chanPropId) return window.showAlert("Please enter your Channex Property ID first.");
-
-            // Grab a valid Channex Room ID from your mappings so the webhook doesn't throw a mapping error
-            let testRoomId = "UNMAPPED_TEST_ROOM";
-            if (currentConfig.channexMap && currentConfig.channexMap.length > 0) {
-                testRoomId = currentConfig.channexMap[0].channexId;
-            } else {
-                return window.showAlert("Please fetch and map at least one Channex room first so the test booking has a valid category to snap to.");
-            }
-
-            const today = new Date();
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 2); // 2 night stay
-
-            const mockPayload = {
-                event: "booking_new",
-                payload: {
-                    booking: {
-                        property_id: chanPropId,
-                        ota_reservation_code: "TEST-" + Math.floor(Math.random() * 100000),
-                        status: "new",
-                        channel_id: "booking_com",
-                        customer: {
-                            name: "CHANNEX",
-                            surname: "TESTER",
-                            phone: "+66123456789",
-                            mail: "test@swims.com",
-                            country: "TH"
-                        },
-                        rooms: [
-                            {
-                                amount: "1500.00",
-                                checkin_date: today.toISOString().split('T')[0],
-                                checkout_date: tomorrow.toISOString().split('T')[0],
-                                occupancy: 2,
-                                room_type_id: testRoomId
-                            }
-                        ],
-                        inserted_at: new Date().toISOString()
-                    }
-                }
-            };
-
-            document.getElementById('loader').classList.add('active');
-            document.getElementById('sync-status').innerText = 'FIRING WEBHOOK...';
-
-            try {
-                const res = await fetch(webhookUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(mockPayload)
-                });
-                
-                const data = await res.json();
-                document.getElementById('loader').classList.remove('active');
-
-                if (res.ok) {
-                    window.showAlert("✅ WEBHOOK RECEIVED!\n\nA fake booking for 'CHANNEX TESTER' was just caught by your live Firebase function.\n\nOpen your Master Dashboard and check if they popped up in neon pink!");
-                } else {
-                    window.showAlert("❌ TEST FAILED:\n\n" + (data.error || JSON.stringify(data)));
-                }
-            } catch (err) {
-                document.getElementById('loader').classList.remove('active');
-                window.showAlert(`❌ NETWORK ERROR:\n\nCould not reach the Webhook. Did you deploy functions to Firebase?`);
-            }
+            document.getElementById('loader').style.display = 'none';
+            window.switchTab('general'); // Ensure first tab is visible on load
         };
 
         init();
