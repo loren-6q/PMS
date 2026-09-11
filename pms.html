@@ -114,7 +114,6 @@
     <div id="boot-loader" class="loading-overlay"><div class="spinner"></div><div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4"><span id="sync-status">Authenticating...</span></div></div>
 
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
-        <!-- TOP HEADER -->
         <div class="bg-white px-1 sm:px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50 unselectable w-full">
             
             <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
@@ -161,7 +160,6 @@
                         <button onclick="window.toggleMultiSelect('app-menu-dropdown', this)" class="bg-slate-900 text-white p-1 sm:p-1.5 rounded shadow-md hover:bg-slate-800 transition-colors flex items-center justify-center cursor-pointer">
                             <i data-lucide="menu" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i>
                         </button>
-                        <!-- HIDDEN PROPERTY SWITCHER & MENU -->
                         <div id="app-menu-dropdown" class="multi-select-dropdown absolute mt-1 w-56 bg-white border border-slate-300 rounded-lg shadow-2xl z-50 hidden right-0 left-auto text-slate-800 whitespace-normal overflow-hidden">
                             <div class="p-3 border-b border-slate-200 bg-slate-50">
                                 <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Active Property</label>
@@ -248,14 +246,12 @@
                 <input type="hidden" id="guest-id"> <input type="hidden" id="created-at"> <input type="hidden" id="created-by"> <input type="hidden" id="guest-status-hidden">
                 
                 <div class="section-header rounded-t-md mt-1" onclick="window.toggleSection('guest-profile-section', 'profile-chevron')">
-                    <span>Guest</span>
-                    <div class="flex items-center gap-2">
-                        <button type="button" onclick="event.stopPropagation(); window.syncTM30()" class="text-[9px] bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300 px-2 py-0.5 rounded shadow-sm flex items-center gap-1 cursor-pointer transition-colors"><i data-lucide="scan-face" size="12"></i> TM30 AUTO-FILL / SYNC</button>
-                        <i data-lucide="chevron-down" id="profile-chevron" size="14" class="transition-transform duration-200"></i>
-                    </div>
+                    <span>Guest Details</span>
+                    <i data-lucide="chevron-down" id="profile-chevron" size="14" class="transition-transform duration-200"></i>
                 </div>
                 
                 <div id="guest-profile-section" class="bg-slate-50 p-1.5 border-x border-b border-slate-200 rounded-b-md space-y-1.5 mt-0 block">
+                    <button type="button" id="tm30-sync-btn" onclick="window.syncTM30()" class="w-full py-1.5 mb-1 bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300 rounded shadow-sm flex items-center justify-center gap-1.5 text-[10px] font-black uppercase transition-colors cursor-pointer"><i data-lucide="scan-face" size="14"></i> PASSPORT / TM30 SMART SYNC</button>
                     <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">First Name</label><input type="text" id="first-name" class="input-base uppercase" oninput="window.updateHeaderName()"></div><div><label class="field-label">Last Name</label><input type="text" id="last-name" required class="input-base uppercase" oninput="window.updateHeaderName()"></div></div>
                     <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">Phone</label><input type="text" id="phone" class="input-base"></div><div><label class="field-label">Country</label><input type="text" id="guest-country" class="input-base" list="country-list" placeholder="Type country..."><datalist id="country-list"></datalist></div></div>
                     <div><label class="field-label">Email</label><input type="text" id="email" class="input-base" oninput="window.checkEmailProxy(this.value)"></div>
@@ -502,7 +498,6 @@
             }
         };
 
-        // Delta Sync Logic via Callable Function
         window.triggerAutoSync = async () => {
             if (window.channexConfig && window.channexConfig.apiKey) {
                 try {
@@ -512,7 +507,7 @@
                     d.setUTCDate(d.getUTCDate() + 180);
                     const cOut = d.toISOString().split('T')[0];
                     syncFn({ propId: currentPropertyId, checkIn: cIn, checkOut: cOut });
-                    console.log("Delta Sync Triggered.");
+                    console.log("Delta Sync Triggered via HTTP Call.");
                 } catch (e) {
                     console.warn("Delta Sync Call Failed:", e);
                 }
@@ -541,10 +536,12 @@
                 }
 
                 const propToLoad = windowPropertiesList.find(p => p.id === currentPropertyId);
-                if (propToLoad) {
-                    hotelRooms = (propToLoad.rooms || []).sort((a,b) => a.order - b.order);
-                    fmpDates = propToLoad.events || [];
-                    window.propertyOtaMap = propToLoad.otaMap || [];
+            if (propToLoad) {
+                // Trust the database: Use the exact array order saved from the Settings page. No sorting needed!
+                hotelRooms = propToLoad.rooms || [];
+                
+                fmpDates = propToLoad.events || [];
+                window.propertyOtaMap = propToLoad.otaMap || [];
                     window.channexMap = propToLoad.channexMap || [];
                     window.channexConfig = propToLoad.channex || {};
                     
@@ -659,7 +656,6 @@
             lucide.createIcons();
         };
 
-        // UI Interactions
         window.toggleSection = (sectionId, chevronId, forceState = null) => { 
             const sec = $(sectionId), icon = $(chevronId); 
             if (!sec) return; 
@@ -853,7 +849,7 @@
             }
             
             hotelRooms.forEach((r, idx, arr) => {
-                if (!r.type || !r.id) return; // Safely skip malformed room records
+                if (!r.type || !r.id) return; 
                 if (r.type !== (idx > 0 && arr[idx-1] ? arr[idx-1].type : null)) tRows.push({ isDivider: true, label: r.type });
                 
                 const hasDash = r.id.includes('-');
@@ -1201,8 +1197,9 @@
 
         // NEW BIDIRECTIONAL TM30 SYNC
         window.syncTM30 = async () => {
-            const btnText = document.querySelector('button[onclick="event.stopPropagation(); window.syncTM30()"]').innerHTML; 
-            document.querySelector('button[onclick="event.stopPropagation(); window.syncTM30()"]').innerHTML = '<i data-lucide="loader-2" size="12" class="animate-spin inline"></i>...'; 
+            const btn = document.getElementById('tm30-sync-btn');
+            const origText = btn.innerHTML; 
+            btn.innerHTML = '<i data-lucide="loader-2" size="14" class="animate-spin inline"></i> SYNCING...'; 
             
             try {
                 const rL = Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean);
@@ -1226,7 +1223,7 @@
                 if (rL.length === 0 && !gFirstName && !gLastName) {
                     if (pendingPassports.length === 0) {
                         window.showAlert("No recent passports found to import.");
-                        document.querySelector('button[onclick="event.stopPropagation(); window.syncTM30()"]').innerHTML = btnText; lucide.createIcons(); return;
+                        btn.innerHTML = origText; lucide.createIcons(); return;
                     }
                     
                     let html = '<div class="flex flex-col gap-2 max-h-[300px] overflow-y-auto no-scrollbar">';
@@ -1235,7 +1232,7 @@
                         const sJson = JSON.stringify(s).replace(/'/g, "&#39;");
                         html += `
                         <div class="p-3 border border-slate-200 rounded-lg hover:bg-purple-50 cursor-pointer flex justify-between items-center transition-colors" onclick='window.applyTM30Data(${sJson})'>
-                            <div class="flex flex-col">
+                            <div class="flex flex-col text-left">
                                 <span class="font-black text-slate-800 text-sm uppercase">${fName}</span>
                                 <span class="text-[10px] font-bold text-slate-500 tracking-widest uppercase mt-0.5">NAT: ${s.nationality || '???'} | ID: ${s.passportNumber || 'N/A'}</span>
                             </div>
@@ -1246,48 +1243,80 @@
                     
                     $('alert-header').innerText = 'Select Passport to Auto-Fill';
                     $('alert-message').innerHTML = html;
-                    $('alert-actions').innerHTML = `<button onclick="window.closeAlert()" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700 w-full transition-colors">Close</button>`;
+                    $('alert-actions').innerHTML = `<button onclick="window.closeAlert()" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700 w-full transition-colors">Cancel</button>`;
                     $('alert-modal').classList.add('active');
                     lucide.createIcons();
                     
-                    document.querySelector('button[onclick="event.stopPropagation(); window.syncTM30()"]').innerHTML = btnText; return;
+                    btn.innerHTML = origText; return;
                 }
 
-                // SCENARIO 2: Form has Data -> Act as Bidirectional Room Sync
+                // SCENARIO 2: Form has Data -> Act as Bidirectional Sync & Cross-Pollination
                 let checkoutFormatted = checkOut ? `${checkOut.split('-')[2]}/${checkOut.split('-')[1]}/${checkOut.split('-')[0]}` : "";
                 let matchedPassports = [], updatePromises = [];
 
                 pendingPassports.forEach(data => {
                     let match = false;
-                    if (data.roomNumber) { let searchRooms = [data.roomNumber]; if (/^[a-zA-Z]0\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + data.roomNumber[2]); else if (/^[a-zA-Z]\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + '0' + data.roomNumber[1]); if (rL.some(r => searchRooms.includes(r))) match = true; }
-                    if (!match && data.firstName && data.lastName && gFirstName && gLastName) { if (gLastName.includes(data.lastName.toUpperCase()) && gFirstName.includes(data.firstName.toUpperCase())) match = true; }
+                    
+                    if (data.roomNumber) { 
+                        let searchRooms = [data.roomNumber]; 
+                        if (/^[a-zA-Z]0\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + data.roomNumber[2]); 
+                        else if (/^[a-zA-Z]\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + '0' + data.roomNumber[1]); 
+                        if (rL.some(r => searchRooms.includes(r))) match = true; 
+                    }
+                    
+                    if (!match && data.firstName && data.lastName && gFirstName && gLastName) { 
+                        if (gLastName.includes(data.lastName.toUpperCase()) && gFirstName.includes(data.firstName.toUpperCase())) match = true; 
+                    }
                     
                     if (match) { 
                         matchedPassports.push(data); 
-                        // Push PMS info to TM30 Database
-                        updatePromises.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'submissions', data.id), { checkoutDate: checkoutFormatted, phoneNo: phone, pmsSynced: true, status: "processing" })); 
+                        updatePromises.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'submissions', data.id), { 
+                            checkoutDate: checkoutFormatted, 
+                            phoneNo: phone, 
+                            pmsSynced: true, 
+                            status: "processing" 
+                        })); 
                     }
                 });
 
-                if (matchedPassports.length === 0) { window.showAlert(`No pending passports found matching this room or name.`); document.querySelector('button[onclick="event.stopPropagation(); window.syncTM30()"]').innerHTML = btnText; lucide.createIcons(); return; }
+                if (matchedPassports.length === 0) { 
+                    window.showAlert(`No pending passports found matching this room or name.`); 
+                    btn.innerHTML = origText; lucide.createIcons(); return; 
+                }
                 
                 await Promise.all(updatePromises);
                 
-                // Pull TM30 info to PMS Notes
-                let appendNotes = `\n\n[ROOM PASSPORT SYNC - ${new Date().toLocaleDateString('en-GB')}]\n`;
-                matchedPassports.forEach(p => { const fName = `${p.firstName || ''} ${p.middleName || ''} ${p.lastName || ''}`.replace(/\s+/g, ' ').trim(); appendNotes += `• Companion Added: ${fName} (${p.passportNumber || 'N/A'})\n`; });
-                const notesEl = $('guest-notes'); notesEl.value = (notesEl.value + appendNotes).trim();
+                let appendNotes = `\n\n[PASSPORT SYNC - ${new Date().toLocaleDateString('en-GB')}]\n`;
+                matchedPassports.forEach(p => { 
+                    const fName = `${p.firstName || ''} ${p.middleName || ''} ${p.lastName || ''}`.replace(/\s+/g, ' ').trim(); 
+                    appendNotes += `• Passport: ${p.passportNumber || 'N/A'} | ${fName} | Nat: ${p.nationality || 'N/A'} | DOB: ${p.dobYear}-${p.dobMonth}-${p.dobDay}\n`; 
+                    
+                    if (!$('first-name').value && p.firstName) $('first-name').value = p.firstName.toUpperCase();
+                    if (!$('last-name').value && p.lastName) $('last-name').value = p.lastName.toUpperCase();
+                    if (!$('guest-country').value && p.nationality) {
+                        try {
+                            const fullCountry = new Intl.DisplayNames(['en'], {type: 'region'}).of(p.nationality);
+                            $('guest-country').value = fullCountry || p.nationality;
+                        } catch(e) { $('guest-country').value = p.nationality; }
+                    }
+                });
                 
-                window.showAlert(`✅ Bidirectional Sync Complete!\n\n1. Sent Checkout Date & Phone to TM30 Queue.\n2. Grabbed ${matchedPassports.length} passport(s) into notes.\n\nDon't forget to hit Save!`);
-            } catch (e) { console.error("Sync Error", e); window.showAlert("Error syncing passports. Please check your connection."); }
-            document.querySelector('button[onclick="event.stopPropagation(); window.syncTM30()"]').innerHTML = btnText; lucide.createIcons();
+                const notesEl = $('guest-notes'); 
+                notesEl.value = (notesEl.value + appendNotes).trim();
+                window.updateHeaderName();
+                
+                window.showAlert(`✅ Smart Sync Complete!\n\n1. Sent Checkout Date & Phone to TM30 Queue.\n2. Pulled ${matchedPassports.length} passport(s) into PMS notes.\n\nDon't forget to hit Save!`);
+            } catch (e) { 
+                console.error("Sync Error", e); 
+                window.showAlert("Error syncing passports. Please check your connection."); 
+            }
+            btn.innerHTML = origText; lucide.createIcons();
         };
 
         window.applyTM30Data = (data) => {
             if(data.firstName) $('first-name').value = data.firstName;
             if(data.lastName) $('last-name').value = data.lastName;
             
-            // Try to resolve 3 letter code to full country name for the datalist
             if(data.nationality) {
                 try {
                     const fullCountry = new Intl.DisplayNames(['en'], {type: 'region'}).of(data.nationality);
@@ -1379,10 +1408,8 @@
             const raw = $('email-textarea').value.trim();
             if (!raw) return window.showAlert("Please paste booking text first.");
             
-            // EXTRACT DATA USING EXTERNAL FILE
             const { s, summary } = window.extractBookingData(raw);
 
-            // --- IMMEDIATE DUPLICATE CHECK ---
             if (s.bookId) {
                 const dupe = staff.find(x => x.property === currentPropertyId && x.bookId === s.bookId && x.status !== 'cancelled' && x.status !== 'noshow');
                 if (dupe) {
@@ -1401,7 +1428,6 @@
                 }
             }
 
-            // --- AUTO-MAP ROOMS ---
             let originalBookedType = s.bookedType || 'Unknown';
             if (s.bookedType && window.propertyOtaMap && window.propertyOtaMap.length > 0) {
                 const bookedTypeLower = s.bookedType.toLowerCase();
@@ -1434,12 +1460,10 @@
             }
 
             s.notes = summary;
-
             window.populateStaffForm(s);
             window.closeModal('email-modal');
         };
 
-        // KICKSTART THE APP
         init();
     </script>
 </body>
