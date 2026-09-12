@@ -19,10 +19,13 @@
             .tab-btn { @apply px-3 py-1.5 font-black text-xs uppercase rounded transition-colors border border-transparent text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5; }
             .tab-btn.active { @apply text-indigo-700 bg-white border-slate-200 shadow-sm; }
             
-            .view-btn { @apply px-3 py-1.5 font-black text-[11px] uppercase rounded transition-colors text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5 border border-slate-200 bg-white; }
+            .view-btn { @apply px-2.5 py-1 font-black text-[11px] uppercase rounded transition-colors text-slate-600 hover:text-slate-900 cursor-pointer flex items-center gap-1 border border-slate-300 bg-white shadow-sm; }
             .view-btn.active-bdc { @apply bg-[#003580] border-[#003580] text-white hover:text-white shadow-md; }
             .view-btn.active-hw { @apply bg-[#F15A24] border-[#F15A24] text-white hover:text-white shadow-md; }
             .view-btn.active-direct { @apply bg-emerald-500 border-emerald-500 text-white hover:text-white shadow-md; }
+            
+            .filter-pill { @apply px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-300 bg-slate-100 text-slate-600 cursor-pointer transition-all select-none flex items-center gap-1; }
+            .filter-pill.active { @apply bg-indigo-600 border-indigo-600 text-white shadow-sm; }
         }
 
         body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; font-size: 1.2rem; overscroll-behavior-y: none; }
@@ -66,32 +69,15 @@
         .rate-grid-table td input[type="number"]::-webkit-outer-spin-button, .rate-grid-table td input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .rate-grid-table td input[type="number"]:focus { box-shadow: inset 0 0 0 2px #4f46e5; background: #fff !important; z-index: 10; position: relative; }
         
-        .is-override { color: #d97706 !important; background-color: #fef3c7 !important; font-weight: 900 !important; }
+        .is-override { color: #d97706 !important; font-weight: 900 !important; }
+        .is-dirty { background-color: #ffedd5 !important; transition: background-color 0.2s; }
+        .is-synced { background-color: #ecfdf5 !important; transition: background-color 0.5s; }
 
-        .frozen-col { position: sticky; left: 0; z-index: 20; background: inherit; }
-        .frozen-col-2 { position: sticky; left: 28px; z-index: 21; border-right: 2px solid #94a3b8 !important; background: inherit; }
+        /* Wide Room Columns */
+        .frozen-col { position: sticky; left: 0; z-index: 20; background: inherit; width: 140px; min-width: 140px; }
+        .frozen-col-2 { position: sticky; left: 140px; z-index: 21; border-right: 2px solid #94a3b8 !important; background: inherit; width: 42px; min-width: 42px; }
         .frozen-col-header { position: sticky; background: #1e293b; color: #fff; z-index: 30; }
         .sticky-header { position: sticky; top: 0; background: #1e293b; color: #fff; z-index: 25; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        
-        .vertical-text-wrapper {
-            height: 52px;
-            width: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            background: inherit;
-        }
-        
-        .vertical-text { 
-            writing-mode: vertical-rl; 
-            transform: rotate(180deg); 
-            text-align: center; 
-            font-size: 10px; 
-            font-weight: 900;
-            white-space: normal;
-            line-height: 1.1;
-        }
         
         /* Zebra Striping */
         .room-group-even td:not(.evt-peak):not(.evt-week) { background-color: #ffffff; }
@@ -136,15 +122,15 @@
 
             <div class="flex items-center gap-2 shrink-1 transition-opacity min-w-0 ml-auto">
                 <div id="save-indicator" class="text-[9px] font-black text-emerald-600 uppercase tracking-widest opacity-0 transition-opacity mr-2">Saved</div>
-                <button onclick="window.pushToChannexAPI(this)" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="cloud-upload" size="14"></i> FULL SYNC</button>
+                <button onclick="window.pushToChannexAPI(this, 'delta')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="zap" size="14"></i> SYNC CHANGES</button>
+                <button onclick="window.pushToChannexAPI(this, 'full')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="cloud-upload" size="14"></i> FULL SYNC</button>
                 <a href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors hidden sm:block ml-2 shrink-0">← Back</a>
             </div>
         </div>
 
         <div class="flex-1 flex flex-col min-h-0 bg-slate-100 sm:rounded-lg overflow-hidden border-y sm:border border-slate-300 shadow-sm relative z-0">
             <div class="flex px-2 pt-2 bg-slate-200 border-b border-slate-300 shrink-0 gap-1 overflow-x-auto no-scrollbar shadow-inner unselectable">
-                <button onclick="window.switchTab('grid')" id="tab-grid" class="tab-btn active"><i data-lucide="calendar" size="14"></i> Rates</button>
-                <button onclick="window.switchTab('avail')" id="tab-avail" class="tab-btn"><i data-lucide="layout-grid" size="14" class="text-emerald-500"></i> Live Inventory</button>
+                <button onclick="window.switchTab('grid')" id="tab-grid" class="tab-btn active"><i data-lucide="calendar" size="14"></i> Matrix Command Center</button>
                 <button onclick="window.switchTab('smart')" id="tab-smart" class="tab-btn"><i data-lucide="wand-2" size="14" class="text-amber-500"></i> Autofiller</button>
                 <button onclick="window.switchTab('relational')" id="tab-relational" class="tab-btn"><i data-lucide="link" size="14" class="text-indigo-500"></i> Linking</button>
                 <button onclick="window.switchTab('mapping')" id="tab-mapping" class="tab-btn"><i data-lucide="network" size="14" class="text-pink-500"></i> OTA Mapping</button>
@@ -158,14 +144,71 @@
                         <button onclick="window.shiftTape(7)" class="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"><i data-lucide="chevron-right" size="16"></i></button>
                     </div>
 
+                    <!-- PRESETS & GRANULAR FILTER PILLS -->
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 hidden sm:block">PRESETS:</span>
+                        <button onclick="window.setPreset('rates')" class="view-btn"><i data-lucide="dollar-sign" size="12"></i> Rates</button>
+                        <button onclick="window.setPreset('avail')" class="view-btn"><i data-lucide="layout-grid" size="12" class="text-emerald-500"></i> Avail</button>
+                        <button onclick="window.setPreset('min')" class="view-btn"><i data-lucide="moon" size="12" class="text-amber-500"></i> Min Stay</button>
+                        <button onclick="window.setPreset('full')" class="view-btn"><i data-lucide="layers" size="12" class="text-indigo-500"></i> Full Matrix</button>
+                        
+                        <div class="h-4 w-px bg-slate-300 mx-1 hidden sm:block"></div>
+                        
+                        <div class="items-center gap-1 hidden sm:flex">
+                            <button onclick="window.toggleFilter('rates')" id="flt-rates" class="filter-pill active">Rates</button>
+                            <button onclick="window.toggleFilter('avail')" id="flt-avail" class="filter-pill active">Avail</button>
+                            <button onclick="window.toggleFilter('min')" id="flt-min" class="filter-pill active">Min</button>
+                            <button onclick="window.toggleFilter('max')" id="flt-max" class="filter-pill">Max</button>
+                            <button onclick="window.toggleFilter('cta')" id="flt-cta" class="filter-pill">CTA</button>
+                            <button onclick="window.toggleFilter('ctd')" id="flt-ctd" class="filter-pill">CTD</button>
+                            <button onclick="window.toggleFilter('stop')" id="flt-stop" class="filter-pill active">Stop</button>
+                        </div>
+                    </div>
+
                     <div class="flex items-center gap-1.5">
                         <button onclick="window.setView('direct')" id="view-direct" class="view-btn active-direct"><i data-lucide="globe" size="14"></i> DIR</button>
                         <button onclick="window.setView('bdc')" id="view-bdc" class="view-btn"><i data-lucide="building" size="14"></i> BDC</button>
                         <button onclick="window.setView('hw')" id="view-hw" class="view-btn"><i data-lucide="tent" size="14"></i> HW</button>
+                        <button id="ripple-toggle" onclick="window.toggleRipple()" class="view-btn !bg-indigo-100 !text-indigo-700 !border-indigo-300 ml-1"><i data-lucide="link" size="12"></i> LINKS</button>
+                        <button onclick="window.toggleQuickBulk()" class="view-btn !bg-slate-100"><i data-lucide="zap" size="12"></i> BULK</button>
                     </div>
-                    
-                    <div class="flex items-center gap-2">
-                        <button id="ripple-toggle" onclick="window.toggleRipple()" class="view-btn !bg-indigo-100 !text-indigo-700 !border-indigo-300"><i data-lucide="link" size="12"></i> Auto-Link: ON</button>
+                </div>
+
+                <div id="quick-bulk-panel" class="hidden bg-slate-100 border-b border-slate-300 p-2 shrink-0 shadow-inner flex-col gap-2 z-20 relative">
+                    <div class="flex items-end gap-2 w-full flex-wrap">
+                        <div class="flex flex-col"><label class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Target</label>
+                            <select id="qb-target" class="input-base !py-1 !px-2 !text-xs cursor-pointer w-32" onchange="window.toggleQBTarget()">
+                                <option value="rooms">Specific Rooms</option>
+                                <option value="rates">Specific Rates</option>
+                                <option value="global">Global (Property)</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col"><label class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Field to Edit</label>
+                            <select id="qb-field" class="input-base !py-1 !px-2 !text-xs cursor-pointer w-32" onchange="window.toggleQBField()">
+                                <option value="std" id="qb-opt-std">Standard Rate</option>
+                                <option value="fmp" id="qb-opt-fmp" class="evt-column">EVT Pkg Rate</option>
+                                <option value="min">Min Stay</option>
+                                <option value="max">Max Stay</option>
+                                <option value="min_arr">Min Arrival</option>
+                                <option value="cta">CTA</option>
+                                <option value="ctd">CTD</option>
+                                <option value="stopSell">Stop Sell</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col"><label class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Start Date</label><input type="date" id="qb-start" class="input-base !py-1 !px-2 !text-xs w-32"></div>
+                        <div class="flex flex-col"><label class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-0.5">End Date</label><input type="date" id="qb-end" class="input-base !py-1 !px-2 !text-xs w-32"></div>
+                        
+                        <button onclick="window.runQuickBulk(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded shadow-sm font-black text-[10px] uppercase tracking-widest transition-colors h-[28px] cursor-pointer"><i data-lucide="check" size="14" class="inline"></i> Apply</button>
+                        <button onclick="window.runQuickBulk(true)" class="bg-rose-100 hover:bg-rose-200 text-rose-700 border border-rose-300 px-4 py-1.5 rounded shadow-sm font-black text-[10px] uppercase tracking-widest transition-colors h-[28px] cursor-pointer"><i data-lucide="eraser" size="14" class="inline"></i> Clear Overrides</button>
+                        <button onclick="window.toggleQuickBulk(true)" class="p-1.5 text-slate-400 hover:text-slate-700 rounded h-[28px] cursor-pointer ml-auto"><i data-lucide="x" size="14"></i></button>
+                    </div>
+                    <div class="border-t border-slate-200 pt-2 mt-1">
+                        <div id="qb-rooms-container" class="flex flex-wrap gap-2"></div>
+                        <div id="qb-rates-container" class="hidden flex-wrap gap-2"></div>
+                        <div id="qb-global-container" class="hidden items-center gap-2">
+                            <label class="text-[10px] font-black text-slate-600 uppercase">Apply to entire property:</label>
+                            <input type="text" id="qb-global-val" class="input-base !py-1 !px-2 !text-xs w-32" placeholder="Value (or true/false)">
+                        </div>
                     </div>
                 </div>
 
@@ -173,25 +216,6 @@
                     <table class="rate-grid-table" id="rate-table">
                         <thead id="grid-head"></thead>
                         <tbody id="grid-body"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="view-avail" class="hidden flex-1 flex-col min-h-0 relative bg-slate-50">
-                <div class="bg-slate-200 p-2 font-black text-slate-700 uppercase flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-slate-300">
-                    <span class="pl-2 text-sm flex items-center gap-2"><i data-lucide="layout-grid" class="text-emerald-600"></i> Live Inventory Matrix</span>
-                    <div class="flex gap-2">
-                        <select id="avail-filter" class="input-base !py-1 !px-2 !text-xs !w-auto cursor-pointer" onchange="window.renderAvailability()">
-                            <option value="all">Show All Dates</option>
-                            <option value="urgent">Show Urgent Only (0-2 left)</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="flex-1 overflow-auto bg-slate-50 relative p-0 overscroll-none" id="matrix-container">
-                    <table class="w-full border-spacing-0" id="avail-table">
-                        <thead id="avail-head" class="sticky top-0 z-20 bg-slate-800 text-white shadow-md"></thead>
-                        <tbody id="avail-body"></tbody>
                     </table>
                 </div>
             </div>
@@ -367,8 +391,30 @@
                     <div class="bg-amber-50 border border-amber-200 rounded-lg shadow-sm overflow-hidden flex flex-col hidden" id="channex-rate-mapping-card" style="display: none;">
                         <div class="p-2 bg-amber-100/50 border-b border-amber-200 flex justify-between items-center shrink-0">
                             <h2 class="font-black text-amber-800 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="tags" class="text-amber-600 w-4 h-4"></i> Rate Plan Mapping</h2>
+                            <button onclick="window.toggleCertSuite()" class="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[9px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1"><i data-lucide="award" size="12"></i> Open Certification Suite</button>
                         </div>
                         <div class="p-2" id="channex-rate-mapping-container"></div>
+                    </div>
+
+                    <div class="bg-purple-50 border border-purple-200 rounded-lg shadow-sm overflow-hidden flex flex-col hidden mt-4" id="channex-cert-card">
+                        <div class="p-2 bg-purple-200/50 border-b border-purple-300 flex justify-between items-center shrink-0">
+                            <h2 class="font-black text-purple-900 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="graduation-cap" class="text-purple-700 w-4 h-4"></i> Channex Certification Runner</h2>
+                        </div>
+                        <div class="p-3 text-xs">
+                            <p class="font-bold text-slate-600 mb-2">Select mapped IDs for the Channex Test Requirements (Twin, Double, BAR, B&B):</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                                <div><label class="label-base !text-purple-700">Test: Twin Room</label><select id="cert-twin-room" class="input-base border-purple-300"></select></div>
+                                <div><label class="label-base !text-purple-700">Test: Double Room</label><select id="cert-double-room" class="input-base border-purple-300"></select></div>
+                                <div><label class="label-base !text-purple-700">Test: Best Avail Rate (BAR)</label><select id="cert-bar-rate" class="input-base border-purple-300"></select></div>
+                                <div><label class="label-base !text-purple-700">Test: Bed & Breakfast (B&B)</label><select id="cert-bb-rate" class="input-base border-purple-300"></select></div>
+                            </div>
+                            <div class="flex flex-wrap gap-2 mb-3">
+                                <button onclick="window.runCertTest('rates')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 2-4: Rates</button>
+                                <button onclick="window.runCertTest('restrictions')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 5-8: Restrictions</button>
+                                <button onclick="window.runCertTest('availability')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 9-10: Avail</button>
+                            </div>
+                            <div class="bg-white border border-purple-200 p-2 rounded h-32 overflow-y-auto font-mono text-[10px] text-slate-700 whitespace-pre-wrap" id="cert-log">Ready to run tests...</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -397,7 +443,38 @@
         let totalRoomsByType = {};
         let hotelRooms = [];
 
-        // STRICT Casing Resolver for Channex Mapping Math
+        window.dirtyDates = new Set();
+        window.syncedDates = new Set();
+
+        // GRANULAR DISPLAY METRICS ENGINE
+        window.activeMetrics = new Set(['rates', 'avail', 'min', 'stop']);
+
+        window.toggleFilter = (metric) => {
+            if (window.activeMetrics.has(metric)) window.activeMetrics.delete(metric);
+            else window.activeMetrics.add(metric);
+            window.syncFilterPills();
+            window.renderGrid();
+        };
+
+        window.setPreset = (preset) => {
+            if (preset === 'rates') window.activeMetrics = new Set(['rates']);
+            else if (preset === 'avail') window.activeMetrics = new Set(['avail']);
+            else if (preset === 'min') window.activeMetrics = new Set(['min']);
+            else if (preset === 'full') window.activeMetrics = new Set(['rates', 'avail', 'min', 'max', 'cta', 'ctd', 'stop']);
+            window.syncFilterPills();
+            window.renderGrid();
+        };
+
+        window.syncFilterPills = () => {
+            ['rates', 'avail', 'min', 'max', 'cta', 'ctd', 'stop'].forEach(m => {
+                const pill = document.getElementById(`flt-${m}`);
+                if (pill) {
+                    if (window.activeMetrics.has(m)) pill.classList.add('active');
+                    else pill.classList.remove('active');
+                }
+            });
+        };
+
         const categoryResolver = (catName) => {
             if(!catName) return "";
             const clean = catName.toUpperCase().trim();
@@ -408,7 +485,6 @@
         const getLocalYMD = (d) => { return d.toISOString().split('T')[0]; };
         const parseYMD = (str) => { if(!str) return 0; const p = str.split('-'); return Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2]), 12, 0, 0); };
         
-        // UNBREAKABLE FALLBACK ROOMS (In case properties collection is missing room data)
         const rawRooms = "B01|Oceanfront King^A01|Oceanfront King^A02|Oceanfront King^B02|Oceanfront Twin^B03|Oceanview King Room^B05|Oceanview King Room^B07|Oceanview King Room^A03|Oceanview King Room^A04|Oceanview King Room^A06|Oceanview King Room^A08|Oceanview King Room^A10|Oceanview King Room^A12|Oceanview King Room^C206|Oceanview King Room^C306|Oceanview King Room^C311|Oceanview King Room^B04|Oceanview Twin Room^B06|Oceanview Twin Room^B08|Oceanview Twin Room^C212|Oceanview Twin Room^A05|Partial Oceanview King Room^A07|Partial Oceanview King Room^A09|Partial Oceanview King Room^A11|Partial Oceanview King Room^C203|Partial Oceanview King Room^C204|Partial Oceanview King Room^C205|Partial Oceanview King Room^B09|Gardenview King Room^B11|Gardenview King Room^B13|Gardenview King Room^B15|Gardenview King Room^B17|Gardenview King Room^B19|Gardenview King Room^B21|Gardenview King Room^B22|Gardenview King Room^B10|Gardenview Twin Room^B12|Gardenview Twin Room^B14|Gardenview Twin Room^B16|Gardenview Twin Room^B18|Gardenview Twin Room^B20|Gardenview Twin Room^C201|Gardenview Twin Room^C202|Gardenview Twin Room^C207|Gardenview Twin Room^C208|Gardenview Twin Room^C209|Gardenview Twin Room^C210|Gardenview Twin Room^C211|Gardenview Twin Room^C101|Gardenview Twin Room^C307|Partial Oceanview Triple Room^C308|Partial Oceanview Triple Room^C305|Partial Oceanview Triple Room^C309|Partial Oceanview Triple Room^C310|Partial Oceanview Triple Room^C301-1|Standard Quad Dorm^C301-2|Standard Quad Dorm^C301-3|Standard Quad Dorm^C301-4|Standard Quad Dorm^C302-1|Standard Quad Dorm^C302-2|Standard Quad Dorm^C302-3|Standard Quad Dorm^C302-4|Standard Quad Dorm^C303-1|Standard Quad Dorm^C303-2|Standard Quad Dorm^C303-3|Standard Quad Dorm^C303-4|Standard Quad Dorm^C304-1|Standard Quad Dorm^C304-2|Standard Quad Dorm^C304-3|Standard Quad Dorm^C304-4|Standard Quad Dorm^D01|BUNGALOWS^D02|BUNGALOWS^D03|BUNGALOWS^D04|BUNGALOWS^D05|BUNGALOWS^D06|BUNGALOWS^D07|BUNGALOWS^D08|BUNGALOWS^D09|BUNGALOWS^D10|BUNGALOWS^D11|BUNGALOWS";
         const hardcodedRooms = rawRooms.split('^').map(r => { const p = r.split('|'); return { id: p[0], type: p[1] }; });
         
@@ -452,7 +528,6 @@
 
                 const propToLoad = windowPropertiesList.find(p => p.id === currentPropertyId);
                 if (propToLoad) {
-                    // Pull Rooms straight from Settings (Pre-Sorted in correct UI order)
                     hotelRooms = propToLoad.rooms && propToLoad.rooms.length > 0 ? [...propToLoad.rooms] : [...hardcodedRooms];
                     eventDates = propToLoad.events || [];
                     window.channexConfig = propToLoad.channex || {};
@@ -521,7 +596,6 @@
             currentPropertyId = propId;
             await loadPropertyConfig();
             window.renderGrid();
-            window.renderAvailability();
             document.getElementById('loader').classList.remove('active');
         };
 
@@ -536,7 +610,6 @@
                 if (type === '+%') return Math.round(val * (1 + (mod/100)));
                 if (type === '-%') return Math.max(0, Math.round(val * (1 - (mod/100))));
             } else {
-                // TRUE INVERSE MATH FOR REVERSE RIPPLE
                 if (type === '+') return Math.max(0, Math.round(val - mod));
                 if (type === '-') return Math.max(0, Math.round(val + mod));
                 if (type === '+%') return Math.round(val / (1 + (mod/100)));
@@ -562,7 +635,6 @@
             let minDiff = getNearestEvent(parseYMD(dateStr));
             let isPeak = (minDiff === 0);
 
-            // Construct Undirected Graph (Forward and Reverse Edges)
             const adj = {}; roomTypes.forEach(r => adj[r] = []);
             masterPricing.relationships.forEach(rel => {
                 if (rel.anchor === 'unlinked') return; 
@@ -576,7 +648,6 @@
                 adj[tRoom].push({ to: aRoom, type: rel.type, val: rel.val, typeFmp: rel.typeFmp, valFmp: rel.valFmp, isReverse: true });
             });
 
-            // BFS Traversal
             let queue = [startRoom]; let visited = new Set([startRoom]);
             while(queue.length > 0) {
                 let cur = queue.shift();
@@ -590,7 +661,6 @@
                         masterPricing.timeline[dateStr][edge.to] = masterPricing.timeline[dateStr][edge.to] || { isOverride: {} };
                         let nextVals = masterPricing.timeline[dateStr][edge.to];
                         
-                        // Force update all linked cells and reset their override status so they follow the new source of truth
                         if (isPeak) {
                             let ruleType = edge.typeFmp || edge.type;
                             let ruleVal = edge.valFmp !== undefined && edge.valFmp !== "" ? edge.valFmp : edge.val;
@@ -623,12 +693,12 @@
 
         const getCellData = (dateStr, room) => {
             const data = (masterPricing.timeline[dateStr] || {})[room] || {};
-            if (room === 'GLOBAL') return { min: data.min !== undefined ? data.min : "", max: data.max !== undefined ? data.max : "", min_arr: data.min_arr !== undefined ? data.min_arr : "", cta: data.cta || false, isOverride: data.isOverride || {} };
-            return { std: data.std !== undefined ? data.std : "", fmp: data.fmp !== undefined ? data.fmp : "", isOverride: data.isOverride || {} };
+            if (room === 'GLOBAL') return { min: data.min !== undefined ? data.min : "", max: data.max !== undefined ? data.max : "", min_arr: data.min_arr !== undefined ? data.min_arr : "", cta: data.cta || false, ctd: data.ctd || false, stopSell: data.stopSell || false, isOverride: data.isOverride || {} };
+            return { std: data.std !== undefined ? data.std : "", fmp: data.fmp !== undefined ? data.fmp : "", min: data.min !== undefined ? data.min : "", max: data.max !== undefined ? data.max : "", cta: data.cta || false, ctd: data.ctd || false, stopSell: data.stopSell || false, isOverride: data.isOverride || {} };
         };
 
         window.switchTab = (tab) => {
-            ['grid', 'avail', 'smart', 'relational', 'mapping'].forEach(t => {
+            ['grid', 'smart', 'relational', 'mapping'].forEach(t => {
                 const el = document.getElementById(`view-${t}`);
                 if (el) el.style.display = t === tab ? 'flex' : 'none';
                 const btn = document.getElementById(`tab-${t}`);
@@ -640,7 +710,6 @@
                 if (selP) selP.innerHTML = roomTypes.filter(t => !t.toLowerCase().includes('dorm')).map(t => `<option value="${t}">${t}</option>`).join('');
                 if (selD) selD.innerHTML = roomTypes.filter(t => t.toLowerCase().includes('dorm')).map(t => `<option value="${t}">${t}</option>`).join('');
             }
-            if(tab === 'avail') window.renderAvailability();
         };
 
         window.shiftTape = (days) => {
@@ -661,13 +730,140 @@
             window.isRippleEnabled = !window.isRippleEnabled;
             const btn = document.getElementById('ripple-toggle');
             if (window.isRippleEnabled) {
-                btn.innerHTML = '<i data-lucide="link" size="12"></i> Auto-Link: ON';
+                btn.innerHTML = '<i data-lucide="link" size="12"></i> LINKS: ON';
                 btn.classList.replace('!bg-slate-100', '!bg-indigo-100'); btn.classList.replace('!text-slate-500', '!text-indigo-700');
             } else {
-                btn.innerHTML = '<i data-lucide="link-2-off" size="12"></i> Auto-Link: OFF';
+                btn.innerHTML = '<i data-lucide="link-2-off" size="12"></i> LINKS: OFF';
                 btn.classList.replace('!bg-indigo-100', '!bg-slate-100'); btn.classList.replace('!text-indigo-700', '!text-slate-500');
             }
             lucide.createIcons();
+        };
+
+        window.toggleQuickBulk = (forceClose = false) => {
+            const panel = document.getElementById('quick-bulk-panel');
+            if (!forceClose && panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden'); panel.classList.add('flex');
+                window.toggleQBTarget();
+            } else { panel.classList.add('hidden'); panel.classList.remove('flex'); }
+        };
+
+        window.toggleQBTarget = () => {
+            const target = document.getElementById('qb-target').value;
+            const fieldSel = document.getElementById('qb-field');
+            
+            if (target === 'global') {
+                document.getElementById('qb-rooms-container').style.display = 'none'; 
+                document.getElementById('qb-rates-container').style.display = 'none'; 
+                document.getElementById('qb-global-container').style.display = 'flex';
+                document.getElementById('qb-opt-std').style.display = 'none';
+                document.getElementById('qb-opt-fmp').style.display = 'none';
+                if (fieldSel.value === 'std' || fieldSel.value === 'fmp') fieldSel.value = 'min';
+            } else if (target === 'rooms') {
+                document.getElementById('qb-rooms-container').style.display = 'flex'; 
+                document.getElementById('qb-rates-container').style.display = 'none'; 
+                document.getElementById('qb-global-container').style.display = 'none';
+                document.getElementById('qb-opt-std').style.display = 'block';
+                document.getElementById('qb-opt-fmp').style.display = 'block';
+                window.renderQuickBulkTargets('rooms');
+            } else if (target === 'rates') {
+                document.getElementById('qb-rooms-container').style.display = 'none'; 
+                document.getElementById('qb-rates-container').style.display = 'flex'; 
+                document.getElementById('qb-global-container').style.display = 'none';
+                document.getElementById('qb-opt-std').style.display = 'block';
+                document.getElementById('qb-opt-fmp').style.display = 'none';
+                if (fieldSel.value === 'fmp') fieldSel.value = 'std';
+                window.renderQuickBulkTargets('rates');
+            }
+        };
+
+        window.renderQuickBulkTargets = (type) => {
+            let html = '';
+            if (type === 'rooms') {
+                roomTypes.forEach(r => { 
+                    html += `<div class="flex items-center gap-1 w-32 bg-white px-1.5 py-1 rounded border border-slate-200 shadow-sm">
+                        <input type="checkbox" id="qb_chk_room_${r.replace(/\s+/g, '')}" value="${r}" class="qb-chk cursor-pointer accent-indigo-600">
+                        <input type="number" id="qb_val_room_${r.replace(/\s+/g, '')}" class="qb-val-input input-base !py-0.5 !px-1 text-center text-[10px] w-12 border-slate-300" placeholder="Val" oninput="if(this.value !== '') document.getElementById('qb_chk_room_${r.replace(/\s+/g, '')}').checked = true;">
+                        <label for="qb_chk_room_${r.replace(/\s+/g, '')}" class="text-[9px] uppercase font-bold text-slate-600 truncate flex-1 cursor-pointer" title="${r}">${displayAbbrev[r]||r}</label>
+                    </div>`; 
+                });
+                document.getElementById('qb-rooms-container').innerHTML = html;
+            } else if (type === 'rates') {
+                if (!window.channexRateMap || window.channexRateMap.length === 0) {
+                    html = '<div class="text-[10px] text-slate-500 font-bold italic py-1">No Rate Plans Mapped.</div>';
+                } else {
+                    window.channexRateMap.forEach(m => { 
+                        html += `<div class="flex items-center gap-1 w-40 bg-white px-1.5 py-1 rounded border border-amber-200 shadow-sm">
+                            <input type="checkbox" id="qb_chk_rate_${m.ratePlanId}" value="${m.ratePlanId}" data-parent="${m.pmsCategory}" data-ruletype="${m.ruleType}" data-ruleval="${m.ruleVal}" class="qb-chk cursor-pointer accent-amber-500">
+                            <input type="number" id="qb_val_rate_${m.ratePlanId}" class="qb-val-input input-base !py-0.5 !px-1 text-center text-[10px] w-12 border-amber-300" placeholder="Val" oninput="if(this.value !== '') document.getElementById('qb_chk_rate_${m.ratePlanId}').checked = true;">
+                            <label for="qb_chk_rate_${m.ratePlanId}" class="text-[9px] uppercase font-bold text-amber-800 truncate flex-1 cursor-pointer" title="${m.ratePlanTitle}">${m.ratePlanTitle}</label>
+                        </div>`; 
+                    });
+                }
+                document.getElementById('qb-rates-container').innerHTML = html;
+            }
+        };
+
+        window.runQuickBulk = (isClear = false) => {
+            const s = document.getElementById('qb-start').value, e = document.getElementById('qb-end').value, f = document.getElementById('qb-field').value;
+            const target = document.getElementById('qb-target').value;
+            
+            if(!s || !e) return window.customAlert("Please select Start and End dates.");
+            const sU = parseYMD(s), eU = parseYMD(e);
+            
+            if (target === 'global') {
+                if (isClear) {
+                    for(let d=sU; d<=eU; d+=86400000) window.handleCellEdit(getLocalYMD(new Date(d)), 'GLOBAL', f, "");
+                } else {
+                    let v = document.getElementById('qb-global-val').value;
+                    if (!v && !['cta', 'ctd', 'stopSell'].includes(f)) return window.customAlert("Enter a value to apply global override.");
+                    let applyVal = ['cta', 'ctd', 'stopSell'].includes(f) ? (v.toLowerCase() === 'true' || v === '1' || v.toLowerCase() === 'on') : parseInt(v);
+                    for(let d=sU; d<=eU; d+=86400000) window.handleCellEdit(getLocalYMD(new Date(d)), 'GLOBAL', f, applyVal);
+                }
+            } else if (target === 'rooms') {
+                const updates = [];
+                document.querySelectorAll('#qb-rooms-container .qb-chk:checked').forEach(chk => {
+                    const room = chk.value;
+                    const valInput = document.getElementById(`qb_val_room_${room.replace(/\s+/g, '')}`);
+                    if (isClear) {
+                        updates.push({ room, val: "" });
+                    } else if (valInput.value !== "") {
+                        let applyVal = ['cta', 'ctd', 'stopSell'].includes(f) ? (valInput.value === '1' || valInput.value > 0) : valInput.value;
+                        updates.push({ room, val: applyVal });
+                    }
+                });
+                
+                if(updates.length === 0) return window.customAlert(isClear ? "Check at least one room to clear." : "Check at least one room and enter a value to apply.");
+                
+                for(let d=sU; d<=eU; d+=86400000) {
+                    updates.forEach(u => window.handleCellEdit(getLocalYMD(new Date(d)), u.room, f, u.val));
+                }
+            } else if (target === 'rates') {
+                const updates = [];
+                document.querySelectorAll('#qb-rates-container .qb-chk:checked').forEach(chk => {
+                    const rateId = chk.value;
+                    const pCat = categoryResolver(chk.getAttribute('data-parent'));
+                    const rType = chk.getAttribute('data-ruletype') || "=";
+                    const rVal = parseFloat(chk.getAttribute('data-ruleval')) || 0;
+                    const valInput = document.getElementById(`qb_val_rate_${rateId}`);
+                    
+                    if (isClear) {
+                        updates.push({ rateId, pCat, rType, rVal, val: "" });
+                    } else if (valInput.value !== "") {
+                        let applyVal = ['cta', 'ctd', 'stopSell'].includes(f) ? (valInput.value === '1' || valInput.value > 0) : valInput.value;
+                        updates.push({ rateId, pCat, rType, rVal, val: applyVal });
+                    }
+                });
+                
+                if(updates.length === 0) return window.customAlert(isClear ? "Check at least one rate to clear." : "Check at least one rate and enter a value to apply.");
+                
+                for(let d=sU; d<=eU; d+=86400000) {
+                    let dStr = getLocalYMD(new Date(d));
+                    updates.forEach(u => {
+                        let fieldArg = f === 'std' ? 'rate' : f; 
+                        window.handleOtaEdit(dStr, u.rateId, u.pCat, u.rType, u.rVal, fieldArg, u.val);
+                    });
+                }
+            }
         };
 
         const getViewMultiplier = () => { return currentPlatformView === 'hw' ? 1.25 : 1.0; };
@@ -685,42 +881,143 @@
             const data = getCellData(dateStr, room);
             const mult = getViewMultiplier();
             const hasEvents = eventDates.length > 0;
+            const isDirtyDate = window.dirtyDates.has(dateStr);
+            const isSyncedDate = window.syncedDates.has(dateStr);
+
+            const applyState = (el) => {
+                if(!el) return;
+                if (isDirtyDate) { el.classList.add('is-dirty'); el.classList.remove('is-synced'); }
+                else if (isSyncedDate) { el.classList.add('is-synced'); el.classList.remove('is-dirty'); }
+                else { el.classList.remove('is-dirty', 'is-synced'); }
+            };
 
             if (room !== 'GLOBAL') {
-                const elStd = document.getElementById(`${bId}_std`);
-                if (elStd) {
-                    elStd.value = data.std !== "" && !isNaN(data.std) ? Math.round(data.std * mult) : "";
-                    if (data.isOverride.std) elStd.classList.add('is-override'); else elStd.classList.remove('is-override');
+                // Rates
+                if (window.activeMetrics.has('rates')) {
+                    const elStd = document.getElementById(`${bId}_std`);
+                    if (elStd) {
+                        elStd.value = data.std !== "" && !isNaN(data.std) ? Math.round(data.std * mult) : "";
+                        if (data.isOverride.std) elStd.classList.add('is-override'); else elStd.classList.remove('is-override');
+                        applyState(elStd);
+                    }
+                    const elFmp = document.getElementById(`${bId}_fmp`);
+                    if (elFmp && hasEvents) {
+                        elFmp.value = data.fmp !== "" && !isNaN(data.fmp) ? Math.round(data.fmp * mult) : "";
+                        if (data.isOverride.fmp) elFmp.classList.add('is-override'); else elFmp.classList.remove('is-override');
+                        applyState(elFmp);
+                    }
                 }
-                const elFmp = document.getElementById(`${bId}_fmp`);
-                if (elFmp && hasEvents) {
-                    elFmp.value = data.fmp !== "" && !isNaN(data.fmp) ? Math.round(data.fmp * mult) : "";
-                    if (data.isOverride.fmp) elFmp.classList.add('is-override'); else elFmp.classList.remove('is-override');
-                }
-            } else {
-                ['min', 'max', 'min_arr'].forEach(k => {
-                    const el = document.getElementById(`${bId}_${k}`);
-                    if (el) {
-                        let displayVal = (data[k] !== undefined && data[k] !== "") ? data[k] : "";
-                        if (k === 'min' && currentPlatformView === 'hw' && displayVal === "") {
-                            let msDiff = getNearestEvent(parseYMD(dateStr));
-                            if (msDiff > 0 && msDiff <= 6) displayVal = msDiff + 1; 
+                
+                // Room Level Restrictions
+                ['min', 'max', 'cta', 'ctd', 'stopSell'].forEach(fKey => {
+                    let mapKey = fKey === 'stopSell' ? 'stop' : fKey;
+                    if (window.activeMetrics.has(mapKey)) {
+                        const el = document.getElementById(`${bId}_${fKey}`);
+                        if (el) {
+                            if (fKey === 'cta' || fKey === 'ctd' || fKey === 'stopSell') {
+                                el.checked = data[fKey] === true;
+                                if (data.isOverride[fKey]) el.classList.add('!border-amber-500', '!bg-amber-100'); else el.classList.remove('!border-amber-500', '!bg-amber-100');
+                                const td = el.closest('td'); if (td) applyState(td);
+                            } else {
+                                el.value = data[fKey] !== undefined ? data[fKey] : "";
+                                if (data.isOverride[fKey]) el.classList.add('is-override'); else el.classList.remove('is-override');
+                                applyState(el);
+                            }
                         }
-                        el.value = displayVal;
-                        if (data.isOverride[k]) el.classList.add('is-override'); else el.classList.remove('is-override');
                     }
                 });
-                const elCta = document.getElementById(`${bId}_cta`);
-                if (elCta) {
-                    elCta.checked = data.cta;
-                    if (data.isOverride.cta) elCta.classList.add('!border-amber-500', '!bg-amber-100'); else elCta.classList.remove('!border-amber-500', '!bg-amber-100');
+
+                // OTA Rates & Restrictions
+                if (window.channexRateMap) {
+                    const mappedRates = window.channexRateMap.filter(m => categoryResolver(m.pmsCategory) === room);
+                    mappedRates.forEach(rate => {
+                        const otaId = `inp_${dateStr}_${rate.ratePlanId}`;
+                        
+                        if (window.activeMetrics.has('rates')) {
+                            const otaInput = document.getElementById(`${otaId}_ota`);
+                            if (otaInput) {
+                                const otaOverride = masterPricing.timeline[dateStr]?.otaOverrides?.[rate.ratePlanId];
+                                if (otaOverride !== undefined) {
+                                    otaInput.value = otaOverride;
+                                    otaInput.classList.add('!text-pink-600', 'font-black');
+                                    otaInput.classList.remove('!bg-pink-100', '!text-pink-700');
+                                } else {
+                                    let activePrice = data.std;
+                                    if (data.fmp !== undefined && data.fmp !== "" && hasEvents) {
+                                        let msDiff = getNearestEvent(parseYMD(dateStr));
+                                        if (Math.abs(msDiff) <= 6) activePrice = data.fmp;
+                                    }
+                                    if (activePrice !== "" && activePrice !== undefined) {
+                                        let modified = applyMath(activePrice, rate.ruleType || "=", rate.ruleVal || 0);
+                                        otaInput.value = Math.round(modified * mult);
+                                        otaInput.classList.remove('!text-pink-600', 'font-black', '!bg-pink-100', '!text-pink-700');
+                                    } else {
+                                        otaInput.value = "";
+                                        otaInput.classList.remove('!text-pink-600', 'font-black', '!bg-pink-100', '!text-pink-700');
+                                    }
+                                }
+                                applyState(otaInput);
+                            }
+                        }
+                        
+                        ['min', 'max', 'cta', 'ctd', 'stopSell'].forEach(fKey => {
+                            let mapKey = fKey === 'stopSell' ? 'stop' : fKey;
+                            if (window.activeMetrics.has(mapKey)) {
+                                const rEl = document.getElementById(`${otaId}_${fKey}`);
+                                if (rEl) {
+                                    const val = masterPricing.timeline[dateStr]?.otaOverrides?.[`${rate.ratePlanId}_${fKey}`];
+                                    if (fKey === 'cta' || fKey === 'ctd' || fKey === 'stopSell') {
+                                        rEl.checked = val === true;
+                                        if (val !== undefined) rEl.classList.add('!border-pink-500', '!bg-pink-100'); else rEl.classList.remove('!border-pink-500', '!bg-pink-100');
+                                        const td = rEl.closest('td'); if (td) applyState(td);
+                                    } else {
+                                        rEl.value = val !== undefined ? val : "";
+                                        if (val !== undefined) rEl.classList.add('!text-pink-600', 'font-black'); else rEl.classList.remove('!text-pink-600', 'font-black');
+                                        applyState(rEl);
+                                    }
+                                }
+                            }
+                        });
+                    });
                 }
+            } else {
+                // GLOBAL PROPERTY RESTRICTIONS
+                ['min', 'max', 'min_arr'].forEach(k => {
+                    let mapKey = k === 'min_arr' ? 'min' : k;
+                    if (window.activeMetrics.has(mapKey)) {
+                        const el = document.getElementById(`${bId}_${k}`);
+                        if (el) {
+                            let displayVal = (data[k] !== undefined && data[k] !== "") ? data[k] : "";
+                            if (k === 'min' && currentPlatformView === 'hw' && displayVal === "") {
+                                let msDiff = getNearestEvent(parseYMD(dateStr));
+                                if (msDiff > 0 && msDiff <= 6) displayVal = msDiff + 1; 
+                            }
+                            el.value = displayVal;
+                            if (data.isOverride[k]) el.classList.add('is-override'); else el.classList.remove('is-override');
+                            applyState(el);
+                        }
+                    }
+                });
+                
+                ['cta', 'ctd', 'stopSell'].forEach(k => {
+                    let mapKey = k === 'stopSell' ? 'stop' : k;
+                    if (window.activeMetrics.has(mapKey)) {
+                        const elBool = document.getElementById(`${bId}_${k}`);
+                        if (elBool) {
+                            elBool.checked = data[k] === true;
+                            if (data.isOverride[k]) elBool.classList.add('!border-amber-500', '!bg-amber-100'); else elBool.classList.remove('!border-amber-500', '!bg-amber-100');
+                            const td = elBool.closest('td'); if (td) applyState(td);
+                        }
+                    }
+                });
             }
         };
 
         window.renderGrid = () => {
             const startStr = document.getElementById('tape-start').value;
             if(!startStr) return;
+
+            calculateLiveInventory();
 
             const head = document.getElementById('grid-head');
             const body = document.getElementById('grid-body');
@@ -730,7 +1027,7 @@
             let dObj = new Date(startStr + "T12:00:00Z");
             const hasEvents = eventDates.length > 0;
 
-            let trHead = `<tr class="sticky-header"><th class="frozen-col-header z-30 border-r border-slate-600" style="width: 28px; min-width: 28px; left: 0;"></th><th class="frozen-col-header z-30 border-r-2 border-slate-500" style="width: 28px; min-width: 28px; left: 28px;"></th>`;
+            let trHead = `<tr class="sticky-header"><th class="frozen-col-header z-30 border-r border-slate-600" style="width: 140px; min-width: 140px; left: 0;"></th><th class="frozen-col-header z-30 border-r-2 border-slate-500" style="width: 42px; min-width: 42px; left: 140px;"></th>`;
             for(let i=0; i<daysToRender; i++) {
                 const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
                 const dMs = parseYMD(getLocalYMD(cur));
@@ -755,92 +1052,177 @@
             roomTypes.forEach((room, idx) => {
                 const groupClass = idx % 2 === 0 ? 'room-group-even' : 'room-group-odd';
                 let displayName = displayAbbrev[room] || room;
-                let wrappedName = displayName.replace(' ', '<br>');
+                
+                // Calculate Rowspan dynamically based on active filters
+                let roomRows = [];
+                if (window.activeMetrics.has('avail')) roomRows.push({ id: 'avail', label: 'AVAIL', isBool: false, isAvail: true });
+                if (window.activeMetrics.has('rates')) {
+                    roomRows.push({ id: 'std', label: 'STD', isBool: false });
+                    if (hasEvents) roomRows.push({ id: 'fmp', label: 'EVT', isBool: false, isEvt: true });
+                }
+                if (window.activeMetrics.has('min')) roomRows.push({ id: 'min', label: 'MIN', isBool: false });
+                if (window.activeMetrics.has('max')) roomRows.push({ id: 'max', label: 'MAX', isBool: false });
+                if (window.activeMetrics.has('cta')) roomRows.push({ id: 'cta', label: 'CTA', isBool: true });
+                if (window.activeMetrics.has('ctd')) roomRows.push({ id: 'ctd', label: 'CTD', isBool: true });
+                if (window.activeMetrics.has('stop')) roomRows.push({ id: 'stopSell', label: 'STOP', isBool: true });
 
-                let tr1 = `<tr class="${groupClass} border-t border-slate-300">
-                    <td rowspan="${hasEvents ? 2 : 1}" class="frozen-col !p-0 z-20 align-middle border-r border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}" style="width: 28px; min-width: 28px;">
-                        <div class="vertical-text-wrapper" style="${!hasEvents ? 'height: 26px;' : ''}">
-                            <span class="vertical-text">${wrappedName}</span>
-                        </div>
-                    </td>
-                    <td class="frozen-col-2 !p-0 z-20 ${hasEvents ? 'border-b border-slate-200' : 'border-b border-slate-400'} ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'} align-middle" style="width: 28px; min-width: 28px;">
-                        <span class="text-[9px] font-black text-slate-500 tracking-tighter">STD</span>
-                    </td>`;
+                if (roomRows.length === 0) return; // Skip room if no metrics selected
 
-                let tr2 = '';
-                if (hasEvents) {
-                    tr2 = `<tr class="${groupClass} evt-text">
-                        <td class="frozen-col-2 !p-0 z-20 align-middle border-b border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}" style="width: 28px; min-width: 28px;">
-                            <span class="text-[9px] font-black tracking-tighter text-pink-600">EVT</span>
+                let totalRoomSpan = roomRows.length;
+
+                roomRows.forEach((rDef, rIdx) => {
+                    let tr = `<tr class="${groupClass} ${rDef.isEvt ? 'evt-text' : ''}">`;
+                    
+                    if (rIdx === 0) {
+                        tr += `<td rowspan="${totalRoomSpan}" class="frozen-col !p-0 z-20 align-middle border-r border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                            <div class="w-[140px] flex items-center px-2 h-full font-black text-slate-700 text-left text-[11px] leading-tight whitespace-normal break-words">
+                                ${displayName}
+                            </div>
                         </td>`;
-                }
-
-                for(let i=0; i<daysToRender; i++) {
-                    const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
-                    const dateStr = getLocalYMD(cur);
-                    const bId = `inp_${dateStr}_${room.replace(/\s+/g, '')}`;
-                    
-                    let minDiff = getNearestEvent(parseYMD(dateStr));
-                    let evtColor = '';
-                    if (hasEvents) {
-                        if (minDiff === 0) evtColor = 'bg-amber-300';
-                        else if (Math.abs(minDiff) <= 2) evtColor = 'bg-yellow-100';
                     }
                     
-                    tr1 += `<td class="${evtColor} border-b ${hasEvents ? 'border-slate-200' : 'border-slate-400'} border-t border-t-slate-300"><input type="number" id="${bId}_std" class="w-full text-center outline-none focus:bg-indigo-50 font-bold !text-slate-900 bg-transparent" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', 'std', this.value)"></td>`;
-                    if (hasEvents) {
-                        tr2 += `<td class="${evtColor} border-b border-slate-400"><input type="number" id="${bId}_fmp" class="w-full text-center outline-none focus:bg-pink-50 font-black !text-pink-600 bg-transparent" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp', this.value)"></td>`;
-                    }
-                }
-                allRowsHtml += tr1 + '</tr>' + (hasEvents ? tr2 + '</tr>' : '');
-            });
+                    let isLastInRoom = rIdx === totalRoomSpan - 1;
+                    let borderClass = isLastInRoom ? 'border-b-2 border-slate-400' : 'border-b border-slate-200';
+                    let labelColor = rDef.isEvt ? 'text-pink-600' : (rDef.isAvail ? 'text-slate-500 font-black' : 'text-slate-500');
 
-            let rowsConf = [
-                { id: 'min', lbl: 'MIN NTS', show: true },
-                { id: 'max', lbl: 'MAX NTS', show: currentPlatformView !== 'hw' },
-                { id: 'min_arr', lbl: 'MIN ARR', show: currentPlatformView !== 'hw' },
-                { id: 'cta', lbl: 'CTA', show: currentPlatformView !== 'hw', isBool: true }
-            ];
-            
-            let visibleRowsConf = rowsConf.filter(rc => rc.show);
-            
-            visibleRowsConf.forEach((rc, rIndex) => {
-                let tr = `<tr class="bg-slate-700 border-b border-slate-600 text-white">`;
-                
-                if (rIndex === 0) {
-                    tr += `<td rowspan="${visibleRowsConf.length}" class="frozen-col !p-0 z-20 bg-slate-700 border-r border-slate-600 border-t-4 border-slate-800 align-middle" style="width: 28px; min-width: 28px;">
-                        <div class="vertical-text-wrapper" style="height: ${visibleRowsConf.length * 26}px;">
-                            <span class="vertical-text !text-slate-300 !font-black tracking-widest text-[10px] !whitespace-nowrap">GLOBAL RESTR</span>
-                        </div>
+                    tr += `<td class="frozen-col-2 !p-0 z-20 align-middle ${borderClass} ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                        <span class="text-[9px] font-black tracking-tighter ${labelColor}">${rDef.label}</span>
                     </td>`;
-                }
-                
-                let labelHtml = rc.lbl.replace(' ', '<br>');
-                tr += `<td class="frozen-col-2 !p-0 z-20 bg-slate-700 border-r-2 border-slate-600 ${rIndex===0?'border-t-4 border-slate-800':''} align-middle border-b border-slate-600" style="width: 28px; min-width: 28px;">
-                    <div class="text-[9px] font-black !text-slate-300 uppercase tracking-tighter text-center leading-none">${labelHtml}</div>
-                </td>`;
 
-                for(let i=0; i<daysToRender; i++) {
-                    const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
-                    const dateStr = getLocalYMD(cur);
-                    const bId = `inp_${dateStr}_GLOBAL_${rc.id}`;
-                    
-                    let minDiff = getNearestEvent(parseYMD(dateStr));
-                    let evtColor = 'bg-slate-700';
-                    if (hasEvents) {
-                        evtColor = minDiff === 0 ? 'bg-amber-900/60' : (Math.abs(minDiff) <= 2 ? 'bg-amber-900/30' : 'bg-slate-700');
+                    for(let i=0; i<daysToRender; i++) {
+                        const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
+                        const dateStr = getLocalYMD(cur);
+                        const bId = `inp_${dateStr}_${room.replace(/\s+/g, '')}`;
+                        let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? 'is-dirty' : (isSynced ? 'is-synced' : '');
+                        
+                        let minDiff = getNearestEvent(parseYMD(dateStr));
+                        let evtColor = '';
+                        if (hasEvents) {
+                            if (minDiff === 0) evtColor = 'bg-amber-300';
+                            else if (Math.abs(minDiff) <= 2) evtColor = 'bg-yellow-100';
+                        }
+                        
+                        if (rDef.isAvail) {
+                            let live = liveInventory[dateStr] && liveInventory[dateStr][room] !== undefined ? liveInventory[dateStr][room] : 0;
+                            let availColor = live === 0 ? 'text-rose-600 font-black' : (live <= 2 ? 'text-amber-600 font-black' : 'text-emerald-700 font-black');
+                            tr += `<td class="${evtColor} ${borderClass} bg-slate-50/80"><span class="text-[13px] ${availColor}">${live}</span></td>`;
+                        } else if (rDef.isBool) {
+                            tr += `<td class="${evtColor} ${borderClass} ${stateClass}"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}_${rDef.id}" class="grid-toggle" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.checked)"></div></td>`;
+                        } else {
+                            tr += `<td class="${evtColor} ${borderClass}"><input type="number" id="${bId}_${rDef.id}" class="w-full text-center outline-none focus:bg-indigo-50 font-bold ${rDef.isEvt ? '!text-pink-600' : '!text-slate-900'} bg-transparent ${stateClass}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.value)"></td>`;
+                        }
                     }
-                    let bTClass = rIndex===0 ? 'border-t-4 border-slate-800' : '';
-                    
-                    if (rc.isBool) {
-                        tr += `<td class="${evtColor} ${bTClass} border-b border-slate-600"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}" class="grid-toggle" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.checked)"></div></td>`;
-                    } else {
-                        tr += `<td class="${evtColor} ${bTClass} border-b border-slate-600"><input type="number" id="${bId}" class="w-full text-center outline-none focus:bg-slate-500 font-bold !text-white bg-transparent !text-[14px]" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.value)"></td>`;
-                    }
+                    tr += `</tr>`;
+                    allRowsHtml += tr;
+                });
+
+                // OTA RATES & RESTRICTIONS SUB-ROWS
+                if (window.channexRateMap) {
+                    const mappedRates = window.channexRateMap.filter(m => categoryResolver(m.pmsCategory) === room);
+                    mappedRates.forEach(rate => {
+                        let otaRows = [];
+                        if (window.activeMetrics.has('rates')) otaRows.push({ id: 'ota', label: 'RATE', isBool: false, isRate: true });
+                        if (window.activeMetrics.has('min')) otaRows.push({ id: 'min', label: 'MIN', isBool: false });
+                        if (window.activeMetrics.has('max')) otaRows.push({ id: 'max', label: 'MAX', isBool: false });
+                        if (window.activeMetrics.has('cta')) otaRows.push({ id: 'cta', label: 'CTA', isBool: true });
+                        if (window.activeMetrics.has('ctd')) otaRows.push({ id: 'ctd', label: 'CTD', isBool: true });
+                        if (window.activeMetrics.has('stop')) otaRows.push({ id: 'stopSell', label: 'STOP', isBool: true });
+
+                        if (otaRows.length === 0) return;
+
+                        let ruleText = rate.ruleType === "=" ? "BASE" : `${rate.ruleType}${rate.ruleVal}`;
+                        let rateRowspan = otaRows.length;
+
+                        otaRows.forEach((oDef, oIdx) => {
+                            let trOta = `<tr class="${groupClass} bg-indigo-50/50">`;
+                            
+                            if (oIdx === 0) {
+                                trOta += `<td rowspan="${rateRowspan}" class="frozen-col !p-0 z-20 border-r border-slate-300 bg-indigo-50/50">
+                                    <div class="w-[140px] flex flex-col justify-center px-2 h-full text-left">
+                                        <span class="text-[10px] font-black text-indigo-900 leading-tight whitespace-normal break-words">${rate.ratePlanTitle}</span>
+                                        <span class="text-[8px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">OTA RATE PLAN</span>
+                                    </div>
+                                </td>`;
+                            }
+                            
+                            let isLastOta = oIdx === rateRowspan - 1;
+                            let bClass = isLastOta ? 'border-b-2 border-slate-400' : 'border-b border-indigo-200';
+
+                            trOta += `<td class="frozen-col-2 !p-0 z-20 align-middle ${bClass} border-r-2 border-slate-400 bg-indigo-50/50">
+                                <span class="text-[8px] font-black tracking-tighter text-indigo-800 block w-full text-center leading-tight">${oDef.label}</span>
+                                ${oDef.isRate ? `<span class="text-[7px] font-bold text-slate-500 tracking-tighter block w-full text-center">${ruleText}</span>` : ''}
+                            </td>`;
+
+                            for(let i=0; i<daysToRender; i++) {
+                                const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
+                                const dateStr = getLocalYMD(cur);
+                                const bId = `inp_${dateStr}_${rate.ratePlanId}`;
+                                let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? 'is-dirty' : (isSynced ? 'is-synced' : '');
+                                let evtColor = ''; if (hasEvents) { let minDiff = getNearestEvent(parseYMD(dateStr)); if (minDiff === 0) evtColor = 'bg-amber-100/50'; else if (Math.abs(minDiff) <= 2) evtColor = 'bg-yellow-50/50'; }
+
+                                if (oDef.isBool) {
+                                    trOta += `<td class="${evtColor} ${bClass} ${stateClass}"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}_${oDef.id}" class="grid-toggle" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.checked)"></div></td>`;
+                                } else if (oDef.isRate) {
+                                    trOta += `<td class="${evtColor} ${bClass}"><input type="number" id="${bId}_ota" class="w-full text-center outline-none focus:bg-pink-50 font-bold !text-indigo-800 bg-transparent text-[13px] ${stateClass}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'rate', this.value)"></td>`;
+                                } else {
+                                    trOta += `<td class="${evtColor} ${bClass}"><input type="number" id="${bId}_${oDef.id}" class="w-full text-center outline-none focus:bg-pink-50 font-bold !text-indigo-600 bg-transparent ${stateClass} !text-[12px]" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.value)"></td>`;
+                                }
+                            }
+                            trOta += `</tr>`;
+                            allRowsHtml += trOta;
+                        });
+                    });
                 }
-                tr += `</tr>`;
-                allRowsHtml += tr;
             });
+
+            // GLOBAL PROPERTY RESTRICTIONS ROW
+            let globalRows = [];
+            if (window.activeMetrics.has('min')) {
+                globalRows.push({ id: 'min', lbl: 'MIN NTS', isBool: false });
+                if (currentPlatformView !== 'hw') globalRows.push({ id: 'min_arr', lbl: 'MIN ARR', isBool: false });
+            }
+            if (window.activeMetrics.has('max') && currentPlatformView !== 'hw') globalRows.push({ id: 'max', lbl: 'MAX NTS', isBool: false });
+            if (window.activeMetrics.has('cta') && currentPlatformView !== 'hw') globalRows.push({ id: 'cta', lbl: 'CTA', isBool: true });
+            if (window.activeMetrics.has('ctd') && currentPlatformView !== 'hw') globalRows.push({ id: 'ctd', lbl: 'CTD', isBool: true });
+            if (window.activeMetrics.has('stop')) globalRows.push({ id: 'stopSell', lbl: 'STOP SELL', isBool: true });
+
+            if (globalRows.length > 0) {
+                globalRows.forEach((rc, rIndex) => {
+                    let tr = `<tr class="bg-white border-b border-slate-200 text-slate-700">`;
+                    
+                    if (rIndex === 0) {
+                        tr += `<td rowspan="${globalRows.length}" class="frozen-col !p-0 z-20 bg-slate-800 border-r border-slate-900 border-t-4 border-slate-900 align-middle">
+                            <div class="w-[140px] flex items-center px-2 h-full text-[11px] font-black tracking-widest text-white text-left overflow-hidden uppercase">
+                                Global Property Constraints
+                            </div>
+                        </td>`;
+                    }
+                    
+                    let labelHtml = rc.lbl.replace(' ', '<br>');
+                    tr += `<td class="frozen-col-2 !p-0 z-20 bg-slate-800 border-r-2 border-slate-900 ${rIndex===0?'border-t-4 border-slate-900':''} align-middle border-b border-slate-700">
+                        <div class="text-[9px] font-black !text-slate-300 uppercase tracking-tighter text-center leading-none">${labelHtml}</div>
+                    </td>`;
+
+                    for(let i=0; i<daysToRender; i++) {
+                        const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
+                        const dateStr = getLocalYMD(cur);
+                        const bId = `inp_${dateStr}_GLOBAL_${rc.id}`;
+                        let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? 'is-dirty' : (isSynced ? 'is-synced' : '');
+                        
+                        let minDiff = getNearestEvent(parseYMD(dateStr));
+                        let evtColor = 'bg-white'; if (hasEvents) evtColor = minDiff === 0 ? 'bg-amber-50' : (Math.abs(minDiff) <= 2 ? 'bg-amber-50/50' : 'bg-white');
+                        let bTClass = rIndex===0 ? 'border-t-4 border-slate-900' : '';
+                        
+                        if (rc.isBool) {
+                            tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300 ${stateClass}"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}" class="grid-toggle" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.checked)"></div></td>`;
+                        } else {
+                            tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300"><input type="number" id="${bId}" class="w-full text-center outline-none focus:bg-indigo-50 font-bold !text-slate-700 bg-transparent !text-[14px] ${stateClass}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.value)"></td>`;
+                        }
+                    }
+                    tr += `</tr>`;
+                    allRowsHtml += tr;
+                });
+            }
 
             body.innerHTML = allRowsHtml;
             
@@ -895,6 +1277,8 @@
         };
 
         window.handleCellEdit = (dateStr, room, field, value) => {
+            window.dirtyDates.add(dateStr);
+            window.syncedDates.delete(dateStr);
             masterPricing.timeline[dateStr] = masterPricing.timeline[dateStr] || {};
             masterPricing.timeline[dateStr][room] = masterPricing.timeline[dateStr][room] || { isOverride: {} };
 
@@ -902,12 +1286,12 @@
 
             if (value === "") {
                 delete data.isOverride[field];
-                if (field === 'cta') data.cta = false; else data[field] = ""; 
+                if (field === 'cta' || field === 'ctd' || field === 'stopSell') data[field] = false; else data[field] = ""; 
             } else {
                 data.isOverride[field] = true;
                 const mult = getViewMultiplier();
                 if(field === 'std' || field === 'fmp') data[field] = Math.round(parseFloat(value) / mult);
-                else if (field === 'cta') data.cta = value;
+                else if (field === 'cta' || field === 'ctd' || field === 'stopSell') data[field] = value;
                 else data[field] = parseInt(value);
             }
             
@@ -933,6 +1317,111 @@
             window.triggerAutoSave();
         };
 
+        window.handleOtaEdit = (dateStr, ratePlanId, parentRoom, ruleType, ruleVal, field, value) => {
+            window.dirtyDates.add(dateStr);
+            window.syncedDates.delete(dateStr);
+            masterPricing.timeline[dateStr] = masterPricing.timeline[dateStr] || {};
+            masterPricing.timeline[dateStr].otaOverrides = masterPricing.timeline[dateStr].otaOverrides || {};
+            
+            let targetKey = field === 'rate' ? ratePlanId : `${ratePlanId}_${field}`;
+
+            if (value === "") {
+                delete masterPricing.timeline[dateStr].otaOverrides[targetKey];
+            } else {
+                if (field === 'rate') {
+                    const mult = getViewMultiplier();
+                    const numVal = Math.round(parseFloat(value) / mult);
+                    
+                    const roomData = masterPricing.timeline[dateStr][parentRoom] || {};
+                    let activePrice = roomData.std;
+                    if (roomData.fmp && eventDates.length > 0) {
+                        let msDiff = getNearestEvent(parseYMD(dateStr));
+                        if (Math.abs(msDiff) <= 6) activePrice = roomData.fmp;
+                    }
+                    let expectedMathVal = null;
+                    if (activePrice !== undefined && activePrice !== "") expectedMathVal = applyMath(activePrice, ruleType, ruleVal);
+
+                    if (expectedMathVal === numVal) {
+                        delete masterPricing.timeline[dateStr].otaOverrides[ratePlanId];
+                    } else {
+                        masterPricing.timeline[dateStr].otaOverrides[ratePlanId] = numVal;
+                    }
+                } else {
+                    masterPricing.timeline[dateStr].otaOverrides[targetKey] = value;
+                }
+            }
+            
+            window.renderGrid(); 
+            window.triggerAutoSave();
+        };
+
+        let liveInventory = {}; 
+        let viewDates = [];
+
+        const calculateLiveInventory = () => {
+            liveInventory = {}; viewDates = [];
+            const startStr = document.getElementById('tape-start').value;
+            if(!startStr) return;
+            
+            const today = new Date(startStr + "T12:00:00Z");
+            
+            for(let i=0; i<daysToRender; i++) {
+                let d = new Date(today); d.setUTCDate(d.getUTCDate() + i);
+                let dStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+                viewDates.push(dStr);
+                
+                liveInventory[dStr] = {};
+                roomTypes.forEach(t => liveInventory[dStr][t] = totalRoomsByType[t] || 0);
+            }
+
+            const activeStaff = staff.filter(s => s.property === currentPropertyId && s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed' && s.status !== 'charged');
+            
+            activeStaff.forEach(s => {
+                if(!s.checkIn || !s.checkOut) return;
+                
+                const rList = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
+                const isUnassigned = rList.length === 0 || rList[0] === "";
+                if (s.status === 'special' && isUnassigned) return;
+
+                const inMs = parseYMD(s.checkIn), outMs = parseYMD(s.checkOut);
+                const typesToDeduct = [];
+                
+                if (!isUnassigned) {
+                    rList.forEach(rid => {
+                        const uiId = dbToUiRoom(rid);
+                        const roomDef = hotelRooms.find(hr => hr.id === uiId);
+                        if(roomDef) typesToDeduct.push(roomDef.type);
+                    });
+                } else if (s.bookedType) {
+                    let bt = s.bookedType.toUpperCase();
+                    let inferred = null;
+                    if (bt.includes("DORMITORY") || bt.includes("4-BED") || bt.includes("DORM")) inferred = "Standard Quad Dorm"; 
+                    else if (bt.includes("TRIPLE")) inferred = "Partial Oceanview Triple Room"; 
+                    else if (bt.includes("SIDE SEA VIEW") || (bt.includes("PARTIAL") && !bt.includes("TWIN") && !bt.includes("TRIPLE"))) inferred = "Partial Oceanview King Room"; 
+                    else if (bt.includes("DELUXE TWIN") || (bt.includes("OCEANVIEW") && bt.includes("TWIN"))) inferred = "Oceanview Twin Room"; 
+                    else if (bt.includes("DELUXE DOUBLE") || (bt.includes("OCEANVIEW") && !bt.includes("TWIN"))) inferred = "Oceanview King Room"; 
+                    else if (bt.includes("GARDEN") && bt.includes("TWIN")) inferred = "Gardenview Twin Room"; 
+                    else if (bt.includes("GARDEN") && !bt.includes("TWIN")) inferred = "Gardenview King Room"; 
+                    else if (bt.includes("OCEANFRONT")) { inferred = bt.includes("TWIN") ? "Oceanfront Twin" : "Oceanfront King"; } 
+                    else if (bt.includes("BUNGALOW")) inferred = "BUNGALOWS";
+                    
+                    if(inferred) {
+                        let dedCount = inferred.includes('Dorm') ? (s.pax || 1) : Math.max(1, rList.length);
+                        for(let k=0; k < dedCount; k++) typesToDeduct.push(inferred);
+                    }
+                }
+
+                viewDates.forEach(dStr => {
+                    const dMs = parseYMD(dStr);
+                    if (dMs >= inMs && dMs < outMs) {
+                        typesToDeduct.forEach(t => {
+                            if(liveInventory[dStr] && liveInventory[dStr][t] !== undefined && liveInventory[dStr][t] > 0) liveInventory[dStr][t]--;
+                        });
+                    }
+                });
+            });
+        };
+
         window.nukeDatabase = () => {
             window.customAlert("WIPE ALL PRICING DATA?\n\nThis will completely clear your entire pricing matrix from the database, resetting everything to blank.", true, () => {
                 masterPricing.timeline = {};
@@ -951,6 +1440,7 @@
                 if (masterPricing.timeline[dateStr]) {
                     roomTypes.forEach(r => { if (masterPricing.timeline[dateStr][r]) masterPricing.timeline[dateStr][r].isOverride = {}; });
                     if (masterPricing.timeline[dateStr]['GLOBAL']) masterPricing.timeline[dateStr]['GLOBAL'].isOverride = {};
+                    masterPricing.timeline[dateStr].otaOverrides = {};
                 }
             }
             window.runAutomator(); 
@@ -976,7 +1466,7 @@
                 
                 if (hasEvents) {
                     if (Math.abs(minDiff) <= 6 && minDiff !== 0) { 
-                        fmpP = p_pkg; fmpD = d_pkg; 
+                        fmpP = p_pkg; fmpD = dpkg; 
                     } else if (Math.abs(minDiff) > 6) {
                         fmpP = ""; fmpD = "";
                     }
@@ -1095,15 +1585,22 @@
             window.channexConfig = { apiKey, propId };
 
             try {
-                // Using Staging endpoint
                 const rRes = await fetch(`https://staging.channex.io/api/v1/room_types?filter[property_id]=${propId}`, { headers: { "user-api-key": apiKey } });
                 if (!rRes.ok) throw new Error("Channex Rooms API returned " + rRes.status);
                 const rData = await rRes.json();
                 
-                // Using Staging endpoint
                 const rateRes = await fetch(`https://staging.channex.io/api/v1/rate_plans?filter[property_id]=${propId}`, { headers: { "user-api-key": apiKey } });
                 if (!rateRes.ok) throw new Error("Channex Rates API returned " + rateRes.status);
                 const rateData = await rateRes.json();
+
+                const roomNameMap = {};
+                rData.data.forEach(r => { roomNameMap[r.id] = r.attributes.title; });
+                rateData.data.forEach(rate => {
+                    const parentRoomId = rate.relationships?.room_type?.data?.id;
+                    if (parentRoomId && roomNameMap[parentRoomId]) {
+                        rate.attributes.title = `${rate.attributes.title} [${roomNameMap[parentRoomId]}]`;
+                    }
+                });
 
                 window.renderChannexMappingUI(rData.data, rateData.data);
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentPropertyId), { channex: window.channexConfig }, { merge: true });
@@ -1146,6 +1643,8 @@
                 channexRates.forEach(rate => {
                     const existingMap = (window.channexRateMap || []).find(m => m.ratePlanId === rate.id);
                     let selectedVal = existingMap ? existingMap.pmsCategory : '';
+                    let ruleType = existingMap ? (existingMap.ruleType || "=") : "=";
+                    let ruleVal = existingMap && existingMap.ruleVal !== undefined ? existingMap.ruleVal : "";
                     
                     rHtml += `
                         <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${rate.id}" data-rate-title="${rate.attributes.title}">
@@ -1154,9 +1653,17 @@
                                 <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
                             </div>
                             <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
-                            <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none" onchange="window.saveMappingToDB()">
+                            <select class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none" onchange="window.saveMappingToDB()">
                                 ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
                             </select>
+                            <select class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center" onchange="window.saveMappingToDB()">
+                                <option value="=" ${ruleType==='='?'selected':''}>=</option>
+                                <option value="+" ${ruleType==='+'?'selected':''}>+$</option>
+                                <option value="-" ${ruleType==='-'?'selected':''}>-$</option>
+                                <option value="+%" ${ruleType==='+%'?'selected':''}>+%</option>
+                                <option value="-%" ${ruleType==='-%'?'selected':''}>-%</option>
+                            </select>
+                            <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white" placeholder="0" value="${ruleVal}" onchange="window.saveMappingToDB()">
                         </div>`;
                 });
                 rHtml += '</div>';
@@ -1166,7 +1673,6 @@
                 document.getElementById('channex-rate-mapping-card').style.display = 'none';
             }
             lucide.createIcons();
-            window.customAlert(`Successfully fetched ${channexRooms.length} Rooms and ${channexRates ? channexRates.length : 0} Rate Plans from Channex.\n\nPlease complete the mapping dropdowns. Changes are saved automatically.`);
         };
 
         window.renderChannexMapping = () => {
@@ -1195,6 +1701,8 @@
                 document.getElementById('channex-rate-mapping-card').style.display = 'flex';
                 let rHtml = '<div class="flex flex-col gap-1.5 opacity-70 hover:opacity-100 transition-opacity">';
                 rateMap.forEach(m => {
+                    let ruleType = m.ruleType || "=";
+                    let ruleVal = m.ruleVal !== undefined ? m.ruleVal : "";
                     rHtml += `
                         <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${m.ratePlanId}" data-rate-title="${m.ratePlanTitle}">
                             <div class="flex-1 flex flex-col min-w-0 pl-1">
@@ -1202,7 +1710,15 @@
                                 <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
                             </div>
                             <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
-                            <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none" onchange="window.saveMappingToDB()"><option value="${m.pmsCategory}" selected>${m.pmsCategory}</option></select>
+                            <select class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none" onchange="window.saveMappingToDB()"><option value="${m.pmsCategory}" selected>${m.pmsCategory}</option></select>
+                            <select class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center" onchange="window.saveMappingToDB()">
+                                <option value="=" ${ruleType==='='?'selected':''}>=</option>
+                                <option value="+" ${ruleType==='+'?'selected':''}>+$</option>
+                                <option value="-" ${ruleType==='-'?'selected':''}>-$</option>
+                                <option value="+%" ${ruleType==='+%'?'selected':''}>+%</option>
+                                <option value="-%" ${ruleType==='-%'?'selected':''}>-%</option>
+                            </select>
+                            <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white" placeholder="0" value="${ruleVal}" onchange="window.saveMappingToDB()">
                         </div>`;
                 });
                 rHtml += '</div>';
@@ -1228,7 +1744,10 @@
                 const rId = row.getAttribute('data-rate-id');
                 const rTitle = row.getAttribute('data-rate-title');
                 const pCat = row.querySelector('.chan-rate-pms-sel').value;
-                if (rId && pCat) window.channexRateMap.push({ ratePlanId: rId, ratePlanTitle: rTitle, pmsCategory: pCat });
+                const ruleType = row.querySelector('.chan-rate-rule-type').value;
+                const ruleVal = parseFloat(row.querySelector('.chan-rate-rule-val').value) || 0;
+                
+                if (rId && pCat) window.channexRateMap.push({ ratePlanId: rId, ratePlanTitle: rTitle, pmsCategory: pCat, ruleType: ruleType, ruleVal: ruleVal });
             });
 
             try {
@@ -1239,148 +1758,100 @@
             }
         };
 
-        let liveInventory = {}; 
-        let viewDates = [];
+        window.toggleCertSuite = () => {
+            const card = document.getElementById('channex-cert-card');
+            card.classList.toggle('hidden');
+            if (!card.classList.contains('hidden')) {
+                const rooms = window.channexMap || [];
+                const rates = window.channexRateMap || [];
 
-        const calculateLiveInventory = () => {
-            liveInventory = {}; viewDates = [];
-            const startStr = document.getElementById('tape-start').value;
-            if(!startStr) return;
-            
-            const today = new Date(startStr + "T12:00:00Z");
-            
-            for(let i=0; i<daysToRender; i++) {
-                let d = new Date(today); d.setUTCDate(d.getUTCDate() + i);
-                let dStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-                viewDates.push(dStr);
+                const roomOpts = `<option value="">-- SELECT TEST ROOM --</option>` + rooms.map(r => `<option value="${r.channexId}">${r.channexTitle || r.pmsCategory}</option>`).join('');
+                const rateOpts = `<option value="">-- SELECT TEST RATE --</option>` + rates.map(r => `<option value="${r.ratePlanId}">${r.ratePlanTitle || r.pmsCategory}</option>`).join('');
+
+                document.getElementById('cert-twin-room').innerHTML = roomOpts;
+                document.getElementById('cert-double-room').innerHTML = roomOpts;
+                document.getElementById('cert-bar-rate').innerHTML = rateOpts;
+                document.getElementById('cert-bb-rate').innerHTML = rateOpts;
                 
-                liveInventory[dStr] = {};
-                roomTypes.forEach(t => liveInventory[dStr][t] = totalRoomsByType[t] || 0);
+                setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'end' }), 100);
             }
-
-            const activeStaff = staff.filter(s => s.property === currentPropertyId && s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed' && s.status !== 'charged');
-            
-            activeStaff.forEach(s => {
-                if(!s.checkIn || !s.checkOut) return;
-                
-                const rList = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
-                const isUnassigned = rList.length === 0 || rList[0] === "";
-                if (s.status === 'special' && isUnassigned) return; // Ignore volunteers
-
-                const inMs = parseYMD(s.checkIn), outMs = parseYMD(s.checkOut);
-                const typesToDeduct = [];
-                
-                if (!isUnassigned) {
-                    rList.forEach(rid => {
-                        const uiId = dbToUiRoom(rid);
-                        const roomDef = hotelRooms.find(hr => hr.id === uiId);
-                        if(roomDef) typesToDeduct.push(roomDef.type);
-                    });
-                } else if (s.bookedType) {
-                    let bt = s.bookedType.toUpperCase();
-                    let inferred = null;
-                    if (bt.includes("DORMITORY") || bt.includes("4-BED") || bt.includes("DORM")) inferred = "Standard Quad Dorm"; 
-                    else if (bt.includes("TRIPLE")) inferred = "Partial Oceanview Triple Room"; 
-                    else if (bt.includes("SIDE SEA VIEW") || (bt.includes("PARTIAL") && !bt.includes("TWIN") && !bt.includes("TRIPLE"))) inferred = "Partial Oceanview King Room"; 
-                    else if (bt.includes("DELUXE TWIN") || (bt.includes("OCEANVIEW") && bt.includes("TWIN"))) inferred = "Oceanview Twin Room"; 
-                    else if (bt.includes("DELUXE DOUBLE") || (bt.includes("OCEANVIEW") && !bt.includes("TWIN"))) inferred = "Oceanview King Room"; 
-                    else if (bt.includes("GARDEN") && bt.includes("TWIN")) inferred = "Gardenview Twin Room"; 
-                    else if (bt.includes("GARDEN") && !bt.includes("TWIN")) inferred = "Gardenview King Room"; 
-                    else if (bt.includes("OCEANFRONT")) { inferred = bt.includes("TWIN") ? "Oceanfront Twin" : "Oceanfront King"; } 
-                    else if (bt.includes("BUNGALOW")) inferred = "BUNGALOWS";
-                    
-                    if(inferred) {
-                        let dedCount = inferred.includes('Dorm') ? (s.pax || 1) : Math.max(1, rList.length);
-                        for(let k=0; k < dedCount; k++) typesToDeduct.push(inferred);
-                    }
-                }
-
-                viewDates.forEach(dStr => {
-                    const dMs = parseYMD(dStr);
-                    if (dMs >= inMs && dMs < outMs) {
-                        typesToDeduct.forEach(t => {
-                            if(liveInventory[dStr][t] > 0) liveInventory[dStr][t]--;
-                        });
-                    }
-                });
-            });
         };
 
-        window.renderAvailability = () => {
-            calculateLiveInventory();
-            const filter = document.getElementById('avail-filter').value;
-            const head = document.getElementById('avail-head');
-            const body = document.getElementById('avail-body');
-            head.innerHTML = ''; body.innerHTML = '';
+        window.runCertTest = async (testGroup) => {
+            if (!window.channexConfig || !window.channexConfig.apiKey) return window.customAlert("Missing API Key.");
             
-            let colsToShowRaw = [];
-            viewDates.forEach(d => {
-                let show = false;
-                if (filter === 'all') show = true;
-                else {
-                    roomTypes.forEach(t => {
-                        if (t === 'BUNGALOWS') return;
-                        let live = liveInventory[d][t] || 0;
-                        let isUrgent = live <= 2 && totalRoomsByType[t] > 2;
-                        if (filter === 'urgent' && isUrgent) show = true;
-                    });
-                }
-                if(show) colsToShowRaw.push(d);
-            });
+            const propId = window.channexConfig.propId;
+            const twin = document.getElementById('cert-twin-room').value;
+            const dbl = document.getElementById('cert-double-room').value;
+            const bar = document.getElementById('cert-bar-rate').value;
+            const bb = document.getElementById('cert-bb-rate').value;
 
-            if (colsToShowRaw.length === 0) return;
+            if(!twin || !dbl || !bar || !bb) return window.customAlert("Please select all 4 dropdowns to assign test IDs.");
 
-            let finalCols = [];
-            for (let i = 0; i < colsToShowRaw.length; i++) {
-                if (i > 0) {
-                    let prevD = new Date(colsToShowRaw[i-1] + "T12:00:00Z");
-                    let currD = new Date(colsToShowRaw[i] + "T12:00:00Z");
-                    let diff = Math.round((currD - prevD) / 86400000);
-                    if (diff > 1) finalCols.push({ type: 'gap' });
-                }
-                finalCols.push({ type: 'date', val: colsToShowRaw[i] });
+            document.getElementById('loader').classList.add('active');
+            document.getElementById('sync-status').innerText = 'PUSHING CERTIFICATION TEST...';
+
+            let url = "https://staging.channex.io/api/v1/restrictions";
+            let payload = [];
+
+            if (testGroup === 'rates') {
+                payload = [
+                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-21", date_to: "2026-11-21", rate: 33300 },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-22", date_to: "2026-11-22", rate: 33300 },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-11-25", date_to: "2026-11-25", rate: 44400 },
+                    { property_id: propId, rate_plan_id: bb, room_type_id: dbl, date_from: "2026-11-29", date_to: "2026-11-29", rate: 45623 },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-01", date_to: "2026-11-10", rate: 24100 },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-11-10", date_to: "2026-11-16", rate: 31266 },
+                    { property_id: propId, rate_plan_id: bb, room_type_id: dbl, date_from: "2026-11-01", date_to: "2026-11-20", rate: 11100 }
+                ];
+            } else if (testGroup === 'restrictions') {
+                payload = [
+                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-23", date_to: "2026-11-23", min_stay_arrival: 3, min_stay_through: 3 },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-11-25", date_to: "2026-11-25", min_stay_arrival: 2, min_stay_through: 2 },
+                    { property_id: propId, rate_plan_id: bb, room_type_id: dbl, date_from: "2026-11-15", date_to: "2026-11-15", min_stay_arrival: 5, min_stay_through: 5 },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-14", date_to: "2026-11-14", stop_sell: true },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-11-16", date_to: "2026-11-16", stop_sell: true },
+                    { property_id: propId, rate_plan_id: bb, room_type_id: dbl, date_from: "2026-11-20", date_to: "2026-11-20", stop_sell: true },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-01", date_to: "2026-11-10", closed_to_arrival: true, closed_to_departure: false, max_stay: 4, min_stay_arrival: 1, min_stay_through: 1 },
+                    { property_id: propId, rate_plan_id: bb, room_type_id: twin, date_from: "2026-11-12", date_to: "2026-11-16", closed_to_arrival: false, closed_to_departure: true, min_stay_arrival: 6, min_stay_through: 6 },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-11-10", date_to: "2026-11-16", closed_to_arrival: true, min_stay_arrival: 2, min_stay_through: 2 },
+                    { property_id: propId, rate_plan_id: bb, room_type_id: dbl, date_from: "2026-11-01", date_to: "2026-11-20", min_stay_arrival: 10, min_stay_through: 10 },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-12-01", date_to: "2027-05-01", rate: 43200, closed_to_arrival: false, closed_to_departure: false, min_stay_arrival: 2, min_stay_through: 2 },
+                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-12-01", date_to: "2027-05-01", rate: 34200, min_stay_arrival: 3, min_stay_through: 3 }
+                ];
+            } else if (testGroup === 'availability') {
+                url = "https://staging.channex.io/api/v1/availability";
+                payload = [
+                    { property_id: propId, room_type_id: twin, date_from: "2026-11-21", date_to: "2026-11-21", availability: 7 },
+                    { property_id: propId, room_type_id: dbl, date_from: "2026-11-25", date_to: "2026-11-25", availability: 0 },
+                    { property_id: propId, room_type_id: twin, date_from: "2026-11-10", date_to: "2026-11-16", availability: 3 },
+                    { property_id: propId, room_type_id: dbl, date_from: "2026-11-17", date_to: "2026-11-24", availability: 4 }
+                ];
             }
 
-            const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-            let trHead = `<tr class="frozen-row"><th class="frozen-corner w-24 min-w-[7rem] max-w-[9rem] text-[11px] whitespace-normal break-words text-left leading-tight">ROOM TYPE</th>`;
-            finalCols.forEach(col => {
-                if (col.type === 'gap') {
-                    trHead += `<th class="w-2 min-w-[8px] bg-amber-400 border-x-[2px] border-white" title="Skipped Dates"></th>`;
-                } else {
-                    const dt = new Date(col.val + "T12:00:00Z");
-                    trHead += `<th class="w-[32px] min-w-[32px] px-0 py-1 leading-tight text-center border-b border-slate-400"><span class="text-emerald-300 text-[10px] uppercase font-bold tracking-tight block">${mNames[dt.getUTCMonth()]}</span><span class="text-sm font-black">${dt.getUTCDate()}</span></th>`;
-                }
-            });
-            trHead += `</tr>`;
-            head.innerHTML = trHead;
-
-            roomTypes.forEach((t, index) => {
-                let isMuted = t === 'BUNGALOWS';
-                let rowBg = isMuted ? 'bg-slate-200' : (index % 2 === 0 ? 'bg-white' : 'bg-slate-100');
-                let rowOpacity = isMuted ? 'opacity-50 grayscale' : '';
-                let shortName = displayAbbrev[t] || t;
-                
-                let tr = `<tr class="${rowOpacity} ${rowBg} hover:bg-slate-200 transition-colors"><td class="frozen-col font-black text-[11px] sm:text-xs leading-snug whitespace-normal break-words ${rowBg}" title="${t}">${shortName}<br><span class="text-slate-400 font-bold text-[9px] uppercase mt-0.5 inline-block tracking-widest">CAPACITY: ${totalRoomsByType[t]}</span>${isMuted ? '<br><span class="text-rose-500 font-black text-[9px] uppercase tracking-widest mt-0.5 inline-block">Muted</span>' : ''}</td>`;
-                
-                finalCols.forEach(col => {
-                    if (col.type === 'gap') {
-                        tr += `<td class="bg-amber-300 border-x-[2px] border-white"></td>`;
-                    } else {
-                        let d = col.val;
-                        let live = liveInventory[d][t] || 0;
-                        let isUrgent = live <= 2 && totalRoomsByType[t] > 2 && !isMuted;
-                        
-                        let content = `<span class="font-bold text-sm text-slate-700">${live}</span>`;
-                        if (filter === 'urgent' && isUrgent) content = `<span class="font-black text-orange-600 text-base">${live}</span>`;
-                        if (live === 0) content = `<span class="font-black text-rose-600 text-base">${live}</span>`;
-                        
-                        tr += `<td>${content}</td>`;
-                    }
+            try {
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: { "user-api-key": window.channexConfig.apiKey, "Content-Type": "application/json" },
+                    body: JSON.stringify({ values: payload })
                 });
-                tr += `</tr>`;
-                body.innerHTML += tr;
-            });
-            lucide.createIcons();
+                const data = await res.json();
+                const logEl = document.getElementById('cert-log');
+                
+                if (data.data && data.data[0]) {
+                    const tId = data.data[0].id;
+                    logEl.innerHTML = `[SUCCESS] ${new Date().toLocaleTimeString()}\nGroup: ${testGroup.toUpperCase()}\nBatched ${payload.length} API rules successfully.\n\nTask ID: ${tId}\n\n${logEl.innerHTML}`;
+                    window.customAlert(`✅ Sent ${payload.length} specific rules successfully!\n\nTask ID: ${tId}\n\nYou can copy this from the log box.`);
+                } else {
+                    logEl.innerHTML = `[ERROR] ${new Date().toLocaleTimeString()}\nPayload: ${JSON.stringify(payload, null, 2)}\nResponse: ${JSON.stringify(data, null, 2)}\n\n${logEl.innerHTML}`;
+                    window.customAlert("Error running test. Check log box.");
+                }
+            } catch (e) {
+                document.getElementById('cert-log').innerText = `[CRASH] ${e.message}\n\n` + document.getElementById('cert-log').innerText;
+                window.customAlert("Failed to push: " + e.message);
+            } finally {
+                document.getElementById('loader').classList.remove('active');
+            }
         };
 
         const cleanPayload = (obj) => {
@@ -1403,7 +1874,7 @@
             }
         };
 
-        window.pushToChannexAPI = async (btn) => {
+        window.pushToChannexAPI = async (btn, mode = 'full') => {
             const origHtml = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin inline" size="14"></i> SYNCING...';
             btn.disabled = true;
@@ -1422,19 +1893,29 @@
 
                 if (rMap.length === 0) throw new Error("No Room mappings found. Please map Room Types in the OTA Mapping tab.");
 
-                // Pre-calculate full 365 days of availability
-                const availMap = {};
-                let dTemp = new Date();
-                let currentDate = new Date(Date.UTC(dTemp.getFullYear(), dTemp.getMonth(), dTemp.getDate(), 12, 0, 0));
-                
-                for (let i = 0; i <= 365; i++) {
-                    const d = new Date(currentDate.getTime() + (i * 86400000));
-                    const dStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-                    availMap[dStr] = {};
-                    roomTypes.forEach(t => availMap[dStr][t] = totalRoomsByType[t] || 0);
+                let datesToProcess = [];
+                if (mode === 'delta') {
+                    if (window.dirtyDates.size === 0) {
+                        document.getElementById('loader').classList.remove('active');
+                        btn.innerHTML = origHtml; btn.disabled = false; lucide.createIcons();
+                        return window.customAlert("No changes to sync! Cells will turn orange when edited.");
+                    }
+                    datesToProcess = Array.from(window.dirtyDates).sort();
+                } else {
+                    let dTemp = new Date();
+                    let currentDate = new Date(Date.UTC(dTemp.getFullYear(), dTemp.getMonth(), dTemp.getDate(), 12, 0, 0));
+                    for (let i = 0; i <= 500; i++) {
+                        const d = new Date(currentDate.getTime() + (i * 86400000));
+                        datesToProcess.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`);
+                    }
                 }
 
-                // Deduct live occupancy (Strict filtering + Pax for dorms)
+                const availMap = {};
+                datesToProcess.forEach(dStr => {
+                    availMap[dStr] = {};
+                    roomTypes.forEach(t => availMap[dStr][t] = totalRoomsByType[t] || 0);
+                });
+
                 const activeStaff = staff.filter(s => s.property === currentPropertyId && s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed' && s.status !== 'charged');
                 activeStaff.forEach(s => {
                     if(!s.checkIn || !s.checkOut) return;
@@ -1470,7 +1951,7 @@
                         }
                     }
 
-                    Object.keys(availMap).forEach(dStr => {
+                    datesToProcess.forEach(dStr => {
                         const dMs = parseYMD(dStr);
                         if (dMs >= inMs && dMs < outMs) {
                             typesToDeduct.forEach(t => {
@@ -1480,14 +1961,63 @@
                     });
                 });
 
-                // Range Compression Engine for Restrictions/Rates
-                const payloadValues = [];
+                const availPayload = [];
+                const restPayload = [];
+                
                 document.getElementById('sync-status').innerText = 'COMPRESSING PAYLOAD...';
 
-                // Process Room/Rate Plans
+                // 1. COMPRESS INVENTORY (ROOM LEVEL)
+                rMap.forEach(roomRule => {
+                    const pmsCat = categoryResolver(roomRule.pmsCategory);
+                    const roomTypeId = roomRule.channexId;
+                    
+                    let rangeStart = null;
+                    let currentAvail = null;
+
+                    for (let i = 0; i < datesToProcess.length; i++) {
+                        const dStr = datesToProcess[i];
+                        const dMs = parseYMD(dStr);
+                        const availToday = availMap[dStr][pmsCat] !== undefined ? availMap[dStr][pmsCat] : 0;
+                        
+                        let isAdjacent = false;
+                        if (i > 0) {
+                            const prevMs = parseYMD(datesToProcess[i-1]);
+                            if (dMs - prevMs === 86400000) isAdjacent = true;
+                        }
+
+                        if (availToday !== currentAvail || (i > 0 && !isAdjacent)) {
+                            if (rangeStart !== null) {
+                                const prevDStr = datesToProcess[i-1];
+                                availPayload.push({
+                                    property_id: propId,
+                                    room_type_id: roomTypeId,
+                                    date_from: rangeStart,
+                                    date_to: prevDStr,
+                                    availability: currentAvail
+                                });
+                            }
+                            rangeStart = dStr;
+                            currentAvail = availToday;
+                        }
+
+                        if (i === datesToProcess.length - 1 && rangeStart !== null) {
+                            availPayload.push({
+                                property_id: propId,
+                                room_type_id: roomTypeId,
+                                date_from: rangeStart,
+                                date_to: dStr,
+                                availability: currentAvail
+                            });
+                        }
+                    }
+                });
+
+                // 2. COMPRESS RATES AND RESTRICTIONS (RATE PLAN LEVEL - WITH CASCADING)
                 rateMap.forEach(mapRule => {
                     const pmsCat = categoryResolver(mapRule.pmsCategory);
                     const ratePlanId = mapRule.ratePlanId;
+                    const ruleType = mapRule.ruleType || "=";
+                    const ruleVal = mapRule.ruleVal !== undefined ? parseFloat(mapRule.ruleVal) : 0;
                     
                     const roomMapRule = rMap.find(r => categoryResolver(r.pmsCategory) === pmsCat);
                     if (!roomMapRule) return; 
@@ -1496,11 +2026,9 @@
                     let rangeStart = null;
                     let currentObj = null;
 
-                    for (let i = 0; i <= 365; i++) {
-                        const d = new Date(currentDate.getTime() + (i * 86400000));
-                        const dStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-                        
-                        const availToday = availMap[dStr][pmsCat] !== undefined ? availMap[dStr][pmsCat] : 0;
+                    for (let i = 0; i < datesToProcess.length; i++) {
+                        const dStr = datesToProcess[i];
+                        const dMs = parseYMD(dStr);
                         const dayData = masterPricing.timeline[dStr] || {};
                         const rData = dayData[pmsCat] || {};
                         const gData = dayData['GLOBAL'] || {};
@@ -1511,68 +2039,153 @@
                             if (Math.abs(minDiff) <= 6) activePrice = rData.fmp; 
                         }
                         
-                        if (activePrice === undefined || activePrice === "") continue; 
+                        let modifiedPrice = null;
+                        const otaOverride = dayData.otaOverrides?.[ratePlanId];
                         
-                        // STRICT CHANNEX FIX: Minor Units (Cents)
-                        const channexMinorUnits = Math.round(parseFloat(activePrice) * 100);
-
-                        const minStay = parseInt(gData.min_arr) || parseInt(gData.min) || 1;
-                        const cta = gData.cta === true;
-
-                        const objToCompare = { rate: channexMinorUnits, min_stay_arrival: minStay, min_stay_through: minStay, closed_to_arrival: cta, availability: availToday };
-
-                        const isMatch = currentObj && currentObj.rate === objToCompare.rate && currentObj.min_stay_arrival === objToCompare.min_stay_arrival && currentObj.closed_to_arrival === objToCompare.closed_to_arrival && currentObj.availability === objToCompare.availability;
-
-                        if (!isMatch || i === 365) {
+                        if (otaOverride !== undefined) {
+                            modifiedPrice = otaOverride;
+                        } else if (activePrice !== undefined && activePrice !== "") {
+                            modifiedPrice = applyMath(activePrice, ruleType, ruleVal);
+                        }
+                        
+                        if (modifiedPrice === null) {
                             if (rangeStart !== null) {
-                                const prevD = new Date(d.getTime() - 86400000);
-                                const prevDStr = i === 365 && isMatch ? dStr : `${prevD.getUTCFullYear()}-${String(prevD.getUTCMonth()+1).padStart(2,'0')}-${String(prevD.getUTCDate()).padStart(2,'0')}`;
-                                
-                                payloadValues.push({
+                                const prevDStr = datesToProcess[i-1];
+                                restPayload.push({
                                     property_id: propId,
                                     rate_plan_id: ratePlanId,
                                     room_type_id: roomTypeId,
                                     date_from: rangeStart,
                                     date_to: prevDStr,
                                     rate: currentObj.rate,
-                                    availability: currentObj.availability,
                                     min_stay_arrival: currentObj.min_stay_arrival,
                                     min_stay_through: currentObj.min_stay_through,
-                                    closed_to_arrival: currentObj.closed_to_arrival
+                                    closed_to_arrival: currentObj.closed_to_arrival,
+                                    closed_to_departure: currentObj.closed_to_departure,
+                                    stop_sell: currentObj.stop_sell
+                                });
+                                rangeStart = null;
+                                currentObj = null;
+                            }
+                            continue; 
+                        }
+                        
+                        const channexMinorUnits = Math.round(modifiedPrice * 100);
+
+                        // CASCADING RULE ENGINE (OTA -> ROOM -> GLOBAL -> FALLBACK)
+                        const otaMin = dayData.otaOverrides?.[`${ratePlanId}_min`];
+                        const otaCta = dayData.otaOverrides?.[`${ratePlanId}_cta`];
+                        const otaCtd = dayData.otaOverrides?.[`${ratePlanId}_ctd`];
+                        const otaStop = dayData.otaOverrides?.[`${ratePlanId}_stopSell`];
+
+                        const minStay = otaMin !== undefined ? otaMin : (rData.min !== undefined && rData.min !== "" ? rData.min : (gData.min_arr || gData.min || 1));
+                        const cta = otaCta !== undefined ? otaCta : (rData.cta !== undefined ? rData.cta : (gData.cta === true));
+                        const ctd = otaCtd !== undefined ? otaCtd : (rData.ctd !== undefined ? rData.ctd : (gData.ctd === true));
+                        const stopSell = otaStop !== undefined ? otaStop : (rData.stopSell !== undefined ? rData.stopSell : (gData.stopSell === true));
+
+                        const objToCompare = { rate: channexMinorUnits, min_stay_arrival: minStay, min_stay_through: minStay, closed_to_arrival: cta, closed_to_departure: ctd, stop_sell: stopSell };
+
+                        let isAdjacent = false;
+                        if (i > 0) {
+                            const prevMs = parseYMD(datesToProcess[i-1]);
+                            if (dMs - prevMs === 86400000) isAdjacent = true;
+                        }
+
+                        const isMatch = currentObj && 
+                            currentObj.rate === objToCompare.rate && 
+                            currentObj.min_stay_arrival === objToCompare.min_stay_arrival && 
+                            currentObj.closed_to_arrival === objToCompare.closed_to_arrival &&
+                            currentObj.closed_to_departure === objToCompare.closed_to_departure &&
+                            currentObj.stop_sell === objToCompare.stop_sell;
+
+                        if (!isMatch || (i > 0 && !isAdjacent)) {
+                            if (rangeStart !== null) {
+                                const prevDStr = datesToProcess[i-1];
+                                restPayload.push({
+                                    property_id: propId,
+                                    rate_plan_id: ratePlanId,
+                                    room_type_id: roomTypeId,
+                                    date_from: rangeStart,
+                                    date_to: prevDStr,
+                                    rate: currentObj.rate,
+                                    min_stay_arrival: currentObj.min_stay_arrival,
+                                    min_stay_through: currentObj.min_stay_through,
+                                    closed_to_arrival: currentObj.closed_to_arrival,
+                                    closed_to_departure: currentObj.closed_to_departure,
+                                    stop_sell: currentObj.stop_sell
                                 });
                             }
-                            if (i < 365) {
-                                rangeStart = dStr;
-                                currentObj = objToCompare;
-                            }
+                            rangeStart = dStr;
+                            currentObj = objToCompare;
+                        }
+
+                        if (i === datesToProcess.length - 1 && rangeStart !== null) {
+                            restPayload.push({
+                                property_id: propId,
+                                rate_plan_id: ratePlanId,
+                                room_type_id: roomTypeId,
+                                date_from: rangeStart,
+                                date_to: dStr,
+                                rate: currentObj.rate,
+                                min_stay_arrival: currentObj.min_stay_arrival,
+                                min_stay_through: currentObj.min_stay_through,
+                                closed_to_arrival: currentObj.closed_to_arrival,
+                                closed_to_departure: currentObj.closed_to_departure,
+                                stop_sell: currentObj.stop_sell
+                            });
                         }
                     }
                 });
 
-                if (payloadValues.length === 0) {
+                if (availPayload.length === 0 && restPayload.length === 0) {
                     throw new Error("Payload is empty. Please ensure pricing is populated in the calendar and Room Types are mapped.");
                 }
 
-                document.getElementById('sync-status').innerText = `PUSHING TO CHANNEX...`;
+                let channexTaskIds = [];
 
-                // Using Staging endpoint
-                const response = await fetch("https://staging.channex.io/api/v1/restrictions", {
-                    method: "POST",
-                    headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
-                    body: JSON.stringify({ values: payloadValues })
-                });
+                if (availPayload.length > 0) {
+                    document.getElementById('sync-status').innerText = `PUSHING INVENTORY TO CHANNEX...`;
+                    const aRes = await fetch("https://staging.channex.io/api/v1/availability", {
+                        method: "POST",
+                        headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+                        body: JSON.stringify({ values: availPayload })
+                    });
+                    
+                    const aData = await aRes.json();
+                    if (!aRes.ok) throw new Error("Availability Push Failed: " + JSON.stringify(aData));
+                    if (aData && aData.data && aData.data[0]) channexTaskIds.push("Inventory Task ID: " + aData.data[0].id);
+                }
 
-                let responseData;
-                try { responseData = await response.json(); } catch(e) { responseData = { error: "Unparseable response" }; }
-                
-                if (!response.ok) {
-                    let errMsg = "Unknown Error";
-                    if (responseData.errors && responseData.errors.length > 0) errMsg = responseData.errors[0].title || responseData.errors[0].detail || JSON.stringify(responseData.errors[0]);
-                    else if (responseData.error) errMsg = responseData.error;
-                    throw new Error(errMsg + "\n\nRaw Payload Response: " + JSON.stringify(responseData));
+                if (restPayload.length > 0) {
+                    document.getElementById('sync-status').innerText = `PUSHING RATES TO CHANNEX...`;
+                    const rRes = await fetch("https://staging.channex.io/api/v1/restrictions", {
+                        method: "POST",
+                        headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+                        body: JSON.stringify({ values: restPayload })
+                    });
+                    
+                    let responseData;
+                    try { responseData = await rRes.json(); } catch(e) { responseData = { error: "Unparseable response" }; }
+                    
+                    if (!rRes.ok) {
+                        let errMsg = "Unknown Error";
+                        if (responseData.errors && responseData.errors.length > 0) errMsg = responseData.errors[0].title || responseData.errors[0].detail || JSON.stringify(responseData.errors[0]);
+                        else if (responseData.error) errMsg = responseData.error;
+                        throw new Error(errMsg + "\n\nRaw Payload Response: " + JSON.stringify(responseData));
+                    }
+                    if (responseData && responseData.data && responseData.data[0]) channexTaskIds.push("Rates Task ID: " + responseData.data[0].id);
                 }
                 
-                window.customAlert(`✅ Full Sync Successful!\n\nPushed 365 days of Rates, Minimum Stays, CTAs, and Live Availability to Channex for all mapped rooms.`);
+                let taskIdText = channexTaskIds.length > 0 ? "\n\n📋 COPY THESE TASK IDs FOR CHANNEX:\n" + channexTaskIds.join("\n") : "";
+                
+                if (mode === 'delta') {
+                    window.syncedDates = new Set(window.dirtyDates);
+                    window.dirtyDates.clear();
+                    window.renderGrid();
+                    window.customAlert(`✅ Delta Sync Successful!\n\nTargeted updates sent strictly for modified dates.${taskIdText}`);
+                } else {
+                    window.customAlert(`✅ Full Sync Successful!\n\nPushed 500 days of Rates, Minimum Stays, CTAs, CTDs, Stop Sells, and Live Availability to Channex for all mapped rooms.${taskIdText}`);
+                }
 
             } catch (err) {
                 console.error("Channex Sync Error:", err);
@@ -1590,20 +2203,34 @@
             try { 
                 await signInAnonymously(auth); 
                 
-                // Load staff before config so availability can calculate
-                const staffSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
-                staff = staffSnap.docs.map(d => {
-                    let data = d.data();
-                    if (!data.property) data.property = 'swims_resort'; // Backwards compatibility fix for un-tagged reservations
-                    return { id: d.id, ...data };
-                });
+                // DECOUPLED: Fetch Staff
+                try {
+                    const staffSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
+                    staff = staffSnap.docs.map(d => {
+                        let data = d.data();
+                        if (!data.property) data.property = 'swims_resort'; 
+                        return { id: d.id, ...data };
+                    });
+                } catch (staffErr) {
+                    console.warn("Could not load staff bookings, continuing anyway...", staffErr);
+                }
 
+                // DECOUPLED: Load Properties
                 await loadPropertyConfig();
             } catch (e) { console.warn("Initialization error.", e); }
 
-            const today = new Date(); document.getElementById('tape-start').value = getLocalYMD(today); 
+            const today = new Date(); 
+            document.getElementById('tape-start').value = getLocalYMD(today); 
             document.getElementById('w-start-date').value = getLocalYMD(today);
-            window.switchTab('grid'); window.renderGrid(); document.getElementById('loader').classList.remove('active');
+            
+            const nextM = new Date(today); nextM.setDate(today.getDate() + 30);
+            const qbStart = document.getElementById('qb-start'); if(qbStart) qbStart.value = getLocalYMD(today);
+            const qbEnd = document.getElementById('qb-end'); if(qbEnd) qbEnd.value = getLocalYMD(nextM);
+
+            window.switchTab('grid'); 
+            window.syncFilterPills();
+            window.renderGrid(); 
+            document.getElementById('loader').classList.remove('active');
         };
 
         init();
