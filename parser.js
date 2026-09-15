@@ -364,8 +364,79 @@ window.extractBookingData = (raw) => {
             if (commAmt > 0) s.payments.push({ date: payDate, amt: Number(commAmt.toFixed(2)), method: 'agoda-kp' });
             if (netRate > 0) s.payments.push({ date: payDate, amt: Number(netRate.toFixed(2)), method: 'agoda-pay' });
         }
-    } else if (raw.toLowerCase().includes('airbnb')) {
+        
+    // ---------------------------------------------------------
+    // AIRBNB PARSER
+    // ---------------------------------------------------------
+    } else if (s.source === 'airbnb' || raw.toLowerCase().includes('airbnb')) {
         s.source = 'airbnb';
+
+        // 1. Booking ID
+        let idM = raw.match(/Confirmation code\s*([A-Z0-9]+)/i);
+        if (idM) s.bookId = idM[1];
+
+        // 2. Guest Name
+        let nameM = raw.match(/Reservation confirmed - (.*?)\s+arrives/i) || raw.match(/New booking confirmed![\s\S]*?\n[\s\S]*?\n(.*?)(?:\n|Identity)/i);
+        if (nameM) {
+            let parts = nameM[1].trim().split(' ');
+            s.firstName = parts[0];
+            s.lastName = parts.slice(1).join(' ') || 'GUEST';
+        }
+
+        // 3. Country (Look right after "Identity verified")
+        let countryMatch = raw.match(/Identity verified.*?\n(.*?)\n/i);
+        if (countryMatch) {
+            let locationString = countryMatch[1].trim();
+            // Split by comma "Copenhagen, Denmark", take the last part
+            let locParts = locationString.split(',');
+            s.country = locParts[locParts.length - 1].trim();
+        }
+
+        // 4. Book Date (Look near the top near "Airbnb")
+        let bookDateMatch = raw.match(/Airbnb\s*\n(.*?)\n/i);
+        if (bookDateMatch) {
+            let timeString = bookDateMatch[1].trim();
+            // If it contains a colon (like 7:28 PM) or "ago", it's today.
+            if (timeString.includes(':') || timeString.includes('ago')) {
+                s.bookDate = getLocalYMD(new Date());
+            } else {
+                // Otherwise, try to parse the date string (e.g. "Jan 22")
+                let d = new Date(timeString + " " + new Date().getFullYear());
+                if (!isNaN(d)) s.bookDate = getLocalYMD(d);
+            }
+        }
+
+        // 5. Check-In
+        let inM = raw.match(/Check-in\s*(?:[A-Za-z]{3},\s*)?([A-Za-z]{3}\s*\d{1,2},?\s*\d{4})/i);
+        if (inM) {
+            let d = new Date(inM[1]);
+            if (!isNaN(d)) s.checkIn = getLocalYMD(d);
+        }
+
+        // 6. Check-Out
+        let outM = raw.match(/Checkout\s*(?:[A-Za-z]{3},\s*)?([A-Za-z]{3}\s*\d{1,2},?\s*\d{4})/i);
+        if (outM) {
+            let d = new Date(outM[1]);
+            if (!isNaN(d)) s.checkOut = getLocalYMD(d);
+        }
+
+        // 7. PAX
+        let paxM = raw.match(/Guests?\s*(\d+)\s*(?:adult|guest)/i);
+        if (paxM) s.pax = parseInt(paxM[1]);
+
+        // 8. Prices (Gross and Net)
+        let totM = raw.match(/Total\s*\([A-Z]{3}\)\s*฿?([\d,.]+)/i) || raw.match(/Guest paid[\s\S]*?฿([\d,.]+)/i);
+        if (totM) s.totalPrice = parseFloat(totM[1].replace(/,/g, ''));
+
+        let netM = raw.match(/You earn\s*฿?([\d,.]+)/i);
+        if (netM) {
+            s.netPrice = parseFloat(netM[1].replace(/,/g, ''));
+            s.netOverride = true;
+        }
+
+        // 9. Booked Room Type
+        let rtM = raw.match(/Add guest details\s*(.*?)\s*Room/i);
+        if (rtM) s.bookedType = rtM[1].trim();
     }
 
     // Refundability Check (Applies to all)
