@@ -441,19 +441,30 @@ window.extractBookingData = (raw) => {
         }
 
         // 8. Prices (Gross and Net)
-        let totIdx = lines.findIndex(l => l.startsWith('Total ('));
+        let totIdx = lines.findIndex(l => l.toLowerCase().includes('total ('));
         if (totIdx > -1 && lines.length > totIdx + 1) {
             let val = lines[totIdx + 1].replace(/[^\d.]/g, '');
             if (val) s.totalPrice = parseFloat(val);
         }
 
-        let earnIdx = lines.findIndex(l => l === 'You earn');
+        let earnIdx = lines.findIndex(l => l.toLowerCase().includes('you earn'));
         if (earnIdx > -1 && lines.length > earnIdx + 1) {
             let val = lines[earnIdx + 1].replace(/[^\d.]/g, '');
             if (val) {
                 s.netPrice = parseFloat(val);
                 s.netOverride = true;
             }
+        }
+
+        // Populate Payments Array for PMS
+        if (s.totalPrice && s.netPrice) {
+            let commAmt = s.totalPrice - s.netPrice;
+            let payDate = s.checkIn || getLocalYMD(new Date());
+            s.payments.push({ date: payDate, amt: s.netPrice, method: 'abnb-pay' });
+            if (commAmt > 0) s.payments.push({ date: payDate, amt: Number(commAmt.toFixed(2)), method: 'abnb-kp' });
+        } else if (s.totalPrice) {
+            let payDate = s.checkIn || getLocalYMD(new Date());
+            s.payments.push({ date: payDate, amt: s.totalPrice, method: 'abnb-pay' });
         }
 
         // 9. Booked Room Type
