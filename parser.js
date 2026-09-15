@@ -432,13 +432,13 @@ window.extractBookingData = (raw) => {
         }
 
         // 8. Prices (Gross and Net) & Payments
-        let totIdx = lines.findIndex(l => l.includes('Total (THB)') || l === 'Total');
+        let totIdx = lines.findIndex(l => l.toLowerCase().includes('total (thb)') || l.toLowerCase() === 'total');
         if (totIdx > -1 && lines.length > totIdx + 1) {
             let totMatch = lines[totIdx + 1].match(/[\d,]+\.\d{2}/);
             if (totMatch) s.totalPrice = parseFloat(totMatch[0].replace(/,/g, ''));
         }
 
-        let netIdx = lines.findIndex(l => l.includes('You earn'));
+        let netIdx = lines.findIndex(l => l.toLowerCase().includes('you earn'));
         if (netIdx > -1 && lines.length > netIdx + 1) {
             let netMatch = lines[netIdx + 1].match(/[\d,]+\.\d{2}/);
             if (netMatch) {
@@ -450,8 +450,8 @@ window.extractBookingData = (raw) => {
         if (s.totalPrice && s.netPrice) {
             let commAmt = s.totalPrice - s.netPrice;
             let payDate = s.checkIn || getLocalYMD(new Date());
-            s.payments.push({ date: payDate, amt: Number(s.netPrice.toFixed(2)), method: 'abnb-pay' });
-            s.payments.push({ date: payDate, amt: Number(commAmt.toFixed(2)), method: 'abnb-kp' });
+            s.payments.push({ date: payDate, amt: Number(s.netPrice.toFixed(2)), method: 'airbnb-pay' });
+            s.payments.push({ date: payDate, amt: Number(commAmt.toFixed(2)), method: 'airbnb-kp' });
         }
 
         // 9. Booked Room Type
