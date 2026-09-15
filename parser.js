@@ -368,75 +368,99 @@ window.extractBookingData = (raw) => {
     // ---------------------------------------------------------
     // AIRBNB PARSER
     // ---------------------------------------------------------
-    } else if (s.source === 'airbnb' || raw.toLowerCase().includes('airbnb')) {
+    } else if (raw.toLowerCase().includes('airbnb') || s.source === 'airbnb') {
         s.source = 'airbnb';
+        let flatRaw = raw.replace(/\n/g, ' ');
 
         // 1. Booking ID
-        let idM = raw.match(/Confirmation code\s*([A-Z0-9]+)/i);
-        if (idM) s.bookId = idM[1];
-
-        // 2. Guest Name
-        let nameM = raw.match(/Reservation confirmed - (.*?)\s+arrives/i) || raw.match(/New booking confirmed![\s\S]*?\n[\s\S]*?\n(.*?)(?:\n|Identity)/i);
-        if (nameM) {
-            let parts = nameM[1].trim().split(' ');
-            s.firstName = parts[0];
-            s.lastName = parts.slice(1).join(' ') || 'GUEST';
+        let idIdx = lines.findIndex(l => l === 'Confirmation code');
+        if (idIdx > -1 && lines.length > idIdx + 1) {
+            s.bookId = lines[idIdx + 1].trim();
+        } else {
+            let idM = raw.match(/Confirmation code\s*([A-Z0-9]{8,12})/i);
+            if (idM) s.bookId = idM[1];
         }
 
-        // 3. Country (Look right after "Identity verified")
-        let countryMatch = raw.match(/Identity verified.*?\n(.*?)\n/i);
-        if (countryMatch) {
-            let locationString = countryMatch[1].trim();
-            // Split by comma "Copenhagen, Denmark", take the last part
-            let locParts = locationString.split(',');
-            s.country = locParts[locParts.length - 1].trim();
+        // 2. Guest Name & 3. Country (Look around "Identity verified")
+        let idvLineIdx = lines.findIndex(l => l.includes('Identity verified'));
+        if (idvLineIdx > 0) {
+            let nameLine = lines[idvLineIdx - 1].trim();
+            if (nameLine && !nameLine.includes('New booking') && !nameLine.includes('Send a message')) {
+                let parts = nameLine.split(' ');
+                s.firstName = parts[0];
+                s.lastName = parts.slice(1).join(' ');
+            }
+            if (lines.length > idvLineIdx + 1) {
+                let countryLine = lines[idvLineIdx + 1].trim();
+                let locParts = countryLine.split(',');
+                s.country = locParts[locParts.length - 1].trim();
+            }
+        }
+        
+        // Fallback for Name
+        if (!s.firstName) {
+            let nameM = raw.match(/Reservation confirmed - (.*?)\s+arrives/i);
+            if (nameM) {
+                let parts = nameM[1].trim().split(' ');
+                s.firstName = parts[0];
+                s.lastName = parts.slice(1).join(' ') || 'GUEST';
+            }
         }
 
-        // 4. Book Date (Look near the top near "Airbnb")
-        let bookDateMatch = raw.match(/Airbnb\s*\n(.*?)\n/i);
-        if (bookDateMatch) {
-            let timeString = bookDateMatch[1].trim();
-            // If it contains a colon (like 7:28 PM) or "ago", it's today.
-            if (timeString.includes(':') || timeString.includes('ago')) {
-                s.bookDate = getLocalYMD(new Date());
-            } else {
-                // Otherwise, try to parse the date string (e.g. "Jan 22")
-                let d = new Date(timeString + " " + new Date().getFullYear());
+        // 4. Book Date
+        if (flatRaw.includes('minutes ago') || flatRaw.includes('hours ago') || /\b\d{1,2}:\d{2}\s*(?:AM|PM)\b/i.test(flatRaw)) {
+            s.bookDate = getLocalYMD(new Date());
+        } else {
+            let bdM = flatRaw.match(/Airbnb\s*([A-Za-z]{3}\s+\d{1,2})/i);
+            if (bdM) {
+                let d = new Date(bdM[1] + " " + new Date().getFullYear());
                 if (!isNaN(d)) s.bookDate = getLocalYMD(d);
             }
         }
 
-        // 5. Check-In
-        let inM = raw.match(/Check-in\s*(?:[A-Za-z]{3},\s*)?([A-Za-z]{3}\s*\d{1,2},?\s*\d{4})/i);
-        if (inM) {
-            let d = new Date(inM[1]);
+        // 5. Check-In & 6. Check-Out
+        let ciIdx = lines.findIndex(l => l === 'Check-in');
+        if (ciIdx > -1 && lines.length > ciIdx + 1) {
+            let dateStr = lines[ciIdx + 1].replace(/^[A-Za-z]{3},\s*/, '');
+            let d = new Date(dateStr);
             if (!isNaN(d)) s.checkIn = getLocalYMD(d);
         }
 
-        // 6. Check-Out
-        let outM = raw.match(/Checkout\s*(?:[A-Za-z]{3},\s*)?([A-Za-z]{3}\s*\d{1,2},?\s*\d{4})/i);
-        if (outM) {
-            let d = new Date(outM[1]);
+        let coIdx = lines.findIndex(l => l === 'Checkout');
+        if (coIdx > -1 && lines.length > coIdx + 1) {
+            let dateStr = lines[coIdx + 1].replace(/^[A-Za-z]{3},\s*/, '');
+            let d = new Date(dateStr);
             if (!isNaN(d)) s.checkOut = getLocalYMD(d);
         }
 
         // 7. PAX
-        let paxM = raw.match(/Guests?\s*(\d+)\s*(?:adult|guest)/i);
-        if (paxM) s.pax = parseInt(paxM[1]);
+        let paxIdx = lines.findIndex(l => l === 'Guests');
+        if (paxIdx > -1 && lines.length > paxIdx + 1) {
+            let paxM = lines[paxIdx + 1].match(/(\d+)/);
+            if (paxM) s.pax = parseInt(paxM[1]);
+        }
 
         // 8. Prices (Gross and Net)
-        let totM = raw.match(/Total\s*\([A-Z]{3}\)\s*฿?([\d,.]+)/i) || raw.match(/Guest paid[\s\S]*?฿([\d,.]+)/i);
-        if (totM) s.totalPrice = parseFloat(totM[1].replace(/,/g, ''));
+        let totIdx = lines.findIndex(l => l.startsWith('Total ('));
+        if (totIdx > -1 && lines.length > totIdx + 1) {
+            let val = lines[totIdx + 1].replace(/[^\d.]/g, '');
+            if (val) s.totalPrice = parseFloat(val);
+        }
 
-        let netM = raw.match(/You earn\s*฿?([\d,.]+)/i);
-        if (netM) {
-            s.netPrice = parseFloat(netM[1].replace(/,/g, ''));
-            s.netOverride = true;
+        let earnIdx = lines.findIndex(l => l === 'You earn');
+        if (earnIdx > -1 && lines.length > earnIdx + 1) {
+            let val = lines[earnIdx + 1].replace(/[^\d.]/g, '');
+            if (val) {
+                s.netPrice = parseFloat(val);
+                s.netOverride = true;
+            }
         }
 
         // 9. Booked Room Type
-        let rtM = raw.match(/Add guest details\s*(.*?)\s*Room/i);
-        if (rtM) s.bookedType = rtM[1].trim();
+        let gdIdx = lines.findIndex(l => l === 'Add guest details');
+        if (gdIdx > -1 && lines.length > gdIdx + 1) {
+            s.bookedType = lines[gdIdx + 1].trim();
+        }
     }
 
     // Refundability Check (Applies to all)
