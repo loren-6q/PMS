@@ -76,8 +76,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .loading-overlay { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; }
         .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
+        
         .unassigned-header { border-top: 4px solid #cbd5e1; }
         .smart-notes { transition: height 0.2s ease; height: 50px; resize: none; overflow: hidden; }
         .smart-notes:focus { height: 120px; overflow-y: auto; }
@@ -207,8 +206,8 @@
 
         <div id="calendar-view" class="flex-1 flex flex-col min-h-0 unselectable">
             <div id="calendar-scroll-container" class="flex-1 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-auto relative overscroll-none">
-                <div id="calendar-header-months" class="timeline-grid sticky top-0 z-40 bg-slate-800 shadow-sm border-b border-slate-700 h-[26px] box-border"></div>
-                <div id="calendar-header-days" class="timeline-grid sticky top-[26px] z-30 bg-slate-100 shadow-sm border-b border-slate-400 h-[28px] box-border"></div>
+                <div id="calendar-header-months" class="timeline-grid sticky top-0 z-[60] bg-slate-800 shadow-sm border-b border-slate-700 h-[26px] box-border"></div>
+                <div id="calendar-header-days" class="timeline-grid sticky top-[26px] z-[50] bg-slate-100 shadow-sm border-b border-slate-400 h-[28px] box-border"></div>
                 <div id="timeline-body" class="relative pb-2"></div>
             </div>
             <footer id="calendar-legend" class="mt-1 bg-white p-1.5 sm:rounded-lg border border-slate-200 flex flex-col md:flex-row flex-wrap shrink-0 items-center justify-center gap-x-4 gap-y-2 text-center text-[10px] md:text-[11px]"></footer>
@@ -362,14 +361,12 @@
 
         const $ = id => document.getElementById(id), $$ = s => document.querySelectorAll(s);
 
-        // Security check flag
         const REQUIRE_LOGIN = false; 
 
-        // SECURITY DICTIONARY
         const USER_PERMISSIONS = {
             'loren': { role: 'admin', properties: ['swims_resort', 'loud_samui', 'wet_pool'] },
             'wetkpg': { role: 'admin', properties: ['swims_resort', 'loud_samui', 'wet_pool'] },
-            'admin': { role: 'admin', properties: ['swims_resort', 'loud_samui', 'wet_pool'] } // Failsafe testing
+            'admin': { role: 'admin', properties: ['swims_resort', 'loud_samui', 'wet_pool'] }
         };
 
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
@@ -379,7 +376,6 @@
         const db = getFirestore(app);
         const functions = getFunctions(app, 'asia-southeast1');
 
-        // State Variables
         let currentUserRole = null; 
         let currentUserEmail = 'unknown'; 
         let staff = []; 
@@ -393,7 +389,6 @@
         let sortAsc = false; 
         let isZoomWide = false;
         
-        // Multi-Tenant State
         let currentPropertyId = 'swims_resort';
         let windowPropertiesList = [];
         window.masterState = 0; 
@@ -802,8 +797,8 @@
             const jm = $('jump-month-select'); if(jm) jm.value = `${viewStart.getFullYear()}-${String(viewStart.getMonth() + 1).padStart(2, '0')}`;
             
             const mGrid = $('calendar-header-months'), dGrid = $('calendar-header-days'), body = $('timeline-body');
-            mGrid.innerHTML = `<div class="border-r border-slate-700 flex items-center justify-center h-full sticky left-0 z-50 bg-slate-800 w-[var(--sidebar-w)]"></div>`;
-            dGrid.innerHTML = `<div class="p-1 text-[12px] font-black text-slate-500 uppercase flex items-center justify-between border-r border-slate-400 bg-slate-100 h-full sticky left-0 z-40 w-[var(--sidebar-w)]"><span>ROOM</span><div class="flex items-center gap-1"><button onclick="window.toggleAllGroups()" class="hover:text-blue-500 transition-colors bg-slate-200 hover:bg-slate-300 p-0.5 rounded shadow-sm cursor-pointer" title="Master Toggle"><i data-lucide="layers" class="!w-[13px] !h-[13px]"></i></button><button onclick="window.toggleZoom()" class="hover:text-blue-500 transition-colors bg-slate-200 hover:bg-slate-300 p-0.5 rounded shadow-sm cursor-pointer" title="Toggle Zoom"><i data-lucide="zoom-in" class="!w-[13px] !h-[13px]"></i></button></div></div>`;
+            mGrid.innerHTML = `<div class="border-r border-slate-700 flex items-center justify-center h-full sticky left-0 z-[60] bg-slate-800 w-[var(--sidebar-w)]"></div>`;
+            dGrid.innerHTML = `<div class="p-1 text-[12px] font-black text-slate-500 uppercase flex items-center justify-between border-r border-slate-400 bg-slate-100 h-full sticky left-0 z-[50] w-[var(--sidebar-w)]"><span>ROOM</span><div class="flex items-center gap-1"><button onclick="window.toggleAllGroups()" class="hover:text-blue-500 transition-colors bg-slate-200 hover:bg-slate-300 p-0.5 rounded shadow-sm cursor-pointer" title="Master Toggle"><i data-lucide="layers" class="!w-[13px] !h-[13px]"></i></button><button onclick="window.toggleZoom()" class="hover:text-blue-500 transition-colors bg-slate-200 hover:bg-slate-300 p-0.5 rounded shadow-sm cursor-pointer" title="Toggle Zoom"><i data-lucide="zoom-in" class="!w-[13px] !h-[13px]"></i></button></div></div>`;
             body.innerHTML = '';
 
             const days = Array.from({length: dShow}, (_, i) => new Date(viewStart.getFullYear(), viewStart.getMonth(), viewStart.getDate() + i, 12, 0, 0));
@@ -1195,7 +1190,6 @@
             btn.innerHTML = originalText; btn.disabled = false; lucide.createIcons();
         };
 
-        // NEW BIDIRECTIONAL TM30 SYNC
         window.syncTM30 = async () => {
             const btn = document.getElementById('tm30-sync-btn');
             const origText = btn.innerHTML; 
@@ -1219,7 +1213,6 @@
                     }
                 });
 
-                // SCENARIO 1: Empty Form -> Act as TM30 Auto-Fill Selector
                 if (rL.length === 0 && !gFirstName && !gLastName) {
                     if (pendingPassports.length === 0) {
                         window.showAlert("No recent passports found to import.");
@@ -1250,7 +1243,6 @@
                     btn.innerHTML = origText; return;
                 }
 
-                // SCENARIO 2: Form has Data -> Act as Bidirectional Sync & Cross-Pollination
                 let checkoutFormatted = checkOut ? `${checkOut.split('-')[2]}/${checkOut.split('-')[1]}/${checkOut.split('-')[0]}` : "";
                 let matchedPassports = [], updatePromises = [];
 
@@ -1462,6 +1454,14 @@
             s.notes = summary;
             window.populateStaffForm(s);
             window.closeModal('email-modal');
+            
+            // JUMP TO DATE IMMEDIATELY AFTER PARSING
+            if (s.checkIn) {
+                const d = new Date(s.checkIn + "T12:00:00Z");
+                d.setDate(d.getDate() - 3);
+                viewStart = d;
+                window.render();
+            }
         };
 
         init();
