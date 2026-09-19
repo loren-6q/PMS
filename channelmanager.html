@@ -765,7 +765,7 @@
                 <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
             </tr>`;
 
-            // ROOMS & OTA RATES
+            // ROOMS & OTA Rates
             roomTypes.forEach(r => {
                 html += `<tr class="bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors" data-type="room" data-id="${r}">
                     <td class="p-1.5 font-bold text-[10px] text-slate-600 pl-4 border-r border-slate-200">🚪 ${displayAbbrev[r]||r} <span class="text-[8px] text-slate-400 font-black uppercase ml-1">(Base)</span></td>
@@ -947,22 +947,29 @@
             const isDirtyDate = window.dirtyDates.has(dateStr);
             const isSyncedDate = window.syncedDates.has(dateStr);
 
-            const applyState = (el, isBool = false) => {
+            const applyState = (el, isBool = false, targetId = null, targetField = null) => {
                 if(!el) return;
                 
                 let target = isBool ? el.closest('td') : el;
                 if(!target) return;
                 
-                if (isDirtyDate) { 
-                    if(isBool) target.classList.add('override-cell-highlight'); else target.classList.add('is-dirty'); 
+                let isActuallyDirty = false;
+                if (targetId && targetField && window.dirtyFields?.[dateStr]?.[targetId]?.has(targetField)) {
+                    isActuallyDirty = true;
+                } else if (isDirtyDate && !targetId) {
+                    isActuallyDirty = true;
+                }
+
+                if (isActuallyDirty) { 
+                    if(isBool) target.classList.add('override-cell-highlight', '!bg-orange-100'); else target.classList.add('is-dirty', '!bg-orange-50'); 
                     target.classList.remove('is-synced'); 
                 }
                 else if (isSyncedDate) { 
                     target.classList.add('is-synced'); 
-                    if(isBool) target.classList.remove('override-cell-highlight'); else target.classList.remove('is-dirty'); 
+                    if(isBool) target.classList.remove('override-cell-highlight', '!bg-orange-100'); else target.classList.remove('is-dirty', '!bg-orange-50'); 
                 }
                 else { 
-                    target.classList.remove('is-dirty', 'is-synced', 'override-cell-highlight'); 
+                    target.classList.remove('is-dirty', 'is-synced', 'override-cell-highlight', '!bg-orange-100', '!bg-orange-50'); 
                 }
             };
 
@@ -978,13 +985,13 @@
                     if (elStd) {
                         elStd.value = data.std !== "" && !isNaN(data.std) ? formatDisplay(data.std * mult) : "";
                         if (data.isOverride.std) elStd.classList.add('is-override'); else elStd.classList.remove('is-override');
-                        applyState(elStd);
+                        applyState(elStd, false, room, 'rate');
                     }
                     const elFmp = document.getElementById(`${bId}_fmp`);
                     if (elFmp && hasEvents) {
                         elFmp.value = data.fmp !== "" && !isNaN(data.fmp) ? formatDisplay(data.fmp * mult) : "";
                         if (data.isOverride.fmp) elFmp.classList.add('is-override'); else elFmp.classList.remove('is-override');
-                        applyState(elFmp);
+                        applyState(elFmp, false, room, 'rate');
                     }
                 }
                 
@@ -993,14 +1000,15 @@
                     if (window.activeMetrics.has(mapKey)) {
                         const el = document.getElementById(`${bId}_${fKey}`);
                         if (el) {
+                            let fCheck = fKey === 'min_arr' ? 'min' : fKey;
                             if (fKey === 'cta' || fKey === 'ctd' || fKey === 'stopSell') {
                                 el.checked = data[fKey] === true;
-                                const td = el.closest('td'); if (td) applyState(el, true);
+                                const td = el.closest('td'); if (td) applyState(el, true, room, fCheck);
                                 if (data.isOverride[fKey]) td.classList.add('!border', '!border-orange-500'); else td.classList.remove('!border', '!border-orange-500');
                             } else {
                                 el.value = data[fKey] !== undefined ? data[fKey] : "";
                                 if (data.isOverride[fKey]) el.classList.add('is-override'); else el.classList.remove('is-override');
-                                applyState(el);
+                                applyState(el, false, room, fCheck);
                             }
                         }
                     }
@@ -1034,7 +1042,7 @@
                                         otaInput.classList.remove('!text-pink-600', 'font-black', '!bg-pink-100', '!text-pink-700');
                                     }
                                 }
-                                applyState(otaInput);
+                                applyState(otaInput, false, rate.ratePlanId, 'rate');
                             }
                         }
                         
@@ -1043,15 +1051,16 @@
                             if (window.activeMetrics.has(mapKey)) {
                                 const rEl = document.getElementById(`${otaId}_${fKey}`);
                                 if (rEl) {
+                                    let fCheck = fKey === 'min_arr' ? 'min' : fKey;
                                     const val = masterPricing.timeline[dateStr]?.otaOverrides?.[`${rate.ratePlanId}_${fKey}`];
                                     if (fKey === 'cta' || fKey === 'ctd' || fKey === 'stopSell') {
                                         rEl.checked = val === true;
-                                        const td = rEl.closest('td'); if (td) applyState(rEl, true);
+                                        const td = rEl.closest('td'); if (td) applyState(rEl, true, rate.ratePlanId, fCheck);
                                         if (val !== undefined) td.classList.add('!border', '!border-orange-500'); else td.classList.remove('!border', '!border-orange-500');
                                     } else {
                                         rEl.value = val !== undefined ? val : "";
                                         if (val !== undefined) rEl.classList.add('!text-pink-600', 'font-black'); else rEl.classList.remove('!text-pink-600', 'font-black');
-                                        applyState(rEl);
+                                        applyState(rEl, false, rate.ratePlanId, fCheck);
                                     }
                                 }
                             }
@@ -1071,7 +1080,7 @@
                             }
                             el.value = displayVal;
                             if (data.isOverride[k]) el.classList.add('is-override'); else el.classList.remove('is-override');
-                            applyState(el);
+                            applyState(el, false, 'GLOBAL', k);
                         }
                     }
                 });
@@ -1082,7 +1091,7 @@
                         const elBool = document.getElementById(`${bId}_${k}`);
                         if (elBool) {
                             elBool.checked = data[k] === true;
-                            const td = elBool.closest('td'); if (td) applyState(elBool, true);
+                            const td = elBool.closest('td'); if (td) applyState(elBool, true, 'GLOBAL', k);
                             if (data.isOverride[k]) td.classList.add('!border', '!border-orange-500'); else td.classList.remove('!border', '!border-orange-500');
                         }
                     }
@@ -1091,6 +1100,7 @@
         };
 
         const calculateLiveInventory = () => {
+            const oldInventoryStr = JSON.stringify(liveInventory || {});
             liveInventory = {}; 
             const startStr = document.getElementById('tape-start').value;
             if(!startStr) return;
@@ -1153,6 +1163,48 @@
                     }
                 });
             });
+
+            // --- AUTO-TAG BACKGROUND CHANGES ---
+            if (oldInventoryStr !== "{}" && oldInventoryStr !== "undefined") {
+                try {
+                    const oldInvObj = JSON.parse(oldInventoryStr);
+                    let changesFound = false;
+
+                    Object.keys(liveInventory).forEach(dStr => {
+                        Object.keys(liveInventory[dStr]).forEach(room => {
+                            const oldVal = oldInvObj[dStr] ? oldInvObj[dStr][room] : null;
+                            const newVal = liveInventory[dStr][room];
+                            
+                            // If the inventory dropped due to a new booking
+                            if (oldVal !== null && oldVal !== undefined && newVal < oldVal) {
+                                window.dirtyDates.add(dStr);
+                                window.syncedDates.delete(dStr);
+                                
+                                window.dirtyFields = window.dirtyFields || {};
+                                window.dirtyFields[dStr] = window.dirtyFields[dStr] || {};
+                                
+                                // Tag the specific room type using a SET to prevent crash
+                                window.dirtyFields[dStr][room] = window.dirtyFields[dStr][room] || new Set();
+                                window.dirtyFields[dStr][room].add('avail');
+                                
+                                changesFound = true;
+                            }
+                        });
+                    });
+
+                    if (changesFound) {
+                        const sInd = document.getElementById('save-indicator');
+                        if (sInd) {
+                            sInd.innerText = 'PMS UPDATE DETECTED'; 
+                            sInd.classList.replace('text-emerald-600', 'text-amber-500'); 
+                            sInd.style.opacity = '1'; 
+                        }
+                        window.customAlert("⚠️ PMS UPDATE DETECTED\n\nA new background booking has modified your live inventory. Please click Sync Changes to push the new availability to Channex.");
+                    }
+                } catch (e) {
+                    console.error("Error parsing old inventory:", e);
+                }
+            }
         };
 
         window.renderGrid = () => {
@@ -1432,9 +1484,10 @@
         window.handleAvailEdit = (dateStr, room, value) => {
             window.dirtyDates.add(dateStr);
             window.syncedDates.delete(dateStr);
-            
             window.dirtyFields = window.dirtyFields || {};
             window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
+            window.dirtyFields[dateStr][room] = window.dirtyFields[dateStr][room] || new Set();
+            window.dirtyFields[dateStr][room].add('avail');
             
             if (window.channexRateMap) {
                 let affectedRates = window.channexRateMap.filter(m => categoryResolver(m.pmsCategory) === room);
@@ -2121,13 +2174,30 @@
                         const dMs = parseYMD(dStr);
                         const dayData = masterPricing.timeline[dStr] || {};
                         
+                        // ISOLATION LOCK: Skip this date for this room if it wasn't explicitly edited
+                        if (mode === 'delta') {
+                            const dFields = window.dirtyFields?.[dStr]?.[pmsCat];
+                            if (!dFields || !dFields.has('avail')) {
+                                if (rangeStart !== null && currentAvail !== null) {
+                                    availPayload.push({
+                                        property_id: propId, room_type_id: roomTypeId,
+                                        date_from: rangeStart, date_to: datesToProcess[i-1],
+                                        availability: currentAvail
+                                    });
+                                }
+                                rangeStart = null;
+                                currentAvail = null;
+                                continue;
+                            }
+                        }
+
                         let availToday;
                         if (mode === 'delta') {
                             const otaAvail = dayData.otaOverrides?.[`${pmsCat}_avail`];
                             if (otaAvail !== undefined) {
                                 availToday = parseInt(otaAvail);
                             } else {
-                                availToday = null; 
+                                availToday = availMap[dStr][pmsCat] !== undefined ? availMap[dStr][pmsCat] : 0; 
                             }
                         } else {
                             const otaAvail = dayData.otaOverrides?.[`${pmsCat}_avail`];
@@ -2363,11 +2433,17 @@
                 await signInAnonymously(auth); 
                 
                 try {
-                    const staffSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
-                    staff = staffSnap.docs.map(d => {
-                        let data = d.data();
-                        if (!data.property) data.property = 'swims_resort'; 
-                        return { id: d.id, ...data };
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (staffSnap) => {
+                        staff = staffSnap.docs.map(d => {
+                            let data = d.data();
+                            if (!data.property) data.property = 'swims_resort'; 
+                            return { id: d.id, ...data };
+                        });
+                        
+                        // Live update: Recalculate and re-render grid instantly when new bookings arrive!
+                        if (roomTypes && roomTypes.length > 0) {
+                            window.renderGrid();
+                        }
                     });
                 } catch (staffErr) {
                     console.warn("Could not load staff bookings, continuing anyway...", staffErr);
