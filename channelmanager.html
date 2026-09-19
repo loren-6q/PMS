@@ -51,7 +51,7 @@
             box-sizing: border-box;
         }
         
-        .rate-grid-table td input[type="number"] { 
+        .rate-grid-table td input[type="number"], .rate-grid-table td input[type="text"] { 
             width: 36px; 
             height: 24px;
             text-align: center; 
@@ -67,11 +67,13 @@
             background: transparent;
         }
         .rate-grid-table td input[type="number"]::-webkit-outer-spin-button, .rate-grid-table td input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .rate-grid-table td input[type="number"]:focus { box-shadow: inset 0 0 0 2px #4f46e5; background: #fff !important; z-index: 10; position: relative; }
+        .rate-grid-table td input[type="number"]:focus, .rate-grid-table td input[type="text"]:focus { box-shadow: inset 0 0 0 2px #4f46e5; background: #fff !important; z-index: 10; position: relative; }
         
         .is-override { color: #d97706 !important; font-weight: 900 !important; }
-        .is-dirty { background-color: #ffedd5 !important; transition: background-color 0.2s; }
+        .is-dirty { box-shadow: inset 0 0 0 2px #f97316 !important; transition: box-shadow 0.2s; }
         .is-synced { background-color: #ecfdf5 !important; transition: background-color 0.5s; }
+        
+        .override-cell-highlight { background-color: #ffedd5 !important; }
 
         /* Wide Room Columns */
         .frozen-col { position: sticky; left: 0; z-index: 20; background: inherit; width: 140px; min-width: 140px; }
@@ -130,7 +132,7 @@
 
         <div class="flex-1 flex flex-col min-h-0 bg-slate-100 sm:rounded-lg overflow-hidden border-y sm:border border-slate-300 shadow-sm relative z-0">
             <div class="flex px-2 pt-2 bg-slate-200 border-b border-slate-300 shrink-0 gap-1 overflow-x-auto no-scrollbar shadow-inner unselectable">
-                <button onclick="window.switchTab('grid')" id="tab-grid" class="tab-btn active"><i data-lucide="calendar" size="14"></i> Matrix Command Center</button>
+                <button onclick="window.switchTab('grid')" id="tab-grid" class="tab-btn active"><i data-lucide="calendar" size="14"></i> Calendar</button>
                 <button onclick="window.switchTab('smart')" id="tab-smart" class="tab-btn"><i data-lucide="wand-2" size="14" class="text-amber-500"></i> Autofiller</button>
                 <button onclick="window.switchTab('relational')" id="tab-relational" class="tab-btn"><i data-lucide="link" size="14" class="text-indigo-500"></i> Linking</button>
                 <button onclick="window.switchTab('mapping')" id="tab-mapping" class="tab-btn"><i data-lucide="network" size="14" class="text-pink-500"></i> OTA Mapping</button>
@@ -144,7 +146,6 @@
                         <button onclick="window.shiftTape(7)" class="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"><i data-lucide="chevron-right" size="16"></i></button>
                     </div>
 
-                    <!-- PRESETS & GRANULAR FILTER PILLS -->
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 hidden sm:block">PRESETS:</span>
                         <button onclick="window.setPreset('rates')" class="view-btn"><i data-lucide="dollar-sign" size="12"></i> Rates</button>
@@ -175,40 +176,33 @@
                 </div>
 
                 <div id="quick-bulk-panel" class="hidden bg-slate-100 border-b border-slate-300 p-2 shrink-0 shadow-inner flex-col gap-2 z-20 relative">
-                    <div class="flex items-end gap-2 w-full flex-wrap">
-                        <div class="flex flex-col"><label class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Target</label>
-                            <select id="qb-target" class="input-base !py-1 !px-2 !text-xs cursor-pointer w-32" onchange="window.toggleQBTarget()">
-                                <option value="rooms">Specific Rooms</option>
-                                <option value="rates">Specific Rates</option>
-                                <option value="global">Global (Property)</option>
-                            </select>
+                    <div class="flex items-center justify-between gap-2 w-full flex-wrap border-b border-slate-200 pb-2">
+                        <div class="flex items-center gap-2">
+                            <div class="flex flex-col"><label class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Start Date</label><input type="date" id="qb-start" class="input-base !py-1 !px-2 !text-xs w-32 bg-white"></div>
+                            <div class="flex flex-col"><label class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-0.5">End Date</label><input type="date" id="qb-end" class="input-base !py-1 !px-2 !text-xs w-32 bg-white"></div>
                         </div>
-                        <div class="flex flex-col"><label class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Field to Edit</label>
-                            <select id="qb-field" class="input-base !py-1 !px-2 !text-xs cursor-pointer w-32" onchange="window.toggleQBField()">
-                                <option value="std" id="qb-opt-std">Standard Rate</option>
-                                <option value="fmp" id="qb-opt-fmp" class="evt-column">EVT Pkg Rate</option>
-                                <option value="min">Min Stay</option>
-                                <option value="max">Max Stay</option>
-                                <option value="min_arr">Min Arrival</option>
-                                <option value="cta">CTA</option>
-                                <option value="ctd">CTD</option>
-                                <option value="stopSell">Stop Sell</option>
-                            </select>
+                        <div class="flex items-center gap-2 mt-auto">
+                            <button onclick="window.applyBulkGrid(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded shadow-sm font-black text-[10px] uppercase tracking-widest transition-colors h-[28px] cursor-pointer"><i data-lucide="check" size="14" class="inline"></i> Apply Updates</button>
+                            <button onclick="window.applyBulkGrid(true)" class="bg-rose-100 hover:bg-rose-200 text-rose-700 border border-rose-300 px-4 py-1.5 rounded shadow-sm font-black text-[10px] uppercase tracking-widest transition-colors h-[28px] cursor-pointer"><i data-lucide="eraser" size="14" class="inline"></i> Clear Overrides</button>
+                            <button onclick="window.toggleQuickBulk(true)" class="p-1.5 text-slate-400 hover:text-slate-700 rounded h-[28px] cursor-pointer ml-2"><i data-lucide="x" size="14"></i></button>
                         </div>
-                        <div class="flex flex-col"><label class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Start Date</label><input type="date" id="qb-start" class="input-base !py-1 !px-2 !text-xs w-32"></div>
-                        <div class="flex flex-col"><label class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-0.5">End Date</label><input type="date" id="qb-end" class="input-base !py-1 !px-2 !text-xs w-32"></div>
-                        
-                        <button onclick="window.runQuickBulk(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded shadow-sm font-black text-[10px] uppercase tracking-widest transition-colors h-[28px] cursor-pointer"><i data-lucide="check" size="14" class="inline"></i> Apply</button>
-                        <button onclick="window.runQuickBulk(true)" class="bg-rose-100 hover:bg-rose-200 text-rose-700 border border-rose-300 px-4 py-1.5 rounded shadow-sm font-black text-[10px] uppercase tracking-widest transition-colors h-[28px] cursor-pointer"><i data-lucide="eraser" size="14" class="inline"></i> Clear Overrides</button>
-                        <button onclick="window.toggleQuickBulk(true)" class="p-1.5 text-slate-400 hover:text-slate-700 rounded h-[28px] cursor-pointer ml-auto"><i data-lucide="x" size="14"></i></button>
                     </div>
-                    <div class="border-t border-slate-200 pt-2 mt-1">
-                        <div id="qb-rooms-container" class="flex flex-wrap gap-2"></div>
-                        <div id="qb-rates-container" class="hidden flex-wrap gap-2"></div>
-                        <div id="qb-global-container" class="hidden items-center gap-2">
-                            <label class="text-[10px] font-black text-slate-600 uppercase">Apply to entire property:</label>
-                            <input type="text" id="qb-global-val" class="input-base !py-1 !px-2 !text-xs w-32" placeholder="Value (or true/false)">
-                        </div>
+                    <div class="max-h-[35vh] overflow-y-auto w-full no-scrollbar rounded border border-slate-300 bg-white">
+                        <table class="w-full text-left bg-white text-xs">
+                            <thead class="sticky top-0 bg-slate-800 text-white font-black uppercase text-[9px] z-10 shadow-sm">
+                                <tr>
+                                    <th class="p-1.5 border-r border-slate-700 w-1/4">Target Row</th>
+                                    <th class="p-1.5 text-center border-r border-slate-700">Rate ฿</th>
+                                    <th class="p-1.5 text-center border-r border-slate-700">Min Nts</th>
+                                    <th class="p-1.5 text-center border-r border-slate-700">Max Nts</th>
+                                    <th class="p-1.5 text-center border-r border-slate-700">Min Arr</th>
+                                    <th class="p-1.5 text-center border-r border-slate-700">CTA (t/f)</th>
+                                    <th class="p-1.5 text-center border-r border-slate-700">CTD (t/f)</th>
+                                    <th class="p-1.5 text-center">Stop (t/f)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="qb-grid-body"></tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -276,23 +270,23 @@
                                     <tbody>
                                         <tr class="bg-indigo-50/50">
                                             <td class="text-xs font-bold text-indigo-700 text-left pl-2 rounded-l-lg border border-indigo-100 border-r-0">Privates</td>
-                                            <td class="border-y border-indigo-100"><input type="number" id="w-p-base" class="input-base text-center !py-1 !px-1" value="899" onfocus="this.select()"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" id="w-p-pkg" class="input-base text-center !py-1 !px-1 text-pink-700" value="1000" onfocus="this.select()"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" id="w-p-m2" class="input-base text-center !py-1 !px-1" value="1099" onfocus="this.select()" oninput="document.getElementById('w-p-p2').value = this.value"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" id="w-p-m1" class="input-base text-center !py-1 !px-1" value="1999" onfocus="this.select()" oninput="document.getElementById('w-p-p1').value = this.value"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" id="w-p-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="5999" onfocus="this.select()"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" id="w-p-p1" class="input-base text-center !py-1 !px-1" value="1999" onfocus="this.select()" oninput="document.getElementById('w-p-m1').value = this.value"></td>
-                                            <td class="rounded-r-lg border border-indigo-100 border-l-0"><input type="number" id="w-p-p2" class="input-base text-center !py-1 !px-1" value="1099" onfocus="this.select()" oninput="document.getElementById('w-p-m2').value = this.value"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-base" class="input-base text-center !py-1 !px-1" value="899" onfocus="this.select()"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-pkg" class="input-base text-center !py-1 !px-1 text-pink-700" value="1000" onfocus="this.select()"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-m2" class="input-base text-center !py-1 !px-1" value="1099" onfocus="this.select()" oninput="document.getElementById('w-p-p2').value = this.value"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-m1" class="input-base text-center !py-1 !px-1" value="1999" onfocus="this.select()" oninput="document.getElementById('w-p-p1').value = this.value"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="5999" onfocus="this.select()"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-p1" class="input-base text-center !py-1 !px-1" value="1999" onfocus="this.select()" oninput="document.getElementById('w-p-m1').value = this.value"></td>
+                                            <td class="rounded-r-lg border border-indigo-100 border-l-0"><input type="number" step="any" id="w-p-p2" class="input-base text-center !py-1 !px-1" value="1099" onfocus="this.select()" oninput="document.getElementById('w-p-m2').value = this.value"></td>
                                         </tr>
                                         <tr class="bg-orange-50/50">
                                             <td class="text-xs font-bold text-orange-700 text-left pl-2 rounded-l-lg border border-orange-100 border-r-0">Dorms</td>
-                                            <td class="border-y border-orange-100"><input type="number" id="w-d-base" class="input-base text-center !py-1 !px-1" value="199" onfocus="this.select()"></td>
-                                            <td class="border-y border-orange-100"><input type="number" id="w-d-pkg" class="input-base text-center !py-1 !px-1 text-pink-700" value="200" onfocus="this.select()"></td>
-                                            <td class="border-y border-orange-100"><input type="number" id="w-d-m2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-p2').value = this.value"></td>
-                                            <td class="border-y border-orange-100"><input type="number" id="w-d-m1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-p1').value = this.value"></td>
-                                            <td class="border-y border-orange-100"><input type="number" id="w-d-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="2499" onfocus="this.select()"></td>
-                                            <td class="border-y border-orange-100"><input type="number" id="w-d-p1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-m1').value = this.value"></td>
-                                            <td class="rounded-r-lg border border-orange-100 border-l-0"><input type="number" id="w-d-p2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-m2').value = this.value"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-base" class="input-base text-center !py-1 !px-1" value="199" onfocus="this.select()"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-pkg" class="input-base text-center !py-1 !px-1 text-pink-700" value="200" onfocus="this.select()"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-p2').value = this.value"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-p1').value = this.value"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="2499" onfocus="this.select()"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-p1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-m1').value = this.value"></td>
+                                            <td class="rounded-r-lg border border-orange-100 border-l-0"><input type="number" step="any" id="w-d-p2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-m2').value = this.value"></td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -312,11 +306,11 @@
                                     <tbody>
                                         <tr class="bg-indigo-50/50">
                                             <td class="text-xs font-bold text-indigo-700 text-left pl-2 rounded-l-lg border border-indigo-100 border-r-0 py-2">Privates</td>
-                                            <td class="rounded-r-lg border border-indigo-100 border-l-0 px-2 py-2"><input type="number" id="w-p-base-single" class="input-base text-center !py-1 !px-1 w-32" value="899" onfocus="this.select()" onchange="document.getElementById('w-p-base').value = this.value;"></td>
+                                            <td class="rounded-r-lg border border-indigo-100 border-l-0 px-2 py-2"><input type="number" step="any" id="w-p-base-single" class="input-base text-center !py-1 !px-1 w-32" value="899" onfocus="this.select()" onchange="document.getElementById('w-p-base').value = this.value;"></td>
                                         </tr>
                                         <tr class="bg-orange-50/50">
                                             <td class="text-xs font-bold text-orange-700 text-left pl-2 rounded-l-lg border border-orange-100 border-r-0 py-2">Dorms</td>
-                                            <td class="rounded-r-lg border border-orange-100 border-l-0 px-2 py-2"><input type="number" id="w-d-base-single" class="input-base text-center !py-1 !px-1 w-32" value="199" onfocus="this.select()" onchange="document.getElementById('w-d-base').value = this.value;"></td>
+                                            <td class="rounded-r-lg border border-orange-100 border-l-0 px-2 py-2"><input type="number" step="any" id="w-d-base-single" class="input-base text-center !py-1 !px-1 w-32" value="199" onfocus="this.select()" onchange="document.getElementById('w-d-base').value = this.value;"></td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -401,16 +395,20 @@
                             <h2 class="font-black text-purple-900 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="graduation-cap" class="text-purple-700 w-4 h-4"></i> Channex Certification Runner</h2>
                         </div>
                         <div class="p-3 text-xs">
-                            <p class="font-bold text-slate-600 mb-2">Select mapped IDs for the Channex Test Requirements (Twin, Double, BAR, B&B):</p>
+                            <p class="font-bold text-slate-600 mb-2">Map IDs for Channex Test Requirements (Grader needs extreme precision):</p>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                                 <div><label class="label-base !text-purple-700">Test: Twin Room</label><select id="cert-twin-room" class="input-base border-purple-300"></select></div>
                                 <div><label class="label-base !text-purple-700">Test: Double Room</label><select id="cert-double-room" class="input-base border-purple-300"></select></div>
-                                <div><label class="label-base !text-purple-700">Test: Best Avail Rate (BAR)</label><select id="cert-bar-rate" class="input-base border-purple-300"></select></div>
-                                <div><label class="label-base !text-purple-700">Test: Bed & Breakfast (B&B)</label><select id="cert-bb-rate" class="input-base border-purple-300"></select></div>
+                                <div><label class="label-base !text-purple-700">Test: Twin BAR Rate</label><select id="cert-twin-bar" class="input-base border-purple-300"></select></div>
+                                <div><label class="label-base !text-purple-700">Test: Twin B&B Rate</label><select id="cert-twin-bb" class="input-base border-purple-300"></select></div>
+                                <div><label class="label-base !text-purple-700">Test: Double BAR Rate</label><select id="cert-dbl-bar" class="input-base border-purple-300"></select></div>
+                                <div><label class="label-base !text-purple-700">Test: Double B&B Rate</label><select id="cert-dbl-bb" class="input-base border-purple-300"></select></div>
                             </div>
                             <div class="flex flex-wrap gap-2 mb-3">
-                                <button onclick="window.runCertTest('rates')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 2-4: Rates</button>
-                                <button onclick="window.runCertTest('restrictions')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 5-8: Restrictions</button>
+                                <button onclick="window.runCertTest('rates')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 2-4: Rates Only</button>
+                                <button onclick="window.runCertTest('min_stay')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Test 5: Min Stay</button>
+                                <button onclick="window.runCertTest('stop_sell')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Test 6: Stop Sell</button>
+                                <button onclick="window.runCertTest('restrictions')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 7-8: Multi Rules</button>
                                 <button onclick="window.runCertTest('availability')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 9-10: Avail</button>
                             </div>
                             <div class="bg-white border border-purple-200 p-2 rounded h-32 overflow-y-auto font-mono text-[10px] text-slate-700 whitespace-pre-wrap" id="cert-log">Ready to run tests...</div>
@@ -442,11 +440,13 @@
         let staff = [];
         let totalRoomsByType = {};
         let hotelRooms = [];
+        let liveInventory = {};
 
+        // Memory trackers for Delta Sync Payload isolation
         window.dirtyDates = new Set();
         window.syncedDates = new Set();
+        window.dirtyFields = {}; 
 
-        // GRANULAR DISPLAY METRICS ENGINE
         window.activeMetrics = new Set(['rates', 'avail', 'min', 'stop']);
 
         window.toggleFilter = (metric) => {
@@ -603,19 +603,21 @@
             if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
             let val = parseFloat(baseVal); let mod = parseFloat(modifier); if (isNaN(mod)) mod = 0; 
             
-            if (type === '=') return Math.round(val);
+            const calc = (n) => n;
+            
+            if (type === '=') return calc(val);
             if (!isReverse) {
-                if (type === '+') return Math.max(0, Math.round(val + mod));
-                if (type === '-') return Math.max(0, Math.round(val - mod));
-                if (type === '+%') return Math.round(val * (1 + (mod/100)));
-                if (type === '-%') return Math.max(0, Math.round(val * (1 - (mod/100))));
+                if (type === '+') return Math.max(0, calc(val + mod));
+                if (type === '-') return Math.max(0, calc(val - mod));
+                if (type === '+%') return calc(val * (1 + (mod/100)));
+                if (type === '-%') return Math.max(0, calc(val * (1 - (mod/100))));
             } else {
-                if (type === '+') return Math.max(0, Math.round(val - mod));
-                if (type === '-') return Math.max(0, Math.round(val + mod));
-                if (type === '+%') return Math.round(val / (1 + (mod/100)));
-                if (type === '-%') return Math.max(0, Math.round(val / (1 - (mod/100))));
+                if (type === '+') return Math.max(0, calc(val - mod));
+                if (type === '-') return Math.max(0, calc(val + mod));
+                if (type === '+%') return calc(val / (1 + (mod/100)));
+                if (type === '-%') return Math.max(0, calc(val / (1 - (mod/100))));
             }
-            return Math.round(val);
+            return calc(val);
         };
 
         const getNearestEvent = (unixMs) => {
@@ -694,7 +696,7 @@
         const getCellData = (dateStr, room) => {
             const data = (masterPricing.timeline[dateStr] || {})[room] || {};
             if (room === 'GLOBAL') return { min: data.min !== undefined ? data.min : "", max: data.max !== undefined ? data.max : "", min_arr: data.min_arr !== undefined ? data.min_arr : "", cta: data.cta || false, ctd: data.ctd || false, stopSell: data.stopSell || false, isOverride: data.isOverride || {} };
-            return { std: data.std !== undefined ? data.std : "", fmp: data.fmp !== undefined ? data.fmp : "", min: data.min !== undefined ? data.min : "", max: data.max !== undefined ? data.max : "", cta: data.cta || false, ctd: data.ctd || false, stopSell: data.stopSell || false, isOverride: data.isOverride || {} };
+            return { std: data.std !== undefined ? data.std : "", fmp: data.fmp !== undefined ? data.fmp : "", min: data.min !== undefined ? data.min : "", max: data.max !== undefined ? data.max : "", min_arr: data.min_arr !== undefined ? data.min_arr : "", cta: data.cta || false, ctd: data.ctd || false, stopSell: data.stopSell || false, isOverride: data.isOverride || {} };
         };
 
         window.switchTab = (tab) => {
@@ -743,127 +745,188 @@
             const panel = document.getElementById('quick-bulk-panel');
             if (!forceClose && panel.classList.contains('hidden')) {
                 panel.classList.remove('hidden'); panel.classList.add('flex');
-                window.toggleQBTarget();
+                window.renderBulkGrid();
             } else { panel.classList.add('hidden'); panel.classList.remove('flex'); }
         };
 
-        window.toggleQBTarget = () => {
-            const target = document.getElementById('qb-target').value;
-            const fieldSel = document.getElementById('qb-field');
-            
-            if (target === 'global') {
-                document.getElementById('qb-rooms-container').style.display = 'none'; 
-                document.getElementById('qb-rates-container').style.display = 'none'; 
-                document.getElementById('qb-global-container').style.display = 'flex';
-                document.getElementById('qb-opt-std').style.display = 'none';
-                document.getElementById('qb-opt-fmp').style.display = 'none';
-                if (fieldSel.value === 'std' || fieldSel.value === 'fmp') fieldSel.value = 'min';
-            } else if (target === 'rooms') {
-                document.getElementById('qb-rooms-container').style.display = 'flex'; 
-                document.getElementById('qb-rates-container').style.display = 'none'; 
-                document.getElementById('qb-global-container').style.display = 'none';
-                document.getElementById('qb-opt-std').style.display = 'block';
-                document.getElementById('qb-opt-fmp').style.display = 'block';
-                window.renderQuickBulkTargets('rooms');
-            } else if (target === 'rates') {
-                document.getElementById('qb-rooms-container').style.display = 'none'; 
-                document.getElementById('qb-rates-container').style.display = 'flex'; 
-                document.getElementById('qb-global-container').style.display = 'none';
-                document.getElementById('qb-opt-std').style.display = 'block';
-                document.getElementById('qb-opt-fmp').style.display = 'none';
-                if (fieldSel.value === 'fmp') fieldSel.value = 'std';
-                window.renderQuickBulkTargets('rates');
-            }
-        };
-
-        window.renderQuickBulkTargets = (type) => {
+        window.renderBulkGrid = () => {
             let html = '';
-            if (type === 'rooms') {
-                roomTypes.forEach(r => { 
-                    html += `<div class="flex items-center gap-1 w-32 bg-white px-1.5 py-1 rounded border border-slate-200 shadow-sm">
-                        <input type="checkbox" id="qb_chk_room_${r.replace(/\s+/g, '')}" value="${r}" class="qb-chk cursor-pointer accent-indigo-600">
-                        <input type="number" id="qb_val_room_${r.replace(/\s+/g, '')}" class="qb-val-input input-base !py-0.5 !px-1 text-center text-[10px] w-12 border-slate-300" placeholder="Val" oninput="if(this.value !== '') document.getElementById('qb_chk_room_${r.replace(/\s+/g, '')}').checked = true;">
-                        <label for="qb_chk_room_${r.replace(/\s+/g, '')}" class="text-[9px] uppercase font-bold text-slate-600 truncate flex-1 cursor-pointer" title="${r}">${displayAbbrev[r]||r}</label>
-                    </div>`; 
+            const inptCls = "input-base !py-0.5 !px-1 text-center text-[10px] w-14 font-black transition-colors focus:bg-indigo-50 border border-transparent focus:border-indigo-300 hover:bg-slate-50 placeholder-slate-400";
+
+            // GLOBAL
+            html += `<tr class="bg-slate-200 border-b border-slate-300" data-type="global" data-id="GLOBAL">
+                <td class="p-1.5 font-black text-[10px] uppercase text-slate-800 border-r border-slate-300">🌍 GLOBAL (ALL ROOMS)</td>
+                <td class="p-1 text-center border-r border-slate-300"><input type="text" class="${inptCls} bg-slate-100/50 cursor-not-allowed" disabled></td>
+                <td class="p-1 text-center border-r border-slate-300"><input type="number" step="any" class="${inptCls} qb-val-min" placeholder="MIN"></td>
+                <td class="p-1 text-center border-r border-slate-300"><input type="number" step="any" class="${inptCls} qb-val-max" placeholder="MAX"></td>
+                <td class="p-1 text-center border-r border-slate-300"><input type="number" step="any" class="${inptCls} qb-val-min-arr" placeholder="MIN-A"></td>
+                <td class="p-1 text-center border-r border-slate-300"><input type="text" class="${inptCls} qb-val-cta" placeholder="CTA"></td>
+                <td class="p-1 text-center border-r border-slate-300"><input type="text" class="${inptCls} qb-val-ctd" placeholder="CTD"></td>
+                <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
+            </tr>`;
+
+            // ROOMS & OTA RATES
+            roomTypes.forEach(r => {
+                html += `<tr class="bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors" data-type="room" data-id="${r}">
+                    <td class="p-1.5 font-bold text-[10px] text-slate-600 pl-4 border-r border-slate-200">🚪 ${displayAbbrev[r]||r} <span class="text-[8px] text-slate-400 font-black uppercase ml-1">(Base)</span></td>
+                    <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-rate !placeholder-indigo-400" placeholder="RATE"></td>
+                    <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-min" placeholder="MIN"></td>
+                    <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-max" placeholder="MAX"></td>
+                    <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-min-arr" placeholder="MIN-A"></td>
+                    <td class="p-1 text-center border-r border-slate-200"><input type="text" class="${inptCls} qb-val-cta" placeholder="CTA"></td>
+                    <td class="p-1 text-center border-r border-slate-200"><input type="text" class="${inptCls} qb-val-ctd" placeholder="CTD"></td>
+                    <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
+                </tr>`;
+
+                const mappedRates = (window.channexRateMap || []).filter(m => categoryResolver(m.pmsCategory) === r);
+                mappedRates.forEach(m => {
+                    html += `<tr class="bg-indigo-50/20 border-b border-indigo-50 hover:bg-indigo-50/50 transition-colors" data-type="rate" data-id="${m.ratePlanId}" data-parent="${r}" data-ruletype="${m.ruleType || "="}" data-ruleval="${m.ruleVal !== undefined ? m.ruleVal : 0}">
+                        <td class="p-1.5 font-bold text-[9px] text-indigo-700 pl-8 border-r border-indigo-100">↳ 📡 ${m.ratePlanTitle}</td>
+                        <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-rate !placeholder-indigo-400" placeholder="RATE"></td>
+                        <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-min" placeholder="MIN"></td>
+                        <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-max" placeholder="MAX"></td>
+                        <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-min-arr" placeholder="MIN-A"></td>
+                        <td class="p-1 text-center border-r border-indigo-100"><input type="text" class="${inptCls} qb-val-cta" placeholder="CTA"></td>
+                        <td class="p-1 text-center border-r border-indigo-100"><input type="text" class="${inptCls} qb-val-ctd" placeholder="CTD"></td>
+                        <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
+                    </tr>`;
                 });
-                document.getElementById('qb-rooms-container').innerHTML = html;
-            } else if (type === 'rates') {
-                if (!window.channexRateMap || window.channexRateMap.length === 0) {
-                    html = '<div class="text-[10px] text-slate-500 font-bold italic py-1">No Rate Plans Mapped.</div>';
-                } else {
-                    window.channexRateMap.forEach(m => { 
-                        html += `<div class="flex items-center gap-1 w-40 bg-white px-1.5 py-1 rounded border border-amber-200 shadow-sm">
-                            <input type="checkbox" id="qb_chk_rate_${m.ratePlanId}" value="${m.ratePlanId}" data-parent="${m.pmsCategory}" data-ruletype="${m.ruleType}" data-ruleval="${m.ruleVal}" class="qb-chk cursor-pointer accent-amber-500">
-                            <input type="number" id="qb_val_rate_${m.ratePlanId}" class="qb-val-input input-base !py-0.5 !px-1 text-center text-[10px] w-12 border-amber-300" placeholder="Val" oninput="if(this.value !== '') document.getElementById('qb_chk_rate_${m.ratePlanId}').checked = true;">
-                            <label for="qb_chk_rate_${m.ratePlanId}" class="text-[9px] uppercase font-bold text-amber-800 truncate flex-1 cursor-pointer" title="${m.ratePlanTitle}">${m.ratePlanTitle}</label>
-                        </div>`; 
-                    });
-                }
-                document.getElementById('qb-rates-container').innerHTML = html;
-            }
+            });
+
+            document.getElementById('qb-grid-body').innerHTML = html;
         };
 
-        window.runQuickBulk = (isClear = false) => {
-            const s = document.getElementById('qb-start').value, e = document.getElementById('qb-end').value, f = document.getElementById('qb-field').value;
-            const target = document.getElementById('qb-target').value;
-            
+        window.applyBulkGrid = (isClear = false) => {
+            const s = document.getElementById('qb-start').value, e = document.getElementById('qb-end').value;
             if(!s || !e) return window.customAlert("Please select Start and End dates.");
             const sU = parseYMD(s), eU = parseYMD(e);
-            
-            if (target === 'global') {
-                if (isClear) {
-                    for(let d=sU; d<=eU; d+=86400000) window.handleCellEdit(getLocalYMD(new Date(d)), 'GLOBAL', f, "");
-                } else {
-                    let v = document.getElementById('qb-global-val').value;
-                    if (!v && !['cta', 'ctd', 'stopSell'].includes(f)) return window.customAlert("Enter a value to apply global override.");
-                    let applyVal = ['cta', 'ctd', 'stopSell'].includes(f) ? (v.toLowerCase() === 'true' || v === '1' || v.toLowerCase() === 'on') : parseInt(v);
-                    for(let d=sU; d<=eU; d+=86400000) window.handleCellEdit(getLocalYMD(new Date(d)), 'GLOBAL', f, applyVal);
-                }
-            } else if (target === 'rooms') {
-                const updates = [];
-                document.querySelectorAll('#qb-rooms-container .qb-chk:checked').forEach(chk => {
-                    const room = chk.value;
-                    const valInput = document.getElementById(`qb_val_room_${room.replace(/\s+/g, '')}`);
-                    if (isClear) {
-                        updates.push({ room, val: "" });
-                    } else if (valInput.value !== "") {
-                        let applyVal = ['cta', 'ctd', 'stopSell'].includes(f) ? (valInput.value === '1' || valInput.value > 0) : valInput.value;
-                        updates.push({ room, val: applyVal });
+
+            const rules = [];
+            document.querySelectorAll('#qb-grid-body tr').forEach(tr => {
+                const type = tr.dataset.type;
+                const id = tr.dataset.id;
+                const parent = tr.dataset.parent;
+                const rType = tr.dataset.ruletype || "=";
+                const rVal = parseFloat(tr.dataset.ruleval) || 0;
+
+                const getVal = (cls, isBool=false) => {
+                    const el = tr.querySelector('.' + cls);
+                    if(!el || el.disabled) return undefined;
+                    if(isClear) return "";
+                    if(el.value.trim() === "") return undefined;
+                    if(isBool) return ['true','1','y','yes','on', 't'].includes(el.value.toLowerCase().trim());
+                    return parseFloat(el.value);
+                };
+
+                const rule = {
+                    type, id, parent, rType, rVal,
+                    rate: getVal('qb-val-rate'),
+                    min: getVal('qb-val-min'),
+                    max: getVal('qb-val-max'),
+                    min_arr: getVal('qb-val-min-arr'),
+                    cta: getVal('qb-val-cta', true),
+                    ctd: getVal('qb-val-ctd', true),
+                    stopSell: getVal('qb-val-stop', true)
+                };
+
+                Object.keys(rule).forEach(k => rule[k] === undefined && delete rule[k]);
+                if (Object.keys(rule).length > 5) rules.push(rule); 
+            });
+
+            if (rules.length === 0 && !isClear) return window.customAlert("Enter at least one value to apply in the grid.");
+
+            for(let d=sU; d<=eU; d+=86400000) {
+                let dateStr = getLocalYMD(new Date(d));
+                masterPricing.timeline[dateStr] = masterPricing.timeline[dateStr] || {};
+                
+                // Track memory for Delta Sync payload isolation
+                window.dirtyDates.add(dateStr);
+                window.syncedDates.delete(dateStr);
+                window.dirtyFields = window.dirtyFields || {};
+                window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
+
+                rules.forEach(r => {
+                    if (r.type === 'global') {
+                        masterPricing.timeline[dateStr]['GLOBAL'] = masterPricing.timeline[dateStr]['GLOBAL'] || { isOverride: {} };
+                        ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(f => {
+                            if (r[f] !== undefined) {
+                                if (r[f] === "") {
+                                    masterPricing.timeline[dateStr]['GLOBAL'][f] = ['cta','ctd','stopSell'].includes(f) ? false : "";
+                                    delete masterPricing.timeline[dateStr]['GLOBAL'].isOverride[f];
+                                } else {
+                                    masterPricing.timeline[dateStr]['GLOBAL'][f] = r[f];
+                                    masterPricing.timeline[dateStr]['GLOBAL'].isOverride[f] = true;
+                                }
+                                
+                                // Tag all OTA Rates as dirty since Global affects everything
+                                (window.channexRateMap || []).forEach(rate => {
+                                    window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
+                                    let fMap = f === 'min_arr' ? 'min' : f;
+                                    window.dirtyFields[dateStr][rate.ratePlanId].add(fMap);
+                                });
+                            }
+                        });
+                    } else if (r.type === 'room') {
+                        masterPricing.timeline[dateStr][r.id] = masterPricing.timeline[dateStr][r.id] || { isOverride: {} };
+                        if (r.rate !== undefined) {
+                            if (r.rate === "") {
+                                masterPricing.timeline[dateStr][r.id].std = "";
+                                masterPricing.timeline[dateStr][r.id].fmp = "";
+                                delete masterPricing.timeline[dateStr][r.id].isOverride.std;
+                                delete masterPricing.timeline[dateStr][r.id].isOverride.fmp;
+                                window.healDay(dateStr); 
+                            } else {
+                                const mult = getViewMultiplier();
+                                masterPricing.timeline[dateStr][r.id].std = Number((parseFloat(r.rate) / mult).toFixed(2));
+                                masterPricing.timeline[dateStr][r.id].isOverride.std = true;
+                                rippleDay(dateStr, r.id); 
+                            }
+                            
+                            // Tag all child OTA Rates
+                            (window.channexRateMap || []).filter(m => categoryResolver(m.pmsCategory) === r.id).forEach(rate => {
+                                window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
+                                window.dirtyFields[dateStr][rate.ratePlanId].add('rate');
+                            });
+                        }
+                        
+                        ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(f => {
+                            if (r[f] !== undefined) {
+                                if (r[f] === "") {
+                                    masterPricing.timeline[dateStr][r.id][f] = ['cta','ctd','stopSell'].includes(f) ? false : "";
+                                    delete masterPricing.timeline[dateStr][r.id].isOverride[f];
+                                } else {
+                                    masterPricing.timeline[dateStr][r.id][f] = r[f];
+                                    masterPricing.timeline[dateStr][r.id].isOverride[f] = true;
+                                }
+                                
+                                // Tag all child OTA Rates
+                                (window.channexRateMap || []).filter(m => categoryResolver(m.pmsCategory) === r.id).forEach(rate => {
+                                    window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
+                                    let fMap = f === 'min_arr' ? 'min' : f;
+                                    window.dirtyFields[dateStr][rate.ratePlanId].add(fMap);
+                                });
+                            }
+                        });
+                    } else if (r.type === 'rate') {
+                        if (r.rate !== undefined) window.handleOtaEdit(dateStr, r.id, r.parent, r.rType, r.rVal, 'rate', r.rate);
+                        ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(f => {
+                            if (r[f] !== undefined) window.handleOtaEdit(dateStr, r.id, r.parent, r.rType, r.rVal, f, r[f]);
+                        });
                     }
                 });
-                
-                if(updates.length === 0) return window.customAlert(isClear ? "Check at least one room to clear." : "Check at least one room and enter a value to apply.");
-                
-                for(let d=sU; d<=eU; d+=86400000) {
-                    updates.forEach(u => window.handleCellEdit(getLocalYMD(new Date(d)), u.room, f, u.val));
-                }
-            } else if (target === 'rates') {
-                const updates = [];
-                document.querySelectorAll('#qb-rates-container .qb-chk:checked').forEach(chk => {
-                    const rateId = chk.value;
-                    const pCat = categoryResolver(chk.getAttribute('data-parent'));
-                    const rType = chk.getAttribute('data-ruletype') || "=";
-                    const rVal = parseFloat(chk.getAttribute('data-ruleval')) || 0;
-                    const valInput = document.getElementById(`qb_val_rate_${rateId}`);
-                    
-                    if (isClear) {
-                        updates.push({ rateId, pCat, rType, rVal, val: "" });
-                    } else if (valInput.value !== "") {
-                        let applyVal = ['cta', 'ctd', 'stopSell'].includes(f) ? (valInput.value === '1' || valInput.value > 0) : valInput.value;
-                        updates.push({ rateId, pCat, rType, rVal, val: applyVal });
-                    }
-                });
-                
-                if(updates.length === 0) return window.customAlert(isClear ? "Check at least one rate to clear." : "Check at least one rate and enter a value to apply.");
-                
-                for(let d=sU; d<=eU; d+=86400000) {
-                    let dStr = getLocalYMD(new Date(d));
-                    updates.forEach(u => {
-                        let fieldArg = f === 'std' ? 'rate' : f; 
-                        window.handleOtaEdit(dStr, u.rateId, u.pCat, u.rType, u.rVal, fieldArg, u.val);
-                    });
-                }
             }
+
+            window.renderGrid();
+            window.triggerAutoSave();
+            
+            if(!isClear) {
+                document.querySelectorAll('#qb-grid-body input:not([type="date"]):not([disabled])').forEach(i => i.value = "");
+            }
+            
+            const count = Object.keys(rules).length;
+            const sInd = document.getElementById('save-indicator');
+            sInd.innerText = isClear ? 'OVERRIDES CLEARED' : `APPLIED TO ${((eU - sU) / 86400000) + 1} DAYS`; 
+            sInd.classList.replace('text-emerald-600', 'text-indigo-600'); sInd.style.opacity = '1'; setTimeout(() => { sInd.style.opacity = '0'; }, 3000);
         };
 
         const getViewMultiplier = () => { return currentPlatformView === 'hw' ? 1.25 : 1.0; };
@@ -884,40 +947,56 @@
             const isDirtyDate = window.dirtyDates.has(dateStr);
             const isSyncedDate = window.syncedDates.has(dateStr);
 
-            const applyState = (el) => {
+            const applyState = (el, isBool = false) => {
                 if(!el) return;
-                if (isDirtyDate) { el.classList.add('is-dirty'); el.classList.remove('is-synced'); }
-                else if (isSyncedDate) { el.classList.add('is-synced'); el.classList.remove('is-dirty'); }
-                else { el.classList.remove('is-dirty', 'is-synced'); }
+                
+                let target = isBool ? el.closest('td') : el;
+                if(!target) return;
+                
+                if (isDirtyDate) { 
+                    if(isBool) target.classList.add('override-cell-highlight'); else target.classList.add('is-dirty'); 
+                    target.classList.remove('is-synced'); 
+                }
+                else if (isSyncedDate) { 
+                    target.classList.add('is-synced'); 
+                    if(isBool) target.classList.remove('override-cell-highlight'); else target.classList.remove('is-dirty'); 
+                }
+                else { 
+                    target.classList.remove('is-dirty', 'is-synced', 'override-cell-highlight'); 
+                }
+            };
+
+            const formatDisplay = (val) => {
+                if (val === "" || val === undefined || isNaN(val)) return "";
+                let n = Number(val);
+                return Number.isInteger(n) ? n : n.toFixed(2);
             };
 
             if (room !== 'GLOBAL') {
-                // Rates
                 if (window.activeMetrics.has('rates')) {
                     const elStd = document.getElementById(`${bId}_std`);
                     if (elStd) {
-                        elStd.value = data.std !== "" && !isNaN(data.std) ? Math.round(data.std * mult) : "";
+                        elStd.value = data.std !== "" && !isNaN(data.std) ? formatDisplay(data.std * mult) : "";
                         if (data.isOverride.std) elStd.classList.add('is-override'); else elStd.classList.remove('is-override');
                         applyState(elStd);
                     }
                     const elFmp = document.getElementById(`${bId}_fmp`);
                     if (elFmp && hasEvents) {
-                        elFmp.value = data.fmp !== "" && !isNaN(data.fmp) ? Math.round(data.fmp * mult) : "";
+                        elFmp.value = data.fmp !== "" && !isNaN(data.fmp) ? formatDisplay(data.fmp * mult) : "";
                         if (data.isOverride.fmp) elFmp.classList.add('is-override'); else elFmp.classList.remove('is-override');
                         applyState(elFmp);
                     }
                 }
                 
-                // Room Level Restrictions
-                ['min', 'max', 'cta', 'ctd', 'stopSell'].forEach(fKey => {
-                    let mapKey = fKey === 'stopSell' ? 'stop' : fKey;
+                ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(fKey => {
+                    let mapKey = fKey === 'stopSell' ? 'stop' : (fKey === 'min_arr' ? 'min' : fKey);
                     if (window.activeMetrics.has(mapKey)) {
                         const el = document.getElementById(`${bId}_${fKey}`);
                         if (el) {
                             if (fKey === 'cta' || fKey === 'ctd' || fKey === 'stopSell') {
                                 el.checked = data[fKey] === true;
-                                if (data.isOverride[fKey]) el.classList.add('!border-amber-500', '!bg-amber-100'); else el.classList.remove('!border-amber-500', '!bg-amber-100');
-                                const td = el.closest('td'); if (td) applyState(td);
+                                const td = el.closest('td'); if (td) applyState(el, true);
+                                if (data.isOverride[fKey]) td.classList.add('!border', '!border-orange-500'); else td.classList.remove('!border', '!border-orange-500');
                             } else {
                                 el.value = data[fKey] !== undefined ? data[fKey] : "";
                                 if (data.isOverride[fKey]) el.classList.add('is-override'); else el.classList.remove('is-override');
@@ -927,7 +1006,6 @@
                     }
                 });
 
-                // OTA Rates & Restrictions
                 if (window.channexRateMap) {
                     const mappedRates = window.channexRateMap.filter(m => categoryResolver(m.pmsCategory) === room);
                     mappedRates.forEach(rate => {
@@ -938,7 +1016,7 @@
                             if (otaInput) {
                                 const otaOverride = masterPricing.timeline[dateStr]?.otaOverrides?.[rate.ratePlanId];
                                 if (otaOverride !== undefined) {
-                                    otaInput.value = otaOverride;
+                                    otaInput.value = formatDisplay(otaOverride);
                                     otaInput.classList.add('!text-pink-600', 'font-black');
                                     otaInput.classList.remove('!bg-pink-100', '!text-pink-700');
                                 } else {
@@ -949,7 +1027,7 @@
                                     }
                                     if (activePrice !== "" && activePrice !== undefined) {
                                         let modified = applyMath(activePrice, rate.ruleType || "=", rate.ruleVal || 0);
-                                        otaInput.value = Math.round(modified * mult);
+                                        otaInput.value = formatDisplay(modified * mult);
                                         otaInput.classList.remove('!text-pink-600', 'font-black', '!bg-pink-100', '!text-pink-700');
                                     } else {
                                         otaInput.value = "";
@@ -960,16 +1038,16 @@
                             }
                         }
                         
-                        ['min', 'max', 'cta', 'ctd', 'stopSell'].forEach(fKey => {
-                            let mapKey = fKey === 'stopSell' ? 'stop' : fKey;
+                        ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(fKey => {
+                            let mapKey = fKey === 'stopSell' ? 'stop' : (fKey === 'min_arr' ? 'min' : fKey);
                             if (window.activeMetrics.has(mapKey)) {
                                 const rEl = document.getElementById(`${otaId}_${fKey}`);
                                 if (rEl) {
                                     const val = masterPricing.timeline[dateStr]?.otaOverrides?.[`${rate.ratePlanId}_${fKey}`];
                                     if (fKey === 'cta' || fKey === 'ctd' || fKey === 'stopSell') {
                                         rEl.checked = val === true;
-                                        if (val !== undefined) rEl.classList.add('!border-pink-500', '!bg-pink-100'); else rEl.classList.remove('!border-pink-500', '!bg-pink-100');
-                                        const td = rEl.closest('td'); if (td) applyState(td);
+                                        const td = rEl.closest('td'); if (td) applyState(rEl, true);
+                                        if (val !== undefined) td.classList.add('!border', '!border-orange-500'); else td.classList.remove('!border', '!border-orange-500');
                                     } else {
                                         rEl.value = val !== undefined ? val : "";
                                         if (val !== undefined) rEl.classList.add('!text-pink-600', 'font-black'); else rEl.classList.remove('!text-pink-600', 'font-black');
@@ -981,7 +1059,6 @@
                     });
                 }
             } else {
-                // GLOBAL PROPERTY RESTRICTIONS
                 ['min', 'max', 'min_arr'].forEach(k => {
                     let mapKey = k === 'min_arr' ? 'min' : k;
                     if (window.activeMetrics.has(mapKey)) {
@@ -1005,12 +1082,77 @@
                         const elBool = document.getElementById(`${bId}_${k}`);
                         if (elBool) {
                             elBool.checked = data[k] === true;
-                            if (data.isOverride[k]) elBool.classList.add('!border-amber-500', '!bg-amber-100'); else elBool.classList.remove('!border-amber-500', '!bg-amber-100');
-                            const td = elBool.closest('td'); if (td) applyState(td);
+                            const td = elBool.closest('td'); if (td) applyState(elBool, true);
+                            if (data.isOverride[k]) td.classList.add('!border', '!border-orange-500'); else td.classList.remove('!border', '!border-orange-500');
                         }
                     }
                 });
             }
+        };
+
+        const calculateLiveInventory = () => {
+            liveInventory = {}; 
+            const startStr = document.getElementById('tape-start').value;
+            if(!startStr) return;
+            
+            const today = new Date(startStr + "T12:00:00Z");
+            const dList = [];
+            
+            for(let i=0; i<daysToRender; i++) {
+                let d = new Date(today); d.setUTCDate(d.getUTCDate() + i);
+                let dStr = getLocalYMD(d);
+                dList.push(dStr);
+                
+                liveInventory[dStr] = {};
+                roomTypes.forEach(t => liveInventory[dStr][t] = totalRoomsByType[t] || 0);
+            }
+
+            const activeStaff = staff.filter(s => s.property === currentPropertyId && !['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(s.status));
+            
+            activeStaff.forEach(s => {
+                if(!s.checkIn || !s.checkOut) return;
+                
+                const rList = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
+                const isUnassigned = rList.length === 0 || rList[0] === "";
+                if (s.status === 'special' && isUnassigned) return;
+
+                const inMs = parseYMD(s.checkIn), outMs = parseYMD(s.checkOut);
+                const typesToDeduct = [];
+                
+                if (!isUnassigned) {
+                    rList.forEach(rid => {
+                        const uiId = dbToUiRoom(rid);
+                        const roomDef = hotelRooms.find(hr => hr.id === uiId);
+                        if(roomDef) typesToDeduct.push(roomDef.type);
+                    });
+                } else if (s.bookedType) {
+                    let bt = s.bookedType.toUpperCase();
+                    let inferred = null;
+                    if (bt.includes("DORMITORY") || bt.includes("4-BED") || bt.includes("DORM")) inferred = "Standard Quad Dorm"; 
+                    else if (bt.includes("TRIPLE")) inferred = "Partial Oceanview Triple Room"; 
+                    else if (bt.includes("SIDE SEA VIEW") || (bt.includes("PARTIAL") && !bt.includes("TWIN") && !bt.includes("TRIPLE"))) inferred = "Partial Oceanview King Room"; 
+                    else if (bt.includes("DELUXE TWIN") || (bt.includes("OCEANVIEW") && bt.includes("TWIN"))) inferred = "Oceanview Twin Room"; 
+                    else if (bt.includes("DELUXE DOUBLE") || (bt.includes("OCEANVIEW") && !bt.includes("TWIN"))) inferred = "Oceanview King Room"; 
+                    else if (bt.includes("GARDEN") && bt.includes("TWIN")) inferred = "Gardenview Twin Room"; 
+                    else if (bt.includes("GARDEN") && !bt.includes("TWIN")) inferred = "Gardenview King Room"; 
+                    else if (bt.includes("OCEANFRONT")) { inferred = bt.includes("TWIN") ? "Oceanfront Twin" : "Oceanfront King"; } 
+                    else if (bt.includes("BUNGALOW")) inferred = "BUNGALOWS";
+                    
+                    if(inferred) {
+                        let dedCount = inferred.includes('Dorm') ? (s.pax || 1) : Math.max(1, rList.length);
+                        for(let k=0; k < dedCount; k++) typesToDeduct.push(inferred);
+                    }
+                }
+
+                dList.forEach(dStr => {
+                    const dMs = parseYMD(dStr);
+                    if (dMs >= inMs && dMs < outMs) {
+                        typesToDeduct.forEach(t => {
+                            if(liveInventory[dStr] && liveInventory[dStr][t] !== undefined && liveInventory[dStr][t] > 0) liveInventory[dStr][t]--;
+                        });
+                    }
+                });
+            });
         };
 
         window.renderGrid = () => {
@@ -1053,20 +1195,22 @@
                 const groupClass = idx % 2 === 0 ? 'room-group-even' : 'room-group-odd';
                 let displayName = displayAbbrev[room] || room;
                 
-                // Calculate Rowspan dynamically based on active filters
                 let roomRows = [];
                 if (window.activeMetrics.has('avail')) roomRows.push({ id: 'avail', label: 'AVAIL', isBool: false, isAvail: true });
                 if (window.activeMetrics.has('rates')) {
                     roomRows.push({ id: 'std', label: 'STD', isBool: false });
                     if (hasEvents) roomRows.push({ id: 'fmp', label: 'EVT', isBool: false, isEvt: true });
                 }
-                if (window.activeMetrics.has('min')) roomRows.push({ id: 'min', label: 'MIN', isBool: false });
-                if (window.activeMetrics.has('max')) roomRows.push({ id: 'max', label: 'MAX', isBool: false });
+                if (window.activeMetrics.has('min')) {
+                    roomRows.push({ id: 'min', label: 'MIN NTS', isBool: false });
+                    roomRows.push({ id: 'min_arr', label: 'MIN ARR', isBool: false });
+                }
+                if (window.activeMetrics.has('max')) roomRows.push({ id: 'max', label: 'MAX NTS', isBool: false });
                 if (window.activeMetrics.has('cta')) roomRows.push({ id: 'cta', label: 'CTA', isBool: true });
                 if (window.activeMetrics.has('ctd')) roomRows.push({ id: 'ctd', label: 'CTD', isBool: true });
                 if (window.activeMetrics.has('stop')) roomRows.push({ id: 'stopSell', label: 'STOP', isBool: true });
 
-                if (roomRows.length === 0) return; // Skip room if no metrics selected
+                if (roomRows.length === 0) return;
 
                 let totalRoomSpan = roomRows.length;
 
@@ -1084,16 +1228,17 @@
                     let isLastInRoom = rIdx === totalRoomSpan - 1;
                     let borderClass = isLastInRoom ? 'border-b-2 border-slate-400' : 'border-b border-slate-200';
                     let labelColor = rDef.isEvt ? 'text-pink-600' : (rDef.isAvail ? 'text-slate-500 font-black' : 'text-slate-500');
+                    let labelHtml = rDef.label.replace(' ', '<br>');
 
                     tr += `<td class="frozen-col-2 !p-0 z-20 align-middle ${borderClass} ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                        <span class="text-[9px] font-black tracking-tighter ${labelColor}">${rDef.label}</span>
+                        <span class="text-[9px] font-black tracking-tighter leading-none block ${labelColor}">${labelHtml}</span>
                     </td>`;
 
                     for(let i=0; i<daysToRender; i++) {
                         const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
                         const dateStr = getLocalYMD(cur);
                         const bId = `inp_${dateStr}_${room.replace(/\s+/g, '')}`;
-                        let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? 'is-dirty' : (isSynced ? 'is-synced' : '');
+                        let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? (rDef.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
                         
                         let minDiff = getNearestEvent(parseYMD(dateStr));
                         let evtColor = '';
@@ -1104,33 +1249,42 @@
                         
                         if (rDef.isAvail) {
                             let live = liveInventory[dateStr] && liveInventory[dateStr][room] !== undefined ? liveInventory[dateStr][room] : 0;
-                            let availColor = live === 0 ? 'text-rose-600 font-black' : (live <= 2 ? 'text-amber-600 font-black' : 'text-emerald-700 font-black');
-                            tr += `<td class="${evtColor} ${borderClass} bg-slate-50/80"><span class="text-[13px] ${availColor}">${live}</span></td>`;
+                            let otaAvail = masterPricing.timeline[dateStr]?.otaOverrides?.[`${room}_avail`];
+                            let displayVal = otaAvail !== undefined ? otaAvail : live;
+                            let availColor = displayVal == 0 ? 'text-rose-600 font-black' : (displayVal <= 2 ? 'text-amber-600 font-black' : 'text-emerald-700 font-black');
+                            let overrideClass = otaAvail !== undefined ? '!bg-amber-100' : 'bg-slate-50/80';
+                            tr += `<td class="${evtColor} ${borderClass} ${overrideClass} p-0">
+                                <input type="number" step="any" class="w-full h-full text-center outline-none focus:bg-white text-[14px] ${availColor} ${stateClass} font-black bg-transparent" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
+                            </td>`;
                         } else if (rDef.isBool) {
                             tr += `<td class="${evtColor} ${borderClass} ${stateClass}"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}_${rDef.id}" class="grid-toggle" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.checked)"></div></td>`;
                         } else {
-                            tr += `<td class="${evtColor} ${borderClass}"><input type="number" id="${bId}_${rDef.id}" class="w-full text-center outline-none focus:bg-indigo-50 font-bold ${rDef.isEvt ? '!text-pink-600' : '!text-slate-900'} bg-transparent ${stateClass}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.value)"></td>`;
+                            tr += `<td class="${evtColor} ${borderClass}"><input type="number" step="any" id="${bId}_${rDef.id}" class="w-full text-center outline-none focus:bg-indigo-50 font-bold ${rDef.isEvt ? '!text-pink-600' : '!text-slate-900'} bg-transparent ${stateClass}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.value)"></td>`;
                         }
                     }
                     tr += `</tr>`;
                     allRowsHtml += tr;
                 });
 
-                // OTA RATES & RESTRICTIONS SUB-ROWS
                 if (window.channexRateMap) {
                     const mappedRates = window.channexRateMap.filter(m => categoryResolver(m.pmsCategory) === room);
                     mappedRates.forEach(rate => {
                         let otaRows = [];
                         if (window.activeMetrics.has('rates')) otaRows.push({ id: 'ota', label: 'RATE', isBool: false, isRate: true });
-                        if (window.activeMetrics.has('min')) otaRows.push({ id: 'min', label: 'MIN', isBool: false });
-                        if (window.activeMetrics.has('max')) otaRows.push({ id: 'max', label: 'MAX', isBool: false });
+                        if (window.activeMetrics.has('min')) {
+                            otaRows.push({ id: 'min', label: 'MIN NTS', isBool: false });
+                            otaRows.push({ id: 'min_arr', label: 'MIN ARR', isBool: false });
+                        }
+                        if (window.activeMetrics.has('max')) otaRows.push({ id: 'max', label: 'MAX NTS', isBool: false });
                         if (window.activeMetrics.has('cta')) otaRows.push({ id: 'cta', label: 'CTA', isBool: true });
                         if (window.activeMetrics.has('ctd')) otaRows.push({ id: 'ctd', label: 'CTD', isBool: true });
                         if (window.activeMetrics.has('stop')) otaRows.push({ id: 'stopSell', label: 'STOP', isBool: true });
 
                         if (otaRows.length === 0) return;
 
-                        let ruleText = rate.ruleType === "=" ? "BASE" : `${rate.ruleType}${rate.ruleVal}`;
+                        let rType = rate.ruleType || "=";
+                        let rVal = rate.ruleVal !== undefined ? rate.ruleVal : 0;
+                        let ruleText = rType === "=" ? "BASE" : `${rType}${rVal}`;
                         let rateRowspan = otaRows.length;
 
                         otaRows.forEach((oDef, oIdx) => {
@@ -1147,25 +1301,26 @@
                             
                             let isLastOta = oIdx === rateRowspan - 1;
                             let bClass = isLastOta ? 'border-b-2 border-slate-400' : 'border-b border-indigo-200';
+                            let labelHtml = oDef.label.replace(' ', '<br>');
 
                             trOta += `<td class="frozen-col-2 !p-0 z-20 align-middle ${bClass} border-r-2 border-slate-400 bg-indigo-50/50">
-                                <span class="text-[8px] font-black tracking-tighter text-indigo-800 block w-full text-center leading-tight">${oDef.label}</span>
-                                ${oDef.isRate ? `<span class="text-[7px] font-bold text-slate-500 tracking-tighter block w-full text-center">${ruleText}</span>` : ''}
+                                <span class="text-[8px] font-black tracking-tighter text-indigo-800 block w-full text-center leading-tight">${labelHtml}</span>
+                                ${oDef.isRate ? `<span class="text-[7px] font-bold text-slate-500 tracking-tighter block w-full text-center">${ruleText === 'BASE' ? 'BASE' : (ruleText)}</span>` : ''}
                             </td>`;
 
                             for(let i=0; i<daysToRender; i++) {
                                 const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
                                 const dateStr = getLocalYMD(cur);
                                 const bId = `inp_${dateStr}_${rate.ratePlanId}`;
-                                let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? 'is-dirty' : (isSynced ? 'is-synced' : '');
+                                let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? (oDef.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
                                 let evtColor = ''; if (hasEvents) { let minDiff = getNearestEvent(parseYMD(dateStr)); if (minDiff === 0) evtColor = 'bg-amber-100/50'; else if (Math.abs(minDiff) <= 2) evtColor = 'bg-yellow-50/50'; }
 
                                 if (oDef.isBool) {
                                     trOta += `<td class="${evtColor} ${bClass} ${stateClass}"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}_${oDef.id}" class="grid-toggle" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.checked)"></div></td>`;
                                 } else if (oDef.isRate) {
-                                    trOta += `<td class="${evtColor} ${bClass}"><input type="number" id="${bId}_ota" class="w-full text-center outline-none focus:bg-pink-50 font-bold !text-indigo-800 bg-transparent text-[13px] ${stateClass}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'rate', this.value)"></td>`;
+                                    trOta += `<td class="${evtColor} ${bClass}"><input type="number" step="any" id="${bId}_ota" class="w-full text-center outline-none focus:bg-pink-50 font-bold !text-indigo-800 bg-transparent text-[13px] ${stateClass}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'rate', this.value)"></td>`;
                                 } else {
-                                    trOta += `<td class="${evtColor} ${bClass}"><input type="number" id="${bId}_${oDef.id}" class="w-full text-center outline-none focus:bg-pink-50 font-bold !text-indigo-600 bg-transparent ${stateClass} !text-[12px]" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.value)"></td>`;
+                                    trOta += `<td class="${evtColor} ${bClass}"><input type="number" step="any" id="${bId}_${oDef.id}" class="w-full text-center outline-none focus:bg-pink-50 font-bold !text-indigo-600 bg-transparent ${stateClass} !text-[12px]" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.value)"></td>`;
                                 }
                             }
                             trOta += `</tr>`;
@@ -1191,10 +1346,8 @@
                     let tr = `<tr class="bg-white border-b border-slate-200 text-slate-700">`;
                     
                     if (rIndex === 0) {
-                        tr += `<td rowspan="${globalRows.length}" class="frozen-col !p-0 z-20 bg-slate-800 border-r border-slate-900 border-t-4 border-slate-900 align-middle">
-                            <div class="w-[140px] flex items-center px-2 h-full text-[11px] font-black tracking-widest text-white text-left overflow-hidden uppercase">
-                                Global Property Constraints
-                            </div>
+                        tr += `<td rowspan="${globalRows.length}" class="frozen-col z-20 bg-slate-800 border-r border-slate-900 border-t-4 border-slate-900 align-middle text-center p-2 min-h-[30px]">
+                            <span class="text-[11px] font-black tracking-widest text-white uppercase break-words whitespace-normal leading-tight block w-full text-center">GLOBAL (ALL)</span>
                         </td>`;
                     }
                     
@@ -1207,7 +1360,7 @@
                         const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
                         const dateStr = getLocalYMD(cur);
                         const bId = `inp_${dateStr}_GLOBAL_${rc.id}`;
-                        let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? 'is-dirty' : (isSynced ? 'is-synced' : '');
+                        let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? (rc.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
                         
                         let minDiff = getNearestEvent(parseYMD(dateStr));
                         let evtColor = 'bg-white'; if (hasEvents) evtColor = minDiff === 0 ? 'bg-amber-50' : (Math.abs(minDiff) <= 2 ? 'bg-amber-50/50' : 'bg-white');
@@ -1216,7 +1369,7 @@
                         if (rc.isBool) {
                             tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300 ${stateClass}"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}" class="grid-toggle" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.checked)"></div></td>`;
                         } else {
-                            tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300"><input type="number" id="${bId}" class="w-full text-center outline-none focus:bg-indigo-50 font-bold !text-slate-700 bg-transparent !text-[14px] ${stateClass}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.value)"></td>`;
+                            tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300"><input type="number" step="any" id="${bId}" class="w-full text-center outline-none focus:bg-indigo-50 font-bold !text-slate-700 bg-transparent !text-[14px] ${stateClass}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.value)"></td>`;
                         }
                     }
                     tr += `</tr>`;
@@ -1276,9 +1429,47 @@
             updateDOMCell(dateStr, 'GLOBAL');
         };
 
+        window.handleAvailEdit = (dateStr, room, value) => {
+            window.dirtyDates.add(dateStr);
+            window.syncedDates.delete(dateStr);
+            
+            window.dirtyFields = window.dirtyFields || {};
+            window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
+            
+            if (window.channexRateMap) {
+                let affectedRates = window.channexRateMap.filter(m => categoryResolver(m.pmsCategory) === room);
+                affectedRates.forEach(rate => {
+                    window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
+                    window.dirtyFields[dateStr][rate.ratePlanId].add('avail');
+                });
+            }
+
+            masterPricing.timeline[dateStr] = masterPricing.timeline[dateStr] || {};
+            masterPricing.timeline[dateStr].otaOverrides = masterPricing.timeline[dateStr].otaOverrides || {};
+            
+            if (value === "") delete masterPricing.timeline[dateStr].otaOverrides[`${room}_avail`];
+            else masterPricing.timeline[dateStr].otaOverrides[`${room}_avail`] = parseInt(value);
+            
+            updateDOMCell(dateStr, room);
+            window.triggerAutoSave();
+        };
+
         window.handleCellEdit = (dateStr, room, field, value) => {
             window.dirtyDates.add(dateStr);
             window.syncedDates.delete(dateStr);
+            
+            window.dirtyFields = window.dirtyFields || {};
+            window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
+            
+            if (window.channexRateMap) {
+                let affectedRates = room === 'GLOBAL' ? window.channexRateMap : window.channexRateMap.filter(m => categoryResolver(m.pmsCategory) === room);
+                affectedRates.forEach(rate => {
+                    window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
+                    let fieldMap = (field === 'std' || field === 'fmp') ? 'rate' : (field === 'min_arr' ? 'min' : field);
+                    window.dirtyFields[dateStr][rate.ratePlanId].add(fieldMap);
+                });
+            }
+
             masterPricing.timeline[dateStr] = masterPricing.timeline[dateStr] || {};
             masterPricing.timeline[dateStr][room] = masterPricing.timeline[dateStr][room] || { isOverride: {} };
 
@@ -1290,7 +1481,7 @@
             } else {
                 data.isOverride[field] = true;
                 const mult = getViewMultiplier();
-                if(field === 'std' || field === 'fmp') data[field] = Math.round(parseFloat(value) / mult);
+                if(field === 'std' || field === 'fmp') data[field] = Number((parseFloat(value) / mult).toFixed(2));
                 else if (field === 'cta' || field === 'ctd' || field === 'stopSell') data[field] = value;
                 else data[field] = parseInt(value);
             }
@@ -1320,6 +1511,13 @@
         window.handleOtaEdit = (dateStr, ratePlanId, parentRoom, ruleType, ruleVal, field, value) => {
             window.dirtyDates.add(dateStr);
             window.syncedDates.delete(dateStr);
+            
+            window.dirtyFields = window.dirtyFields || {};
+            window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
+            window.dirtyFields[dateStr][ratePlanId] = window.dirtyFields[dateStr][ratePlanId] || new Set();
+            let fieldMap = field === 'min_arr' ? 'min' : field;
+            window.dirtyFields[dateStr][ratePlanId].add(fieldMap);
+            
             masterPricing.timeline[dateStr] = masterPricing.timeline[dateStr] || {};
             masterPricing.timeline[dateStr].otaOverrides = masterPricing.timeline[dateStr].otaOverrides || {};
             
@@ -1330,7 +1528,7 @@
             } else {
                 if (field === 'rate') {
                     const mult = getViewMultiplier();
-                    const numVal = Math.round(parseFloat(value) / mult);
+                    const numVal = Number((parseFloat(value) / mult).toFixed(2));
                     
                     const roomData = masterPricing.timeline[dateStr][parentRoom] || {};
                     let activePrice = roomData.std;
@@ -1351,75 +1549,8 @@
                 }
             }
             
-            window.renderGrid(); 
+            updateDOMCell(dateStr, parentRoom); 
             window.triggerAutoSave();
-        };
-
-        let liveInventory = {}; 
-        let viewDates = [];
-
-        const calculateLiveInventory = () => {
-            liveInventory = {}; viewDates = [];
-            const startStr = document.getElementById('tape-start').value;
-            if(!startStr) return;
-            
-            const today = new Date(startStr + "T12:00:00Z");
-            
-            for(let i=0; i<daysToRender; i++) {
-                let d = new Date(today); d.setUTCDate(d.getUTCDate() + i);
-                let dStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-                viewDates.push(dStr);
-                
-                liveInventory[dStr] = {};
-                roomTypes.forEach(t => liveInventory[dStr][t] = totalRoomsByType[t] || 0);
-            }
-
-            const activeStaff = staff.filter(s => s.property === currentPropertyId && s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed' && s.status !== 'charged');
-            
-            activeStaff.forEach(s => {
-                if(!s.checkIn || !s.checkOut) return;
-                
-                const rList = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
-                const isUnassigned = rList.length === 0 || rList[0] === "";
-                if (s.status === 'special' && isUnassigned) return;
-
-                const inMs = parseYMD(s.checkIn), outMs = parseYMD(s.checkOut);
-                const typesToDeduct = [];
-                
-                if (!isUnassigned) {
-                    rList.forEach(rid => {
-                        const uiId = dbToUiRoom(rid);
-                        const roomDef = hotelRooms.find(hr => hr.id === uiId);
-                        if(roomDef) typesToDeduct.push(roomDef.type);
-                    });
-                } else if (s.bookedType) {
-                    let bt = s.bookedType.toUpperCase();
-                    let inferred = null;
-                    if (bt.includes("DORMITORY") || bt.includes("4-BED") || bt.includes("DORM")) inferred = "Standard Quad Dorm"; 
-                    else if (bt.includes("TRIPLE")) inferred = "Partial Oceanview Triple Room"; 
-                    else if (bt.includes("SIDE SEA VIEW") || (bt.includes("PARTIAL") && !bt.includes("TWIN") && !bt.includes("TRIPLE"))) inferred = "Partial Oceanview King Room"; 
-                    else if (bt.includes("DELUXE TWIN") || (bt.includes("OCEANVIEW") && bt.includes("TWIN"))) inferred = "Oceanview Twin Room"; 
-                    else if (bt.includes("DELUXE DOUBLE") || (bt.includes("OCEANVIEW") && !bt.includes("TWIN"))) inferred = "Oceanview King Room"; 
-                    else if (bt.includes("GARDEN") && bt.includes("TWIN")) inferred = "Gardenview Twin Room"; 
-                    else if (bt.includes("GARDEN") && !bt.includes("TWIN")) inferred = "Gardenview King Room"; 
-                    else if (bt.includes("OCEANFRONT")) { inferred = bt.includes("TWIN") ? "Oceanfront Twin" : "Oceanfront King"; } 
-                    else if (bt.includes("BUNGALOW")) inferred = "BUNGALOWS";
-                    
-                    if(inferred) {
-                        let dedCount = inferred.includes('Dorm') ? (s.pax || 1) : Math.max(1, rList.length);
-                        for(let k=0; k < dedCount; k++) typesToDeduct.push(inferred);
-                    }
-                }
-
-                viewDates.forEach(dStr => {
-                    const dMs = parseYMD(dStr);
-                    if (dMs >= inMs && dMs < outMs) {
-                        typesToDeduct.forEach(t => {
-                            if(liveInventory[dStr] && liveInventory[dStr][t] !== undefined && liveInventory[dStr][t] > 0) liveInventory[dStr][t]--;
-                        });
-                    }
-                });
-            });
         };
 
         window.nukeDatabase = () => {
@@ -1466,7 +1597,7 @@
                 
                 if (hasEvents) {
                     if (Math.abs(minDiff) <= 6 && minDiff !== 0) { 
-                        fmpP = p_pkg; fmpD = dpkg; 
+                        fmpP = p_pkg; fmpD = d_pkg; 
                     } else if (Math.abs(minDiff) > 6) {
                         fmpP = ""; fmpD = "";
                     }
@@ -1770,8 +1901,11 @@
 
                 document.getElementById('cert-twin-room').innerHTML = roomOpts;
                 document.getElementById('cert-double-room').innerHTML = roomOpts;
-                document.getElementById('cert-bar-rate').innerHTML = rateOpts;
-                document.getElementById('cert-bb-rate').innerHTML = rateOpts;
+                
+                document.getElementById('cert-twin-bar').innerHTML = rateOpts;
+                document.getElementById('cert-twin-bb').innerHTML = rateOpts;
+                document.getElementById('cert-dbl-bar').innerHTML = rateOpts;
+                document.getElementById('cert-dbl-bb').innerHTML = rateOpts;
                 
                 setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'end' }), 100);
             }
@@ -1783,41 +1917,50 @@
             const propId = window.channexConfig.propId;
             const twin = document.getElementById('cert-twin-room').value;
             const dbl = document.getElementById('cert-double-room').value;
-            const bar = document.getElementById('cert-bar-rate').value;
-            const bb = document.getElementById('cert-bb-rate').value;
+            
+            const twinBar = document.getElementById('cert-twin-bar').value;
+            const twinBb = document.getElementById('cert-twin-bb').value;
+            const dblBar = document.getElementById('cert-dbl-bar').value;
+            const dblBb = document.getElementById('cert-dbl-bb').value;
 
-            if(!twin || !dbl || !bar || !bb) return window.customAlert("Please select all 4 dropdowns to assign test IDs.");
+            if(!twin || !dbl || !twinBar || !twinBb || !dblBar || !dblBb) return window.customAlert("Please map all 6 dropdowns to assign test IDs.");
 
             document.getElementById('loader').classList.add('active');
-            document.getElementById('sync-status').innerText = 'PUSHING CERTIFICATION TEST...';
+            document.getElementById('sync-status').innerText = `RUNNING TEST: ${testGroup.toUpperCase()}...`;
 
             let url = "https://staging.channex.io/api/v1/restrictions";
             let payload = [];
 
             if (testGroup === 'rates') {
                 payload = [
-                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-21", date_to: "2026-11-21", rate: 33300 },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-22", date_to: "2026-11-22", rate: 33300 },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-11-25", date_to: "2026-11-25", rate: 44400 },
-                    { property_id: propId, rate_plan_id: bb, room_type_id: dbl, date_from: "2026-11-29", date_to: "2026-11-29", rate: 45623 },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-01", date_to: "2026-11-10", rate: 24100 },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-11-10", date_to: "2026-11-16", rate: 31266 },
-                    { property_id: propId, rate_plan_id: bb, room_type_id: dbl, date_from: "2026-11-01", date_to: "2026-11-20", rate: 11100 }
+                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-22", date_to: "2026-11-22", rate: 33300 },
+                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-21", date_to: "2026-11-21", rate: 33300 },
+                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-11-25", date_to: "2026-11-25", rate: 44400 },
+                    { property_id: propId, rate_plan_id: dblBb, date_from: "2026-11-29", date_to: "2026-11-29", rate: 45623 },
+                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-01", date_to: "2026-11-10", rate: 24100 },
+                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-11-10", date_to: "2026-11-16", rate: 31266 },
+                    { property_id: propId, rate_plan_id: dblBb, date_from: "2026-11-01", date_to: "2026-11-20", rate: 11100 }
+                ];
+            } else if (testGroup === 'min_stay') {
+                payload = [
+                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-23", date_to: "2026-11-23", min_stay_arrival: 3, min_stay_through: 3 },
+                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-11-25", date_to: "2026-11-25", min_stay_arrival: 2, min_stay_through: 2 },
+                    { property_id: propId, rate_plan_id: dblBb, date_from: "2026-11-15", date_to: "2026-11-15", min_stay_arrival: 5, min_stay_through: 5 }
+                ];
+            } else if (testGroup === 'stop_sell') {
+                payload = [
+                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-14", date_to: "2026-11-14", stop_sell: true },
+                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-11-16", date_to: "2026-11-16", stop_sell: true },
+                    { property_id: propId, rate_plan_id: dblBb, date_from: "2026-11-20", date_to: "2026-11-20", stop_sell: true }
                 ];
             } else if (testGroup === 'restrictions') {
                 payload = [
-                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-23", date_to: "2026-11-23", min_stay_arrival: 3, min_stay_through: 3 },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-11-25", date_to: "2026-11-25", min_stay_arrival: 2, min_stay_through: 2 },
-                    { property_id: propId, rate_plan_id: bb, room_type_id: dbl, date_from: "2026-11-15", date_to: "2026-11-15", min_stay_arrival: 5, min_stay_through: 5 },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-14", date_to: "2026-11-14", stop_sell: true },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-11-16", date_to: "2026-11-16", stop_sell: true },
-                    { property_id: propId, rate_plan_id: bb, room_type_id: dbl, date_from: "2026-11-20", date_to: "2026-11-20", stop_sell: true },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-11-01", date_to: "2026-11-10", closed_to_arrival: true, closed_to_departure: false, max_stay: 4, min_stay_arrival: 1, min_stay_through: 1 },
-                    { property_id: propId, rate_plan_id: bb, room_type_id: twin, date_from: "2026-11-12", date_to: "2026-11-16", closed_to_arrival: false, closed_to_departure: true, min_stay_arrival: 6, min_stay_through: 6 },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-11-10", date_to: "2026-11-16", closed_to_arrival: true, min_stay_arrival: 2, min_stay_through: 2 },
-                    { property_id: propId, rate_plan_id: bb, room_type_id: dbl, date_from: "2026-11-01", date_to: "2026-11-20", min_stay_arrival: 10, min_stay_through: 10 },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: twin, date_from: "2026-12-01", date_to: "2027-05-01", rate: 43200, closed_to_arrival: false, closed_to_departure: false, min_stay_arrival: 2, min_stay_through: 2 },
-                    { property_id: propId, rate_plan_id: bar, room_type_id: dbl, date_from: "2026-12-01", date_to: "2027-05-01", rate: 34200, min_stay_arrival: 3, min_stay_through: 3 }
+                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-01", date_to: "2026-11-10", closed_to_arrival: true, max_stay: 4, min_stay_arrival: 1, min_stay_through: 1 },
+                    { property_id: propId, rate_plan_id: twinBb, date_from: "2026-11-12", date_to: "2026-11-16", closed_to_departure: true, min_stay_arrival: 6, min_stay_through: 6 },
+                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-11-10", date_to: "2026-11-16", closed_to_arrival: true, min_stay_arrival: 2, min_stay_through: 2 },
+                    { property_id: propId, rate_plan_id: dblBb, date_from: "2026-11-01", date_to: "2026-11-20", min_stay_arrival: 10, min_stay_through: 10 },
+                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-12-01", date_to: "2027-05-01", min_stay_arrival: 2, min_stay_through: 2 },
+                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-12-01", date_to: "2027-05-01", min_stay_arrival: 3, min_stay_through: 3 }
                 ];
             } else if (testGroup === 'availability') {
                 url = "https://staging.channex.io/api/v1/availability";
@@ -1966,7 +2109,6 @@
                 
                 document.getElementById('sync-status').innerText = 'COMPRESSING PAYLOAD...';
 
-                // 1. COMPRESS INVENTORY (ROOM LEVEL)
                 rMap.forEach(roomRule => {
                     const pmsCat = categoryResolver(roomRule.pmsCategory);
                     const roomTypeId = roomRule.channexId;
@@ -1977,8 +2119,21 @@
                     for (let i = 0; i < datesToProcess.length; i++) {
                         const dStr = datesToProcess[i];
                         const dMs = parseYMD(dStr);
-                        const availToday = availMap[dStr][pmsCat] !== undefined ? availMap[dStr][pmsCat] : 0;
+                        const dayData = masterPricing.timeline[dStr] || {};
                         
+                        let availToday;
+                        if (mode === 'delta') {
+                            const otaAvail = dayData.otaOverrides?.[`${pmsCat}_avail`];
+                            if (otaAvail !== undefined) {
+                                availToday = parseInt(otaAvail);
+                            } else {
+                                availToday = null; 
+                            }
+                        } else {
+                            const otaAvail = dayData.otaOverrides?.[`${pmsCat}_avail`];
+                            availToday = otaAvail !== undefined ? parseInt(otaAvail) : (availMap[dStr][pmsCat] !== undefined ? availMap[dStr][pmsCat] : 0);
+                        }
+
                         let isAdjacent = false;
                         if (i > 0) {
                             const prevMs = parseYMD(datesToProcess[i-1]);
@@ -1986,13 +2141,10 @@
                         }
 
                         if (availToday !== currentAvail || (i > 0 && !isAdjacent)) {
-                            if (rangeStart !== null) {
-                                const prevDStr = datesToProcess[i-1];
+                            if (rangeStart !== null && currentAvail !== null) {
                                 availPayload.push({
-                                    property_id: propId,
-                                    room_type_id: roomTypeId,
-                                    date_from: rangeStart,
-                                    date_to: prevDStr,
+                                    property_id: propId, room_type_id: roomTypeId,
+                                    date_from: rangeStart, date_to: datesToProcess[i-1],
                                     availability: currentAvail
                                 });
                             }
@@ -2000,29 +2152,21 @@
                             currentAvail = availToday;
                         }
 
-                        if (i === datesToProcess.length - 1 && rangeStart !== null) {
+                        if (i === datesToProcess.length - 1 && rangeStart !== null && currentAvail !== null) {
                             availPayload.push({
-                                property_id: propId,
-                                room_type_id: roomTypeId,
-                                date_from: rangeStart,
-                                date_to: dStr,
+                                property_id: propId, room_type_id: roomTypeId,
+                                date_from: rangeStart, date_to: dStr,
                                 availability: currentAvail
                             });
                         }
                     }
                 });
 
-                // 2. COMPRESS RATES AND RESTRICTIONS (RATE PLAN LEVEL - WITH CASCADING)
                 rateMap.forEach(mapRule => {
-                    const pmsCat = categoryResolver(mapRule.pmsCategory);
                     const ratePlanId = mapRule.ratePlanId;
                     const ruleType = mapRule.ruleType || "=";
                     const ruleVal = mapRule.ruleVal !== undefined ? parseFloat(mapRule.ruleVal) : 0;
                     
-                    const roomMapRule = rMap.find(r => categoryResolver(r.pmsCategory) === pmsCat);
-                    if (!roomMapRule) return; 
-                    const roomTypeId = roomMapRule.channexId;
-
                     let rangeStart = null;
                     let currentObj = null;
 
@@ -2030,8 +2174,11 @@
                         const dStr = datesToProcess[i];
                         const dMs = parseYMD(dStr);
                         const dayData = masterPricing.timeline[dStr] || {};
+                        const pmsCat = categoryResolver(mapRule.pmsCategory);
                         const rData = dayData[pmsCat] || {};
                         const gData = dayData['GLOBAL'] || {};
+
+                        let dayPayload = {};
 
                         let activePrice = rData.std;
                         if (rData.fmp && rData.fmp !== "") {
@@ -2048,117 +2195,128 @@
                             modifiedPrice = applyMath(activePrice, ruleType, ruleVal);
                         }
                         
-                        if (modifiedPrice === null) {
-                            if (rangeStart !== null) {
-                                const prevDStr = datesToProcess[i-1];
-                                restPayload.push({
-                                    property_id: propId,
-                                    rate_plan_id: ratePlanId,
-                                    room_type_id: roomTypeId,
-                                    date_from: rangeStart,
-                                    date_to: prevDStr,
-                                    rate: currentObj.rate,
-                                    min_stay_arrival: currentObj.min_stay_arrival,
-                                    min_stay_through: currentObj.min_stay_through,
-                                    closed_to_arrival: currentObj.closed_to_arrival,
-                                    closed_to_departure: currentObj.closed_to_departure,
-                                    stop_sell: currentObj.stop_sell
-                                });
-                                rangeStart = null;
-                                currentObj = null;
-                            }
-                            continue; 
-                        }
-                        
-                        const channexMinorUnits = Math.round(modifiedPrice * 100);
+                        const fullState = {};
+                        if (modifiedPrice !== null) fullState.rate = Math.round(modifiedPrice * 100);
 
-                        // CASCADING RULE ENGINE (OTA -> ROOM -> GLOBAL -> FALLBACK)
                         const otaMin = dayData.otaOverrides?.[`${ratePlanId}_min`];
+                        const otaMinArr = dayData.otaOverrides?.[`${ratePlanId}_min_arr`];
+                        const otaMax = dayData.otaOverrides?.[`${ratePlanId}_max`];
                         const otaCta = dayData.otaOverrides?.[`${ratePlanId}_cta`];
                         const otaCtd = dayData.otaOverrides?.[`${ratePlanId}_ctd`];
                         const otaStop = dayData.otaOverrides?.[`${ratePlanId}_stopSell`];
 
-                        const minStay = otaMin !== undefined ? otaMin : (rData.min !== undefined && rData.min !== "" ? rData.min : (gData.min_arr || gData.min || 1));
-                        const cta = otaCta !== undefined ? otaCta : (rData.cta !== undefined ? rData.cta : (gData.cta === true));
-                        const ctd = otaCtd !== undefined ? otaCtd : (rData.ctd !== undefined ? rData.ctd : (gData.ctd === true));
-                        const stopSell = otaStop !== undefined ? otaStop : (rData.stopSell !== undefined ? rData.stopSell : (gData.stopSell === true));
+                        const minStayThrough = otaMin !== undefined ? otaMin : (rData.min !== undefined && rData.min !== "" ? rData.min : (gData.min !== undefined && gData.min !== "" ? gData.min : 1));
+                        const minStayArrival = otaMinArr !== undefined ? otaMinArr : (rData.min_arr !== undefined && rData.min_arr !== "" ? rData.min_arr : (gData.min_arr !== undefined && gData.min_arr !== "" ? gData.min_arr : minStayThrough));
+                        
+                        fullState.min_stay_arrival = parseInt(minStayArrival) || 1;
+                        fullState.min_stay_through = parseInt(minStayThrough) || 1;
+                        
+                        const maxStay = otaMax !== undefined ? otaMax : (rData.max !== undefined && rData.max !== "" ? rData.max : (gData.max || 365));
+                        fullState.max_stay = parseInt(maxStay) || 365;
 
-                        const objToCompare = { rate: channexMinorUnits, min_stay_arrival: minStay, min_stay_through: minStay, closed_to_arrival: cta, closed_to_departure: ctd, stop_sell: stopSell };
+                        fullState.closed_to_arrival = otaCta !== undefined ? otaCta : (rData.cta !== undefined ? rData.cta : (gData.cta === true));
+                        fullState.closed_to_departure = otaCtd !== undefined ? otaCtd : (rData.ctd !== undefined ? rData.ctd : (gData.ctd === true));
+                        fullState.stop_sell = otaStop !== undefined ? otaStop : (rData.stopSell !== undefined ? rData.stopSell : (gData.stopSell === true));
 
+                        if (mode === 'delta') {
+                            const dFields = window.dirtyFields?.[dStr]?.[ratePlanId];
+                            if (dFields) {
+                                if (dFields.has('rate') && fullState.rate !== undefined) dayPayload.rate = fullState.rate;
+                                if (dFields.has('min_stay_arrival') || dFields.has('min_stay_through') || dFields.has('min') || dFields.has('min_arr')) {
+                                    dayPayload.min_stay_arrival = fullState.min_stay_arrival;
+                                    dayPayload.min_stay_through = fullState.min_stay_through;
+                                }
+                                if (dFields.has('max') && fullState.max_stay !== undefined) dayPayload.max_stay = fullState.max_stay;
+                                if (dFields.has('cta') && fullState.closed_to_arrival !== undefined) dayPayload.closed_to_arrival = fullState.closed_to_arrival;
+                                if (dFields.has('ctd') && fullState.closed_to_departure !== undefined) dayPayload.closed_to_departure = fullState.closed_to_departure;
+                                if (dFields.has('stopSell') && fullState.stop_sell !== undefined) dayPayload.stop_sell = fullState.stop_sell;
+                            }
+                        } else {
+                            dayPayload = fullState;
+                        }
+
+                        if (Object.keys(dayPayload).length === 0) {
+                            if (rangeStart !== null) {
+                                restPayload.push({
+                                    property_id: propId, rate_plan_id: ratePlanId,
+                                    date_from: rangeStart, date_to: datesToProcess[i-1], ...currentObj
+                                });
+                                rangeStart = null; currentObj = null;
+                            }
+                            continue;
+                        }
+
+                        const isMatch = currentObj && JSON.stringify(currentObj) === JSON.stringify(dayPayload);
+                        
                         let isAdjacent = false;
                         if (i > 0) {
                             const prevMs = parseYMD(datesToProcess[i-1]);
                             if (dMs - prevMs === 86400000) isAdjacent = true;
                         }
 
-                        const isMatch = currentObj && 
-                            currentObj.rate === objToCompare.rate && 
-                            currentObj.min_stay_arrival === objToCompare.min_stay_arrival && 
-                            currentObj.closed_to_arrival === objToCompare.closed_to_arrival &&
-                            currentObj.closed_to_departure === objToCompare.closed_to_departure &&
-                            currentObj.stop_sell === objToCompare.stop_sell;
-
                         if (!isMatch || (i > 0 && !isAdjacent)) {
-                            if (rangeStart !== null) {
-                                const prevDStr = datesToProcess[i-1];
+                            if (rangeStart !== null && Object.keys(currentObj || {}).length > 0) {
                                 restPayload.push({
-                                    property_id: propId,
-                                    rate_plan_id: ratePlanId,
-                                    room_type_id: roomTypeId,
-                                    date_from: rangeStart,
-                                    date_to: prevDStr,
-                                    rate: currentObj.rate,
-                                    min_stay_arrival: currentObj.min_stay_arrival,
-                                    min_stay_through: currentObj.min_stay_through,
-                                    closed_to_arrival: currentObj.closed_to_arrival,
-                                    closed_to_departure: currentObj.closed_to_departure,
-                                    stop_sell: currentObj.stop_sell
+                                    property_id: propId, rate_plan_id: ratePlanId,
+                                    date_from: rangeStart, date_to: datesToProcess[i-1], ...currentObj
                                 });
                             }
-                            rangeStart = dStr;
-                            currentObj = objToCompare;
+                            rangeStart = Object.keys(dayPayload).length > 0 ? dStr : null;
+                            currentObj = Object.keys(dayPayload).length > 0 ? dayPayload : null;
                         }
 
-                        if (i === datesToProcess.length - 1 && rangeStart !== null) {
+                        if (i === datesToProcess.length - 1 && rangeStart !== null && Object.keys(currentObj || {}).length > 0) {
                             restPayload.push({
-                                property_id: propId,
-                                rate_plan_id: ratePlanId,
-                                room_type_id: roomTypeId,
-                                date_from: rangeStart,
-                                date_to: dStr,
-                                rate: currentObj.rate,
-                                min_stay_arrival: currentObj.min_stay_arrival,
-                                min_stay_through: currentObj.min_stay_through,
-                                closed_to_arrival: currentObj.closed_to_arrival,
-                                closed_to_departure: currentObj.closed_to_departure,
-                                stop_sell: currentObj.stop_sell
+                                property_id: propId, rate_plan_id: ratePlanId,
+                                date_from: rangeStart, date_to: dStr, ...currentObj
                             });
                         }
                     }
                 });
 
                 if (availPayload.length === 0 && restPayload.length === 0) {
-                    throw new Error("Payload is empty. Please ensure pricing is populated in the calendar and Room Types are mapped.");
+                    if (mode === 'delta') {
+                        window.dirtyDates.clear();
+                        window.dirtyFields = {};
+                        window.renderGrid();
+                        return window.customAlert("✅ All isolated changes have been successfully processed.\n\n(No new restricted payload data required pushing).");
+                    } else {
+                        throw new Error("Payload is empty. No specific changes were made.");
+                    }
                 }
 
                 let channexTaskIds = [];
 
+                const fetchWithRetry = async (url, options, retries = 3, backoff = 2000) => {
+                    for (let i = 0; i < retries; i++) {
+                        const res = await fetch(url, options);
+                        if (res.status === 429) {
+                            document.getElementById('sync-status').innerText = `RATE LIMIT HIT. RETRYING IN ${backoff/1000}s...`;
+                            await new Promise(r => setTimeout(r, backoff));
+                            backoff *= 2; 
+                            continue;
+                        }
+                        return res;
+                    }
+                    return await fetch(url, options);
+                };
+
                 if (availPayload.length > 0) {
                     document.getElementById('sync-status').innerText = `PUSHING INVENTORY TO CHANNEX...`;
-                    const aRes = await fetch("https://staging.channex.io/api/v1/availability", {
+                    const aRes = await fetchWithRetry("https://staging.channex.io/api/v1/availability", {
                         method: "POST",
                         headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
                         body: JSON.stringify({ values: availPayload })
                     });
                     
                     const aData = await aRes.json();
-                    if (!aRes.ok) throw new Error("Availability Push Failed: " + JSON.stringify(aData));
+                    if (!aRes.ok && aRes.status !== 429) throw new Error("Availability Push Failed: " + JSON.stringify(aData));
                     if (aData && aData.data && aData.data[0]) channexTaskIds.push("Inventory Task ID: " + aData.data[0].id);
                 }
 
                 if (restPayload.length > 0) {
                     document.getElementById('sync-status').innerText = `PUSHING RATES TO CHANNEX...`;
-                    const rRes = await fetch("https://staging.channex.io/api/v1/restrictions", {
+                    const rRes = await fetchWithRetry("https://staging.channex.io/api/v1/restrictions", {
                         method: "POST",
                         headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
                         body: JSON.stringify({ values: restPayload })
@@ -2167,13 +2325,13 @@
                     let responseData;
                     try { responseData = await rRes.json(); } catch(e) { responseData = { error: "Unparseable response" }; }
                     
-                    if (!rRes.ok) {
+                    if (!rRes.ok && rRes.status !== 429) {
                         let errMsg = "Unknown Error";
                         if (responseData.errors && responseData.errors.length > 0) errMsg = responseData.errors[0].title || responseData.errors[0].detail || JSON.stringify(responseData.errors[0]);
                         else if (responseData.error) errMsg = responseData.error;
                         throw new Error(errMsg + "\n\nRaw Payload Response: " + JSON.stringify(responseData));
                     }
-                    if (responseData && responseData.data && responseData.data[0]) channexTaskIds.push("Rates Task ID: " + responseData.data[0].id);
+                    if (responseData && responseData.data && responseData.data[0]) channexTaskIds.push("Restrictions Task ID: " + responseData.data[0].id);
                 }
                 
                 let taskIdText = channexTaskIds.length > 0 ? "\n\n📋 COPY THESE TASK IDs FOR CHANNEX:\n" + channexTaskIds.join("\n") : "";
@@ -2181,6 +2339,7 @@
                 if (mode === 'delta') {
                     window.syncedDates = new Set(window.dirtyDates);
                     window.dirtyDates.clear();
+                    window.dirtyFields = {}; 
                     window.renderGrid();
                     window.customAlert(`✅ Delta Sync Successful!\n\nTargeted updates sent strictly for modified dates.${taskIdText}`);
                 } else {
@@ -2203,7 +2362,6 @@
             try { 
                 await signInAnonymously(auth); 
                 
-                // DECOUPLED: Fetch Staff
                 try {
                     const staffSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
                     staff = staffSnap.docs.map(d => {
@@ -2215,7 +2373,6 @@
                     console.warn("Could not load staff bookings, continuing anyway...", staffErr);
                 }
 
-                // DECOUPLED: Load Properties
                 await loadPropertyConfig();
             } catch (e) { console.warn("Initialization error.", e); }
 
@@ -2231,6 +2388,41 @@
             window.syncFilterPills();
             window.renderGrid(); 
             document.getElementById('loader').classList.remove('active');
+            
+            // EXCEL-LIKE NAVIGATION ENGINES
+            document.body.addEventListener('mouseover', (e) => {
+                if (e.target.tagName === 'INPUT' && (e.target.closest('.rate-grid-table') || e.target.closest('#qb-grid-body'))) {
+                    if (document.activeElement !== e.target && e.target.type !== 'date' && !e.target.disabled) {
+                        e.target.focus();
+                        if(e.target.type === 'number' || e.target.type === 'text') e.target.select();
+                    }
+                }
+            });
+
+            document.body.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+                    e.preventDefault();
+                    const currentTd = e.target.closest('td');
+                    const currentTr = e.target.closest('tr');
+                    if(!currentTd || !currentTr) return;
+                    
+                    const cellIndex = Array.from(currentTr.children).indexOf(currentTd);
+                    let nextTr = currentTr.nextElementSibling;
+                    
+                    while(nextTr) {
+                        const nextTd = nextTr.children[cellIndex];
+                        if (nextTd) {
+                            const nextInput = nextTd.querySelector('input:not([disabled])');
+                            if (nextInput && nextInput.type !== 'hidden') {
+                                nextInput.focus();
+                                nextInput.select();
+                                return;
+                            }
+                        }
+                        nextTr = nextTr.nextElementSibling;
+                    }
+                }
+            });
         };
 
         init();
