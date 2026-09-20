@@ -1,5 +1,5 @@
 // ---------------------------------------------------------
-// SWIMS PMS - TEXT EXTRACTION PARSERS
+// PMS - TEXT EXTRACTION PARSERS
 // ---------------------------------------------------------
 
 window.extractBookingData = (raw) => {
