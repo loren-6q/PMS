@@ -285,7 +285,7 @@
                                             <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-p2').value = this.value"></td>
                                             <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-p1').value = this.value"></td>
                                             <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="2499" onfocus="this.select()"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-p1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-m1').value = this.value"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-p1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-p1').value = this.value"></td>
                                             <td class="rounded-r-lg border border-orange-100 border-l-0"><input type="number" step="any" id="w-d-p2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-m2').value = this.value"></td>
                                         </tr>
                                     </tbody>
@@ -2037,7 +2037,7 @@
                 if (data.data && data.data[0]) {
                     const tId = data.data[0].id;
                     logEl.innerHTML = `[SUCCESS] ${new Date().toLocaleTimeString()}\nGroup: ${testGroup.toUpperCase()}\nBatched ${payload.length} API rules successfully.\n\nTask ID: ${tId}\n\n${logEl.innerHTML}`;
-                    window.customAlert(`✅ Sent ${payload.length} specific rules successfully!\n\nTask ID: ${tId}\n\nYou can copy this from the log box.`);
+                    window.customAlert(`✅ ${payload.length} test change${payload.length === 1 ? '' : 's'} confirmed!`);
                 } else {
                     logEl.innerHTML = `[ERROR] ${new Date().toLocaleTimeString()}\nPayload: ${JSON.stringify(payload, null, 2)}\nResponse: ${JSON.stringify(data, null, 2)}\n\n${logEl.innerHTML}`;
                     window.customAlert("Error running test. Check log box.");
@@ -2100,7 +2100,7 @@
                 } else {
                     let dTemp = new Date();
                     let currentDate = new Date(Date.UTC(dTemp.getFullYear(), dTemp.getMonth(), dTemp.getDate(), 12, 0, 0));
-                    for (let i = 0; i <= 500; i++) {
+                    for (let i = 0; i < 500; i++) {
                         const d = new Date(currentDate.getTime() + (i * 86400000));
                         datesToProcess.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`);
                     }
@@ -2288,6 +2288,16 @@
                         fullState.closed_to_departure = otaCtd !== undefined ? otaCtd : (rData.ctd !== undefined ? rData.ctd : (gData.ctd === true));
                         fullState.stop_sell = otaStop !== undefined ? otaStop : (rData.stopSell !== undefined ? rData.stopSell : (gData.stopSell === true));
 
+                        // Ensure every day across all 500 days has a valid rate so end dates stay 100% aligned
+                        if (mode === 'full' && (modifiedPrice === null || modifiedPrice === "")) {
+                            let isDorm = pmsCat.toLowerCase().includes('dorm');
+                            let fallbackBase = isDorm 
+                                ? (parseFloat(document.getElementById('w-d-base')?.value) || parseFloat(document.getElementById('w-d-base-single')?.value) || 199) 
+                                : (parseFloat(document.getElementById('w-p-base')?.value) || parseFloat(document.getElementById('w-p-base-single')?.value) || 899);
+                            modifiedPrice = applyMath(fallbackBase, ruleType, ruleVal);
+                            fullState.rate = Math.round(modifiedPrice * 100);
+                        }
+
                         if (mode === 'delta') {
                             const dFields = window.dirtyFields?.[dStr]?.[ratePlanId];
                             if (dFields) {
@@ -2404,16 +2414,16 @@
                     if (responseData && responseData.data && responseData.data[0]) channexTaskIds.push("Restrictions Task ID: " + responseData.data[0].id);
                 }
                 
-                let taskIdText = channexTaskIds.length > 0 ? "\n\n📋 COPY THESE TASK IDs FOR CHANNEX:\n" + channexTaskIds.join("\n") : "";
+                const totalChanges = availPayload.length + restPayload.length;
                 
                 if (mode === 'delta') {
                     window.syncedDates = new Set(window.dirtyDates);
                     window.dirtyDates.clear();
                     window.dirtyFields = {}; 
                     window.renderGrid();
-                    window.customAlert(`✅ Delta Sync Successful!\n\nTargeted updates sent strictly for modified dates.${taskIdText}`);
+                    window.customAlert(`✅ ${totalChanges} change${totalChanges === 1 ? '' : 's'} confirmed!`);
                 } else {
-                    window.customAlert(`✅ Full Sync Successful!\n\nPushed 500 days of Rates, Minimum Stays, CTAs, CTDs, Stop Sells, and Live Availability to Channex for all mapped rooms.${taskIdText}`);
+                    window.customAlert("✅ Full 500 day sync confirmed!");
                 }
 
             } catch (err) {
