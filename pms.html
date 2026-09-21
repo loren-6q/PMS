@@ -163,7 +163,6 @@
                             <div class="p-3 border-b border-slate-200 bg-slate-50">
                                 <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Active Property</label>
                                 <select id="main-property-switcher" onchange="window.handlePropertySwitch(this.value)" class="w-full bg-white text-slate-800 font-black uppercase text-xs rounded px-2 py-1.5 outline-none cursor-pointer border border-slate-300 shadow-sm focus:ring-2 focus:ring-blue-500">
-                                    <!-- Populated Dynamically -->
                                 </select>
                             </div>
                             <div class="py-1">
@@ -493,16 +492,33 @@
             }
         };
 
-        window.triggerAutoSync = async () => {
+        window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypes = null) => {
             if (window.channexConfig && window.channexConfig.apiKey) {
                 try {
                     const syncFn = httpsCallable(functions, 'channexDeltaSync');
-                    const cIn = $('check-in').value || getLocalYMD(new Date());
-                    let d = new Date(cIn + "T12:00:00Z");
-                    d.setUTCDate(d.getUTCDate() + 180);
-                    const cOut = d.toISOString().split('T')[0];
-                    syncFn({ propId: currentPropertyId, checkIn: cIn, checkOut: cOut });
-                    console.log("Delta Sync Triggered via HTTP Call.");
+                    const cIn = overrideIn || $('check-in')?.value || getLocalYMD(new Date());
+                    const cOut = overrideOut || $('check-out')?.value || cIn;
+                    
+                    let rTypes = roomTypes;
+                    if (!rTypes || rTypes.length === 0) {
+                        const rL = Array.from($$('.assigned-room-select') || []).map(sel => sel.value).filter(Boolean);
+                        const bType = $('booked-type')?.value;
+                        const types = new Set();
+                        rL.forEach(rid => {
+                            const hr = hotelRooms.find(r => r.id === rid || r.id === uiToDbRoom(rid) || r.id === dbToUiRoom(rid));
+                            if (hr && hr.type) types.add(hr.type);
+                        });
+                        if (bType) types.add(bType);
+                        rTypes = Array.from(types);
+                    }
+
+                    syncFn({ 
+                        propId: currentPropertyId, 
+                        checkIn: cIn, 
+                        checkOut: cOut,
+                        roomTypes: rTypes
+                    });
+                    console.log(`Delta Sync Triggered for ${cIn} to ${cOut}, rooms:`, rTypes);
                 } catch (e) {
                     console.warn("Delta Sync Call Failed:", e);
                 }
@@ -531,12 +547,10 @@
                 }
 
                 const propToLoad = windowPropertiesList.find(p => p.id === currentPropertyId);
-            if (propToLoad) {
-                // Trust the database: Use the exact array order saved from the Settings page. No sorting needed!
-                hotelRooms = propToLoad.rooms || [];
-                
-                fmpDates = propToLoad.events || [];
-                window.propertyOtaMap = propToLoad.otaMap || [];
+                if (propToLoad) {
+                    hotelRooms = propToLoad.rooms || [];
+                    fmpDates = propToLoad.events || [];
+                    window.propertyOtaMap = propToLoad.otaMap || [];
                     window.channexMap = propToLoad.channexMap || [];
                     window.channexConfig = propToLoad.channex || {};
                     
@@ -575,7 +589,7 @@
         const init = async () => {
             const processSnapshot = snap => { 
                 staff = snap.docs.map(d => ({ id: d.id, ...d.data() })).map(s => { 
-                    if (!s.property) s.property = 'swims_resort'; // BACKWARDS COMPATIBILITY
+                    if (!s.property) s.property = 'swims_resort'; 
                     s.room = (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).map(dbToUiRoom)[0] || ""; 
                     s.rooms = (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).map(dbToUiRoom); 
                     return s; 
@@ -593,14 +607,14 @@
                         try {
                             await signInWithCustomToken(auth, window.__initial_auth_token);
                         } catch (tokenErr) {
-                            console.warn("Custom token failed (likely expired), falling back to anonymous login:", tokenErr);
+                            console.warn("Custom token failed, falling back to anonymous login:", tokenErr);
                             await signInAnonymously(auth);
                         }
                     } else {
                         await signInAnonymously(auth);
                     }
                     currentUserRole = 'admin'; 
-                    currentUserEmail = 'admin'; // Fits failsafe
+                    currentUserEmail = 'admin'; 
                     $('boot-loader').style.display = 'none'; 
                     $$('.admin-only').forEach(el => el.classList.remove('hidden'));
                     await loadPropertyConfig();
@@ -642,7 +656,7 @@
                         });
                         loadRates();
                     } else {
-                        window.location.href = 'index.html'; // Kick out to app portal if not authenticated
+                        window.location.href = 'index.html';
                     }
                 });
             }
@@ -1114,7 +1128,15 @@
                 const s = staff.find(x => x.id === $('guest-id').value); if (!s) return window.showAlert("Error: Please save booking first before splitting."); 
                 let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); const nId = Math.random().toString(36).substr(2, 9); const selRoom = extRoomSel.value; const dbRoom = uiToDbRoom(selRoom); 
                 const newBooking = { ...s, id: nId, checkIn: cO, checkOut: nCo, room: dbRoom, rooms: [dbRoom], linkedId: lC, totalPrice: Number(aP), netPrice: Number(aP), netOverride: false, payments: [], extended: true, notes: "Extended segment from multi-room booking.\n" + (s.notes || ""), createdAt: new Date().toISOString(), createdBy: currentUserEmail, auditLog: [] }; 
-                try { const sB = $('save-btn'); sB.disabled = true; sB.innerHTML = 'SAVING...'; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, linkedId: lC, extended: true }, { merge: true }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), newBooking); window.showAlert(`Room ${selRoom} extended by ${days} day(s) as a new linked booking.\n\nOriginal booking preserved.`); window.triggerAutoSync(); window.closeGuestModal(); } catch(e) { window.showAlert("Extension failed due to database rules."); } return;
+                try { 
+                    const sB = $('save-btn'); sB.disabled = true; sB.innerHTML = 'SAVING...'; 
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, linkedId: lC, extended: true }, { merge: true }); 
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), newBooking); 
+                    window.showAlert(`Room ${selRoom} extended by ${days} day(s) as a new linked booking.\n\nOriginal booking preserved.`); 
+                    const extType = (hotelRooms.find(r => r.id === selRoom)?.type) || s.bookedType;
+                    window.triggerAutoSync(cO, nCo, [extType].filter(Boolean)); 
+                    window.closeGuestModal(); 
+                } catch(e) { window.showAlert("Extension failed due to database rules."); } return;
             }
             $('check-out').value = nCo; $('total-price').value = ((Number($('total-price').value) || 0) + Number(aP)).toFixed(2); setMulti('ext-btn', 1, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
             const todayStr = new Date().toLocaleDateString('en-GB').slice(0,5); const extMsg = `\n[EXTENDED on ${todayStr}] Added ${days} day(s). Added ฿${aP} to total.`; $('guest-notes').value = ($('guest-notes').value + extMsg).trim();
@@ -1371,17 +1393,165 @@
                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 15000));
                 
                 await Promise.race([savePromise, timeoutPromise]); 
-                window.triggerAutoSync(); 
+                
+                // Identify exactly which room type(s) were changed
+                const bookingRoomTypes = Array.from(new Set([
+                    ...rL.map(rId => {
+                        const hr = hotelRooms.find(hr => hr.id === rId);
+                        return hr ? hr.type : null;
+                    }).filter(Boolean),
+                    $('booked-type').value
+                ])).filter(Boolean);
+
+                const earliestIn = ext?.checkIn && ext.checkIn < cI ? ext.checkIn : cI;
+                const latestOut = ext?.checkOut && ext.checkOut > cO ? ext.checkOut : cO;
+
+                window.triggerAutoSync(earliestIn, latestOut, bookingRoomTypes); 
                 if (!keepOpen) window.closeGuestModal();
             } catch (err) { console.error("Save Error:", err); window.showAlert("Save process timed out or encountered an error. Please verify your connection.\n\nError: " + err.message); } finally { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons(); }
         };
 
-        window.requestDelete = () => { if(currentUserRole === 'staff') return; window.showAlert(`Permanently delete this record?`, true, async () => { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', $('guest-id').value)); window.triggerAutoSync(); window.closeGuestModal(); } catch (e) { window.showAlert("Delete blocked by Firebase Rules."); } }); };
-        window.requestDuplicate = async () => { if(currentUserRole === 'staff') return; try { const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; let lC = $('link-code').value.trim().toUpperCase() || s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); if(!s.linkedId) { let dbR = (s.rooms || []).map(uiToDbRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, linkedId: lC }); } const nId = Math.random().toString(36).substr(2, 9); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, room: "", rooms: [""], linkedId: lC, payments: [], extended: false, createdAt: new Date().toISOString(), createdBy: currentUserEmail, lastEditedAt: null, lastEditedBy: null, auditLog: [] }); window.triggerAutoSync(); window.closeGuestModal(); } catch (e) { window.showAlert("Duplicate blocked by Firebase Rules."); } };
-        window.requestSplit = () => { if(currentUserRole === 'staff') return; const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; const sd = $('split-date'); sd.value = ""; sd.min = s.checkIn; sd.max = s.checkOut; const c = $('split-room-dropdown-container'); const sel = document.createElement('select'); sel.id = 'split-room-select'; sel.className = "input-base text-lg !p-2 cursor-pointer"; sel.innerHTML = `<option value="">-- SELECT NEW ROOM --</option>`; let cg = '', og = null; hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; opt.innerText = `${r.id} - ${r.type}`; og.appendChild(opt); }); c.innerHTML = ''; c.appendChild(sel); $('split-modal').style.display = 'flex'; };
-        window.confirmSplit = async () => { const sD = $('split-date').value; const newRoom = $('split-room-select').value; const s = staff.find(x => x.id === $('guest-id').value); if (!sD || sD <= s.checkIn || sD >= s.checkOut) return window.showAlert("Invalid split date."); if (!newRoom) return window.showAlert("Please select a new room for the split."); let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); let nId = Math.random().toString(36).substr(2, 9); let dbR = (s.rooms || []).map(uiToDbRoom); let nDbRoom = uiToDbRoom(newRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, checkOut: sD, linkedId: lC }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, checkIn: sD, room: nDbRoom, rooms: [nDbRoom], linkedId: lC, totalPrice: 0, netPrice: 0, payments: [], extended: false, notes: "Split segment for mid-stay room change. Master folio kept on original booking.\n" + (s.notes || ""), auditLog: [] }); $('split-modal').style.display = 'none'; window.triggerAutoSync(); window.closeGuestModal(); };
-        window.requestMerge = () => { if(currentUserRole === 'staff') return; const cId = $('guest-id').value; if (!cId) return window.showAlert("Please save this booking first before merging."); const c = staff.find(x => x.id === cId); if (!c) return; const sel = $('merge-target'); sel.innerHTML = '<option value="">-- SELECT BOOKING --</option>'; [...staff].filter(s => s.property === currentPropertyId && s.id !== cId && s.status !== 'cancelled' && s.status !== 'noshow').sort((a,b) => (a.lastName === c.lastName ? -1 : (b.lastName === c.lastName ? 1 : a.checkIn.localeCompare(b.checkIn)))).forEach(s => { const opt = document.createElement('option'); opt.value = s.id; opt.innerText = `${s.lastName}, ${s.firstName} (${s.checkIn.substr(5)} to ${s.checkOut.substr(5)})`; if (s.lastName === c.lastName) opt.className = "text-indigo-600 font-black"; sel.appendChild(opt); }); $('merge-modal').style.display = 'flex'; };
-        window.confirmMerge = async () => { const tId = $('merge-target').value; if(!tId) return window.showAlert("Please select a booking to merge."); const t = staff.find(s => s.id === tId), c = staff.find(s => s.id === $('guest-id').value); if(!t || !c) return; const btn = $('merge-confirm-btn'); btn.innerHTML = 'MERGING...'; btn.disabled = true; try { let mNotes = ($('guest-notes').value || "") + `\n\n--- MERGED WITH BOOKING ${t.bookId || tId} ---\n` + (t.notes || ""); [ { id: 'first-name', tVal: t.firstName, lbl: 'First Name' }, { id: 'last-name', tVal: t.lastName, lbl: 'Last Name' }, { id: 'phone', tVal: t.phone, lbl: 'Phone' }, { id: 'email', tVal: t.email, lbl: 'Email' }, { id: 'guest-country', tVal: t.country, lbl: 'Country' }, { id: 'booked-type', tVal: t.bookedType, lbl: 'Booked Type' }, { id: 'booking-source', tVal: t.source, lbl: 'Source' }, { id: 'booking-date', tVal: t.bookDate, lbl: 'Book Date' }, { id: 'booking-id', tVal: t.bookId, lbl: 'Book ID' } ].forEach(f => { const el = $(f.id); if (!el) return; if (!el.value && f.tVal) el.value = f.tVal; else if (el.value && f.tVal && el.value.toString().trim().toLowerCase() !== f.tVal.toString().trim().toLowerCase()) mNotes += `\n[Merged ${f.lbl}]: ${f.tVal}`; }); $('check-in').value = c.checkIn < t.checkIn ? c.checkIn : t.checkIn; $('check-out').value = c.checkOut > t.checkOut ? c.checkOut : t.checkOut; $('total-price').value = Number(c.totalPrice || 0) + Number(t.totalPrice || 0); $('net-price').value = Number(c.netPrice || 0) + Number(t.netPrice || 0); $('guest-notes').value = mNotes.trim(); $('pax-count').value = Math.max(c.pax || 1, t.pax || 1); (t.payments || []).forEach(p => window.addPaymentRow(p.date, Number(p.amt||0).toFixed(2), p.method, true)); const cR = Array.from(new Set([...Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean), ...(t.rooms || []).filter(Boolean)])); $('assigned-rooms-container').innerHTML = ''; if (cR.length > 0) cR.forEach(r => window.addRoomSelect(r)); else window.addRoomSelect(""); window.calcFinancials(); window.updateAvailableRooms(); await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', t.id)); $('merge-modal').style.display = 'none'; window.saveBooking(true); window.triggerAutoSync(); } catch(err) { window.showAlert("Merge error, please check connection."); } finally { btn.innerHTML = 'Merge'; btn.disabled = false; } };
+        window.requestDelete = () => { 
+            if(currentUserRole === 'staff') return; 
+            const cIn = $('check-in').value, cOut = $('check-out').value;
+            const rL = Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean);
+            const delTypes = Array.from(new Set([
+                ...rL.map(rId => {
+                    const hr = hotelRooms.find(hr => hr.id === rId);
+                    return hr ? hr.type : null;
+                }).filter(Boolean),
+                $('booked-type').value
+            ])).filter(Boolean);
+
+            window.showAlert(`Permanently delete this record?`, true, async () => { 
+                try { 
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', $('guest-id').value)); 
+                    window.triggerAutoSync(cIn, cOut, delTypes); 
+                    window.closeGuestModal(); 
+                } catch (e) { window.showAlert("Delete blocked by Firebase Rules."); } 
+            }); 
+        };
+        
+        window.requestDuplicate = async () => { 
+            if(currentUserRole === 'staff') return; 
+            try { 
+                const s = staff.find(x => x.id === $('guest-id').value); 
+                if (!s) return; 
+                let lC = $('link-code').value.trim().toUpperCase() || s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); 
+                if(!s.linkedId) { 
+                    let dbR = (s.rooms || []).map(uiToDbRoom); 
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, linkedId: lC }); 
+                } 
+                const nId = Math.random().toString(36).substr(2, 9); 
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, room: "", rooms: [""], linkedId: lC, payments: [], extended: false, createdAt: new Date().toISOString(), createdBy: currentUserEmail, lastEditedAt: null, lastEditedBy: null, auditLog: [] }); 
+                const dupTypes = s.bookedType ? [s.bookedType] : [];
+                window.triggerAutoSync(s.checkIn, s.checkOut, dupTypes); 
+                window.closeGuestModal(); 
+            } catch (e) { window.showAlert("Duplicate blocked by Firebase Rules."); } 
+        };
+
+        window.requestSplit = () => { 
+            if(currentUserRole === 'staff') return; 
+            const s = staff.find(x => x.id === $('guest-id').value); 
+            if (!s) return; 
+            const sd = $('split-date'); 
+            sd.value = ""; 
+            sd.min = s.checkIn; 
+            sd.max = s.checkOut; 
+            const c = $('split-room-dropdown-container'); 
+            const sel = document.createElement('select'); 
+            sel.id = 'split-room-select'; 
+            sel.className = "input-base text-lg !p-2 cursor-pointer"; 
+            sel.innerHTML = `<option value="">-- SELECT NEW ROOM --</option>`; 
+            let cg = '', og = null; 
+            hotelRooms.forEach(r => { 
+                if (r.type !== cg) { 
+                    og = document.createElement('optgroup'); 
+                    og.label = `--- ${r.type.toUpperCase()} ---`; 
+                    sel.appendChild(og); 
+                    cg = r.type; 
+                } 
+                const opt = document.createElement('option'); 
+                opt.value = r.id; 
+                opt.innerText = `${r.id} - ${r.type}`; 
+                og.appendChild(opt); 
+            }); 
+            c.innerHTML = ''; 
+            c.appendChild(sel); 
+            $('split-modal').style.display = 'flex'; 
+        };
+
+        window.confirmSplit = async () => { 
+            const sD = $('split-date').value; 
+            const newRoom = $('split-room-select').value; 
+            const s = staff.find(x => x.id === $('guest-id').value); 
+            if (!sD || sD <= s.checkIn || sD >= s.checkOut) return window.showAlert("Invalid split date."); 
+            if (!newRoom) return window.showAlert("Please select a new room for the split."); 
+            let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); 
+            let nId = Math.random().toString(36).substr(2, 9); 
+            let dbR = (s.rooms || []).map(uiToDbRoom); 
+            let nDbRoom = uiToDbRoom(newRoom); 
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, checkOut: sD, linkedId: lC }); 
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, checkIn: sD, room: nDbRoom, rooms: [nDbRoom], linkedId: lC, totalPrice: 0, netPrice: 0, payments: [], extended: false, notes: "Split segment for mid-stay room change. Master folio kept on original booking.\n" + (s.notes || ""), auditLog: [] }); 
+            $('split-modal').style.display = 'none'; 
+            const splitTypes = [s.bookedType, (hotelRooms.find(r => r.id === newRoom)?.type)].filter(Boolean);
+            window.triggerAutoSync(s.checkIn, s.checkOut, splitTypes); 
+            window.closeGuestModal(); 
+        };
+
+        window.requestMerge = () => { 
+            if(currentUserRole === 'staff') return; 
+            const cId = $('guest-id').value; 
+            if (!cId) return window.showAlert("Please save this booking first before merging."); 
+            const c = staff.find(x => x.id === cId); 
+            if (!c) return; 
+            const sel = $('merge-target'); 
+            sel.innerHTML = '<option value="">-- SELECT BOOKING --</option>'; 
+            [...staff].filter(s => s.property === currentPropertyId && s.id !== cId && s.status !== 'cancelled' && s.status !== 'noshow').sort((a,b) => (a.lastName === c.lastName ? -1 : (b.lastName === c.lastName ? 1 : a.checkIn.localeCompare(b.checkIn)))).forEach(s => { 
+                const opt = document.createElement('option'); 
+                opt.value = s.id; 
+                opt.innerText = `${s.lastName}, ${s.firstName} (${s.checkIn.substr(5)} to ${s.checkOut.substr(5)})`; 
+                if (s.lastName === c.lastName) opt.className = "text-indigo-600 font-black"; 
+                sel.appendChild(opt); 
+            }); 
+            $('merge-modal').style.display = 'flex'; 
+        };
+
+        window.confirmMerge = async () => { 
+            const tId = $('merge-target').value; 
+            if(!tId) return window.showAlert("Please select a booking to merge."); 
+            const t = staff.find(s => s.id === tId), c = staff.find(s => s.id === $('guest-id').value); 
+            if(!t || !c) return; 
+            const btn = $('merge-confirm-btn'); 
+            btn.innerHTML = 'MERGING...'; 
+            btn.disabled = true; 
+            try { 
+                let mNotes = ($('guest-notes').value || "") + `\n\n--- MERGED WITH BOOKING ${t.bookId || tId} ---\n` + (t.notes || ""); 
+                [ { id: 'first-name', tVal: t.firstName, lbl: 'First Name' }, { id: 'last-name', tVal: t.lastName, lbl: 'Last Name' }, { id: 'phone', tVal: t.phone, lbl: 'Phone' }, { id: 'email', tVal: t.email, lbl: 'Email' }, { id: 'guest-country', tVal: t.country, lbl: 'Country' }, { id: 'booked-type', tVal: t.bookedType, lbl: 'Booked Type' }, { id: 'booking-source', tVal: t.source, lbl: 'Source' }, { id: 'booking-date', tVal: t.bookDate, lbl: 'Book Date' }, { id: 'booking-id', tVal: t.bookId, lbl: 'Book ID' } ].forEach(f => { 
+                    const el = $(f.id); 
+                    if (!el) return; 
+                    if (!el.value && f.tVal) el.value = f.tVal; 
+                    else if (el.value && f.tVal && el.value.toString().trim().toLowerCase() !== f.tVal.toString().trim().toLowerCase()) mNotes += `\n[Merged ${f.lbl}]: ${f.tVal}`; 
+                }); 
+                $('check-in').value = c.checkIn < t.checkIn ? c.checkIn : t.checkIn; 
+                $('check-out').value = c.checkOut > t.checkOut ? c.checkOut : t.checkOut; 
+                $('total-price').value = Number(c.totalPrice || 0) + Number(t.totalPrice || 0); 
+                $('net-price').value = Number(c.netPrice || 0) + Number(t.netPrice || 0); 
+                $('guest-notes').value = mNotes.trim(); 
+                $('pax-count').value = Math.max(c.pax || 1, t.pax || 1); 
+                (t.payments || []).forEach(p => window.addPaymentRow(p.date, Number(p.amt||0).toFixed(2), p.method, true)); 
+                const cR = Array.from(new Set([...Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean), ...(t.rooms || []).filter(Boolean)])); 
+                $('assigned-rooms-container').innerHTML = ''; 
+                if (cR.length > 0) cR.forEach(r => window.addRoomSelect(r)); else window.addRoomSelect(""); 
+                window.calcFinancials(); 
+                window.updateAvailableRooms(); 
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', t.id)); 
+                $('merge-modal').style.display = 'none'; 
+                window.saveBooking(true); 
+                const mergeTypes = [c.bookedType, t.bookedType].filter(Boolean);
+                window.triggerAutoSync(c.checkIn, c.checkOut, mergeTypes); 
+            } catch(err) { window.showAlert("Merge error, please check connection."); } finally { btn.innerHTML = 'Merge'; btn.disabled = false; } 
+        };
 
         window.openPriceCheckModal = () => { const d = new Date(); d.setHours(12,0,0,0); $('pc-checkin').value = getLocalYMD(d); $('price-check-modal').style.display = 'flex'; };
         window.runPriceCheck = () => { const cI = $('pc-checkin').value, n = parseInt($('pc-nights').value)||1, p = parseInt($('pc-pax').value)||1; if(!cI) return; const d = new Date(cI + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); const cO = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`; window.open(`https://www.booking.com/hotel/th/swims-a-social-beach-resort.html?checkin=${cI}&checkout=${cO}&group_adults=${p}&group_children=0&no_rooms=1`, '_blank'); window.closeModal('price-check-modal'); };
@@ -1455,7 +1625,6 @@
             window.populateStaffForm(s);
             window.closeModal('email-modal');
             
-            // JUMP TO DATE IMMEDIATELY AFTER PARSING
             if (s.checkIn) {
                 const d = new Date(s.checkIn + "T12:00:00Z");
                 d.setDate(d.getDate() - 3);
