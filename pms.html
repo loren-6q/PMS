@@ -50,16 +50,17 @@
 
         .staff-bar { position: absolute; height: 22px; top: 3px; border-radius: 4px; display: flex; align-items: center; cursor: pointer; z-index: 10; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; transition: all 0.2s; }
         
+        .status-new { background-color: #ec4899; color: #ffffff; border: 1px solid #be185d; }
         .status-future { background-color: #7fc6f5; color: #1e293b; border: 1px solid #38bdf8; } 
-        .status-here { background-color: #dcfce7; color: #14532d; border: 1px solid #86efac; }   
+        .status-here { background-color: #059669; color: #ffffff; border: 1px solid #047857; }   
         .status-left { background-color: #aba39d; color: #1e293b; border: 1px solid #78716c; }
-        .status-unconfirmed { background-color: #f3e8ff; color: #581c87; border: 1px solid #d8b4fe; }
-        .status-cancelled, .status-noshow { background-color: #e5e7eb; color: #1e293b; border: 1px solid #d1d5db; opacity: 0.8; }
-        .status-special { background-color: #fef08a; color: #1e293b; border: 1px solid #fde047; }
+        .status-cancelled { background-color: #94a3b8; color: #1e293b; border: 1px solid #64748b; opacity: 0.8; }
+        .status-noshow { background-color: #000000; color: #ffffff; border: 1px solid #334155; }
+        .status-special { background-color: #fde047; color: #1e293b; border: 1px solid #eab308; }
         .status-blocked { background-color: #475569; color: #ffffff; border: 1px solid #334155; }
         .status-charged { background-color: #0f172a; color: #fbbf24; border: 1px solid #f59e0b; }
-        .status-new { background-color: #ec4899; color: #ffffff; border: 1px solid #be185d; }
         .status-vol { background-color: #fbcfe8; color: #831843; border: 1px solid #f472b6; }
+        .status-unconfirmed { background-color: #8b5cf6; color: #ffffff; border: 1px solid #7c3aed; }
         
         .modal-overlay { display: none; position: fixed; inset: 0; background: transparent; pointer-events: none; z-index: 100; align-items: flex-start; justify-content: center; padding-top: 5vh; padding-bottom: 5vh; }
         .modal-overlay.active { display: flex; }
@@ -163,6 +164,7 @@
                             <div class="p-3 border-b border-slate-200 bg-slate-50">
                                 <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Active Property</label>
                                 <select id="main-property-switcher" onchange="window.handlePropertySwitch(this.value)" class="w-full bg-white text-slate-800 font-black uppercase text-xs rounded px-2 py-1.5 outline-none cursor-pointer border border-slate-300 shadow-sm focus:ring-2 focus:ring-blue-500">
+                                    <!-- Populated Dynamically -->
                                 </select>
                             </div>
                             <div class="py-1">
@@ -179,6 +181,7 @@
             </div>
         </div>
 
+        <!-- DASHBOARD VIEW -->
         <div id="dashboard-view" class="flex-1 flex flex-col min-h-0 bg-slate-100 overflow-y-auto hidden gap-2 p-0 sm:p-2">
             <div class="flex items-center justify-between bg-white p-2 rounded-lg shadow-sm border border-slate-200 shrink-0">
                 <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg flex items-center gap-2"><i data-lucide="layout-dashboard" class="text-blue-600"></i> Today's Snapshot <span id="dash-date-display" class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded ml-2">--</span></h2>
@@ -203,6 +206,7 @@
             </div>
         </div>
 
+        <!-- CALENDAR VIEW -->
         <div id="calendar-view" class="flex-1 flex flex-col min-h-0 unselectable">
             <div id="calendar-scroll-container" class="flex-1 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-auto relative overscroll-none">
                 <div id="calendar-header-months" class="timeline-grid sticky top-0 z-[60] bg-slate-800 shadow-sm border-b border-slate-700 h-[26px] box-border"></div>
@@ -212,11 +216,12 @@
             <footer id="calendar-legend" class="mt-1 bg-white p-1.5 sm:rounded-lg border border-slate-200 flex flex-col md:flex-row flex-wrap shrink-0 items-center justify-center gap-x-4 gap-y-2 text-center text-[10px] md:text-[11px]"></footer>
         </div>
 
+        <!-- DATABASE VIEW -->
         <div id="database-view" class="flex-1 flex flex-col min-h-0 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-hidden hidden">
             <div class="p-2 bg-slate-100 border-b border-slate-300 flex flex-wrap gap-2 items-center text-xs unselectable shrink-0">
                 <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-room-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-36 cursor-pointer"><span id="db-room-label" class="truncate">ALL ROOMS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-room-dropdown" class="multi-select-dropdown absolute mt-1 w-48 bg-white border border-slate-300 rounded shadow-lg z-50 hidden"></div></div>
                 <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-source-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-source-label" class="truncate">ALL SOURCES</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-source-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"><label><input type="checkbox" value="direct" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> DIRECT</label><label><input type="checkbox" value="booking.com" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> BOOKING.COM</label><label><input type="checkbox" value="agoda" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> AGODA</label><label><input type="checkbox" value="hostelworld" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> HOSTELWORLD</label><label><input type="checkbox" value="airbnb" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> AIRBNB</label><label><input type="checkbox" value="expedia" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> EXPEDIA</label><label><input type="checkbox" value="ctrip" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> CTRIP</label><label><input type="checkbox" value="walkin" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> WALK-IN</label></div></div>
-                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-status-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-status-label" class="truncate">ALL STATUS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-status-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"><label><input type="checkbox" value="new" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> NEW</label><label><input type="checkbox" value="future" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> FUTURE</label><label><input type="checkbox" value="here" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> HERE</label><label><input type="checkbox" value="left" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> LEFT</label><label><input type="checkbox" value="unconfirmed" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> UNCONFIRMED</label><label><input type="checkbox" value="cancelled" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> CANCELLED</label><label><input type="checkbox" value="noshow" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> NO-SHOW</label><label><input type="checkbox" value="charged" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> CHARGED</label><label><input type="checkbox" value="special" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> SPECIAL</label><label><input type="checkbox" value="vol" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> VOLUNTEER</label><label><input type="checkbox" value="blocked" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> BLOCKED</label></div></div>
+                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-status-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-status-label" class="truncate">ALL STATUS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-status-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"><label><input type="checkbox" value="new" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> NEW</label><label><input type="checkbox" value="future" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> FUTURE</label><label><input type="checkbox" value="here" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> HERE</label><label><input type="checkbox" value="left" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> LEFT</label><label><input type="checkbox" value="cancelled" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> CANCELLED</label><label><input type="checkbox" value="noshow" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> NO-SHOW</label><label><input type="checkbox" value="special" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> SPECIAL</label><label><input type="checkbox" value="blocked" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> BLOCKED</label><label><input type="checkbox" value="charged" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> CHARGED</label><label><input type="checkbox" value="vol" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> VOLUNTEER</label><label><input type="checkbox" value="unconfirmed" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> UNCONFIRMED</label></div></div>
                 <div class="flex items-center gap-1"><select id="db-filter-preset" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none cursor-pointer text-slate-700" onchange="window.applyDbPreset(this.value)"><option value="custom">CUSTOM DATES</option><option value="today">TODAY</option><option value="tomorrow">TOMORROW</option><option value="this_week">THIS WEEK</option><option value="next_week">NEXT WEEK</option><option value="this_month">THIS MONTH</option><option value="next_month">NEXT MONTH</option></select><input type="date" id="db-filter-start" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none" onchange="window.renderDatabase(); $('db-filter-preset').value='custom';"><span class="font-bold text-slate-400">to</span><input type="date" id="db-filter-end" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none" onchange="window.renderDatabase(); $('db-filter-preset').value='custom';"></div>
                 <input type="text" id="db-filter-name" placeholder="GUEST / ID..." class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none focus:ring-2 focus:ring-blue-500 uppercase w-32" oninput="window.renderDatabase()">
                 <div class="flex items-center gap-1 border border-slate-300 bg-white rounded px-1"><span class="text-slate-400 font-black pl-1">฿</span><input type="number" id="db-filter-min" placeholder="MIN" class="w-16 py-1 font-bold outline-none text-center" oninput="window.renderDatabase()"><span class="text-slate-300">-</span><input type="number" id="db-filter-max" placeholder="MAX" class="w-16 py-1 font-bold outline-none text-center" oninput="window.renderDatabase()"></div>
@@ -228,6 +233,7 @@
         </div>
     </div>
 
+    <!-- GUEST FOLIO MODAL -->
     <div id="guest-modal" class="modal-overlay">
         <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800">
             <div id="modal-header-btn" class="bg-slate-900 p-2 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable" onmousedown="window.startDrag(event)">
@@ -249,18 +255,62 @@
                 </div>
                 
                 <div id="guest-profile-section" class="bg-slate-50 p-1.5 border-x border-b border-slate-200 rounded-b-md space-y-1.5 mt-0 block">
-                    <button type="button" id="tm30-sync-btn" onclick="window.syncTM30()" class="w-full py-1.5 mb-1 bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300 rounded shadow-sm flex items-center justify-center gap-1.5 text-[10px] font-black uppercase transition-colors cursor-pointer"><i data-lucide="scan-face" size="14"></i> PASSPORT / TM30 SMART SYNC</button>
                     <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">First Name</label><input type="text" id="first-name" class="input-base uppercase" oninput="window.updateHeaderName()"></div><div><label class="field-label">Last Name</label><input type="text" id="last-name" required class="input-base uppercase" oninput="window.updateHeaderName()"></div></div>
                     <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">Phone</label><input type="text" id="phone" class="input-base"></div><div><label class="field-label">Country</label><input type="text" id="guest-country" class="input-base" list="country-list" placeholder="Type country..."><datalist id="country-list"></datalist></div></div>
                     <div><label class="field-label">Email</label><input type="text" id="email" class="input-base" oninput="window.checkEmailProxy(this.value)"></div>
                     <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200 mt-1 unselectable overflow-x-auto no-scrollbar"><div id="email-confirm-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['CONFIRM: --', 'CONFIRM: SENT'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400'])">CONFIRM: --</div><div id="email-prepost-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['PRE/POST: --', 'PRE/POST: SENT', 'PRE/POST: CONF'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400'])">PRE/POST: --</div><div id="email-special-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['SPECIAL: --', 'SPECIAL: SENT'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400'])">SPECIAL: --</div></div>
                 </div>
 
-                <div class="grid grid-cols-4 gap-1.5 pt-1">
-                    <div class="col-span-1"><label class="field-label">In</label><input type="date" id="check-in" required class="input-base !px-1" onchange="window.updateAvailableRooms();"></div>
-                    <div class="col-span-1"><label class="field-label">Out</label><input type="date" id="check-out" required class="input-base !px-1" onchange="window.updateAvailableRooms();"></div>
-                    <div class="col-span-1"><label class="field-label">PAX</label><input type="number" id="pax-count" value="1" min="1" class="input-base text-center" oninput="window.calcFinancials(); window.calcExtension && window.calcExtension();"></div>
-                    <div class="col-span-1"><label class="field-label">Status</label><button type="button" id="status-cycle-btn" onclick="window.cycleStatus()" class="w-full h-[26px] rounded text-[11px] font-black uppercase text-center shadow-sm cursor-pointer border unselectable"></button></div>
+                <!-- DATES, NIGHTS, ARROWS & ACTION CONTROLLER -->
+                <div class="bg-slate-50 p-1.5 rounded-md border border-slate-200 space-y-1.5">
+                    <!-- Row 1: IN <[date]>   OUT <[date]>   #Nts -->
+                    <div class="flex items-center gap-1.5">
+                        <!-- IN Control -->
+                        <div class="w-[130px] shrink-0">
+                            <label class="field-label text-center mb-0.5">IN</label>
+                            <div class="flex items-stretch bg-white border border-slate-300 rounded overflow-hidden shadow-sm h-[28px]">
+                                <button type="button" onclick="window.nudgeDate('in', -1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-r border-slate-200 cursor-pointer transition-colors" title="Earlier arrival (-1d)">◀</button>
+                                <input type="date" id="check-in" required class="w-full text-[11px] font-black px-0 text-center bg-transparent border-none outline-none cursor-pointer" onchange="window.handleCheckInPicker(this.value)">
+                                <button type="button" onclick="window.nudgeDate('in', 1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-l border-slate-200 cursor-pointer transition-colors" title="Later arrival (+1d)">▶</button>
+                            </div>
+                        </div>
+
+                        <!-- OUT Control -->
+                        <div class="w-[130px] shrink-0">
+                            <label class="field-label text-center mb-0.5">OUT</label>
+                            <div class="flex items-stretch bg-white border border-slate-300 rounded overflow-hidden shadow-sm h-[28px]">
+                                <button type="button" onclick="window.nudgeDate('out', -1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-r border-slate-200 cursor-pointer transition-colors" title="Earlier departure (-1d)">◀</button>
+                                <input type="date" id="check-out" required class="w-full text-[11px] font-black px-0 text-center bg-transparent border-none outline-none cursor-pointer" onchange="window.handleCheckOutPicker(this.value)">
+                                <button type="button" onclick="window.nudgeDate('out', 1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-l border-slate-200 cursor-pointer transition-colors" title="Later departure (+1d)">▶</button>
+                            </div>
+                        </div>
+
+                        <!-- #Nts Info Display -->
+                        <div class="flex-1 min-w-0 flex flex-col items-center">
+                            <label class="field-label text-center mb-0.5">#NTS</label>
+                            <div id="booking-nights-display" class="w-full h-[28px] bg-indigo-50 border border-indigo-200 rounded font-black text-xs text-indigo-700 flex items-center justify-center shadow-sm select-none tracking-wide" title="Stay Duration">1 Nt</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Row 2: TM30 SMART SYNC + PAX + STATUS (Matching 3-Column Dimensions) -->
+                    <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200">
+                        <button type="button" id="tm30-sync-btn" onclick="window.syncTM30()" class="w-full h-[28px] bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300 rounded text-[9px] sm:text-[10px] font-black uppercase flex items-center justify-center gap-1 transition-colors cursor-pointer truncate px-1 shadow-sm" title="Scan & Sync Passports with TM30">
+                            <i data-lucide="scan-face" size="13" class="shrink-0"></i>
+                            <span class="truncate">TM30 SYNC</span>
+                        </button>
+
+                        <div class="w-full h-[28px] bg-white border border-slate-300 rounded shadow-sm flex items-center justify-between px-0.5 text-[10px] font-black text-slate-600 select-none" title="Guest Count (PAX)">
+                            <button type="button" onclick="window.adjustPax(-1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer hover:bg-slate-100 rounded-l">◀</button>
+                            <div class="flex items-center gap-0.5">
+                                <i data-lucide="users" size="11" class="text-slate-400 shrink-0"></i>
+                                <input type="number" id="pax-count" value="1" min="1" class="w-6 text-center text-xs font-black border-none outline-none p-0 bg-transparent" oninput="window.calcFinancials(); window.calcExtension && window.calcExtension();">
+                                <span class="text-[8px] sm:text-[9px] uppercase font-black text-slate-400">PAX</span>
+                            </div>
+                            <button type="button" onclick="window.adjustPax(1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer hover:bg-slate-100 rounded-r">▶</button>
+                        </div>
+
+                        <button type="button" id="status-cycle-btn" onclick="window.cycleStatus()" class="w-full h-[28px] rounded text-[10px] font-black uppercase text-center shadow-sm cursor-pointer border unselectable transition-colors truncate px-1"></button>
+                    </div>
                 </div>
 
                 <div class="flex flex-col gap-1.5">
@@ -285,7 +335,10 @@
                 <div id="fin-section" class="bg-slate-100 p-1.5 border-x border-b border-slate-200 rounded-b-md mt-0 block">
                     <div class="flex justify-between items-end border-b-2 border-slate-200 pb-1 mb-1">
                         <div class="flex gap-2 items-end">
-                            <div><label class="field-label">Total Price</label><div class="flex items-center text-lg font-black">฿<input type="number" id="total-price" value="0" step="0.01" class="w-20 p-0 ml-1 border-none bg-transparent outline-none focus:ring-0 text-lg font-black" oninput="window.calcFinancials(); window.calcExtension && window.calcExtension();"></div></div>
+                            <div>
+                                <div class="flex items-center justify-between"><label class="field-label">Total Price</label><button type="button" onclick="window.addQuickCharge()" class="text-[9px] font-black text-blue-600 hover:underline cursor-pointer ml-2">+ ADD ฿</button></div>
+                                <div class="flex items-center text-lg font-black">฿<input type="number" id="total-price" value="0" step="0.01" class="w-20 p-0 ml-1 border-none bg-transparent outline-none focus:ring-0 text-lg font-black" oninput="window.calcFinancials(); window.calcExtension && window.calcExtension();"></div>
+                            </div>
                             <div class="mb-0.5"><label class="field-label text-[9px] text-slate-400 cursor-pointer hover:text-blue-500" onclick="$('net-price').focus()">Net Est.</label><div class="flex items-center text-xs font-bold text-slate-500">฿<input type="number" id="net-price" value="0" step="0.01" class="w-14 p-0 ml-0.5 border-none bg-transparent outline-none focus:ring-0 text-xs font-bold text-slate-500 transition-all focus:bg-white focus:border focus:border-blue-300 focus:rounded px-1" oninput="window.overrideNet()"></div></div>
                         </div>
                         <div class="flex gap-3 text-right items-center">
@@ -328,6 +381,7 @@
         </div>
     </div>
 
+    <!-- MODALS -->
     <div id="email-modal" class="alert-modal-overlay">
         <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col">
             <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm">
@@ -346,7 +400,20 @@
     </div>
     
     <div id="price-check-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Quick Price Check</span><button type="button" onclick="window.closeModal('price-check-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><div class="grid grid-cols-2 gap-3"><div class="col-span-2"><label class="field-label">Check-In</label><input type="date" id="pc-checkin" class="input-base !p-2 !text-sm"></div><div><label class="field-label">Nights</label><input type="number" id="pc-nights" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div><div><label class="field-label">PAX</label><input type="number" id="pc-pax" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div></div><button onclick="window.runPriceCheck()" class="w-full mt-2 btn-modal bg-pink-600 hover:bg-pink-700 text-white flex justify-center items-center gap-2"><i data-lucide="external-link" size="16"></i> Check BDC</button></div></div></div>
-    <div id="alert-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Attention</div><div class="p-6 text-center"><p id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></p><div id="alert-actions" class="mt-6 flex gap-2 justify-center"><button id="alert-cancel" onclick="window.closeAlert()" class="hidden btn-modal bg-slate-200 text-slate-700">Cancel</button><button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button></div></div></div></div>
+    
+    <div id="alert-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Attention</div>
+            <div class="p-6 text-center">
+                <p id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></p>
+                <div id="alert-actions" class="mt-6 flex gap-2 justify-center">
+                    <button id="alert-cancel" onclick="window.closeAlert()" class="hidden btn-modal bg-slate-200 text-slate-700">Cancel</button>
+                    <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <div id="split-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Split Stay</div><div class="p-6 text-center"><p class="font-black text-slate-700 leading-tight text-md mb-4">Select date and room to split booking.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Creates a zero-balance linked segment to move guests mid-stay.</span></p><input type="date" id="split-date" class="input-base !text-lg !p-2 mb-4"><div id="split-room-dropdown-container" class="mb-6"></div><div class="flex gap-2 justify-center"><button onclick="window.closeModal('split-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button><button onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10">Split</button></div></div></div></div>
     <div id="merge-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Merge Bookings</div><div class="p-6 text-center"><p class="font-black text-slate-700 leading-tight text-md mb-4">Select a booking to absorb.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Absorbed booking will be deleted!</span></p><select id="merge-target" class="input-base !text-sm !p-2 mb-6 cursor-pointer"></select><div class="flex gap-2 justify-center"><button onclick="window.closeModal('merge-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button><button id="merge-confirm-btn" onclick="window.confirmMerge()" class="btn-modal bg-indigo-600 text-white px-10">Merge</button></div></div></div></div>
 
@@ -411,21 +478,22 @@
             fbBad: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg>`
         };
 
+        // PRECISE STATUS PROGRESSION: NEW > FUTURE (default manual) > HERE > LEFT > CANCELLED > NOSHOW > SPECIAL > BLOCKED > CHARGED > VOL > UNCONFIRMED
         const STATUS_CYCLE = [
-            { val: 'future', bg: '#7fc6f5', txt: '#1e293b' },
             { val: 'new', bg: '#ec4899', txt: '#fff' },
+            { val: 'future', bg: '#7fc6f5', txt: '#1e293b' },
             { val: 'here', bg: '#059669', txt: '#fff' },
             { val: 'left', bg: '#aba39d', txt: '#1e293b' },
-            { val: 'unconfirmed', bg: '#8b5cf6', txt: '#fff' },
-            { val: 'noshow', bg: '#000', txt: '#fff' },
             { val: 'cancelled', bg: '#94a3b8', txt: '#1e293b' },
-            { val: 'charged', bg: '#0f172a', txt: '#fbbf24' },
+            { val: 'noshow', bg: '#000000', txt: '#fff' },
             { val: 'special', bg: '#fde047', txt: '#1e293b' },
             { val: 'blocked', bg: '#475569', txt: '#fff' },
-            { val: 'vol', bg: '#fbcfe8', txt: '#831843' }
+            { val: 'charged', bg: '#0f172a', txt: '#fbbf24' },
+            { val: 'vol', bg: '#fbcfe8', txt: '#831843' },
+            { val: 'unconfirmed', bg: '#8b5cf6', txt: '#fff' }
         ];
 
-        $('calendar-legend').innerHTML = `<div class="flex flex-wrap items-center justify-center gap-3"><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#ec4899] border border-[#be185d]"></span> NEW</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#7fc6f5] border border-[#38bdf8]"></span> FUTURE</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#059669] border border-[#047857]"></span> HERE</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#aba39d] border border-[#78716c]"></span> LEFT</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#f3e8ff] border border-[#d8b4fe]"></span> UNCONFIRMED</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#0f172a] border border-[#f59e0b]"></span> CHARGED</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#fbcfe8] border border-[#f472b6]"></span> VOLUNTEER</div></div><div class="w-px h-4 bg-slate-300 hidden md:block"></div><div class="flex flex-wrap items-center justify-center gap-3"><div class="legend-item"><div class="w-3.5 h-4 shrink-0">${SVGS.upFree}</div> FREE UP</div><div class="legend-item"><div class="w-3.5 h-4 shrink-0">${SVGS.upPaid}</div> PAID UP</div><div class="legend-item"><div class="w-4 h-4 shrink-0">${SVGS.link}</div> LINKED</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.ext}</div> EXTENDED</div><div class="legend-item font-black text-[10px] md:text-[11px] text-slate-800"><em>REFUNDABLE (it.)</em></div><div class="legend-item"><div class="border-[2px] border-red-500 w-3 h-3"></div> DUE</div><div class="legend-item"><div class="border-[2px] border-red-500 border-dashed w-3 h-3"></div> BAD CC</div></div><div class="w-px h-4 bg-slate-300 hidden xl:block"></div><div class="flex flex-wrap items-center justify-center gap-3"><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailConf}</div> CONFIRM</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailPre}</div> PRE/POST SENT</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailPreConf}</div> PRE/POST CONF</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailSpec}</div> SPECIAL</div></div>`;
+        $('calendar-legend').innerHTML = `<div class="flex flex-wrap items-center justify-center gap-3"><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#ec4899] border border-[#be185d]"></span> NEW</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#7fc6f5] border border-[#38bdf8]"></span> FUTURE</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#059669] border border-[#047857]"></span> HERE</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#aba39d] border border-[#78716c]"></span> LEFT</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#8b5cf6] border border-[#7c3aed]"></span> UNCONFIRMED</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#0f172a] border border-[#f59e0b]"></span> CHARGED</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#fbcfe8] border border-[#f472b6]"></span> VOLUNTEER</div></div><div class="w-px h-4 bg-slate-300 hidden md:block"></div><div class="flex flex-wrap items-center justify-center gap-3"><div class="legend-item"><div class="w-3.5 h-4 shrink-0">${SVGS.upFree}</div> FREE UP</div><div class="legend-item"><div class="w-3.5 h-4 shrink-0">${SVGS.upPaid}</div> PAID UP</div><div class="legend-item"><div class="w-4 h-4 shrink-0">${SVGS.link}</div> LINKED</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.ext}</div> EXTENDED</div><div class="legend-item font-black text-[10px] md:text-[11px] text-slate-800"><em>REFUNDABLE (it.)</em></div><div class="legend-item"><div class="border-[2px] border-red-500 w-3 h-3"></div> DUE</div><div class="legend-item"><div class="border-[2px] border-red-500 border-dashed w-3 h-3"></div> BAD CC</div></div><div class="w-px h-4 bg-slate-300 hidden xl:block"></div><div class="flex flex-wrap items-center justify-center gap-3"><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailConf}</div> CONFIRM</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailPre}</div> PRE/POST SENT</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailPreConf}</div> PRE/POST CONF</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailSpec}</div> SPECIAL</div></div>`;
 
         const getLocalYMD = d => { const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)); return o.toISOString().split('T')[0]; };
         const parseYMD = str => { if(!str || typeof str !== 'string') return 0; const p = str.split('-'); return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); };
@@ -446,6 +514,97 @@
             if ((oldRec.payments||[]).length !== (newRec.payments||[]).length) changes.push(`Payments: ${(oldRec.payments||[]).length} -> ${(newRec.payments||[]).length}`);
             if (oldRec.notes !== newRec.notes) changes.push(`Notes modified.`);
             return changes.length > 0 ? changes.join(' | ') : "Saved without major changes.";
+        };
+
+        // DATES & STAY CONTROLLER FUNCTIONS
+        window.calcNights = () => {
+            const cI = $('check-in')?.value, cO = $('check-out')?.value;
+            if (!cI || !cO) return 1;
+            const ms = parseYMD(cO) - parseYMD(cI);
+            return Math.max(1, Math.round(ms / 86400000));
+        };
+
+        window.updateNightsDisplay = (forcedNights = null) => {
+            const n = forcedNights !== null ? forcedNights : window.calcNights();
+            const disp = $('booking-nights-display');
+            if (disp) {
+                disp.dataset.nights = n;
+                disp.innerText = `${n} Nt${n > 1 ? 's' : ''}`;
+            }
+            return n;
+        };
+
+        window.getStoredNights = () => {
+            const disp = $('booking-nights-display');
+            const n = parseInt(disp?.dataset?.nights);
+            if (!isNaN(n) && n >= 1) return n;
+            return window.calcNights();
+        };
+
+        // Arrow Nudging: modifies either arrival or departure independently
+        window.nudgeDate = (type, deltaDays) => {
+            const inEl = $('check-in'), outEl = $('check-out');
+            if (!inEl.value || !outEl.value) return;
+
+            if (type === 'in') {
+                const dIn = new Date(inEl.value + "T12:00:00Z");
+                dIn.setUTCDate(dIn.getUTCDate() + deltaDays);
+                const newInStr = dIn.toISOString().split('T')[0];
+                if (newInStr >= outEl.value) return; // Prevent arrival on or after checkout
+                inEl.value = newInStr;
+            } else if (type === 'out') {
+                const dOut = new Date(outEl.value + "T12:00:00Z");
+                dOut.setUTCDate(dOut.getUTCDate() + deltaDays);
+                const newOutStr = dOut.toISOString().split('T')[0];
+                if (newOutStr <= inEl.value) return; // Prevent departure on or before arrival
+                outEl.value = newOutStr;
+            }
+
+            window.updateNightsDisplay();
+            window.updateAvailableRooms();
+            if (window.calcExtension) window.calcExtension();
+        };
+
+        // Date Picker Selection: locks stay length (#Nts) and shifts the entire reservation
+        window.handleCheckInPicker = (newCheckIn) => {
+            if (!newCheckIn) return;
+            const lockedNights = window.getStoredNights();
+            const d = new Date(newCheckIn + "T12:00:00Z");
+            d.setUTCDate(d.getUTCDate() + lockedNights);
+            $('check-out').value = d.toISOString().split('T')[0];
+            window.updateNightsDisplay(lockedNights);
+            window.updateAvailableRooms();
+            if (window.calcExtension) window.calcExtension();
+        };
+
+        window.handleCheckOutPicker = (newCheckOut) => {
+            if (!newCheckOut) return;
+            const lockedNights = window.getStoredNights();
+            const d = new Date(newCheckOut + "T12:00:00Z");
+            d.setUTCDate(d.getUTCDate() - lockedNights);
+            $('check-in').value = d.toISOString().split('T')[0];
+            window.updateNightsDisplay(lockedNights);
+            window.updateAvailableRooms();
+            if (window.calcExtension) window.calcExtension();
+        };
+
+        window.adjustPax = (delta) => {
+            const el = $('pax-count');
+            if (!el) return;
+            let val = Math.max(1, (parseInt(el.value) || 1) + delta);
+            el.value = val;
+            window.calcFinancials();
+            if (window.calcExtension) window.calcExtension();
+        };
+
+        window.addQuickCharge = () => {
+            const extra = prompt("Enter additional amount to add to Total (฿):");
+            if (extra !== null && !isNaN(parseFloat(extra))) {
+                const addVal = parseFloat(extra);
+                const curTot = Number($('total-price').value) || 0;
+                $('total-price').value = (curTot + addVal).toFixed(2);
+                window.calcFinancials();
+            }
         };
 
         let isDragging = false, dragOffsetX, dragOffsetY;
@@ -492,6 +651,7 @@
             }
         };
 
+        // TARGETED DELTA SYNC TRIGGER
         window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypes = null) => {
             if (window.channexConfig && window.channexConfig.apiKey) {
                 try {
@@ -730,9 +890,14 @@
             if (isConfirm) { c.style.display = 'block'; c.classList.remove('hidden'); b.onclick = () => { window.closeAlert(); if(onConfirm) onConfirm(); }; } 
             else { c.style.display = 'none'; c.classList.add('hidden'); b.onclick = window.closeAlert; } 
             m.classList.add('active'); 
+            m.style.display = 'flex';
         };
         
-        window.closeAlert = () => $('alert-modal').classList.remove('active');
+        window.closeAlert = () => {
+            const m = $('alert-modal');
+            m.classList.remove('active');
+            m.style.display = 'none';
+        };
 
         window.renderDashboard = () => {
             const todayStr = getLocalYMD(new Date()); 
@@ -977,7 +1142,28 @@
                     const c = document.createElement('div'), iT = getLocalYMD(days[i]) === todayStr; let fmpShade = ''; const dMs = days[i].getTime(); 
                     for (let f of fmpDates) { const diff = Math.round((dMs - new Date(f + "T12:00:00").getTime()) / 86400000); if (diff === 0) { fmpShade = 'day-fmp-dark'; break; } if (diff >= -2 && diff <= 2) { fmpShade = 'day-fmp-medium'; break; } }
                     c.className = `day-column ${fmpShade} ${iT ? 'day-today' : ''} ${rD.isUnassigned ? 'bg-amber-50/50' : ''}`; 
-                    c.dataset.colIndex = i; c.dataset.dateNum = days[i].getDate(); c.onmouseenter = () => $$(`[data-col-index="${i}"]`).forEach(el => el.classList.add('hover-col')); c.onmouseleave = () => $$(`[data-col-index="${i}"]`).forEach(el => el.classList.remove('hover-col')); c.onclick = () => window.quickAdd(rD.isUnassigned ? "" : rD.id, days[i]); row.appendChild(c); 
+                    c.dataset.colIndex = i; c.dataset.dateNum = days[i].getDate(); c.onmouseenter = () => $$(`[data-col-index="${i}"]`).forEach(el => el.classList.add('hover-col')); c.onmouseleave = () => $$(`[data-col-index="${i}"]`).forEach(el => el.classList.remove('hover-col')); 
+                    
+                    // CLICK ON CALENDAR CELL: If guest modal is open, add/assign room to it!
+                    c.onclick = () => {
+                        const modal = $('guest-modal');
+                        const isModalOpen = modal && modal.style.display === 'flex';
+                        if (isModalOpen) {
+                            if (rD.id && !rD.isUnassigned) {
+                                const curSelects = Array.from($$('.assigned-room-select'));
+                                const emptySelect = curSelects.find(s => !s.value);
+                                if (emptySelect) {
+                                    emptySelect.value = rD.id;
+                                } else if (!curSelects.some(s => s.value === rD.id)) {
+                                    window.addRoomSelect(rD.id);
+                                }
+                                window.updateAvailableRooms();
+                            }
+                        } else {
+                            window.quickAdd(rD.isUnassigned ? "" : rD.id, days[i]);
+                        }
+                    };
+                    row.appendChild(c); 
                 }
 
                 rD.bookings.forEach(s => {
@@ -1073,7 +1259,21 @@
         
         const setMulti = (id, state, labels, classes) => { const el = $(id); if (!el) return; el.dataset.state = state; el.innerText = labels[state]; el.className = id.includes('email') ? `flex-1 min-w-[80px] unselectable multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border text-center whitespace-nowrap ${classes[state]}` : `flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border ${classes[state]}`; };
         window.cycleMulti = (el, labels, classes) => { if (!el) return; let s = parseInt(el.dataset.state) + 1; if(s >= labels.length) s = 0; setMulti(el.id, s, labels, classes); };
-        window.cycleStatus = () => { let sBtn = $('status-cycle-btn'); let cV = sBtn.dataset.value || 'future'; let idx = STATUS_CYCLE.findIndex(x => x.val === cV); idx = (idx + 1) % STATUS_CYCLE.length; let nO = STATUS_CYCLE[idx]; sBtn.dataset.value = nO.val; sBtn.innerText = nO.val; sBtn.style.background = nO.bg; sBtn.style.color = nO.txt; $('guest-status-hidden').value = nO.val; };
+        
+        // STRICT STATUS CYCLE: NEW > FUTURE > HERE > LEFT > CANCELLED > NOSHOW > SPECIAL > BLOCKED > CHARGED > VOL > UNCONFIRMED
+        window.cycleStatus = () => { 
+            let sBtn = $('status-cycle-btn'); 
+            let cV = sBtn.dataset.value || 'future'; 
+            let idx = STATUS_CYCLE.findIndex(x => x.val === cV); 
+            idx = (idx + 1) % STATUS_CYCLE.length; 
+            let nO = STATUS_CYCLE[idx]; 
+            sBtn.dataset.value = nO.val; 
+            sBtn.innerText = nO.val.toUpperCase(); 
+            sBtn.style.background = nO.bg; 
+            sBtn.style.color = nO.txt; 
+            $('guest-status-hidden').value = nO.val; 
+        };
+
         window.toggleBadCC = () => { const b = $('bad-cc-box'); if(b.dataset.bad === 'true') { b.dataset.bad = 'false'; b.innerHTML = ''; b.classList.replace('bg-red-500', 'border-slate-300'); b.classList.remove('border-red-600'); } else { b.dataset.bad = 'true'; b.innerHTML = '<span class="text-white text-[10px] font-black">X</span>'; b.classList.replace('border-slate-300', 'bg-red-500'); b.classList.add('border-red-600'); } };
 
         window.calcFinancials = () => {
@@ -1100,15 +1300,42 @@
         window.updateAvailableRooms = () => {
             const cI = $('check-in').value, cO = $('check-out').value, cId = $('guest-id').value; if(!cI || !cO) return;
             const sU = parseYMD(cI), eU = parseYMD(cO), occ = new Set();
-            staff.forEach(s => { if(s.id === cId || s.status === 'cancelled' || s.status === 'noshow' || s.status === 'unconfirmed' || s.status === 'charged' || s.property !== currentPropertyId) return; if(sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) { (s.rooms?.length ? s.rooms : [s.room]).forEach(r => { if(r) occ.add(r); }); } });
+            staff.forEach(s => { if(s.id === cId || s.status === 'cancelled' || s.status === 'noshow' || s.status === 'unconfirmed' || s.status === 'charged' || s.property !== currentPropertyId) return; if(sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) { (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).forEach(r => { if(r) occ.add(r); }); } });
             $$('.assigned-room-select').forEach(sel => { const cur = sel.value; Array.from(sel.options).forEach(opt => { if(!opt.value) return; if(occ.has(opt.value)) { opt.disabled = true; opt.text = opt.text.replace(' (OCCUPIED)', '') + ' (OCCUPIED)'; } else { opt.disabled = false; opt.text = opt.text.replace(' (OCCUPIED)', ''); } }); sel.value = cur; });
         };
         
+        window.suggestAvailableRoom = (preferredType = null) => {
+            const cI = $('check-in')?.value, cO = $('check-out')?.value, cId = $('guest-id')?.value;
+            if (!cI || !cO) return "";
+            const sU = parseYMD(cI), eU = parseYMD(cO), occ = new Set();
+            staff.forEach(s => { 
+                if (s.id === cId || s.status === 'cancelled' || s.status === 'noshow' || s.status === 'unconfirmed' || s.status === 'charged' || s.property !== currentPropertyId) return; 
+                if (sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) { 
+                    (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).forEach(r => { if(r) occ.add(r); }); 
+                } 
+            });
+            const assignedNow = new Set(Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean));
+            
+            if (preferredType) {
+                const freeInType = hotelRooms.find(r => r.type === preferredType && !occ.has(r.id) && !assignedNow.has(r.id));
+                if (freeInType) return freeInType.id;
+            }
+            const anyFree = hotelRooms.find(r => !occ.has(r.id) && !assignedNow.has(r.id));
+            return anyFree ? anyFree.id : "";
+        };
+
         window.addRoomSelect = (val = "") => {
             const c = $('assigned-rooms-container'); const w = document.createElement('div'); const sel = document.createElement('select'); 
             w.className = "flex items-stretch gap-1 w-full"; sel.className = "assigned-room-select flex-1 min-w-0 bg-white border border-blue-300 text-xs font-bold uppercase text-blue-800 rounded px-1 py-1 outline-none shadow-sm cursor-pointer focus:ring-2 focus:ring-blue-500 text-ellipsis"; sel.innerHTML = `<option value="">-- UNASSIGNED --</option>`; sel.onchange = window.updateAvailableRooms; 
             let cg = '', og = null; 
             hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; let fNum = 1; const nid = (r.id||'').toUpperCase(); if (/^[AB]\d+$/.test(nid)) fNum = parseInt(nid.replace(/\D/g, '') || '0') % 2 !== 0 ? 1 : 2; else if (nid.startsWith('C1')) fNum = 1; else if (nid.startsWith('C2')) fNum = 2; else if (nid.startsWith('C3')) fNum = 3; else if (nid.startsWith('D')) fNum = 1; opt.innerText = `${r.id} - Room ${fNum === 1 ? '↓' : (fNum === 2 ? '↑' : '⇈')} (${r.bed || '?'})`; og.appendChild(opt); }); 
+            
+            // Auto-suggest free room if blank
+            if (!val) {
+                const suggested = window.suggestAvailableRoom($('booked-type')?.value);
+                if (suggested) val = suggested;
+            }
+            
             sel.value = val; const del = document.createElement('button'); del.type = "button"; del.className = "w-6 flex justify-center items-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 flex-shrink-0 shadow-sm transition-colors cursor-pointer"; del.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>`; del.onclick = () => { w.remove(); if(c.children.length === 0) window.addRoomSelect(); window.updateAvailableRooms(); }; 
             w.appendChild(sel); w.appendChild(del); c.appendChild(w); window.updateAvailableRooms();
         };
@@ -1128,44 +1355,75 @@
                 const s = staff.find(x => x.id === $('guest-id').value); if (!s) return window.showAlert("Error: Please save booking first before splitting."); 
                 let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); const nId = Math.random().toString(36).substr(2, 9); const selRoom = extRoomSel.value; const dbRoom = uiToDbRoom(selRoom); 
                 const newBooking = { ...s, id: nId, checkIn: cO, checkOut: nCo, room: dbRoom, rooms: [dbRoom], linkedId: lC, totalPrice: Number(aP), netPrice: Number(aP), netOverride: false, payments: [], extended: true, notes: "Extended segment from multi-room booking.\n" + (s.notes || ""), createdAt: new Date().toISOString(), createdBy: currentUserEmail, auditLog: [] }; 
-                try { 
-                    const sB = $('save-btn'); sB.disabled = true; sB.innerHTML = 'SAVING...'; 
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, linkedId: lC, extended: true }, { merge: true }); 
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), newBooking); 
-                    window.showAlert(`Room ${selRoom} extended by ${days} day(s) as a new linked booking.\n\nOriginal booking preserved.`); 
-                    const extType = (hotelRooms.find(r => r.id === selRoom)?.type) || s.bookedType;
-                    window.triggerAutoSync(cO, nCo, [extType].filter(Boolean)); 
-                    window.closeGuestModal(); 
-                } catch(e) { window.showAlert("Extension failed due to database rules."); } return;
+                try { const sB = $('save-btn'); sB.disabled = true; sB.innerHTML = 'SAVING...'; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, linkedId: lC, extended: true }, { merge: true }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), newBooking); window.showAlert(`Room ${selRoom} extended by ${days} day(s) as a new linked booking.\n\nOriginal booking preserved.`); window.triggerAutoSync(cO, nCo); window.closeGuestModal(); } catch(e) { window.showAlert("Extension failed due to database rules."); } return;
             }
             $('check-out').value = nCo; $('total-price').value = ((Number($('total-price').value) || 0) + Number(aP)).toFixed(2); setMulti('ext-btn', 1, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
             const todayStr = new Date().toLocaleDateString('en-GB').slice(0,5); const extMsg = `\n[EXTENDED on ${todayStr}] Added ${days} day(s). Added ฿${aP} to total.`; $('guest-notes').value = ($('guest-notes').value + extMsg).trim();
-            window.updateAvailableRooms(); window.calcFinancials(); window.calcExtension(); window.showAlert(`Booking extended by ${days} day(s).\n\nCheckout is now ${nCo}.\nAdded ฿${aP} to Total Price.`); 
+            window.updateNightsDisplay(); window.updateAvailableRooms(); window.calcFinancials(); window.calcExtension(); window.showAlert(`Booking extended by ${days} day(s).\n\nCheckout is now ${nCo}.\nAdded ฿${aP} to Total Price.`); 
         };
 
         window.populateStaffForm = (s = {}) => {
             const isN = !s.id; const f = $('guest-form'); if(f) f.reset(); const mC = $('guest-modal-content'); mC.style.position = 'relative'; mC.style.left = 'auto'; mC.style.top = 'auto'; mC.style.margin = '0'; 
             const bcc = $('bad-cc-box'); bcc.dataset.bad = s.badCC ? 'true' : 'false'; bcc.innerHTML = s.badCC ? '<span class="text-white text-[10px] font-black">X</span>' : ''; bcc.className = `w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center ${s.badCC ? 'bg-red-500 border-red-600' : ''}`; 
             [ ['guest-id', s.id], ['first-name', s.firstName], ['last-name', s.lastName], ['phone', s.phone], ['email', s.email], ['booked-type', s.bookedType], ['check-in', s.checkIn], ['check-out', s.checkOut], ['booking-date', s.bookDate], ['booking-id', s.bookId], ['link-code', s.linkedId], ['guest-country', s.country], ['pax-count', s.pax || 1], ['booking-source', s.source || 'direct'], ['guest-notes', s.notes], ['total-price', Number(s.totalPrice || 0).toFixed(2)], ['net-price', Number(s.netPrice || 0).toFixed(2)] ].forEach(([id, val]) => { const el = $(id); if(el) el.value = val || ""; }); 
-            let pSt = s.status || "future"; $('guest-status-hidden').value = pSt; let sObj = STATUS_CYCLE.find(x => x.val === pSt) || STATUS_CYCLE[0]; let sBtn = $('status-cycle-btn'); sBtn.dataset.value = sObj.val; sBtn.innerText = sObj.val; sBtn.style.background = sObj.bg; sBtn.style.color = sObj.txt;
+            
+            // Manual bookings cleanly start at 'future'
+            let pSt = s.status || "future"; 
+            $('guest-status-hidden').value = pSt; 
+            let sObj = STATUS_CYCLE.find(x => x.val === pSt) || STATUS_CYCLE[1]; // default FUTURE
+            let sBtn = $('status-cycle-btn'); 
+            sBtn.dataset.value = sObj.val; 
+            sBtn.innerText = sObj.val.toUpperCase(); 
+            sBtn.style.background = sObj.bg; 
+            sBtn.style.color = sObj.txt;
+
             $('net-price').dataset.override = s.netOverride ? 'true' : 'false'; 
-            $('assigned-rooms-container').innerHTML = ''; const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : (isN ? [] : [""])); if(rL.length > 0) { rL.forEach(r => window.addRoomSelect(r)); } else { window.addRoomSelect(""); } 
-            $('payments-list').innerHTML = ''; if(s.payments) s.payments.forEach(p => window.addPaymentRow(p.date, Number(p.amt || 0).toFixed(2), p.method, true));
-            setMulti('email-confirm-btn', s.emailConfirm ? 1 : 0, ['CONFIRM: --', 'CONFIRM: SENT'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); setMulti('email-prepost-btn', !s.emailPrePost ? 0 : (s.emailPrePost==='sent'?1:2), ['PRE/POST: --', 'PRE/POST: SENT', 'PRE/POST: CONF'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400']); setMulti('email-special-btn', s.emailSpecial ? 1 : 0, ['SPECIAL: --', 'SPECIAL: SENT'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400']); setMulti('refund-btn', s.refundability === 'non-ref' ? 1 : (s.refundability === 'ref' ? 2 : 0), ['REFUNDABILITY: ?', 'NON-REFUNDABLE', 'REFUNDABLE'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400']); setMulti('upgrade-btn', !s.upgrade || s.upgrade === 'none' ? 0 : (s.upgrade === 'free' ? 1 : 2), ['NO UPGRADE', 'FREE UPGRADE', 'PAID UPGRADE'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400', 'bg-green-100 text-green-700 border-green-400']); setMulti('rating-btn', !s.rating || s.rating === 'none' ? 0 : (s.rating === 'good' ? 1 : 2), ['FEEDBACK: --', 'FEEDBACK: ✔ GOOD', 'FEEDBACK: ❌ BAD'], ['text-slate-400', 'bg-green-100 text-green-700 border-green-400', 'bg-red-100 text-red-700 border-red-400']); setMulti('ext-btn', s.extended ? 1 : 0, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
+            $('assigned-rooms-container').innerHTML = ''; 
+            const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : (isN ? [] : [""])); 
+            if(rL.length > 0) { rL.forEach(r => window.addRoomSelect(r)); } else { window.addRoomSelect(""); } 
+            $('payments-list').innerHTML = ''; 
+            if(s.payments) s.payments.forEach(p => window.addPaymentRow(p.date, Number(p.amt || 0).toFixed(2), p.method, true));
+
+            setMulti('email-confirm-btn', s.emailConfirm ? 1 : 0, ['CONFIRM: --', 'CONFIRM: SENT'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
+            setMulti('email-prepost-btn', !s.emailPrePost ? 0 : (s.emailPrePost==='sent'?1:2), ['PRE/POST: --', 'PRE/POST: SENT', 'PRE/POST: CONF'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400']); 
+            setMulti('email-special-btn', s.emailSpecial ? 1 : 0, ['SPECIAL: --', 'SPECIAL: SENT'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400']); 
+            setMulti('refund-btn', s.refundability === 'non-ref' ? 1 : (s.refundability === 'ref' ? 2 : 0), ['REFUNDABILITY: ?', 'NON-REFUNDABLE', 'REFUNDABLE'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400']); 
+            setMulti('upgrade-btn', !s.upgrade || s.upgrade === 'none' ? 0 : (s.upgrade === 'free' ? 1 : 2), ['NO UPGRADE', 'FREE UPGRADE', 'PAID UPGRADE'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400', 'bg-green-100 text-green-700 border-green-400']); 
+            setMulti('rating-btn', !s.rating || s.rating === 'none' ? 0 : (s.rating === 'good' ? 1 : 2), ['FEEDBACK: --', 'FEEDBACK: ✔ GOOD', 'FEEDBACK: ❌ BAD'], ['text-slate-400', 'bg-green-100 text-green-700 border-green-400', 'bg-red-100 text-red-700 border-red-400']); 
+            setMulti('ext-btn', s.extended ? 1 : 0, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
+
             $('ext-days').value = 1; $('ext-avg-rate').value = ''; $('ext-price').value = ''; $('ext-avg-rate').classList.remove('text-pink-600', 'bg-pink-100'); $('btn-check-bdc').classList.replace('bg-pink-500', 'bg-slate-200'); $('btn-check-bdc').classList.replace('text-white', 'text-slate-700'); $('btn-check-bdc').classList.remove('animate-pulse');
-            window.updateHeaderName(); window.checkEmailProxy(s.email || ""); window.calcFinancials(); window.updateAvailableRooms(); if(window.calcExtension) window.calcExtension(); 
-            window.toggleSection('guest-profile-section', 'profile-chevron', true); window.toggleSection('ext-section', 'ext-chevron', false); window.toggleSection('fin-section', 'fin-chevron', true); window.toggleSection('meta-section', 'meta-chevron', true);
+            
+            window.updateHeaderName(); 
+            window.checkEmailProxy(s.email || ""); 
+            window.calcFinancials(); 
+            window.updateAvailableRooms(); 
+            window.updateNightsDisplay(); 
+            if(window.calcExtension) window.calcExtension(); 
+
+            window.toggleSection('guest-profile-section', 'profile-chevron', true); 
+            window.toggleSection('ext-section', 'ext-chevron', false); 
+            window.toggleSection('fin-section', 'fin-chevron', true); 
+            window.toggleSection('meta-section', 'meta-chevron', true);
+            
             ['delete-btn', 'split-btn', 'merge-btn', 'dup-btn', 'hist-btn'].forEach(id => { const el = $(id); if (el) el.style.visibility = isN ? 'hidden' : 'visible'; }); 
             $('audit-log').innerText = isN ? `NEW RECORD | CREATING AS ${currentUserEmail.toUpperCase()}` : `CREATED BY ${s.createdBy||'UNKNOWN'} ON ${s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-GB').slice(0,5) : '--'}` + (s.lastEditedBy ? ` | LAST EDIT: ${s.lastEditedBy} ON ${new Date(s.lastEditedAt).toLocaleDateString('en-GB').slice(0,5)}` : ''); 
             if(currentUserRole === 'staff') { ['delete-btn', 'split-btn', 'merge-btn'].forEach(id => { if($(id)) $(id).style.visibility = 'hidden'; }); $('save-btn').style.display = 'none'; }
             $('guest-modal').style.display = 'flex';
+            lucide.createIcons();
         };
 
         window.editStaff = id => { const s = staff.find(x => x.id === id); if (s) window.populateStaffForm(s); }; 
         window.closeGuestModal = () => { $('guest-modal').style.display = 'none'; try { window.history.replaceState({}, document.title, window.location.pathname); } catch(e) {} }; 
         
         window.quickAdd = (r, d) => { 
-            window.populateStaffForm({}); $('assigned-rooms-container').innerHTML = ''; window.addRoomSelect(r); $('check-in').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; const o = new Date(d); o.setDate(d.getDate() + 1); $('check-out').value = `${o.getFullYear()}-${String(o.getMonth() + 1).padStart(2, '0')}-${String(o.getDate()).padStart(2, '0')}`; 
+            window.populateStaffForm({}); 
+            $('check-in').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; 
+            const o = new Date(d); o.setDate(d.getDate() + 1); 
+            $('check-out').value = `${o.getFullYear()}-${String(o.getMonth() + 1).padStart(2, '0')}-${String(o.getDate()).padStart(2, '0')}`; 
+            window.updateNightsDisplay();
+            $('assigned-rooms-container').innerHTML = ''; 
+            window.addRoomSelect(r); 
             const directBookings = staff.filter(s => s.property === currentPropertyId && s.bookId && s.bookId.startsWith('SW')).sort((a,b) => { const numA = parseInt(a.bookId.replace('SW', '')) || 0; const numB = parseInt(b.bookId.replace('SW', '')) || 0; return numB - numA; });
             let nextNum = 1; if (directBookings.length > 0) { nextNum = (parseInt(directBookings[0].bookId.replace('SW', '')) || 0) + 1; }
             $('booking-id').value = `SW${String(nextNum).padStart(5, '0')}`; $('booking-date').value = getLocalYMD(new Date());
@@ -1175,7 +1433,15 @@
         window.showAuditHistory = () => {
             const id = $('guest-id').value; const s = staff.find(x => x.id === id); if (!s) return; const logs = s.auditLog || [];
             let html = logs.length === 0 ? '<p class="text-slate-400 italic">No history recorded yet.</p>' : logs.slice().reverse().map(l => `<div class="text-left text-xs border-b border-slate-200 pb-2 mb-2"><div class="font-black text-slate-800">${new Date(l.ts).toLocaleString('en-GB')} by ${l.user}</div><div class="text-slate-600">${l.msg}</div></div>`).join('');
-            $('alert-header').innerText = `Audit History: ${s.lastName}`; $('alert-message').innerHTML = `<div class="max-h-[300px] overflow-y-auto no-scrollbar">${html}</div>`; $('alert-cancel').className = 'hidden'; $('alert-confirm').innerText = 'Close'; $('alert-confirm').className = 'px-10 py-2 rounded-lg font-black text-sm uppercase bg-slate-800 text-white'; $('alert-modal').style.display = 'flex';
+            $('alert-header').innerText = `Audit History: ${s.lastName}`; 
+            $('alert-message').innerHTML = `<div class="max-h-[300px] overflow-y-auto no-scrollbar">${html}</div>`; 
+            $('alert-cancel').className = 'hidden'; 
+            $('alert-confirm').innerText = 'Close'; 
+            $('alert-confirm').className = 'btn-modal bg-slate-800 text-white px-10'; 
+            $('alert-confirm').onclick = window.closeAlert;
+            const m = $('alert-modal');
+            m.classList.add('active');
+            m.style.display = 'flex';
         };
 
         window.globalPassportSync = async () => {
@@ -1394,7 +1660,6 @@
                 
                 await Promise.race([savePromise, timeoutPromise]); 
                 
-                // Identify exactly which room type(s) were changed
                 const bookingRoomTypes = Array.from(new Set([
                     ...rL.map(rId => {
                         const hr = hotelRooms.find(hr => hr.id === rId);
@@ -1432,91 +1697,11 @@
             }); 
         };
         
-        window.requestDuplicate = async () => { 
-            if(currentUserRole === 'staff') return; 
-            try { 
-                const s = staff.find(x => x.id === $('guest-id').value); 
-                if (!s) return; 
-                let lC = $('link-code').value.trim().toUpperCase() || s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); 
-                if(!s.linkedId) { 
-                    let dbR = (s.rooms || []).map(uiToDbRoom); 
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, linkedId: lC }); 
-                } 
-                const nId = Math.random().toString(36).substr(2, 9); 
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, room: "", rooms: [""], linkedId: lC, payments: [], extended: false, createdAt: new Date().toISOString(), createdBy: currentUserEmail, lastEditedAt: null, lastEditedBy: null, auditLog: [] }); 
-                const dupTypes = s.bookedType ? [s.bookedType] : [];
-                window.triggerAutoSync(s.checkIn, s.checkOut, dupTypes); 
-                window.closeGuestModal(); 
-            } catch (e) { window.showAlert("Duplicate blocked by Firebase Rules."); } 
-        };
-
-        window.requestSplit = () => { 
-            if(currentUserRole === 'staff') return; 
-            const s = staff.find(x => x.id === $('guest-id').value); 
-            if (!s) return; 
-            const sd = $('split-date'); 
-            sd.value = ""; 
-            sd.min = s.checkIn; 
-            sd.max = s.checkOut; 
-            const c = $('split-room-dropdown-container'); 
-            const sel = document.createElement('select'); 
-            sel.id = 'split-room-select'; 
-            sel.className = "input-base text-lg !p-2 cursor-pointer"; 
-            sel.innerHTML = `<option value="">-- SELECT NEW ROOM --</option>`; 
-            let cg = '', og = null; 
-            hotelRooms.forEach(r => { 
-                if (r.type !== cg) { 
-                    og = document.createElement('optgroup'); 
-                    og.label = `--- ${r.type.toUpperCase()} ---`; 
-                    sel.appendChild(og); 
-                    cg = r.type; 
-                } 
-                const opt = document.createElement('option'); 
-                opt.value = r.id; 
-                opt.innerText = `${r.id} - ${r.type}`; 
-                og.appendChild(opt); 
-            }); 
-            c.innerHTML = ''; 
-            c.appendChild(sel); 
-            $('split-modal').style.display = 'flex'; 
-        };
-
-        window.confirmSplit = async () => { 
-            const sD = $('split-date').value; 
-            const newRoom = $('split-room-select').value; 
-            const s = staff.find(x => x.id === $('guest-id').value); 
-            if (!sD || sD <= s.checkIn || sD >= s.checkOut) return window.showAlert("Invalid split date."); 
-            if (!newRoom) return window.showAlert("Please select a new room for the split."); 
-            let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); 
-            let nId = Math.random().toString(36).substr(2, 9); 
-            let dbR = (s.rooms || []).map(uiToDbRoom); 
-            let nDbRoom = uiToDbRoom(newRoom); 
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, checkOut: sD, linkedId: lC }); 
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, checkIn: sD, room: nDbRoom, rooms: [nDbRoom], linkedId: lC, totalPrice: 0, netPrice: 0, payments: [], extended: false, notes: "Split segment for mid-stay room change. Master folio kept on original booking.\n" + (s.notes || ""), auditLog: [] }); 
-            $('split-modal').style.display = 'none'; 
-            const splitTypes = [s.bookedType, (hotelRooms.find(r => r.id === newRoom)?.type)].filter(Boolean);
-            window.triggerAutoSync(s.checkIn, s.checkOut, splitTypes); 
-            window.closeGuestModal(); 
-        };
-
-        window.requestMerge = () => { 
-            if(currentUserRole === 'staff') return; 
-            const cId = $('guest-id').value; 
-            if (!cId) return window.showAlert("Please save this booking first before merging."); 
-            const c = staff.find(x => x.id === cId); 
-            if (!c) return; 
-            const sel = $('merge-target'); 
-            sel.innerHTML = '<option value="">-- SELECT BOOKING --</option>'; 
-            [...staff].filter(s => s.property === currentPropertyId && s.id !== cId && s.status !== 'cancelled' && s.status !== 'noshow').sort((a,b) => (a.lastName === c.lastName ? -1 : (b.lastName === c.lastName ? 1 : a.checkIn.localeCompare(b.checkIn)))).forEach(s => { 
-                const opt = document.createElement('option'); 
-                opt.value = s.id; 
-                opt.innerText = `${s.lastName}, ${s.firstName} (${s.checkIn.substr(5)} to ${s.checkOut.substr(5)})`; 
-                if (s.lastName === c.lastName) opt.className = "text-indigo-600 font-black"; 
-                sel.appendChild(opt); 
-            }); 
-            $('merge-modal').style.display = 'flex'; 
-        };
-
+        window.requestDuplicate = async () => { if(currentUserRole === 'staff') return; try { const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; let lC = $('link-code').value.trim().toUpperCase() || s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); if(!s.linkedId) { let dbR = (s.rooms || []).map(uiToDbRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, linkedId: lC }); } const nId = Math.random().toString(36).substr(2, 9); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, room: "", rooms: [""], linkedId: lC, payments: [], extended: false, createdAt: new Date().toISOString(), createdBy: currentUserEmail, lastEditedAt: null, lastEditedBy: null, auditLog: [] }); window.triggerAutoSync(s.checkIn, s.checkOut); window.closeGuestModal(); } catch (e) { window.showAlert("Duplicate blocked by Firebase Rules."); } };
+        window.requestSplit = () => { if(currentUserRole === 'staff') return; const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; const sd = $('split-date'); sd.value = ""; sd.min = s.checkIn; sd.max = s.checkOut; const c = $('split-room-dropdown-container'); const sel = document.createElement('select'); sel.id = 'split-room-select'; sel.className = "input-base text-lg !p-2 cursor-pointer"; sel.innerHTML = `<option value="">-- SELECT NEW ROOM --</option>`; let cg = '', og = null; hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; opt.innerText = `${r.id} - ${r.type}`; og.appendChild(opt); }); c.innerHTML = ''; c.appendChild(sel); $('split-modal').style.display = 'flex'; };
+        window.confirmSplit = async () => { const sD = $('split-date').value; const newRoom = $('split-room-select').value; const s = staff.find(x => x.id === $('guest-id').value); if (!sD || sD <= s.checkIn || sD >= s.checkOut) return window.showAlert("Invalid split date."); if (!newRoom) return window.showAlert("Please select a new room for the split."); let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); let nId = Math.random().toString(36).substr(2, 9); let dbR = (s.rooms || []).map(uiToDbRoom); let nDbRoom = uiToDbRoom(newRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, checkOut: sD, linkedId: lC }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, checkIn: sD, room: nDbRoom, rooms: [nDbRoom], linkedId: lC, totalPrice: 0, netPrice: 0, payments: [], extended: false, notes: "Split segment for mid-stay room change. Master folio kept on original booking.\n" + (s.notes || ""), auditLog: [] }); $('split-modal').style.display = 'none'; window.triggerAutoSync(s.checkIn, s.checkOut); window.closeGuestModal(); };
+        window.requestMerge = () => { if(currentUserRole === 'staff') return; const cId = $('guest-id').value; if (!cId) return window.showAlert("Please save this booking first before merging."); const c = staff.find(x => x.id === cId); if (!c) return; const sel = $('merge-target'); sel.innerHTML = '<option value="">-- SELECT BOOKING --</option>'; [...staff].filter(s => s.property === currentPropertyId && s.id !== cId && s.status !== 'cancelled' && s.status !== 'noshow').sort((a,b) => (a.lastName === c.lastName ? -1 : (b.lastName === c.lastName ? 1 : a.checkIn.localeCompare(b.checkIn)))).forEach(s => { const opt = document.createElement('option'); opt.value = s.id; opt.innerText = `${s.lastName}, ${s.firstName} (${s.checkIn.substr(5)} to ${s.checkOut.substr(5)})`; if (s.lastName === c.lastName) opt.className = "text-indigo-600 font-black"; sel.appendChild(opt); }); $('merge-modal').style.display = 'flex'; };
+        
         window.confirmMerge = async () => { 
             const tId = $('merge-target').value; 
             if(!tId) return window.showAlert("Please select a booking to merge."); 
@@ -1535,16 +1720,21 @@
                 }); 
                 $('check-in').value = c.checkIn < t.checkIn ? c.checkIn : t.checkIn; 
                 $('check-out').value = c.checkOut > t.checkOut ? c.checkOut : t.checkOut; 
-                $('total-price').value = Number(c.totalPrice || 0) + Number(t.totalPrice || 0); 
-                $('net-price').value = Number(c.netPrice || 0) + Number(t.netPrice || 0); 
+                $('total-price').value = (Number(c.totalPrice || 0) + Number(t.totalPrice || 0)).toFixed(2); 
+                $('net-price').value = (Number(c.netPrice || 0) + Number(t.netPrice || 0)).toFixed(2); 
                 $('guest-notes').value = mNotes.trim(); 
                 $('pax-count').value = Math.max(c.pax || 1, t.pax || 1); 
                 (t.payments || []).forEach(p => window.addPaymentRow(p.date, Number(p.amt||0).toFixed(2), p.method, true)); 
                 const cR = Array.from(new Set([...Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean), ...(t.rooms || []).filter(Boolean)])); 
                 $('assigned-rooms-container').innerHTML = ''; 
                 if (cR.length > 0) cR.forEach(r => window.addRoomSelect(r)); else window.addRoomSelect(""); 
+                
+                // MERGING SETS EXTENDED TAG PROMINENTLY
+                setMulti('ext-btn', 1, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']);
+
                 window.calcFinancials(); 
                 window.updateAvailableRooms(); 
+                window.updateNightsDisplay();
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', t.id)); 
                 $('merge-modal').style.display = 'none'; 
                 window.saveBooking(true); 
