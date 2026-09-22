@@ -22,6 +22,7 @@
             .label-base { @apply text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest block; }
             .field-label { @apply text-[11px] font-black text-slate-500 uppercase block mb-[-2px]; }
             .section-header { @apply bg-slate-200 hover:bg-slate-300 px-2 py-1 text-[0.75rem] font-black uppercase text-slate-600 cursor-pointer flex justify-between items-center border-y border-slate-300 transition-colors; }
+            .preset-pill { @apply px-2 py-1 bg-slate-100 hover:bg-blue-100 hover:text-blue-700 text-slate-600 border border-slate-300 rounded text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer select-none; }
         }
 
         body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; font-size: 1.2rem; overscroll-behavior-y: none; }
@@ -164,7 +165,6 @@
                             <div class="p-3 border-b border-slate-200 bg-slate-50">
                                 <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Active Property</label>
                                 <select id="main-property-switcher" onchange="window.handlePropertySwitch(this.value)" class="w-full bg-white text-slate-800 font-black uppercase text-xs rounded px-2 py-1.5 outline-none cursor-pointer border border-slate-300 shadow-sm focus:ring-2 focus:ring-blue-500">
-                                    <!-- Populated Dynamically -->
                                 </select>
                             </div>
                             <div class="py-1">
@@ -181,7 +181,6 @@
             </div>
         </div>
 
-        <!-- DASHBOARD VIEW -->
         <div id="dashboard-view" class="flex-1 flex flex-col min-h-0 bg-slate-100 overflow-y-auto hidden gap-2 p-0 sm:p-2">
             <div class="flex items-center justify-between bg-white p-2 rounded-lg shadow-sm border border-slate-200 shrink-0">
                 <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg flex items-center gap-2"><i data-lucide="layout-dashboard" class="text-blue-600"></i> Today's Snapshot <span id="dash-date-display" class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded ml-2">--</span></h2>
@@ -206,7 +205,6 @@
             </div>
         </div>
 
-        <!-- CALENDAR VIEW -->
         <div id="calendar-view" class="flex-1 flex flex-col min-h-0 unselectable">
             <div id="calendar-scroll-container" class="flex-1 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-auto relative overscroll-none">
                 <div id="calendar-header-months" class="timeline-grid sticky top-0 z-[60] bg-slate-800 shadow-sm border-b border-slate-700 h-[26px] box-border"></div>
@@ -216,7 +214,6 @@
             <footer id="calendar-legend" class="mt-1 bg-white p-1.5 sm:rounded-lg border border-slate-200 flex flex-col md:flex-row flex-wrap shrink-0 items-center justify-center gap-x-4 gap-y-2 text-center text-[10px] md:text-[11px]"></footer>
         </div>
 
-        <!-- DATABASE VIEW -->
         <div id="database-view" class="flex-1 flex flex-col min-h-0 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-hidden hidden">
             <div class="p-2 bg-slate-100 border-b border-slate-300 flex flex-wrap gap-2 items-center text-xs unselectable shrink-0">
                 <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-room-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-36 cursor-pointer"><span id="db-room-label" class="truncate">ALL ROOMS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-room-dropdown" class="multi-select-dropdown absolute mt-1 w-48 bg-white border border-slate-300 rounded shadow-lg z-50 hidden"></div></div>
@@ -233,7 +230,6 @@
         </div>
     </div>
 
-    <!-- GUEST FOLIO MODAL -->
     <div id="guest-modal" class="modal-overlay">
         <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800">
             <div id="modal-header-btn" class="bg-slate-900 p-2 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable" onmousedown="window.startDrag(event)">
@@ -265,7 +261,6 @@
                 <div class="bg-slate-50 p-1.5 rounded-md border border-slate-200 space-y-1.5">
                     <!-- Row 1: IN <[date]>   OUT <[date]>   #Nts -->
                     <div class="flex items-center gap-1.5">
-                        <!-- IN Control -->
                         <div class="w-[130px] shrink-0">
                             <label class="field-label text-center mb-0.5">IN</label>
                             <div class="flex items-stretch bg-white border border-slate-300 rounded overflow-hidden shadow-sm h-[28px]">
@@ -275,7 +270,6 @@
                             </div>
                         </div>
 
-                        <!-- OUT Control -->
                         <div class="w-[130px] shrink-0">
                             <label class="field-label text-center mb-0.5">OUT</label>
                             <div class="flex items-stretch bg-white border border-slate-300 rounded overflow-hidden shadow-sm h-[28px]">
@@ -285,7 +279,6 @@
                             </div>
                         </div>
 
-                        <!-- #Nts Info Display -->
                         <div class="flex-1 min-w-0 flex flex-col items-center">
                             <label class="field-label text-center mb-0.5">#NTS</label>
                             <div id="booking-nights-display" class="w-full h-[28px] bg-indigo-50 border border-indigo-200 rounded font-black text-xs text-indigo-700 flex items-center justify-center shadow-sm select-none tracking-wide" title="Stay Duration">1 Nt</div>
@@ -336,7 +329,7 @@
                     <div class="flex justify-between items-end border-b-2 border-slate-200 pb-1 mb-1">
                         <div class="flex gap-2 items-end">
                             <div>
-                                <div class="flex items-center justify-between"><label class="field-label">Total Price</label><button type="button" onclick="window.addQuickCharge()" class="text-[9px] font-black text-blue-600 hover:underline cursor-pointer ml-2">+ ADD ฿</button></div>
+                                <div class="flex items-center justify-between"><label class="field-label">Total Price</label><button type="button" onclick="window.openChargeModal()" class="text-[9px] font-black text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-1 py-0.5 rounded cursor-pointer ml-1.5 shadow-sm transition-colors border border-blue-200">+ ADD ฿</button></div>
                                 <div class="flex items-center text-lg font-black">฿<input type="number" id="total-price" value="0" step="0.01" class="w-20 p-0 ml-1 border-none bg-transparent outline-none focus:ring-0 text-lg font-black" oninput="window.calcFinancials(); window.calcExtension && window.calcExtension();"></div>
                             </div>
                             <div class="mb-0.5"><label class="field-label text-[9px] text-slate-400 cursor-pointer hover:text-blue-500" onclick="$('net-price').focus()">Net Est.</label><div class="flex items-center text-xs font-bold text-slate-500">฿<input type="number" id="net-price" value="0" step="0.01" class="w-14 p-0 ml-0.5 border-none bg-transparent outline-none focus:ring-0 text-xs font-bold text-slate-500 transition-all focus:bg-white focus:border focus:border-blue-300 focus:rounded px-1" oninput="window.overrideNet()"></div></div>
@@ -347,6 +340,16 @@
                             <div class="flex flex-col items-center justify-center ml-1 border-l border-slate-300 pl-1.5 cursor-pointer unselectable" onclick="window.toggleBadCC()"><span class="text-[9px] font-black leading-none text-slate-400">BAD</span><span class="text-[9px] font-black leading-none text-slate-400">CC</span><div id="bad-cc-box" class="w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center"></div></div>
                         </div>
                     </div>
+
+                    <!-- Itemized Extra Charges Container -->
+                    <div id="extra-charges-wrapper" class="hidden mb-1.5 p-1 bg-amber-50/70 border border-amber-200 rounded">
+                        <div class="flex justify-between items-center text-[9px] font-black uppercase text-amber-800 mb-1 px-1 border-b border-amber-200 pb-0.5">
+                            <span>Itemized Add-ons / Services</span>
+                            <span id="extra-charges-total" class="text-amber-900">+฿0</span>
+                        </div>
+                        <div id="extra-charges-list" class="space-y-1"></div>
+                    </div>
+
                     <div id="payments-list" class="space-y-1 mb-1.5"></div>
                     <button type="button" onclick="window.addPaymentRow()" class="w-full py-1 border-2 border-dashed border-slate-300 rounded text-xs font-black text-slate-500 hover:bg-slate-200 uppercase unselectable transition-colors cursor-pointer">+ ADD PAYMENT</button>
                 </div>
@@ -381,7 +384,47 @@
         </div>
     </div>
 
-    <!-- MODALS -->
+    <div id="charge-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm">
+                <span class="flex items-center gap-1.5"><i data-lucide="plus-circle" size="16" class="text-blue-400"></i> Add Itemized Charge</span>
+                <button type="button" onclick="window.closeModal('charge-modal')" class="p-1 hover:bg-slate-800 rounded cursor-pointer"><i data-lucide="x" size="18"></i></button>
+            </div>
+            <div class="p-4 flex flex-col gap-3">
+                <div>
+                    <label class="field-label mb-1">Quick Presets</label>
+                    <div class="flex flex-wrap gap-1">
+                        <span class="preset-pill" onclick="window.applyChargePreset('Ferry Ticket', 400)">Ferry ฿400</span>
+                        <span class="preset-pill" onclick="window.applyChargePreset('Van Transfer', 300)">Transfer ฿300</span>
+                        <span class="preset-pill" onclick="window.applyChargePreset('Drink Package', 350)">Drinks ฿350</span>
+                        <span class="preset-pill" onclick="window.applyChargePreset('Tour Package', 1200)">Tour ฿1200</span>
+                        <span class="preset-pill" onclick="window.applyChargePreset('Laundry', 100)">Laundry ฿100</span>
+                        <span class="preset-pill" onclick="window.applyChargePreset('Late Checkout', 300)">Late Out ฿300</span>
+                        <span class="preset-pill" onclick="window.applyChargePreset('Scooter Rental', 250)">Scooter ฿250</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="field-label mb-0.5">Description</label>
+                    <input type="text" id="charge-desc" placeholder="e.g. Airport Van, Towel Rental..." class="input-base !p-2 !text-xs uppercase font-black">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="field-label mb-0.5">Amount (฿)</label>
+                        <input type="number" id="charge-amount" step="any" placeholder="0" class="input-base !p-2 !text-sm font-black text-blue-700">
+                    </div>
+                    <div>
+                        <label class="field-label mb-0.5">Date</label>
+                        <input type="date" id="charge-date" class="input-base !p-2 !text-xs font-black cursor-pointer">
+                    </div>
+                </div>
+                <div class="flex gap-2 justify-end mt-2">
+                    <button type="button" onclick="window.closeModal('charge-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button>
+                    <button type="button" onclick="window.confirmAddCharge()" class="btn-modal bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 shadow-md"><i data-lucide="check" size="14"></i> Add to Folio</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="email-modal" class="alert-modal-overlay">
         <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col">
             <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm">
@@ -403,9 +446,12 @@
     
     <div id="alert-modal" class="alert-modal-overlay">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
-            <div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Attention</div>
+            <div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase flex items-center justify-between text-sm">
+                <span id="alert-header-title">Attention</span>
+                <button type="button" onclick="window.closeAlert()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="18"></i></button>
+            </div>
             <div class="p-6 text-center">
-                <p id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></p>
+                <div id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></div>
                 <div id="alert-actions" class="mt-6 flex gap-2 justify-center">
                     <button id="alert-cancel" onclick="window.closeAlert()" class="hidden btn-modal bg-slate-200 text-slate-700">Cancel</button>
                     <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
@@ -465,6 +511,9 @@
         let roomTypes = [];
         let fmpDates = [];
 
+        // State holder for active extra charges in current booking
+        window.activeExtraCharges = [];
+
         const SVGS = {
             upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
             upPaid: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#4ade80" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -478,7 +527,7 @@
             fbBad: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg>`
         };
 
-        // PRECISE STATUS PROGRESSION: NEW > FUTURE (default manual) > HERE > LEFT > CANCELLED > NOSHOW > SPECIAL > BLOCKED > CHARGED > VOL > UNCONFIRMED
+        // STRICT STATUS CYCLE: NEW > FUTURE (manual bookings start here) > HERE > LEFT > CANCELLED > NOSHOW > SPECIAL > BLOCKED > CHARGED > VOL > UNCONFIRMED
         const STATUS_CYCLE = [
             { val: 'new', bg: '#ec4899', txt: '#fff' },
             { val: 'future', bg: '#7fc6f5', txt: '#1e293b' },
@@ -512,11 +561,11 @@
             if (oldRec.rooms?.join(',') !== newRec.rooms?.join(',')) changes.push(`Rooms: ${oldRec.rooms?.join(',')} -> ${newRec.rooms?.join(',')}`);
             if (oldRec.totalPrice != newRec.totalPrice) changes.push(`Price: ${oldRec.totalPrice} -> ${newRec.totalPrice}`);
             if ((oldRec.payments||[]).length !== (newRec.payments||[]).length) changes.push(`Payments: ${(oldRec.payments||[]).length} -> ${(newRec.payments||[]).length}`);
+            if ((oldRec.extraCharges||[]).length !== (newRec.extraCharges||[]).length) changes.push(`Charges: ${(oldRec.extraCharges||[]).length} -> ${(newRec.extraCharges||[]).length}`);
             if (oldRec.notes !== newRec.notes) changes.push(`Notes modified.`);
             return changes.length > 0 ? changes.join(' | ') : "Saved without major changes.";
         };
 
-        // DATES & STAY CONTROLLER FUNCTIONS
         window.calcNights = () => {
             const cI = $('check-in')?.value, cO = $('check-out')?.value;
             if (!cI || !cO) return 1;
@@ -550,13 +599,13 @@
                 const dIn = new Date(inEl.value + "T12:00:00Z");
                 dIn.setUTCDate(dIn.getUTCDate() + deltaDays);
                 const newInStr = dIn.toISOString().split('T')[0];
-                if (newInStr >= outEl.value) return; // Prevent arrival on or after checkout
+                if (newInStr >= outEl.value) return; 
                 inEl.value = newInStr;
             } else if (type === 'out') {
                 const dOut = new Date(outEl.value + "T12:00:00Z");
                 dOut.setUTCDate(dOut.getUTCDate() + deltaDays);
                 const newOutStr = dOut.toISOString().split('T')[0];
-                if (newOutStr <= inEl.value) return; // Prevent departure on or before arrival
+                if (newOutStr <= inEl.value) return; 
                 outEl.value = newOutStr;
             }
 
@@ -597,14 +646,95 @@
             if (window.calcExtension) window.calcExtension();
         };
 
-        window.addQuickCharge = () => {
-            const extra = prompt("Enter additional amount to add to Total (฿):");
-            if (extra !== null && !isNaN(parseFloat(extra))) {
-                const addVal = parseFloat(extra);
+        window.openChargeModal = () => {
+            $('charge-desc').value = '';
+            $('charge-amount').value = '';
+            $('charge-date').value = $('check-in')?.value || getLocalYMD(new Date());
+            const m = $('charge-modal');
+            m.classList.add('active');
+            m.style.display = 'flex';
+            setTimeout(() => $('charge-desc').focus(), 50);
+            lucide.createIcons();
+        };
+
+        window.applyChargePreset = (desc, amt) => {
+            $('charge-desc').value = desc;
+            $('charge-amount').value = amt;
+            $('charge-amount').focus();
+        };
+
+        window.confirmAddCharge = () => {
+            const desc = $('charge-desc').value.trim();
+            const amt = parseFloat($('charge-amount').value);
+            const date = $('charge-date').value || getLocalYMD(new Date());
+
+            if (!desc) return window.showAlert("Please enter a description for the charge.");
+            if (isNaN(amt) || amt <= 0) return window.showAlert("Please enter a valid charge amount.");
+
+            const chargeObj = {
+                id: 'chg_' + Math.random().toString(36).substr(2, 9),
+                desc: desc.toUpperCase(),
+                amt: Number(amt.toFixed(2)),
+                date: date
+            };
+
+            window.activeExtraCharges.push(chargeObj);
+            
+            // Add to Total Price input
+            const curTot = Number($('total-price').value) || 0;
+            $('total-price').value = (curTot + chargeObj.amt).toFixed(2);
+
+            window.renderExtraCharges();
+            window.calcFinancials();
+            window.closeModal('charge-modal');
+        };
+
+        window.removeCharge = (chargeId) => {
+            const idx = window.activeExtraCharges.findIndex(c => c.id === chargeId);
+            if (idx > -1) {
+                const removed = window.activeExtraCharges.splice(idx, 1)[0];
                 const curTot = Number($('total-price').value) || 0;
-                $('total-price').value = (curTot + addVal).toFixed(2);
+                $('total-price').value = Math.max(0, curTot - removed.amt).toFixed(2);
+                window.renderExtraCharges();
                 window.calcFinancials();
             }
+        };
+
+        window.renderExtraCharges = () => {
+            const wrapper = $('extra-charges-wrapper');
+            const list = $('extra-charges-list');
+            const totalEl = $('extra-charges-total');
+            if (!wrapper || !list) return;
+
+            if (window.activeExtraCharges.length === 0) {
+                wrapper.classList.add('hidden');
+                list.innerHTML = '';
+                if (totalEl) totalEl.innerText = '+฿0';
+                return;
+            }
+
+            wrapper.classList.remove('hidden');
+            let sum = 0;
+            list.innerHTML = window.activeExtraCharges.map(c => {
+                sum += Number(c.amt);
+                return `
+                    <div class="flex items-center justify-between bg-white px-2 py-1 rounded border border-amber-200 text-xs">
+                        <div class="flex items-center gap-1.5 truncate">
+                            <span class="font-black text-slate-700 uppercase">${c.desc}</span>
+                            <span class="text-[9px] font-bold text-slate-400">(${c.date ? c.date.substr(5) : ''})</span>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="font-black text-amber-700">+฿${Number(c.amt).toFixed(2)}</span>
+                            <button type="button" onclick="window.removeCharge('${c.id}')" class="p-0.5 text-red-400 hover:text-red-600 rounded cursor-pointer" title="Delete Charge">
+                                <i data-lucide="trash-2" size="12"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (totalEl) totalEl.innerText = `+฿${sum.toFixed(2)}`;
+            lucide.createIcons();
         };
 
         let isDragging = false, dragOffsetX, dragOffsetY;
@@ -651,7 +781,6 @@
             }
         };
 
-        // TARGETED DELTA SYNC TRIGGER
         window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypes = null) => {
             if (window.channexConfig && window.channexConfig.apiKey) {
                 try {
@@ -886,11 +1015,22 @@
 
         window.showAlert = (msg, isConfirm = false, onConfirm = null) => { 
             const m = $('alert-modal'), c = $('alert-cancel'), b = $('alert-confirm'); 
+            $('alert-header-title').innerText = "Attention";
             $('alert-message').innerText = msg; 
-            if (isConfirm) { c.style.display = 'block'; c.classList.remove('hidden'); b.onclick = () => { window.closeAlert(); if(onConfirm) onConfirm(); }; } 
-            else { c.style.display = 'none'; c.classList.add('hidden'); b.onclick = window.closeAlert; } 
+            if (isConfirm) { 
+                c.style.display = 'block'; c.classList.remove('hidden'); 
+                b.className = 'btn-modal bg-blue-600 text-white px-10';
+                b.innerText = 'Confirm';
+                b.onclick = () => { window.closeAlert(); if(onConfirm) onConfirm(); }; 
+            } else { 
+                c.style.display = 'none'; c.classList.add('hidden'); 
+                b.className = 'btn-modal bg-blue-600 text-white px-10';
+                b.innerText = 'Okay';
+                b.onclick = window.closeAlert; 
+            } 
             m.classList.add('active'); 
             m.style.display = 'flex';
+            lucide.createIcons();
         };
         
         window.closeAlert = () => {
@@ -1144,10 +1284,11 @@
                     c.className = `day-column ${fmpShade} ${iT ? 'day-today' : ''} ${rD.isUnassigned ? 'bg-amber-50/50' : ''}`; 
                     c.dataset.colIndex = i; c.dataset.dateNum = days[i].getDate(); c.onmouseenter = () => $$(`[data-col-index="${i}"]`).forEach(el => el.classList.add('hover-col')); c.onmouseleave = () => $$(`[data-col-index="${i}"]`).forEach(el => el.classList.remove('hover-col')); 
                     
-                    // CLICK ON CALENDAR CELL: If guest modal is open, add/assign room to it!
+                    // INTERACTIVE CALENDAR CLICK
                     c.onclick = () => {
                         const modal = $('guest-modal');
-                        const isModalOpen = modal && modal.style.display === 'flex';
+                        const isModalOpen = modal && (modal.classList.contains('active') || window.getComputedStyle(modal).display !== 'none');
+                        
                         if (isModalOpen) {
                             if (rD.id && !rD.isUnassigned) {
                                 const curSelects = Array.from($$('.assigned-room-select'));
@@ -1159,9 +1300,10 @@
                                 }
                                 window.updateAvailableRooms();
                             }
-                        } else {
-                            window.quickAdd(rD.isUnassigned ? "" : rD.id, days[i]);
+                            return; 
                         }
+
+                        window.quickAdd(rD.isUnassigned ? "" : rD.id, days[i]);
                     };
                     row.appendChild(c); 
                 }
@@ -1260,7 +1402,6 @@
         const setMulti = (id, state, labels, classes) => { const el = $(id); if (!el) return; el.dataset.state = state; el.innerText = labels[state]; el.className = id.includes('email') ? `flex-1 min-w-[80px] unselectable multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border text-center whitespace-nowrap ${classes[state]}` : `flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border ${classes[state]}`; };
         window.cycleMulti = (el, labels, classes) => { if (!el) return; let s = parseInt(el.dataset.state) + 1; if(s >= labels.length) s = 0; setMulti(el.id, s, labels, classes); };
         
-        // STRICT STATUS CYCLE: NEW > FUTURE > HERE > LEFT > CANCELLED > NOSHOW > SPECIAL > BLOCKED > CHARGED > VOL > UNCONFIRMED
         window.cycleStatus = () => { 
             let sBtn = $('status-cycle-btn'); 
             let cV = sBtn.dataset.value || 'future'; 
@@ -1330,7 +1471,6 @@
             let cg = '', og = null; 
             hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; let fNum = 1; const nid = (r.id||'').toUpperCase(); if (/^[AB]\d+$/.test(nid)) fNum = parseInt(nid.replace(/\D/g, '') || '0') % 2 !== 0 ? 1 : 2; else if (nid.startsWith('C1')) fNum = 1; else if (nid.startsWith('C2')) fNum = 2; else if (nid.startsWith('C3')) fNum = 3; else if (nid.startsWith('D')) fNum = 1; opt.innerText = `${r.id} - Room ${fNum === 1 ? '↓' : (fNum === 2 ? '↑' : '⇈')} (${r.bed || '?'})`; og.appendChild(opt); }); 
             
-            // Auto-suggest free room if blank
             if (!val) {
                 const suggested = window.suggestAvailableRoom($('booked-type')?.value);
                 if (suggested) val = suggested;
@@ -1367,10 +1507,10 @@
             const bcc = $('bad-cc-box'); bcc.dataset.bad = s.badCC ? 'true' : 'false'; bcc.innerHTML = s.badCC ? '<span class="text-white text-[10px] font-black">X</span>' : ''; bcc.className = `w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center ${s.badCC ? 'bg-red-500 border-red-600' : ''}`; 
             [ ['guest-id', s.id], ['first-name', s.firstName], ['last-name', s.lastName], ['phone', s.phone], ['email', s.email], ['booked-type', s.bookedType], ['check-in', s.checkIn], ['check-out', s.checkOut], ['booking-date', s.bookDate], ['booking-id', s.bookId], ['link-code', s.linkedId], ['guest-country', s.country], ['pax-count', s.pax || 1], ['booking-source', s.source || 'direct'], ['guest-notes', s.notes], ['total-price', Number(s.totalPrice || 0).toFixed(2)], ['net-price', Number(s.netPrice || 0).toFixed(2)] ].forEach(([id, val]) => { const el = $(id); if(el) el.value = val || ""; }); 
             
-            // Manual bookings cleanly start at 'future'
+            // Manual bookings default to 'future'
             let pSt = s.status || "future"; 
             $('guest-status-hidden').value = pSt; 
-            let sObj = STATUS_CYCLE.find(x => x.val === pSt) || STATUS_CYCLE[1]; // default FUTURE
+            let sObj = STATUS_CYCLE.find(x => x.val === pSt) || STATUS_CYCLE[1]; 
             let sBtn = $('status-cycle-btn'); 
             sBtn.dataset.value = sObj.val; 
             sBtn.innerText = sObj.val.toUpperCase(); 
@@ -1381,8 +1521,13 @@
             $('assigned-rooms-container').innerHTML = ''; 
             const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : (isN ? [] : [""])); 
             if(rL.length > 0) { rL.forEach(r => window.addRoomSelect(r)); } else { window.addRoomSelect(""); } 
+            
             $('payments-list').innerHTML = ''; 
             if(s.payments) s.payments.forEach(p => window.addPaymentRow(p.date, Number(p.amt || 0).toFixed(2), p.method, true));
+
+            // Load and render itemized charges
+            window.activeExtraCharges = Array.isArray(s.extraCharges) ? [...s.extraCharges] : [];
+            window.renderExtraCharges();
 
             setMulti('email-confirm-btn', s.emailConfirm ? 1 : 0, ['CONFIRM: --', 'CONFIRM: SENT'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
             setMulti('email-prepost-btn', !s.emailPrePost ? 0 : (s.emailPrePost==='sent'?1:2), ['PRE/POST: --', 'PRE/POST: SENT', 'PRE/POST: CONF'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400']); 
@@ -1409,12 +1554,20 @@
             ['delete-btn', 'split-btn', 'merge-btn', 'dup-btn', 'hist-btn'].forEach(id => { const el = $(id); if (el) el.style.visibility = isN ? 'hidden' : 'visible'; }); 
             $('audit-log').innerText = isN ? `NEW RECORD | CREATING AS ${currentUserEmail.toUpperCase()}` : `CREATED BY ${s.createdBy||'UNKNOWN'} ON ${s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-GB').slice(0,5) : '--'}` + (s.lastEditedBy ? ` | LAST EDIT: ${s.lastEditedBy} ON ${new Date(s.lastEditedAt).toLocaleDateString('en-GB').slice(0,5)}` : ''); 
             if(currentUserRole === 'staff') { ['delete-btn', 'split-btn', 'merge-btn'].forEach(id => { if($(id)) $(id).style.visibility = 'hidden'; }); $('save-btn').style.display = 'none'; }
-            $('guest-modal').style.display = 'flex';
+            
+            const modal = $('guest-modal');
+            modal.classList.add('active');
+            modal.style.display = 'flex';
             lucide.createIcons();
         };
 
         window.editStaff = id => { const s = staff.find(x => x.id === id); if (s) window.populateStaffForm(s); }; 
-        window.closeGuestModal = () => { $('guest-modal').style.display = 'none'; try { window.history.replaceState({}, document.title, window.location.pathname); } catch(e) {} }; 
+        window.closeGuestModal = () => { 
+            const m = $('guest-modal');
+            m.classList.remove('active');
+            m.style.display = 'none'; 
+            try { window.history.replaceState({}, document.title, window.location.pathname); } catch(e) {} 
+        }; 
         
         window.quickAdd = (r, d) => { 
             window.populateStaffForm({}); 
@@ -1433,15 +1586,16 @@
         window.showAuditHistory = () => {
             const id = $('guest-id').value; const s = staff.find(x => x.id === id); if (!s) return; const logs = s.auditLog || [];
             let html = logs.length === 0 ? '<p class="text-slate-400 italic">No history recorded yet.</p>' : logs.slice().reverse().map(l => `<div class="text-left text-xs border-b border-slate-200 pb-2 mb-2"><div class="font-black text-slate-800">${new Date(l.ts).toLocaleString('en-GB')} by ${l.user}</div><div class="text-slate-600">${l.msg}</div></div>`).join('');
-            $('alert-header').innerText = `Audit History: ${s.lastName}`; 
+            $('alert-header-title').innerText = `Audit History: ${s.lastName}`; 
             $('alert-message').innerHTML = `<div class="max-h-[300px] overflow-y-auto no-scrollbar">${html}</div>`; 
-            $('alert-cancel').className = 'hidden'; 
+            $('alert-cancel').style.display = 'none'; 
             $('alert-confirm').innerText = 'Close'; 
-            $('alert-confirm').className = 'btn-modal bg-slate-800 text-white px-10'; 
+            $('alert-confirm').className = 'btn-modal bg-slate-800 hover:bg-slate-700 text-white px-10'; 
             $('alert-confirm').onclick = window.closeAlert;
             const m = $('alert-modal');
             m.classList.add('active');
             m.style.display = 'flex';
+            lucide.createIcons();
         };
 
         window.globalPassportSync = async () => {
@@ -1522,10 +1676,11 @@
                     });
                     html += '</div>';
                     
-                    $('alert-header').innerText = 'Select Passport to Auto-Fill';
+                    $('alert-header-title').innerText = 'Select Passport to Auto-Fill';
                     $('alert-message').innerHTML = html;
                     $('alert-actions').innerHTML = `<button onclick="window.closeAlert()" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700 w-full transition-colors">Cancel</button>`;
                     $('alert-modal').classList.add('active');
+                    $('alert-modal').style.display = 'flex';
                     lucide.createIcons();
                     
                     btn.innerHTML = origText; return;
@@ -1651,6 +1806,7 @@
                     property: currentPropertyId, 
                     firstName: $('first-name').value.trim().toUpperCase(), lastName: $('last-name').value.trim().toUpperCase(), status: stat, bookedType: $('booked-type').value, room: dbRL[0] || "", rooms: dbRL, checkIn: cI, checkOut: cO, pax: parseInt($('pax-count').value) || 1, country: $('guest-country').value, phone: $('phone').value, email: $('email').value, source: $('booking-source').value, bookDate: $('booking-date').value, bookId: $('booking-id').value, linkedId: $('link-code').value.trim().toUpperCase(), totalPrice: Number($('total-price').value) || 0, netPrice: Number($('net-price').value) || 0, netOverride: $('net-price').dataset.override === 'true', badCC: $('bad-cc-box').dataset.bad === 'true', 
                     payments: Array.from($$('.payment-row')).map(r => ({ date: r.querySelector('.pay-date').value, amt: Number(r.querySelector('.pay-amt').value) || 0, method: r.querySelector('.pay-method').value })), 
+                    extraCharges: window.activeExtraCharges || [],
                     emailConfirm: parseInt($('email-confirm-btn')?.dataset?.state || 0) === 1, emailPrePost: parseInt($('email-prepost-btn')?.dataset?.state || 0) > 0 ? (parseInt($('email-prepost-btn')?.dataset?.state) === 1 ? 'sent' : 'confirmed') : false, emailSpecial: parseInt($('email-special-btn')?.dataset?.state || 0) === 1, refundability: parseInt($('refund-btn')?.dataset?.state || 0) == 1 ? 'non-ref' : (parseInt($('refund-btn')?.dataset?.state || 0) == 2 ? 'ref' : 'unknown'), upgrade: parseInt($('upgrade-btn')?.dataset?.state || 0) > 0 ? (parseInt($('upgrade-btn')?.dataset?.state) === 1 ? 'free' : 'paid') : 'none', rating: parseInt($('rating-btn')?.dataset?.state || 0) > 0 ? (parseInt($('rating-btn')?.dataset?.state) === 1 ? 'good' : 'bad') : 'none', extended: parseInt($('ext-btn')?.dataset?.state || 0) === 1, notes: $('guest-notes').value, createdAt: ext?.createdAt || now, createdBy: ext?.createdBy || currentUserEmail, lastEditedAt: now, lastEditedBy: currentUserEmail, auditLog: Array.isArray(ext?.auditLog) ? ext.auditLog : [] 
                 };
                 
@@ -1697,9 +1853,9 @@
             }); 
         };
         
-        window.requestDuplicate = async () => { if(currentUserRole === 'staff') return; try { const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; let lC = $('link-code').value.trim().toUpperCase() || s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); if(!s.linkedId) { let dbR = (s.rooms || []).map(uiToDbRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, linkedId: lC }); } const nId = Math.random().toString(36).substr(2, 9); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, room: "", rooms: [""], linkedId: lC, payments: [], extended: false, createdAt: new Date().toISOString(), createdBy: currentUserEmail, lastEditedAt: null, lastEditedBy: null, auditLog: [] }); window.triggerAutoSync(s.checkIn, s.checkOut); window.closeGuestModal(); } catch (e) { window.showAlert("Duplicate blocked by Firebase Rules."); } };
+        window.requestDuplicate = async () => { if(currentUserRole === 'staff') return; try { const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; let lC = $('link-code').value.trim().toUpperCase() || s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); if(!s.linkedId) { let dbR = (s.rooms || []).map(uiToDbRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, linkedId: lC }); } const nId = Math.random().toString(36).substr(2, 9); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, room: "", rooms: [""], linkedId: lC, payments: [], extraCharges: [], extended: false, createdAt: new Date().toISOString(), createdBy: currentUserEmail, lastEditedAt: null, lastEditedBy: null, auditLog: [] }); window.triggerAutoSync(s.checkIn, s.checkOut); window.closeGuestModal(); } catch (e) { window.showAlert("Duplicate blocked by Firebase Rules."); } };
         window.requestSplit = () => { if(currentUserRole === 'staff') return; const s = staff.find(x => x.id === $('guest-id').value); if (!s) return; const sd = $('split-date'); sd.value = ""; sd.min = s.checkIn; sd.max = s.checkOut; const c = $('split-room-dropdown-container'); const sel = document.createElement('select'); sel.id = 'split-room-select'; sel.className = "input-base text-lg !p-2 cursor-pointer"; sel.innerHTML = `<option value="">-- SELECT NEW ROOM --</option>`; let cg = '', og = null; hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; opt.innerText = `${r.id} - ${r.type}`; og.appendChild(opt); }); c.innerHTML = ''; c.appendChild(sel); $('split-modal').style.display = 'flex'; };
-        window.confirmSplit = async () => { const sD = $('split-date').value; const newRoom = $('split-room-select').value; const s = staff.find(x => x.id === $('guest-id').value); if (!sD || sD <= s.checkIn || sD >= s.checkOut) return window.showAlert("Invalid split date."); if (!newRoom) return window.showAlert("Please select a new room for the split."); let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); let nId = Math.random().toString(36).substr(2, 9); let dbR = (s.rooms || []).map(uiToDbRoom); let nDbRoom = uiToDbRoom(newRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, checkOut: sD, linkedId: lC }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, checkIn: sD, room: nDbRoom, rooms: [nDbRoom], linkedId: lC, totalPrice: 0, netPrice: 0, payments: [], extended: false, notes: "Split segment for mid-stay room change. Master folio kept on original booking.\n" + (s.notes || ""), auditLog: [] }); $('split-modal').style.display = 'none'; window.triggerAutoSync(s.checkIn, s.checkOut); window.closeGuestModal(); };
+        window.confirmSplit = async () => { const sD = $('split-date').value; const newRoom = $('split-room-select').value; const s = staff.find(x => x.id === $('guest-id').value); if (!sD || sD <= s.checkIn || sD >= s.checkOut) return window.showAlert("Invalid split date."); if (!newRoom) return window.showAlert("Please select a new room for the split."); let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); let nId = Math.random().toString(36).substr(2, 9); let dbR = (s.rooms || []).map(uiToDbRoom); let nDbRoom = uiToDbRoom(newRoom); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, room: dbR[0]||"", rooms: dbR, checkOut: sD, linkedId: lC }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), { ...s, id: nId, checkIn: sD, room: nDbRoom, rooms: [nDbRoom], linkedId: lC, totalPrice: 0, netPrice: 0, payments: [], extraCharges: [], extended: false, notes: "Split segment for mid-stay room change. Master folio kept on original booking.\n" + (s.notes || ""), auditLog: [] }); $('split-modal').style.display = 'none'; window.triggerAutoSync(s.checkIn, s.checkOut); window.closeGuestModal(); };
         window.requestMerge = () => { if(currentUserRole === 'staff') return; const cId = $('guest-id').value; if (!cId) return window.showAlert("Please save this booking first before merging."); const c = staff.find(x => x.id === cId); if (!c) return; const sel = $('merge-target'); sel.innerHTML = '<option value="">-- SELECT BOOKING --</option>'; [...staff].filter(s => s.property === currentPropertyId && s.id !== cId && s.status !== 'cancelled' && s.status !== 'noshow').sort((a,b) => (a.lastName === c.lastName ? -1 : (b.lastName === c.lastName ? 1 : a.checkIn.localeCompare(b.checkIn)))).forEach(s => { const opt = document.createElement('option'); opt.value = s.id; opt.innerText = `${s.lastName}, ${s.firstName} (${s.checkIn.substr(5)} to ${s.checkOut.substr(5)})`; if (s.lastName === c.lastName) opt.className = "text-indigo-600 font-black"; sel.appendChild(opt); }); $('merge-modal').style.display = 'flex'; };
         
         window.confirmMerge = async () => { 
@@ -1725,19 +1881,28 @@
                 $('guest-notes').value = mNotes.trim(); 
                 $('pax-count').value = Math.max(c.pax || 1, t.pax || 1); 
                 (t.payments || []).forEach(p => window.addPaymentRow(p.date, Number(p.amt||0).toFixed(2), p.method, true)); 
+                
+                // Merge itemized charges
+                window.activeExtraCharges = [...(c.extraCharges || []), ...(t.extraCharges || [])];
+                window.renderExtraCharges();
+
                 const cR = Array.from(new Set([...Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean), ...(t.rooms || []).filter(Boolean)])); 
                 $('assigned-rooms-container').innerHTML = ''; 
                 if (cR.length > 0) cR.forEach(r => window.addRoomSelect(r)); else window.addRoomSelect(""); 
                 
-                // MERGING SETS EXTENDED TAG PROMINENTLY
+                // AUTOMATICALLY SET EXTENDED TAG ON MERGE
                 setMulti('ext-btn', 1, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']);
 
                 window.calcFinancials(); 
                 window.updateAvailableRooms(); 
                 window.updateNightsDisplay();
+
+                // Prevent room overlap check from blocking save of the merged stay
+                staff = staff.filter(s => s.id !== t.id);
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', t.id)); 
+
                 $('merge-modal').style.display = 'none'; 
-                window.saveBooking(true); 
+                await window.saveBooking(true); 
                 const mergeTypes = [c.bookedType, t.bookedType].filter(Boolean);
                 window.triggerAutoSync(c.checkIn, c.checkOut, mergeTypes); 
             } catch(err) { window.showAlert("Merge error, please check connection."); } finally { btn.innerHTML = 'Merge'; btn.disabled = false; } 
@@ -1745,7 +1910,13 @@
 
         window.openPriceCheckModal = () => { const d = new Date(); d.setHours(12,0,0,0); $('pc-checkin').value = getLocalYMD(d); $('price-check-modal').style.display = 'flex'; };
         window.runPriceCheck = () => { const cI = $('pc-checkin').value, n = parseInt($('pc-nights').value)||1, p = parseInt($('pc-pax').value)||1; if(!cI) return; const d = new Date(cI + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); const cO = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`; window.open(`https://www.booking.com/hotel/th/swims-a-social-beach-resort.html?checkin=${cI}&checkout=${cO}&group_adults=${p}&group_children=0&no_rooms=1`, '_blank'); window.closeModal('price-check-modal'); };
-        window.closeModal = id => { $(id).style.display = 'none'; };
+        window.closeModal = id => { 
+            const el = $(id);
+            if (el) {
+                el.classList.remove('active');
+                el.style.display = 'none';
+            }
+        };
 
         window.parseBdcPublicRates = async () => {
             const txt = $('rates-textarea').value; if(!txt) return window.showAlert("Please paste BDC search results text into the box first."); const newRates = {};
