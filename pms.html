@@ -12,7 +12,7 @@
     <script src="https://loren-6q.github.io/PMS/parser.js"></script>
     
     <style type="text/tailwindcss">
-        @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Condensed:wght@400;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700;900&display=swap');
         
         @layer components {
             .btn-action { @apply px-2 py-1 text-white rounded shadow text-xs font-black uppercase flex items-center gap-1 hover:brightness-110 active:scale-95 transition-all cursor-pointer; }
@@ -488,6 +488,25 @@
         const db = getFirestore(app);
         const functions = getFunctions(app, 'asia-southeast1');
 
+        // SHORT PROPERTY CODE MAPPING
+        const PROP_MAP = {
+            'LOUD': 'loud_samui',
+            'WET': 'wet_pool',
+            'SWIMS': 'swims_resort'
+        };
+
+        const PROP_REVERSE_MAP = {
+            'loud_samui': 'LOUD',
+            'wet_pool': 'WET',
+            'swims_resort': 'SWIMS'
+        };
+
+        // Resolve current property safely from URL parameter ?p=, fallback to localStorage, fallback to LOUD
+        const urlParams = new URLSearchParams(window.location.search);
+        const pParam = urlParams.get('p') ? urlParams.get('p').toUpperCase() : null;
+        let currentPropertyId = PROP_MAP[pParam] || localStorage.getItem('last_prop') || 'loud_samui';
+        localStorage.setItem('last_prop', currentPropertyId);
+
         let currentUserRole = null; 
         let currentUserEmail = 'unknown'; 
         let staff = []; 
@@ -501,7 +520,6 @@
         let sortAsc = false; 
         let isZoomWide = false;
         
-        let currentPropertyId = 'swims_resort';
         let windowPropertiesList = [];
         window.masterState = 0; 
         
@@ -513,6 +531,29 @@
 
         // State holder for active extra charges in current booking
         window.activeExtraCharges = [];
+
+        // Safe URL & Navigation link synchronizer
+        window.updateNavLinks = (shortKey) => {
+            const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || 'LOUD';
+            document.querySelectorAll('a[href*=".html"]').forEach(a => {
+                const href = a.getAttribute('href');
+                if (!href) return;
+                const [base] = href.split('?');
+                a.setAttribute('href', `${base}?p=${key}`);
+            });
+        };
+
+        window.syncPropertyUrl = (propId) => {
+            const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || 'LOUD';
+            try {
+                const url = new URL(window.location);
+                url.searchParams.set('p', shortKey);
+                window.history.replaceState({}, '', url);
+            } catch (e) {
+                // Ignore security error when run locally in file:// or sandboxed iframes
+            }
+            window.updateNavLinks(shortKey);
+        };
 
         const SVGS = {
             upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -829,14 +870,20 @@
                     }
                     switcher.innerHTML = allowedProps.map(p => `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`).join('');
                     
+                    // Fallback to first available property if currentPropertyId is not in allowed list
                     if(!allowedProps.find(p => p.id === currentPropertyId) && allowedProps.length > 0) {
                         currentPropertyId = allowedProps[0].id;
+                        localStorage.setItem('last_prop', currentPropertyId);
                     }
                     switcher.value = currentPropertyId;
                 }
 
-                const propToLoad = windowPropertiesList.find(p => p.id === currentPropertyId);
+                // Sync URL & links safely
+                window.syncPropertyUrl(currentPropertyId);
+
+                const propToLoad = windowPropertiesList.find(p => p.id === currentPropertyId) || windowPropertiesList[0];
                 if (propToLoad) {
+                    currentPropertyId = propToLoad.id;
                     hotelRooms = propToLoad.rooms || [];
                     fmpDates = propToLoad.events || [];
                     window.propertyOtaMap = propToLoad.otaMap || [];
@@ -864,10 +911,12 @@
         };
 
         window.handlePropertySwitch = async (propId) => {
-            if (propId === currentPropertyId) return;
+            if (!propId || propId === currentPropertyId) return;
             $('boot-loader').style.display = 'flex';
             $('sync-status').innerText = 'Switching Property...';
             currentPropertyId = propId;
+            localStorage.setItem('last_prop', propId);
+            window.syncPropertyUrl(propId);
             await loadPropertyConfig();
             window.render();
             window.renderDashboard();
@@ -951,6 +1000,7 @@
             }
 
             window.addEventListener('resize', window.render); 
+            window.updateNavLinks();
             lucide.createIcons();
         };
 
@@ -1419,7 +1469,14 @@
 
         window.calcFinancials = () => {
             const tot = Number($('total-price').value) || 0; let pd = 0, cD = 0; 
-            $$('.payment-row').forEach(r => { const a = Number(r.querySelector('.pay-amt').value) || 0; pd += a; if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp'].includes(r.querySelector('.pay-method').value)) cD += a; });
+            $$('.payment-row').forEach(r => { 
+                const a = Number(r.querySelector('.pay-amt').value) || 0; 
+                pd += a; 
+                const m = (r.querySelector('.pay-method').value || '').toLowerCase();
+                if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp'].includes(m)) {
+                    cD += a; 
+                }
+            });
             const due = Number((tot - pd).toFixed(2)); const dC = $('display-due'); const tC = $('total-price').parentElement; const pax = parseInt($('pax-count').value) || 1;
             dC.innerText = `฿${due.toFixed(2)}`; $('display-paid').innerText = `฿${pd.toFixed(2)}`;
             if (pax > 1) { dC.title = `Split: ฿${(due/pax).toFixed(2)} each`; tC.title = `Split: ฿${(tot/pax).toFixed(2)} each`; dC.classList.add('cursor-help', 'border-b-2', 'border-dashed', 'border-red-300'); tC.classList.add('cursor-help', 'border-b-2', 'border-dashed', 'border-slate-300'); } else { dC.title = ''; tC.title = ''; dC.classList.remove('cursor-help', 'border-b-2', 'border-dashed', 'border-red-300'); tC.classList.remove('cursor-help', 'border-b-2', 'border-dashed', 'border-slate-300'); }
@@ -1431,7 +1488,29 @@
         window.addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
             const id = `pay-${pCount++}`; const div = document.createElement('div'); div.className = `payment-row flex gap-1 items-center bg-white p-1 rounded border border-slate-200 transition-opacity ${loc ? 'opacity-70' : ''}`; div.id = id;
             if (!d) d = getLocalYMD(new Date()); if (a === '') { const due = (Number($('total-price').value) || 0) - Array.from($$('.payment-row')).reduce((s, r) => s + (Number(r.querySelector('.pay-amt').value) || 0), 0); if (due > 0) a = Number(due.toFixed(2)); }
-            div.innerHTML = `<input type="date" class="pay-date w-24 text-xs !p-1" value="${d}" ${loc ? 'disabled' : ''}><input type="number" class="pay-amt w-16 text-xs !p-1 font-black" value="${a}" placeholder="0" oninput="window.calcFinancials()" ${loc ? 'disabled' : ''}><select class="pay-method flex-1 text-xs !p-1 uppercase" onchange="window.calcFinancials()" ${loc ? 'disabled' : ''}>${['cash','card','scan','cc-fee','hw-kp','bdc-kp','bdc-pay','agoda-kp','agoda-pay','airbnb-kp','airbnb-pay','other'].map(x => `<option value="${x}" ${m===x?'selected':''}>${x.replace('-', ' ').toUpperCase()}</option>`).join('')}</select>${loc ? `<button type="button" onclick="window.unlockPayment('${id}')" class="p-1 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded flex-shrink-0 border border-slate-200 cursor-pointer" title="Edit Payment"><i data-lucide="edit" size="12"></i></button>` : `<button type="button" onclick="window.removePaymentRow('${id}')" class="p-1 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded flex-shrink-0 border border-red-200 cursor-pointer" title="Delete Payment"><i data-lucide="trash-2" size="12"></i></button>`}`;
+            
+            const paymentOptions = [
+                { val: 'cash', label: 'CASH' },
+                { val: 'card', label: 'CARD' },
+                { val: 'scan', label: 'SCAN' },
+                { val: 'cc-fee', label: 'CC FEE' },
+                { val: 'hw-kp', label: 'HW KP' },
+                { val: 'bdc-kp', label: 'BDC KP' },
+                { val: 'bdc-pay', label: 'BDC PAY' },
+                { val: 'agoda-kp', label: 'AGODA KP' },
+                { val: 'agoda-pay', label: 'AGODA PAY' },
+                { val: 'airbnb-kp', label: 'AIRBNB KP' },
+                { val: 'airbnb-pay', label: 'AIRBNB PAY' },
+                { val: 'expedia-kp', label: 'EXPEDIA KP' },
+                { val: 'expedia-pay', label: 'EXPEDIA PAY' },
+                { val: 'trip-kp', label: 'TRIP KP' },
+                { val: 'trip-pay', label: 'TRIP PAY' },
+                { val: 'other', label: 'OTHER' }
+            ];
+
+            const curM = (m || 'cash').toLowerCase();
+
+            div.innerHTML = `<input type="date" class="pay-date w-24 text-xs !p-1" value="${d}" ${loc ? 'disabled' : ''}><input type="number" class="pay-amt w-16 text-xs !p-1 font-black" value="${a}" placeholder="0" oninput="window.calcFinancials()" ${loc ? 'disabled' : ''}><select class="pay-method flex-1 text-xs !p-1 uppercase" onchange="window.calcFinancials()" ${loc ? 'disabled' : ''}>${paymentOptions.map(opt => `<option value="${opt.val}" ${curM === opt.val ? 'selected' : ''}>${opt.label}</option>`).join('')}</select>${loc ? `<button type="button" onclick="window.unlockPayment('${id}')" class="p-1 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded flex-shrink-0 border border-slate-200 cursor-pointer" title="Edit Payment"><i data-lucide="edit" size="12"></i></button>` : `<button type="button" onclick="window.removePaymentRow('${id}')" class="p-1 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded flex-shrink-0 border border-red-200 cursor-pointer" title="Delete Payment"><i data-lucide="trash-2" size="12"></i></button>`}`;
             $('payments-list').appendChild(div); window.calcFinancials(); lucide.createIcons();
         };
 
