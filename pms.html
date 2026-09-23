@@ -488,7 +488,7 @@
         const db = getFirestore(app);
         const functions = getFunctions(app, 'asia-southeast1');
 
-        // SHORT PROPERTY CODE MAPPING
+        // PROPERTY ALIAS MAPPINGS & URL PERSISTENCE
         const PROP_MAP = {
             'LOUD': 'loud_samui',
             'WET': 'wet_pool',
@@ -501,11 +501,21 @@
             'swims_resort': 'SWIMS'
         };
 
-        // Resolve current property safely from URL parameter ?p=, fallback to localStorage, fallback to LOUD
-        const urlParams = new URLSearchParams(window.location.search);
-        const pParam = urlParams.get('p') ? urlParams.get('p').toUpperCase() : null;
-        let currentPropertyId = PROP_MAP[pParam] || localStorage.getItem('last_prop') || 'loud_samui';
-        localStorage.setItem('last_prop', currentPropertyId);
+        // Resolve property from URL ?p=, fallback to localStorage, fallback to 'swims_resort'
+        let initialP = null;
+        try {
+            initialP = new URLSearchParams(window.location.search).get('p')?.toUpperCase();
+        } catch (e) {}
+
+        let storedProp = null;
+        try {
+            storedProp = localStorage.getItem('last_prop');
+        } catch (e) {}
+
+        let currentPropertyId = PROP_MAP[initialP] || storedProp || 'swims_resort';
+        try {
+            localStorage.setItem('last_prop', currentPropertyId);
+        } catch (e) {}
 
         let currentUserRole = null; 
         let currentUserEmail = 'unknown'; 
@@ -532,7 +542,7 @@
         // State holder for active extra charges in current booking
         window.activeExtraCharges = [];
 
-        // Safe URL & Navigation link synchronizer
+        // Propagate current property param to all navigation links on the page
         window.updateNavLinks = (shortKey) => {
             const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || 'LOUD';
             document.querySelectorAll('a[href*=".html"]').forEach(a => {
@@ -543,14 +553,17 @@
             });
         };
 
+        // Keep address bar URL synchronized with the active property safely
         window.syncPropertyUrl = (propId) => {
             const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || 'LOUD';
             try {
-                const url = new URL(window.location);
-                url.searchParams.set('p', shortKey);
-                window.history.replaceState({}, '', url);
+                if (window.location.protocol !== 'blob:') {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('p', shortKey);
+                    window.history.replaceState({}, '', url.toString());
+                }
             } catch (e) {
-                // Ignore security error when run locally in file:// or sandboxed iframes
+                // Silently ignore SecurityError in sandboxed iframes or blob environments
             }
             window.updateNavLinks(shortKey);
         };
@@ -870,20 +883,17 @@
                     }
                     switcher.innerHTML = allowedProps.map(p => `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`).join('');
                     
-                    // Fallback to first available property if currentPropertyId is not in allowed list
                     if(!allowedProps.find(p => p.id === currentPropertyId) && allowedProps.length > 0) {
                         currentPropertyId = allowedProps[0].id;
-                        localStorage.setItem('last_prop', currentPropertyId);
                     }
                     switcher.value = currentPropertyId;
                 }
 
-                // Sync URL & links safely
+                // Sync URL and link hrefs with current property
                 window.syncPropertyUrl(currentPropertyId);
 
-                const propToLoad = windowPropertiesList.find(p => p.id === currentPropertyId) || windowPropertiesList[0];
+                const propToLoad = windowPropertiesList.find(p => p.id === currentPropertyId);
                 if (propToLoad) {
-                    currentPropertyId = propToLoad.id;
                     hotelRooms = propToLoad.rooms || [];
                     fmpDates = propToLoad.events || [];
                     window.propertyOtaMap = propToLoad.otaMap || [];
@@ -915,7 +925,9 @@
             $('boot-loader').style.display = 'flex';
             $('sync-status').innerText = 'Switching Property...';
             currentPropertyId = propId;
-            localStorage.setItem('last_prop', propId);
+            try {
+                localStorage.setItem('last_prop', propId);
+            } catch (e) {}
             window.syncPropertyUrl(propId);
             await loadPropertyConfig();
             window.render();
@@ -1472,10 +1484,7 @@
             $$('.payment-row').forEach(r => { 
                 const a = Number(r.querySelector('.pay-amt').value) || 0; 
                 pd += a; 
-                const m = (r.querySelector('.pay-method').value || '').toLowerCase();
-                if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp'].includes(m)) {
-                    cD += a; 
-                }
+                if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp'].includes(r.querySelector('.pay-method').value)) cD += a; 
             });
             const due = Number((tot - pd).toFixed(2)); const dC = $('display-due'); const tC = $('total-price').parentElement; const pax = parseInt($('pax-count').value) || 1;
             dC.innerText = `฿${due.toFixed(2)}`; $('display-paid').innerText = `฿${pd.toFixed(2)}`;
@@ -1488,29 +1497,17 @@
         window.addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
             const id = `pay-${pCount++}`; const div = document.createElement('div'); div.className = `payment-row flex gap-1 items-center bg-white p-1 rounded border border-slate-200 transition-opacity ${loc ? 'opacity-70' : ''}`; div.id = id;
             if (!d) d = getLocalYMD(new Date()); if (a === '') { const due = (Number($('total-price').value) || 0) - Array.from($$('.payment-row')).reduce((s, r) => s + (Number(r.querySelector('.pay-amt').value) || 0), 0); if (due > 0) a = Number(due.toFixed(2)); }
-            
             const paymentOptions = [
-                { val: 'cash', label: 'CASH' },
-                { val: 'card', label: 'CARD' },
-                { val: 'scan', label: 'SCAN' },
-                { val: 'cc-fee', label: 'CC FEE' },
-                { val: 'hw-kp', label: 'HW KP' },
-                { val: 'bdc-kp', label: 'BDC KP' },
-                { val: 'bdc-pay', label: 'BDC PAY' },
-                { val: 'agoda-kp', label: 'AGODA KP' },
-                { val: 'agoda-pay', label: 'AGODA PAY' },
-                { val: 'airbnb-kp', label: 'AIRBNB KP' },
-                { val: 'airbnb-pay', label: 'AIRBNB PAY' },
-                { val: 'expedia-kp', label: 'EXPEDIA KP' },
-                { val: 'expedia-pay', label: 'EXPEDIA PAY' },
-                { val: 'trip-kp', label: 'TRIP KP' },
-                { val: 'trip-pay', label: 'TRIP PAY' },
-                { val: 'other', label: 'OTHER' }
+                'cash', 'card', 'scan', 'cc-fee',
+                'hw-kp',
+                'bdc-kp', 'bdc-pay',
+                'agoda-kp', 'agoda-pay',
+                'airbnb-kp', 'airbnb-pay',
+                'expedia-kp', 'expedia-pay',
+                'trip-kp', 'trip-pay',
+                'other'
             ];
-
-            const curM = (m || 'cash').toLowerCase();
-
-            div.innerHTML = `<input type="date" class="pay-date w-24 text-xs !p-1" value="${d}" ${loc ? 'disabled' : ''}><input type="number" class="pay-amt w-16 text-xs !p-1 font-black" value="${a}" placeholder="0" oninput="window.calcFinancials()" ${loc ? 'disabled' : ''}><select class="pay-method flex-1 text-xs !p-1 uppercase" onchange="window.calcFinancials()" ${loc ? 'disabled' : ''}>${paymentOptions.map(opt => `<option value="${opt.val}" ${curM === opt.val ? 'selected' : ''}>${opt.label}</option>`).join('')}</select>${loc ? `<button type="button" onclick="window.unlockPayment('${id}')" class="p-1 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded flex-shrink-0 border border-slate-200 cursor-pointer" title="Edit Payment"><i data-lucide="edit" size="12"></i></button>` : `<button type="button" onclick="window.removePaymentRow('${id}')" class="p-1 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded flex-shrink-0 border border-red-200 cursor-pointer" title="Delete Payment"><i data-lucide="trash-2" size="12"></i></button>`}`;
+            div.innerHTML = `<input type="date" class="pay-date w-24 text-xs !p-1" value="${d}" ${loc ? 'disabled' : ''}><input type="number" class="pay-amt w-16 text-xs !p-1 font-black" value="${a}" placeholder="0" oninput="window.calcFinancials()" ${loc ? 'disabled' : ''}><select class="pay-method flex-1 text-xs !p-1 uppercase" onchange="window.calcFinancials()" ${loc ? 'disabled' : ''}>${paymentOptions.map(x => `<option value="${x}" ${m===x?'selected':''}>${x.replace(/-/g, ' ').toUpperCase()}</option>`).join('')}</select>${loc ? `<button type="button" onclick="window.unlockPayment('${id}')" class="p-1 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded flex-shrink-0 border border-slate-200 cursor-pointer" title="Edit Payment"><i data-lucide="edit" size="12"></i></button>` : `<button type="button" onclick="window.removePaymentRow('${id}')" class="p-1 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded flex-shrink-0 border border-red-200 cursor-pointer" title="Delete Payment"><i data-lucide="trash-2" size="12"></i></button>`}`;
             $('payments-list').appendChild(div); window.calcFinancials(); lucide.createIcons();
         };
 
@@ -1523,6 +1520,83 @@
             staff.forEach(s => { if(s.id === cId || s.status === 'cancelled' || s.status === 'noshow' || s.status === 'unconfirmed' || s.status === 'charged' || s.property !== currentPropertyId) return; if(sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) { (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).forEach(r => { if(r) occ.add(r); }); } });
             $$('.assigned-room-select').forEach(sel => { const cur = sel.value; Array.from(sel.options).forEach(opt => { if(!opt.value) return; if(occ.has(opt.value)) { opt.disabled = true; opt.text = opt.text.replace(' (OCCUPIED)', '') + ' (OCCUPIED)'; } else { opt.disabled = false; opt.text = opt.text.replace(' (OCCUPIED)', ''); } }); sel.value = cur; });
         };
+
+        // Fuzzy & OTA Mapping Resolver
+        window.resolvePmsRoomType = (rawType = '') => {
+            if (!rawType) return '';
+            const rawLower = rawType.toLowerCase().trim();
+
+            // 1. Check property OTA map first
+            if (window.propertyOtaMap && window.propertyOtaMap.length > 0) {
+                const sortedMap = [...window.propertyOtaMap].sort((a, b) => (b.otaName || '').length - (a.otaName || '').length);
+                const otaMatch = sortedMap.find(m => {
+                    const kw = (m.otaName || '').toLowerCase().split(/\s+/).filter(Boolean);
+                    return kw.length > 0 && kw.every(k => rawLower.includes(k));
+                });
+                if (otaMatch && otaMatch.pmsCategory) return otaMatch.pmsCategory;
+            }
+
+            // 2. Direct match against property room types
+            const direct = roomTypes.find(t => t.toLowerCase() === rawLower);
+            if (direct) return direct;
+
+            // 3. Substring match
+            const sub = roomTypes.find(t => rawLower.includes(t.toLowerCase()) || t.toLowerCase().includes(rawLower));
+            if (sub) return sub;
+
+            // 4. Weighted keyword matcher (Gender > Capacity > Style)
+            let bestType = null;
+            let highestScore = 0;
+
+            roomTypes.forEach(pmsType => {
+                const pmsLower = pmsType.toLowerCase();
+                let score = 0;
+
+                // Gender match (crucial for dorms)
+                if (rawLower.includes('female') && pmsLower.includes('female')) score += 20;
+                if (rawLower.includes('male') && !rawLower.includes('female') && pmsLower.includes('male') && !pmsLower.includes('female')) score += 20;
+                if (rawLower.includes('mixed') && pmsLower.includes('mixed')) score += 15;
+
+                // Bed count / Room capacity
+                ['4', '6', '8', '10', '12', 'quad', 'triple', 'twin', 'double', 'single', 'king'].forEach(kw => {
+                    if (rawLower.includes(kw) && pmsLower.includes(kw)) score += 5;
+                });
+
+                // Style keywords
+                ['dorm', 'ensuite', 'balcony', 'bungalow', 'oceanview', 'gardenview', 'deluxe', 'standard'].forEach(kw => {
+                    if (rawLower.includes(kw) && pmsLower.includes(kw)) score += 3;
+                });
+
+                if (score > highestScore) {
+                    highestScore = score;
+                    bestType = pmsType;
+                }
+            });
+
+            return highestScore >= 5 ? bestType : rawType;
+        };
+
+        // Proximity calculation between two room IDs (e.g. H1 and H2, or 101 and 102)
+        window.getRoomDistance = (anchorId, candidateId) => {
+            if (!anchorId || !candidateId || anchorId === candidateId) return 0;
+            const anchorIdx = hotelRooms.findIndex(r => r.id === anchorId);
+            const candIdx = hotelRooms.findIndex(r => r.id === candidateId);
+            if (anchorIdx === -1 || candIdx === -1) return 999;
+
+            // Extract base unit (e.g. "H" from "H1", "101" from "101-1")
+            const anchorBase = anchorId.replace(/\d+$/, '').replace(/-.*$/, '').toUpperCase();
+            const candBase = candidateId.replace(/\d+$/, '').replace(/-.*$/, '').toUpperCase();
+
+            // Same room unit: highest proximity
+            if (anchorBase && anchorBase === candBase) {
+                const anchorNum = parseInt(anchorId.match(/\d+$/)?.[0] || '0');
+                const candNum = parseInt(candidateId.match(/\d+$/)?.[0] || '0');
+                return Math.abs(anchorNum - candNum);
+            }
+
+            // Different units: distance based on list sequence
+            return 100 + Math.abs(anchorIdx - candIdx);
+        };
         
         window.suggestAvailableRoom = (preferredType = null) => {
             const cI = $('check-in')?.value, cO = $('check-out')?.value, cId = $('guest-id')?.value;
@@ -1534,14 +1608,35 @@
                     (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).forEach(r => { if(r) occ.add(r); }); 
                 } 
             });
-            const assignedNow = new Set(Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean));
-            
-            if (preferredType) {
-                const freeInType = hotelRooms.find(r => r.type === preferredType && !occ.has(r.id) && !assignedNow.has(r.id));
-                if (freeInType) return freeInType.id;
+            const assignedNow = Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean);
+            const assignedSet = new Set(assignedNow);
+
+            // Determine target category: prioritize already assigned room's category, then preferredType
+            let targetType = null;
+            let anchorRoom = null;
+
+            if (assignedNow.length > 0) {
+                anchorRoom = assignedNow[assignedNow.length - 1];
+                const refObj = hotelRooms.find(r => r.id === anchorRoom);
+                if (refObj && refObj.type) targetType = refObj.type;
             }
-            const anyFree = hotelRooms.find(r => !occ.has(r.id) && !assignedNow.has(r.id));
-            return anyFree ? anyFree.id : "";
+
+            if (!targetType && preferredType) {
+                targetType = window.resolvePmsRoomType ? window.resolvePmsRoomType(preferredType) : preferredType;
+            }
+
+            if (!targetType) return "";
+
+            // Find all available rooms in this category
+            let freeInType = hotelRooms.filter(r => r.type === targetType && !occ.has(r.id) && !assignedSet.has(r.id));
+            if (freeInType.length === 0) return ""; // NEVER fallback to A1
+
+            // Sort vacancies by physical proximity to the anchor room
+            if (anchorRoom) {
+                freeInType.sort((a, b) => window.getRoomDistance(anchorRoom, a.id) - window.getRoomDistance(anchorRoom, b.id));
+            }
+
+            return freeInType[0].id;
         };
 
         window.addRoomSelect = (val = "") => {
@@ -1550,12 +1645,13 @@
             let cg = '', og = null; 
             hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; let fNum = 1; const nid = (r.id||'').toUpperCase(); if (/^[AB]\d+$/.test(nid)) fNum = parseInt(nid.replace(/\D/g, '') || '0') % 2 !== 0 ? 1 : 2; else if (nid.startsWith('C1')) fNum = 1; else if (nid.startsWith('C2')) fNum = 2; else if (nid.startsWith('C3')) fNum = 3; else if (nid.startsWith('D')) fNum = 1; opt.innerText = `${r.id} - Room ${fNum === 1 ? '↓' : (fNum === 2 ? '↑' : '⇈')} (${r.bed || '?'})`; og.appendChild(opt); }); 
             
-            if (!val) {
+            // Suggest nearest available room if val is not provided
+            if (val === undefined || val === null || (val === "" && c.children.length > 0)) {
                 const suggested = window.suggestAvailableRoom($('booked-type')?.value);
                 if (suggested) val = suggested;
             }
             
-            sel.value = val; const del = document.createElement('button'); del.type = "button"; del.className = "w-6 flex justify-center items-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 flex-shrink-0 shadow-sm transition-colors cursor-pointer"; del.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>`; del.onclick = () => { w.remove(); if(c.children.length === 0) window.addRoomSelect(); window.updateAvailableRooms(); }; 
+            sel.value = val || ""; const del = document.createElement('button'); del.type = "button"; del.className = "w-6 flex justify-center items-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 flex-shrink-0 shadow-sm transition-colors cursor-pointer"; del.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>`; del.onclick = () => { w.remove(); if(c.children.length === 0) window.addRoomSelect(""); window.updateAvailableRooms(); }; 
             w.appendChild(sel); w.appendChild(del); c.appendChild(w); window.updateAvailableRooms();
         };
 
@@ -2006,6 +2102,182 @@
 
         window.openEmailParserModal = () => { $('email-textarea').value = ''; $('email-modal').style.display = 'flex'; setTimeout(() => $('email-textarea').focus(), 50); };
         
+        // DEDICATED CHANNEL RESERVATION SHEET PARSER
+        window.parseCustomPmsText = (raw) => {
+            const normalized = raw.replace(/\u00A0/g, ' ');
+            const lines = normalized.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+            const getField = (label) => {
+                const target = label.toLowerCase();
+                const idx = lines.findIndex(l => {
+                    const low = l.toLowerCase();
+                    return low === target || low.startsWith(target + ':') || low.startsWith(target + ' :');
+                });
+                if (idx !== -1) {
+                    if (lines[idx].includes(':')) {
+                        const val = lines[idx].split(':').slice(1).join(':').trim();
+                        if (val) return val;
+                    }
+                    if (idx + 1 < lines.length) {
+                        return lines[idx + 1];
+                    }
+                }
+                return '';
+            };
+
+            const parseDateDMY = (str) => {
+                if (!str) return '';
+                const m = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+                if (m) {
+                    const d = m[1].padStart(2, '0');
+                    const mo = m[2].padStart(2, '0');
+                    const y = m[3];
+                    return `${y}-${mo}-${d}`;
+                }
+                return '';
+            };
+
+            const parseMoney = (str) => {
+                if (!str) return 0;
+                const m = str.match(/[\d,]+(?:\.\d+)?/);
+                return m ? parseFloat(m[0].replace(/,/g, '')) : 0;
+            };
+
+            // 1. Clean Header Isolation (Name, Country, Phone, Email)
+            const keywordRegex = /^(?:reservation\s*number|voucher\s*number|status|arrival\s*date|departure\s*date|booking\s*date|room\s*type|room\s*number|rate\s*plan|pax)/i;
+            const cutIdx = lines.findIndex(l => keywordRegex.test(l));
+            const headerLines = (cutIdx > 0 ? lines.slice(0, cutIdx) : lines.slice(0, 4));
+
+            let rawName = headerLines[0] || '';
+            let country = '';
+            let phone = '';
+            let email = '';
+
+            for (let i = 1; i < headerLines.length; i++) {
+                const line = headerLines[i];
+                if (line.includes('@') && !email) {
+                    email = line;
+                } else if ((line.match(/\d/g) || []).length >= 7 && !phone) {
+                    phone = line;
+                } else if (/[a-zA-Z]/.test(line) && !country) {
+                    country = line;
+                }
+            }
+
+            // Clean prefixes (Mr., Mrs., Ms., Dr.) and split first / last name
+            rawName = rawName.replace(/^(?:mr\.|mrs\.|ms\.|miss|dr\.|master)\s+/i, '').trim();
+            const nameParts = rawName.split(/\s+/).filter(Boolean);
+            let firstName = '', lastName = '';
+            if (nameParts.length === 1) {
+                lastName = nameParts[0].toUpperCase();
+            } else if (nameParts.length >= 2) {
+                firstName = nameParts.slice(0, -1).join(' ').toUpperCase();
+                lastName = nameParts[nameParts.length - 1].toUpperCase();
+            }
+
+            // 2. Dates & Identifiers
+            const checkIn = parseDateDMY(getField('Arrival Date'));
+            const checkOut = parseDateDMY(getField('Departure Date'));
+            const bookDate = parseDateDMY(getField('Booking Date')) || getLocalYMD(new Date());
+
+            const resNum = getField('Reservation Number');
+            const voucherNum = getField('Voucher Number');
+            const bookId = voucherNum || resNum;
+
+            // 3. Room & Pax
+            const bookedType = getField('Room Type');
+            const roomNumber = getField('Room Number');
+            const room = roomNumber || '';
+            const rooms = room ? [room] : [];
+
+            const rawPax = getField('Pax');
+            let pax = 1;
+            if (rawPax === '10') pax = 1;
+            else if (rawPax === '20') pax = 2;
+            else if (rawPax) pax = Math.max(1, parseInt(rawPax) || 1);
+
+            // 4. Status
+            const rawStatus = getField('Status').toLowerCase();
+            let status = 'future';
+            if (rawStatus.includes('stayover') || rawStatus.includes('in-house') || rawStatus.includes('arrived') || rawStatus.includes('checked in')) {
+                status = 'here';
+            } else if (rawStatus.includes('depart') || rawStatus.includes('left') || rawStatus.includes('checked out')) {
+                status = 'left';
+            } else if (rawStatus.includes('cancel')) {
+                status = 'cancelled';
+            } else if (rawStatus.includes('noshow') || rawStatus.includes('no show')) {
+                status = 'noshow';
+            } else if (checkIn && checkOut) {
+                const today = getLocalYMD(new Date());
+                if (checkIn <= today && checkOut > today) status = 'here';
+                else if (checkOut <= today) status = 'left';
+            }
+
+            // 5. Source & Payment Mapping
+            const lower = normalized.toLowerCase();
+            let source = 'direct';
+            let payMethod = 'cash';
+
+            if (lower.includes('expedia')) {
+                source = 'expedia';
+                payMethod = (lower.includes('expedia collect') || lower.includes('pre-paid') || lower.includes('prepaid')) ? 'expedia-kp' : 'expedia-pay';
+            } else if (lower.includes('agoda')) {
+                source = 'agoda';
+                payMethod = (lower.includes('agoda collect') || lower.includes('pre-paid') || lower.includes('prepaid')) ? 'agoda-kp' : 'agoda-pay';
+            } else if (lower.includes('booking.com') || lower.includes('bdc')) {
+                source = 'booking.com';
+                payMethod = (lower.includes('pre-paid') || lower.includes('prepaid') || lower.includes('payment done by booking.com')) ? 'bdc-kp' : 'bdc-pay';
+            } else if (lower.includes('hostelworld')) {
+                source = 'hostelworld';
+                payMethod = 'hw-kp';
+            } else if (lower.includes('airbnb')) {
+                source = 'airbnb';
+                payMethod = 'airbnb-kp';
+            } else if (lower.includes('trip.com') || lower.includes('ctrip')) {
+                source = 'ctrip';
+                payMethod = 'trip-kp';
+            }
+
+            // 6. Financials
+            const totalPrice = parseMoney(getField('Total'));
+            const paid = parseMoney(getField('Paid'));
+            const payments = [];
+
+            if (paid > 0) {
+                payments.push({
+                    date: checkIn || bookDate || getLocalYMD(new Date()),
+                    amt: Number(paid.toFixed(2)),
+                    method: payMethod
+                });
+            }
+
+            const summary = `[IMPORTED FROM CHANNEL SHEET]\n${normalized.trim()}`;
+
+            const s = {
+                firstName,
+                lastName,
+                phone,
+                country,
+                email,
+                bookedType,
+                room,
+                rooms,
+                checkIn,
+                checkOut,
+                bookDate,
+                bookId,
+                status,
+                source,
+                pax,
+                totalPrice,
+                netPrice: totalPrice,
+                payments,
+                extraCharges: []
+            };
+
+            return { s, summary };
+        };
+
         window.parseEmail = () => {
             const raw = $('email-textarea').value.trim();
             if (!raw) return window.showAlert("Please paste booking text first.");
@@ -2030,34 +2302,38 @@
                 }
             }
 
-            let originalBookedType = s.bookedType || 'Unknown';
-            if (s.bookedType && window.propertyOtaMap && window.propertyOtaMap.length > 0) {
-                const bookedTypeLower = s.bookedType.toLowerCase();
-                const sortedMap = [...window.propertyOtaMap].sort((a, b) => b.otaName.length - a.otaName.length);
-                const match = sortedMap.find(m => {
-                    const keywords = m.otaName.toLowerCase().split(' ').filter(Boolean);
-                    return keywords.every(kw => bookedTypeLower.includes(kw));
+            // Resolve raw OTA booked type to property PMS category
+            if (s.bookedType) {
+                const resolved = window.resolvePmsRoomType(s.bookedType);
+                if (resolved) s.bookedType = resolved;
+            }
+
+            // Auto-assign available rooms matching the resolved category
+            if (s.bookedType && s.checkIn && s.checkOut && (!s.rooms || s.rooms.length === 0 || !s.rooms[0])) {
+                const sU = parseYMD(s.checkIn), eU = parseYMD(s.checkOut);
+                const occ = new Set();
+                let unitsNeeded = s.units || 1;
+                s.autoRooms = [];
+                
+                staff.forEach(st => {
+                    if (st.status === 'cancelled' || st.status === 'noshow' || st.status === 'unconfirmed' || st.status === 'charged' || st.property !== currentPropertyId) return;
+                    if (sU < parseYMD(st.checkOut) && parseYMD(st.checkIn) < eU) {
+                        (st.rooms?.length ? st.rooms : (st.room ? [st.room] : [])).forEach(r => { if(r) occ.add(r); });
+                    }
                 });
                 
-                if (match) {
-                    s.bookedType = match.pmsCategory;
-                    if (s.checkIn && s.checkOut) {
-                        const sU = parseYMD(s.checkIn), eU = parseYMD(s.checkOut);
-                        const occ = new Set();
-                        let unitsNeeded = s.units || 1;
-                        s.autoRooms = [];
-                        
-                        staff.forEach(st => {
-                            if (st.status === 'cancelled' || st.status === 'noshow' || st.status === 'unconfirmed' || st.status === 'charged' || st.property !== currentPropertyId) return;
-                            if (sU < parseYMD(st.checkOut) && parseYMD(st.checkIn) < eU) {
-                                (st.rooms?.length ? st.rooms : (st.room ? [st.room] : [])).forEach(r => { if(r) occ.add(r); });
-                            }
-                        });
-                        
-                        const availableBeds = hotelRooms.filter(r => r.type === match.pmsCategory && !occ.has(r.id)).map(r => r.id);
-                        for (let i = 0; i < Math.min(unitsNeeded, availableBeds.length); i++) s.autoRooms.push(availableBeds[i]);
-                        if (s.autoRooms.length > 0) { s.room = s.autoRooms[0]; s.rooms = [...s.autoRooms]; }
-                    }
+                const availableBeds = hotelRooms.filter(r => r.type === s.bookedType && !occ.has(r.id));
+                for (let i = 0; i < Math.min(unitsNeeded, availableBeds.length); i++) {
+                    s.autoRooms.push(availableBeds[i].id);
+                    occ.add(availableBeds[i].id);
+                }
+
+                if (s.autoRooms.length > 0) {
+                    s.room = s.autoRooms[0];
+                    s.rooms = [...s.autoRooms];
+                } else {
+                    s.room = "";
+                    s.rooms = [];
                 }
             }
 
