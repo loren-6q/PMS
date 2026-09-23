@@ -1,5 +1,5 @@
 // ---------------------------------------------------------
-// PMS - TEXT EXTRACTION PARSERS
+// PMS - TEXT EXTRACTION PARSERS (Hostelworld, Booking.com, Agoda, Expedia, Airbnb)
 // ---------------------------------------------------------
 
 window.extractBookingData = (raw) => {
@@ -13,7 +13,7 @@ window.extractBookingData = (raw) => {
     // Identify Source
     if (rawLower.includes('hostelworld')) s.source = 'hostelworld';
     else if (rawLower.includes('booking.com')) s.source = 'booking.com';
-    else if (rawLower.includes('expedia')) s.source = 'expedia';
+    else if (rawLower.includes('expedia') || rawLower.includes('expediapartnercentral')) s.source = 'expedia';
     else if (rawLower.includes('agoda')) s.source = 'agoda';
     else if (rawLower.includes('airbnb')) s.source = 'airbnb';
     else if (rawLower.includes('trip.com') || rawLower.includes('ctrip')) s.source = 'ctrip';
@@ -58,7 +58,6 @@ window.extractBookingData = (raw) => {
         let bookedIdx = lines.findIndex(l => l === 'Booked' || l === 'Booking Date');
         if (bookedIdx > -1) s.bookDate = parseHWDate(lines[bookedIdx + 1]);
         
-        // Exact Arriving Check-in Logic
         let arrIdx = lines.findIndex(l => l === 'Arriving');
         if (arrIdx > -1) s.checkIn = parseHWDate(lines[arrIdx + 1]);
         
@@ -66,10 +65,9 @@ window.extractBookingData = (raw) => {
         for (let i = 0; i < lines.length; i++) {
             let m = lines[i].match(hwDenseRegex);
             if (m) {
-                if (!s.checkIn) s.checkIn = parseHWDate(m[1]); // Fallback if Arriving wasn't found
+                if (!s.checkIn) s.checkIn = parseHWDate(m[1]);
                 let roomStr = m[2].trim();
                 
-                // Refundability Catch
                 if (roomStr.toLowerCase().includes('non-refundable') || roomStr.toLowerCase().includes('non refundable')) {
                     s.refundability = 'non-ref';
                     roomStr = roomStr.replace(/non-?refundable/gi, '').replace(/-\s*$/, '').trim();
@@ -108,31 +106,26 @@ window.extractBookingData = (raw) => {
     // ---------------------------------------------------------
     } else if (s.source === 'booking.com') {
         
-        // Email & Phone Number Fix
         let emailIdx = lines.findIndex(l => l.includes('@guest.booking.com'));
         if (emailIdx > -1) {
             s.email = lines[emailIdx];
             if (lines.length > emailIdx + 1) {
                 let nextLine = lines[emailIdx + 1].trim();
-                // If it contains a string of numbers, assume it's the phone number
                 if (/\d{5,}/.test(nextLine.replace(/\s+/g, ''))) {
                     s.phone = nextLine;
                 }
             }
         }
 
-        // Booking ID
         let bIdIdx = lines.findIndex(l => l === 'Booking number:');
         if (bIdIdx > -1 && lines.length > bIdIdx + 1) s.bookId = lines[bIdIdx + 1].trim();
 
-        // Book Date
         let recIdx = lines.findIndex(l => l === 'Received');
         if (recIdx > -1 && lines.length > recIdx + 1) {
             let d = new Date(lines[recIdx + 1]);
             if (!isNaN(d)) s.bookDate = getLocalYMD(d);
         }
 
-        // Guest Name & Country
         let gnIdx = lines.findIndex(l => l === 'Guest name:');
         if (gnIdx > -1 && lines.length > gnIdx + 1) {
             let nameLine = lines[gnIdx + 1].trim().replace(/\bGENIUS\b/i, '').trim();
@@ -154,14 +147,12 @@ window.extractBookingData = (raw) => {
             }
         }
 
-        // Check-in and Check-out
         let ciIdx = lines.findIndex(l => l === 'Check-in');
         if (ciIdx > -1 && lines.length > ciIdx + 1) s.checkIn = getLocalYMD(new Date(lines[ciIdx + 1]));
         
         let coIdx = lines.findIndex(l => l === 'Check-out');
         if (coIdx > -1 && lines.length > coIdx + 1) s.checkOut = getLocalYMD(new Date(lines[coIdx + 1]));
 
-        // Units and Pax
         let unitsIdx = lines.findIndex(l => l === 'Total units');
         if (unitsIdx > -1 && lines.length > unitsIdx + 1) {
              let uMatch = lines[unitsIdx + 1].match(/(\d+)/);
@@ -174,14 +165,12 @@ window.extractBookingData = (raw) => {
              if (paxMatch) s.pax = parseInt(paxMatch[1]);
         }
 
-        // Total Price
         let tpIdx = lines.findIndex(l => l === 'Total price');
         if (tpIdx > -1 && lines.length > tpIdx + 1) {
             let priceMatch = lines[tpIdx + 1].match(/(?:THB|USD|EUR|GBP|฿|\$|€|£)\s*([\d,.]+)/i);
             if (priceMatch) s.totalPrice = parseFloat(priceMatch[1].replace(/,/g, ''));
         }
 
-        // Commission (Net Price)
         let commIdx = lines.findIndex(l => l === 'Commission and charges:');
         if (commIdx > -1 && lines.length > commIdx + 1) {
              let cMatch = lines[commIdx + 1].match(/(?:THB|USD|EUR|GBP|฿|\$|€|£)\s*([\d,.]+)/i);
@@ -191,7 +180,6 @@ window.extractBookingData = (raw) => {
              }
         }
 
-        // Room Type
         let bookDIdx = lines.findIndex(l => l.includes('Booking.com will collect') || l.includes('You will receive a virtual credit card'));
         if (bookDIdx > -1 && lines.length > bookDIdx + 1) {
             s.bookedType = lines[bookDIdx + 1].trim(); 
@@ -205,7 +193,6 @@ window.extractBookingData = (raw) => {
              }
         }
 
-        // Payment setup
         if (lines.some(l => l.includes('Payment is facilitated via Payments by Booking.com') || l.includes('Booking.com will collect'))) {
             if (s.netPrice && s.totalPrice) {
                 s.payments.push({ date: s.checkIn || getLocalYMD(), amt: s.netPrice, method: 'bdc-pay' });
@@ -216,17 +203,17 @@ window.extractBookingData = (raw) => {
         }
 
     // ---------------------------------------------------------
-    // AGODA PARSER (REVISED FOR GMAIL TEXT & EXTRANET COPIES)
+    // AGODA PARSER (Gmail Copied Tables & YCS Notifications)
     // ---------------------------------------------------------
     } else if (s.source === 'agoda') {
         const flatRaw = normalized.replace(/\s+/g, ' ');
 
-        // 1. Booking ID (handles spaced and unspaced, e.g. "Booking ID2048748786" or "Booking ID: 2048748786")
+        // 1. Booking ID
         let bIdMatch = normalized.match(/(?:Booking\s*ID|Booking\s*Reference(?:\s*No\.?)?|Reference\s*ID)\s*:?\s*(\d{7,15})/i)
                     || flatRaw.match(/Booking\s*ID\s*(\d{7,15})/i);
         if (bIdMatch) s.bookId = bIdMatch[1];
 
-        // 2. Guest Name (handles unspaced Gmail tables: "Customer First NameMatchimaCustomer Last NameYuangprasit")
+        // 2. Guest Name
         let nameMatch = normalized.match(/Customer\s*First\s*Name\s*:?\s*([A-Za-z\u00C0-\u024F\s\-'\.]+?)\s*Customer\s*Last\s*Name\s*:?\s*([A-Za-z\u00C0-\u024F\s\-'\.]+?)(?:Country\s*of\s*Residence|Check-in|Other\s*Guests|\n|City|$)/i);
         if (nameMatch) {
             s.firstName = nameMatch[1].trim();
@@ -256,13 +243,13 @@ window.extractBookingData = (raw) => {
             }
         }
 
-        // 3. Country of Residence (handles unspaced: "Country of ResidenceThailandCheck-in")
+        // 3. Country of Residence
         let countryMatch = normalized.match(/Country\s*of\s*Residence\s*:?\s*([A-Za-z\s]+?)(?:Check-in|Check-out|City|Other\s*Guests|Room\s*Type|\n|$)/i);
         if (countryMatch) {
             s.country = countryMatch[1].trim();
         }
 
-        // 4. Check-in & Check-out Dates (e.g. "Check-inSeptember 18, 2026Check-outOctober 2, 2026")
+        // 4. Check-in & Check-out Dates
         let ciMatch = normalized.match(/Check-in\s*(?:Date)?\s*:?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i);
         if (ciMatch) {
             let d = new Date(ciMatch[1]);
@@ -275,7 +262,7 @@ window.extractBookingData = (raw) => {
             if (!isNaN(d)) s.checkOut = getLocalYMD(d);
         }
 
-        // 5. Booking Date (email timestamp header)
+        // 5. Booking Date
         let bdMatch = normalized.match(/agoda\.com\s*<no-reply@agoda\.com>[\s\S]{0,120}?(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)?,?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i)
                    || normalized.match(/Booked\s*on\s*:?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i);
         if (bdMatch) {
@@ -285,14 +272,14 @@ window.extractBookingData = (raw) => {
             s.bookDate = getLocalYMD();
         }
 
-        // 6. Occupancy / Pax (handles "11 Adult0" -> 1 Adult)
+        // 6. Occupancy / Pax
         let paxMatch = normalized.match(/(\d+)\s*Adult/i);
         if (paxMatch) {
             let pStr = paxMatch[1];
             s.pax = parseInt(pStr.length > 1 ? pStr.slice(-1) : pStr) || 1;
         }
 
-        // 7. Room Type (handles unspaced: "No. of Extra Bed6 Bed Female Community Dorm (null)11 Adult0")
+        // 7. Room Type
         let rtMatch = normalized.match(/No\.\s*of\s*Extra\s*Bed\s*([\s\S]+?)(?:\(null\))?\s*\d*\s*\d+\s*Adult/i)
                    || normalized.match(/Room\s*Type\s*:?\s*([\s\S]+?)(?:\(null\))?\s*(?:No\.\s*of\s*Rooms|Occupancy|\d+\s*Adult)/i);
         if (rtMatch) {
@@ -325,7 +312,6 @@ window.extractBookingData = (raw) => {
             s.totalPrice = Number((netAmt / 0.815).toFixed(2));
         }
 
-        // Prepayment split: Agoda Commission + Net Payout
         if (s.totalPrice > 0) {
             const payDate = s.checkIn || s.bookDate || getLocalYMD();
             const commission = Number((s.totalPrice - (s.netPrice || s.totalPrice)).toFixed(2));
@@ -342,6 +328,132 @@ window.extractBookingData = (raw) => {
                     date: payDate,
                     amt: Number(s.netPrice.toFixed(2)),
                     method: 'agoda-pay'
+                });
+            }
+        }
+
+    // ---------------------------------------------------------
+    // EXPEDIA PARSER (Partner Central Emails & Mashed Tables)
+    // ---------------------------------------------------------
+    } else if (s.source === 'expedia') {
+        const flatRaw = normalized.replace(/\s+/g, ' ');
+
+        // 1. Booking ID (Reservation ID)
+        let idMatch = normalized.match(/Reservation\s*ID\s*:?\s*(\d{8,14})/i)
+                   || flatRaw.match(/Reservation\s*ID\s*:?\s*(\d{8,14})/i);
+        if (idMatch) s.bookId = idMatch[1];
+
+        // 2. Guest Name
+        let guestMatch = normalized.match(/Guest\s*:\s*([A-Za-z\u00C0-\u024F\s\-'\.]+?)(?:Booked\s*on|Guest\s*Email|Room\s*Type|\n|$)/i);
+        if (guestMatch) {
+            let rawName = guestMatch[1].replace(/^(?:mr\.|mrs\.|ms\.|miss|dr\.)\s+/i, '').trim();
+            let parts = rawName.split(/\s+/).filter(Boolean);
+            if (parts.length > 1) {
+                s.firstName = parts.slice(0, -1).join(' ').toUpperCase();
+                s.lastName = parts[parts.length - 1].toUpperCase();
+            } else if (parts.length === 1) {
+                s.lastName = parts[0].toUpperCase();
+            }
+        }
+
+        // 3. Guest Email & Phone
+        let emailMatch = normalized.match(/Guest\s*Email\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+        if (emailMatch) s.email = emailMatch[1].trim();
+
+        let phoneMatch = normalized.match(/(?:PST|PDT|AM|PM)\s*(\+?[\d\s()\-]{7,25})\s*Guest\s*Email/i);
+        if (phoneMatch) s.phone = phoneMatch[1].trim();
+
+        // 4. Book Date
+        let bdMatch = normalized.match(/Booked\s*on\s*:?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i);
+        if (bdMatch) {
+            let d = new Date(bdMatch[1]);
+            if (!isNaN(d)) s.bookDate = getLocalYMD(d);
+        } else {
+            s.bookDate = getLocalYMD();
+        }
+
+        // 5. Room Type Name
+        let rtMatch = normalized.match(/Room\s*Type\s*Name\s*:?\s*([\s\S]+?)(?:Pricing\s*Model|Payment\s*Instructions|Check-In|Rate\s*Code|Daily\s*Base\s*Rate|\n|$)/i);
+        if (rtMatch) {
+            s.bookedType = rtMatch[1].replace(/\r?\n/g, ' ').trim();
+        }
+
+        // 6. Check-In & Check-Out Dates (Handles mashed: "Check-InCheck-Out...Sep 26, 2026Oct 1, 2026105")
+        let datesSection = normalized.match(/Check-In[\s\S]{0,120}?Check-Out[\s\S]{0,120}?([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})(\d{1,3})?/i);
+        if (datesSection) {
+            let dIn = new Date(datesSection[1]);
+            let dOut = new Date(datesSection[2]);
+            if (!isNaN(dIn)) s.checkIn = getLocalYMD(dIn);
+            if (!isNaN(dOut)) s.checkOut = getLocalYMD(dOut);
+            
+            // Mashed digits after dates: "105" -> 1 Adult, 0 Kids, 5 Nights
+            if (datesSection[3]) {
+                let paxDigit = datesSection[3].charAt(0);
+                let pVal = parseInt(paxDigit);
+                if (!isNaN(pVal) && pVal > 0) s.pax = pVal;
+            }
+        }
+
+        // Fallback for dates if table was spaced differently
+        if (!s.checkIn) {
+            let singleIn = normalized.match(/Check-In\s*(?:Date)?\s*:?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i);
+            if (singleIn) {
+                let d = new Date(singleIn[1]);
+                if (!isNaN(d)) s.checkIn = getLocalYMD(d);
+            }
+        }
+        if (!s.checkOut) {
+            let singleOut = normalized.match(/Check-Out\s*(?:Date)?\s*:?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i);
+            if (singleOut) {
+                let d = new Date(singleOut[1]);
+                if (!isNaN(d)) s.checkOut = getLocalYMD(d);
+            }
+        }
+
+        // 7. Adults / PAX Fallback
+        if (!s.pax || s.pax === 1) {
+            let paxMatch = normalized.match(/Adults\s*:?\s*(\d+)/i) || flatRaw.match(/(\d+)\s*Adult/i);
+            if (paxMatch) s.pax = Math.max(1, parseInt(paxMatch[1]) || 1);
+        }
+
+        // 8. Financials: Total Booking Amount and Amount to Charge Expedia Group (Net)
+        let totalMatch = normalized.match(/Total\s*Booking\s*Amount\s*:?\s*([\d,]+(?:\.\d+)?)/i)
+                      || flatRaw.match(/Total\s*(?:Booking\s*Amount|Amount)?[^\d]*([\d,]+(?:\.\d+)?)\s*(?:THB|USD|EUR|GBP|฿|\$)/i);
+        let netMatch = normalized.match(/Amount\s*to\s*Charge\s*Expedia\s*Group\s*:?\s*([\d,]+(?:\.\d+)?)/i)
+                    || flatRaw.match(/Charge\s*Expedia\s*Group[^\d]*([\d,]+(?:\.\d+)?)/i);
+
+        let totalAmt = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, '')) : 0;
+        let netAmt = netMatch ? parseFloat(netMatch[1].replace(/,/g, '')) : 0;
+
+        if (totalAmt > 0) {
+            s.totalPrice = totalAmt;
+            s.netPrice = netAmt > 0 ? netAmt : Number((totalAmt * 0.82).toFixed(2));
+        } else if (netAmt > 0) {
+            s.netPrice = netAmt;
+            s.totalPrice = Number((netAmt / 0.82).toFixed(2));
+        }
+
+        // 9. Prepayments & Collection Status
+        let isExpediaCollect = rawLower.includes('expedia collects payment') || 
+                               rawLower.includes('guest has pre-paid') || 
+                               rawLower.includes('hotel invoices expedia');
+
+        if (isExpediaCollect && s.totalPrice > 0) {
+            const payDate = s.checkIn || s.bookDate || getLocalYMD();
+            const commission = Number((s.totalPrice - (s.netPrice || s.totalPrice)).toFixed(2));
+
+            if (commission > 0) {
+                s.payments.push({
+                    date: payDate,
+                    amt: commission,
+                    method: 'expedia-kp'
+                });
+            }
+            if (s.netPrice > 0) {
+                s.payments.push({
+                    date: payDate,
+                    amt: Number(s.netPrice.toFixed(2)),
+                    method: 'expedia-pay'
                 });
             }
         }
@@ -370,7 +482,7 @@ window.extractBookingData = (raw) => {
             s.lastName = parts.slice(1).join(' ') || 'GUEST';
         }
 
-        // 3. Country (Look right after "Identity verified")
+        // 3. Country
         let countryMatch = raw.match(/Identity verified.*?\n(.*?)\n/i);
         if (countryMatch) {
             let locationString = countryMatch[1].trim();
@@ -378,7 +490,7 @@ window.extractBookingData = (raw) => {
             s.country = locParts[locParts.length - 1].trim();
         }
 
-        // 4. Book Date (Look near the top near "Airbnb")
+        // 4. Book Date
         let bookDateMatch = raw.match(/Airbnb\s*\n(.*?)\n/i);
         if (bookDateMatch) {
             let timeString = bookDateMatch[1].trim();
