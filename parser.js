@@ -66,6 +66,23 @@ const parseAnyDateToYMD = (input) => {
     return "";
 };
 
+const safeGetLocalYMD = (d) => {
+    if (!d) d = new Date();
+    if (typeof d === 'string') {
+        const parsed = parseAnyDateToYMD(d);
+        if (parsed) return parsed;
+        d = new Date();
+    }
+    if (!(d instanceof Date) || isNaN(d.getTime())) d = new Date();
+    try {
+        const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+        return isNaN(o.getTime()) ? new Date().toISOString().split('T')[0] : o.toISOString().split('T')[0];
+    } catch (e) {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+};
+
 window.extractBookingData = (raw) => {
     const normalized = (raw || '').replace(/\u00A0/g, ' ');
     let rawLines = normalized.split(/\r?\n/).map(l => l.trim());
@@ -81,14 +98,6 @@ window.extractBookingData = (raw) => {
     else if (rawLower.includes('agoda')) s.source = 'agoda';
     else if (rawLower.includes('airbnb')) s.source = 'airbnb';
     else if (rawLower.includes('trip.com') || rawLower.includes('ctrip')) s.source = 'ctrip';
-
-    const getLocalYMD = (d = new Date()) => {
-        const parsed = parseAnyDateToYMD(d);
-        if (parsed) return parsed;
-        const now = new Date();
-        const o = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
-        return o.toISOString().split('T')[0];
-    };
 
     // ---------------------------------------------------------
     // HOSTELWORLD PARSER
@@ -138,12 +147,17 @@ window.extractBookingData = (raw) => {
 
         let nightMatch = normalized.match(/(\d+)\s*Nights?/i);
         if (nightMatch && s.checkIn) {
-            let nights = parseInt(nightMatch[1]);
+            let nights = parseInt(nightMatch[1]) || 1;
             const p = s.checkIn.split('-');
             if (p.length === 3) {
-                let d = new Date(Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])));
-                d.setUTCDate(d.getUTCDate() + nights);
-                s.checkOut = d.toISOString().split('T')[0];
+                const y = parseInt(p[0]), m = parseInt(p[1]) - 1, day = parseInt(p[2]);
+                if (!isNaN(y) && !isNaN(m) && !isNaN(day)) {
+                    let d = new Date(Date.UTC(y, m, day));
+                    if (!isNaN(d.getTime())) {
+                        d.setUTCDate(d.getUTCDate() + nights);
+                        s.checkOut = d.toISOString().split('T')[0];
+                    }
+                }
             }
         }
         
@@ -156,7 +170,7 @@ window.extractBookingData = (raw) => {
         let depIdx = lines.findIndex(l => l.includes('Hostelworld Deposit') || l.includes('Deposit'));
         if (depIdx > -1 && lines.length > depIdx + 1) {
             let depositAmt = parseFloat((lines[depIdx + 1] || lines[depIdx]).replace(/[^\d.]/g, ''));
-            if (!isNaN(depositAmt)) s.payments.push({ date: s.checkIn || getLocalYMD(), amt: depositAmt, method: 'hw-kp' });
+            if (!isNaN(depositAmt)) s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: depositAmt, method: 'hw-kp' });
         }
 
     // ---------------------------------------------------------
@@ -252,10 +266,10 @@ window.extractBookingData = (raw) => {
 
         if (lines.some(l => l.includes('Payment is facilitated via Payments by Booking.com') || l.includes('Booking.com will collect'))) {
             if (s.netPrice && s.totalPrice) {
-                s.payments.push({ date: s.checkIn || getLocalYMD(), amt: s.netPrice, method: 'bdc-pay' });
-                s.payments.push({ date: s.checkIn || getLocalYMD(), amt: Number((s.totalPrice - s.netPrice).toFixed(2)), method: 'bdc-kp' });
+                s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: s.netPrice, method: 'bdc-pay' });
+                s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: Number((s.totalPrice - s.netPrice).toFixed(2)), method: 'bdc-kp' });
             } else if (s.totalPrice) {
-                 s.payments.push({ date: s.checkIn || getLocalYMD(), amt: s.totalPrice, method: 'bdc-pay' });
+                 s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: s.totalPrice, method: 'bdc-pay' });
             }
         }
 
@@ -323,7 +337,7 @@ window.extractBookingData = (raw) => {
         if (bdMatch) {
             s.bookDate = parseAnyDateToYMD(bdMatch[1]);
         }
-        if (!s.bookDate) s.bookDate = getLocalYMD();
+        if (!s.bookDate) s.bookDate = safeGetLocalYMD();
 
         // 6. Occupancy / Pax
         let paxMatch = normalized.match(/(\d+)\s*Adult/i);
@@ -366,7 +380,7 @@ window.extractBookingData = (raw) => {
         }
 
         if (s.totalPrice > 0) {
-            const payDate = s.checkIn || s.bookDate || getLocalYMD();
+            const payDate = s.checkIn || s.bookDate || safeGetLocalYMD();
             const commission = Number((s.totalPrice - (s.netPrice || s.totalPrice)).toFixed(2));
 
             if (commission > 0) {
@@ -421,7 +435,7 @@ window.extractBookingData = (raw) => {
         if (bdMatch) {
             s.bookDate = parseAnyDateToYMD(bdMatch[1]);
         }
-        if (!s.bookDate) s.bookDate = getLocalYMD();
+        if (!s.bookDate) s.bookDate = safeGetLocalYMD();
 
         // 5. Room Type Name
         let rtMatch = normalized.match(/Room\s*Type\s*Name\s*:?\s*([\s\S]+?)(?:Pricing\s*Model|Payment\s*Instructions|Check-In|Rate\s*Code|Daily\s*Base\s*Rate|\n|$)/i);
@@ -429,8 +443,7 @@ window.extractBookingData = (raw) => {
             s.bookedType = rtMatch[1].replace(/\r?\n/g, ' ').trim();
         }
 
-        // 6. Check-In & Check-Out Dates (Handles mashed: "...Hotel ConfSep 26, 2026Oct 1, 2026105")
-        // Uses explicit month names so attached prefix words like "Conf" are not grouped with the month
+        // 6. Check-In & Check-Out Dates
         const mPattern = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
         const dateSectionRegex = new RegExp(`Check-In[\\s\\S]{0,120}?Check-Out[\\s\\S]{0,120}?(${mPattern}\\s+\\d{1,2},?\\s+\\d{4})\\s*(${mPattern}\\s+\\d{1,2},?\\s+\\d{4})(\\d{1,3})?`, 'i');
         
@@ -439,7 +452,6 @@ window.extractBookingData = (raw) => {
             s.checkIn = parseAnyDateToYMD(datesSection[1]);
             s.checkOut = parseAnyDateToYMD(datesSection[2]);
             
-            // Mashed digits after dates: "105" -> 1 Adult, 0 Kids, 5 Nights
             if (datesSection[3]) {
                 let paxDigit = datesSection[3].charAt(0);
                 let pVal = parseInt(paxDigit);
@@ -447,7 +459,6 @@ window.extractBookingData = (raw) => {
             }
         }
 
-        // Fallback for dates if table was spaced differently
         if (!s.checkIn) {
             let singleIn = normalized.match(new RegExp(`Check-In\\s*(?:Date)?\\s*:?\\s*(${mPattern}\\s+\\d{1,2},?\\s+\\d{4})`, 'i'));
             if (singleIn) s.checkIn = parseAnyDateToYMD(singleIn[1]);
@@ -463,7 +474,7 @@ window.extractBookingData = (raw) => {
             if (paxMatch) s.pax = Math.max(1, parseInt(paxMatch[1]) || 1);
         }
 
-        // 8. Financials: Total Booking Amount and Amount to Charge Expedia Group (Net)
+        // 8. Financials
         let totalMatch = normalized.match(/Total\s*Booking\s*Amount\s*:?\s*([\d,]+(?:\.\d+)?)/i)
                       || flatRaw.match(/Total\s*(?:Booking\s*Amount|Amount)?[^\d]*([\d,]+(?:\.\d+)?)\s*(?:THB|USD|EUR|GBP|฿|\$)/i);
         let netMatch = normalized.match(/Amount\s*to\s*Charge\s*Expedia\s*Group\s*:?\s*([\d,]+(?:\.\d+)?)/i)
@@ -486,7 +497,7 @@ window.extractBookingData = (raw) => {
                                rawLower.includes('hotel invoices expedia');
 
         if (isExpediaCollect && s.totalPrice > 0) {
-            const payDate = s.checkIn || s.bookDate || getLocalYMD();
+            const payDate = s.checkIn || s.bookDate || safeGetLocalYMD();
             const commission = Number((s.totalPrice - (s.netPrice || s.totalPrice)).toFixed(2));
 
             if (commission > 0) {
@@ -541,9 +552,9 @@ window.extractBookingData = (raw) => {
         if (bookDateMatch) {
             let timeString = bookDateMatch[1].trim();
             if (timeString.includes(':') || timeString.includes('ago')) {
-                s.bookDate = getLocalYMD();
+                s.bookDate = safeGetLocalYMD();
             } else {
-                s.bookDate = parseAnyDateToYMD(timeString + " " + new Date().getFullYear()) || getLocalYMD();
+                s.bookDate = parseAnyDateToYMD(timeString + " " + new Date().getFullYear()) || safeGetLocalYMD();
             }
         }
 
@@ -585,7 +596,7 @@ window.extractBookingData = (raw) => {
 
         if (s.totalPrice && s.netPrice) {
             let commAmt = s.totalPrice - s.netPrice;
-            let payDate = s.checkIn || getLocalYMD();
+            let payDate = s.checkIn || safeGetLocalYMD();
             s.payments.push({ date: payDate, amt: Number(s.netPrice.toFixed(2)), method: 'airbnb-pay' });
             s.payments.push({ date: payDate, amt: Number(commAmt.toFixed(2)), method: 'airbnb-kp' });
         }
@@ -597,7 +608,7 @@ window.extractBookingData = (raw) => {
         }
     }
 
-    // Universal Fallback for Channel Sheets (Arrival Date / Departure Date formatted text)
+    // Universal Fallback for Channel Sheets
     if (!s.checkIn) {
         let arrMatch = normalized.match(/Arrival\s*Date\s*:?\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{4}|\d{4}[-/.]\d{1,2}[-/.]\d{1,2})/i);
         if (arrMatch) s.checkIn = parseAnyDateToYMD(arrMatch[1]);
@@ -615,12 +626,15 @@ window.extractBookingData = (raw) => {
     if (s.checkIn) {
         const p = s.checkIn.split('-');
         if (p.length === 3) {
-            let ciDate = new Date(Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])));
-            if (!isNaN(ciDate.getTime())) {
-                let today = new Date();
-                today.setHours(0, 0, 0, 0); 
-                let diffDays = (ciDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
-                if (diffDays <= 7) s.refundability = 'non-ref';
+            const y = parseInt(p[0]), m = parseInt(p[1]) - 1, day = parseInt(p[2]);
+            if (!isNaN(y) && !isNaN(m) && !isNaN(day)) {
+                let ciDate = new Date(Date.UTC(y, m, day));
+                if (!isNaN(ciDate.getTime())) {
+                    let today = new Date();
+                    today.setHours(0, 0, 0, 0); 
+                    let diffDays = (ciDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+                    if (diffDays <= 7) s.refundability = 'non-ref';
+                }
             }
         }
     }
@@ -631,7 +645,9 @@ window.extractBookingData = (raw) => {
         const parseYMD = str => { 
             if (!str || typeof str !== 'string') return 0;
             const p = str.split('-'); 
-            return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); 
+            if (p.length !== 3) return 0;
+            const y = parseInt(p[0]), m = parseInt(p[1]) - 1, d = parseInt(p[2]);
+            return (isNaN(y) || isNaN(m) || isNaN(d)) ? 0 : Date.UTC(y, m, d);
         };
         const ms = parseYMD(s.checkOut) - parseYMD(s.checkIn);
         nights = Math.round(ms / 86400000);
