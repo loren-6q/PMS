@@ -7,7 +7,7 @@ const MONTH_MAP = {
     jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
 };
 
-const parseAnyDateToYMD = (input) => {
+const parseAnyDateToYMD = (input, defaultYear) => {
     if (!input) return "";
     if (input instanceof Date) {
         if (isNaN(input.getTime())) return "";
@@ -22,6 +22,8 @@ const parseAnyDateToYMD = (input) => {
     const str = String(input).trim();
     if (!str) return "";
 
+    const curYear = defaultYear || (new Date()).getFullYear();
+
     // 1. ISO format: YYYY-MM-DD
     const isoMatch = str.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
     if (isoMatch) {
@@ -34,23 +36,25 @@ const parseAnyDateToYMD = (input) => {
         return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
     }
 
-    // 3. Month Name + Day + Year: "September 18, 2026" or "Sep 26, 2026"
-    const mdyMatch = str.match(/(?:^|[^\w])(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s,]+(\d{1,2})(?:st|nd|rd|th)?[\s,]+(\d{4})/i);
+    // 3. Month Name + Day + (Optional) Year: "September 18, 2026", "Sep 26, 2026", or "Sep 25"
+    const mdyMatch = str.match(/(?:^|[^\w])(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s,]+(\d{1,2})(?:st|nd|rd|th)?(?:[\s,]+(\d{4}))?/i);
     if (mdyMatch) {
         const mKey = mdyMatch[1].toLowerCase().slice(0, 3);
         const mNum = MONTH_MAP[mKey];
         if (mNum) {
-            return `${mdyMatch[3]}-${mNum}-${mdyMatch[2].padStart(2, '0')}`;
+            const yr = mdyMatch[3] || curYear;
+            return `${yr}-${mNum}-${mdyMatch[2].padStart(2, '0')}`;
         }
     }
 
-    // 4. Day + Month Name + Year: "18 September 2026" or "26 Sep 2026"
-    const dmyWordMatch = str.match(/(\d{1,2})(?:st|nd|rd|th)?[\s,]+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s,]+(\d{4})/i);
+    // 4. Day + Month Name + (Optional) Year: "18 September 2026", "26 Sep 2026", or "25 Sep"
+    const dmyWordMatch = str.match(/(\d{1,2})(?:st|nd|rd|th)?[\s,]+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:[\s,]+(\d{4}))?/i);
     if (dmyWordMatch) {
         const mKey = dmyWordMatch[2].toLowerCase().slice(0, 3);
         const mNum = MONTH_MAP[mKey];
         if (mNum) {
-            return `${dmyWordMatch[3]}-${mNum}-${dmyWordMatch[1].padStart(2, '0')}`;
+            const yr = dmyWordMatch[3] || curYear;
+            return `${yr}-${mNum}-${dmyWordMatch[1].padStart(2, '0')}`;
         }
     }
 
@@ -557,18 +561,31 @@ window.extractBookingData = (raw) => {
                 s.bookDate = parseAnyDateToYMD(timeString + " " + new Date().getFullYear()) || safeGetLocalYMD();
             }
         }
+        if (!s.bookDate) s.bookDate = safeGetLocalYMD();
+
+        const refYear = parseInt((s.bookDate || '').split('-')[0]) || (new Date()).getFullYear();
 
         // 5. Check-In & 6. Check-Out
         let ciIdx = lines.findIndex(l => l.includes('Check-in') || l.includes('Check in'));
         if (ciIdx > -1 && lines.length > ciIdx + 1) {
-            let dateStr = lines[ciIdx + 1].replace(/^[A-Za-z]{3},\s*/, '');
-            s.checkIn = parseAnyDateToYMD(dateStr);
+            let dateStr = lines[ciIdx + 1].replace(/^[A-Za-z]{3},\s*/, '').trim();
+            s.checkIn = parseAnyDateToYMD(dateStr, refYear);
         }
 
         let coIdx = lines.findIndex(l => l.includes('Checkout') || l.includes('Check out'));
         if (coIdx > -1 && lines.length > coIdx + 1) {
-            let dateStr = lines[coIdx + 1].replace(/^[A-Za-z]{3},\s*/, '');
-            s.checkOut = parseAnyDateToYMD(dateStr);
+            let dateStr = lines[coIdx + 1].replace(/^[A-Za-z]{3},\s*/, '').trim();
+            s.checkOut = parseAnyDateToYMD(dateStr, refYear);
+        }
+
+        // Handle year boundary transitions (e.g., booking made in late Dec for early Jan)
+        if (s.checkIn && s.bookDate && s.checkIn < s.bookDate) {
+            const p = s.checkIn.split('-');
+            s.checkIn = `${parseInt(p[0]) + 1}-${p[1]}-${p[2]}`;
+        }
+        if (s.checkIn && s.checkOut && s.checkOut < s.checkIn) {
+            const p = s.checkOut.split('-');
+            s.checkOut = `${parseInt(p[0]) + 1}-${p[1]}-${p[2]}`;
         }
 
         // 7. PAX
