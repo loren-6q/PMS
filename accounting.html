@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SWIMS Accounting</title>
+    <title>Financial Dashboard | Accounting</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Condensed:wght@400;700;900&display=swap');
         body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; overflow-x: hidden; font-size: 1.2rem; }
         .unselectable { user-select: none; -webkit-user-select: none; }
         input, select { font-size: 1rem !important; padding: 2px 6px !important; border-radius: 4px !important; border: 1px solid #cbd5e1 !important; font-weight: 700 !important; }
@@ -22,29 +24,48 @@
 </head>
 <body class="bg-slate-100 p-0 sm:p-4">
 
-    <div id="boot-loader" class="loading-overlay"><div class="spinner"></div><div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4"><span id="sync-status">Authenticating...</span></div></div>
+    <div id="boot-loader" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4">
+            <span id="sync-status">Loading Financials...</span>
+        </div>
+    </div>
 
     <div class="max-w-[1950px] mx-auto">
         
         <!-- Header -->
-        <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 mb-4 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-40">
-            <div class="flex items-center gap-4">
-                <a href="index.html" class="px-3 py-1.5 bg-slate-800 text-white rounded font-black text-xs uppercase hover:bg-slate-700 flex items-center gap-1 transition-colors"><i data-lucide="arrow-left" size="14"></i> Calendar</a>
-                <h1 class="text-xl font-black uppercase tracking-tighter text-blue-900 flex items-center gap-2"><i data-lucide="bar-chart-3" class="text-blue-600"></i> Financial Dashboard</h1>
+        <div class="bg-white px-4 py-2.5 rounded-lg shadow-sm border border-slate-200 mb-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40">
+            <div class="flex items-center gap-3 flex-wrap">
+                <a id="nav-calendar-btn" href="index.html" class="px-3 py-1.5 bg-slate-800 text-white rounded font-black text-xs uppercase hover:bg-slate-700 flex items-center gap-1 transition-colors">
+                    <i data-lucide="arrow-left" size="14"></i> Calendar
+                </a>
+                <h1 class="text-lg sm:text-xl font-black uppercase tracking-tighter text-blue-900 flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="text-blue-600"></i> Financial Dashboard
+                </h1>
+
+                <!-- Property Filter Switcher -->
+                <div class="flex items-center bg-slate-100 rounded px-2 py-1 border border-slate-300 shadow-inner">
+                    <span class="text-[10px] font-black uppercase text-slate-500 mr-2 tracking-wider">Property:</span>
+                    <select id="acc-property-select" onchange="window.switchProperty(this.value)" class="bg-white font-black text-xs uppercase text-blue-700 outline-none cursor-pointer border border-slate-300 rounded px-2 py-0.5 shadow-sm">
+                    </select>
+                </div>
             </div>
+
+            <!-- Date Range Controls -->
             <div class="flex items-center gap-2 bg-slate-50 p-1.5 rounded border border-slate-300 shadow-inner w-full md:w-auto">
                 <span class="text-xs font-black uppercase text-slate-500 px-2">Date Range:</span>
                 <input type="date" id="acc-date-start" onchange="window.renderAccounting()" class="w-full text-xs p-1 border-none shadow-none">
                 <span class="text-slate-400 font-bold px-1">TO</span>
                 <input type="date" id="acc-date-end" onchange="window.renderAccounting()" class="w-full text-xs p-1 border-none shadow-none">
-                <button onclick="document.getElementById('acc-date-start').value=''; document.getElementById('acc-date-end').value=''; window.renderAccounting();" class="p-1 hover:bg-slate-200 rounded text-slate-400"><i data-lucide="x" size="14"></i></button>
+                <button onclick="document.getElementById('acc-date-start').value=''; document.getElementById('acc-date-end').value=''; window.renderAccounting();" class="p-1 hover:bg-slate-200 rounded text-slate-400" title="Clear Dates">
+                    <i data-lucide="x" size="14"></i>
+                </button>
             </div>
         </div>
-
         <div class="p-4 sm:p-6 bg-white rounded-lg shadow border border-slate-200">
             
             <!-- KPI Blocks -->
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8 unselectable">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-8 unselectable">
                 <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden h-28">
                     <span class="text-blue-500 font-black text-[10px] uppercase tracking-widest mb-1 z-10">Active Gross Booked</span>
                     <span id="acc-active-gross" class="text-2xl lg:text-3xl font-black text-blue-900 tracking-tighter z-10">฿0</span>
@@ -72,11 +93,12 @@
                     <span class="text-slate-400 font-bold text-[9px] uppercase mt-1 z-10">Zero-Revenue Cancels</span>
                 </div>
             </div>
-
             <!-- Daily Operations Report -->
             <div class="mb-8 bg-indigo-50 border-2 border-indigo-200 rounded-xl p-4 shadow-sm unselectable">
                 <div class="flex flex-col sm:flex-row justify-between items-center mb-4 pb-2 border-b border-indigo-200">
-                    <h3 class="font-black text-indigo-900 uppercase tracking-widest flex items-center gap-2"><i data-lucide="calendar-clock" size="18"></i> Daily Operations Report</h3>
+                    <h3 class="font-black text-indigo-900 uppercase tracking-widest flex items-center gap-2">
+                        <i data-lucide="calendar-clock" size="18"></i> Daily Operations Report
+                    </h3>
                     <div class="flex items-center gap-2 mt-2 sm:mt-0">
                         <label class="text-[10px] font-black uppercase text-indigo-600">Select Date:</label>
                         <input type="date" id="daily-rep-date" class="text-xs border border-indigo-300 rounded p-1 font-bold text-indigo-800 bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer" onchange="window.renderDailyReport()">
@@ -105,12 +127,13 @@
                     </div>
                 </div>
             </div>
-
             <!-- Filtered Ledger -->
             <div class="mb-8">
                 <div class="flex justify-between items-end border-b border-slate-200 pb-2 mb-3">
                     <h3 class="font-black text-slate-800 uppercase tracking-widest text-sm unselectable">Filtered Ledger</h3>
-                    <button onclick="window.exportLedgerCSV()" class="text-[10px] font-black uppercase bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded flex items-center gap-1 shadow-sm transition-colors unselectable"><i data-lucide="download" size="12"></i> Export CSV</button>
+                    <button onclick="window.exportLedgerCSV()" class="text-[10px] font-black uppercase bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded flex items-center gap-1 shadow-sm transition-colors unselectable cursor-pointer">
+                        <i data-lucide="download" size="12"></i> Export CSV
+                    </button>
                 </div>
                 
                 <div class="overflow-x-auto min-h-[300px] max-h-[500px] border border-slate-300 rounded-lg shadow-sm">
@@ -145,14 +168,15 @@
                     </table>
                 </div>
             </div>
-
             <!-- Analytics Modules Grid -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 <!-- Channel Distribution -->
                 <div class="border border-indigo-300 rounded-lg overflow-hidden shadow-sm self-start">
                     <div class="bg-indigo-700 text-white p-1.5 font-black uppercase tracking-widest text-[10px] text-center unselectable">Channel Distribution</div>
                     <table class="w-full text-left border-collapse">
-                        <thead class="bg-indigo-50 text-[9px] uppercase font-bold text-indigo-700"><tr><th class="p-1.5 border-r border-indigo-200">Source</th><th class="p-1.5 border-r border-indigo-200 text-right">Bks</th><th class="p-1.5 text-right">Value ฿</th></tr></thead>
+                        <thead class="bg-indigo-50 text-[9px] uppercase font-bold text-indigo-700">
+                            <tr><th class="p-1.5 border-r border-indigo-200">Source</th><th class="p-1.5 border-r border-indigo-200 text-right">Bks</th><th class="p-1.5 text-right">Value ฿</th></tr>
+                        </thead>
                         <tbody id="acc-channel-body" class="text-[10px] font-bold text-slate-700 bg-white"></tbody>
                     </table>
                 </div>
@@ -160,7 +184,9 @@
                 <div class="border border-slate-300 rounded-lg overflow-hidden shadow-sm self-start">
                     <div class="bg-slate-800 text-white p-1.5 font-black uppercase tracking-widest text-[10px] text-center unselectable" title="Counts total bed/room instances sold, not just bookings.">Bed Popularity</div>
                     <table class="w-full text-left border-collapse">
-                        <thead class="bg-slate-100 text-[9px] uppercase font-bold text-slate-500"><tr><th class="p-1.5 border-r border-slate-200">Bed Setup</th><th class="p-1.5 border-r border-slate-200 text-right" title="Beds/Rooms Sold">Sold</th><th class="p-1.5 text-right">Nights</th></tr></thead>
+                        <thead class="bg-slate-100 text-[9px] uppercase font-bold text-slate-500">
+                            <tr><th class="p-1.5 border-r border-slate-200">Bed Setup</th><th class="p-1.5 border-r border-slate-200 text-right" title="Beds/Rooms Sold">Sold</th><th class="p-1.5 text-right">Nights</th></tr>
+                        </thead>
                         <tbody id="acc-bed-body" class="text-[10px] font-bold text-slate-700 bg-white"></tbody>
                     </table>
                 </div>
@@ -168,7 +194,9 @@
                 <div class="border border-emerald-300 rounded-lg overflow-hidden shadow-sm self-start lg:col-span-2">
                     <div class="bg-emerald-700 text-white p-1.5 font-black uppercase tracking-widest text-[10px] text-center unselectable">Income & Cash Flow (By Payment Date)</div>
                     <table class="w-full text-left border-collapse">
-                        <thead class="bg-emerald-50 text-[9px] uppercase font-bold text-emerald-700"><tr><th class="p-1.5 border-r border-emerald-200">Payment Category</th><th class="p-1.5 border-r border-emerald-200 text-right">Txns</th><th class="p-1.5 text-right">Total Amount</th></tr></thead>
+                        <thead class="bg-emerald-50 text-[9px] uppercase font-bold text-emerald-700">
+                            <tr><th class="p-1.5 border-r border-emerald-200">Payment Category</th><th class="p-1.5 border-r border-emerald-200 text-right">Txns</th><th class="p-1.5 text-right">Total Amount</th></tr>
+                        </thead>
                         <tbody id="acc-cashflow-body" class="text-[10px] font-bold text-slate-700 bg-white"></tbody>
                         <tfoot id="acc-cashflow-foot" class="bg-emerald-100 text-[11px] font-black text-emerald-900 border-t-2 border-emerald-300"></tfoot>
                     </table>
@@ -177,130 +205,111 @@
 
         </div>
     </div>
-
     <!-- Hidden Dropdowns -->
     <div id="acc-source-dropdown" class="multi-select-dropdown">
         <label><input type="checkbox" value="booking.com" onchange="window.updateMultiLabel('acc-source-dropdown', 'acc-source-label', 'ALL SOURCES'); window.renderAccounting();" class="mr-1.5"> BDC</label>
         <label><input type="checkbox" value="agoda" onchange="window.updateMultiLabel('acc-source-dropdown', 'acc-source-label', 'ALL SOURCES'); window.renderAccounting();" class="mr-1.5"> AGODA</label>
         <label><input type="checkbox" value="airbnb" onchange="window.updateMultiLabel('acc-source-dropdown', 'acc-source-label', 'ALL SOURCES'); window.renderAccounting();" class="mr-1.5"> AIRBNB</label>
         <label><input type="checkbox" value="hostelworld" onchange="window.updateMultiLabel('acc-source-dropdown', 'acc-source-label', 'ALL SOURCES'); window.renderAccounting();" class="mr-1.5"> HW</label>
+        <label><input type="checkbox" value="expedia" onchange="window.updateMultiLabel('acc-source-dropdown', 'acc-source-label', 'ALL SOURCES'); window.renderAccounting();" class="mr-1.5"> EXPEDIA</label>
+        <label><input type="checkbox" value="ctrip" onchange="window.updateMultiLabel('acc-source-dropdown', 'acc-source-label', 'ALL SOURCES'); window.renderAccounting();" class="mr-1.5"> CTRIP</label>
         <label><input type="checkbox" value="direct" onchange="window.updateMultiLabel('acc-source-dropdown', 'acc-source-label', 'ALL SOURCES'); window.renderAccounting();" class="mr-1.5"> DIRECT</label>
         <label><input type="checkbox" value="walkin" onchange="window.updateMultiLabel('acc-source-dropdown', 'acc-source-label', 'ALL SOURCES'); window.renderAccounting();" class="mr-1.5"> WALK-IN</label>
         <label><input type="checkbox" value="other" onchange="window.updateMultiLabel('acc-source-dropdown', 'acc-source-label', 'ALL SOURCES'); window.renderAccounting();" class="mr-1.5"> OTHER</label>
     </div>
-
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
         const appId = 'hotel-pms-v1'; 
-        const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app);
+        const app = initializeApp(firebaseConfig); 
+        const auth = getAuth(app); 
+        const db = getFirestore(app);
+
+        // PROPERTY ALIAS MAPPINGS & ROUTING
+        const PROP_MAP = {
+            'LOUD': 'loud_samui',
+            'WET': 'wet_pool',
+            'SWIMS': 'swims_resort'
+        };
+
+        const PROP_REVERSE_MAP = {
+            'loud_samui': 'LOUD',
+            'wet_pool': 'WET',
+            'swims_resort': 'SWIMS'
+        };
+
+        let initialP = null;
+        try {
+            initialP = new URLSearchParams(window.location.search).get('p')?.toUpperCase();
+        } catch (e) {}
+
+        let storedProp = null;
+        try {
+            storedProp = localStorage.getItem('last_prop');
+        } catch (e) {}
+
+        let currentPropertyId = PROP_MAP[initialP] || storedProp || 'swims_resort';
 
         let staff = [];
-        let accSortKey = "checkIn"; let accSortAsc = false;
+        let propertiesList = [];
+        let hotelRooms = [];
+        let accSortKey = "checkIn"; 
+        let accSortAsc = false;
         const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
         const parseYMD = (ymd) => { if (!ymd) return 0; const [y, m, d] = ymd.split('-'); return Date.UTC(y, m - 1, d); };
 
-        const hotelRooms = [
-            { id: "B01", type: "Oceanfront King", bed: "KING", floor: 2 },
-            { id: "A01", type: "Oceanfront King", bed: "KING", floor: 1 },
-            { id: "A02", type: "Oceanfront King", bed: "KING", floor: 1 },
-            { id: "B02", type: "Oceanfront Twin", bed: "TWIN", floor: 2 },
-            { id: "B03", type: "Oceanview King Room", bed: "KING", floor: 2 },
-            { id: "B05", type: "Oceanview King Room", bed: "KING", floor: 2 },
-            { id: "B07", type: "Oceanview King Room", bed: "KING", floor: 2 },
-            { id: "A03", type: "Oceanview King Room", bed: "KING", floor: 1 },
-            { id: "A04", type: "Oceanview King Room", bed: "KING", floor: 1 },
-            { id: "A06", type: "Oceanview King Room", bed: "KING", floor: 1 },
-            { id: "A08", type: "Oceanview King Room", bed: "KING", floor: 1 },
-            { id: "A10", type: "Oceanview King Room", bed: "KING", floor: 1 },
-            { id: "A12", type: "Oceanview King Room", bed: "KING", floor: 1 },
-            { id: "C206", type: "Oceanview King Room", bed: "KING", floor: 2 },
-            { id: "C306", type: "Oceanview King Room", bed: "KING", floor: 3 },
-            { id: "C311", type: "Oceanview King Room", bed: "KING", floor: 3 },
-            { id: "B04", type: "Oceanview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "B06", type: "Oceanview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "B08", type: "Oceanview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "C212", type: "Oceanview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "A05", type: "Partial Oceanview King Room", bed: "KING", floor: 1 },
-            { id: "A07", type: "Partial Oceanview King Room", bed: "KING", floor: 1 },
-            { id: "A09", type: "Partial Oceanview King Room", bed: "KING", floor: 1 },
-            { id: "A11", type: "Partial Oceanview King Room", bed: "KING", floor: 1 },
-            { id: "C203", type: "Partial Oceanview King Room", bed: "KING", floor: 2 },
-            { id: "C204", type: "Partial Oceanview King Room", bed: "KING", floor: 2 },
-            { id: "C205", type: "Partial Oceanview King Room", bed: "KING", floor: 2 },
-            { id: "B09", type: "Gardenview King Room", bed: "KING", floor: 2 },
-            { id: "B11", type: "Gardenview King Room", bed: "KING", floor: 2 },
-            { id: "B13", type: "Gardenview King Room", bed: "KING", floor: 2 },
-            { id: "B15", type: "Gardenview King Room", bed: "KING", floor: 2 },
-            { id: "B17", type: "Gardenview King Room", bed: "KING", floor: 2 },
-            { id: "B19", type: "Gardenview King Room", bed: "KING", floor: 2 },
-            { id: "B21", type: "Gardenview King Room", bed: "KING", floor: 2 },
-            { id: "B22", type: "Gardenview King Room", bed: "KING", floor: 2 },
-            { id: "B10", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "B12", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "B14", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "B16", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "B18", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "B20", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "C201", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "C202", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "C207", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "C208", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "C209", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "C210", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "C211", type: "Gardenview Twin Room", bed: "TWIN", floor: 2 },
-            { id: "C101", type: "Gardenview Twin Room", bed: "TWIN", floor: 1 },
-            { id: "C307", type: "Partial Oceanview Triple Room", bed: "BUNK+T", floor: 3 },
-            { id: "C308", type: "Partial Oceanview Triple Room", bed: "BUNK+T", floor: 3 },
-            { id: "C305", type: "Partial Oceanview Triple Room", bed: "K+T", floor: 3 },
-            { id: "C309", type: "Partial Oceanview Triple Room", bed: "K+T", floor: 3 },
-            { id: "C310", type: "Partial Oceanview Triple Room", bed: "K+T", floor: 3 },
-            { id: "C301-1", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C301-2", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C301-3", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C301-4", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C302-1", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C302-2", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C302-3", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C302-4", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C303-1", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C303-2", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C303-3", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C303-4", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C304-1", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C304-2", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C304-3", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "C304-4", type: "Standard Quad Dorm", bed: "QUAD", floor: 3 },
-            { id: "D01", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "D02", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "D03", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "D04", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "D05", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "D06", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "D07", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "D08", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "D09", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "D10", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "D11", type: "BUNGALOWS", bed: "", floor: 1 },
-            { id: "102", type: "STAFF ROOMS", bed: "", floor: 1 },
-            { id: "103", type: "STAFF ROOMS", bed: "", floor: 1 }
-        ];
-
         window.getPaid = (s) => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
         window.getDue = (s) => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
-        window.getComm = (s) => (s.payments || []).filter(p => ['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'cc-fee'].includes(p.method)).reduce((sum, p) => sum + Number(p.amt), 0);
+        window.getComm = (s) => (s.payments || []).filter(p => ['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'cc-fee'].includes(p.method)).reduce((sum, p) => sum + Number(p.amt), 0);
+        window.syncPropertyUrl = (propId) => {
+            const shortKey = PROP_REVERSE_MAP[propId] || (propId === 'ALL' ? 'ALL' : 'SWIMS');
+            try {
+                if (window.location.protocol !== 'blob:') {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('p', shortKey);
+                    window.history.replaceState({}, '', url.toString());
+                }
+            } catch (e) {}
+            
+            const calLink = document.getElementById('nav-calendar-btn');
+            if (calLink) {
+                calLink.href = propId === 'ALL' ? 'index.html' : `index.html?p=${shortKey}`;
+            }
+        };
 
-        // Safe DB adapters: Preserves history, translates old DB to new UI formats
-        const dbToUiRoom = (rid) => {
-            if (!rid) return rid;
-            let nid = String(rid).toUpperCase();
-            if (/^[ABF]\d$/.test(nid)) { let l = nid[0] === 'F' ? 'D' : nid[0]; return l + '0' + nid.substring(1); }
-            if (nid === '102' || nid === '103') return nid;
-            if (/^[123]\d\d(?:-\d)?$/.test(nid)) return 'C' + nid;
-            return nid;
+        window.matchProperty = (itemProp, targetPropId) => {
+            if (!targetPropId || targetPropId === 'ALL') return true;
+            if (!itemProp) return targetPropId === 'swims_resort';
+            const normItem = String(itemProp).toUpperCase().trim();
+            const normTarget = String(targetPropId).toUpperCase().trim();
+            if (normItem === normTarget) return true;
+            const mappedTarget = (PROP_REVERSE_MAP[targetPropId] || '').toUpperCase();
+            if (mappedTarget && normItem === mappedTarget) return true;
+            const mappedItem = (PROP_MAP[normItem] || '').toUpperCase();
+            if (mappedItem && mappedItem === normTarget) return true;
+            return false;
+        };
+
+        window.switchProperty = (newPropId) => {
+            currentPropertyId = newPropId;
+            if (newPropId !== 'ALL') {
+                try { localStorage.setItem('last_prop', newPropId); } catch(e) {}
+            }
+            window.syncPropertyUrl(newPropId);
+            window.updateActiveInventory();
+            window.renderAccounting();
+        };
+
+        window.updateActiveInventory = () => {
+            if (currentPropertyId === 'ALL') {
+                hotelRooms = propertiesList.flatMap(p => p.rooms || []);
+            } else {
+                const targetProp = propertiesList.find(p => p.id === currentPropertyId);
+                hotelRooms = targetProp?.rooms || [];
+            }
         };
 
         window.toggleMultiSelect = (id, btnEventEl) => {
@@ -325,15 +334,37 @@
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.multi-select-dropdown')) document.querySelectorAll('.multi-select-dropdown').forEach(d => { d.style.display = 'none'; });
         });
-
         const init = async () => {
             try {
                 await signInAnonymously(auth);
+
+                // 1. Fetch dynamic property configurations and rooms
+                const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
+                const propsSnap = await getDocs(propsRef);
+                propertiesList = [];
+                propsSnap.forEach(d => propertiesList.push({ id: d.id, ...d.data() }));
+
+                const propSelect = document.getElementById('acc-property-select');
+                if (propSelect && propertiesList.length > 0) {
+                    let optsHtml = propertiesList.map(p => `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`).join('');
+                    optsHtml += `<option value="ALL">ALL PROPERTIES (CONSOLIDATED)</option>`;
+                    propSelect.innerHTML = optsHtml;
+
+                    if (!propertiesList.some(p => p.id === currentPropertyId) && currentPropertyId !== 'ALL') {
+                        currentPropertyId = propertiesList[0].id;
+                    }
+                    propSelect.value = currentPropertyId;
+                }
+
+                window.syncPropertyUrl(currentPropertyId);
+                window.updateActiveInventory();
+
+                // 2. Realtime listener for bookings
                 onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => { 
-                    let rawStaff = snap.docs.map(d => ({ id: d.id, ...d.data() })); 
-                    staff = rawStaff.map(s => {
-                        let mappedRooms = (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).map(dbToUiRoom);
-                        return { ...s, room: mappedRooms[0] || "", rooms: mappedRooms };
+                    staff = snap.docs.map(d => {
+                        const data = d.data();
+                        const rList = data.rooms?.length ? data.rooms : (data.room ? [data.room] : []);
+                        return { id: d.id, ...data, room: rList[0] || "", rooms: rList };
                     });
                     document.getElementById('boot-loader').style.display = 'none';
                     
@@ -347,12 +378,14 @@
                     }
                     window.renderAccounting();
                 });
-            } catch (error) { document.getElementById('sync-status').innerText = "Auth Error"; }
+            } catch (error) { 
+                console.error("Auth / Load Error:", error);
+                document.getElementById('sync-status').innerText = "Auth Error"; 
+            }
             lucide.createIcons();
         };
 
         window.sortAccounting = (key) => { if(accSortKey === key) accSortAsc = !accSortAsc; else { accSortKey = key; accSortAsc = true; } window.renderAccounting(); };
-
         window.getFilteredBookings = () => {
             const nFilter = (document.getElementById('acc-filter-name')?.value || '').trim().toUpperCase();
             const sFilter = window.getMultiValues('acc-source-dropdown') || [];
@@ -364,6 +397,9 @@
             const endStr = document.getElementById('acc-date-end').value;
 
             return staff.filter(s => {
+                // Strict Property Filter
+                if (!window.matchProperty(s.property, currentPropertyId)) return false;
+
                 if ((startStr && s.checkOut < startStr) || (endStr && s.checkIn > endStr)) return false;
                 const fN = (s.firstName+' '+s.lastName).toUpperCase();
                 const bId = (s.bookId||'').toUpperCase();
@@ -385,15 +421,14 @@
                 if (accSortKey === 'due') { vA = window.getDue(a); vB = window.getDue(b); }
                 if (accSortKey === 'collected') {
                     const now = Date.now(), cA = parseYMD(a.checkOut), cB = parseYMD(b.checkOut);
-                    vA = (a.payments||[]).reduce((s,p) => s + (['bdc-pay', 'agoda-pay', 'airbnb-pay'].includes(p.method) ? (cA <= now ? Number(p.amt) : 0) : (!['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'cc-fee'].includes(p.method) ? Number(p.amt) : 0)), 0);
-                    vB = (b.payments||[]).reduce((s,p) => s + (['bdc-pay', 'agoda-pay', 'airbnb-pay'].includes(p.method) ? (cB <= now ? Number(p.amt) : 0) : (!['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'cc-fee'].includes(p.method) ? Number(p.amt) : 0)), 0);
+                    vA = (a.payments||[]).reduce((s,p) => s + (['bdc-pay', 'agoda-pay', 'airbnb-pay', 'expedia-pay', 'trip-pay'].includes(p.method) ? (cA <= now ? Number(p.amt) : 0) : (!['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'cc-fee'].includes(p.method) ? Number(p.amt) : 0)), 0);
+                    vB = (b.payments||[]).reduce((s,p) => s + (['bdc-pay', 'agoda-pay', 'airbnb-pay', 'expedia-pay', 'trip-pay'].includes(p.method) ? (cB <= now ? Number(p.amt) : 0) : (!['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'cc-fee'].includes(p.method) ? Number(p.amt) : 0)), 0);
                 } return accSortAsc ? (vA > vB ? 1 : -1) : (vA < vB ? 1 : -1);
             });
         };
-
         window.renderAccounting = () => {
             let activeGross = 0, actualCollected = 0, pendingAR = 0, badDebt = 0, lostCancel = 0, bedStats = {};
-            let channelStats = { 'booking.com': { count: 0, val: 0 }, 'agoda': { count: 0, val: 0 }, 'hostelworld': { count: 0, val: 0 }, 'airbnb': { count: 0, val: 0 }, 'direct': { count: 0, val: 0 }, 'walkin': { count: 0, val: 0 }, 'other': { count: 0, val: 0 } };
+            let channelStats = { 'booking.com': { count: 0, val: 0 }, 'agoda': { count: 0, val: 0 }, 'hostelworld': { count: 0, val: 0 }, 'airbnb': { count: 0, val: 0 }, 'expedia': { count: 0, val: 0 }, 'ctrip': { count: 0, val: 0 }, 'direct': { count: 0, val: 0 }, 'walkin': { count: 0, val: 0 }, 'other': { count: 0, val: 0 } };
             
             const ledgerRows = [], nowStr = new Date().toISOString().split('T')[0];
             const startStr = document.getElementById('acc-date-start').value, endStr = document.getElementById('acc-date-end').value;
@@ -409,12 +444,15 @@
                 if (countsTowardIncome) paidComm = window.getComm(s);
 
                 (s.payments || []).forEach(p => {
-                    if (!['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'cc-fee'].includes(p.method)) { if (p.date > nowStr) paidPending += Number(p.amt||0); else paidRealized += Number(p.amt||0); }
+                    if (!['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'cc-fee'].includes(p.method)) { 
+                        if (p.date > nowStr) paidPending += Number(p.amt||0); 
+                        else paidRealized += Number(p.amt||0); 
+                    }
                     if (countsTowardIncome && p.date >= cfStart && p.date <= cfEnd) {
                         const amt = Number(p.amt || 0); if (amt === 0) return;
                         if (cfStats[p.method]) { cfStats[p.method].count++; cfStats[p.method].amt += amt; totalRealCash += amt; }
-                        else if (['bdc-pay', 'agoda-pay', 'airbnb-pay'].includes(p.method)) { cfStats.otapay.count++; cfStats.otapay.amt += amt; totalRealCash += amt; }
-                        else if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'cc-fee'].includes(p.method)) { cfStats.otakp.count++; cfStats.otakp.amt += amt; }
+                        else if (['bdc-pay', 'agoda-pay', 'airbnb-pay', 'expedia-pay', 'trip-pay'].includes(p.method)) { cfStats.otapay.count++; cfStats.otapay.amt += amt; totalRealCash += amt; }
+                        else if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'cc-fee'].includes(p.method)) { cfStats.otakp.count++; cfStats.otakp.amt += amt; }
                         else { cfStats.other.count++; cfStats.other.amt += amt; totalRealCash += amt; }
                     }
                 });
@@ -432,14 +470,30 @@
                     const cin = parseYMD(s.checkIn), cout = parseYMD(s.checkOut), nights = cin && cout && cout > cin ? Math.round((cout - cin) / 86400000) : 0;
                     (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).forEach(r => {
                         const hr = hotelRooms.find(x => x.id === r);
-                        if (hr && hr.bed) { if (!bedStats[hr.bed]) bedStats[hr.bed] = { count: 0, nights: 0 }; bedStats[hr.bed].count += 1; bedStats[hr.bed].nights += nights; }
+                        const bedType = hr?.bed || hr?.type || (r ? 'Custom Room' : 'Unassigned');
+                        if (!bedStats[bedType]) bedStats[bedType] = { count: 0, nights: 0 }; 
+                        bedStats[bedType].count += 1; 
+                        bedStats[bedType].nights += nights;
                     });
                     
                     const srcKey = s.source || 'other';
                     if(channelStats[srcKey]) { channelStats[srcKey].count++; channelStats[srcKey].val += tPrice; }
                 }
                 
-                ledgerRows.push({ id: s.id, name: `${s.firstName||''} ${s.lastName||''}`.trim(), in: s.checkIn ? s.checkIn.substr(5) : '--', out: s.checkOut ? s.checkOut.substr(5) : '--', src: (s.source||'').toUpperCase(), gross: tPrice.toFixed(2), net: nPrice.toFixed(2), comm: paidComm.toFixed(2), coll: paidRealized.toFixed(2), bal: balance.toFixed(2), status: s.status, badCC: s.badCC });
+                ledgerRows.push({ 
+                    id: s.id, 
+                    name: `${s.firstName||''} ${s.lastName||''}`.trim(), 
+                    in: s.checkIn ? s.checkIn.substr(5) : '--', 
+                    out: s.checkOut ? s.checkOut.substr(5) : '--', 
+                    src: (s.source||'').toUpperCase(), 
+                    gross: tPrice.toFixed(2), 
+                    net: nPrice.toFixed(2), 
+                    comm: paidComm.toFixed(2), 
+                    coll: paidRealized.toFixed(2), 
+                    bal: balance.toFixed(2), 
+                    status: s.status, 
+                    badCC: s.badCC 
+                });
             });
 
             document.getElementById('acc-active-gross').innerText = `฿${activeGross.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
@@ -470,7 +524,9 @@
             ledgerRows.forEach(lr => {
                 const tr = document.createElement('tr'); const isDead = lr.status === 'cancelled' || lr.status === 'noshow';
                 tr.className = `border-b border-slate-200 hover:bg-slate-50 cursor-pointer ${isDead ? 'opacity-40 line-through decoration-slate-400 decoration-[1.5px]' : ''}`;
-                tr.onclick = () => { window.location.href = `index.html?edit=${lr.id}`; };
+                
+                const shortKey = PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
+                tr.onclick = () => { window.location.href = `index.html?edit=${lr.id}&p=${shortKey}`; };
                 
                 const statusColor = lr.status === 'charged' ? 'bg-[#0f172a] text-[#fbbf24]' : (lr.status === 'here' ? 'bg-[#059669] text-white' : (lr.status === 'future' ? 'bg-[#7fc6f5] text-slate-800' : 'bg-slate-200 text-slate-700'));
                 tr.innerHTML = `<td class="p-2 border-r border-slate-200">${lr.name} <span class="ml-1 px-1 py-0.5 text-[9px] rounded uppercase font-black ${statusColor}">${lr.status}</span></td><td class="p-2 border-r border-slate-200 text-[10px] uppercase">${lr.src}</td><td class="p-2 border-r border-slate-200 text-slate-500 text-xs">${lr.in} to ${lr.out}</td><td class="p-2 border-r border-slate-200 text-right">${lr.gross}</td><td class="p-2 border-r border-slate-200 text-right">${lr.net}</td><td class="p-2 border-r border-slate-200 text-right text-red-400">${lr.comm}</td><td class="p-2 border-r border-slate-200 text-right text-emerald-600">${lr.coll}</td><td class="p-2 text-right ${lr.badCC ? 'underline decoration-dashed decoration-red-500 text-red-600 font-black' : 'text-amber-500'}">${lr.bal}</td>`;
@@ -480,17 +536,23 @@
             window.exportLedgerCSV = () => {
                 let csv = "Guest Name,Check In,Check Out,Source,Status,Gross Booked,Net Expected,Commission,Actual Collected,Balance\n";
                 ledgerRows.forEach(lr => { csv += `"${lr.name}","${lr.in}","${lr.out}","${lr.src}","${lr.status}",${lr.gross},${lr.net},${lr.comm},${lr.coll},${lr.bal}\n`; });
-                const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })); a.download = "SWIMS_Ledger.csv"; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                const propTag = (PROP_REVERSE_MAP[currentPropertyId] || currentPropertyId).toUpperCase();
+                const a = document.createElement("a"); 
+                a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })); 
+                a.download = `${propTag}_Financial_Ledger_${new Date().toISOString().split('T')[0]}.csv`; 
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
             };
             window.renderDailyReport();
         };
-
         window.renderDailyReport = () => {
             const dateInput = document.getElementById('daily-rep-date'); if (!dateInput) return;
             if (!dateInput.value) { const n = new Date(); dateInput.value = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; }
             const tDate = dateInput.value; let ciVal = 0, ciCount = 0, rMoney = 0, oPay = 0, oKp = 0;
             
             staff.forEach(s => {
+                // Strict Property Filter for Daily Operations
+                if (!window.matchProperty(s.property, currentPropertyId)) return;
+
                 const countsTowardIncome = (s.status !== 'cancelled' && s.status !== 'noshow');
                 if (countsTowardIncome && s.checkIn === tDate) { ciVal += Number(s.totalPrice || 0); ciCount++; }
                 if (countsTowardIncome) {
@@ -498,8 +560,8 @@
                         if (p.date === tDate) {
                             const amt = Number(p.amt || 0);
                             if (['cash', 'card', 'scan'].includes(p.method)) rMoney += amt;
-                            else if (['bdc-pay', 'agoda-pay', 'airbnb-pay'].includes(p.method)) oPay += amt;
-                            else if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'cc-fee'].includes(p.method)) oKp += amt;
+                            else if (['bdc-pay', 'agoda-pay', 'airbnb-pay', 'expedia-pay', 'trip-pay'].includes(p.method)) oPay += amt;
+                            else if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'cc-fee'].includes(p.method)) oKp += amt;
                             else rMoney += amt; 
                         }
                     });
