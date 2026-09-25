@@ -66,7 +66,10 @@
         <!-- Camera Trigger Zone -->
         <div id="capture-zone" class="bg-slate-800/80 border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center shadow-lg transition-colors cursor-pointer min-h-[220px] relative overflow-hidden" onclick="triggerCamera()">
             
+            <!-- Native Rear Camera Input -->
             <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageSelected(event)">
+            <!-- Gallery / Existing File Fallback Input -->
+            <input type="file" id="gallery-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
 
             <div id="empty-state" class="flex flex-col items-center gap-2 py-4">
                 <div class="w-16 h-16 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shadow-inner">
@@ -75,6 +78,11 @@
                 <div>
                     <h3 class="text-lg font-black uppercase tracking-wide text-slate-100">Tap to Snap Passport</h3>
                     <p class="text-xs font-bold text-slate-400 mt-0.5">Captures back camera photo instantly</p>
+                </div>
+                <div class="pt-2">
+                    <button type="button" onclick="event.stopPropagation(); triggerGallery()" class="text-xs font-bold text-blue-400 hover:text-blue-300 underline uppercase tracking-wider py-1 px-2 cursor-pointer">
+                        or pick photo from gallery / file
+                    </button>
                 </div>
             </div>
 
@@ -168,6 +176,8 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU",
@@ -182,8 +192,11 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const storage = getStorage(app);
+        const functions = getFunctions(app, 'asia-southeast1');
 
         let currentCompressedBase64 = null;
+        let uploadedPhotoUrl = null;
 
         // Initialize Property from URL or LocalStorage
         const urlParams = new URLSearchParams(window.location.search);
@@ -207,7 +220,7 @@
             const ind = document.getElementById('conn-indicator');
             ind.classList.remove('bg-amber-400', 'animate-pulse');
             ind.classList.add('bg-emerald-400');
-            ind.title = "Connected to Firestore";
+            ind.title = "Connected to Firestore & Storage";
         }).catch(err => {
             console.error("Auth error", err);
             showToast("Offline", "Working in offline fallback mode", "error");
@@ -217,12 +230,18 @@
             document.getElementById('camera-input').click();
         };
 
+        window.triggerGallery = () => {
+            document.getElementById('gallery-input').click();
+        };
+
         window.retakePhoto = () => {
             document.getElementById('review-card').classList.add('hidden');
             document.getElementById('preview-state').classList.add('hidden');
             document.getElementById('empty-state').classList.remove('hidden');
             document.getElementById('camera-input').value = '';
+            document.getElementById('gallery-input').value = '';
             currentCompressedBase64 = null;
+            uploadedPhotoUrl = null;
         };
 
         window.handleImageSelected = async (event) => {
@@ -242,16 +261,25 @@
             processingBadge.classList.remove('hidden');
             processingText.innerText = "Compressing Photo...";
 
-            // 1. Client-Side Image Downscaling via Canvas (Converts 12MB phone photo to ~300KB)
             try {
+                // 1. Client-Side Image Downscaling via Canvas (Converts 12MB photo to ~250KB JPEG)
                 currentCompressedBase64 = await resizeImageToMaxDimension(file, 1400);
                 previewImg.src = `data:image/jpeg;base64,${currentCompressedBase64}`;
-                processingText.innerText = "Extracting Passport Details...";
-                
-                // 2. Client-Side OCR Request using Gemini Vision with Exponential Backoff
-                const guestData = await extractPassportWithGemini(currentCompressedBase64);
-                
-                // 3. Populate Review Card
+                processingText.innerText = "Archiving Photo & Reading...";
+
+                // 2. Start photo upload to Firebase Storage in parallel
+                const photoUploadPromise = uploadPhotoToStorage(currentCompressedBase64)
+                    .then(url => { uploadedPhotoUrl = url; return url; })
+                    .catch(err => { console.warn("Storage upload warning:", err); return null; });
+
+                // 3. Call backend OCR via Firebase Function (uses protected API keys + model cascade)
+                const parseFn = httpsCallable(functions, 'parsePassportScan');
+                const parsePromise = parseFn({ imageBase64: currentCompressedBase64 });
+
+                const [_, ocrResult] = await Promise.all([photoUploadPromise, parsePromise]);
+                const guestData = ocrResult?.data?.data || {};
+
+                // 4. Populate Review Card
                 populateReviewCard(guestData);
                 processingBadge.classList.add('hidden');
                 reviewCard.classList.remove('hidden');
@@ -268,6 +296,19 @@
                 lucide.createIcons();
             }
         };
+
+        async function uploadPhotoToStorage(base64Data) {
+            const prop = (document.getElementById('property-select')?.value || 'SWIMS').toLowerCase();
+            const timestamp = Date.now();
+            const randId = Math.random().toString(36).substring(2, 8);
+            const path = `passports/${prop}/${timestamp}_${randId}.jpg`;
+            const fileRef = storageRef(storage, path);
+            
+            await uploadString(fileRef, `data:image/jpeg;base64,${base64Data}`, 'data_url', {
+                contentType: 'image/jpeg'
+            });
+            return await getDownloadURL(fileRef);
+        }
 
         function resizeImageToMaxDimension(file, maxDimension) {
             return new Promise((resolve, reject) => {
@@ -301,74 +342,6 @@
                 reader.onerror = reject;
                 reader.readAsDataURL(file);
             });
-        }
-
-        async function extractPassportWithGemini(base64Data, maxRetries = 3) {
-            const apiKey = ""; // Runtime injection
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
-            const prompt = `Analyze this passport biographical page. Extract the fields and return them strictly inside a valid flat JSON block containing: 
-            firstName (First name only), 
-            middleName (Any remaining words in the Given Names field. If none, leave blank),
-            lastName (Surname field),
-            gender (Sex field, output exactly 'M' or 'F'),
-            passportNumber (The document number),
-            nationality (3-letter country code),
-            dobDay (Strictly 2-digit day of birth),
-            dobMonth (Strictly 2-digit month of birth),
-            dobYear (4-digit year of birth).
-            Do not include Markdown formatting. Output only RAW JSON.`;
-
-            const payload = {
-                contents: [
-                    {
-                        parts: [
-                            { text: prompt },
-                            {
-                                inlineData: {
-                                    mimeType: "image/jpeg",
-                                    data: base64Data
-                                }
-                            }
-                        ]
-                    }
-                ],
-                generationConfig: {
-                    responseMimeType: "application/json"
-                }
-            };
-
-            let delay = 1200;
-            for (let attempt = 0; attempt < maxRetries; attempt++) {
-                try {
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (response.status === 429 || response.status === 503) {
-                        await new Promise(r => setTimeout(r, delay));
-                        delay *= 2;
-                        continue;
-                    }
-
-                    if (!response.ok) throw new Error(`API status ${response.status}`);
-
-                    const resJson = await response.json();
-                    const text = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (!text) throw new Error("Empty model response");
-                    
-                    const cleaned = text.replace(/`{3}[a-zA-Z]*\n?/gi, '').replace(/`{3}\n?/g, '').trim();
-                    return JSON.parse(cleaned);
-
-                } catch (err) {
-                    if (attempt === maxRetries - 1) throw err;
-                    await new Promise(r => setTimeout(r, delay));
-                    delay *= 2;
-                }
-            }
-            throw new Error("Timeout reading passport image");
         }
 
         function populateReviewCard(data) {
@@ -405,6 +378,15 @@
                     throw new Error("Please provide at least a Passport Number or Name");
                 }
 
+                // If storage upload is still pending, make sure we have a reference
+                if (!uploadedPhotoUrl && currentCompressedBase64) {
+                    try {
+                        uploadedPhotoUrl = await uploadPhotoToStorage(currentCompressedBase64);
+                    } catch(e) {
+                        console.warn("Storage upload fallback error", e);
+                    }
+                }
+
                 // Push directly into Firestore submissions (matching TM30 & PMS collections)
                 await addDoc(collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'), {
                     property: property,
@@ -420,6 +402,7 @@
                     gender: gender,
                     checkoutDate: "",
                     phoneNo: "",
+                    photoUrl: uploadedPhotoUrl || "",
                     status: "processing",
                     source: "MOBILE_SCANNER",
                     createdAt: serverTimestamp()
