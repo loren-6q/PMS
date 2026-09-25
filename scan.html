@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>W&W | Mobile Passport Scanner</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700;900&display=swap');
+        body {
+            font-family: 'Roboto Condensed', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-bounce:active {
+            transform: scale(0.97);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-3 sm:p-5 max-w-md mx-auto select-none">
+
+    <!-- Top Status & Property Selector -->
+    <header class="flex items-center justify-between bg-slate-800/90 border border-slate-700/80 px-3 py-2.5 rounded-xl shadow-lg shrink-0">
+        <div class="flex items-center gap-2">
+            <div id="conn-indicator" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" title="Connecting..."></div>
+            <a href="index.html" class="flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+                <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="W&W" class="h-6 w-auto object-contain">
+                <span class="font-black tracking-wider text-sm text-slate-100 uppercase">Scanner</span>
+            </a>
+        </div>
+        
+        <div class="flex items-center gap-1.5">
+            <select id="property-select" class="bg-slate-900 border border-slate-600 text-emerald-400 text-xs font-black uppercase rounded-lg px-2.5 py-1.5 outline-none cursor-pointer">
+                <option value="SWIMS">SWIMS</option>
+                <option value="WET">WET</option>
+                <option value="LOUD">LOUD</option>
+                <option value="BIGC">BIGC</option>
+            </select>
+            <a href="tm30.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-200 uppercase bg-slate-700/60 px-2 py-1.5 rounded-lg border border-slate-600/50">TM30 →</a>
+        </div>
+    </header>
+
+    <!-- Main Scanner Workflow -->
+    <main class="flex-1 flex flex-col justify-center my-3 gap-3">
+        
+        <!-- Room Tag Card -->
+        <div class="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-3.5 shadow-md">
+            <label class="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-1">Room / Bed Number (Optional)</label>
+            <div class="flex items-center gap-2">
+                <div class="relative flex-1">
+                    <i data-lucide="tag" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                    <input type="text" id="room-input" placeholder="e.g. 101, A02, C301-2" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-base font-black uppercase text-amber-300 placeholder-slate-500 outline-none focus:border-blue-500">
+                </div>
+                <button type="button" onclick="document.getElementById('room-input').value=''" class="bg-slate-700/70 hover:bg-slate-700 text-slate-300 p-2.5 rounded-xl border border-slate-600/50 btn-bounce">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Camera Trigger Zone -->
+        <div id="capture-zone" class="bg-slate-800/80 border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center shadow-lg transition-colors cursor-pointer min-h-[220px] relative overflow-hidden" onclick="triggerCamera()">
+            
+            <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageSelected(event)">
+
+            <div id="empty-state" class="flex flex-col items-center gap-2 py-4">
+                <div class="w-16 h-16 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shadow-inner">
+                    <i data-lucide="camera" class="w-8 h-8"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-black uppercase tracking-wide text-slate-100">Tap to Snap Passport</h3>
+                    <p class="text-xs font-bold text-slate-400 mt-0.5">Captures back camera photo instantly</p>
+                </div>
+            </div>
+
+            <!-- Image Preview & Status Overlay -->
+            <div id="preview-state" class="hidden absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-2">
+                <img id="preview-img" src="" alt="Passport Preview" class="w-full h-full object-contain rounded-xl opacity-75">
+                <div id="processing-badge" class="absolute bg-slate-900/90 border border-blue-500/50 px-4 py-2 rounded-xl flex items-center gap-2 shadow-2xl backdrop-blur-sm">
+                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-blue-400"></i>
+                    <span id="processing-text" class="text-xs font-black uppercase tracking-widest text-slate-100">Reading Passport...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Extracted Data Verification Card -->
+        <div id="review-card" class="hidden bg-slate-800 border border-slate-700 rounded-2xl p-3.5 shadow-xl space-y-2.5 animate-in fade-in duration-200">
+            <div class="flex items-center justify-between border-b border-slate-700/80 pb-2">
+                <div class="flex items-center gap-1.5">
+                    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+                    <span class="text-xs font-black uppercase tracking-wider text-slate-200">Verify Guest Details</span>
+                </div>
+                <button type="button" onclick="retakePhoto()" class="text-[10px] font-black uppercase text-slate-400 hover:text-slate-200 bg-slate-700/60 px-2 py-1 rounded border border-slate-600/50">
+                    Retake
+                </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">First Name</label>
+                    <input type="text" id="f-name" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-slate-100 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Last Name</label>
+                    <input type="text" id="l-name" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-slate-100 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Passport Number</label>
+                    <input type="text" id="f-passport" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-mono font-bold uppercase text-amber-300 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Nationality (3-Letter)</label>
+                    <input type="text" id="f-nat" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-purple-300 outline-none text-center">
+                </div>
+                <div class="col-span-2 grid grid-cols-4 gap-1.5">
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Day</label>
+                        <input type="text" id="f-dob-day" placeholder="DD" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Month</label>
+                        <input type="text" id="f-dob-month" placeholder="MM" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Year</label>
+                        <input type="text" id="f-dob-year" placeholder="YYYY" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Sex</label>
+                        <input type="text" id="f-gender" placeholder="M/F" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" id="submit-btn" onclick="saveToFirestoreQueue()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-sm uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 btn-bounce">
+                <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+                <span>Push to TM30 Queue</span>
+            </button>
+        </div>
+
+    </main>
+
+    <!-- Footer Toast & Instructions -->
+    <footer class="text-center py-2 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+        <span>Wild & Wandering Instant Check-In</span>
+    </footer>
+
+    <!-- Custom Notification Toast -->
+    <div id="toast" class="fixed top-4 left-4 right-4 z-50 transform -translate-y-24 opacity-0 transition-all duration-300 pointer-events-none">
+        <div id="toast-inner" class="bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 max-w-sm mx-auto border border-emerald-500">
+            <i id="toast-icon" data-lucide="check-circle" class="w-5 h-5 shrink-0"></i>
+            <div class="leading-tight">
+                <h4 id="toast-title" class="text-xs font-black uppercase tracking-wider">Success</h4>
+                <p id="toast-msg" class="text-[11px] font-bold opacity-90">Guest pushed to database.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Canvas for Client-side Downscaling -->
+    <canvas id="downscale-canvas" class="hidden"></canvas>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU",
+            authDomain: "swimspms.firebaseapp.com",
+            projectId: "swimspms",
+            storageBucket: "swimspms.firebasestorage.app",
+            messagingSenderId: "989960113115",
+            appId: "1:989960113115:web:a99e08a23a36ff4289f5fe"
+        };
+
+        const targetAppId = 'hotel-pms-v1';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentCompressedBase64 = null;
+
+        // Initialize Property from URL or LocalStorage
+        const urlParams = new URLSearchParams(window.location.search);
+        let propParam = (urlParams.get('p') || urlParams.get('prop') || '').toUpperCase();
+        if (propParam.includes('SWIMS')) propParam = 'SWIMS';
+        else if (propParam.includes('WET')) propParam = 'WET';
+        else if (propParam.includes('LOUD')) propParam = 'LOUD';
+        else if (propParam.includes('BIG')) propParam = 'BIGC';
+
+        const savedProp = propParam || localStorage.getItem('ww_last_scan_prop') || 'SWIMS';
+        const propSelect = document.getElementById('property-select');
+        if (propSelect) {
+            propSelect.value = savedProp;
+            propSelect.onchange = (e) => {
+                localStorage.setItem('ww_last_scan_prop', e.target.value);
+            };
+        }
+
+        // Initialize Auth
+        signInAnonymously(auth).then(() => {
+            const ind = document.getElementById('conn-indicator');
+            ind.classList.remove('bg-amber-400', 'animate-pulse');
+            ind.classList.add('bg-emerald-400');
+            ind.title = "Connected to Firestore";
+        }).catch(err => {
+            console.error("Auth error", err);
+            showToast("Offline", "Working in offline fallback mode", "error");
+        });
+
+        window.triggerCamera = () => {
+            document.getElementById('camera-input').click();
+        };
+
+        window.retakePhoto = () => {
+            document.getElementById('review-card').classList.add('hidden');
+            document.getElementById('preview-state').classList.add('hidden');
+            document.getElementById('empty-state').classList.remove('hidden');
+            document.getElementById('camera-input').value = '';
+            currentCompressedBase64 = null;
+        };
+
+        window.handleImageSelected = async (event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            const previewImg = document.getElementById('preview-img');
+            const previewState = document.getElementById('preview-state');
+            const emptyState = document.getElementById('empty-state');
+            const reviewCard = document.getElementById('review-card');
+            const processingBadge = document.getElementById('processing-badge');
+            const processingText = document.getElementById('processing-text');
+
+            emptyState.classList.add('hidden');
+            reviewCard.classList.add('hidden');
+            previewState.classList.remove('hidden');
+            processingBadge.classList.remove('hidden');
+            processingText.innerText = "Compressing Photo...";
+
+            // 1. Client-Side Image Downscaling via Canvas (Converts 12MB phone photo to ~300KB)
+            try {
+                currentCompressedBase64 = await resizeImageToMaxDimension(file, 1400);
+                previewImg.src = `data:image/jpeg;base64,${currentCompressedBase64}`;
+                processingText.innerText = "Extracting Passport Details...";
+                
+                // 2. Client-Side OCR Request using Gemini Vision with Exponential Backoff
+                const guestData = await extractPassportWithGemini(currentCompressedBase64);
+                
+                // 3. Populate Review Card
+                populateReviewCard(guestData);
+                processingBadge.classList.add('hidden');
+                reviewCard.classList.remove('hidden');
+                lucide.createIcons();
+
+            } catch (err) {
+                console.error("Scanning Error:", err);
+                processingBadge.classList.add('hidden');
+                showToast("Extraction Issue", "Could not auto-read passport. Please type details manually.", "error");
+                
+                // Allow manual entry on photo preview
+                populateReviewCard({});
+                reviewCard.classList.remove('hidden');
+                lucide.createIcons();
+            }
+        };
+
+        function resizeImageToMaxDimension(file, maxDimension) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let { width, height } = img;
+                        if (width > maxDimension || height > maxDimension) {
+                            if (width > height) {
+                                height = Math.round((height * maxDimension) / width);
+                                width = maxDimension;
+                            } else {
+                                width = Math.round((width * maxDimension) / height);
+                                height = maxDimension;
+                            }
+                        }
+                        const canvas = document.getElementById('downscale-canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.84);
+                        const base64Only = dataUrl.split(',')[1];
+                        resolve(base64Only);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function extractPassportWithGemini(base64Data, maxRetries = 3) {
+            const apiKey = ""; // Runtime injection
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const prompt = `Analyze this passport biographical page. Extract the fields and return them strictly inside a valid flat JSON block containing: 
+            firstName (First name only), 
+            middleName (Any remaining words in the Given Names field. If none, leave blank),
+            lastName (Surname field),
+            gender (Sex field, output exactly 'M' or 'F'),
+            passportNumber (The document number),
+            nationality (3-letter country code),
+            dobDay (Strictly 2-digit day of birth),
+            dobMonth (Strictly 2-digit month of birth),
+            dobYear (4-digit year of birth).
+            Do not include Markdown formatting. Output only RAW JSON.`;
+
+            const payload = {
+                contents: [
+                    {
+                        parts: [
+                            { text: prompt },
+                            {
+                                inlineData: {
+                                    mimeType: "image/jpeg",
+                                    data: base64Data
+                                }
+                            }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            let delay = 1200;
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.status === 429 || response.status === 503) {
+                        await new Promise(r => setTimeout(r, delay));
+                        delay *= 2;
+                        continue;
+                    }
+
+                    if (!response.ok) throw new Error(`API status ${response.status}`);
+
+                    const resJson = await response.json();
+                    const text = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) throw new Error("Empty model response");
+                    
+                    const cleaned = text.replace(/`{3}[a-zA-Z]*\n?/gi, '').replace(/`{3}\n?/g, '').trim();
+                    return JSON.parse(cleaned);
+
+                } catch (err) {
+                    if (attempt === maxRetries - 1) throw err;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+            throw new Error("Timeout reading passport image");
+        }
+
+        function populateReviewCard(data) {
+            document.getElementById('f-name').value = (data.firstName || '').toUpperCase();
+            document.getElementById('l-name').value = (data.lastName || '').toUpperCase();
+            document.getElementById('f-passport').value = (data.passportNumber || '').toUpperCase().replace(/\s/g, '');
+            document.getElementById('f-nat').value = (data.nationality || '').toUpperCase().trim();
+            document.getElementById('f-dob-day').value = data.dobDay || '';
+            document.getElementById('f-dob-month').value = data.dobMonth || '';
+            document.getElementById('f-dob-year').value = data.dobYear || '';
+            document.getElementById('f-gender').value = (data.gender || 'M').toUpperCase().charAt(0);
+        }
+
+        window.saveToFirestoreQueue = async () => {
+            const btn = document.getElementById('submit-btn');
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Saving...</span>`;
+            btn.disabled = true;
+            lucide.createIcons();
+
+            try {
+                const property = document.getElementById('property-select').value;
+                const roomNumber = document.getElementById('room-input').value.trim().toUpperCase();
+                const firstName = document.getElementById('f-name').value.trim().toUpperCase();
+                const lastName = document.getElementById('l-name').value.trim().toUpperCase();
+                const passportNumber = document.getElementById('f-passport').value.trim().toUpperCase();
+                const nationality = document.getElementById('f-nat').value.trim().toUpperCase();
+                const dobDay = document.getElementById('f-dob-day').value.trim();
+                const dobMonth = document.getElementById('f-dob-month').value.trim();
+                const dobYear = document.getElementById('f-dob-year').value.trim();
+                const gender = (document.getElementById('f-gender').value || 'M').trim().toUpperCase().charAt(0);
+
+                if (!passportNumber && !lastName) {
+                    throw new Error("Please provide at least a Passport Number or Name");
+                }
+
+                // Push directly into Firestore submissions (matching TM30 & PMS collections)
+                await addDoc(collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'), {
+                    property: property,
+                    roomNumber: roomNumber,
+                    firstName: firstName,
+                    middleName: "",
+                    lastName: lastName,
+                    passportNumber: passportNumber,
+                    nationality: nationality,
+                    dobDay: dobDay,
+                    dobMonth: dobMonth,
+                    dobYear: dobYear,
+                    gender: gender,
+                    checkoutDate: "",
+                    phoneNo: "",
+                    status: "processing",
+                    source: "MOBILE_SCANNER",
+                    createdAt: serverTimestamp()
+                });
+
+                showToast("Pushed to Queue!", `${firstName || 'Guest'} (${passportNumber || 'N/A'})${roomNumber ? ' • Room ' + roomNumber : ''}`);
+                
+                // Clear state and prepare for next guest
+                setTimeout(() => {
+                    window.retakePhoto();
+                    document.getElementById('room-input').value = '';
+                }, 1200);
+
+            } catch (err) {
+                console.error("Firestore push error", err);
+                showToast("Save Error", err.message || "Could not write to database", "error");
+            } finally {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        };
+
+        function showToast(title, msg, type = "success") {
+            const toast = document.getElementById('toast');
+            const inner = document.getElementById('toast-inner');
+            const tTitle = document.getElementById('toast-title');
+            const tMsg = document.getElementById('toast-msg');
+            const tIcon = document.getElementById('toast-icon');
+
+            if (type === "error") {
+                inner.className = "bg-red-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 max-w-sm mx-auto border border-red-500";
+                tIcon.setAttribute('data-lucide', 'alert-circle');
+            } else {
+                inner.className = "bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 max-w-sm mx-auto border border-emerald-500";
+                tIcon.setAttribute('data-lucide', 'check-circle');
+            }
+
+            tTitle.innerText = title;
+            tMsg.innerText = msg;
+            lucide.createIcons();
+
+            toast.classList.remove('-translate-y-24', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('-translate-y-24', 'opacity-0');
+            }, 3500);
+        }
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>
