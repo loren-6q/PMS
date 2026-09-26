@@ -10,14 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="parser.js"></script>
-    <script>
-        if (typeof window.extractBookingData !== 'function') {
-            const fallbackScript = document.createElement('script');
-            fallbackScript.src = "https://loren-6q.github.io/PMS/parser.js?v=" + Date.now();
-            document.head.appendChild(fallbackScript);
-        }
-    </script>
-    <link rel="stylesheet" href="style.css">
+    <script src="https://loren-6q.github.io/PMS/parser.js"></script>
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 </head>
 
@@ -195,7 +188,7 @@
                         </div>
                     </div>
                     
-                    <!-- Row 2: TM30 SMART SYNC + PAX + STATUS (Matching 3-Column Dimensions) -->
+                    <!-- Row 2: TM30 SMART SYNC + PAX + STATUS -->
                     <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200">
                         <button type="button" id="tm30-sync-btn" onclick="window.syncTM30()" class="w-full h-[28px] bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300 rounded text-[9px] sm:text-[10px] font-black uppercase flex items-center justify-center gap-1 transition-colors cursor-pointer truncate px-1 shadow-sm" title="Scan & Sync Passports with TM30">
                             <i data-lucide="scan-face" size="13" class="shrink-0"></i>
@@ -398,34 +391,17 @@
         const db = getFirestore(app);
         const functions = getFunctions(app, 'asia-southeast1');
 
-        // PROPERTY ALIAS MAPPINGS & URL PERSISTENCE
-        const PROP_MAP = {
-            'LOUD': 'loud_samui',
-            'WET': 'wet_pool',
-            'SWIMS': 'swims_resort'
-        };
+        const PROP_MAP = { 'LOUD': 'loud_samui', 'WET': 'wet_pool', 'SWIMS': 'swims_resort' };
+        const PROP_REVERSE_MAP = { 'loud_samui': 'LOUD', 'wet_pool': 'WET', 'swims_resort': 'SWIMS' };
 
-        const PROP_REVERSE_MAP = {
-            'loud_samui': 'LOUD',
-            'wet_pool': 'WET',
-            'swims_resort': 'SWIMS'
-        };
-
-        // Resolve property from URL ?p=, fallback to localStorage, fallback to 'swims_resort'
         let initialP = null;
-        try {
-            initialP = new URLSearchParams(window.location.search).get('p')?.toUpperCase();
-        } catch (e) {}
+        try { initialP = new URLSearchParams(window.location.search).get('p')?.toUpperCase(); } catch (e) {}
 
         let storedProp = null;
-        try {
-            storedProp = localStorage.getItem('last_prop');
-        } catch (e) {}
+        try { storedProp = localStorage.getItem('last_prop'); } catch (e) {}
 
         let currentPropertyId = PROP_MAP[initialP] || storedProp || 'swims_resort';
-        try {
-            localStorage.setItem('last_prop', currentPropertyId);
-        } catch (e) {}
+        try { localStorage.setItem('last_prop', currentPropertyId); } catch (e) {}
 
         let currentUserRole = null; 
         let currentUserEmail = 'unknown'; 
@@ -449,12 +425,10 @@
         let roomTypes = [];
         let fmpDates = [];
 
-        // State holder for active extra charges in current booking
         window.activeExtraCharges = [];
 
-        // Propagate current property param to all navigation links on the page
         window.updateNavLinks = (shortKey) => {
-            const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || 'LOUD';
+            const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
             document.querySelectorAll('a[href*=".html"]').forEach(a => {
                 const href = a.getAttribute('href');
                 if (!href) return;
@@ -463,18 +437,15 @@
             });
         };
 
-        // Keep address bar URL synchronized with the active property safely
         window.syncPropertyUrl = (propId) => {
-            const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || 'LOUD';
+            const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
             try {
                 if (window.location.protocol !== 'blob:') {
                     const url = new URL(window.location.href);
                     url.searchParams.set('p', shortKey);
                     window.history.replaceState({}, '', url.toString());
                 }
-            } catch (e) {
-                // Silently ignore SecurityError in sandboxed iframes or blob environments
-            }
+            } catch (e) {}
             window.updateNavLinks(shortKey);
         };
 
@@ -491,28 +462,104 @@
             fbBad: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg>`
         };
 
-        // STRICT STATUS CYCLE: NEW > FUTURE (manual bookings start here) > HERE > LEFT > CANCELLED > NOSHOW > SPECIAL > BLOCKED > CHARGED > VOL > UNCONFIRMED
         const STATUS_CYCLE = [
             { val: 'new', bg: '#ec4899', txt: '#fff' },
             { val: 'future', bg: '#7fc6f5', txt: '#1e293b' },
-            { val: 'here', bg: '#059669', txt: '#fff' },
+            { val: 'here', bg: '#dcfce7', txt: '#14532d' },
             { val: 'left', bg: '#aba39d', txt: '#1e293b' },
-            { val: 'cancelled', bg: '#94a3b8', txt: '#1e293b' },
-            { val: 'noshow', bg: '#000000', txt: '#fff' },
-            { val: 'special', bg: '#fde047', txt: '#1e293b' },
+            { val: 'cancelled', bg: '#e5e7eb', txt: '#1e293b' },
+            { val: 'noshow', bg: '#e5e7eb', txt: '#1e293b' },
+            { val: 'special', bg: '#fef08a', txt: '#1e293b' },
             { val: 'blocked', bg: '#475569', txt: '#fff' },
             { val: 'charged', bg: '#0f172a', txt: '#fbbf24' },
             { val: 'vol', bg: '#fbcfe8', txt: '#831843' },
-            { val: 'unconfirmed', bg: '#8b5cf6', txt: '#fff' }
+            { val: 'unconfirmed', bg: '#f3e8ff', txt: '#581c87' }
         ];
 
-        $('calendar-legend').innerHTML = `<div class="flex flex-wrap items-center justify-center gap-3"><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#ec4899] border border-[#be185d]"></span> NEW</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#7fc6f5] border border-[#38bdf8]"></span> FUTURE</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#059669] border border-[#047857]"></span> HERE</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#aba39d] border border-[#78716c]"></span> LEFT</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#8b5cf6] border border-[#7c3aed]"></span> UNCONFIRMED</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#0f172a] border border-[#f59e0b]"></span> CHARGED</div><div class="legend-item"><span class="w-3 h-3 rounded-full bg-[#fbcfe8] border border-[#f472b6]"></span> VOLUNTEER</div></div><div class="w-px h-4 bg-slate-300 hidden md:block"></div><div class="flex flex-wrap items-center justify-center gap-3"><div class="legend-item"><div class="w-3.5 h-4 shrink-0">${SVGS.upFree}</div> FREE UP</div><div class="legend-item"><div class="w-3.5 h-4 shrink-0">${SVGS.upPaid}</div> PAID UP</div><div class="legend-item"><div class="w-4 h-4 shrink-0">${SVGS.link}</div> LINKED</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.ext}</div> EXTENDED</div><div class="legend-item font-black text-[10px] md:text-[11px] text-slate-800"><em>REFUNDABLE (it.)</em></div><div class="legend-item"><div class="border-[2px] border-red-500 w-3 h-3"></div> DUE</div><div class="legend-item"><div class="border-[2px] border-red-500 border-dashed w-3 h-3"></div> BAD CC</div></div><div class="w-px h-4 bg-slate-300 hidden xl:block"></div><div class="flex flex-wrap items-center justify-center gap-3"><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailConf}</div> CONFIRM</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailPre}</div> PRE/POST SENT</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailPreConf}</div> PRE/POST CONF</div><div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailSpec}</div> SPECIAL</div></div>`;
+        // Centralized room list resolver
+        const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
-        const getLocalYMD = d => { const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)); return o.toISOString().split('T')[0]; };
+        // Centralized room conflict query
+        const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = null) => {
+            const occ = new Set();
+            const sU = parseYMD(checkInStr), eU = parseYMD(checkOutStr);
+            if (!sU || !eU) return occ;
+            staff.forEach(s => {
+                if (s.id === excludeBookingId || s.property !== currentPropertyId) return;
+                if (['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(s.status)) return;
+                if (sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) {
+                    getRooms(s).forEach(r => { if (r) occ.add(r); });
+                }
+            });
+            return occ;
+        };
+
+        // Render Legend dynamically from STATUS_CYCLE
+        const statusLegendHtml = STATUS_CYCLE.filter(x => !['blocked', 'noshow', 'special'].includes(x.val)).map(s => 
+            `<div class="legend-item"><span class="w-3 h-3 rounded-full" style="background-color:${s.bg}; border:1px solid rgba(0,0,0,0.15)"></span> ${s.val.toUpperCase()}</div>`
+        ).join('');
+
+        $('calendar-legend').innerHTML = `
+            <div class="flex flex-wrap items-center justify-center gap-3">${statusLegendHtml}</div>
+            <div class="w-px h-4 bg-slate-300 hidden md:block"></div>
+            <div class="flex flex-wrap items-center justify-center gap-3">
+                <div class="legend-item"><div class="w-3.5 h-4 shrink-0">${SVGS.upFree}</div> FREE UP</div>
+                <div class="legend-item"><div class="w-3.5 h-4 shrink-0">${SVGS.upPaid}</div> PAID UP</div>
+                <div class="legend-item"><div class="w-4 h-4 shrink-0">${SVGS.link}</div> LINKED</div>
+                <div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.ext}</div> EXTENDED</div>
+                <div class="legend-item font-black text-[10px] md:text-[11px] text-slate-800"><em>REFUNDABLE (it.)</em></div>
+                <div class="legend-item"><div class="border-[2px] border-red-500 w-3 h-3"></div> DUE</div>
+                <div class="legend-item"><div class="border-[2px] border-red-500 border-dashed w-3 h-3"></div> BAD CC</div>
+            </div>
+            <div class="w-px h-4 bg-slate-300 hidden xl:block"></div>
+            <div class="flex flex-wrap items-center justify-center gap-3">
+                <div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailConf}</div> CONFIRM</div>
+                <div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailPre}</div> PRE/POST SENT</div>
+                <div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailPreConf}</div> PRE/POST CONF</div>
+                <div class="legend-item"><div class="w-4 h-3.5 shrink-0">${SVGS.mailSpec}</div> SPECIAL</div>
+            </div>
+        `;
+
+        const getLocalYMD = d => { 
+            if (!d) d = new Date();
+            if (typeof d === 'string') {
+                const trimmed = d.trim();
+                if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+                const parsed = new Date(trimmed.includes('T') ? trimmed : trimmed + 'T12:00:00Z');
+                d = isNaN(parsed.getTime()) ? new Date() : parsed;
+            } else if (typeof d === 'number') d = new Date(d);
+            if (!(d instanceof Date) || isNaN(d.getTime())) d = new Date();
+            try {
+                const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)); 
+                return isNaN(o.getTime()) ? new Date().toISOString().split('T')[0] : o.toISOString().split('T')[0]; 
+            } catch (e) {
+                return new Date().toISOString().split('T')[0];
+            }
+        };
+
         const parseYMD = str => { if(!str || typeof str !== 'string') return 0; const p = str.split('-'); return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); };
         const getDayIndex = str => { const t = parseYMD(str); return t ? Math.round((t - Date.UTC(viewStart.getFullYear(), viewStart.getMonth(), viewStart.getDate())) / 86400000) : -1; };
-        const dbToUiRoom = rid => { if (!rid) return rid; let nid = rid.toUpperCase(); if (/^[ABFD]\d$/.test(nid)) return nid[0] + '0' + nid.substring(1); if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) return 'C' + nid; return nid; };
-        const uiToDbRoom = rid => { if (!rid) return rid; let nid = rid.toUpperCase(); if (/^[ABFD]0\d$/.test(nid)) return nid[0] + nid.substring(2); if (nid.startsWith('C') && /^(101|[23]\d{2}(?:-\d)?)$/.test(nid.substring(1))) return nid.substring(1); return nid; };
+        
+        const dbToUiRoom = rid => { 
+            if (!rid) return rid; 
+            let nid = rid.toUpperCase(); 
+            if (hotelRooms.some(r => r.id === nid || r.id === rid)) return rid;
+            if (currentPropertyId === 'swims_resort') {
+                if (/^[ABFD]\d$/.test(nid)) return nid[0] + '0' + nid.substring(1); 
+                if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) return 'C' + nid; 
+            }
+            return rid; 
+        };
+        const uiToDbRoom = rid => { 
+            if (!rid) return rid; 
+            let nid = rid.toUpperCase(); 
+            if (hotelRooms.some(r => r.id === nid || r.id === rid)) return rid;
+            if (currentPropertyId === 'swims_resort') {
+                if (/^[ABFD]0\d$/.test(nid)) return nid[0] + nid.substring(2); 
+                if (nid.startsWith('C') && /^(101|[23]\d{2}(?:-\d)?)$/.test(nid.substring(1))) return nid.substring(1); 
+            }
+            return rid; 
+        };
         
         window.getPaid = s => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
         window.getDue = s => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
@@ -554,7 +601,6 @@
             return window.calcNights();
         };
 
-        // Arrow Nudging: modifies either arrival or departure independently
         window.nudgeDate = (type, deltaDays) => {
             const inEl = $('check-in'), outEl = $('check-out');
             if (!inEl.value || !outEl.value) return;
@@ -578,7 +624,6 @@
             if (window.calcExtension) window.calcExtension();
         };
 
-        // Date Picker Selection: locks stay length (#Nts) and shifts the entire reservation
         window.handleCheckInPicker = (newCheckIn) => {
             if (!newCheckIn) return;
             const lockedNights = window.getStoredNights();
@@ -643,8 +688,6 @@
             };
 
             window.activeExtraCharges.push(chargeObj);
-            
-            // Add to Total Price input
             const curTot = Number($('total-price').value) || 0;
             $('total-price').value = (curTot + chargeObj.amt).toFixed(2);
 
@@ -771,7 +814,6 @@
                         checkOut: cOut,
                         roomTypes: rTypes
                     });
-                    console.log(`Delta Sync Triggered for ${cIn} to ${cOut}, rooms:`, rTypes);
                 } catch (e) {
                     console.warn("Delta Sync Call Failed:", e);
                 }
@@ -799,7 +841,6 @@
                     switcher.value = currentPropertyId;
                 }
 
-                // Sync URL and link hrefs with current property
                 window.syncPropertyUrl(currentPropertyId);
 
                 const propToLoad = windowPropertiesList.find(p => p.id === currentPropertyId);
@@ -835,9 +876,7 @@
             $('boot-loader').style.display = 'flex';
             $('sync-status').innerText = 'Switching Property...';
             currentPropertyId = propId;
-            try {
-                localStorage.setItem('last_prop', propId);
-            } catch (e) {}
+            try { localStorage.setItem('last_prop', propId); } catch (e) {}
             window.syncPropertyUrl(propId);
             await loadPropertyConfig();
             window.render();
@@ -850,13 +889,18 @@
             const processSnapshot = snap => { 
                 staff = snap.docs.map(d => ({ id: d.id, ...d.data() })).map(s => { 
                     if (!s.property) s.property = 'swims_resort'; 
-                    s.room = (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).map(dbToUiRoom)[0] || ""; 
-                    s.rooms = (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).map(dbToUiRoom); 
+                    const rList = getRooms(s).map(dbToUiRoom);
+                    s.room = rList[0] || ""; 
+                    s.rooms = rList; 
                     return s; 
                 });
                 setupDatalist(); 
-                window.render(); 
+                
+                // Optimized view-sensitive rendering
+                if ($('calendar-view').style.display !== 'none') window.render(); 
                 if ($('dashboard-view').style.display === 'flex') window.renderDashboard();
+                if ($('database-view').style.display === 'flex') window.renderDatabase();
+
                 const editId = new URLSearchParams(window.location.search).get('edit'); 
                 if (editId) { window.editStaff(editId); try { window.history.replaceState({}, document.title, window.location.pathname); } catch(e) {} }
             };
@@ -921,7 +965,54 @@
                 });
             }
 
-            window.addEventListener('resize', window.render); 
+            // High Performance Event Delegation on Timeline Grid
+            const tBodyEl = $('timeline-body');
+            tBodyEl.addEventListener('mouseover', e => {
+                const col = e.target.closest('.day-column');
+                if (col && col.dataset.colIndex !== undefined) {
+                    const idx = col.dataset.colIndex;
+                    $$(`[data-col-index="${idx}"]`).forEach(el => el.classList.add('hover-col'));
+                }
+            });
+
+            tBodyEl.addEventListener('mouseout', e => {
+                const col = e.target.closest('.day-column');
+                if (col && col.dataset.colIndex !== undefined) {
+                    const idx = col.dataset.colIndex;
+                    $$(`[data-col-index="${idx}"]`).forEach(el => el.classList.remove('hover-col'));
+                }
+            });
+
+            tBodyEl.addEventListener('click', e => {
+                const col = e.target.closest('.day-column');
+                if (!col) return;
+                const dStr = col.dataset.dateIso;
+                const rId = col.dataset.roomId || "";
+                if (!dStr) return;
+
+                const modal = $('guest-modal');
+                const isModalOpen = modal && (modal.classList.contains('active') || window.getComputedStyle(modal).display !== 'none');
+                
+                if (isModalOpen) {
+                    if (rId) {
+                        const curSelects = Array.from($$('.assigned-room-select'));
+                        const emptySelect = curSelects.find(s => !s.value);
+                        if (emptySelect) {
+                            emptySelect.value = rId;
+                        } else if (!curSelects.some(s => s.value === rId)) {
+                            window.addRoomSelect(rId);
+                        }
+                        window.updateAvailableRooms();
+                    }
+                    return;
+                }
+
+                window.quickAdd(rId, new Date(dStr + "T12:00:00Z"));
+            });
+
+            window.addEventListener('resize', () => {
+                if ($('calendar-view').style.display !== 'none') window.render();
+            }); 
             window.updateNavLinks();
             lucide.createIcons();
         };
@@ -934,11 +1025,6 @@
             if (shouldShow) { 
                 sec.style.display = 'block'; sec.classList.remove('hidden'); 
                 if(icon) icon.style.transform = 'rotate(0deg)'; 
-                if (sectionId === 'ext-section') {
-                    const rL = Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean);
-                    let extHtml = rL.length > 1 ? `<div class="w-full mb-1.5"><label class="field-label text-blue-600">Room to Extend</label><select id="ext-room-select" class="input-base text-blue-800 border-blue-300"><option value="ALL">Extend ALL Rooms</option>` + rL.map(r => `<option value="${r}">Extend Room ${r} Only</option>`).join('') + `</select></div>` : `<div class="hidden"><select id="ext-room-select"><option value="ALL">ALL</option></select></div>`;
-                    if($('split-room-dropdown-container')) $('split-room-dropdown-container').innerHTML = extHtml;
-                }
             } else { 
                 sec.style.display = 'none'; sec.classList.add('hidden'); 
                 if(icon) icon.style.transform = 'rotate(-90deg)'; 
@@ -1025,7 +1111,7 @@
             sortedStaff.forEach(s => {
                 if(s.status === 'cancelled' || s.status === 'noshow') return;
                 const cIn = s.checkIn, cOut = s.checkOut, due = window.getDue(s);
-                let assigned = (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).filter(Boolean).join(',') || 'Unassigned';
+                let assigned = getRooms(s).filter(Boolean).join(',') || 'Unassigned';
                 const name = `${s.firstName||''} ${s.lastName||''}`.trim() || 'Unknown';
                 const sBadge = `<span class="px-1 py-0.5 text-[8px] rounded text-white status-${s.status}">${s.status.toUpperCase()}</span>`;
                 const dueBadge = due > 0 ? `<span class="text-red-500 font-black">฿${due}</span>` : `<span class="text-green-500">฿0</span>`;
@@ -1114,7 +1200,7 @@
             
             actStaff.forEach(s => { 
                 if (parseYMD(s.checkIn) > veUTC || parseYMD(s.checkOut) < vsUTC) return; 
-                const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : [""]); 
+                const rL = getRooms(s).length ? getRooms(s) : [""]; 
                 if (s.status === 'unconfirmed' || s.status === 'charged') {
                     for(let i=0; i < Math.max(1, rL.length); i++) uConf.push(s); 
                 } else { 
@@ -1151,9 +1237,9 @@
                         tRows.push({ isSubHeader: true, label: baseRoom, floor: r.floor });
                     }
                     
-                    tRows.push({ isRoom: true, isBed: true, id: r.id, displayId: bedName, type: r.type, bed: r.bed, floor: '', icon: r.icon, bookings: actStaff.filter(s => { const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []); return rL.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC; }) });
+                    tRows.push({ isRoom: true, isBed: true, id: r.id, displayId: bedName, type: r.type, bed: r.bed, floor: '', icon: r.icon, bookings: actStaff.filter(s => { const rL = getRooms(s); return rL.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC; }) });
                 } else {
-                    tRows.push({ isRoom: true, isPrivate: true, id: r.id, displayId: r.id, type: r.type, bed: r.bed, floor: r.floor, icon: r.icon, bookings: actStaff.filter(s => { const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []); return rL.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC; }) });
+                    tRows.push({ isRoom: true, isPrivate: true, id: r.id, displayId: r.id, type: r.type, bed: r.bed, floor: r.floor, icon: r.icon, bookings: actStaff.filter(s => { const rL = getRooms(s); return rL.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC; }) });
                 }
             });
 
@@ -1172,7 +1258,7 @@
                 if (!b) return '';
                 let bStr = String(b).toLowerCase().trim();
                 if (bStr === 'bottom' || bStr === 'bot' || bStr === 'bunk-bottom') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Bottom Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
-                if (bStr === 'top' || bStr === 'bunk-top') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
+                if (bStr === 'top' || bStr === 'bunk-top') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
                 return '';
             };
 
@@ -1197,7 +1283,7 @@
                             actStaff.forEach(s => {
                                 if(s.status === 'unconfirmed' || s.status === 'charged' || s.status === 'cancelled' || s.status === 'noshow') return;
                                 if (dT >= parseYMD(s.checkIn) && dT < parseYMD(s.checkOut)) {
-                                    (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).forEach(r => { if (r && tRIds.includes(r)) occ.add(r); });
+                                    getRooms(s).forEach(r => { if (r && tRIds.includes(r)) occ.add(r); });
                                 }
                             });
                             let av = cap - occ.size, pct = cap > 0 ? av / cap : 0, cCls = '';
@@ -1254,29 +1340,10 @@
                     const c = document.createElement('div'), iT = getLocalYMD(days[i]) === todayStr; let fmpShade = ''; const dMs = days[i].getTime(); 
                     for (let f of fmpDates) { const diff = Math.round((dMs - new Date(f + "T12:00:00").getTime()) / 86400000); if (diff === 0) { fmpShade = 'day-fmp-dark'; break; } if (diff >= -2 && diff <= 2) { fmpShade = 'day-fmp-medium'; break; } }
                     c.className = `day-column ${fmpShade} ${iT ? 'day-today' : ''} ${rD.isUnassigned ? 'bg-amber-50/50' : ''}`; 
-                    c.dataset.colIndex = i; c.dataset.dateNum = days[i].getDate(); c.onmouseenter = () => $$(`[data-col-index="${i}"]`).forEach(el => el.classList.add('hover-col')); c.onmouseleave = () => $$(`[data-col-index="${i}"]`).forEach(el => el.classList.remove('hover-col')); 
-                    
-                    // INTERACTIVE CALENDAR CLICK
-                    c.onclick = () => {
-                        const modal = $('guest-modal');
-                        const isModalOpen = modal && (modal.classList.contains('active') || window.getComputedStyle(modal).display !== 'none');
-                        
-                        if (isModalOpen) {
-                            if (rD.id && !rD.isUnassigned) {
-                                const curSelects = Array.from($$('.assigned-room-select'));
-                                const emptySelect = curSelects.find(s => !s.value);
-                                if (emptySelect) {
-                                    emptySelect.value = rD.id;
-                                } else if (!curSelects.some(s => s.value === rD.id)) {
-                                    window.addRoomSelect(rD.id);
-                                }
-                                window.updateAvailableRooms();
-                            }
-                            return; 
-                        }
-
-                        window.quickAdd(rD.isUnassigned ? "" : rD.id, days[i]);
-                    };
+                    c.dataset.colIndex = i; 
+                    c.dataset.dateNum = days[i].getDate(); 
+                    c.dataset.dateIso = getLocalYMD(days[i]);
+                    c.dataset.roomId = rD.isUnassigned ? "" : (rD.id || "");
                     row.appendChild(c); 
                 }
 
@@ -1303,7 +1370,7 @@
                     bHtml += `<div class="ml-1 ${src.bg} text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">${src.text}</div><div class="w-2 shrink-0"></div></div>`;
                     bar.innerHTML = bHtml;
                     let tags = []; if (s.refundability === 'ref') tags.push('Refundable'); if (s.upgrade === 'free') tags.push('Free Upgrade'); if (s.upgrade === 'paid') tags.push('Paid Upgrade'); if (s.extended) tags.push('Extended'); if (s.emailConfirm) tags.push('Conf Sent'); if (s.emailPrePost) tags.push(`Pre/Post ${s.emailPrePost}`); if (s.emailSpecial) tags.push('Special Sent'); if (s.linkedId) tags.push(`Linked: ${s.linkedId}`);
-                    let ttHtml = `<div class="font-black text-[15px] text-blue-300 leading-tight mb-1">${s.firstName||''} ${s.lastName||''}</div><div>Total: ฿${Number(s.totalPrice || 0).toFixed(2)} | <span class="${due > 0 ? 'text-red-400' : 'text-green-400'}">Due: ฿${due.toFixed(2)} ${s.badCC ? '(*BAD CC*)' : ''}</span></div><div class="text-slate-300 mt-1">${s.checkIn ? s.checkIn.substr(5) : ''} → ${s.checkOut ? s.checkOut.substr(5) : ''} (${s.pax} PAX)</div><div class="text-slate-300 mt-0.5">Rooms: ${(s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).filter(Boolean).join(', ') || 'Unassigned'}</div>`; if(s.bookedType) ttHtml += `<div class="text-slate-300 mt-0.5">Booked: ${s.bookedType}</div>`; ttHtml += `<div class="text-slate-300 mt-0.5">Src: ${(s.source||'other').toUpperCase()}</div>`; if (tags.length > 0) ttHtml += `<div class="mt-1 pt-1 border-t border-slate-600 text-yellow-200 text-[10px] uppercase font-bold max-w-[200px] leading-tight">${tags.join(' • ')}</div>`; if (s.phone || s.email) ttHtml += `<div class="mt-1 pt-1 border-t border-slate-600 text-slate-400 text-[10px] leading-tight">${s.phone||''}<br>${s.email||''}</div>`;
+                    let ttHtml = `<div class="font-black text-[15px] text-blue-300 leading-tight mb-1">${s.firstName||''} ${s.lastName||''}</div><div>Total: ฿${Number(s.totalPrice || 0).toFixed(2)} | <span class="${due > 0 ? 'text-red-400' : 'text-green-400'}">Due: ฿${due.toFixed(2)} ${s.badCC ? '(*BAD CC*)' : ''}</span></div><div class="text-slate-300 mt-1">${s.checkIn ? s.checkIn.substr(5) : ''} → ${s.checkOut ? s.checkOut.substr(5) : ''} (${s.pax} PAX)</div><div class="text-slate-300 mt-0.5">Rooms: ${getRooms(s).filter(Boolean).join(', ') || 'Unassigned'}</div>`; if(s.bookedType) ttHtml += `<div class="text-slate-300 mt-0.5">Booked: ${s.bookedType}</div>`; ttHtml += `<div class="text-slate-300 mt-0.5">Src: ${(s.source||'other').toUpperCase()}</div>`; if (tags.length > 0) ttHtml += `<div class="mt-1 pt-1 border-t border-slate-600 text-yellow-200 text-[10px] uppercase font-bold max-w-[200px] leading-tight">${tags.join(' • ')}</div>`; if (s.phone || s.email) ttHtml += `<div class="mt-1 pt-1 border-t border-slate-600 text-slate-400 text-[10px] leading-tight">${s.phone||''}<br>${s.email||''}</div>`;
                     bar.onmouseenter = () => { if(s.linkedId) $$('.linked-'+s.linkedId).forEach(el => el.classList.add('link-glow')); tt.innerHTML = ttHtml; tt.style.display = 'block'; };
                     bar.onmousemove = e => { tt.style.left = (e.clientX + 235 > window.innerWidth ? e.clientX - 235 : e.clientX + 15) + 'px'; tt.style.top = (e.clientY + 165 > window.innerHeight ? e.clientY - 165 : e.clientY + 15) + 'px'; };
                     bar.onmouseleave = () => { if(s.linkedId) $$('.linked-'+s.linkedId).forEach(el => el.classList.remove('link-glow')); tt.style.display = 'none'; };
@@ -1318,7 +1385,7 @@
             const nF = ($(`${v}-filter-name`)?.value || '').trim().toUpperCase(); const sF = window.getMultiValues(`${v}-source-dropdown`) || []; const dS = $(`${v}-filter-start`)?.value || ''; const dE = $(`${v}-filter-end`)?.value || ''; const rF = window.getMultiValues(`${v}-room-dropdown`) || []; const minF = $(`${v}-filter-min`)?.value; const maxF = $(`${v}-filter-max`)?.value; const dF = $(`${v}-filter-due`)?.value || ''; const statF = window.getMultiValues(`${v}-status-dropdown`) || [];
             return staff.filter(s => {
                 if (s.property !== currentPropertyId) return false;
-                if (statF.length > 0 && !statF.includes(s.status)) return false; const fN = (s.firstName+' '+s.lastName).toUpperCase(); const bId = (s.bookId||'').toUpperCase(); if (searchTerm && !fN.includes(searchTerm) && !bId.includes(searchTerm)) return false; if (nF && !fN.includes(nF) && !bId.includes(nF)) return false; if (sF.length > 0 && !sF.includes(s.source)) return false; if (dS && s.checkOut <= dS) return false; if (dE && s.checkIn >= dE) return false; const due = window.getDue(s); if (dF === 'zero' && due > 0) return false; if (dF === 'owes' && due <= 0) return false; const tP = Number(s.totalPrice || 0); if (minF && tP < Number(minF)) return false; if (maxF && tP > Number(maxF)) return false; const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []); 
+                if (statF.length > 0 && !statF.includes(s.status)) return false; const fN = (s.firstName+' '+s.lastName).toUpperCase(); const bId = (s.bookId||'').toUpperCase(); if (searchTerm && !fN.includes(searchTerm) && !bId.includes(searchTerm)) return false; if (nF && !fN.includes(nF) && !bId.includes(nF)) return false; if (sF.length > 0 && !sF.includes(s.source)) return false; if (dS && s.checkOut <= dS) return false; if (dE && s.checkIn >= dE) return false; const due = window.getDue(s); if (dF === 'zero' && due > 0) return false; if (dF === 'owes' && due <= 0) return false; const tP = Number(s.totalPrice || 0); if (minF && tP < Number(minF)) return false; if (maxF && tP > Number(maxF)) return false; const rL = getRooms(s); 
                 if (rF.length > 0) { const wU = rF.includes('UNASSIGNED'); const hU = rL.length === 0 || rL.includes(""); const hT = rL.some(r => { const hr = hotelRooms.find(x => x.id === r); return hr && rF.includes(hr.type); }); if (!hT && (!wU || !hU)) return false; } return true;
             }).sort((a, b) => { 
                 let vA = a[sKey], vB = b[sKey]; if (sKey === 'room') { vA = a.rooms?.[0] || a.room || 'ZZZ'; vB = b.rooms?.[0] || b.room || 'ZZZ'; } if (sKey === 'name') { vA = (a.firstName+' '+a.lastName).toUpperCase(); vB = (b.firstName+' '+b.lastName).toUpperCase(); } if (sKey === 'totalPrice') { vA = Number(vA||0); vB = Number(vB||0); } if (sKey === 'due') { vA = window.getDue(a); vB = window.getDue(b); } if (sKey === 'paid') { vA = window.getPaid(a); vB = window.getPaid(b); } return sAsc ? (vA > vB ? 1 : -1) : (vA < vB ? 1 : -1); 
@@ -1330,7 +1397,7 @@
         window.renderDatabase = () => { 
             const body = $('database-body'); if (!body) return; body.innerHTML = ''; 
             window.getFilteredBookings('db', sortKey, sortAsc).forEach(s => { 
-                const due = window.getDue(s); const paid = window.getPaid(s); const asg = (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).filter(Boolean).join(', ') || '--'; 
+                const due = window.getDue(s); const paid = window.getPaid(s); const asg = getRooms(s).filter(Boolean).join(', ') || '--'; 
                 const tr = document.createElement('tr'); tr.className = "border-b hover:bg-slate-50 cursor-pointer"; tr.onclick = () => window.editStaff(s.id); tr.dataset.recordId = s.id; 
                 tr.innerHTML = `<td class="p-2 border-r border-slate-200">${s.firstName||''} ${s.lastName||''}</td><td class="p-2 border-r border-slate-200 uppercase">${s.source||''}</td><td class="p-2 border-r border-slate-200">${formatDbDate(s.checkIn, s.checkOut)}</td><td class="p-2 border-r border-slate-200 font-black max-w-[96px] break-words whitespace-normal leading-tight">${asg}</td><td class="p-2 border-r border-slate-200 text-right font-black">฿${Number(s.totalPrice||0).toFixed(2)}</td><td class="p-2 border-r border-slate-200 text-right font-black text-green-600">฿${paid.toFixed(2)}</td><td class="p-2 border-r border-slate-200 text-right font-black ${due>0?'text-red-600':''} ${s.badCC?'underline decoration-dashed decoration-red-500':''}">฿${due.toFixed(2)}</td><td class="p-2 uppercase"><span class="px-2 py-0.5 rounded text-[10px] text-white status-${s.status}">${s.status}</span></td>`; body.appendChild(tr); 
             }); lucide.createIcons();
@@ -1347,14 +1414,17 @@
             $('dashboard-view').style.display = t === 'dashboard' ? 'flex' : 'none'; $('calendar-view').style.display = t === 'calendar' ? 'flex' : 'none'; $('database-view').style.display = t === 'database' ? 'flex' : 'none'; 
             $('tab-dash').classList.toggle('active', t === 'dashboard'); $('tab-cal').classList.toggle('active', t === 'calendar'); $('tab-db').classList.toggle('active', t === 'database'); 
             const ctxCal = $('context-tools-cal'); if(ctxCal) { if(t === 'calendar') { ctxCal.style.display = 'flex'; setTimeout(() => ctxCal.style.opacity = '1', 50); } else { ctxCal.style.opacity = '0'; setTimeout(() => ctxCal.style.display = 'none', 200); } }
-            if(t === 'database') window.renderDatabase(); if(t === 'dashboard') window.renderDashboard();
+            if(t === 'calendar') window.render();
+            if(t === 'database') window.renderDatabase(); 
+            if(t === 'dashboard') window.renderDashboard();
         };
 
         window.handleSearch = v => { 
             searchTerm = v.trim().toUpperCase(); searchMatchIndex = 0; const jb = $('search-jump-btn'), mc = $('match-counter'); 
             const m = staff.filter(s => (s.firstName+' '+s.lastName).toUpperCase().includes(searchTerm) || (s.bookId||'').toUpperCase().includes(searchTerm)); 
             if(searchTerm && m.length > 0) { jb?.classList.replace('hidden', 'flex'); if(mc) mc.innerText = `Match ${searchMatchIndex + 1} of ${m.length}`; } else { jb?.classList.replace('flex', 'hidden'); }
-            window.render(); window.renderDatabase(); 
+            if ($('calendar-view').style.display !== 'none') window.render(); 
+            if ($('database-view').style.display !== 'none') window.renderDatabase(); 
         };
         window.clearSearch = () => { $('guest-search').value = ""; window.handleSearch(""); };
         window.toggleSearchMode = () => { const c = $('search-container'); if (c.classList.contains('hidden')) { c.classList.replace('hidden', 'flex'); setTimeout(() => $('guest-search').focus(), 50); } else { c.classList.replace('flex', 'hidden'); } };
@@ -1426,17 +1496,27 @@
         
         window.updateAvailableRooms = () => {
             const cI = $('check-in').value, cO = $('check-out').value, cId = $('guest-id').value; if(!cI || !cO) return;
-            const sU = parseYMD(cI), eU = parseYMD(cO), occ = new Set();
-            staff.forEach(s => { if(s.id === cId || s.status === 'cancelled' || s.status === 'noshow' || s.status === 'unconfirmed' || s.status === 'charged' || s.property !== currentPropertyId) return; if(sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) { (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).forEach(r => { if(r) occ.add(r); }); } });
-            $$('.assigned-room-select').forEach(sel => { const cur = sel.value; Array.from(sel.options).forEach(opt => { if(!opt.value) return; if(occ.has(opt.value)) { opt.disabled = true; opt.text = opt.text.replace(' (OCCUPIED)', '') + ' (OCCUPIED)'; } else { opt.disabled = false; opt.text = opt.text.replace(' (OCCUPIED)', ''); } }); sel.value = cur; });
+            const occ = getOccupiedRooms(cI, cO, cId);
+            $$('.assigned-room-select').forEach(sel => { 
+                const cur = sel.value; 
+                Array.from(sel.options).forEach(opt => { 
+                    if(!opt.value) return; 
+                    if(occ.has(opt.value)) { 
+                        opt.disabled = true; 
+                        opt.text = opt.text.replace(' (OCCUPIED)', '') + ' (OCCUPIED)'; 
+                    } else { 
+                        opt.disabled = false; 
+                        opt.text = opt.text.replace(' (OCCUPIED)', ''); 
+                    } 
+                }); 
+                sel.value = cur; 
+            });
         };
 
-        // Fuzzy & OTA Mapping Resolver
         window.resolvePmsRoomType = (rawType = '') => {
             if (!rawType) return '';
             const rawLower = rawType.toLowerCase().trim();
 
-            // 1. Check property OTA map first
             if (window.propertyOtaMap && window.propertyOtaMap.length > 0) {
                 const sortedMap = [...window.propertyOtaMap].sort((a, b) => (b.otaName || '').length - (a.otaName || '').length);
                 const otaMatch = sortedMap.find(m => {
@@ -1446,33 +1526,26 @@
                 if (otaMatch && otaMatch.pmsCategory) return otaMatch.pmsCategory;
             }
 
-            // 2. Direct match against property room types
             const direct = roomTypes.find(t => t.toLowerCase() === rawLower);
             if (direct) return direct;
 
-            // 3. Substring match
             const sub = roomTypes.find(t => rawLower.includes(t.toLowerCase()) || t.toLowerCase().includes(rawLower));
             if (sub) return sub;
 
-            // 4. Weighted keyword matcher (Gender > Capacity > Style)
             let bestType = null;
             let highestScore = 0;
 
             roomTypes.forEach(pmsType => {
                 const pmsLower = pmsType.toLowerCase();
                 let score = 0;
-
-                // Gender match (crucial for dorms)
                 if (rawLower.includes('female') && pmsLower.includes('female')) score += 20;
                 if (rawLower.includes('male') && !rawLower.includes('female') && pmsLower.includes('male') && !pmsLower.includes('female')) score += 20;
                 if (rawLower.includes('mixed') && pmsLower.includes('mixed')) score += 15;
 
-                // Bed count / Room capacity
                 ['4', '6', '8', '10', '12', 'quad', 'triple', 'twin', 'double', 'single', 'king'].forEach(kw => {
                     if (rawLower.includes(kw) && pmsLower.includes(kw)) score += 5;
                 });
 
-                // Style keywords
                 ['dorm', 'ensuite', 'balcony', 'bungalow', 'oceanview', 'gardenview', 'deluxe', 'standard'].forEach(kw => {
                     if (rawLower.includes(kw) && pmsLower.includes(kw)) score += 3;
                 });
@@ -1486,42 +1559,30 @@
             return highestScore >= 5 ? bestType : rawType;
         };
 
-        // Proximity calculation between two room IDs (e.g. H1 and H2, or 101 and 102)
         window.getRoomDistance = (anchorId, candidateId) => {
             if (!anchorId || !candidateId || anchorId === candidateId) return 0;
             const anchorIdx = hotelRooms.findIndex(r => r.id === anchorId);
             const candIdx = hotelRooms.findIndex(r => r.id === candidateId);
             if (anchorIdx === -1 || candIdx === -1) return 999;
 
-            // Extract base unit (e.g. "H" from "H1", "101" from "101-1")
             const anchorBase = anchorId.replace(/\d+$/, '').replace(/-.*$/, '').toUpperCase();
             const candBase = candidateId.replace(/\d+$/, '').replace(/-.*$/, '').toUpperCase();
 
-            // Same room unit: highest proximity
             if (anchorBase && anchorBase === candBase) {
                 const anchorNum = parseInt(anchorId.match(/\d+$/)?.[0] || '0');
                 const candNum = parseInt(candidateId.match(/\d+$/)?.[0] || '0');
                 return Math.abs(anchorNum - candNum);
             }
-
-            // Different units: distance based on list sequence
             return 100 + Math.abs(anchorIdx - candIdx);
         };
         
         window.suggestAvailableRoom = (preferredType = null) => {
             const cI = $('check-in')?.value, cO = $('check-out')?.value, cId = $('guest-id')?.value;
             if (!cI || !cO) return "";
-            const sU = parseYMD(cI), eU = parseYMD(cO), occ = new Set();
-            staff.forEach(s => { 
-                if (s.id === cId || s.status === 'cancelled' || s.status === 'noshow' || s.status === 'unconfirmed' || s.status === 'charged' || s.property !== currentPropertyId) return; 
-                if (sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) { 
-                    (s.rooms?.length ? s.rooms : (s.room ? [s.room] : [])).forEach(r => { if(r) occ.add(r); }); 
-                } 
-            });
+            const occ = getOccupiedRooms(cI, cO, cId);
             const assignedNow = Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean);
             const assignedSet = new Set(assignedNow);
 
-            // Determine target category: prioritize already assigned room's category, then preferredType
             let targetType = null;
             let anchorRoom = null;
 
@@ -1537,11 +1598,9 @@
 
             if (!targetType) return "";
 
-            // Find all available rooms in this category
             let freeInType = hotelRooms.filter(r => r.type === targetType && !occ.has(r.id) && !assignedSet.has(r.id));
-            if (freeInType.length === 0) return ""; // NEVER fallback to A1
+            if (freeInType.length === 0) return ""; 
 
-            // Sort vacancies by physical proximity to the anchor room
             if (anchorRoom) {
                 freeInType.sort((a, b) => window.getRoomDistance(anchorRoom, a.id) - window.getRoomDistance(anchorRoom, b.id));
             }
@@ -1555,7 +1614,6 @@
             let cg = '', og = null; 
             hotelRooms.forEach(r => { if (r.type !== cg) { og = document.createElement('optgroup'); og.label = `--- ${r.type.toUpperCase()} ---`; sel.appendChild(og); cg = r.type; } const opt = document.createElement('option'); opt.value = r.id; let fNum = 1; const nid = (r.id||'').toUpperCase(); if (/^[AB]\d+$/.test(nid)) fNum = parseInt(nid.replace(/\D/g, '') || '0') % 2 !== 0 ? 1 : 2; else if (nid.startsWith('C1')) fNum = 1; else if (nid.startsWith('C2')) fNum = 2; else if (nid.startsWith('C3')) fNum = 3; else if (nid.startsWith('D')) fNum = 1; opt.innerText = `${r.id} - Room ${fNum === 1 ? '↓' : (fNum === 2 ? '↑' : '⇈')} (${r.bed || '?'})`; og.appendChild(opt); }); 
             
-            // Suggest nearest available room if val is not provided
             if (val === undefined || val === null || (val === "" && c.children.length > 0)) {
                 const suggested = window.suggestAvailableRoom($('booked-type')?.value);
                 if (suggested) val = suggested;
@@ -1575,13 +1633,7 @@
         
         window.confirmExtension = async () => { 
             const cO = $('check-out').value; if(!cO) return window.showAlert("Please set a check-out date first."); const aP = $('ext-price').value; if(aP === '') return window.showAlert("Please enter the Extension Price first."); const days = parseInt($('ext-days').value) || 1; const d = new Date(cO + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + days); const nCo = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`; 
-            const extRoomSel = $('ext-room-select');
-            if (extRoomSel && extRoomSel.value !== "ALL" && !extRoomSel.parentElement.classList.contains('hidden')) {
-                const s = staff.find(x => x.id === $('guest-id').value); if (!s) return window.showAlert("Error: Please save booking first before splitting."); 
-                let lC = s.linkedId || Math.random().toString(36).substr(2, 4).toUpperCase(); const nId = Math.random().toString(36).substr(2, 9); const selRoom = extRoomSel.value; const dbRoom = uiToDbRoom(selRoom); 
-                const newBooking = { ...s, id: nId, checkIn: cO, checkOut: nCo, room: dbRoom, rooms: [dbRoom], linkedId: lC, totalPrice: Number(aP), netPrice: Number(aP), netOverride: false, payments: [], extended: true, notes: "Extended segment from multi-room booking.\n" + (s.notes || ""), createdAt: new Date().toISOString(), createdBy: currentUserEmail, auditLog: [] }; 
-                try { const sB = $('save-btn'); sB.disabled = true; sB.innerHTML = 'SAVING...'; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, linkedId: lC, extended: true }, { merge: true }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', nId), newBooking); window.showAlert(`Room ${selRoom} extended by ${days} day(s) as a new linked booking.\n\nOriginal booking preserved.`); window.triggerAutoSync(cO, nCo); window.closeGuestModal(); } catch(e) { window.showAlert("Extension failed due to database rules."); } return;
-            }
+            
             $('check-out').value = nCo; $('total-price').value = ((Number($('total-price').value) || 0) + Number(aP)).toFixed(2); setMulti('ext-btn', 1, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
             const todayStr = new Date().toLocaleDateString('en-GB').slice(0,5); const extMsg = `\n[EXTENDED on ${todayStr}] Added ${days} day(s). Added ฿${aP} to total.`; $('guest-notes').value = ($('guest-notes').value + extMsg).trim();
             window.updateNightsDisplay(); window.updateAvailableRooms(); window.calcFinancials(); window.calcExtension(); window.showAlert(`Booking extended by ${days} day(s).\n\nCheckout is now ${nCo}.\nAdded ฿${aP} to Total Price.`); 
@@ -1592,7 +1644,6 @@
             const bcc = $('bad-cc-box'); bcc.dataset.bad = s.badCC ? 'true' : 'false'; bcc.innerHTML = s.badCC ? '<span class="text-white text-[10px] font-black">X</span>' : ''; bcc.className = `w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center ${s.badCC ? 'bg-red-500 border-red-600' : ''}`; 
             [ ['guest-id', s.id], ['first-name', s.firstName], ['last-name', s.lastName], ['phone', s.phone], ['email', s.email], ['booked-type', s.bookedType], ['check-in', s.checkIn], ['check-out', s.checkOut], ['booking-date', s.bookDate], ['booking-id', s.bookId], ['link-code', s.linkedId], ['guest-country', s.country], ['pax-count', s.pax || 1], ['booking-source', s.source || 'direct'], ['guest-notes', s.notes], ['total-price', Number(s.totalPrice || 0).toFixed(2)], ['net-price', Number(s.netPrice || 0).toFixed(2)] ].forEach(([id, val]) => { const el = $(id); if(el) el.value = val || ""; }); 
             
-            // Manual bookings default to 'future'
             let pSt = s.status || "future"; 
             $('guest-status-hidden').value = pSt; 
             let sObj = STATUS_CYCLE.find(x => x.val === pSt) || STATUS_CYCLE[1]; 
@@ -1604,13 +1655,12 @@
 
             $('net-price').dataset.override = s.netOverride ? 'true' : 'false'; 
             $('assigned-rooms-container').innerHTML = ''; 
-            const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : (isN ? [] : [""])); 
+            const rL = getRooms(s).length ? getRooms(s) : (isN ? [] : [""]); 
             if(rL.length > 0) { rL.forEach(r => window.addRoomSelect(r)); } else { window.addRoomSelect(""); } 
             
             $('payments-list').innerHTML = ''; 
             if(s.payments) s.payments.forEach(p => window.addPaymentRow(p.date, Number(p.amt || 0).toFixed(2), p.method, true));
 
-            // Load and render itemized charges
             window.activeExtraCharges = Array.isArray(s.extraCharges) ? [...s.extraCharges] : [];
             window.renderExtraCharges();
 
@@ -1662,10 +1712,22 @@
             window.updateNightsDisplay();
             $('assigned-rooms-container').innerHTML = ''; 
             window.addRoomSelect(r); 
-            const directBookings = staff.filter(s => s.property === currentPropertyId && s.bookId && s.bookId.startsWith('SW')).sort((a,b) => { const numA = parseInt(a.bookId.replace('SW', '')) || 0; const numB = parseInt(b.bookId.replace('SW', '')) || 0; return numB - numA; });
-            let nextNum = 1; if (directBookings.length > 0) { nextNum = (parseInt(directBookings[0].bookId.replace('SW', '')) || 0) + 1; }
-            $('booking-id').value = `SW${String(nextNum).padStart(5, '0')}`; $('booking-date').value = getLocalYMD(new Date());
-            window.updateAvailableRooms(); if(window.calcExtension) window.calcExtension(); 
+            
+            // Dynamic Property-Specific Booking Prefix (e.g. SW00001, LD00001, WT00001)
+            const pCode = (PROP_REVERSE_MAP[currentPropertyId] || currentPropertyId.substring(0, 2)).toUpperCase();
+            const directBookings = staff.filter(s => s.property === currentPropertyId && s.bookId && s.bookId.startsWith(pCode)).sort((a,b) => { 
+                const numA = parseInt(a.bookId.replace(pCode, '')) || 0; 
+                const numB = parseInt(b.bookId.replace(pCode, '')) || 0; 
+                return numB - numA; 
+            });
+            let nextNum = 1; 
+            if (directBookings.length > 0) { 
+                nextNum = (parseInt(directBookings[0].bookId.replace(pCode, '')) || 0) + 1; 
+            }
+            $('booking-id').value = `${pCode}${String(nextNum).padStart(5, '0')}`; 
+            $('booking-date').value = getLocalYMD(new Date());
+            window.updateAvailableRooms(); 
+            if(window.calcExtension) window.calcExtension(); 
         };
 
         window.showAuditHistory = () => {
@@ -1697,7 +1759,7 @@
                         let searchRooms = [p.roomNumber];
                         if (/^[a-zA-Z]0\d$/.test(p.roomNumber)) searchRooms.push(p.roomNumber[0] + p.roomNumber[2]);
                         else if (/^[a-zA-Z]\d$/.test(p.roomNumber)) searchRooms.push(p.roomNumber[0] + '0' + p.roomNumber[1]);
-                        matchedBooking = staff.filter(x => x.property === currentPropertyId).find(s => { if (s.status === 'cancelled' || s.status === 'noshow') return false; const rL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []); return rL.some(r => searchRooms.includes(r)); });
+                        matchedBooking = staff.filter(x => x.property === currentPropertyId).find(s => { if (s.status === 'cancelled' || s.status === 'noshow') return false; return getRooms(s).some(r => searchRooms.includes(r)); });
                     }
                     if (!matchedBooking && p.firstName && p.lastName) {
                         matchedBooking = staff.filter(x => x.property === currentPropertyId).find(s => { if (s.status === 'cancelled' || s.status === 'noshow') return false; const bName = (s.firstName + " " + s.lastName).toUpperCase(); return bName.includes(p.lastName.toUpperCase()) && bName.includes(p.firstName.toUpperCase()); });
@@ -1767,7 +1829,6 @@
                     $('alert-modal').classList.add('active');
                     $('alert-modal').style.display = 'flex';
                     lucide.createIcons();
-                    
                     btn.innerHTML = origText; return;
                 }
 
@@ -1776,18 +1837,15 @@
 
                 pendingPassports.forEach(data => {
                     let match = false;
-                    
                     if (data.roomNumber) { 
                         let searchRooms = [data.roomNumber]; 
                         if (/^[a-zA-Z]0\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + data.roomNumber[2]); 
                         else if (/^[a-zA-Z]\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + '0' + data.roomNumber[1]); 
                         if (rL.some(r => searchRooms.includes(r))) match = true; 
                     }
-                    
                     if (!match && data.firstName && data.lastName && gFirstName && gLastName) { 
                         if (gLastName.includes(data.lastName.toUpperCase()) && gFirstName.includes(data.firstName.toUpperCase())) match = true; 
                     }
-                    
                     if (match) { 
                         matchedPassports.push(data); 
                         updatePromises.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'submissions', data.id), { 
@@ -1873,14 +1931,15 @@
                 }
 
                 let rL = Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean); const dbRL = rL.map(uiToDbRoom);
-                const stat = $('guest-status-hidden').value; const sU = parseYMD(cI), eU = parseYMD(cO);
+                const stat = $('guest-status-hidden').value;
 
                 if (!['unconfirmed', 'cancelled', 'noshow', 'charged'].includes(stat)) {
-                    for (let s of staff.filter(x => x.property === currentPropertyId)) {
-                        if (s.id === id || ['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(s.status)) continue;
-                        if(sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) { 
-                            const srL = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []); 
-                            for (let r of rL) { if (srL.includes(r)) { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons(); return window.showAlert(`ROOM OVERLAP ERROR:\n\nRoom ${r} is already assigned to ${s.firstName} ${s.lastName} during these dates.`); } }
+                    const occupiedNow = getOccupiedRooms(cI, cO, id);
+                    for (let r of rL) {
+                        if (occupiedNow.has(r)) {
+                            const conflictBooking = staff.find(s => s.id !== id && s.property === currentPropertyId && !['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(s.status) && parseYMD(cI) < parseYMD(s.checkOut) && parseYMD(s.checkIn) < parseYMD(cO) && getRooms(s).includes(r));
+                            sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons(); 
+                            return window.showAlert(`ROOM OVERLAP ERROR:\n\nRoom ${r} is already assigned to ${conflictBooking?.firstName || ''} ${conflictBooking?.lastName || 'another guest'} during these dates.`);
                         }
                     }
                 }
@@ -1967,22 +2026,19 @@
                 $('pax-count').value = Math.max(c.pax || 1, t.pax || 1); 
                 (t.payments || []).forEach(p => window.addPaymentRow(p.date, Number(p.amt||0).toFixed(2), p.method, true)); 
                 
-                // Merge itemized charges
                 window.activeExtraCharges = [...(c.extraCharges || []), ...(t.extraCharges || [])];
                 window.renderExtraCharges();
 
-                const cR = Array.from(new Set([...Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean), ...(t.rooms || []).filter(Boolean)])); 
+                const cR = Array.from(new Set([...Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean), ...getRooms(t).filter(Boolean)])); 
                 $('assigned-rooms-container').innerHTML = ''; 
                 if (cR.length > 0) cR.forEach(r => window.addRoomSelect(r)); else window.addRoomSelect(""); 
                 
-                // AUTOMATICALLY SET EXTENDED TAG ON MERGE
                 setMulti('ext-btn', 1, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']);
 
                 window.calcFinancials(); 
                 window.updateAvailableRooms(); 
                 window.updateNightsDisplay();
 
-                // Prevent room overlap check from blocking save of the merged stay
                 staff = staff.filter(s => s.id !== t.id);
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', t.id)); 
 
@@ -2011,251 +2067,74 @@
         };
 
         window.openEmailParserModal = () => { $('email-textarea').value = ''; $('email-modal').style.display = 'flex'; setTimeout(() => $('email-textarea').focus(), 50); };
-        
-        // DEDICATED CHANNEL RESERVATION SHEET PARSER
-        window.parseCustomPmsText = (raw) => {
-            const normalized = raw.replace(/\u00A0/g, ' ');
-            const lines = normalized.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-
-            const getField = (label) => {
-                const target = label.toLowerCase();
-                const idx = lines.findIndex(l => {
-                    const low = l.toLowerCase();
-                    return low === target || low.startsWith(target + ':') || low.startsWith(target + ' :');
-                });
-                if (idx !== -1) {
-                    if (lines[idx].includes(':')) {
-                        const val = lines[idx].split(':').slice(1).join(':').trim();
-                        if (val) return val;
-                    }
-                    if (idx + 1 < lines.length) {
-                        return lines[idx + 1];
-                    }
-                }
-                return '';
-            };
-
-            const parseDateDMY = (str) => {
-                if (!str) return '';
-                const m = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-                if (m) {
-                    const d = m[1].padStart(2, '0');
-                    const mo = m[2].padStart(2, '0');
-                    const y = m[3];
-                    return `${y}-${mo}-${d}`;
-                }
-                return '';
-            };
-
-            const parseMoney = (str) => {
-                if (!str) return 0;
-                const m = str.match(/[\d,]+(?:\.\d+)?/);
-                return m ? parseFloat(m[0].replace(/,/g, '')) : 0;
-            };
-
-            // 1. Clean Header Isolation (Name, Country, Phone, Email)
-            const keywordRegex = /^(?:reservation\s*number|voucher\s*number|status|arrival\s*date|departure\s*date|booking\s*date|room\s*type|room\s*number|rate\s*plan|pax)/i;
-            const cutIdx = lines.findIndex(l => keywordRegex.test(l));
-            const headerLines = (cutIdx > 0 ? lines.slice(0, cutIdx) : lines.slice(0, 4));
-
-            let rawName = headerLines[0] || '';
-            let country = '';
-            let phone = '';
-            let email = '';
-
-            for (let i = 1; i < headerLines.length; i++) {
-                const line = headerLines[i];
-                if (line.includes('@') && !email) {
-                    email = line;
-                } else if ((line.match(/\d/g) || []).length >= 7 && !phone) {
-                    phone = line;
-                } else if (/[a-zA-Z]/.test(line) && !country) {
-                    country = line;
-                }
-            }
-
-            // Clean prefixes (Mr., Mrs., Ms., Dr.) and split first / last name
-            rawName = rawName.replace(/^(?:mr\.|mrs\.|ms\.|miss|dr\.|master)\s+/i, '').trim();
-            const nameParts = rawName.split(/\s+/).filter(Boolean);
-            let firstName = '', lastName = '';
-            if (nameParts.length === 1) {
-                lastName = nameParts[0].toUpperCase();
-            } else if (nameParts.length >= 2) {
-                firstName = nameParts.slice(0, -1).join(' ').toUpperCase();
-                lastName = nameParts[nameParts.length - 1].toUpperCase();
-            }
-
-            // 2. Dates & Identifiers
-            const checkIn = parseDateDMY(getField('Arrival Date'));
-            const checkOut = parseDateDMY(getField('Departure Date'));
-            const bookDate = parseDateDMY(getField('Booking Date')) || getLocalYMD(new Date());
-
-            const resNum = getField('Reservation Number');
-            const voucherNum = getField('Voucher Number');
-            const bookId = voucherNum || resNum;
-
-            // 3. Room & Pax
-            const bookedType = getField('Room Type');
-            const roomNumber = getField('Room Number');
-            const room = roomNumber || '';
-            const rooms = room ? [room] : [];
-
-            const rawPax = getField('Pax');
-            let pax = 1;
-            if (rawPax === '10') pax = 1;
-            else if (rawPax === '20') pax = 2;
-            else if (rawPax) pax = Math.max(1, parseInt(rawPax) || 1);
-
-            // 4. Status
-            const rawStatus = getField('Status').toLowerCase();
-            let status = 'future';
-            if (rawStatus.includes('stayover') || rawStatus.includes('in-house') || rawStatus.includes('arrived') || rawStatus.includes('checked in')) {
-                status = 'here';
-            } else if (rawStatus.includes('depart') || rawStatus.includes('left') || rawStatus.includes('checked out')) {
-                status = 'left';
-            } else if (rawStatus.includes('cancel')) {
-                status = 'cancelled';
-            } else if (rawStatus.includes('noshow') || rawStatus.includes('no show')) {
-                status = 'noshow';
-            } else if (checkIn && checkOut) {
-                const today = getLocalYMD(new Date());
-                if (checkIn <= today && checkOut > today) status = 'here';
-                else if (checkOut <= today) status = 'left';
-            }
-
-            // 5. Source & Payment Mapping
-            const lower = normalized.toLowerCase();
-            let source = 'direct';
-            let payMethod = 'cash';
-
-            if (lower.includes('expedia')) {
-                source = 'expedia';
-                payMethod = (lower.includes('expedia collect') || lower.includes('pre-paid') || lower.includes('prepaid')) ? 'expedia-kp' : 'expedia-pay';
-            } else if (lower.includes('agoda')) {
-                source = 'agoda';
-                payMethod = (lower.includes('agoda collect') || lower.includes('pre-paid') || lower.includes('prepaid')) ? 'agoda-kp' : 'agoda-pay';
-            } else if (lower.includes('booking.com') || lower.includes('bdc')) {
-                source = 'booking.com';
-                payMethod = (lower.includes('pre-paid') || lower.includes('prepaid') || lower.includes('payment done by booking.com')) ? 'bdc-kp' : 'bdc-pay';
-            } else if (lower.includes('hostelworld')) {
-                source = 'hostelworld';
-                payMethod = 'hw-kp';
-            } else if (lower.includes('airbnb')) {
-                source = 'airbnb';
-                payMethod = 'airbnb-kp';
-            } else if (lower.includes('trip.com') || lower.includes('ctrip')) {
-                source = 'ctrip';
-                payMethod = 'trip-kp';
-            }
-
-            // 6. Financials
-            const totalPrice = parseMoney(getField('Total'));
-            const paid = parseMoney(getField('Paid'));
-            const payments = [];
-
-            if (paid > 0) {
-                payments.push({
-                    date: checkIn || bookDate || getLocalYMD(new Date()),
-                    amt: Number(paid.toFixed(2)),
-                    method: payMethod
-                });
-            }
-
-            const summary = `[IMPORTED FROM CHANNEL SHEET]\n${normalized.trim()}`;
-
-            const s = {
-                firstName,
-                lastName,
-                phone,
-                country,
-                email,
-                bookedType,
-                room,
-                rooms,
-                checkIn,
-                checkOut,
-                bookDate,
-                bookId,
-                status,
-                source,
-                pax,
-                totalPrice,
-                netPrice: totalPrice,
-                payments,
-                extraCharges: []
-            };
-
-            return { s, summary };
-        };
 
         window.parseEmail = () => {
             const raw = $('email-textarea').value.trim();
             if (!raw) return window.showAlert("Please paste booking text first.");
             
-            const { s, summary } = window.extractBookingData(raw);
-
-            if (s.bookId) {
-                const dupe = staff.find(x => x.property === currentPropertyId && x.bookId === s.bookId && x.status !== 'cancelled' && x.status !== 'noshow');
-                if (dupe) {
-                    window.closeModal('email-modal');
-                    window.showAlert(`Duplicate Found:\nBooking ID ${s.bookId} already exists in the system!\n\nOpening original record now...`);
-                    setTimeout(() => { window.closeAlert(); window.editStaff(dupe.id); }, 2500);
-                    return;
-                }
-            } else if (s.firstName && s.lastName && s.checkIn) {
-                const nameDupe = staff.find(x => x.property === currentPropertyId && x.firstName === s.firstName && x.lastName === s.lastName && x.checkIn === s.checkIn && x.status !== 'cancelled' && x.status !== 'noshow');
-                if (nameDupe) {
-                    window.closeModal('email-modal');
-                    window.showAlert(`Duplicate Found:\n${s.firstName} ${s.lastName} arriving on ${s.checkIn} already exists in the system!\n\nOpening original record now...`);
-                    setTimeout(() => { window.closeAlert(); window.editStaff(nameDupe.id); }, 2500);
-                    return;
-                }
+            if (typeof window.extractBookingData !== 'function') {
+                return window.showAlert("Parser Library Not Loaded:\n\nCould not access window.extractBookingData. Ensure parser.js is reachable.");
             }
 
-            // Resolve raw OTA booked type to property PMS category
-            if (s.bookedType) {
-                const resolved = window.resolvePmsRoomType(s.bookedType);
-                if (resolved) s.bookedType = resolved;
-            }
+            try {
+                const { s, summary } = window.extractBookingData(raw);
 
-            // Auto-assign available rooms matching the resolved category
-            if (s.bookedType && s.checkIn && s.checkOut && (!s.rooms || s.rooms.length === 0 || !s.rooms[0])) {
-                const sU = parseYMD(s.checkIn), eU = parseYMD(s.checkOut);
-                const occ = new Set();
-                let unitsNeeded = s.units || 1;
-                s.autoRooms = [];
-                
-                staff.forEach(st => {
-                    if (st.status === 'cancelled' || st.status === 'noshow' || st.status === 'unconfirmed' || st.status === 'charged' || st.property !== currentPropertyId) return;
-                    if (sU < parseYMD(st.checkOut) && parseYMD(st.checkIn) < eU) {
-                        (st.rooms?.length ? st.rooms : (st.room ? [st.room] : [])).forEach(r => { if(r) occ.add(r); });
+                if (s.bookId) {
+                    const dupe = staff.find(x => x.property === currentPropertyId && x.bookId === s.bookId && x.status !== 'cancelled' && x.status !== 'noshow');
+                    if (dupe) {
+                        window.closeModal('email-modal');
+                        window.showAlert(`Duplicate Found:\nBooking ID ${s.bookId} already exists in the system!\n\nOpening original record now...`);
+                        setTimeout(() => { window.closeAlert(); window.editStaff(dupe.id); }, 2500);
+                        return;
                     }
-                });
+                } else if (s.firstName && s.lastName && s.checkIn) {
+                    const nameDupe = staff.find(x => x.property === currentPropertyId && x.firstName === s.firstName && x.lastName === s.lastName && x.checkIn === s.checkIn && x.status !== 'cancelled' && x.status !== 'noshow');
+                    if (nameDupe) {
+                        window.closeModal('email-modal');
+                        window.showAlert(`Duplicate Found:\n${s.firstName} ${s.lastName} arriving on ${s.checkIn} already exists in the system!\n\nOpening original record now...`);
+                        setTimeout(() => { window.closeAlert(); window.editStaff(nameDupe.id); }, 2500);
+                        return;
+                    }
+                }
+
+                if (s.bookedType) {
+                    const resolved = window.resolvePmsRoomType(s.bookedType);
+                    if (resolved) s.bookedType = resolved;
+                }
+
+                if (s.bookedType && s.checkIn && s.checkOut && (!s.rooms || s.rooms.length === 0 || !s.rooms[0])) {
+                    const occ = getOccupiedRooms(s.checkIn, s.checkOut);
+                    let unitsNeeded = s.units || 1;
+                    s.autoRooms = [];
+                    
+                    const availableBeds = hotelRooms.filter(r => r.type === s.bookedType && !occ.has(r.id));
+                    for (let i = 0; i < Math.min(unitsNeeded, availableBeds.length); i++) {
+                        s.autoRooms.push(availableBeds[i].id);
+                        occ.add(availableBeds[i].id);
+                    }
+
+                    if (s.autoRooms.length > 0) {
+                        s.room = s.autoRooms[0];
+                        s.rooms = [...s.autoRooms];
+                    } else {
+                        s.room = "";
+                        s.rooms = [];
+                    }
+                }
+
+                s.notes = summary;
+                window.populateStaffForm(s);
+                window.closeModal('email-modal');
                 
-                const availableBeds = hotelRooms.filter(r => r.type === s.bookedType && !occ.has(r.id));
-                for (let i = 0; i < Math.min(unitsNeeded, availableBeds.length); i++) {
-                    s.autoRooms.push(availableBeds[i].id);
-                    occ.add(availableBeds[i].id);
+                if (s.checkIn) {
+                    const d = new Date(s.checkIn + "T12:00:00Z");
+                    d.setDate(d.getDate() - 3);
+                    viewStart = d;
+                    window.render();
                 }
-
-                if (s.autoRooms.length > 0) {
-                    s.room = s.autoRooms[0];
-                    s.rooms = [...s.autoRooms];
-                } else {
-                    s.room = "";
-                    s.rooms = [];
-                }
-            }
-
-            s.notes = summary;
-            window.populateStaffForm(s);
-            window.closeModal('email-modal');
-            
-            if (s.checkIn) {
-                const d = new Date(s.checkIn + "T12:00:00Z");
-                d.setDate(d.getDate() - 3);
-                viewStart = d;
-                window.render();
+            } catch (err) {
+                console.error("Booking Import Exception:", err);
+                window.showAlert("Failed to parse booking:\n\n" + (err.message || "Unknown format error"));
             }
         };
 
