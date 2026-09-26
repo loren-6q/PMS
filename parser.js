@@ -36,25 +36,26 @@ const parseAnyDateToYMD = (input, defaultYear) => {
         return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
     }
 
-    // 3. Month Name + Day + (Optional) Year: "September 18, 2026", "Sep 26, 2026", or "Sep 25"
-    const mdyMatch = str.match(/(?:^|[^\w])(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s,]+(\d{1,2})(?:st|nd|rd|th)?(?:[\s,]+(\d{4}))?/i);
-    if (mdyMatch) {
-        const mKey = mdyMatch[1].toLowerCase().slice(0, 3);
-        const mNum = MONTH_MAP[mKey];
-        if (mNum) {
-            const yr = mdyMatch[3] || curYear;
-            return `${yr}-${mNum}-${mdyMatch[2].padStart(2, '0')}`;
-        }
-    }
-
-    // 4. Day + Month Name + (Optional) Year: "18 September 2026", "26 Sep 2026", or "25 Sep"
-    const dmyWordMatch = str.match(/(\d{1,2})(?:st|nd|rd|th)?[\s,]+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:[\s,]+(\d{4}))?/i);
+    // 3. Day + Month Name + (Optional) Year: "Tue 24 Nov 2026", "24 Nov 2026", "18 September 2026"
+    const dmyWordMatch = str.match(/\b(\d{1,2})(?:st|nd|rd|th)?[\s,]+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:[\s,]+(\d{4}))?\b/i);
     if (dmyWordMatch) {
         const mKey = dmyWordMatch[2].toLowerCase().slice(0, 3);
         const mNum = MONTH_MAP[mKey];
         if (mNum) {
             const yr = dmyWordMatch[3] || curYear;
             return `${yr}-${mNum}-${dmyWordMatch[1].padStart(2, '0')}`;
+        }
+    }
+
+    // 4. Month Name + Day + (Optional) Year: "November 24, 2026", "Sep 26, 2026", or "Sep 25"
+    // Note: \b(\d{1,2})\b prevents matching the first two digits of a year like 2026 as day 20!
+    const mdyMatch = str.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s,]+(\d{1,2})(?:st|nd|rd|th)?\b(?:[\s,]+(\d{4}))?/i);
+    if (mdyMatch) {
+        const mKey = mdyMatch[1].toLowerCase().slice(0, 3);
+        const mNum = MONTH_MAP[mKey];
+        if (mNum) {
+            const yr = mdyMatch[3] || curYear;
+            return `${yr}-${mNum}-${mdyMatch[2].padStart(2, '0')}`;
         }
     }
 
