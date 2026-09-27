@@ -710,7 +710,7 @@ background: #cbd5e1;
 border-radius: 3px;
 }
 
-/* ==========================================================================
+/ ==========================================================================
 8. NON-PMS & SETTINGS SHARED STYLES
 ========================================================================== */
 
@@ -725,4 +725,84 @@ cursor: grabbing;
 .dragging {
 opacity: 0.5;
 background: #f8fafc;
+}
+
+/* ==========================================================================
+9. OTA SYNC & AVAILABILITY MATRIX STYLES
+========================================================================== */
+
+.btn-base {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+gap: 0.5rem;
+padding: 0.5rem 1rem;
+border-radius: 0.5rem;
+font-weight: 900;
+font-size: 0.875rem;
+text-transform: uppercase;
+box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+transition: all 0.15s ease-in-out;
+cursor: pointer;
+border: none;
+}
+
+.btn-blue {
+background-color: #2563eb;
+color: #ffffff;
+}
+
+.btn-blue:hover {
+background-color: #1d4ed8;
+}
+
+.btn-slate {
+background-color: #e2e8f0;
+color: #334155;
+}
+
+.btn-slate:hover {
+background-color: #cbd5e1;
+}
+
+.sync-table {
+border-spacing: 0;
+width: 100%;
+}
+
+.sync-table th,
+.sync-table td {
+padding: 4px 0px;
+text-align: center;
+border-right: 1px solid #cbd5e1;
+border-bottom: 1px solid #cbd5e1;
+vertical-align: middle;
+}
+
+.frozen-col {
+position: sticky !important;
+left: 0 !important;
+z-index: 10 !important;
+text-align: left;
+border-right: 2px solid #94a3b8;
+padding: 4px 6px;
+}
+
+.frozen-row {
+position: sticky !important;
+top: 0 !important;
+background: #1e293b;
+color: #ffffff;
+z-index: 20 !important;
+}
+
+.frozen-corner {
+position: sticky !important;
+top: 0 !important;
+left: 0 !important;
+background: #0f172a;
+color: #ffffff;
+z-index: 30 !important;
+border-right: 2px solid #94a3b8;
+padding: 4px 6px;
 }
