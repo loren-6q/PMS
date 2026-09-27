@@ -2,110 +2,110 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OTA Sync Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wild & Wandering | OTA Sync Dashboard</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <style type="text/tailwindcss">
-        @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Condensed:wght@400;700;900&display=swap');
-        
-        body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; }
-        
-        @layer components {
-            .btn-base { @apply px-4 py-2 rounded-lg font-black text-sm uppercase shadow-sm flex items-center justify-center gap-2 transition-colors cursor-pointer; }
-            .btn-blue { @apply btn-base bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/30; }
-            .btn-slate { @apply btn-base bg-slate-200 hover:bg-slate-300 text-slate-700; }
-        }
-
-        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; display: none; }
-        .loading-overlay.active { display: flex; pointer-events: auto; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        
-        /* Grid Styles */
-        table { border-spacing: 0; width: 100%; }
-        th, td { padding: 4px 0px; text-align: center; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; vertical-align: middle; }
-        .frozen-col { position: sticky; left: 0; z-index: 10; text-align: left; border-right: 2px solid #94a3b8; padding: 4px 6px; }
-        .frozen-row { position: sticky; top: 0; background: #1e293b; color: white; z-index: 20; }
-        .frozen-corner { position: sticky; top: 0; left: 0; background: #0f172a; color: white; z-index: 30; border-right: 2px solid #94a3b8; padding: 4px 6px; }
-    </style>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 </head>
-<body class="p-2 sm:p-4 h-screen flex flex-col overflow-hidden">
-    <div id="loader" class="loading-overlay active">
+
+<body class="bg-slate-100 p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
+    <div id="loader" class="loading-overlay">
         <div class="spinner"></div>
-        <div id="sync-status" class="mt-4 font-black text-blue-800 uppercase tracking-widest text-center">CONNECTING...</div>
+        <div id="sync-status" class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4">Connecting...</div>
     </div>
 
-    <!-- Alert Modal for replacing native alert/confirm -->
-    <div id="alert-modal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4">
+    <!-- Alert Modal matching Global PMS Theme -->
+    <div id="alert-modal" class="alert-modal-overlay">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
-            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Attention</div>
+            <div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase flex items-center justify-between text-sm">
+                <span id="alert-header-title">Attention</span>
+                <button type="button" onclick="window.closeAlert()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="18"></i></button>
+            </div>
             <div class="p-6 text-center">
-                <p id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></p>
-                <div class="mt-6 flex gap-2 justify-center">
-                    <button id="alert-cancel" onclick="window.closeAlert()" class="hidden px-6 py-2 rounded-lg font-black text-sm uppercase bg-slate-200 text-slate-700">Cancel</button>
-                    <button id="alert-confirm" class="px-10 py-2 rounded-lg font-black text-sm uppercase bg-blue-600 text-white">Okay</button>
+                <div id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></div>
+                <div id="alert-actions" class="mt-6 flex gap-2 justify-center">
+                    <button id="alert-cancel" onclick="window.closeAlert()" class="hidden btn-modal bg-slate-200 text-slate-700">Cancel</button>
+                    <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="flex items-center justify-between bg-slate-900 p-3 sm:p-4 rounded-t-xl shrink-0 text-white">
-        <div class="flex items-center gap-3">
-            <div class="bg-blue-500 p-1.5 rounded"><i data-lucide="refresh-cw" class="text-white"></i></div>
-            <h1 class="font-black uppercase tracking-widest text-lg sm:text-xl">OTA Sync & Auditor</h1>
-        </div>
-        <div class="flex items-center gap-4">
-            <button id="reset-dismissed-btn" onclick="window.resetDismissed()" class="hidden text-xs font-bold text-amber-400 hover:text-amber-300 uppercase underline transition-colors">Reset Dismissed Bookings</button>
-            <a href="index.html" class="text-xs font-bold text-slate-400 hover:text-white uppercase transition-colors">← Back to PMS</a>
-        </div>
-    </div>
-    
-    <div class="flex-1 flex flex-col gap-4 bg-white p-3 border-x border-b border-slate-300 rounded-b-xl shadow-xl min-h-0 overflow-hidden">
-        
-        <!-- AUDITOR PANEL (Stacked on top, naturally grows to push down grid) -->
-        <div class="w-full flex flex-col border border-slate-300 rounded-lg shrink-0 bg-slate-50">
-            <div class="bg-slate-200 p-2 px-3 font-black text-slate-700 uppercase flex items-center justify-between shrink-0 border-b border-slate-300">
-                <span class="text-sm">1. Missing Booking Auditor</span>
-                <span class="text-[10px] text-slate-500">Paste Extranet list below</span>
+    <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+        <!-- Uniform Top Navbar matching PMS & Accounting -->
+        <div class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-2 shrink-0 z-50 unselectable w-full">
+            <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+                <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
+                    <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-10 object-contain">
+                </a>
+                <h1 class="text-base sm:text-lg font-black uppercase tracking-tight text-slate-800 flex items-center gap-1.5">
+                    <i data-lucide="refresh-cw" size="18" class="text-blue-600"></i> OTA Sync & Auditor
+                </h1>
             </div>
-            <div class="p-3 flex flex-col gap-3">
-                <textarea id="audit-text" class="w-full h-16 sm:h-20 bg-white border border-slate-300 rounded p-2 outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre text-xs text-slate-400 font-mono resize-none transition-all" placeholder="Paste Booking.com, Hostelworld, or Airbnb list data here..." oninput="window.checkMissing()"></textarea>
-                <div id="audit-result" class="flex flex-col gap-2"></div>
+
+            <div class="flex items-center gap-2 shrink-0 ml-auto">
+                <button id="reset-dismissed-btn" onclick="window.resetDismissed()" class="hidden text-xs font-black text-amber-600 hover:text-amber-700 uppercase bg-amber-50 border border-amber-200 px-2 py-1 rounded shadow-sm transition-colors cursor-pointer">
+                    Reset Dismissed
+                </button>
+                <a id="nav-pms-btn" href="index.html" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded font-black text-xs uppercase flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer">
+                    <i data-lucide="calendar" size="14"></i> Calendar
+                </a>
             </div>
         </div>
 
-        <!-- ACTION LIST MATRIX (Bottom, takes rest of screen) -->
-        <div class="w-full flex-1 flex flex-col border border-slate-300 rounded-lg min-h-0 relative">
-            <div class="bg-slate-200 p-2 font-black text-slate-700 uppercase flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-slate-300">
-                <span class="pl-2 text-sm">2. Live Availability Matrix</span>
-                <div class="flex gap-2">
-                    <select id="grid-filter" class="btn-slate !py-1.5 !px-3 !text-xs outline-none shadow-sm cursor-pointer" onchange="window.renderGrid()">
-                        <option value="changes">Show Changes Only</option>
-                        <option value="urgent">Show Urgent Only (0-2 left)</option>
-                        <option value="all">Show All Dates</option>
-                    </select>
-                    <button onclick="window.markSynced()" class="btn-blue !py-1.5 !px-4 !text-xs shadow-md"><i data-lucide="check-check" size="14"></i> Mark Synced</button>
+        <div class="flex-1 flex flex-col gap-2 bg-white p-2 sm:p-3 border-x sm:border border-slate-300 rounded-none sm:rounded-lg shadow min-h-0 overflow-hidden">
+            <!-- 1. MISSING BOOKING AUDITOR -->
+            <div class="w-full flex flex-col border border-slate-300 rounded-lg shrink-0 bg-slate-50 overflow-hidden shadow-sm">
+                <div class="bg-slate-200 p-2 px-3 font-black text-slate-700 uppercase flex items-center justify-between shrink-0 border-b border-slate-300">
+                    <span class="text-xs sm:text-sm flex items-center gap-1.5">
+                        <i data-lucide="search" size="14" class="text-blue-600"></i> 1. Missing Booking Auditor
+                    </span>
+                    <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Paste Extranet List Below</span>
+                </div>
+                <div class="p-2 sm:p-3 flex flex-col gap-2">
+                    <textarea id="audit-text" class="w-full h-16 sm:h-20 bg-white border border-slate-300 rounded p-2 outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre text-xs text-slate-700 font-mono resize-none transition-all placeholder:text-slate-400" placeholder="Paste Booking.com, Hostelworld, or Airbnb list data here..." oninput="window.checkMissing()"></textarea>
+                    <div id="audit-result" class="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto no-scrollbar"></div>
                 </div>
             </div>
-            
-            <div class="flex-1 overflow-auto bg-slate-50 relative p-0 overscroll-none" id="matrix-container">
-                <table id="sync-table">
-                    <thead id="sync-head"></thead>
-                    <tbody id="sync-body"></tbody>
-                </table>
-            </div>
 
-            <!-- Context-Aware Overlay moved out of scroll container but inside relative container -->
-            <div id="no-changes-msg" class="hidden absolute inset-0 top-[45px] flex items-center justify-center bg-slate-50/95 z-40">
-                <div class="text-center p-6 bg-white rounded-xl shadow-xl border border-slate-200">
-                    <div class="bg-green-100 text-green-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3"><i data-lucide="shield-check" size="32"></i></div>
-                    <h3 id="no-data-title" class="text-2xl font-black text-slate-800 uppercase tracking-tight">Everything is Synced</h3>
-                    <p id="no-data-desc" class="text-sm font-bold text-slate-500 mt-1">No changes detected since your last sync.</p>
+            <!-- 2. LIVE AVAILABILITY MATRIX -->
+            <div class="w-full flex-1 flex flex-col border border-slate-300 rounded-lg min-h-0 relative overflow-hidden shadow-sm">
+                <div class="bg-slate-200 p-2 px-3 font-black text-slate-700 uppercase flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-slate-300">
+                    <span class="text-xs sm:text-sm flex items-center gap-1.5">
+                        <i data-lucide="table" size="14" class="text-indigo-600"></i> 2. Live Availability Matrix
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <select id="grid-filter" class="btn-slate !py-1 !px-2.5 !text-xs outline-none shadow-sm cursor-pointer" onchange="window.renderGrid()">
+                            <option value="changes">Show Changes Only</option>
+                            <option value="urgent">Show Urgent Only (0-2 left)</option>
+                            <option value="all">Show All Dates</option>
+                        </select>
+                        <button onclick="window.markSynced()" class="btn-blue !py-1 !px-3 !text-xs shadow flex items-center gap-1">
+                            <i data-lucide="check-check" size="14"></i> Mark Synced
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-auto bg-slate-50 relative p-0 overscroll-none" id="matrix-container">
+                    <table id="sync-table" class="sync-table">
+                        <thead id="sync-head"></thead>
+                        <tbody id="sync-body"></tbody>
+                    </table>
+                </div>
+
+                <div id="no-changes-msg" class="hidden absolute inset-0 top-[40px] flex items-center justify-center bg-slate-50/95 z-40 backdrop-blur-sm">
+                    <div class="text-center p-6 bg-white rounded-xl shadow-xl border border-slate-200">
+                        <div class="bg-green-100 text-green-600 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <i data-lucide="shield-check" size="28"></i>
+                        </div>
+                        <h3 id="no-data-title" class="text-xl font-black text-slate-800 uppercase tracking-tight">Everything is Synced</h3>
+                        <p id="no-data-desc" class="text-xs font-bold text-slate-500 mt-1">No changes detected since your last sync.</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -114,92 +114,103 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, onSnapshot, getDoc, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // CRITICAL: Ensure your Firebase Rules are updated to allow access to 'ota_sync' collection
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
-        const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app); const appId = 'hotel-pms-v1';
-        
-        let staff = []; let snapshotData = {}; let liveInventory = {}; let viewDates = []; let rawTypes = []; let totalRoomsByType = {};
-        let dismissedIds = [];
-        
-        // Exact matched arrays from main app
-        const rawRooms = "B01|Oceanfront King|KING|2|101^A01|Oceanfront King|KING|1|102^A02|Oceanfront King|KING|1|103^B02|Oceanfront Twin|TWIN|2|201^B03|Oceanview King Room|KING|2|301^B05|Oceanview King Room|KING|2|302^B07|Oceanview King Room|KING|2|303^A03|Oceanview King Room|KING|1|304^A04|Oceanview King Room|KING|1|305^A06|Oceanview King Room|KING|1|306^A08|Oceanview King Room|KING|1|307^A10|Oceanview King Room|KING|1|308^A12|Oceanview King Room|KING|1|309^C206|Oceanview King Room|KING|2|310^C306|Oceanview King Room|KING|3|311^C311|Oceanview King Room|KING|3|312^B04|Oceanview Twin Room|TWIN|2|401^B06|Oceanview Twin Room|TWIN|2|402^B08|Oceanview Twin Room|TWIN|2|403^C212|Oceanview Twin Room|TWIN|2|404^A05|Partial Oceanview King Room|KING|1|501^A07|Partial Oceanview King Room|KING|1|502^A09|Partial Oceanview King Room|KING|1|503^A11|Partial Oceanview King Room|KING|1|504^C203|Partial Oceanview King Room|KING|2|505^C204|Partial Oceanview King Room|KING|2|506^C205|Partial Oceanview King Room|KING|2|507^B09|Gardenview King Room|KING|2|601^B11|Gardenview King Room|KING|2|602^B13|Gardenview King Room|KING|2|603^B15|Gardenview King Room|KING|2|604^B17|Gardenview King Room|KING|2|605^B19|Gardenview King Room|KING|2|606^B21|Gardenview King Room|KING|2|607^B22|Gardenview King Room|KING|2|608^B10|Gardenview Twin Room|TWIN|2|701^B12|Gardenview Twin Room|TWIN|2|702^B14|Gardenview Twin Room|TWIN|2|703^B16|Gardenview Twin Room|TWIN|2|704^B18|Gardenview Twin Room|TWIN|2|705^B20|Gardenview Twin Room|TWIN|2|706^C201|Gardenview Twin Room|TWIN|2|707^C202|Gardenview Twin Room|TWIN|2|708^C207|Gardenview Twin Room|TWIN|2|709^C208|Gardenview Twin Room|TWIN|2|710^C209|Gardenview Twin Room|TWIN|2|711^C210|Gardenview Twin Room|TWIN|2|712^C211|Gardenview Twin Room|TWIN|2|713^C101|Gardenview Twin Room|TWIN|1|714^C307|Partial Oceanview Triple Room|BUNK+T|3|801^C308|Partial Oceanview Triple Room|BUNK+T|3|802^C305|Partial Oceanview Triple Room|K+T|3|803^C309|Partial Oceanview Triple Room|K+T|3|804^C310|Partial Oceanview Triple Room|K+T|3|805^C301-1|Standard Quad Dorm|QUAD|3|901^C301-2|Standard Quad Dorm|QUAD|3|902^C301-3|Standard Quad Dorm|QUAD|3|903^C301-4|Standard Quad Dorm|QUAD|3|904^C302-1|Standard Quad Dorm|QUAD|3|905^C302-2|Standard Quad Dorm|QUAD|3|906^C302-3|Standard Quad Dorm|QUAD|3|907^C302-4|Standard Quad Dorm|QUAD|3|908^C303-1|Standard Quad Dorm|QUAD|3|909^C303-2|Standard Quad Dorm|QUAD|3|910^C303-3|Standard Quad Dorm|QUAD|3|911^C303-4|Standard Quad Dorm|QUAD|3|912^C304-1|Standard Quad Dorm|QUAD|3|913^C304-2|Standard Quad Dorm|QUAD|3|914^C304-3|Standard Quad Dorm|QUAD|3|915^C304-4|Standard Quad Dorm|QUAD|3|916^D01|BUNGALOWS||1|1001^D02|BUNGALOWS||1|1002^D03|BUNGALOWS||1|1003^D04|BUNGALOWS||1|1004^D05|BUNGALOWS||1|1005^D06|BUNGALOWS||1|1006^D07|BUNGALOWS||1|1007^D08|BUNGALOWS||1|1008^D09|BUNGALOWS||1|1009^D10|BUNGALOWS||1|1010^D11|BUNGALOWS||1|1011";
-        const hotelRooms = rawRooms.split('^').map(r => { const p = r.split('|'); return { id: p[0], type: p[1] }; });
-        
-        hotelRooms.forEach(r => { 
-            if (!rawTypes.includes(r.type)) rawTypes.push(r.type);
-            totalRoomsByType[r.type] = (totalRoomsByType[r.type] || 0) + 1;
-        });
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'hotel-pms-v1';
 
-        const parseYMD = (str) => { if(!str) return 0; const p = str.split('-'); return Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); };
+        const PROP_MAP = { 'LOUD': 'loud_samui', 'WET': 'wet_pool', 'SWIMS': 'swims_resort' };
+        const PROP_REVERSE_MAP = { 'loud_samui': 'LOUD', 'wet_pool': 'WET', 'swims_resort': 'SWIMS' };
+
+        let initialP = null;
+        try { initialP = new URLSearchParams(window.location.search).get('p')?.toUpperCase(); } catch (e) {}
+        let storedProp = null;
+        try { storedProp = localStorage.getItem('last_prop'); } catch (e) {}
+
+        let currentPropertyId = PROP_MAP[initialP] || storedProp || 'swims_resort';
+
+        const navBtn = document.getElementById('nav-pms-btn');
+        if (navBtn) {
+            const shortKey = PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
+            navBtn.href = `index.html?p=${shortKey}`;
+        }
+
+        let staff = [];
+        let snapshotData = {};
+        let liveInventory = {};
+        let viewDates = [];
+        let rawTypes = [];
+        let totalRoomsByType = {};
+        let dismissedIds = [];
+        let hotelRooms = [];
+
+        const parseYMD = str => { if (!str) return 0; const p = str.split('-'); return Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); };
         const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
-        const dbToUiRoom = (rid) => {
-            if (!rid) return rid; let nid = rid.toUpperCase();
+        const dbToUiRoom = rid => {
+            if (!rid) return rid;
+            let nid = rid.toUpperCase();
             if (/^[ABFD]\d$/.test(nid)) return nid[0] + '0' + nid.substring(1);
             if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) return 'C' + nid;
             return nid;
         };
 
         window.showAlert = (msg, isConfirm = false, onConfirm = null) => {
-            document.getElementById('alert-message').innerText = msg;
+            const modal = document.getElementById('alert-modal');
+            const msgEl = document.getElementById('alert-message');
             const cancelBtn = document.getElementById('alert-cancel');
             const confirmBtn = document.getElementById('alert-confirm');
-            
+            if (!modal || !msgEl) return;
+
+            msgEl.innerText = msg;
             if (isConfirm) {
                 cancelBtn.classList.remove('hidden');
-                confirmBtn.innerText = 'Yes';
-                confirmBtn.className = 'px-10 py-2 rounded-lg font-black text-sm uppercase bg-red-600 text-white';
+                cancelBtn.style.display = 'block';
+                confirmBtn.innerText = 'Confirm';
+                confirmBtn.className = 'btn-modal bg-blue-600 hover:bg-blue-700 text-white px-10';
+                confirmBtn.onclick = () => { if (onConfirm) onConfirm(); window.closeAlert(); };
             } else {
                 cancelBtn.classList.add('hidden');
+                cancelBtn.style.display = 'none';
                 confirmBtn.innerText = 'Okay';
-                confirmBtn.className = 'px-10 py-2 rounded-lg font-black text-sm uppercase bg-blue-600 text-white';
+                confirmBtn.className = 'btn-modal bg-blue-600 hover:bg-blue-700 text-white px-10';
+                confirmBtn.onclick = window.closeAlert;
             }
-            
-            confirmBtn.onclick = () => {
-                if (onConfirm) onConfirm();
-                window.closeAlert();
-            };
-            document.getElementById('alert-modal').classList.remove('hidden');
+
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+            if (window.lucide) window.lucide.createIcons();
         };
 
         window.closeAlert = () => {
-            document.getElementById('alert-modal').classList.add('hidden');
+            const modal = document.getElementById('alert-modal');
+            if (modal) {
+                modal.classList.remove('active');
+                modal.style.display = 'none';
+            }
         };
-
-        signInAnonymously(auth).then(() => {
-            getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline')).then(snap => {
-                if(snap.exists()) {
-                    snapshotData = snap.data().matrix || {};
-                    dismissedIds = snap.data().dismissed || [];
-                    updateDismissedUI();
-                }
-                
-                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (usersSnap) => {
-                    staff = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    calculateLiveInventory();
-                    document.getElementById('loader').classList.remove('active');
-                });
-            }).catch(e => {
-                document.getElementById('sync-status').innerText = 'DB PERMISSION ERROR';
-                window.showAlert("Firebase Rules block reading 'ota_sync'. Please update rules as discussed.");
-            });
-        }).catch(() => { document.getElementById('sync-status').innerText = 'AUTH ERROR'; });
 
         const updateDismissedUI = () => {
             const btn = document.getElementById('reset-dismissed-btn');
+            if (!btn) return;
             if (dismissedIds.length > 0) btn.classList.remove('hidden');
             else btn.classList.add('hidden');
         };
 
-        window.dismissBooking = async (id) => {
+        window.dismissBooking = async id => {
             if (!dismissedIds.includes(id)) dismissedIds.push(id);
             try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'), { matrix: snapshotData, dismissed: dismissedIds, updatedAt: new Date().toISOString() }, { merge: true });
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'), {
+                    matrix: snapshotData,
+                    dismissed: dismissedIds,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
                 updateDismissedUI();
                 window.checkMissing();
-            } catch(e) {
+            } catch (e) {
                 window.showAlert("Failed to dismiss. Check database permissions.");
             }
         };
@@ -207,64 +218,144 @@
         window.resetDismissed = async () => {
             dismissedIds = [];
             try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'), { matrix: snapshotData, dismissed: dismissedIds, updatedAt: new Date().toISOString() }, { merge: true });
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'), {
+                    matrix: snapshotData,
+                    dismissed: dismissedIds,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
                 updateDismissedUI();
                 window.checkMissing();
-            } catch(e) {
+            } catch (e) {
                 window.showAlert("Failed to reset. Check database permissions.");
             }
         };
 
-        const calculateLiveInventory = () => {
-            liveInventory = {}; viewDates = [];
-            const today = new Date(); today.setHours(12,0,0,0);
-            
-            for(let i=0; i<240; i++) {
-                let d = new Date(today); d.setDate(d.getDate() + i);
-                let dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                viewDates.push(dStr);
-                
-                liveInventory[dStr] = {};
-                rawTypes.forEach(t => liveInventory[dStr][t] = totalRoomsByType[t]);
+        const loadConfigAndInit = async () => {
+            const loader = document.getElementById('loader');
+            const statusEl = document.getElementById('sync-status');
+
+            // Safety timeout: Ensure the loading overlay never freezes the viewport
+            const safetyTimer = setTimeout(() => {
+                if (loader) loader.style.display = 'none';
+            }, 5000);
+
+            try {
+                if (typeof window.__initial_auth_token !== 'undefined') {
+                    try {
+                        await signInWithCustomToken(auth, window.__initial_auth_token);
+                    } catch (tokenErr) {
+                        await signInAnonymously(auth);
+                    }
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (authErr) {
+                console.warn("Auth bypass/anon warning:", authErr);
+                if (statusEl) statusEl.innerText = 'AUTH ERROR';
             }
 
-            // Exclude unconfirmed holds from consuming OTA inventory
-            const activeStaff = staff.filter(s => s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed');
-            
+            try {
+                const propSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentPropertyId));
+                if (propSnap.exists()) {
+                    hotelRooms = propSnap.data().rooms || [];
+                }
+            } catch (err) {
+                console.warn("Could not load dynamic property rooms, using fallback", err);
+            }
+
+            if (hotelRooms.length === 0) {
+                const rawRooms = "B01|Oceanfront King|KING|2|101^A01|Oceanfront King|KING|1|102^A02|Oceanfront King|KING|1|103^B02|Oceanfront Twin|TWIN|2|201^B03|Oceanview King Room|KING|2|301^B05|Oceanview King Room|KING|2|302^B07|Oceanview King Room|KING|2|303^A03|Oceanview King Room|KING|1|304^A04|Oceanview King Room|KING|1|305^A06|Oceanview King Room|KING|1|306^A08|Oceanview King Room|KING|1|307^A10|Oceanview King Room|KING|1|308^A12|Oceanview King Room|KING|1|309^C206|Oceanview King Room|KING|2|310^C306|Oceanview King Room|KING|3|311^C311|Oceanview King Room|KING|3|312^B04|Oceanview Twin Room|TWIN|2|401^B06|Oceanview Twin Room|TWIN|2|402^B08|Oceanview Twin Room|TWIN|2|403^C212|Oceanview Twin Room|TWIN|2|404^A05|Partial Oceanview King Room|KING|1|501^A07|Partial Oceanview King Room|KING|1|502^A09|Partial Oceanview King Room|KING|1|503^A11|Partial Oceanview King Room|KING|1|504^C203|Partial Oceanview King Room|KING|2|505^C204|Partial Oceanview King Room|KING|2|506^C205|Partial Oceanview King Room|KING|2|507^B09|Gardenview King Room|KING|2|601^B11|Gardenview King Room|KING|2|602^B13|Gardenview King Room|KING|2|603^B15|Gardenview King Room|KING|2|604^B17|Gardenview King Room|KING|2|605^B19|Gardenview King Room|KING|2|606^B21|Gardenview King Room|KING|2|607^B22|Gardenview King Room|KING|2|608^B10|Gardenview Twin Room|TWIN|2|701^B12|Gardenview Twin Room|TWIN|2|702^B14|Gardenview Twin Room|TWIN|2|703^B16|Gardenview Twin Room|TWIN|2|704^B18|Gardenview Twin Room|TWIN|2|705^B20|Gardenview Twin Room|TWIN|2|706^C201|Gardenview Twin Room|TWIN|2|707^C202|Gardenview Twin Room|TWIN|2|708^C207|Gardenview Twin Room|TWIN|2|709^C208|Gardenview Twin Room|TWIN|2|710^C209|Gardenview Twin Room|TWIN|2|711^C210|Gardenview Twin Room|TWIN|2|712^C211|Gardenview Twin Room|TWIN|2|713^C101|Gardenview Twin Room|TWIN|1|714^C307|Partial Oceanview Triple Room|BUNK+T|3|801^C308|Partial Oceanview Triple Room|BUNK+T|3|802^C305|Partial Oceanview Triple Room|K+T|3|803^C309|Partial Oceanview Triple Room|K+T|3|804^C310|Partial Oceanview Triple Room|K+T|3|805^C301-1|Standard Quad Dorm|QUAD|3|901^C301-2|Standard Quad Dorm|QUAD|3|902^C301-3|Standard Quad Dorm|QUAD|3|903^C301-4|Standard Quad Dorm|QUAD|3|904^C302-1|Standard Quad Dorm|QUAD|3|905^C302-2|Standard Quad Dorm|QUAD|3|906^C302-3|Standard Quad Dorm|QUAD|3|907^C302-4|Standard Quad Dorm|QUAD|3|908^C303-1|Standard Quad Dorm|QUAD|3|909^C303-2|Standard Quad Dorm|QUAD|3|910^C303-3|Standard Quad Dorm|QUAD|3|911^C303-4|Standard Quad Dorm|QUAD|3|912^C304-1|Standard Quad Dorm|QUAD|3|913^C304-2|Standard Quad Dorm|QUAD|3|914^C304-3|Standard Quad Dorm|QUAD|3|915^C304-4|Standard Quad Dorm|QUAD|3|916^D01|BUNGALOWS||1|1001^D02|BUNGALOWS||1|1002^D03|BUNGALOWS||1|1003^D04|BUNGALOWS||1|1004^D05|BUNGALOWS||1|1005^D06|BUNGALOWS||1|1006^D07|BUNGALOWS||1|1007^D08|BUNGALOWS||1|1008^D09|BUNGALOWS||1|1009^D10|BUNGALOWS||1|1010^D11|BUNGALOWS||1|1011";
+                hotelRooms = rawRooms.split('^').map(r => { const p = r.split('|'); return { id: p[0], type: p[1] }; });
+            }
+
+            rawTypes = [];
+            totalRoomsByType = {};
+            hotelRooms.forEach(r => {
+                if (r.type && !rawTypes.includes(r.type)) rawTypes.push(r.type);
+                if (r.type) totalRoomsByType[r.type] = (totalRoomsByType[r.type] || 0) + 1;
+            });
+
+            // Initial calculate and render
+            calculateLiveInventory();
+
+            try {
+                const baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'));
+                if (baselineSnap.exists()) {
+                    snapshotData = baselineSnap.data().matrix || {};
+                    dismissedIds = baselineSnap.data().dismissed || [];
+                    updateDismissedUI();
+                }
+            } catch (baseErr) {
+                console.warn("Could not load baseline:", baseErr);
+            }
+
+            try {
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), usersSnap => {
+                    staff = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    calculateLiveInventory();
+                    clearTimeout(safetyTimer);
+                    if (loader) loader.style.display = 'none';
+                }, snapErr => {
+                    console.warn("Staff snapshot error:", snapErr);
+                    clearTimeout(safetyTimer);
+                    if (loader) loader.style.display = 'none';
+                });
+            } catch (e) {
+                console.error("Snapshot attach error:", e);
+                clearTimeout(safetyTimer);
+                if (loader) loader.style.display = 'none';
+            }
+        };
+
+        const calculateLiveInventory = () => {
+            liveInventory = {};
+            viewDates = [];
+            const today = new Date();
+            today.setHours(12, 0, 0, 0);
+
+            for (let i = 0; i < 240; i++) {
+                let d = new Date(today);
+                d.setDate(d.getDate() + i);
+                let dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                viewDates.push(dStr);
+
+                liveInventory[dStr] = {};
+                rawTypes.forEach(t => liveInventory[dStr][t] = totalRoomsByType[t] || 0);
+            }
+
+            const activeStaff = staff.filter(s => (s.property === currentPropertyId || !s.property) && s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed');
+
             activeStaff.forEach(s => {
-                if(!s.checkIn || !s.checkOut) return;
-                
+                if (!s.checkIn || !s.checkOut) return;
                 const rList = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
                 const isUnassigned = rList.length === 0 || rList[0] === "";
-                
-                // SAFE VOLUNTEER EXCLUSION: Ignore 'Special' status bookings that are Unassigned
+
                 if (s.status === 'special' && isUnassigned) return;
 
                 const inMs = parseYMD(s.checkIn), outMs = parseYMD(s.checkOut);
-                
                 const typesToDeduct = [];
-                
+
                 if (!isUnassigned) {
                     rList.forEach(rid => {
                         const uiId = dbToUiRoom(rid);
                         const roomDef = hotelRooms.find(hr => hr.id === uiId);
-                        if(roomDef) typesToDeduct.push(roomDef.type);
+                        if (roomDef) typesToDeduct.push(roomDef.type);
                     });
                 } else if (s.bookedType) {
                     let bt = s.bookedType.toUpperCase();
                     let inferred = null;
-                    if (bt.includes("DORMITORY") || bt.includes("4-BED") || bt.includes("DORM")) inferred = "Standard Quad Dorm"; 
-                    else if (bt.includes("TRIPLE")) inferred = "Partial Oceanview Triple Room"; 
-                    else if (bt.includes("SIDE SEA VIEW") || (bt.includes("PARTIAL") && !bt.includes("TWIN") && !bt.includes("TRIPLE"))) inferred = "Partial Oceanview King Room"; 
-                    else if (bt.includes("DELUXE TWIN") || (bt.includes("OCEANVIEW") && bt.includes("TWIN"))) inferred = "Oceanview Twin Room"; 
-                    else if (bt.includes("DELUXE DOUBLE") || (bt.includes("OCEANVIEW") && !bt.includes("TWIN"))) inferred = "Oceanview King Room"; 
-                    else if (bt.includes("GARDEN") && bt.includes("TWIN")) inferred = "Gardenview Twin Room"; 
-                    else if (bt.includes("GARDEN") && !bt.includes("TWIN")) inferred = "Gardenview King Room"; 
-                    else if (bt.includes("OCEANFRONT")) { inferred = bt.includes("TWIN") ? "Oceanfront Twin" : "Oceanfront King"; } 
+                    if (bt.includes("DORMITORY") || bt.includes("4-BED") || bt.includes("DORM")) inferred = "Standard Quad Dorm";
+                    else if (bt.includes("TRIPLE")) inferred = "Partial Oceanview Triple Room";
+                    else if (bt.includes("SIDE SEA VIEW") || (bt.includes("PARTIAL") && !bt.includes("TWIN") && !bt.includes("TRIPLE"))) inferred = "Partial Oceanview King Room";
+                    else if (bt.includes("DELUXE TWIN") || (bt.includes("OCEANVIEW") && bt.includes("TWIN"))) inferred = "Oceanview Twin Room";
+                    else if (bt.includes("DELUXE DOUBLE") || (bt.includes("OCEANVIEW") && !bt.includes("TWIN"))) inferred = "Oceanview King Room";
+                    else if (bt.includes("GARDEN") && bt.includes("TWIN")) inferred = "Gardenview Twin Room";
+                    else if (bt.includes("GARDEN") && !bt.includes("TWIN")) inferred = "Gardenview King Room";
+                    else if (bt.includes("OCEANFRONT")) { inferred = bt.includes("TWIN") ? "Oceanfront Twin" : "Oceanfront King"; }
                     else if (bt.includes("BUNGALOW")) inferred = "BUNGALOWS";
-                    
-                    if(inferred) {
-                        for(let k=0; k < (s.rooms?.length || 1); k++) typesToDeduct.push(inferred);
+
+                    if (inferred) {
+                        for (let k = 0; k < (s.rooms?.length || 1); k++) typesToDeduct.push(inferred);
                     }
                 }
 
@@ -272,7 +363,7 @@
                     const dMs = parseYMD(dStr);
                     if (dMs >= inMs && dMs < outMs) {
                         typesToDeduct.forEach(t => {
-                            if(liveInventory[dStr][t] > 0) liveInventory[dStr][t]--;
+                            if (liveInventory[dStr] && liveInventory[dStr][t] > 0) liveInventory[dStr][t]--;
                         });
                     }
                 });
@@ -282,23 +373,24 @@
         };
 
         window.renderGrid = () => {
-            const filter = document.getElementById('grid-filter').value;
+            const filterEl = document.getElementById('grid-filter');
+            const filter = filterEl ? filterEl.value : 'changes';
             const head = document.getElementById('sync-head');
             const body = document.getElementById('sync-body');
             const noMsg = document.getElementById('no-changes-msg');
-            
-            head.innerHTML = ''; body.innerHTML = '';
-            
-            // Determine which exact dates have activity to show
+
+            if (!head || !body) return;
+            head.innerHTML = '';
+            body.innerHTML = '';
+
             let colsToShowRaw = [];
             viewDates.forEach(d => {
                 let show = false;
                 if (filter === 'all') show = true;
                 else {
                     rawTypes.forEach(t => {
-                        if (t === 'BUNGALOWS') return; // Completely ignore BUNGALOWS for triggering columns
-
-                        let live = liveInventory[d][t] || 0;
+                        if (t === 'BUNGALOWS') return;
+                        let live = (liveInventory[d] && liveInventory[d][t] !== undefined) ? liveInventory[d][t] : 0;
                         let snap = snapshotData[d] && snapshotData[d][t] !== undefined ? snapshotData[d][t] : totalRoomsByType[t];
                         let isUrgent = live <= 2 && totalRoomsByType[t] > 2;
 
@@ -306,14 +398,14 @@
                         if (filter === 'urgent' && isUrgent) show = true;
                     });
                 }
-                if(show) colsToShowRaw.push(d);
+                if (show) colsToShowRaw.push(d);
             });
 
             if (colsToShowRaw.length === 0) {
-                noMsg.classList.remove('hidden');
+                if (noMsg) noMsg.classList.remove('hidden');
                 const title = document.getElementById('no-data-title');
                 const desc = document.getElementById('no-data-desc');
-                if(title && desc) {
+                if (title && desc) {
                     if (filter === 'urgent') {
                         title.innerText = "NO URGENT DATES";
                         desc.innerText = "You have plenty of availability everywhere.";
@@ -324,24 +416,20 @@
                 }
                 return;
             } else {
-                noMsg.classList.add('hidden');
+                if (noMsg) noMsg.classList.add('hidden');
             }
 
-            // Insert Visual Gaps for skipped dates
             let finalCols = [];
             for (let i = 0; i < colsToShowRaw.length; i++) {
                 if (i > 0) {
-                    let prevD = new Date(colsToShowRaw[i-1] + "T12:00:00Z");
+                    let prevD = new Date(colsToShowRaw[i - 1] + "T12:00:00Z");
                     let currD = new Date(colsToShowRaw[i] + "T12:00:00Z");
                     let diff = Math.round((currD - prevD) / 86400000);
-                    if (diff > 1) {
-                        finalCols.push({ type: 'gap' });
-                    }
+                    if (diff > 1) finalCols.push({ type: 'gap' });
                 }
                 finalCols.push({ type: 'date', val: colsToShowRaw[i] });
             }
 
-            // Build Header
             let trHead = `<tr class="frozen-row"><th class="frozen-corner w-24 min-w-[7rem] max-w-[9rem] text-[11px] whitespace-normal break-words text-left leading-tight">ROOM TYPE</th>`;
             finalCols.forEach(col => {
                 if (col.type === 'gap') {
@@ -354,28 +442,25 @@
             trHead += `</tr>`;
             head.innerHTML = trHead;
 
-            // Build Body
             rawTypes.forEach((t, index) => {
                 let isMuted = t === 'BUNGALOWS';
                 let rowBg = isMuted ? 'bg-slate-200' : (index % 2 === 0 ? 'bg-white' : 'bg-slate-100');
                 let rowOpacity = isMuted ? 'opacity-50 grayscale' : '';
-                
-                // Smart abbreviation for horizontal space saving
                 let shortName = t.replace("Partial Oceanview", "Partial OV").replace("Standard Quad Dorm", "Quad Dorm").replace(" Room", "");
-                
+
                 let tr = `<tr class="${rowOpacity} ${rowBg} hover:bg-slate-200 transition-colors"><td class="frozen-col font-black text-[11px] sm:text-xs leading-snug whitespace-normal break-words ${rowBg}" title="${t}">${shortName}<br><span class="text-slate-400 font-bold text-[9px] uppercase mt-0.5 inline-block tracking-widest">CAPACITY: ${totalRoomsByType[t]}</span>${isMuted ? '<br><span class="text-rose-500 font-black text-[9px] uppercase tracking-widest mt-0.5 inline-block">Muted</span>' : ''}</td>`;
-                
+
                 finalCols.forEach(col => {
                     if (col.type === 'gap') {
                         tr += `<td class="bg-amber-300 border-x-[2px] border-white"></td>`;
                     } else {
                         let d = col.val;
-                        let live = liveInventory[d][t] || 0;
+                        let live = (liveInventory[d] && liveInventory[d][t] !== undefined) ? liveInventory[d][t] : 0;
                         let snap = snapshotData[d] && snapshotData[d][t] !== undefined ? snapshotData[d][t] : totalRoomsByType[t];
                         let isUrgent = live <= 2 && totalRoomsByType[t] > 2 && !isMuted;
-                        
-                        let cellClass = ""; let content = `<span class="font-bold text-sm text-slate-700">${live}</span>`;
-                        
+
+                        let content = `<span class="font-bold text-sm text-slate-700">${live}</span>`;
+
                         if (live !== snap && !isMuted) {
                             content = `<div class="flex flex-col items-center justify-center leading-none"><span class="text-[10px] font-bold text-red-400 line-through mb-0.5">${snap}</span><span class="font-black text-red-600 text-base">${live}</span></div>`;
                         }
@@ -385,36 +470,66 @@
                         if (live !== snap && filter === 'urgent' && isUrgent) {
                             content = `<div class="flex flex-col items-center justify-center leading-none"><span class="text-[10px] font-bold text-red-400 line-through mb-0.5">${snap}</span><span class="font-black text-red-600 text-base">${live}</span></div>`;
                         }
-                        
-                        tr += `<td class="${cellClass}">${content}</td>`;
+
+                        tr += `<td>${content}</td>`;
                     }
                 });
                 tr += `</tr>`;
                 body.innerHTML += tr;
             });
-            
-            lucide.createIcons();
+
+            if (window.lucide) window.lucide.createIcons();
         };
 
         window.markSynced = () => {
             window.showAlert("Mark all current availability as synced? This will clear your 'Changes' list until new bookings arrive.", true, async () => {
-                document.getElementById('loader').classList.add('active');
-                document.getElementById('sync-status').innerText = 'SAVING SYNC...';
-                
+                const loader = document.getElementById('loader');
+                const statusEl = document.getElementById('sync-status');
+                if (loader) loader.style.display = 'flex';
+                if (statusEl) statusEl.innerText = 'SAVING SYNC...';
+
                 snapshotData = JSON.parse(JSON.stringify(liveInventory));
                 try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'), { matrix: snapshotData, dismissed: dismissedIds, updatedAt: new Date().toISOString() });
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'), {
+                        matrix: snapshotData,
+                        dismissed: dismissedIds,
+                        updatedAt: new Date().toISOString()
+                    });
                     window.renderGrid();
-                } catch(e) {
-                    window.showAlert("Save failed. Check permissions on 'ota_sync' collection.");
+                } catch (e) {
+                    window.showAlert("Save failed. Check permissions on 'ota_sync' collection: " + e.message);
                 }
-                document.getElementById('loader').classList.remove('active');
+                if (loader) loader.style.display = 'none';
+            });
+        };
+
+        // ENHANCED PMS LOOKUP: Finds bookings directly OR checks for merged extension tags in notes
+        const findPmsBooking = (id, extraPredicate = null) => {
+            if (!id) return null;
+            const cleanId = String(id).trim();
+            const curProp = currentPropertyId;
+
+            return staff.find(s => {
+                if (s.property && s.property !== curProp) return false;
+                if (s.bookId === cleanId || s.id === cleanId) return true;
+                if (cleanId.includes('-') && s.bookId === cleanId.split('-')[1]) return true;
+
+                // Merge detection: Check if booking notes recorded this ID as an absorbed extension
+                if (s.notes) {
+                    if (s.notes.includes(cleanId)) return true;
+                    if (s.notes.includes(`[Merged Book ID]: ${cleanId}`)) return true;
+                    if (s.notes.includes(`--- MERGED WITH BOOKING ${cleanId} ---`)) return true;
+                }
+
+                if (extraPredicate && extraPredicate(s)) return true;
+                return false;
             });
         };
 
         window.checkMissing = () => {
-            const rawText = document.getElementById('audit-text').value;
+            const rawText = document.getElementById('audit-text')?.value || '';
             const resultDiv = document.getElementById('audit-result');
+            if (!resultDiv) return;
             if (!rawText.trim()) { resultDiv.innerHTML = ''; return; }
 
             let foundIds = new Set();
@@ -424,9 +539,8 @@
             const ignoreIds = ['16646458'];
             const dismissed = dismissedIds || [];
 
-            // 1. Detect Source FIRST
             const lowerText = rawText.toLowerCase();
-            let source = 'bdc'; // Default fallback
+            let source = 'bdc';
             if (lowerText.includes('hostelworld') || rawText.includes('339615-')) {
                 source = 'hw';
             } else if (lowerText.includes('airbnb') || lowerText.includes('switch to traveling') || lowerText.includes('upcoming reservations')) {
@@ -439,7 +553,7 @@
                 if (ignoreIds.includes(id) || dismissed.includes(id) || foundIds.has(id)) return;
                 foundIds.add(id);
                 actionCount++;
-                
+
                 let cardStyle = '', icon = '';
                 if (type === 'missing') {
                     cardStyle = 'bg-rose-50 border-rose-200 text-rose-900';
@@ -451,21 +565,20 @@
                     cardStyle = 'bg-slate-100 border-slate-300 text-slate-700 opacity-80';
                     icon = '<i data-lucide="arrow-right" class="text-slate-400 shrink-0" size="16"></i>';
                 }
-                
+
                 missingHtml.push(`
-                    <div class="${cardStyle} px-4 py-3 rounded-lg border shadow-sm flex items-center justify-between gap-4">
-                        <div class="font-bold text-sm truncate flex items-center gap-2 w-full">
-                            ${icon} <span class="truncate">${guestName}</span> <span class="opacity-60 font-mono text-xs shrink-0">(${displayId})</span> 
-                            <span class="bg-white/50 text-[10px] px-2 py-0.5 rounded uppercase font-black tracking-widest shrink-0 border border-black/10">${badge}</span>
+                    <div class="${cardStyle} px-3 py-2 rounded-lg border shadow-sm flex items-center justify-between gap-3 text-xs">
+                        <div class="font-bold truncate flex items-center gap-2 flex-1 min-w-0">
+                            ${icon} <span class="truncate font-black text-sm">${guestName}</span> <span class="opacity-60 font-mono text-xs shrink-0">(${displayId})</span> 
+                            <span class="bg-white/60 text-[9px] px-1.5 py-0.5 rounded uppercase font-black tracking-wider shrink-0 border border-black/10">${badge}</span>
                         </div>
-                        <button onclick="window.dismissBooking('${id}')" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-500 text-[10px] font-black uppercase rounded shadow-sm border border-slate-200 transition-colors shrink-0 flex items-center gap-1">
-                            Dismiss <i data-lucide="x" size="12"></i>
+                        <button onclick="window.dismissBooking('${id}')" class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 text-[10px] font-black uppercase rounded shadow-sm border border-slate-200 transition-colors shrink-0 flex items-center gap-1 cursor-pointer">
+                            Dismiss <i data-lucide="x" size="11"></i>
                         </button>
                     </div>
                 `);
             };
 
-            // 2. Parse strictly based on source
             if (source === 'hw') {
                 const hwRegex = /(339615-\d+)/g;
                 let match;
@@ -475,32 +588,31 @@
                     let textAfterId = rawText.substring(startIndex);
                     let firstDigitIndex = textAfterId.search(/\d/);
                     let rawName = firstDigitIndex > -1 ? textAfterId.substring(0, firstDigitIndex) : textAfterId.substring(0, 50);
-                    
+
                     let guestName = rawName
                         .replace(/Visa|Mastercard|Amex|JCB|Diners|UnionPay|Discover|Maestro|Cash|None/gi, '')
                         .replace(/Late|Reference|Card|Type/gi, '')
                         .replace(/[\n\r\t]/g, ' ')
                         .trim();
-                    
+
                     if (!guestName || guestName.length < 2) guestName = "UNKNOWN GUEST";
 
-                    let pmsBooking = staff.find(s => s.bookId === id || s.id === id || s.bookId === id.split('-')[1]);
+                    let pmsBooking = findPmsBooking(id);
                     if (!pmsBooking) {
                         addMissing(id, guestName, 'Missing in PMS', 'missing', id);
                     }
                 }
-            } 
-            else if (source === 'airbnb') {
+            } else if (source === 'airbnb') {
                 let lines = rawText.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
                 for (let i = 0; i < lines.length; i++) {
                     if (lines[i].toLowerCase().includes('sunset')) {
-                        let rawName = lines[i-1];
-                        if(!rawName) continue;
-                        
+                        let rawName = lines[i - 1];
+                        if (!rawName) continue;
+
                         let guestName = rawName.split(/['’]s group/i)[0].trim();
-                        let pmsBooking = staff.find(s => 
+                        let pmsBooking = findPmsBooking(null, s => 
                             s.source === 'airbnb' && s.status !== 'cancelled' && s.status !== 'noshow' &&
-                            (s.firstName.toLowerCase().includes(guestName.toLowerCase()) || 
+                            (s.firstName.toLowerCase().includes(guestName.toLowerCase()) ||
                              s.lastName.toLowerCase().includes(guestName.toLowerCase()) ||
                              guestName.toLowerCase().includes(s.firstName.toLowerCase()) ||
                              guestName.toLowerCase().includes(s.lastName.toLowerCase()))
@@ -512,21 +624,18 @@
                         }
                     }
                 }
-            }
-            else {
-                // Booking.com
+            } else {
                 let lines = rawText.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
-                const numRegex = /\b\d{10}\b/g; 
-                
+                const numRegex = /\b\d{10}\b/g;
+
                 for (let i = 0; i < lines.length; i++) {
                     let match;
                     while ((match = numRegex.exec(lines[i])) !== null) {
                         let id = match[0];
-                        let pmsBooking = staff.find(s => s.bookId === id || s.id === id);
-                        
+                        let pmsBooking = findPmsBooking(id);
                         let guestName = "UNKNOWN GUEST";
                         let isCancelled = false;
-                        
+
                         for (let j = i; j >= Math.max(0, i - 12); j--) {
                             if (/\b(adult|child|adults|children)\b/i.test(lines[j])) {
                                 if (j - 1 >= 0) {
@@ -538,16 +647,16 @@
                                         .replace(/StatusPriceCommission and chargesBooking number/i, '')
                                         .replace(/[\d,.]+/g, '')
                                         .trim();
-                                    
-                                    for(let k = Math.max(0, j - 2); k <= i; k++) {
+
+                                    for (let k = Math.max(0, j - 2); k <= i; k++) {
                                         if (lines[k] && /cancelled|canceled/i.test(lines[k])) isCancelled = true;
                                     }
                                 }
                                 break;
                             }
                         }
-                        if(!guestName || guestName.length < 2) guestName = "UNKNOWN GUEST";
-                        
+                        if (!guestName || guestName.length < 2) guestName = "UNKNOWN GUEST";
+
                         if (!pmsBooking && !isCancelled) addMissing(id, guestName, 'Missing', 'missing', id);
                         else if (!pmsBooking && isCancelled) addMissing(id, guestName, 'OTA Cancelled', 'ota_cancel', id);
                         else if (pmsBooking && isCancelled && pmsBooking.status !== 'cancelled') addMissing(id, guestName, 'Cancel in PMS!', 'cancel', id);
@@ -557,27 +666,27 @@
 
             if (actionCount === 0) {
                 resultDiv.innerHTML = `
-                    <div class="bg-emerald-50 border-2 border-emerald-500 text-emerald-800 p-4 rounded-xl shadow-sm text-center">
-                        <div class="font-black text-xl mb-1 flex items-center justify-center gap-2">
-                            <i data-lucide="check-circle" size="24" class="text-emerald-500"></i> ALL CLEAR
+                    <div class="bg-emerald-50 border border-emerald-400 text-emerald-800 p-2.5 rounded-lg shadow-sm text-center">
+                        <div class="font-black text-sm mb-0.5 flex items-center justify-center gap-1.5">
+                            <i data-lucide="check-circle" size="16" class="text-emerald-500"></i> ALL CLEAR
                         </div>
-                        <p class="font-bold text-sm text-emerald-600">No missing or pending cancelled bookings found.</p>
+                        <p class="font-bold text-xs text-emerald-600">No missing or pending cancelled bookings found.</p>
                     </div>`;
             } else {
                 resultDiv.innerHTML = `
-                    <div class="bg-slate-50 border-2 border-slate-300 p-4 rounded-xl shadow-sm">
-                        <div class="font-black text-lg text-slate-800 mb-3 flex items-center gap-2">
-                            <i data-lucide="alert-triangle" size="20" class="text-rose-600"></i> ${actionCount} ACTION ITEM${actionCount > 1 ? 'S' : ''} FOUND
+                    <div class="bg-slate-50 border border-slate-300 p-2.5 rounded-lg shadow-sm">
+                        <div class="font-black text-xs text-slate-800 mb-2 flex items-center gap-1.5 uppercase tracking-wider">
+                            <i data-lucide="alert-triangle" size="14" class="text-rose-600"></i> ${actionCount} ACTION ITEM${actionCount > 1 ? 'S' : ''} FOUND
                         </div>
-                        <div class="flex flex-col gap-2">
+                        <div class="flex flex-col gap-1.5">
                             ${missingHtml.join('')}
                         </div>
                     </div>`;
             }
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
         };
 
-        lucide.createIcons();
+        loadConfigAndInit();
     </script>
 </body>
 </html>
