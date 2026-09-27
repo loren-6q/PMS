@@ -10,6 +10,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://loren-6q.github.io/PMS/pms-folio.js"></script>
+    <script src="https://loren-6q.github.io/PMS/pms-tm30.js"></script>
+    <script src="https://loren-6q.github.io/PMS/pms-db.js"></script>
     <script src="https://loren-6q.github.io/PMS/parser.js"></script>
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 </head>
@@ -412,8 +414,6 @@
         viewStart.setHours(12,0,0,0);
         let searchTerm = ""; 
         let searchMatchIndex = 0; 
-        let sortKey = "checkIn"; 
-        let sortAsc = false; 
         let isZoomWide = false;
         
         let windowPropertiesList = [];
@@ -445,10 +445,19 @@
             }
         };
 
-        // Expose core shared utilities for external modules (pms-folio.js, etc.)
+        const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
+
+        window.db = db;
+        window.appId = appId;
+        window.fs = { collection, doc, query, where, getDocs, updateDoc, setDoc, deleteDoc };
         window.parseYMD = parseYMD;
         window.getLocalYMD = getLocalYMD;
         window.fmpDates = fmpDates;
+        window.getRooms = getRooms;
+        window.getCurrentPropertyId = () => currentPropertyId;
+        window.getHotelRooms = () => hotelRooms;
+        window.getStaff = () => staff;
+        window.getSearchTerm = () => searchTerm;
 
         window.updateNavLinks = (shortKey) => {
             const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
@@ -498,8 +507,6 @@
             { val: 'vol', bg: '#fbcfe8', txt: '#831843' },
             { val: 'unconfirmed', bg: '#f3e8ff', txt: '#581c87' }
         ];
-
-        const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
         const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = null) => {
             const occ = new Set();
@@ -691,7 +698,7 @@
             await loadPropertyConfig();
             window.render();
             window.renderDashboard();
-            window.renderDatabase();
+            if (window.renderDatabase) window.renderDatabase();
             $('boot-loader').style.display = 'none';
         };
 
@@ -709,7 +716,7 @@
                 
                 if ($('calendar-view').style.display !== 'none') window.render(); 
                 if ($('dashboard-view').style.display === 'flex') window.renderDashboard();
-                if ($('database-view').style.display === 'flex') window.renderDatabase();
+                if ($('database-view').style.display === 'flex' && window.renderDatabase) window.renderDatabase();
 
                 const editId = new URLSearchParams(window.location.search).get('edit'); 
                 if (editId) { window.editStaff(editId); try { window.history.replaceState({}, document.title, window.location.pathname); } catch(e) {} }
@@ -1133,57 +1140,28 @@
             lucide.createIcons();
         };
 
-        window.getFilteredBookings = (v, sKey, sAsc) => {
-            const nF = ($(`${v}-filter-name`)?.value || '').trim().toUpperCase(); const sF = window.getMultiValues(`${v}-source-dropdown`) || []; const dS = $(`${v}-filter-start`)?.value || ''; const dE = $(`${v}-filter-end`)?.value || ''; const rF = window.getMultiValues(`${v}-room-dropdown`) || []; const minF = $(`${v}-filter-min`)?.value; const maxF = $(`${v}-filter-max`)?.value; const dF = $(`${v}-filter-due`)?.value || ''; const statF = window.getMultiValues(`${v}-status-dropdown`) || [];
-            return staff.filter(s => {
-                if (s.property !== currentPropertyId) return false;
-                if (statF.length > 0 && !statF.includes(s.status)) return false; const fN = (s.firstName+' '+s.lastName).toUpperCase(); const bId = (s.bookId||'').toUpperCase(); if (searchTerm && !fN.includes(searchTerm) && !bId.includes(searchTerm)) return false; if (nF && !fN.includes(nF) && !bId.includes(nF)) return false; if (sF.length > 0 && !sF.includes(s.source)) return false; if (dS && s.checkOut <= dS) return false; if (dE && s.checkIn >= dE) return false; const due = window.getDue(s); if (dF === 'zero' && due > 0) return false; if (dF === 'owes' && due <= 0) return false; const tP = Number(s.totalPrice || 0); if (minF && tP < Number(minF)) return false; if (maxF && tP > Number(maxF)) return false; const rL = getRooms(s); 
-                if (rF.length > 0) { const wU = rF.includes('UNASSIGNED'); const hU = rL.length === 0 || rL.includes(""); const hT = rL.some(r => { const hr = hotelRooms.find(x => x.id === r); return hr && rF.includes(hr.type); }); if (!hT && (!wU || !hU)) return false; } return true;
-            }).sort((a, b) => { 
-                let vA = a[sKey], vB = b[sKey]; if (sKey === 'room') { vA = a.rooms?.[0] || a.room || 'ZZZ'; vB = b.rooms?.[0] || b.room || 'ZZZ'; } if (sKey === 'name') { vA = (a.firstName+' '+a.lastName).toUpperCase(); vB = (b.firstName+' '+b.lastName).toUpperCase(); } if (sKey === 'totalPrice') { vA = Number(vA||0); vB = Number(vB||0); } if (sKey === 'due') { vA = window.getDue(a); vB = window.getDue(b); } if (sKey === 'paid') { vA = window.getPaid(a); vB = window.getPaid(b); } return sAsc ? (vA > vB ? 1 : -1) : (vA < vB ? 1 : -1); 
-            });
-        };
-
-        const formatDbDate = (dIn, dOut) => { if(!dIn || !dOut) return ''; let iD = new Date(dIn+"T12:00:00Z"), oD = new Date(dOut+"T12:00:00Z"); let iM = iD.getUTCMonth()+1, iDay = iD.getUTCDate(); let oM = oD.getUTCMonth()+1, oDay = oD.getUTCDate(); return iM === oM ? `${iM}/${iDay}-${oDay}` : `${iM}/${iDay}-${oM}/${oDay}`; };
-
-        window.renderDatabase = () => { 
-            const body = $('database-body'); if (!body) return; body.innerHTML = ''; 
-            window.getFilteredBookings('db', sortKey, sortAsc).forEach(s => { 
-                const due = window.getDue(s); const paid = window.getPaid(s); const asg = getRooms(s).filter(Boolean).join(', ') || '--'; 
-                const tr = document.createElement('tr'); tr.className = "border-b hover:bg-slate-50 cursor-pointer"; tr.onclick = () => window.editStaff(s.id); tr.dataset.recordId = s.id; 
-                tr.innerHTML = `<td class="p-2 border-r border-slate-200">${s.firstName||''} ${s.lastName||''}</td><td class="p-2 border-r border-slate-200 uppercase">${s.source||''}</td><td class="p-2 border-r border-slate-200">${formatDbDate(s.checkIn, s.checkOut)}</td><td class="p-2 border-r border-slate-200 font-black max-w-[96px] break-words whitespace-normal leading-tight">${asg}</td><td class="p-2 border-r border-slate-200 text-right font-black">฿${Number(s.totalPrice||0).toFixed(2)}</td><td class="p-2 border-r border-slate-200 text-right font-black text-green-600">฿${paid.toFixed(2)}</td><td class="p-2 border-r border-slate-200 text-right font-black ${due>0?'text-red-600':''} ${s.badCC?'underline decoration-dashed decoration-red-500':''}">฿${due.toFixed(2)}</td><td class="p-2 uppercase"><span class="px-2 py-0.5 rounded text-[10px] text-white status-${s.status}">${s.status}</span></td>`; body.appendChild(tr); 
-            }); lucide.createIcons();
-        };
-
-        window.bulkDelete = () => { 
-            if(currentUserRole !== 'admin') return; const rows = $$('#database-body tr'); if(rows.length === 0) return window.showAlert("Nothing to delete."); 
-            window.showAlert(`PERMANENTLY DELETE ${rows.length} RECORDS?\n\nThis will wipe all visible bookings!`, true, async () => { try { $('boot-loader').style.display = 'flex'; await Promise.all(Array.from(rows).map(tr => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', tr.dataset.recordId)))); $('boot-loader').style.display = 'none'; window.closeAlert(); } catch (e) { $('boot-loader').style.display = 'none'; window.showAlert("Delete blocked by Firebase Rules."); } }); 
-        };
-        
-        window.sortDatabase = k => { if(sortKey === k) sortAsc = !sortAsc; else { sortKey = k; sortAsc = true; } window.renderDatabase(); };
-        
         window.switchTab = t => { 
             $('dashboard-view').style.display = t === 'dashboard' ? 'flex' : 'none'; $('calendar-view').style.display = t === 'calendar' ? 'flex' : 'none'; $('database-view').style.display = t === 'database' ? 'flex' : 'none'; 
             $('tab-dash').classList.toggle('active', t === 'dashboard'); $('tab-cal').classList.toggle('active', t === 'calendar'); $('tab-db').classList.toggle('active', t === 'database'); 
             const ctxCal = $('context-tools-cal'); if(ctxCal) { if(t === 'calendar') { ctxCal.style.display = 'flex'; setTimeout(() => ctxCal.style.opacity = '1', 50); } else { ctxCal.style.opacity = '0'; setTimeout(() => ctxCal.style.display = 'none', 200); } }
             if(t === 'calendar') window.render();
-            if(t === 'database') window.renderDatabase(); 
+            if(t === 'database' && window.renderDatabase) window.renderDatabase(); 
             if(t === 'dashboard') window.renderDashboard();
         };
 
         window.handleSearch = v => { 
             searchTerm = v.trim().toUpperCase(); searchMatchIndex = 0; const jb = $('search-jump-btn'), mc = $('match-counter'); 
-            const m = staff.filter(s => (s.firstName+' '+s.lastName).toUpperCase().includes(searchTerm) || (s.bookId||'').toUpperCase().includes(searchTerm)); 
+            const m = staff.filter(s => ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) || (s.bookId||'').toUpperCase().includes(searchTerm)); 
             if(searchTerm && m.length > 0) { jb?.classList.replace('hidden', 'flex'); if(mc) mc.innerText = `Match ${searchMatchIndex + 1} of ${m.length}`; } else { jb?.classList.replace('flex', 'hidden'); }
             if ($('calendar-view').style.display !== 'none') window.render(); 
-            if ($('database-view').style.display !== 'none') window.renderDatabase(); 
+            if ($('database-view').style.display !== 'none' && window.renderDatabase) window.renderDatabase(); 
         };
         window.clearSearch = () => { $('guest-search').value = ""; window.handleSearch(""); };
         window.toggleSearchMode = () => { const c = $('search-container'); if (c.classList.contains('hidden')) { c.classList.replace('hidden', 'flex'); setTimeout(() => $('guest-search').focus(), 50); } else { c.classList.replace('flex', 'hidden'); } };
         window.clearSearchAndClose = () => { window.clearSearch(); if(window.innerWidth < 640) $('search-container').classList.replace('flex', 'hidden'); };
         
         window.jumpToSearchMatch = () => { 
-            const m = staff.filter(s => (s.firstName+' '+s.lastName).toUpperCase().includes(searchTerm) || (s.bookId||'').toUpperCase().includes(searchTerm)).sort((a,b) => (a.checkIn||'').localeCompare(b.checkIn||'')); 
+            const m = staff.filter(s => ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) || (s.bookId||'').toUpperCase().includes(searchTerm)).sort((a,b) => (a.checkIn||'').localeCompare(b.checkIn||'')); 
             if (m.length > 0) { const d = new Date(m[searchMatchIndex % m.length].checkIn + "T12:00:00"); d.setDate(d.getDate() - 3); viewStart = d; searchMatchIndex++; const mc = $('match-counter'); if(mc) mc.innerText = `Match ${(searchMatchIndex % m.length) + 1} of ${m.length}`; window.render(); } 
         };
         
@@ -1428,176 +1406,6 @@
             if(window.calcExtension) window.calcExtension(); 
         };
 
-        window.globalPassportSync = async () => {
-            const btn = document.querySelector('button[onclick="window.globalPassportSync()"]'); const originalText = btn.innerHTML; btn.innerHTML = '<i data-lucide="loader-2" size="12" class="animate-spin inline"></i> Syncing...'; btn.disabled = true;
-            try {
-                const passSnap = await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'submissions'), where("property", "==", currentPropertyId === 'swims_resort' ? 'SWIMS' : currentPropertyId.toUpperCase())));
-                let foundPassports = []; passSnap.forEach(d => { if (d.data().status !== 'completed' && d.data().status !== 'failed' && !d.data().pmsSynced) foundPassports.push({ id: d.id, ...d.data() }); });
-                if (foundPassports.length === 0) { window.showAlert(`No pending unsynced passports found for ${currentPropertyId.toUpperCase()}.`); btn.innerHTML = originalText; btn.disabled = false; lucide.createIcons(); return; }
-
-                let syncCount = 0; let updatePromises = []; let bookingUpdates = {};
-                for (let p of foundPassports) {
-                    let matchedBooking = null;
-                    if (p.roomNumber) {
-                        let searchRooms = [p.roomNumber];
-                        if (/^[a-zA-Z]0\d$/.test(p.roomNumber)) searchRooms.push(p.roomNumber[0] + p.roomNumber[2]);
-                        else if (/^[a-zA-Z]\d$/.test(p.roomNumber)) searchRooms.push(p.roomNumber[0] + '0' + p.roomNumber[1]);
-                        matchedBooking = staff.filter(x => x.property === currentPropertyId).find(s => { if (s.status === 'cancelled' || s.status === 'noshow') return false; return getRooms(s).some(r => searchRooms.includes(r)); });
-                    }
-                    if (!matchedBooking && p.firstName && p.lastName) {
-                        matchedBooking = staff.filter(x => x.property === currentPropertyId).find(s => { if (s.status === 'cancelled' || s.status === 'noshow') return false; const bName = (s.firstName + " " + s.lastName).toUpperCase(); return bName.includes(p.lastName.toUpperCase()) && bName.includes(p.firstName.toUpperCase()); });
-                    }
-                    if (matchedBooking) {
-                        syncCount++;
-                        let checkoutFormatted = matchedBooking.checkOut ? `${matchedBooking.checkOut.split('-')[2]}/${matchedBooking.checkOut.split('-')[1]}/${matchedBooking.checkOut.split('-')[0]}` : "";
-                        updatePromises.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'submissions', p.id), { checkoutDate: checkoutFormatted, phoneNo: matchedBooking.phone || "", pmsSynced: true, status: "processing" }));
-                        if (!bookingUpdates[matchedBooking.id]) bookingUpdates[matchedBooking.id] = `\n\n[GLOBAL SYNC - ${new Date().toLocaleDateString('en-GB')}]\n`;
-                        bookingUpdates[matchedBooking.id] += `• Synced Passport: ${p.firstName} ${p.lastName} (${p.passportNumber || 'N/A'})\n`;
-                    }
-                }
-                if (syncCount === 0) { window.showAlert(`Found ${foundPassports.length} pending passport(s), but could not match ANY to active bookings.`); btn.innerHTML = originalText; btn.disabled = false; lucide.createIcons(); return; }
-                for (let bId in bookingUpdates) { let b = staff.find(x => x.id === bId); if (b) { let newNotes = (b.notes || "") + bookingUpdates[bId]; updatePromises.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', bId), { notes: newNotes.trim() })); } }
-                await Promise.all(updatePromises); window.showAlert(`✅ Global Sync Complete!\n\nSuccessfully matched ${syncCount} out of ${foundPassports.length} passports to existing bookings.`);
-            } catch (e) { console.error("Global Sync Error", e); window.showAlert("Error during global sync."); }
-            btn.innerHTML = originalText; btn.disabled = false; lucide.createIcons();
-        };
-
-        window.syncTM30 = async () => {
-            const btn = document.getElementById('tm30-sync-btn');
-            const origText = btn.innerHTML; 
-            btn.innerHTML = '<i data-lucide="loader-2" size="14" class="animate-spin inline"></i> SYNCING...'; 
-            
-            try {
-                const rL = Array.from($$('.assigned-room-select')).map(sel => sel.value).filter(Boolean);
-                const gFirstName = $('first-name').value.trim().toUpperCase();
-                const gLastName = $('last-name').value.trim().toUpperCase();
-                const checkOut = $('check-out').value;
-                const phone = $('phone').value;
-                
-                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'submissions'), where("property", "==", currentPropertyId === 'swims_resort' ? 'SWIMS' : currentPropertyId.toUpperCase()));
-                const passSnap = await getDocs(q);
-                let pendingPassports = [];
-
-                passSnap.forEach(docSnap => {
-                    const data = docSnap.data();
-                    if (data.status !== 'completed' && data.status !== 'failed' && !data.pmsSynced) {
-                        pendingPassports.push({ id: docSnap.id, ...data });
-                    }
-                });
-
-                if (rL.length === 0 && !gFirstName && !gLastName) {
-                    if (pendingPassports.length === 0) {
-                        window.showAlert("No recent passports found to import.");
-                        btn.innerHTML = origText; lucide.createIcons(); return;
-                    }
-                    
-                    let html = '<div class="flex flex-col gap-2 max-h-[300px] overflow-y-auto no-scrollbar">';
-                    pendingPassports.sort((a,b) => (new Date(b.createdAt||0).getTime()) - (new Date(a.createdAt||0).getTime())).slice(0, 10).forEach(s => {
-                        const fName = `${s.firstName || ''} ${s.lastName || ''}`.trim();
-                        const sJson = JSON.stringify(s).replace(/'/g, "&#39;");
-                        html += `
-                        <div class="p-3 border border-slate-200 rounded-lg hover:bg-purple-50 cursor-pointer flex justify-between items-center transition-colors" onclick='window.applyTM30Data(${sJson})'>
-                            <div class="flex flex-col text-left">
-                                <span class="font-black text-slate-800 text-sm uppercase">${fName}</span>
-                                <span class="text-[10px] font-bold text-slate-500 tracking-widest uppercase mt-0.5">NAT: ${s.nationality || '???'} | ID: ${s.passportNumber || 'N/A'}</span>
-                            </div>
-                            <i data-lucide="arrow-right" size="16" class="text-purple-500 shrink-0"></i>
-                        </div>`;
-                    });
-                    html += '</div>';
-                    
-                    $('alert-header-title').innerText = 'Select Passport to Auto-Fill';
-                    $('alert-message').innerHTML = html;
-                    $('alert-actions').innerHTML = `<button onclick="window.closeAlert()" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700 w-full transition-colors">Cancel</button>`;
-                    $('alert-modal').classList.add('active');
-                    $('alert-modal').style.display = 'flex';
-                    lucide.createIcons();
-                    
-                    btn.innerHTML = origText; return;
-                }
-
-                let checkoutFormatted = checkOut ? `${checkOut.split('-')[2]}/${checkOut.split('-')[1]}/${checkOut.split('-')[0]}` : "";
-                let matchedPassports = [], updatePromises = [];
-
-                pendingPassports.forEach(data => {
-                    let match = false;
-                    
-                    if (data.roomNumber) { 
-                        let searchRooms = [data.roomNumber]; 
-                        if (/^[a-zA-Z]0\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + data.roomNumber[2]); 
-                        else if (/^[a-zA-Z]\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + '0' + data.roomNumber[1]); 
-                        if (rL.some(r => searchRooms.includes(r))) match = true; 
-                    }
-                    
-                    if (!match && data.firstName && data.lastName && gFirstName && gLastName) { 
-                        if (gLastName.includes(data.lastName.toUpperCase()) && gFirstName.includes(data.firstName.toUpperCase())) match = true; 
-                    }
-                    
-                    if (match) { 
-                        matchedPassports.push(data); 
-                        updatePromises.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'submissions', data.id), { 
-                            checkoutDate: checkoutFormatted, 
-                            phoneNo: phone, 
-                            pmsSynced: true, 
-                            status: "processing" 
-                        })); 
-                    }
-                });
-
-                if (matchedPassports.length === 0) { 
-                    window.showAlert(`No pending passports found matching this room or name.`); 
-                    btn.innerHTML = origText; lucide.createIcons(); return; 
-                }
-                
-                await Promise.all(updatePromises);
-                
-                let appendNotes = `\n\n[PASSPORT SYNC - ${new Date().toLocaleDateString('en-GB')}]\n`;
-                matchedPassports.forEach(p => { 
-                    const fName = `${p.firstName || ''} ${p.middleName || ''} ${p.lastName || ''}`.replace(/\s+/g, ' ').trim(); 
-                    appendNotes += `• Passport: ${p.passportNumber || 'N/A'} | ${fName} | Nat: ${p.nationality || 'N/A'} | DOB: ${p.dobYear}-${p.dobMonth}-${p.dobDay}\n`; 
-                    
-                    if (!$('first-name').value && p.firstName) $('first-name').value = p.firstName.toUpperCase();
-                    if (!$('last-name').value && p.lastName) $('last-name').value = p.lastName.toUpperCase();
-                    if (!$('guest-country').value && p.nationality) {
-                        try {
-                            const fullCountry = new Intl.DisplayNames(['en'], {type: 'region'}).of(p.nationality);
-                            $('guest-country').value = fullCountry || p.nationality;
-                        } catch(e) { $('guest-country').value = p.nationality; }
-                    }
-                });
-                
-                const notesEl = $('guest-notes'); 
-                notesEl.value = (notesEl.value + appendNotes).trim();
-                window.updateHeaderName();
-                
-                window.showAlert(`✅ Smart Sync Complete!\n\n1. Sent Checkout Date & Phone to TM30 Queue.\n2. Pulled ${matchedPassports.length} passport(s) into PMS notes.\n\nDon't forget to hit Save!`);
-            } catch (e) { 
-                console.error("Sync Error", e); 
-                window.showAlert("Error syncing passports. Please check your connection."); 
-            }
-            btn.innerHTML = origText; lucide.createIcons();
-        };
-
-        window.applyTM30Data = (data) => {
-            if(data.firstName) $('first-name').value = data.firstName;
-            if(data.lastName) $('last-name').value = data.lastName;
-            
-            if(data.nationality) {
-                try {
-                    const fullCountry = new Intl.DisplayNames(['en'], {type: 'region'}).of(data.nationality);
-                    if (fullCountry && fullCountry !== data.nationality) $('guest-country').value = fullCountry;
-                    else $('guest-country').value = data.nationality;
-                } catch(e) { $('guest-country').value = data.nationality; }
-            }
-            
-            const dobStr = `${data.dobYear || 'YYYY'}-${data.dobMonth || 'MM'}-${data.dobDay || 'DD'}`;
-            const notesAppend = `\n\n[TM30 AUTO-FILL]\nPassport: ${data.passportNumber || 'N/A'}\nNat: ${data.nationality || 'N/A'}\nGender: ${data.gender || 'N/A'}\nDOB: ${dobStr}`;
-            
-            $('guest-notes').value = ($('guest-notes').value + notesAppend).trim();
-            window.updateHeaderName();
-            window.closeAlert();
-        };
-
         window.saveBooking = async (keepOpen = false) => {
             if(currentUserRole === 'staff') return; const sB = $('save-btn'); if(sB.disabled) return; sB.disabled = true; sB.innerHTML = 'SAVING...';
             try {
@@ -1624,7 +1432,7 @@
                     const occupiedNow = getOccupiedRooms(cI, cO, id);
                     for (let r of rL) {
                         if (occupiedNow.has(r)) {
-                            const conflictBooking = staff.find(s => s.id !== id && s.property === currentPropertyId && !['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(s.status) && parseYMD(cI) < parseYMD(s.checkOut) && parseYMD(s.checkIn) < parseYMD(cO) && getRooms(s).includes(r));
+                            const conflictBooking = staff.find(s => s.id !== id && s.property === currentPropertyId && !['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(s.status) && parseYMD(cI) < parseYMD(s.checkOut) && parseYMD(cI) < parseYMD(cO) && getRooms(s).includes(r));
                             sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons(); 
                             return window.showAlert(`ROOM OVERLAP ERROR:\n\nRoom ${r} is already assigned to ${conflictBooking?.firstName || ''} ${conflictBooking?.lastName || 'another guest'} during these dates.`);
                         }
