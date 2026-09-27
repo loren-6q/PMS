@@ -95,6 +95,21 @@
         }
     };
 
+    window.toggleSection = (sectionId, chevronId, forceState = null) => {
+        const sec = $(sectionId), icon = $(chevronId);
+        if (!sec) return;
+        const shouldShow = forceState !== null ? forceState : (sec.style.display === 'none' || sec.classList.contains('hidden'));
+        if (shouldShow) {
+            sec.style.display = 'block';
+            sec.classList.remove('hidden');
+            if (icon) icon.style.transform = 'rotate(0deg)';
+        } else {
+            sec.style.display = 'none';
+            sec.classList.add('hidden');
+            if (icon) icon.style.transform = 'rotate(-90deg)';
+        }
+    };
+
     window.showAuditHistory = () => {
         const id = $('guest-id')?.value;
         const staffList = window.staff || [];
