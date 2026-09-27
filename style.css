@@ -806,3 +806,67 @@ z-index: 30 !important;
 border-right: 2px solid #94a3b8;
 padding: 4px 6px;
 }
+
+
+/* ==========================================================================
+10. TM30 & PASSPORT QUEUE SHARED STYLES
+========================================================================== */
+
+.btn-action {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+gap: 0.25rem;
+padding: 0.25rem 0.5rem;
+color: #ffffff;
+border-radius: 0.25rem;
+font-size: 0.75rem;
+font-weight: 900;
+text-transform: uppercase;
+box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+transition: all 0.15s ease-in-out;
+cursor: pointer;
+border: none;
+}
+
+.btn-action:hover {
+filter: brightness(1.1);
+}
+
+.btn-action:active {
+transform: scale(0.96);
+}
+
+.input-base {
+width: 100%;
+background-color: #f8fafc;
+border: 1px solid #cbd5e1;
+font-weight: 700;
+font-size: 0.75rem;
+padding: 0.375rem 0.5rem;
+border-radius: 0.375rem;
+outline: none;
+transition: box-shadow 0.15s ease-in-out;
+}
+
+.input-base:focus {
+border-color: #3b82f6;
+box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.label-base {
+display: block;
+font-size: 10px;
+font-weight: 900;
+color: #64748b;
+margin-bottom: 0.25rem;
+text-transform: uppercase;
+letter-spacing: 0.1em;
+}
+
+.row-checkbox {
+accent-color: #2563eb;
+cursor: pointer;
+width: 14px;
+height: 14px;
+}
