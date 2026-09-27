@@ -199,7 +199,7 @@
                             <button type="button" onclick="window.adjustPax(-1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer hover:bg-slate-100 rounded-l">◀</button>
                             <div class="flex items-center gap-0.5">
                                 <i data-lucide="users" size="11" class="text-slate-400 shrink-0"></i>
-                                <input type="number" id="pax-count" value="1" min="1" class="w-6 text-center text-xs font-black border-none outline-none p-0 bg-transparent" oninput="window.calcFinancials(); window.calcExtension && window.calcExtension();">
+                                <input type="number" id="pax-count" value="1" min="1" class="w-6 text-center text-xs font-black border-none outline-none p-0 bg-transparent" oninput="window.calcFinancials(); if(window.calcExtension) window.calcExtension();">
                                 <span class="text-[8px] sm:text-[9px] uppercase font-black text-slate-400">PAX</span>
                             </div>
                             <button type="button" onclick="window.adjustPax(1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer hover:bg-slate-100 rounded-r">▶</button>
@@ -233,7 +233,7 @@
                         <div class="flex gap-2 items-end">
                             <div>
                                 <div class="flex items-center justify-between"><label class="field-label">Total Price</label><button type="button" onclick="window.openChargeModal()" class="text-[9px] font-black text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-1 py-0.5 rounded cursor-pointer ml-1.5 shadow-sm transition-colors border border-blue-200">+ ADD ฿</button></div>
-                                <div class="flex items-center text-lg font-black">฿<input type="number" id="total-price" value="0" step="0.01" class="w-20 p-0 ml-1 border-none bg-transparent outline-none focus:ring-0 text-lg font-black" oninput="window.calcFinancials(); window.calcExtension && window.calcExtension();"></div>
+                                <div class="flex items-center text-lg font-black">฿<input type="number" id="total-price" value="0" step="0.01" class="w-20 p-0 ml-1 border-none bg-transparent outline-none focus:ring-0 text-lg font-black" oninput="window.calcFinancials(); if(window.calcExtension) window.calcExtension();"></div>
                             </div>
                             <div class="mb-0.5"><label class="field-label text-[9px] text-slate-400 cursor-pointer hover:text-blue-500" onclick="$('net-price').focus()">Net Est.</label><div class="flex items-center text-xs font-bold text-slate-500">฿<input type="number" id="net-price" value="0" step="0.01" class="w-14 p-0 ml-0.5 border-none bg-transparent outline-none focus:ring-0 text-xs font-bold text-slate-500 transition-all focus:bg-white focus:border focus:border-blue-300 focus:rounded px-1" oninput="window.overrideNet()"></div></div>
                         </div>
@@ -427,6 +427,29 @@
 
         window.activeExtraCharges = [];
 
+        const parseYMD = str => { if(!str || typeof str !== 'string') return 0; const p = str.split('-'); return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); };
+        const getLocalYMD = d => { 
+            if (!d) d = new Date();
+            if (typeof d === 'string') {
+                const trimmed = d.trim();
+                if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+                const parsed = new Date(trimmed.includes('T') ? trimmed : trimmed + 'T12:00:00Z');
+                d = isNaN(parsed.getTime()) ? new Date() : parsed;
+            } else if (typeof d === 'number') d = new Date(d);
+            if (!(d instanceof Date) || isNaN(d.getTime())) d = new Date();
+            try {
+                const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)); 
+                return isNaN(o.getTime()) ? new Date().toISOString().split('T')[0] : o.toISOString().split('T')[0]; 
+            } catch (e) {
+                return new Date().toISOString().split('T')[0];
+            }
+        };
+
+        // Expose core shared utilities for external modules (pms-folio.js, etc.)
+        window.parseYMD = parseYMD;
+        window.getLocalYMD = getLocalYMD;
+        window.fmpDates = fmpDates;
+
         window.updateNavLinks = (shortKey) => {
             const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
             document.querySelectorAll('a[href*=".html"]').forEach(a => {
@@ -476,10 +499,8 @@
             { val: 'unconfirmed', bg: '#f3e8ff', txt: '#581c87' }
         ];
 
-        // Centralized room list resolver
         const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
-        // Centralized room conflict query
         const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = null) => {
             const occ = new Set();
             const sU = parseYMD(checkInStr), eU = parseYMD(checkOutStr);
@@ -494,7 +515,6 @@
             return occ;
         };
 
-        // Render Legend dynamically from STATUS_CYCLE
         const statusLegendHtml = STATUS_CYCLE.filter(x => !['blocked', 'noshow', 'special'].includes(x.val)).map(s => 
             `<div class="legend-item"><span class="w-3 h-3 rounded-full" style="background-color:${s.bg}; border:1px solid rgba(0,0,0,0.15)"></span> ${s.val.toUpperCase()}</div>`
         ).join('');
@@ -520,24 +540,6 @@
             </div>
         `;
 
-        const getLocalYMD = d => { 
-            if (!d) d = new Date();
-            if (typeof d === 'string') {
-                const trimmed = d.trim();
-                if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-                const parsed = new Date(trimmed.includes('T') ? trimmed : trimmed + 'T12:00:00Z');
-                d = isNaN(parsed.getTime()) ? new Date() : parsed;
-            } else if (typeof d === 'number') d = new Date(d);
-            if (!(d instanceof Date) || isNaN(d.getTime())) d = new Date();
-            try {
-                const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)); 
-                return isNaN(o.getTime()) ? new Date().toISOString().split('T')[0] : o.toISOString().split('T')[0]; 
-            } catch (e) {
-                return new Date().toISOString().split('T')[0];
-            }
-        };
-
-        const parseYMD = str => { if(!str || typeof str !== 'string') return 0; const p = str.split('-'); return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])); };
         const getDayIndex = str => { const t = parseYMD(str); return t ? Math.round((t - Date.UTC(viewStart.getFullYear(), viewStart.getMonth(), viewStart.getDate())) / 86400000) : -1; };
         
         const dbToUiRoom = rid => { 
@@ -576,200 +578,6 @@
             if (oldRec.notes !== newRec.notes) changes.push(`Notes modified.`);
             return changes.length > 0 ? changes.join(' | ') : "Saved without major changes.";
         };
-
-        window.calcNights = () => {
-            const cI = $('check-in')?.value, cO = $('check-out')?.value;
-            if (!cI || !cO) return 1;
-            const ms = parseYMD(cO) - parseYMD(cI);
-            return Math.max(1, Math.round(ms / 86400000));
-        };
-
-        window.updateNightsDisplay = (forcedNights = null) => {
-            const n = forcedNights !== null ? forcedNights : window.calcNights();
-            const disp = $('booking-nights-display');
-            if (disp) {
-                disp.dataset.nights = n;
-                disp.innerText = `${n} Nt${n > 1 ? 's' : ''}`;
-            }
-            return n;
-        };
-
-        window.getStoredNights = () => {
-            const disp = $('booking-nights-display');
-            const n = parseInt(disp?.dataset?.nights);
-            if (!isNaN(n) && n >= 1) return n;
-            return window.calcNights();
-        };
-
-        window.nudgeDate = (type, deltaDays) => {
-            const inEl = $('check-in'), outEl = $('check-out');
-            if (!inEl.value || !outEl.value) return;
-
-            if (type === 'in') {
-                const dIn = new Date(inEl.value + "T12:00:00Z");
-                dIn.setUTCDate(dIn.getUTCDate() + deltaDays);
-                const newInStr = dIn.toISOString().split('T')[0];
-                if (newInStr >= outEl.value) return; 
-                inEl.value = newInStr;
-            } else if (type === 'out') {
-                const dOut = new Date(outEl.value + "T12:00:00Z");
-                dOut.setUTCDate(dOut.getUTCDate() + deltaDays);
-                const newOutStr = dOut.toISOString().split('T')[0];
-                if (newOutStr <= inEl.value) return; 
-                outEl.value = newOutStr;
-            }
-
-            window.updateNightsDisplay();
-            window.updateAvailableRooms();
-            if (window.calcExtension) window.calcExtension();
-        };
-
-        window.handleCheckInPicker = (newCheckIn) => {
-            if (!newCheckIn) return;
-            const lockedNights = window.getStoredNights();
-            const d = new Date(newCheckIn + "T12:00:00Z");
-            d.setUTCDate(d.getUTCDate() + lockedNights);
-            $('check-out').value = d.toISOString().split('T')[0];
-            window.updateNightsDisplay(lockedNights);
-            window.updateAvailableRooms();
-            if (window.calcExtension) window.calcExtension();
-        };
-
-        window.handleCheckOutPicker = (newCheckOut) => {
-            if (!newCheckOut) return;
-            const lockedNights = window.getStoredNights();
-            const d = new Date(newCheckOut + "T12:00:00Z");
-            d.setUTCDate(d.getUTCDate() - lockedNights);
-            $('check-in').value = d.toISOString().split('T')[0];
-            window.updateNightsDisplay(lockedNights);
-            window.updateAvailableRooms();
-            if (window.calcExtension) window.calcExtension();
-        };
-
-        window.adjustPax = (delta) => {
-            const el = $('pax-count');
-            if (!el) return;
-            let val = Math.max(1, (parseInt(el.value) || 1) + delta);
-            el.value = val;
-            window.calcFinancials();
-            if (window.calcExtension) window.calcExtension();
-        };
-
-        window.openChargeModal = () => {
-            $('charge-desc').value = '';
-            $('charge-amount').value = '';
-            $('charge-date').value = $('check-in')?.value || getLocalYMD(new Date());
-            const m = $('charge-modal');
-            m.classList.add('active');
-            m.style.display = 'flex';
-            setTimeout(() => $('charge-desc').focus(), 50);
-            lucide.createIcons();
-        };
-
-        window.applyChargePreset = (desc, amt) => {
-            $('charge-desc').value = desc;
-            $('charge-amount').value = amt;
-            $('charge-amount').focus();
-        };
-
-        window.confirmAddCharge = () => {
-            const desc = $('charge-desc').value.trim();
-            const amt = parseFloat($('charge-amount').value);
-            const date = $('charge-date').value || getLocalYMD(new Date());
-
-            if (!desc) return window.showAlert("Please enter a description for the charge.");
-            if (isNaN(amt) || amt <= 0) return window.showAlert("Please enter a valid charge amount.");
-
-            const chargeObj = {
-                id: 'chg_' + Math.random().toString(36).substr(2, 9),
-                desc: desc.toUpperCase(),
-                amt: Number(amt.toFixed(2)),
-                date: date
-            };
-
-            window.activeExtraCharges.push(chargeObj);
-            const curTot = Number($('total-price').value) || 0;
-            $('total-price').value = (curTot + chargeObj.amt).toFixed(2);
-
-            window.renderExtraCharges();
-            window.calcFinancials();
-            window.closeModal('charge-modal');
-        };
-
-        window.removeCharge = (chargeId) => {
-            const idx = window.activeExtraCharges.findIndex(c => c.id === chargeId);
-            if (idx > -1) {
-                const removed = window.activeExtraCharges.splice(idx, 1)[0];
-                const curTot = Number($('total-price').value) || 0;
-                $('total-price').value = Math.max(0, curTot - removed.amt).toFixed(2);
-                window.renderExtraCharges();
-                window.calcFinancials();
-            }
-        };
-
-        window.renderExtraCharges = () => {
-            const wrapper = $('extra-charges-wrapper');
-            const list = $('extra-charges-list');
-            const totalEl = $('extra-charges-total');
-            if (!wrapper || !list) return;
-
-            if (window.activeExtraCharges.length === 0) {
-                wrapper.classList.add('hidden');
-                list.innerHTML = '';
-                if (totalEl) totalEl.innerText = '+฿0';
-                return;
-            }
-
-            wrapper.classList.remove('hidden');
-            let sum = 0;
-            list.innerHTML = window.activeExtraCharges.map(c => {
-                sum += Number(c.amt);
-                return `
-                    <div class="flex items-center justify-between bg-white px-2 py-1 rounded border border-amber-200 text-xs">
-                        <div class="flex items-center gap-1.5 truncate">
-                            <span class="font-black text-slate-700 uppercase">${c.desc}</span>
-                            <span class="text-[9px] font-bold text-slate-400">(${c.date ? c.date.substr(5) : ''})</span>
-                        </div>
-                        <div class="flex items-center gap-2 shrink-0">
-                            <span class="font-black text-amber-700">+฿${Number(c.amt).toFixed(2)}</span>
-                            <button type="button" onclick="window.removeCharge('${c.id}')" class="p-0.5 text-red-400 hover:text-red-600 rounded cursor-pointer" title="Delete Charge">
-                                <i data-lucide="trash-2" size="12"></i>
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            if (totalEl) totalEl.innerText = `+฿${sum.toFixed(2)}`;
-            lucide.createIcons();
-        };
-
-        let isDragging = false, dragOffsetX, dragOffsetY;
-        window.startDrag = e => { 
-            if (e.target.closest('button, input, select, i, textarea, .multi-state-btn')) return; 
-            isDragging = true; 
-            const m = $('guest-modal-content'), r = m.getBoundingClientRect(); 
-            if(m.style.position !== 'fixed') { 
-                m.style.position = 'fixed'; 
-                m.style.margin = '0'; 
-                m.style.left = r.left + 'px'; 
-                m.style.top = r.top + 'px'; 
-            } 
-            dragOffsetX = e.clientX - r.left; 
-            dragOffsetY = e.clientY - r.top; 
-        };
-        document.addEventListener('mousemove', e => { 
-            if (!isDragging) return; 
-            const m = $('guest-modal-content'); 
-            let nL = e.clientX - dragOffsetX, nT = e.clientY - dragOffsetY; 
-            if (nT < 0) nT = 0; 
-            if (nT > window.innerHeight - 50) nT = window.innerHeight - 50; 
-            m.style.left = nL + 'px'; 
-            m.style.top = nT + 'px'; 
-        });
-        document.addEventListener('mouseup', () => { 
-            if(isDragging) isDragging = false; 
-        });
 
         const setupDatalist = () => {
             const base = ["France", "Germany", "United Kingdom", "United States", "Australia", "Netherlands", "Israel", "Spain", "Italy", "Switzerland", "Canada", "Sweden", "Denmark", "Russia", "Thailand", "Belgium", "Austria", "Ireland", "Norway", "Finland", "Brazil", "Argentina", "South Korea", "Japan", "China", "India", "Mexico", "New Zealand", "South Africa", "Portugal", "Greece"];
@@ -814,6 +622,7 @@
                         checkOut: cOut,
                         roomTypes: rTypes
                     });
+                    console.log(`Delta Sync Triggered for ${cIn} to ${cOut}, rooms:`, rTypes);
                 } catch (e) {
                     console.warn("Delta Sync Call Failed:", e);
                 }
@@ -847,6 +656,7 @@
                 if (propToLoad) {
                     hotelRooms = propToLoad.rooms || [];
                     fmpDates = propToLoad.events || [];
+                    window.fmpDates = fmpDates;
                     window.propertyOtaMap = propToLoad.otaMap || [];
                     window.channexMap = propToLoad.channexMap || [];
                     window.channexConfig = propToLoad.channex || {};
@@ -857,7 +667,7 @@
                         else cxBtn.classList.add('hidden');
                     }
                 } else {
-                    hotelRooms = []; fmpDates = []; window.propertyOtaMap = []; window.channexMap = []; window.channexConfig = {};
+                    hotelRooms = []; fmpDates = []; window.fmpDates = []; window.propertyOtaMap = []; window.channexMap = []; window.channexConfig = {};
                 }
 
                 roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
@@ -894,9 +704,9 @@
                     s.rooms = rList; 
                     return s; 
                 });
+                window.staff = staff;
                 setupDatalist(); 
                 
-                // Optimized view-sensitive rendering
                 if ($('calendar-view').style.display !== 'none') window.render(); 
                 if ($('dashboard-view').style.display === 'flex') window.renderDashboard();
                 if ($('database-view').style.display === 'flex') window.renderDatabase();
@@ -965,7 +775,6 @@
                 });
             }
 
-            // High Performance Event Delegation on Timeline Grid
             const tBodyEl = $('timeline-body');
             tBodyEl.addEventListener('mouseover', e => {
                 const col = e.target.closest('.day-column');
@@ -1004,7 +813,7 @@
                         }
                         window.updateAvailableRooms();
                     }
-                    return;
+                    return; 
                 }
 
                 window.quickAdd(rId, new Date(dStr + "T12:00:00Z"));
@@ -1017,85 +826,28 @@
             lucide.createIcons();
         };
 
-        window.toggleSection = (sectionId, chevronId, forceState = null) => { 
-            const sec = $(sectionId), icon = $(chevronId); 
-            if (!sec) return; 
-            const shouldShow = forceState !== null ? forceState : (sec.style.display === 'none' || sec.classList.contains('hidden')); 
-            
-            if (shouldShow) { 
-                sec.style.display = 'block'; sec.classList.remove('hidden'); 
-                if(icon) icon.style.transform = 'rotate(0deg)'; 
-            } else { 
-                sec.style.display = 'none'; sec.classList.add('hidden'); 
-                if(icon) icon.style.transform = 'rotate(-90deg)'; 
-            } 
-        };
-
-        window.toggleMultiSelect = (id, btn) => { 
-            event.stopPropagation(); 
-            const d = $(id); if(!d) return; 
-            const isH = d.style.display === 'none' || d.style.display === ''; 
-            $$('.multi-select-dropdown').forEach(x => x.style.display = 'none'); 
-            
-            if(isH) { 
-                const r = btn.getBoundingClientRect(); 
-                document.body.appendChild(d); 
-                d.style.position = 'absolute'; 
-                d.style.top = (r.bottom + window.scrollY) + 'px'; 
-                d.style.left = (r.left + window.scrollX) + 'px'; 
-                d.style.width = Math.max(r.width, 160) + 'px'; 
-                if (r.left + 160 > window.innerWidth) d.style.left = (window.scrollX + r.right - 160) + 'px'; 
-                d.style.display = 'block'; 
-            } 
-        };
-        
-        window.updateMultiLabel = (dId, lId, def) => { const c = $$(`#${dId} input[type="checkbox"]:checked`), l = $(lId); if(l) l.innerText = c.length === 0 ? def : (c.length === 1 ? c[0].parentNode.textContent.trim().toUpperCase() : c.length + ' SELECTED'); };
-        window.getMultiValues = id => Array.from($(id)?.querySelectorAll('input[type="checkbox"]:checked') || []).map(cb => cb.value);
-        document.addEventListener('click', e => { if (!e.target.closest('.multi-select-container') && !e.target.closest('.multi-select-dropdown')) $$('.multi-select-dropdown').forEach(d => d.style.display = 'none'); });
-
-        window.applyDbPreset = val => {
-            const today = new Date(); let s = '', e = '';
-            if (val === 'today') { s = getLocalYMD(today); e = s; }
-            else if (val === 'tomorrow') { const tmrw = new Date(today); tmrw.setDate(today.getDate() + 1); s = getLocalYMD(tmrw); e = s; }
-            else if (val === 'this_week') { const t = new Date(today); const day = t.getDay(); const diff = t.getDate() - day + (day == 0 ? -6:1); const start = new Date(t.setDate(diff)); s = getLocalYMD(start); const end = new Date(start); end.setDate(start.getDate()+6); e = getLocalYMD(end); }
-            else if (val === 'next_week') { const t = new Date(today); const day = t.getDay(); const diff = t.getDate() - day + (day == 0 ? -6:1) + 7; const start = new Date(t.setDate(diff)); s = getLocalYMD(start); const end = new Date(start); end.setDate(start.getDate()+6); e = getLocalYMD(end); }
-            else if (val === 'this_month') { s = getLocalYMD(new Date(today.getFullYear(), today.getMonth(), 1)); e = getLocalYMD(new Date(today.getFullYear(), today.getMonth() + 1, 0)); }
-            else if (val === 'next_month') { s = getLocalYMD(new Date(today.getFullYear(), today.getMonth() + 1, 1)); e = getLocalYMD(new Date(today.getFullYear(), today.getMonth() + 2, 0)); }
-            $('db-filter-start').value = s; $('db-filter-end').value = e; window.renderDatabase();
-        };
-
-        window.jumpToMonth = val => { if(val) { const [y, m] = val.split('-'); viewStart = new Date(y, m-1, 1, 12, 0, 0); window.render(); } };
-        window.toggleZoom = () => { isZoomWide = !isZoomWide; const c = $('calendar-view'); if (isZoomWide) c.classList.add('zoom-wide-mode'); else c.classList.remove('zoom-wide-mode'); };
-        
         window.dismissAlert = async (id) => { 
             try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), { alertDismissed: true }, { merge: true }); let s = staff.find(x=>x.id===id); if(s) s.alertDismissed = true; window.renderDashboard(); } catch(e) {} 
         };
 
-        window.showAlert = (msg, isConfirm = false, onConfirm = null) => { 
-            const m = $('alert-modal'), c = $('alert-cancel'), b = $('alert-confirm'); 
-            $('alert-header-title').innerText = "Attention";
-            $('alert-message').innerText = msg; 
-            if (isConfirm) { 
-                c.style.display = 'block'; c.classList.remove('hidden'); 
-                b.className = 'btn-modal bg-blue-600 text-white px-10';
-                b.innerText = 'Confirm';
-                b.onclick = () => { window.closeAlert(); if(onConfirm) onConfirm(); }; 
-            } else { 
-                c.style.display = 'none'; c.classList.add('hidden'); 
-                b.className = 'btn-modal bg-blue-600 text-white px-10';
-                b.innerText = 'Okay';
-                b.onclick = window.closeAlert; 
-            } 
-            m.classList.add('active'); 
-            m.style.display = 'flex';
-            lucide.createIcons();
-        };
-        
-        window.closeAlert = () => {
-            const m = $('alert-modal');
-            m.classList.remove('active');
-            m.style.display = 'none';
-        };
+        // ==========================================================================
+        // 🚀 DEVELOPMENT STAGING DOCK: PASTE MODULE CODE HERE TO TEST IN CANVAS
+        // Any functions pasted here immediately override the external scripts.
+        // When finished testing in Canvas, cut it out and paste into the external .js file.
+        // ==========================================================================
+
+
+
+
+
+
+
+
+
+
+        // ==========================================================================
+        // 🚀 END DEVELOPMENT STAGING DOCK
+        // ==========================================================================
 
         window.renderDashboard = () => {
             const todayStr = getLocalYMD(new Date()); 
@@ -1258,7 +1010,7 @@
                 if (!b) return '';
                 let bStr = String(b).toLowerCase().trim();
                 if (bStr === 'bottom' || bStr === 'bot' || bStr === 'bunk-bottom') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Bottom Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
-                if (bStr === 'top' || bStr === 'bunk-top') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
+                if (bStr === 'top' || bStr === 'bunk-top') return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 5 19 12"></polyline></svg>`;
                 return '';
             };
 
@@ -1457,43 +1209,6 @@
             $('guest-status-hidden').value = nO.val; 
         };
 
-        window.toggleBadCC = () => { const b = $('bad-cc-box'); if(b.dataset.bad === 'true') { b.dataset.bad = 'false'; b.innerHTML = ''; b.classList.replace('bg-red-500', 'border-slate-300'); b.classList.remove('border-red-600'); } else { b.dataset.bad = 'true'; b.innerHTML = '<span class="text-white text-[10px] font-black">X</span>'; b.classList.replace('border-slate-300', 'bg-red-500'); b.classList.add('border-red-600'); } };
-
-        window.calcFinancials = () => {
-            const tot = Number($('total-price').value) || 0; let pd = 0, cD = 0; 
-            $$('.payment-row').forEach(r => { 
-                const a = Number(r.querySelector('.pay-amt').value) || 0; 
-                pd += a; 
-                if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp'].includes(r.querySelector('.pay-method').value)) cD += a; 
-            });
-            const due = Number((tot - pd).toFixed(2)); const dC = $('display-due'); const tC = $('total-price').parentElement; const pax = parseInt($('pax-count').value) || 1;
-            dC.innerText = `฿${due.toFixed(2)}`; $('display-paid').innerText = `฿${pd.toFixed(2)}`;
-            if (pax > 1) { dC.title = `Split: ฿${(due/pax).toFixed(2)} each`; tC.title = `Split: ฿${(tot/pax).toFixed(2)} each`; dC.classList.add('cursor-help', 'border-b-2', 'border-dashed', 'border-red-300'); tC.classList.add('cursor-help', 'border-b-2', 'border-dashed', 'border-slate-300'); } else { dC.title = ''; tC.title = ''; dC.classList.remove('cursor-help', 'border-b-2', 'border-dashed', 'border-red-300'); tC.classList.remove('cursor-help', 'border-b-2', 'border-dashed', 'border-slate-300'); }
-            const nEl = $('net-price'); if (nEl.dataset.override !== 'true') { const src = $('booking-source').value; nEl.value = (cD > 0 ? tot - cD : (src === 'booking.com' || src === 'agoda' ? tot * 0.815 : (src === 'airbnb' ? tot * 0.845 : tot))).toFixed(2); }
-        };
-        window.overrideNet = () => { $('net-price').dataset.override = 'true'; };
-
-        let pCount = 0;
-        window.addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
-            const id = `pay-${pCount++}`; const div = document.createElement('div'); div.className = `payment-row flex gap-1 items-center bg-white p-1 rounded border border-slate-200 transition-opacity ${loc ? 'opacity-70' : ''}`; div.id = id;
-            if (!d) d = getLocalYMD(new Date()); if (a === '') { const due = (Number($('total-price').value) || 0) - Array.from($$('.payment-row')).reduce((s, r) => s + (Number(r.querySelector('.pay-amt').value) || 0), 0); if (due > 0) a = Number(due.toFixed(2)); }
-            const paymentOptions = [
-                'cash', 'card', 'scan', 'cc-fee',
-                'hw-kp',
-                'bdc-kp', 'bdc-pay',
-                'agoda-kp', 'agoda-pay',
-                'airbnb-kp', 'airbnb-pay',
-                'expedia-kp', 'expedia-pay',
-                'trip-kp', 'trip-pay',
-                'other'
-            ];
-            div.innerHTML = `<input type="date" class="pay-date w-24 text-xs !p-1" value="${d}" ${loc ? 'disabled' : ''}><input type="number" class="pay-amt w-16 text-xs !p-1 font-black" value="${a}" placeholder="0" oninput="window.calcFinancials()" ${loc ? 'disabled' : ''}><select class="pay-method flex-1 text-xs !p-1 uppercase" onchange="window.calcFinancials()" ${loc ? 'disabled' : ''}>${paymentOptions.map(x => `<option value="${x}" ${m===x?'selected':''}>${x.replace(/-/g, ' ').toUpperCase()}</option>`).join('')}</select>${loc ? `<button type="button" onclick="window.unlockPayment('${id}')" class="p-1 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded flex-shrink-0 border border-slate-200 cursor-pointer" title="Edit Payment"><i data-lucide="edit" size="12"></i></button>` : `<button type="button" onclick="window.removePaymentRow('${id}')" class="p-1 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded flex-shrink-0 border border-red-200 cursor-pointer" title="Delete Payment"><i data-lucide="trash-2" size="12"></i></button>`}`;
-            $('payments-list').appendChild(div); window.calcFinancials(); lucide.createIcons();
-        };
-
-        window.unlockPayment = id => { const r = $(id); r.classList.remove('opacity-70'); r.querySelectorAll('input, select').forEach(el => el.disabled = false); r.lastElementChild.outerHTML = `<button type="button" onclick="window.removePaymentRow('${id}')" class="p-1 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded flex-shrink-0 border border-red-200 cursor-pointer" title="Delete Payment"><i data-lucide="trash-2" size="12"></i></button>`; lucide.createIcons(); };
-        window.removePaymentRow = id => { window.showAlert("Delete this payment entry?", true, () => { $(id).remove(); window.calcFinancials(); }); };
-        
         window.updateAvailableRooms = () => {
             const cI = $('check-in').value, cO = $('check-out').value, cId = $('guest-id').value; if(!cI || !cO) return;
             const occ = getOccupiedRooms(cI, cO, cId);
@@ -1623,22 +1338,6 @@
             w.appendChild(sel); w.appendChild(del); c.appendChild(w); window.updateAvailableRooms();
         };
 
-        window.calcExtension = () => { 
-            const cI = $('check-in').value, cO = $('check-out').value; const ms = parseYMD(cO) - parseYMD(cI); const avg = ms > 0 ? (Number($('total-price').value) || 0) / Math.round(ms / 86400000) : 0; const days = parseInt($('ext-days').value) || 1; let xFMP = false; 
-            if (cO) { const sD = parseYMD(cO), eD = sD + (days * 86400000); for (let f of fmpDates) { const fT = new Date(f + "T12:00:00").getTime(); if ((sD <= fT && eD >= fT) || (Math.abs(sD - fT) <= 3 * 86400000) || (Math.abs(eD - fT) <= 3 * 86400000)) { xFMP = true; break; } } } 
-            if (xFMP) { $('ext-avg-rate').value = 'FMP!'; $('ext-avg-rate').classList.add('text-pink-600', 'bg-pink-100'); $('ext-price').value = ''; $('ext-price').placeholder = 'CHECK RATE ->'; $('btn-check-bdc').classList.replace('bg-slate-200', 'bg-pink-500'); $('btn-check-bdc').classList.replace('text-white', 'text-slate-700'); $('btn-check-bdc').classList.add('animate-pulse'); } else { $('ext-avg-rate').value = Math.round(avg); $('ext-avg-rate').classList.remove('text-pink-600', 'bg-pink-100'); $('ext-price').value = Math.round(avg * days); $('ext-price').placeholder = ''; $('btn-check-bdc').classList.replace('bg-pink-500', 'bg-slate-200'); $('btn-check-bdc').classList.replace('text-white', 'text-slate-700'); $('btn-check-bdc').classList.remove('animate-pulse'); } 
-        };
-        
-        window.checkBdcPrice = () => { const cO = $('check-out').value; if(!cO) return window.showAlert("Please set a check-out date first."); const d = new Date(cO + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + (parseInt($('ext-days').value) || 1)); window.open(`https://www.booking.com/hotel/th/swims-a-social-beach-resort.html?checkin=${cO}&checkout=${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}&group_adults=${$('pax-count').value || 1}&group_children=0&no_rooms=${Array.from($$('.assigned-room-select')).filter(sel => sel.value !== "").length || 1}`, '_blank'); };
-        
-        window.confirmExtension = async () => { 
-            const cO = $('check-out').value; if(!cO) return window.showAlert("Please set a check-out date first."); const aP = $('ext-price').value; if(aP === '') return window.showAlert("Please enter the Extension Price first."); const days = parseInt($('ext-days').value) || 1; const d = new Date(cO + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + days); const nCo = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`; 
-            
-            $('check-out').value = nCo; $('total-price').value = ((Number($('total-price').value) || 0) + Number(aP)).toFixed(2); setMulti('ext-btn', 1, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
-            const todayStr = new Date().toLocaleDateString('en-GB').slice(0,5); const extMsg = `\n[EXTENDED on ${todayStr}] Added ${days} day(s). Added ฿${aP} to total.`; $('guest-notes').value = ($('guest-notes').value + extMsg).trim();
-            window.updateNightsDisplay(); window.updateAvailableRooms(); window.calcFinancials(); window.calcExtension(); window.showAlert(`Booking extended by ${days} day(s).\n\nCheckout is now ${nCo}.\nAdded ฿${aP} to Total Price.`); 
-        };
-
         window.populateStaffForm = (s = {}) => {
             const isN = !s.id; const f = $('guest-form'); if(f) f.reset(); const mC = $('guest-modal-content'); mC.style.position = 'relative'; mC.style.left = 'auto'; mC.style.top = 'auto'; mC.style.margin = '0'; 
             const bcc = $('bad-cc-box'); bcc.dataset.bad = s.badCC ? 'true' : 'false'; bcc.innerHTML = s.badCC ? '<span class="text-white text-[10px] font-black">X</span>' : ''; bcc.className = `w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center ${s.badCC ? 'bg-red-500 border-red-600' : ''}`; 
@@ -1662,7 +1361,7 @@
             if(s.payments) s.payments.forEach(p => window.addPaymentRow(p.date, Number(p.amt || 0).toFixed(2), p.method, true));
 
             window.activeExtraCharges = Array.isArray(s.extraCharges) ? [...s.extraCharges] : [];
-            window.renderExtraCharges();
+            if (window.renderExtraCharges) window.renderExtraCharges();
 
             setMulti('email-confirm-btn', s.emailConfirm ? 1 : 0, ['CONFIRM: --', 'CONFIRM: SENT'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
             setMulti('email-prepost-btn', !s.emailPrePost ? 0 : (s.emailPrePost==='sent'?1:2), ['PRE/POST: --', 'PRE/POST: SENT', 'PRE/POST: CONF'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400']); 
@@ -1713,7 +1412,6 @@
             $('assigned-rooms-container').innerHTML = ''; 
             window.addRoomSelect(r); 
             
-            // Dynamic Property-Specific Booking Prefix (e.g. SW00001, LD00001, WT00001)
             const pCode = (PROP_REVERSE_MAP[currentPropertyId] || currentPropertyId.substring(0, 2)).toUpperCase();
             const directBookings = staff.filter(s => s.property === currentPropertyId && s.bookId && s.bookId.startsWith(pCode)).sort((a,b) => { 
                 const numA = parseInt(a.bookId.replace(pCode, '')) || 0; 
@@ -1728,21 +1426,6 @@
             $('booking-date').value = getLocalYMD(new Date());
             window.updateAvailableRooms(); 
             if(window.calcExtension) window.calcExtension(); 
-        };
-
-        window.showAuditHistory = () => {
-            const id = $('guest-id').value; const s = staff.find(x => x.id === id); if (!s) return; const logs = s.auditLog || [];
-            let html = logs.length === 0 ? '<p class="text-slate-400 italic">No history recorded yet.</p>' : logs.slice().reverse().map(l => `<div class="text-left text-xs border-b border-slate-200 pb-2 mb-2"><div class="font-black text-slate-800">${new Date(l.ts).toLocaleString('en-GB')} by ${l.user}</div><div class="text-slate-600">${l.msg}</div></div>`).join('');
-            $('alert-header-title').innerText = `Audit History: ${s.lastName}`; 
-            $('alert-message').innerHTML = `<div class="max-h-[300px] overflow-y-auto no-scrollbar">${html}</div>`; 
-            $('alert-cancel').style.display = 'none'; 
-            $('alert-confirm').innerText = 'Close'; 
-            $('alert-confirm').className = 'btn-modal bg-slate-800 hover:bg-slate-700 text-white px-10'; 
-            $('alert-confirm').onclick = window.closeAlert;
-            const m = $('alert-modal');
-            m.classList.add('active');
-            m.style.display = 'flex';
-            lucide.createIcons();
         };
 
         window.globalPassportSync = async () => {
@@ -1829,6 +1512,7 @@
                     $('alert-modal').classList.add('active');
                     $('alert-modal').style.display = 'flex';
                     lucide.createIcons();
+                    
                     btn.innerHTML = origText; return;
                 }
 
@@ -1837,15 +1521,18 @@
 
                 pendingPassports.forEach(data => {
                     let match = false;
+                    
                     if (data.roomNumber) { 
                         let searchRooms = [data.roomNumber]; 
                         if (/^[a-zA-Z]0\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + data.roomNumber[2]); 
                         else if (/^[a-zA-Z]\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + '0' + data.roomNumber[1]); 
                         if (rL.some(r => searchRooms.includes(r))) match = true; 
                     }
+                    
                     if (!match && data.firstName && data.lastName && gFirstName && gLastName) { 
                         if (gLastName.includes(data.lastName.toUpperCase()) && gFirstName.includes(data.firstName.toUpperCase())) match = true; 
                     }
+                    
                     if (match) { 
                         matchedPassports.push(data); 
                         updatePromises.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'submissions', data.id), { 
@@ -2037,7 +1724,7 @@
 
                 window.calcFinancials(); 
                 window.updateAvailableRooms(); 
-                window.updateNightsDisplay();
+                window.updateNightsDisplay(); 
 
                 staff = staff.filter(s => s.id !== t.id);
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', t.id)); 
