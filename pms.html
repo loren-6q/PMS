@@ -225,7 +225,7 @@
 
                 <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('ext-section', 'ext-chevron')"><span class="text-blue-700"><i data-lucide="calendar-plus" size="14" class="inline mb-0.5 mr-1"></i>Extend Stay</span><i data-lucide="chevron-down" id="ext-chevron" size="14" class="transition-transform duration-200" style="transform: rotate(-90deg);"></i></div>
                 <div id="ext-section" class="bg-blue-50/50 p-1.5 border-x border-b border-blue-200 rounded-b-md mt-0 hidden" style="display: none;">
-                    <div class="flex gap-1.5 items-end"><div class="w-16"><label class="field-label">Days</label><input type="number" id="ext-days" value="1" min="1" class="input-base text-center" oninput="window.calcExtension()"></div><div class="w-24"><label class="field-label text-slate-400 text-[10px]">Avg Daily ฿</label><input type="text" id="ext-avg-rate" class="input-base text-slate-500" readonly></div><div class="flex-1"><label class="field-label text-blue-600">Ext. Price ฿</label><input type="number" id="ext-price" class="input-base text-blue-700"></div></div>
+                    <div class="flex gap-1.5 items-end"><div class="w-16"><label class="field-label">Days</label><input type="number" id="ext-days" value="1" min="1" class="input-base text-center" oninput="if(window.calcExtension) window.calcExtension()"></div><div class="w-24"><label class="field-label text-slate-400 text-[10px]">Avg Daily ฿</label><input type="text" id="ext-avg-rate" class="input-base text-slate-500" readonly></div><div class="flex-1"><label class="field-label text-blue-600">Ext. Price ฿</label><input type="number" id="ext-price" class="input-base text-blue-700"></div></div>
                     <div class="flex gap-1.5 mt-1.5"><button type="button" id="btn-check-bdc" onclick="window.checkBdcPrice()" class="flex-1 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-black uppercase rounded border border-slate-300 flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"><i data-lucide="external-link" size="12"></i> Check BDC Rate</button><button type="button" onclick="window.confirmExtension()" class="flex-1 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded shadow-sm flex items-center justify-center gap-1 transition-colors cursor-pointer"><i data-lucide="plus-circle" size="12"></i> Add Extension</button></div>
                 </div>
 
@@ -235,9 +235,9 @@
                         <div class="flex gap-2 items-end">
                             <div>
                                 <div class="flex items-center justify-between"><label class="field-label">Total Price</label><button type="button" onclick="window.openChargeModal()" class="text-[9px] font-black text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-1 py-0.5 rounded cursor-pointer ml-1.5 shadow-sm transition-colors border border-blue-200">+ ADD ฿</button></div>
-                                <div class="flex items-center text-lg font-black">฿<input type="number" id="total-price" value="0" step="0.01" class="w-20 p-0 ml-1 border-none bg-transparent outline-none focus:ring-0 text-lg font-black" oninput="window.calcFinancials(); if(window.calcExtension) window.calcExtension();"></div>
+                                <div class="flex items-center text-lg font-black">฿<input type="number" id="total-price" value="0" step="0.01" class="w-20 p-0 ml-1 border-none bg-transparent outline-none focus:ring-0 text-lg font-black" oninput="if(window.calcFinancials) window.calcFinancials(); if(window.calcExtension) window.calcExtension();"></div>
                             </div>
-                            <div class="mb-0.5"><label class="field-label text-[9px] text-slate-400 cursor-pointer hover:text-blue-500" onclick="$('net-price').focus()">Net Est.</label><div class="flex items-center text-xs font-bold text-slate-500">฿<input type="number" id="net-price" value="0" step="0.01" class="w-14 p-0 ml-0.5 border-none bg-transparent outline-none focus:ring-0 text-xs font-bold text-slate-500 transition-all focus:bg-white focus:border focus:border-blue-300 focus:rounded px-1" oninput="window.overrideNet()"></div></div>
+                            <div class="mb-0.5"><label class="field-label text-[9px] text-slate-400 cursor-pointer hover:text-blue-500" onclick="$('net-price').focus()">Net Est.</label><div class="flex items-center text-xs font-bold text-slate-500">฿<input type="number" id="net-price" value="0" step="0.01" class="w-14 p-0 ml-0.5 border-none bg-transparent outline-none focus:ring-0 text-xs font-bold text-slate-500 transition-all focus:bg-white focus:border focus:border-blue-300 focus:rounded px-1" oninput="if(window.overrideNet) window.overrideNet()"></div></div>
                         </div>
                         <div class="flex gap-3 text-right items-center">
                             <div><label class="field-label">Paid</label><div class="font-black text-lg text-green-600 leading-none" id="display-paid">฿0</div></div>
@@ -264,7 +264,7 @@
                     <label class="field-label mb-0 border-b border-slate-200 pb-1">Guest Notes</label>
                     <textarea id="guest-notes" class="smart-notes w-full bg-white border border-slate-300 font-bold text-xs p-1.5 mb-1.5 rounded outline-none focus:ring-2 focus:ring-blue-500 mt-1" placeholder="NOTES..."></textarea>
                     <div class="grid grid-cols-3 gap-1.5">
-                        <div class="flex flex-col"><label class="field-label">Source</label><select id="booking-source" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none uppercase cursor-pointer" onchange="window.calcFinancials()"><option value="direct">DIRECT</option><option value="booking.com">BOOKING.COM</option><option value="agoda">AGODA</option><option value="hostelworld">HOSTELWORLD</option><option value="airbnb">AIRBNB</option><option value="expedia">EXPEDIA</option><option value="ctrip">CTRIP</option><option value="walkin">WALK-IN</option><option value="other">OTHER</option></select></div>
+                        <div class="flex flex-col"><label class="field-label">Source</label><select id="booking-source" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none uppercase cursor-pointer" onchange="if(window.calcFinancials) window.calcFinancials()"><option value="direct">DIRECT</option><option value="booking.com">BOOKING.COM</option><option value="agoda">AGODA</option><option value="hostelworld">HOSTELWORLD</option><option value="airbnb">AIRBNB</option><option value="expedia">EXPEDIA</option><option value="ctrip">CTRIP</option><option value="walkin">WALK-IN</option><option value="other">OTHER</option></select></div>
                         <div class="flex flex-col"><label class="field-label">Book Date</label><input type="date" id="booking-date" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none"></div>
                         <div class="flex flex-col"><label class="field-label">Book ID</label><input type="text" id="booking-id" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none" placeholder="ID..."></div>
                         <div class="flex flex-col col-span-3 mt-0.5 pt-1 border-t border-slate-200"><label class="field-label text-[9px] text-amber-600">Link Code</label><input type="text" id="link-code" class="w-24 text-xs font-black bg-amber-50 border border-amber-200 text-amber-700 rounded px-1 outline-none uppercase text-center" placeholder="----"></div>
@@ -447,6 +447,7 @@
 
         const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
+        // Shared bridge methods for external modules
         window.db = db;
         window.appId = appId;
         window.fs = { collection, doc, query, where, getDocs, updateDoc, setDoc, deleteDoc };
@@ -458,6 +459,39 @@
         window.getHotelRooms = () => hotelRooms;
         window.getStaff = () => staff;
         window.getSearchTerm = () => searchTerm;
+
+        // Core fallback definitions for accordion & calendar controls
+        window.toggleSection = window.toggleSection || ((sectionId, chevronId, forceState = null) => {
+            const sec = $(sectionId), icon = $(chevronId);
+            if (!sec) return;
+            const shouldShow = forceState !== null ? forceState : (sec.style.display === 'none' || sec.classList.contains('hidden'));
+            if (shouldShow) {
+                sec.style.display = 'block';
+                sec.classList.remove('hidden');
+                if (icon) icon.style.transform = 'rotate(0deg)';
+            } else {
+                sec.style.display = 'none';
+                sec.classList.add('hidden');
+                if (icon) icon.style.transform = 'rotate(-90deg)';
+            }
+        });
+
+        window.jumpToMonth = window.jumpToMonth || (val => {
+            if (val) {
+                const [y, m] = val.split('-');
+                viewStart = new Date(y, m - 1, 1, 12, 0, 0);
+                window.render();
+            }
+        });
+
+        window.toggleZoom = window.toggleZoom || (() => {
+            isZoomWide = !isZoomWide;
+            const c = $('calendar-view');
+            if (c) {
+                if (isZoomWide) c.classList.add('zoom-wide-mode');
+                else c.classList.remove('zoom-wide-mode');
+            }
+        });
 
         window.updateNavLinks = (shortKey) => {
             const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
@@ -1318,25 +1352,32 @@
 
         window.populateStaffForm = (s = {}) => {
             const isN = !s.id; const f = $('guest-form'); if(f) f.reset(); const mC = $('guest-modal-content'); mC.style.position = 'relative'; mC.style.left = 'auto'; mC.style.top = 'auto'; mC.style.margin = '0'; 
-            const bcc = $('bad-cc-box'); bcc.dataset.bad = s.badCC ? 'true' : 'false'; bcc.innerHTML = s.badCC ? '<span class="text-white text-[10px] font-black">X</span>' : ''; bcc.className = `w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center ${s.badCC ? 'bg-red-500 border-red-600' : ''}`; 
+            const bcc = $('bad-cc-box'); 
+            if (bcc) {
+                bcc.dataset.bad = s.badCC ? 'true' : 'false'; 
+                bcc.innerHTML = s.badCC ? '<span class="text-white text-[10px] font-black">X</span>' : ''; 
+                bcc.className = `w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center ${s.badCC ? 'bg-red-500 border-red-600' : ''}`; 
+            }
             [ ['guest-id', s.id], ['first-name', s.firstName], ['last-name', s.lastName], ['phone', s.phone], ['email', s.email], ['booked-type', s.bookedType], ['check-in', s.checkIn], ['check-out', s.checkOut], ['booking-date', s.bookDate], ['booking-id', s.bookId], ['link-code', s.linkedId], ['guest-country', s.country], ['pax-count', s.pax || 1], ['booking-source', s.source || 'direct'], ['guest-notes', s.notes], ['total-price', Number(s.totalPrice || 0).toFixed(2)], ['net-price', Number(s.netPrice || 0).toFixed(2)] ].forEach(([id, val]) => { const el = $(id); if(el) el.value = val || ""; }); 
             
             let pSt = s.status || "future"; 
-            $('guest-status-hidden').value = pSt; 
+            if ($('guest-status-hidden')) $('guest-status-hidden').value = pSt; 
             let sObj = STATUS_CYCLE.find(x => x.val === pSt) || STATUS_CYCLE[1]; 
             let sBtn = $('status-cycle-btn'); 
-            sBtn.dataset.value = sObj.val; 
-            sBtn.innerText = sObj.val.toUpperCase(); 
-            sBtn.style.background = sObj.bg; 
-            sBtn.style.color = sObj.txt;
+            if (sBtn) {
+                sBtn.dataset.value = sObj.val; 
+                sBtn.innerText = sObj.val.toUpperCase(); 
+                sBtn.style.background = sObj.bg; 
+                sBtn.style.color = sObj.txt;
+            }
 
-            $('net-price').dataset.override = s.netOverride ? 'true' : 'false'; 
-            $('assigned-rooms-container').innerHTML = ''; 
+            if ($('net-price')) $('net-price').dataset.override = s.netOverride ? 'true' : 'false'; 
+            if ($('assigned-rooms-container')) $('assigned-rooms-container').innerHTML = ''; 
             const rL = getRooms(s).length ? getRooms(s) : (isN ? [] : [""]); 
             if(rL.length > 0) { rL.forEach(r => window.addRoomSelect(r)); } else { window.addRoomSelect(""); } 
             
-            $('payments-list').innerHTML = ''; 
-            if(s.payments) s.payments.forEach(p => window.addPaymentRow(p.date, Number(p.amt || 0).toFixed(2), p.method, true));
+            if ($('payments-list')) $('payments-list').innerHTML = ''; 
+            if(s.payments && window.addPaymentRow) s.payments.forEach(p => window.addPaymentRow(p.date, Number(p.amt || 0).toFixed(2), p.method, true));
 
             window.activeExtraCharges = Array.isArray(s.extraCharges) ? [...s.extraCharges] : [];
             if (window.renderExtraCharges) window.renderExtraCharges();
@@ -1349,14 +1390,17 @@
             setMulti('rating-btn', !s.rating || s.rating === 'none' ? 0 : (s.rating === 'good' ? 1 : 2), ['FEEDBACK: --', 'FEEDBACK: ✔ GOOD', 'FEEDBACK: ❌ BAD'], ['text-slate-400', 'bg-green-100 text-green-700 border-green-400', 'bg-red-100 text-red-700 border-red-400']); 
             setMulti('ext-btn', s.extended ? 1 : 0, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']); 
 
-            $('ext-days').value = 1; $('ext-avg-rate').value = ''; $('ext-price').value = ''; $('ext-avg-rate').classList.remove('text-pink-600', 'bg-pink-100'); $('btn-check-bdc').classList.replace('bg-pink-500', 'bg-slate-200'); $('btn-check-bdc').classList.replace('text-white', 'text-slate-700'); $('btn-check-bdc').classList.remove('animate-pulse');
+            if ($('ext-days')) $('ext-days').value = 1; 
+            if ($('ext-avg-rate')) { $('ext-avg-rate').value = ''; $('ext-avg-rate').classList.remove('text-pink-600', 'bg-pink-100'); }
+            if ($('ext-price')) $('ext-price').value = ''; 
+            if ($('btn-check-bdc')) { $('btn-check-bdc').classList.replace('bg-pink-500', 'bg-slate-200'); $('btn-check-bdc').classList.replace('text-white', 'text-slate-700'); $('btn-check-bdc').classList.remove('animate-pulse'); }
             
-            window.updateHeaderName(); 
-            window.checkEmailProxy(s.email || ""); 
-            window.calcFinancials(); 
-            window.updateAvailableRooms(); 
-            window.updateNightsDisplay(); 
-            if(window.calcExtension) window.calcExtension(); 
+            if (window.updateHeaderName) window.updateHeaderName(); 
+            if (window.checkEmailProxy) window.checkEmailProxy(s.email || ""); 
+            if (window.calcFinancials) window.calcFinancials(); 
+            if (window.updateAvailableRooms) window.updateAvailableRooms(); 
+            if (window.updateNightsDisplay) window.updateNightsDisplay(); 
+            if (window.calcExtension) window.calcExtension(); 
 
             window.toggleSection('guest-profile-section', 'profile-chevron', true); 
             window.toggleSection('ext-section', 'ext-chevron', false); 
@@ -1364,30 +1408,34 @@
             window.toggleSection('meta-section', 'meta-chevron', true);
             
             ['delete-btn', 'split-btn', 'merge-btn', 'dup-btn', 'hist-btn'].forEach(id => { const el = $(id); if (el) el.style.visibility = isN ? 'hidden' : 'visible'; }); 
-            $('audit-log').innerText = isN ? `NEW RECORD | CREATING AS ${currentUserEmail.toUpperCase()}` : `CREATED BY ${s.createdBy||'UNKNOWN'} ON ${s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-GB').slice(0,5) : '--'}` + (s.lastEditedBy ? ` | LAST EDIT: ${s.lastEditedBy} ON ${new Date(s.lastEditedAt).toLocaleDateString('en-GB').slice(0,5)}` : ''); 
-            if(currentUserRole === 'staff') { ['delete-btn', 'split-btn', 'merge-btn'].forEach(id => { if($(id)) $(id).style.visibility = 'hidden'; }); $('save-btn').style.display = 'none'; }
+            if ($('audit-log')) $('audit-log').innerText = isN ? `NEW RECORD | CREATING AS ${currentUserEmail.toUpperCase()}` : `CREATED BY ${s.createdBy||'UNKNOWN'} ON ${s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-GB').slice(0,5) : '--'}` + (s.lastEditedBy ? ` | LAST EDIT: ${s.lastEditedBy} ON ${new Date(s.lastEditedAt).toLocaleDateString('en-GB').slice(0,5)}` : ''); 
+            if (currentUserRole === 'staff') { ['delete-btn', 'split-btn', 'merge-btn'].forEach(id => { if($(id)) $(id).style.visibility = 'hidden'; }); if ($('save-btn')) $('save-btn').style.display = 'none'; }
             
             const modal = $('guest-modal');
-            modal.classList.add('active');
-            modal.style.display = 'flex';
-            lucide.createIcons();
+            if (modal) {
+                modal.classList.add('active');
+                modal.style.display = 'flex';
+            }
+            if (window.lucide) window.lucide.createIcons();
         };
 
         window.editStaff = id => { const s = staff.find(x => x.id === id); if (s) window.populateStaffForm(s); }; 
         window.closeGuestModal = () => { 
             const m = $('guest-modal');
-            m.classList.remove('active');
-            m.style.display = 'none'; 
+            if (m) {
+                m.classList.remove('active');
+                m.style.display = 'none'; 
+            }
             try { window.history.replaceState({}, document.title, window.location.pathname); } catch(e) {} 
         }; 
         
         window.quickAdd = (r, d) => { 
             window.populateStaffForm({}); 
-            $('check-in').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; 
+            if ($('check-in')) $('check-in').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; 
             const o = new Date(d); o.setDate(d.getDate() + 1); 
-            $('check-out').value = `${o.getFullYear()}-${String(o.getMonth() + 1).padStart(2, '0')}-${String(o.getDate()).padStart(2, '0')}`; 
-            window.updateNightsDisplay();
-            $('assigned-rooms-container').innerHTML = ''; 
+            if ($('check-out')) $('check-out').value = `${o.getFullYear()}-${String(o.getMonth() + 1).padStart(2, '0')}-${String(o.getDate()).padStart(2, '0')}`; 
+            if (window.updateNightsDisplay) window.updateNightsDisplay();
+            if ($('assigned-rooms-container')) $('assigned-rooms-container').innerHTML = ''; 
             window.addRoomSelect(r); 
             
             const pCode = (PROP_REVERSE_MAP[currentPropertyId] || currentPropertyId.substring(0, 2)).toUpperCase();
@@ -1400,8 +1448,8 @@
             if (directBookings.length > 0) { 
                 nextNum = (parseInt(directBookings[0].bookId.replace(pCode, '')) || 0) + 1; 
             }
-            $('booking-id').value = `${pCode}${String(nextNum).padStart(5, '0')}`; 
-            $('booking-date').value = getLocalYMD(new Date());
+            if ($('booking-id')) $('booking-id').value = `${pCode}${String(nextNum).padStart(5, '0')}`; 
+            if ($('booking-date')) $('booking-date').value = getLocalYMD(new Date());
             window.updateAvailableRooms(); 
             if(window.calcExtension) window.calcExtension(); 
         };
@@ -1410,14 +1458,14 @@
             if(currentUserRole === 'staff') return; const sB = $('save-btn'); if(sB.disabled) return; sB.disabled = true; sB.innerHTML = 'SAVING...';
             try {
                 const cI = $('check-in').value, cO = $('check-out').value; 
-                if (cI >= cO) { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons(); return window.showAlert("INVALID DATES:\nDeparture must be after arrival."); }
+                if (cI >= cO) { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; if (window.lucide) lucide.createIcons(); return window.showAlert("INVALID DATES:\nDeparture must be after arrival."); }
                 const idI = $('guest-id'), id = idI.value || Math.random().toString(36).substr(2, 9); idI.value = id;
                 
                 const bId = $('booking-id').value.trim();
                 if (bId) {
                     const dupe = staff.find(s => s.property === currentPropertyId && s.bookId === bId && s.id !== id && s.status !== 'cancelled' && s.status !== 'noshow');
                     if (dupe) {
-                        sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons();
+                        sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; if (window.lucide) lucide.createIcons();
                         window.closeModal('email-modal');
                         window.showAlert(`Duplicate Blocked:\nBooking ID ${bId} already exists in the system!\n\nOpening original record now...`);
                         setTimeout(() => { window.closeAlert(); window.editStaff(dupe.id); }, 2500);
@@ -1433,7 +1481,7 @@
                     for (let r of rL) {
                         if (occupiedNow.has(r)) {
                             const conflictBooking = staff.find(s => s.id !== id && s.property === currentPropertyId && !['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(s.status) && parseYMD(cI) < parseYMD(s.checkOut) && parseYMD(cI) < parseYMD(cO) && getRooms(s).includes(r));
-                            sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons(); 
+                            sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; if (window.lucide) lucide.createIcons(); 
                             return window.showAlert(`ROOM OVERLAP ERROR:\n\nRoom ${r} is already assigned to ${conflictBooking?.firstName || ''} ${conflictBooking?.lastName || 'another guest'} during these dates.`);
                         }
                     }
@@ -1468,7 +1516,7 @@
 
                 window.triggerAutoSync(earliestIn, latestOut, bookingRoomTypes); 
                 if (!keepOpen) window.closeGuestModal();
-            } catch (err) { console.error("Save Error:", err); window.showAlert("Save process timed out or encountered an error. Please verify your connection.\n\nError: " + err.message); } finally { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; lucide.createIcons(); }
+            } catch (err) { console.error("Save Error:", err); window.showAlert("Save process timed out or encountered an error. Please verify your connection.\n\nError: " + err.message); } finally { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; if (window.lucide) lucide.createIcons(); }
         };
 
         window.requestDelete = () => { 
