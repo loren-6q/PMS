@@ -46,6 +46,13 @@
                 <h1 class="text-base sm:text-lg font-black uppercase tracking-tight text-slate-800 flex items-center gap-1.5">
                     <i data-lucide="refresh-cw" size="18" class="text-blue-600"></i> OTA Sync & Auditor
                 </h1>
+
+                <!-- Property Filter Switcher -->
+                <div class="flex items-center bg-slate-100 rounded px-2 py-0.5 border border-slate-300 shadow-inner ml-1 sm:ml-2">
+                    <span class="text-[10px] font-black uppercase text-slate-500 mr-1.5 tracking-wider hidden sm:inline">Property:</span>
+                    <select id="sync-property-select" onchange="window.handlePropertySwitch(this.value)" class="bg-white font-black text-xs uppercase text-blue-700 outline-none cursor-pointer border border-slate-300 rounded px-2 py-0.5 shadow-sm">
+                    </select>
+                </div>
             </div>
 
             <div class="flex items-center gap-2 shrink-0 ml-auto">
@@ -65,7 +72,7 @@
                     <span class="text-xs sm:text-sm flex items-center gap-1.5">
                         <i data-lucide="search" size="14" class="text-blue-600"></i> 1. Missing Booking Auditor
                     </span>
-                    <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Paste Extranet List Below</span>
+                    <span id="auditor-prop-indicator" class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Paste Extranet List Below</span>
                 </div>
                 <div class="p-2 sm:p-3 flex flex-col gap-2">
                     <textarea id="audit-text" class="w-full h-16 sm:h-20 bg-white border border-slate-300 rounded p-2 outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre text-xs text-slate-700 font-mono resize-none transition-all placeholder:text-slate-400" placeholder="Paste Booking.com, Hostelworld, or Airbnb list data here..." oninput="window.checkMissing()"></textarea>
@@ -113,7 +120,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, onSnapshot, getDoc, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
@@ -132,12 +139,7 @@
 
         let currentPropertyId = PROP_MAP[initialP] || storedProp || 'swims_resort';
 
-        const navBtn = document.getElementById('nav-pms-btn');
-        if (navBtn) {
-            const shortKey = PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
-            navBtn.href = `index.html?p=${shortKey}`;
-        }
-
+        let propertiesList = [];
         let staff = [];
         let snapshotData = {};
         let liveInventory = {};
@@ -153,9 +155,12 @@
         const dbToUiRoom = rid => {
             if (!rid) return rid;
             let nid = rid.toUpperCase();
-            if (/^[ABFD]\d$/.test(nid)) return nid[0] + '0' + nid.substring(1);
-            if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) return 'C' + nid;
-            return nid;
+            if (hotelRooms.some(r => r.id === nid || r.id === rid)) return rid;
+            if (currentPropertyId === 'swims_resort') {
+                if (/^[ABFD]\d$/.test(nid)) return nid[0] + '0' + nid.substring(1);
+                if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) return 'C' + nid;
+            }
+            return rid;
         };
 
         window.showAlert = (msg, isConfirm = false, onConfirm = null) => {
@@ -193,6 +198,27 @@
             }
         };
 
+        window.syncPropertyUrl = propId => {
+            const shortKey = PROP_REVERSE_MAP[propId] || 'SWIMS';
+            try {
+                if (window.location.protocol !== 'blob:') {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('p', shortKey);
+                    window.history.replaceState({}, '', url.toString());
+                }
+            } catch (e) {}
+
+            const navBtn = document.getElementById('nav-pms-btn');
+            if (navBtn) {
+                navBtn.href = `index.html?p=${shortKey}`;
+            }
+
+            const ind = document.getElementById('auditor-prop-indicator');
+            if (ind) {
+                ind.innerText = `Active: ${shortKey} | Paste Extranet List Below`;
+            }
+        };
+
         const updateDismissedUI = () => {
             const btn = document.getElementById('reset-dismissed-btn');
             if (!btn) return;
@@ -200,12 +226,15 @@
             else btn.classList.add('hidden');
         };
 
+        const getBaselineDocId = () => `baseline_${currentPropertyId}`;
+
         window.dismissBooking = async id => {
             if (!dismissedIds.includes(id)) dismissedIds.push(id);
             try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'), {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', getBaselineDocId()), {
                     matrix: snapshotData,
                     dismissed: dismissedIds,
+                    property: currentPropertyId,
                     updatedAt: new Date().toISOString()
                 }, { merge: true });
                 updateDismissedUI();
@@ -218,9 +247,10 @@
         window.resetDismissed = async () => {
             dismissedIds = [];
             try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'), {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', getBaselineDocId()), {
                     matrix: snapshotData,
                     dismissed: dismissedIds,
+                    property: currentPropertyId,
                     updatedAt: new Date().toISOString()
                 }, { merge: true });
                 updateDismissedUI();
@@ -230,42 +260,36 @@
             }
         };
 
-        const loadConfigAndInit = async () => {
-            const loader = document.getElementById('loader');
-            const statusEl = document.getElementById('sync-status');
-
-            // Safety timeout: Ensure the loading overlay never freezes the viewport
-            const safetyTimer = setTimeout(() => {
-                if (loader) loader.style.display = 'none';
-            }, 5000);
-
+        const loadPropertyBaseline = async () => {
             try {
-                if (typeof window.__initial_auth_token !== 'undefined') {
-                    try {
-                        await signInWithCustomToken(auth, window.__initial_auth_token);
-                    } catch (tokenErr) {
-                        await signInAnonymously(auth);
-                    }
+                let baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', getBaselineDocId()));
+                
+                // Backward compatibility: If no per-property doc exists and we're on SWIMS, fallback to original legacy baseline
+                if (!baselineSnap.exists() && currentPropertyId === 'swims_resort') {
+                    baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'));
+                }
+
+                if (baselineSnap.exists()) {
+                    snapshotData = baselineSnap.data().matrix || {};
+                    dismissedIds = baselineSnap.data().dismissed || [];
                 } else {
-                    await signInAnonymously(auth);
+                    snapshotData = {};
+                    dismissedIds = [];
                 }
-            } catch (authErr) {
-                console.warn("Auth bypass/anon warning:", authErr);
-                if (statusEl) statusEl.innerText = 'AUTH ERROR';
+                updateDismissedUI();
+            } catch (baseErr) {
+                console.warn("Could not load baseline for property:", currentPropertyId, baseErr);
+                snapshotData = {};
+                dismissedIds = [];
             }
+        };
 
-            try {
-                const propSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentPropertyId));
-                if (propSnap.exists()) {
-                    hotelRooms = propSnap.data().rooms || [];
-                }
-            } catch (err) {
-                console.warn("Could not load dynamic property rooms, using fallback", err);
-            }
-
-            if (hotelRooms.length === 0) {
-                const rawRooms = "B01|Oceanfront King|KING|2|101^A01|Oceanfront King|KING|1|102^A02|Oceanfront King|KING|1|103^B02|Oceanfront Twin|TWIN|2|201^B03|Oceanview King Room|KING|2|301^B05|Oceanview King Room|KING|2|302^B07|Oceanview King Room|KING|2|303^A03|Oceanview King Room|KING|1|304^A04|Oceanview King Room|KING|1|305^A06|Oceanview King Room|KING|1|306^A08|Oceanview King Room|KING|1|307^A10|Oceanview King Room|KING|1|308^A12|Oceanview King Room|KING|1|309^C206|Oceanview King Room|KING|2|310^C306|Oceanview King Room|KING|3|311^C311|Oceanview King Room|KING|3|312^B04|Oceanview Twin Room|TWIN|2|401^B06|Oceanview Twin Room|TWIN|2|402^B08|Oceanview Twin Room|TWIN|2|403^C212|Oceanview Twin Room|TWIN|2|404^A05|Partial Oceanview King Room|KING|1|501^A07|Partial Oceanview King Room|KING|1|502^A09|Partial Oceanview King Room|KING|1|503^A11|Partial Oceanview King Room|KING|1|504^C203|Partial Oceanview King Room|KING|2|505^C204|Partial Oceanview King Room|KING|2|506^C205|Partial Oceanview King Room|KING|2|507^B09|Gardenview King Room|KING|2|601^B11|Gardenview King Room|KING|2|602^B13|Gardenview King Room|KING|2|603^B15|Gardenview King Room|KING|2|604^B17|Gardenview King Room|KING|2|605^B19|Gardenview King Room|KING|2|606^B21|Gardenview King Room|KING|2|607^B22|Gardenview King Room|KING|2|608^B10|Gardenview Twin Room|TWIN|2|701^B12|Gardenview Twin Room|TWIN|2|702^B14|Gardenview Twin Room|TWIN|2|703^B16|Gardenview Twin Room|TWIN|2|704^B18|Gardenview Twin Room|TWIN|2|705^B20|Gardenview Twin Room|TWIN|2|706^C201|Gardenview Twin Room|TWIN|2|707^C202|Gardenview Twin Room|TWIN|2|708^C207|Gardenview Twin Room|TWIN|2|709^C208|Gardenview Twin Room|TWIN|2|710^C209|Gardenview Twin Room|TWIN|2|711^C210|Gardenview Twin Room|TWIN|2|712^C211|Gardenview Twin Room|TWIN|2|713^C101|Gardenview Twin Room|TWIN|1|714^C307|Partial Oceanview Triple Room|BUNK+T|3|801^C308|Partial Oceanview Triple Room|BUNK+T|3|802^C305|Partial Oceanview Triple Room|K+T|3|803^C309|Partial Oceanview Triple Room|K+T|3|804^C310|Partial Oceanview Triple Room|K+T|3|805^C301-1|Standard Quad Dorm|QUAD|3|901^C301-2|Standard Quad Dorm|QUAD|3|902^C301-3|Standard Quad Dorm|QUAD|3|903^C301-4|Standard Quad Dorm|QUAD|3|904^C302-1|Standard Quad Dorm|QUAD|3|905^C302-2|Standard Quad Dorm|QUAD|3|906^C302-3|Standard Quad Dorm|QUAD|3|907^C302-4|Standard Quad Dorm|QUAD|3|908^C303-1|Standard Quad Dorm|QUAD|3|909^C303-2|Standard Quad Dorm|QUAD|3|910^C303-3|Standard Quad Dorm|QUAD|3|911^C303-4|Standard Quad Dorm|QUAD|3|912^C304-1|Standard Quad Dorm|QUAD|3|913^C304-2|Standard Quad Dorm|QUAD|3|914^C304-3|Standard Quad Dorm|QUAD|3|915^C304-4|Standard Quad Dorm|QUAD|3|916^D01|BUNGALOWS||1|1001^D02|BUNGALOWS||1|1002^D03|BUNGALOWS||1|1003^D04|BUNGALOWS||1|1004^D05|BUNGALOWS||1|1005^D06|BUNGALOWS||1|1006^D07|BUNGALOWS||1|1007^D08|BUNGALOWS||1|1008^D09|BUNGALOWS||1|1009^D10|BUNGALOWS||1|1010^D11|BUNGALOWS||1|1011";
-                hotelRooms = rawRooms.split('^').map(r => { const p = r.split('|'); return { id: p[0], type: p[1] }; });
+        const setupPropertyData = async () => {
+            const propObj = propertiesList.find(p => p.id === currentPropertyId);
+            if (propObj) {
+                hotelRooms = propObj.rooms || [];
+            } else {
+                hotelRooms = [];
             }
 
             rawTypes = [];
@@ -275,36 +299,24 @@
                 if (r.type) totalRoomsByType[r.type] = (totalRoomsByType[r.type] || 0) + 1;
             });
 
-            // Initial calculate and render
+            await loadPropertyBaseline();
             calculateLiveInventory();
+            window.checkMissing();
+        };
 
-            try {
-                const baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'));
-                if (baselineSnap.exists()) {
-                    snapshotData = baselineSnap.data().matrix || {};
-                    dismissedIds = baselineSnap.data().dismissed || [];
-                    updateDismissedUI();
-                }
-            } catch (baseErr) {
-                console.warn("Could not load baseline:", baseErr);
-            }
+        window.handlePropertySwitch = async newPropId => {
+            if (!newPropId || newPropId === currentPropertyId) return;
+            const loader = document.getElementById('loader');
+            const statusEl = document.getElementById('sync-status');
+            if (loader) loader.style.display = 'flex';
+            if (statusEl) statusEl.innerText = 'SWITCHING PROPERTY...';
 
-            try {
-                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), usersSnap => {
-                    staff = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    calculateLiveInventory();
-                    clearTimeout(safetyTimer);
-                    if (loader) loader.style.display = 'none';
-                }, snapErr => {
-                    console.warn("Staff snapshot error:", snapErr);
-                    clearTimeout(safetyTimer);
-                    if (loader) loader.style.display = 'none';
-                });
-            } catch (e) {
-                console.error("Snapshot attach error:", e);
-                clearTimeout(safetyTimer);
-                if (loader) loader.style.display = 'none';
-            }
+            currentPropertyId = newPropId;
+            try { localStorage.setItem('last_prop', newPropId); } catch (e) {}
+            window.syncPropertyUrl(newPropId);
+
+            await setupPropertyData();
+            if (loader) loader.style.display = 'none';
         };
 
         const calculateLiveInventory = () => {
@@ -323,7 +335,10 @@
                 rawTypes.forEach(t => liveInventory[dStr][t] = totalRoomsByType[t] || 0);
             }
 
-            const activeStaff = staff.filter(s => (s.property === currentPropertyId || !s.property) && s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed');
+            const activeStaff = staff.filter(s => {
+                const sProp = s.property || 'swims_resort';
+                return sProp === currentPropertyId && s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed';
+            });
 
             activeStaff.forEach(s => {
                 if (!s.checkIn || !s.checkOut) return;
@@ -353,6 +368,12 @@
                     else if (bt.includes("GARDEN") && !bt.includes("TWIN")) inferred = "Gardenview King Room";
                     else if (bt.includes("OCEANFRONT")) { inferred = bt.includes("TWIN") ? "Oceanfront Twin" : "Oceanfront King"; }
                     else if (bt.includes("BUNGALOW")) inferred = "BUNGALOWS";
+
+                    // Fallback to match directly against dynamic room types of this property
+                    if (!inferred) {
+                        const directMatch = rawTypes.find(t => t.toUpperCase() === bt || bt.includes(t.toUpperCase()));
+                        if (directMatch) inferred = directMatch;
+                    }
 
                     if (inferred) {
                         for (let k = 0; k < (s.rooms?.length || 1); k++) typesToDeduct.push(inferred);
@@ -482,7 +503,8 @@
         };
 
         window.markSynced = () => {
-            window.showAlert("Mark all current availability as synced? This will clear your 'Changes' list until new bookings arrive.", true, async () => {
+            const shortKey = PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
+            window.showAlert(`Mark all current availability as synced for ${shortKey}? This will clear your 'Changes' list until new bookings arrive.`, true, async () => {
                 const loader = document.getElementById('loader');
                 const statusEl = document.getElementById('sync-status');
                 if (loader) loader.style.display = 'flex';
@@ -490,9 +512,10 @@
 
                 snapshotData = JSON.parse(JSON.stringify(liveInventory));
                 try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'), {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', getBaselineDocId()), {
                         matrix: snapshotData,
                         dismissed: dismissedIds,
+                        property: currentPropertyId,
                         updatedAt: new Date().toISOString()
                     });
                     window.renderGrid();
@@ -505,20 +528,24 @@
 
         // ENHANCED PMS LOOKUP: Finds bookings directly OR checks for merged extension tags in notes
         const findPmsBooking = (id, extraPredicate = null) => {
-            if (!id) return null;
-            const cleanId = String(id).trim();
+            if (!id && !extraPredicate) return null;
+            const cleanId = id ? String(id).trim() : null;
             const curProp = currentPropertyId;
 
             return staff.find(s => {
-                if (s.property && s.property !== curProp) return false;
-                if (s.bookId === cleanId || s.id === cleanId) return true;
-                if (cleanId.includes('-') && s.bookId === cleanId.split('-')[1]) return true;
+                const sProp = s.property || 'swims_resort';
+                if (sProp !== curProp) return false;
 
-                // Merge detection: Check if booking notes recorded this ID as an absorbed extension
-                if (s.notes) {
-                    if (s.notes.includes(cleanId)) return true;
-                    if (s.notes.includes(`[Merged Book ID]: ${cleanId}`)) return true;
-                    if (s.notes.includes(`--- MERGED WITH BOOKING ${cleanId} ---`)) return true;
+                if (cleanId) {
+                    if (s.bookId === cleanId || s.id === cleanId) return true;
+                    if (cleanId.includes('-') && s.bookId === cleanId.split('-')[1]) return true;
+
+                    // Merge detection: Check if booking notes recorded this ID as an absorbed extension
+                    if (s.notes) {
+                        if (s.notes.includes(cleanId)) return true;
+                        if (s.notes.includes(`[Merged Book ID]: ${cleanId}`)) return true;
+                        if (s.notes.includes(`--- MERGED WITH BOOKING ${cleanId} ---`)) return true;
+                    }
                 }
 
                 if (extraPredicate && extraPredicate(s)) return true;
@@ -541,7 +568,7 @@
 
             const lowerText = rawText.toLowerCase();
             let source = 'bdc';
-            if (lowerText.includes('hostelworld') || rawText.includes('339615-')) {
+            if (lowerText.includes('hostelworld') || /\b\d{5,7}-\d+\b/.test(rawText)) {
                 source = 'hw';
             } else if (lowerText.includes('airbnb') || lowerText.includes('switch to traveling') || lowerText.includes('upcoming reservations')) {
                 source = 'airbnb';
@@ -580,7 +607,7 @@
             };
 
             if (source === 'hw') {
-                const hwRegex = /(339615-\d+)/g;
+                const hwRegex = /\b(\d{5,7}-\d+)\b/g;
                 let match;
                 while ((match = hwRegex.exec(rawText)) !== null) {
                     let id = match[1];
@@ -605,7 +632,7 @@
             } else if (source === 'airbnb') {
                 let lines = rawText.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
                 for (let i = 0; i < lines.length; i++) {
-                    if (lines[i].toLowerCase().includes('sunset')) {
+                    if (lines[i].toLowerCase().includes('sunset') || lines[i].toLowerCase().includes('entire') || lines[i].toLowerCase().includes('private room') || lines[i].toLowerCase().includes('group')) {
                         let rawName = lines[i - 1];
                         if (!rawName) continue;
 
@@ -670,7 +697,7 @@
                         <div class="font-black text-sm mb-0.5 flex items-center justify-center gap-1.5">
                             <i data-lucide="check-circle" size="16" class="text-emerald-500"></i> ALL CLEAR
                         </div>
-                        <p class="font-bold text-xs text-emerald-600">No missing or pending cancelled bookings found.</p>
+                        <p class="font-bold text-xs text-emerald-600">No missing or pending cancelled bookings found for this property.</p>
                     </div>`;
             } else {
                 resultDiv.innerHTML = `
@@ -684,6 +711,72 @@
                     </div>`;
             }
             if (window.lucide) window.lucide.createIcons();
+        };
+
+        const loadConfigAndInit = async () => {
+            const loader = document.getElementById('loader');
+            const statusEl = document.getElementById('sync-status');
+
+            const safetyTimer = setTimeout(() => {
+                if (loader) loader.style.display = 'none';
+            }, 5000);
+
+            try {
+                if (typeof window.__initial_auth_token !== 'undefined') {
+                    try {
+                        await signInWithCustomToken(auth, window.__initial_auth_token);
+                    } catch (tokenErr) {
+                        await signInAnonymously(auth);
+                    }
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (authErr) {
+                console.warn("Auth bypass/anon warning:", authErr);
+                if (statusEl) statusEl.innerText = 'AUTH ERROR';
+            }
+
+            try {
+                const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
+                const propsSnap = await getDocs(propsRef);
+                propertiesList = [];
+                propsSnap.forEach(docSnap => propertiesList.push({ id: docSnap.id, ...docSnap.data() }));
+
+                const switcher = document.getElementById('sync-property-select');
+                if (switcher && propertiesList.length > 0) {
+                    switcher.innerHTML = propertiesList.map(p => 
+                        `<option value="${p.id}" ${p.id === currentPropertyId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`
+                    ).join('');
+
+                    if (!propertiesList.some(p => p.id === currentPropertyId)) {
+                        currentPropertyId = propertiesList[0].id;
+                        switcher.value = currentPropertyId;
+                    }
+                }
+            } catch (err) {
+                console.warn("Could not load dynamic properties list", err);
+            }
+
+            window.syncPropertyUrl(currentPropertyId);
+            await setupPropertyData();
+
+            try {
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), usersSnap => {
+                    staff = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    calculateLiveInventory();
+                    window.checkMissing();
+                    clearTimeout(safetyTimer);
+                    if (loader) loader.style.display = 'none';
+                }, snapErr => {
+                    console.warn("Staff snapshot error:", snapErr);
+                    clearTimeout(safetyTimer);
+                    if (loader) loader.style.display = 'none';
+                });
+            } catch (e) {
+                console.error("Snapshot attach error:", e);
+                clearTimeout(safetyTimer);
+                if (loader) loader.style.display = 'none';
+            }
         };
 
         loadConfigAndInit();
