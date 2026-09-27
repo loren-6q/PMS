@@ -2,150 +2,149 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Wild & Wandering | TM30 Dashboard</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    
-    <!-- STANDARD W&W THEME BLOCK -->
-    <style type="text/tailwindcss">
-        @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Condensed:wght@400;700;900&display=swap');
-        
-        @layer components {
-            .btn-action { @apply px-2 py-1 text-white rounded shadow text-xs font-black uppercase flex items-center justify-center gap-1 hover:brightness-110 active:scale-95 transition-all cursor-pointer; }
-            .btn-modal { @apply px-6 py-2 rounded-lg font-black text-sm uppercase transition-colors cursor-pointer shadow-sm; }
-            .input-base { @apply w-full bg-slate-50 border border-slate-300 font-bold text-xs px-2 py-1.5 rounded outline-none focus:ring-2 focus:ring-blue-500 transition-shadow; }
-            .label-base { @apply text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest block; }
-        }
-
-        body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; overscroll-behavior-y: none; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        .alert-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 200; pointer-events: auto; padding: 1rem;}
-        .alert-modal-overlay.active { display: flex; }
-        
-        .row-checkbox { accent-color: #3b82f6; cursor: pointer; width: 14px; height: 14px; }
-    </style>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 </head>
-<body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
+
+<body class="bg-slate-100 p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
     <div id="toast-container" class="fixed top-4 right-4 z-[999] flex flex-col gap-2 pointer-events-none"></div>
 
+    <!-- Alert Modal matching Global PMS Theme -->
+    <div id="alert-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase flex items-center justify-between text-sm">
+                <span id="alert-header-title">Attention</span>
+                <button type="button" onclick="window.closeAlert()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="18"></i></button>
+            </div>
+            <div class="p-6 text-center">
+                <div id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></div>
+                <div id="alert-actions" class="mt-6 flex gap-2 justify-center">
+                    <button id="alert-cancel" onclick="window.closeAlert()" class="hidden btn-modal bg-slate-200 text-slate-700">Cancel</button>
+                    <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
-        
-        <!-- HEADER (UNIFIED DESIGN) -->
-        <header class="flex items-center justify-between bg-slate-900 px-3 py-2 sm:p-4 rounded-none sm:rounded-t-xl shrink-0 text-white shadow-lg z-40 flex-wrap gap-3">
+        <!-- UNIFORM TOP NAVBAR MATCHING PMS & SYNC -->
+        <div class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-2 shrink-0 z-50 unselectable w-full">
             <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
                 <div id="connection-dot" class="relative flex h-2.5 w-2.5 shrink-0" title="Disconnected">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
                 </div>
-                
-                <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-2 hover:brightness-110 transition-all cursor-pointer">
-                    <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-6 sm:h-9 object-contain">
+
+                <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
+                    <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-10 object-contain">
                 </a>
-                
-                <div class="hidden sm:flex flex-col min-w-0 border-l border-slate-700 pl-3">
-                    <h1 id="main-title" class="font-black text-sm sm:text-base text-slate-100 tracking-widest uppercase leading-none">TM30 Queue</h1>
-                    <p class="text-[9px] text-emerald-400 font-bold uppercase tracking-widest mt-0.5">Immigration Export</p>
+
+                <h1 class="text-base sm:text-lg font-black uppercase tracking-tight text-slate-800 flex items-center gap-1.5">
+                    <i data-lucide="id-card" size="18" class="text-emerald-600"></i> <span id="main-title">TM30 Queue</span>
+                </h1>
+
+                <!-- Property Filter Switcher -->
+                <div class="flex items-center bg-slate-100 rounded px-2 py-0.5 border border-slate-300 shadow-inner ml-1 sm:ml-2">
+                    <span class="text-[10px] font-black uppercase text-slate-500 mr-1.5 tracking-wider hidden sm:inline">Property:</span>
+                    <select id="property-filter" onchange="window.setPropFilter(this.value)" class="bg-white font-black text-xs uppercase text-emerald-700 outline-none cursor-pointer border border-slate-300 rounded px-2 py-0.5 shadow-sm">
+                        <option value="ALL">ALL PROPERTIES</option>
+                        <option value="SWIMS">SWIMS</option>
+                        <option value="WET">WET</option>
+                        <option value="LOUD">LOUD</option>
+                        <option value="BIGC">BIGC</option>
+                    </select>
                 </div>
-                
-                <button onclick="document.getElementById('credentials-modal').classList.add('active')" class="ml-1 sm:ml-2 bg-slate-800 hover:bg-slate-700 text-slate-300 p-1.5 rounded border border-slate-600 shadow transition-colors flex items-center justify-center cursor-pointer" title="Immigration Portal Login">
-                    <i data-lucide="key" class="w-4 h-4 text-emerald-400"></i>
-                </button>
-
-                <a href="index.html" class="ml-1 sm:ml-2 text-[10px] sm:text-xs font-bold text-slate-400 hover:text-slate-200 uppercase transition-colors whitespace-nowrap">← PMS</a>
             </div>
-            
-            <div class="flex items-center gap-2 overflow-x-auto no-scrollbar w-full sm:w-auto ml-auto justify-between sm:justify-end">
-                
-                <!-- COMPACT PROPERTY TOGGLE -->
-                <select id="property-filter" onchange="window.setPropFilter(this.value)" class="bg-slate-800 border border-slate-600 text-white text-[11px] font-black uppercase tracking-widest rounded px-2 py-1.5 focus:outline-none focus:border-emerald-500 transition-colors shrink-0 outline-none cursor-pointer shadow w-24 text-center appearance-none text-ellipsis">
-                    <option value="ALL">ALL</option>
-                    <option value="WET">WET</option>
-                    <option value="SWIMS">SWIMS</option>
-                    <option value="LOUD">LOUD</option>
-                    <option value="BIGC">BIGC</option>
-                </select>
 
+            <!-- Action Controls & Navigation -->
+            <div class="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar ml-auto">
                 <div id="global-search-container" class="relative shrink-0">
-                    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1.5 text-slate-400"></i>
-                    <input type="text" id="global-search" onkeyup="applyFilters()" placeholder="Search..." class="bg-white border border-slate-300 text-slate-800 text-[11px] font-bold rounded pl-8 pr-2 py-1.5 w-28 sm:w-40 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-shadow">
+                    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400"></i>
+                    <input type="text" id="global-search" onkeyup="window.applyFilters()" placeholder="Search..." class="bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded pl-8 pr-2 py-1 w-28 sm:w-36 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-shadow">
                 </div>
 
-                <div class="flex items-center gap-1.5 shrink-0 flex-nowrap">
-                    <button id="bulk-assign-btn" onclick="openBulkAssignModal()" class="hidden btn-action bg-purple-600 hover:bg-purple-700 whitespace-nowrap">
-                        <i data-lucide="layers" class="w-3.5 h-3.5"></i> EDIT
-                    </button>
-                    <button id="bulk-delete-btn" onclick="confirmBulkDelete()" class="hidden btn-action bg-red-600 hover:bg-red-700 whitespace-nowrap">
-                        <i data-lucide="trash" class="w-3.5 h-3.5"></i> DEL
-                    </button>
-                    <button id="send-ext-btn" onclick="sendToExtension()" class="hidden btn-action bg-sky-600 hover:bg-sky-700 whitespace-nowrap">
-                        <i data-lucide="puzzle" class="w-3.5 h-3.5"></i> EXT
-                    </button>
-                    <button id="export-excel-btn" onclick="exportToExcel()" class="hidden btn-action bg-emerald-600 hover:bg-emerald-700 whitespace-nowrap">
-                        <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> XLS
-                    </button>
-                    <button id="clear-queue-btn" onclick="markAllAsFiled()" class="hidden btn-action bg-slate-700 hover:bg-slate-600 border border-slate-500 whitespace-nowrap">
-                        <i data-lucide="check-square" class="w-3.5 h-3.5"></i> CLEAR
-                    </button>
-                    <button id="toggle-view-btn" onclick="toggleView()" class="btn-action bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 whitespace-nowrap ml-1">
-                        <i data-lucide="database" class="w-3.5 h-3.5"></i> <span id="toggle-view-text">ARCHIVE</span>
-                    </button>
-                </div>
+                <button id="bulk-assign-btn" onclick="window.openBulkAssignModal()" class="hidden btn-action bg-purple-600 hover:bg-purple-700 whitespace-nowrap">
+                    <i data-lucide="layers" class="w-3.5 h-3.5"></i> EDIT
+                </button>
+                <button id="bulk-delete-btn" onclick="window.confirmBulkDelete()" class="hidden btn-action bg-red-600 hover:bg-red-700 whitespace-nowrap">
+                    <i data-lucide="trash" class="w-3.5 h-3.5"></i> DEL
+                </button>
+                <button id="send-ext-btn" onclick="window.sendToExtension()" class="hidden btn-action bg-sky-600 hover:bg-sky-700 whitespace-nowrap">
+                    <i data-lucide="puzzle" class="w-3.5 h-3.5"></i> EXT
+                </button>
+                <button id="export-excel-btn" onclick="window.exportToExcel()" class="hidden btn-action bg-emerald-600 hover:bg-emerald-700 whitespace-nowrap">
+                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> XLS
+                </button>
+                <button id="clear-queue-btn" onclick="window.markAllAsFiled()" class="hidden btn-action bg-slate-700 hover:bg-slate-600 border border-slate-500 whitespace-nowrap">
+                    <i data-lucide="check-square" class="w-3.5 h-3.5"></i> CLEAR
+                </button>
+                <button id="toggle-view-btn" onclick="window.toggleView()" class="btn-action bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 whitespace-nowrap">
+                    <i data-lucide="database" class="w-3.5 h-3.5"></i> <span id="toggle-view-text">ARCHIVE</span>
+                </button>
+                <button onclick="document.getElementById('credentials-modal').classList.add('active')" class="p-1 sm:p-1.5 text-slate-500 hover:text-emerald-600 bg-white border border-slate-200 hover:bg-emerald-50 rounded shadow-sm transition-colors cursor-pointer" title="TM30 Login Credentials">
+                    <i data-lucide="key" class="w-4 h-4 text-emerald-600"></i>
+                </button>
+                <a id="nav-pms-btn" href="index.html" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded font-black text-xs uppercase flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer whitespace-nowrap">
+                    <i data-lucide="calendar" size="14"></i> Calendar
+                </a>
             </div>
-        </header>
+        </div>
 
-        <!-- TABLE AREA -->
-        <main class="flex-1 flex flex-col min-h-0 bg-white border-x border-b border-slate-300 rounded-none sm:rounded-b-xl shadow-xl overflow-hidden">
+        <!-- MAIN TABLE AREA -->
+        <main class="flex-1 flex flex-col min-h-0 bg-white border-x sm:border border-slate-300 rounded-none sm:rounded-lg shadow overflow-hidden">
             <div class="flex-1 overflow-auto bg-slate-50">
-                <table class="w-full text-left border-collapse whitespace-nowrap text-[12px]">
+                <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
                     <thead class="sticky top-0 z-10 bg-slate-200 shadow-sm border-b border-slate-300">
                         <tr class="text-slate-600 uppercase tracking-wider text-[11px] font-black">
                             <th class="py-2 px-2 w-8 border-r border-slate-300 text-center bg-slate-300">
-                                <input type="checkbox" id="select-all" onclick="toggleSelectAll(this)" title="Select all in view" class="row-checkbox cursor-pointer">
+                                <input type="checkbox" id="select-all" onclick="window.toggleSelectAll(this)" title="Select all in view" class="row-checkbox">
                             </th>
                             <th class="py-2 px-2 w-16 border-r border-slate-300 text-center">Acts</th>
-                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="sortTable('property')">
+                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="window.sortTable('property')">
                                 <div class="flex items-center justify-between">Property <i id="sort-icon-property" data-lucide="arrow-up-down" class="w-3 h-3 text-slate-400 group-hover:text-slate-600"></i></div>
                             </th>
-                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="sortTable('firstName')">
+                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="window.sortTable('firstName')">
                                 <div class="flex items-center justify-between">First Name <i id="sort-icon-firstName" data-lucide="arrow-up-down" class="w-3 h-3 text-slate-400 group-hover:text-slate-600"></i></div>
                             </th>
                             <th class="py-2 px-2 border-r border-slate-300">Middle Name</th>
-                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="sortTable('lastName')">
+                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="window.sortTable('lastName')">
                                 <div class="flex items-center justify-between">Last Name <i id="sort-icon-lastName" data-lucide="arrow-up-down" class="w-3 h-3 text-slate-400 group-hover:text-slate-600"></i></div>
                             </th>
                             <th class="py-2 px-2 border-r border-slate-300 text-center">Gender</th>
-                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="sortTable('passportNumber')">
+                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="window.sortTable('passportNumber')">
                                 <div class="flex items-center justify-between">Passport No. <i id="sort-icon-passportNumber" data-lucide="arrow-up-down" class="w-3 h-3 text-slate-400 group-hover:text-slate-600"></i></div>
                             </th>
-                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="sortTable('nationality')">
+                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="window.sortTable('nationality')">
                                 <div class="flex items-center justify-between">Nationality <i id="sort-icon-nationality" data-lucide="arrow-up-down" class="w-3 h-3 text-slate-400 group-hover:text-slate-600"></i></div>
                             </th>
                             <th class="py-2 px-2 border-r border-slate-300">Birth Date</th>
                             <th class="py-2 px-2 border-r border-slate-300">Check-out</th>
-                            <th class="py-2 px-2">Phone No.</th>
+                            <th class="py-2 px-2 border-r border-slate-300">Phone No.</th>
+                            <th class="py-2 px-2 text-center">PMS Status</th>
                         </tr>
                     </thead>
                     <tbody id="table-body" class="bg-white">
                         <tr>
-                            <td colspan="12" class="text-center py-12 text-slate-400 font-bold uppercase tracking-widest">
+                            <td colspan="13" class="text-center py-12 text-slate-400 font-bold uppercase tracking-widest">
                                 <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-3 text-slate-300"></i>
-                                Waiting for passports from Telegram...
+                                Connecting to TM30 stream...
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-            
+
             <div class="bg-slate-100 p-1.5 border-t border-slate-300 flex justify-between items-center shrink-0">
-                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2" id="status-footer">Queue Live</span>
+                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2" id="status-footer">Queue Live</span>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider mr-2" id="status-count">0 Guests</span>
             </div>
         </main>
     </div>
@@ -157,31 +156,31 @@
             <h3 class="text-base font-black text-slate-800 uppercase mb-2">Confirm Deletion</h3>
             <p id="confirm-text" class="text-sm font-bold text-slate-500 mb-6">Are you sure you want to delete?</p>
             <div class="flex justify-center gap-2">
-                <button onclick="closeConfirmModal()" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300">Cancel</button>
+                <button onclick="window.closeConfirmModal()" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300">Cancel</button>
                 <button id="confirm-yes-btn" class="btn-modal bg-red-600 hover:bg-red-700 text-white">Delete</button>
             </div>
         </div>
     </div>
 
-    <!-- Credentials Modal (Updated to Light Theme) -->
+    <!-- Credentials Modal -->
     <div id="credentials-modal" class="alert-modal-overlay">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm border-2 border-slate-800 flex flex-col overflow-hidden">
             <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm">
                 <div class="flex items-center gap-2"><i data-lucide="key" class="w-4 h-4 text-emerald-400"></i> TM30 Credentials</div>
                 <button onclick="document.getElementById('credentials-modal').classList.remove('active')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
-            <div class="p-4 space-y-4">
+            <div class="p-4 space-y-3">
                 <div class="text-center">
                     <a href="https://tm30.immigration.go.th/" target="_blank" class="text-blue-600 hover:text-blue-700 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-1 bg-blue-50 py-2 rounded border border-blue-200 transition-colors"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> tm30.immigration.go.th</a>
                 </div>
-                
+
                 <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 shadow-sm">
                     <div class="text-[11px] text-emerald-600 font-black uppercase tracking-wider mb-2 border-b border-slate-200 pb-1">Wet Pool Party</div>
                     <div class="flex flex-col gap-1.5 text-xs">
-                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="copyText('pontip031217@gmail.com', 'Wet Username copied')">
+                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="window.copyText('pontip031217@gmail.com', 'Wet Username copied')">
                             <span class="text-slate-500 font-bold uppercase text-[10px]">User:</span> <span class="text-slate-700 font-bold">pontip031217@gmail.com</span>
                         </div>
-                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="copyText('Pontip@chongkonphuet03', 'Wet Password copied')">
+                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="window.copyText('Pontip@chongkonphuet03', 'Wet Password copied')">
                             <span class="text-slate-500 font-bold uppercase text-[10px]">Pass:</span> <span class="text-slate-700 font-bold">Pontip@chongkonphuet03</span>
                         </div>
                     </div>
@@ -190,10 +189,10 @@
                 <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 shadow-sm">
                     <div class="text-[11px] text-blue-600 font-black uppercase tracking-wider mb-2 border-b border-slate-200 pb-1">Swims Resort</div>
                     <div class="flex flex-col gap-1.5 text-xs">
-                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="copyText('maxfriendlyresort@gmail.com', 'Swims Username copied')">
+                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="window.copyText('maxfriendlyresort@gmail.com', 'Swims Username copied')">
                             <span class="text-slate-500 font-bold uppercase text-[10px]">User:</span> <span class="text-slate-700 font-bold">maxfriendlyresort@gmail.com</span>
                         </div>
-                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="copyText('Max0838888341!', 'Swims Password copied')">
+                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="window.copyText('Max0838888341!', 'Swims Password copied')">
                             <span class="text-slate-500 font-bold uppercase text-[10px]">Pass:</span> <span class="text-slate-700 font-bold">Max0838888341!</span>
                         </div>
                     </div>
@@ -202,23 +201,11 @@
                 <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 shadow-sm">
                     <div class="text-[11px] text-purple-600 font-black uppercase tracking-wider mb-2 border-b border-slate-200 pb-1">LOUD Samui</div>
                     <div class="flex flex-col gap-1.5 text-xs">
-                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="copyText('umairch018@gmail.com', 'Loud Username copied')">
+                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="window.copyText('umairch018@gmail.com', 'Loud Username copied')">
                             <span class="text-slate-500 font-bold uppercase text-[10px]">User:</span> <span class="text-slate-700 font-bold">umairch018@gmail.com</span>
                         </div>
-                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="copyText('Samui123!', 'Loud Password copied')">
+                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="window.copyText('Samui123!', 'Loud Password copied')">
                             <span class="text-slate-500 font-bold uppercase text-[10px]">Pass:</span> <span class="text-slate-700 font-bold">Samui123!</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 shadow-sm">
-                    <div class="text-[11px] text-orange-600 font-black uppercase tracking-wider mb-2 border-b border-slate-200 pb-1">BIG C</div>
-                    <div class="flex flex-col gap-1.5 text-xs">
-                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="copyText('warisara.noppa@gmail.com', 'BIG C Username copied')">
-                            <span class="text-slate-500 font-bold uppercase text-[10px]">User:</span> <span class="text-slate-700 font-bold">warisara.noppa@gmail.com</span>
-                        </div>
-                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="copyText('Elements24', 'BIG C Password copied')">
-                            <span class="text-slate-500 font-bold uppercase text-[10px]">Pass:</span> <span class="text-slate-700 font-bold">Elements24</span>
                         </div>
                     </div>
                 </div>
@@ -232,10 +219,10 @@
             <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Bulk Edit Property</div>
             <div class="p-5 text-center">
                 <p class="text-sm font-bold text-slate-500 mb-3">Assign property to <span id="bulk-count" class="font-black text-slate-800">0</span> selected guests.</p>
-                <input type="text" id="bulk-property" class="input-base text-center !text-sm mb-4" placeholder="e.g. WET or SWIMS">
+                <input type="text" id="bulk-property" class="input-base text-center !text-sm mb-4" placeholder="e.g. WET, SWIMS, LOUD">
                 <div class="flex justify-center gap-2">
-                    <button onclick="closeBulkAssignModal()" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300">Cancel</button>
-                    <button onclick="applyBulkProperty()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white">Apply</button>
+                    <button onclick="window.closeBulkAssignModal()" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300">Cancel</button>
+                    <button onclick="window.applyBulkProperty()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white">Apply</button>
                 </div>
             </div>
         </div>
@@ -246,7 +233,7 @@
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md border-2 border-slate-800 flex flex-col overflow-hidden max-h-[90vh]">
             <div class="bg-slate-900 p-3 text-white font-bold uppercase text-sm flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-2"><i data-lucide="user" class="w-4 h-4"></i> Edit Guest Details</div>
-                <button onclick="closeEditModal()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" class="w-4 h-4"></i></button>
+                <button onclick="window.closeEditModal()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
             <div class="p-4 overflow-y-auto flex-1">
                 <input type="hidden" id="edit-doc-id">
@@ -304,8 +291,8 @@
                 </div>
             </div>
             <div class="p-3 bg-slate-100 border-t border-slate-200 flex justify-end gap-2 shrink-0">
-                <button onclick="closeEditModal()" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300 !py-1.5">Cancel</button>
-                <button onclick="saveEdit()" class="btn-modal bg-blue-600 hover:bg-blue-700 text-white !py-1.5 shadow">Save Changes</button>
+                <button onclick="window.closeEditModal()" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300 !py-1.5">Cancel</button>
+                <button onclick="window.saveEdit()" class="btn-modal bg-blue-600 hover:bg-blue-700 text-white !py-1.5 shadow">Save Changes</button>
             </div>
         </div>
     </div>
@@ -316,7 +303,6 @@
         import { getFirestore, collection, onSnapshot, doc, updateDoc, deleteDoc, query, where, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
-
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -324,9 +310,13 @@
         const targetAppId = 'hotel-pms-v1';
         let currentSubmissionsList = [];
         let historyList = [];
+        let pmsBookings = [];
         let viewMode = 'queue';
         let currentPropFilter = 'ALL';
-        
+
+        const PROP_MAP = { 'LOUD': 'loud_samui', 'WET': 'wet_pool', 'SWIMS': 'swims_resort' };
+        const PROP_REVERSE_MAP = { 'loud_samui': 'LOUD', 'wet_pool': 'WET', 'swims_resort': 'SWIMS' };
+
         const urlParams = new URLSearchParams(window.location.search);
         const pParam = urlParams.get('p');
         if (pParam) {
@@ -340,51 +330,98 @@
                 if (f) f.value = currentPropFilter;
             });
         }
-        
+
         let searchTerm = '';
-        let sortCol = 'createdAt'; 
+        let sortCol = 'createdAt';
         let sortDesc = true;
 
-        // Global Bindings
-        window.copyText = copyText;
-        window.deleteGuest = deleteGuest;
-        window.openEditModal = openEditModal;
-        window.closeEditModal = closeEditModal;
-        window.saveEdit = saveEdit;
-        window.markAllAsFiled = markAllAsFiled;
-        window.exportToExcel = exportToExcel;
-        window.sendToExtension = sendToExtension;
-        window.toggleView = toggleView;
-        window.applyFilters = applyFilters;
-        window.sortTable = sortTable;
-        window.toggleSelectAll = toggleSelectAll;
-        window.updateBulkActionVisibility = updateBulkActionVisibility;
-        window.openBulkAssignModal = openBulkAssignModal;
-        window.closeBulkAssignModal = closeBulkAssignModal;
-        window.applyBulkProperty = applyBulkProperty;
-        
-        window.confirmBulkDelete = confirmBulkDelete;
-        window.closeConfirmModal = closeConfirmModal;
+        window.showAlert = (msg, isConfirm = false, onConfirm = null) => {
+            const modal = document.getElementById('alert-modal');
+            const msgEl = document.getElementById('alert-message');
+            const cancelBtn = document.getElementById('alert-cancel');
+            const confirmBtn = document.getElementById('alert-confirm');
+            if (!modal || !msgEl) return;
+
+            msgEl.innerText = msg;
+            if (isConfirm) {
+                cancelBtn.classList.remove('hidden');
+                cancelBtn.style.display = 'block';
+                confirmBtn.innerText = 'Confirm';
+                confirmBtn.className = 'btn-modal bg-blue-600 hover:bg-blue-700 text-white px-10';
+                confirmBtn.onclick = () => { if (onConfirm) onConfirm(); window.closeAlert(); };
+            } else {
+                cancelBtn.classList.add('hidden');
+                cancelBtn.style.display = 'none';
+                confirmBtn.innerText = 'Okay';
+                confirmBtn.className = 'btn-modal bg-blue-600 hover:bg-blue-700 text-white px-10';
+                confirmBtn.onclick = window.closeAlert;
+            }
+
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.closeAlert = () => {
+            const modal = document.getElementById('alert-modal');
+            if (modal) {
+                modal.classList.remove('active');
+                modal.style.display = 'none';
+            }
+        };
+
+        window.copyText = (text, successMsg) => {
+            if (!text) return;
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = text;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+            window.showToast("Copied", successMsg, "success");
+        };
+
+        window.showToast = (title, text, type = "success") => {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgColor = type === "success" ? "bg-emerald-600 border-emerald-500 shadow-emerald-500/20" : "bg-red-600 border-red-500 shadow-red-500/20";
+            const icon = type === "success" ? `<i data-lucide="check-circle" class="w-4 h-4 text-white"></i>` : `<i data-lucide="alert-circle" class="w-4 h-4 text-white"></i>`;
+
+            toast.className = `${bgColor} border text-white p-3 rounded-lg shadow-xl transform transition-all duration-300 translate-x-full opacity-0 max-w-xs`;
+            toast.innerHTML = `
+                <div class="flex items-start gap-2">
+                    <div class="mt-0.5">${icon}</div>
+                    <div><h4 class="text-xs font-black uppercase tracking-widest">${title}</h4><p class="text-[11px] font-bold text-white/90 mt-0.5 leading-tight">${text}</p></div>
+                </div>`;
+            container.appendChild(toast);
+            if (window.lucide) window.lucide.createIcons();
+            requestAnimationFrame(() => toast.classList.remove('translate-x-full', 'opacity-0'));
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        };
 
         window.setPropFilter = (f) => {
             currentPropFilter = f;
+            try {
+                if (window.location.protocol !== 'blob:') {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('p', f);
+                    window.history.replaceState({}, '', url.toString());
+                }
+            } catch (e) {}
+
+            const navBtn = document.getElementById('nav-pms-btn');
+            if (navBtn && f !== 'ALL') {
+                navBtn.href = `index.html?p=${f}`;
+            }
+
             renderCurrentView();
         };
 
-        lucide.createIcons();
-
-        signInAnonymously(auth).catch(error => showToast("Connection Error", "Failed to authenticate.", "error"));
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                document.getElementById('connection-dot').querySelector('.bg-red-500').classList.replace('bg-red-500', 'bg-emerald-500');
-                document.getElementById('connection-dot').querySelector('.bg-red-400').classList.replace('bg-red-400', 'bg-emerald-400');
-                document.getElementById('connection-dot').title = "Online";
-                startListening();
-            }
-        });
-
-        function startListening() {
+        const startListening = () => {
+            // 1. Listen for TM30 submissions
             const subsRef = collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions');
             onSnapshot(subsRef, (snapshot) => {
                 let submissions = [];
@@ -399,23 +436,30 @@
             }, (error) => {
                 console.error("Listener error:", error);
             });
-        }
 
-        async function toggleView() {
+            // 2. Realtime listener for PMS bookings to display live checkout status
+            const staffRef = collection(db, 'artifacts', targetAppId, 'public', 'data', 'staff');
+            onSnapshot(staffRef, (snap) => {
+                pmsBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderCurrentView();
+            });
+        };
+
+        window.toggleView = async () => {
             const btnText = document.getElementById('toggle-view-text');
             const title = document.getElementById('main-title');
-            
+
             document.getElementById('select-all').checked = false;
-            updateBulkActionVisibility();
+            window.updateBulkActionVisibility();
 
             if (viewMode === 'queue') {
                 viewMode = 'history';
                 btnText.innerText = "QUEUE";
-                if(title) title.innerText = "TM30 Archive";
+                if (title) title.innerText = "TM30 Archive";
                 document.getElementById('status-footer').innerText = "History Archive (Past 300)";
-                
-                document.getElementById('table-body').innerHTML = '<tr><td colspan="12" class="text-center py-12 text-slate-400 font-bold uppercase tracking-widest"><i data-lucide="loader-2" class="w-8 h-8 mx-auto mb-3 animate-spin text-blue-500"></i>Loading archive...</td></tr>';
-                lucide.createIcons();
+
+                document.getElementById('table-body').innerHTML = '<tr><td colspan="13" class="text-center py-12 text-slate-400 font-bold uppercase tracking-widest"><i data-lucide="loader-2" class="w-8 h-8 mx-auto mb-3 animate-spin text-blue-500"></i>Loading archive...</td></tr>';
+                if (window.lucide) window.lucide.createIcons();
 
                 try {
                     const q = query(collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'), 
@@ -424,41 +468,41 @@
                     const snapshot = await getDocs(q);
                     historyList = [];
                     snapshot.forEach(doc => historyList.push({ id: doc.id, ...doc.data() }));
-                    
+
                     historyList.sort((a, b) => {
                         const timeA = a.createdAt?.toMillis() || 0;
                         const timeB = b.createdAt?.toMillis() || 0;
-                        return timeB - timeA; 
+                        return timeB - timeA;
                     });
-                    
+
                     historyList = historyList.slice(0, 300);
                     renderCurrentView();
-                } catch(e) {
-                    showToast("Error", "Could not load archive history.", "error");
+                } catch (e) {
+                    window.showToast("Error", "Could not load archive history.", "error");
                     console.error("Archive Load Error: ", e);
                 }
             } else {
                 viewMode = 'queue';
                 btnText.innerText = "ARCHIVE";
-                if(title) title.innerText = "TM30 Queue";
+                if (title) title.innerText = "TM30 Queue";
                 document.getElementById('status-footer').innerText = "Queue Live";
                 renderCurrentView();
             }
-        }
+        };
 
-        function applyFilters() {
+        window.applyFilters = () => {
             searchTerm = document.getElementById('global-search').value.toLowerCase();
             renderCurrentView();
-        }
+        };
 
-        function sortTable(col) {
+        window.sortTable = (col) => {
             if (sortCol === col) sortDesc = !sortDesc;
             else { sortCol = col; sortDesc = false; }
             updateSortIcons();
             renderCurrentView();
-        }
+        };
 
-        function updateSortIcons() {
+        const updateSortIcons = () => {
             const columns = ['property', 'firstName', 'lastName', 'passportNumber', 'nationality'];
             columns.forEach(c => {
                 const iconEl = document.getElementById(`sort-icon-${c}`);
@@ -474,13 +518,12 @@
                     }
                 }
             });
-            lucide.createIcons();
-        }
+            if (window.lucide) window.lucide.createIcons();
+        };
 
-        function renderCurrentView() {
+        const renderCurrentView = () => {
             let list = viewMode === 'queue' ? currentSubmissionsList : historyList;
 
-            // Apply property filter dropdown
             list = list.filter(g => {
                 if (currentPropFilter === 'ALL') return true;
                 let pRaw = (g.property || 'SWIMS').toUpperCase();
@@ -512,15 +555,18 @@
                 return 0;
             });
 
+            const countEl = document.getElementById('status-count');
+            if (countEl) countEl.innerText = `${list.length} Guest${list.length !== 1 ? 's' : ''}`;
+
             const extBtn = document.getElementById('send-ext-btn');
             const excelBtn = document.getElementById('export-excel-btn');
             const clearBtn = document.getElementById('clear-queue-btn');
-            
+
             if (list.length > 0) {
                 extBtn.classList.remove('hidden');
                 excelBtn.classList.remove('hidden');
                 if (viewMode === 'queue') clearBtn.classList.remove('hidden');
-                else clearBtn.classList.add('hidden'); 
+                else clearBtn.classList.add('hidden');
             } else {
                 extBtn.classList.add('hidden');
                 excelBtn.classList.add('hidden');
@@ -529,114 +575,130 @@
 
             const masterCheckbox = document.getElementById('select-all');
             if (masterCheckbox) masterCheckbox.checked = false;
-            updateBulkActionVisibility();
+            window.updateBulkActionVisibility();
 
             const tbody = document.getElementById('table-body');
             tbody.innerHTML = '';
-            
+
             if (list.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="12" class="text-center py-12 text-slate-400 font-bold uppercase tracking-widest">
+                        <td colspan="13" class="text-center py-12 text-slate-400 font-bold uppercase tracking-widest">
                             <i data-lucide="${viewMode === 'history' || searchTerm ? 'search' : 'check-circle'}" class="w-8 h-8 mx-auto mb-3 opacity-80 ${viewMode === 'history' || searchTerm ? 'text-slate-300' : 'text-emerald-500'}"></i>
                             ${searchTerm ? 'No results match your search.' : viewMode === 'history' ? 'No historical records found.' : 'Queue is empty. Ready for passports.'}
                         </td>
                     </tr>`;
-                lucide.createIcons();
+                if (window.lucide) window.lucide.createIcons();
                 return;
             }
 
             list.forEach(guest => {
                 const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-200 hover:bg-slate-50 transition-colors text-slate-700";
+                tr.className = "border-b border-slate-200 hover:bg-slate-50 transition-colors text-slate-700 text-xs";
                 tr.id = `row-${guest.id}`;
-                
+
                 let actsColumn = '';
                 if (viewMode === 'history') {
                     actsColumn = `
                     <td class="py-1 px-2 border-r border-slate-200 text-center">
                         <div class="flex gap-2 items-center justify-center">
                             <span class="text-[9px] bg-slate-200 text-slate-500 px-1 py-0.5 rounded font-black mt-0.5">FILED</span>
-                            <button id="del-${guest.id}" onclick="deleteGuest('${guest.id}')" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete (Double tap)"><i data-lucide="trash" class="w-3.5 h-3.5"></i></button>
+                            <button id="del-${guest.id}" onclick="window.deleteGuest('${guest.id}')" class="text-slate-400 hover:text-red-500 transition-colors cursor-pointer" title="Delete"><i data-lucide="trash" class="w-3.5 h-3.5"></i></button>
                         </div>
                     </td>`;
                 } else {
                     actsColumn = `
                     <td class="py-1 px-2 border-r border-slate-200 text-center">
                         <div class="flex gap-2 items-center justify-center">
-                            <button onclick='openEditModal(${JSON.stringify(guest).replace(/'/g, "&#39;")})' class="text-slate-400 hover:text-blue-500 transition-colors" title="Edit"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
-                            <button id="del-${guest.id}" onclick="deleteGuest('${guest.id}')" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete (Double tap)"><i data-lucide="trash" class="w-3.5 h-3.5"></i></button>
+                            <button onclick='window.openEditModal(${JSON.stringify(guest).replace(/'/g, "&#39;")})' class="text-slate-400 hover:text-blue-500 transition-colors cursor-pointer" title="Edit"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                            <button id="del-${guest.id}" onclick="window.deleteGuest('${guest.id}')" class="text-slate-400 hover:text-red-500 transition-colors cursor-pointer" title="Delete"><i data-lucide="trash" class="w-3.5 h-3.5"></i></button>
                         </div>
                     </td>`;
                 }
 
                 const dobString = (guest.dobDay && guest.dobMonth && guest.dobYear) ? `${guest.dobDay}/${guest.dobMonth}/${guest.dobYear}` : "";
 
+                // Live PMS Booking Match Indicator
+                let pmsBadge = `<span class="text-[9px] text-slate-400 uppercase font-black">--</span>`;
+                if (guest.passportNumber) {
+                    const cleanPass = guest.passportNumber.toUpperCase().replace(/\s/g, '');
+                    const matched = pmsBookings.find(b => {
+                        return (b.notes && b.notes.includes(cleanPass)) ||
+                               (b.lastName && guest.lastName && b.lastName.toUpperCase() === guest.lastName.toUpperCase() && b.firstName && guest.firstName && b.firstName.toUpperCase().includes(guest.firstName.toUpperCase()));
+                    });
+
+                    if (matched) {
+                        const roomLabel = (matched.rooms?.length ? matched.rooms.join(',') : (matched.room || 'PMS'));
+                        pmsBadge = `<span class="bg-emerald-100 text-emerald-700 border border-emerald-300 text-[9px] px-1.5 py-0.5 rounded uppercase font-black tracking-wide">✓ ${roomLabel}</span>`;
+                    } else if (guest.roomNumber) {
+                        pmsBadge = `<span class="bg-blue-50 text-blue-600 border border-blue-200 text-[9px] px-1.5 py-0.5 rounded uppercase font-black">Room ${guest.roomNumber}</span>`;
+                    }
+                }
+
                 tr.innerHTML = `
                     <td class="py-1 px-2 border-r border-slate-200 text-center bg-slate-50">
-                        <input type="checkbox" class="row-checkbox" value="${guest.id}" onchange="updateBulkActionVisibility()">
+                        <input type="checkbox" class="row-checkbox" value="${guest.id}" onchange="window.updateBulkActionVisibility()">
                     </td>
                     ${actsColumn}
-                    <td class="py-1 px-2 border-r border-slate-200 font-black text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors" onclick="copyText('${guest.property || 'UNASSIGNED'}', 'Property copied')">${guest.property || 'UNASSIGNED'}</td>
-                    
-                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="copyText('${guest.firstName || ''}', 'First Name copied')">${guest.firstName || ''}</td>
-                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="copyText('${guest.middleName || ''}', 'Middle Name copied')">${guest.middleName || ''}</td>
-                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="copyText('${guest.lastName || ''}', 'Last Name copied')">${guest.lastName || ''}</td>
-                    <td class="py-1 px-2 border-r border-slate-200 font-black text-center hover:bg-slate-100 cursor-pointer transition-colors" onclick="copyText('${guest.gender || ''}', 'Gender copied')">${guest.gender || ''}</td>
-                    <td class="py-1 px-2 border-r border-slate-200 font-mono text-[11px] font-bold text-slate-800 hover:bg-slate-100 cursor-pointer transition-colors" onclick="copyText('${guest.passportNumber || ''}', 'Passport copied')">${guest.passportNumber || '-'}</td>
-                    <td class="py-1 px-2 border-r border-slate-200 font-bold text-purple-700 hover:bg-slate-100 cursor-pointer transition-colors" onclick="copyText('${guest.nationality || ''}', 'Nationality copied')">${guest.nationality || '-'}</td>
-                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="copyText('${dobString}', 'DOB copied')">${dobString}</td>
-                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="copyText('${guest.checkoutDate || ''}', 'Check-out copied')">${guest.checkoutDate || ''}</td>
-                    <td class="py-1 px-2 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="copyText('${guest.phoneNo || ''}', 'Phone No. copied')">${guest.phoneNo || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-black text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors" onclick="window.copyText('${guest.property || 'UNASSIGNED'}', 'Property copied')">${guest.property || 'UNASSIGNED'}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.firstName || ''}', 'First Name copied')">${guest.firstName || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.middleName || ''}', 'Middle Name copied')">${guest.middleName || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.lastName || ''}', 'Last Name copied')">${guest.lastName || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-black text-center hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.gender || ''}', 'Gender copied')">${guest.gender || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-mono text-[11px] font-bold text-slate-800 hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.passportNumber || ''}', 'Passport copied')">${guest.passportNumber || '-'}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold text-purple-700 hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.nationality || ''}', 'Nationality copied')">${guest.nationality || '-'}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${dobString}', 'DOB copied')">${dobString}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.checkoutDate || ''}', 'Check-out copied')">${guest.checkoutDate || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.phoneNo || ''}', 'Phone No. copied')">${guest.phoneNo || ''}</td>
+                    <td class="py-1 px-2 text-center">${pmsBadge}</td>
                 `;
                 tbody.appendChild(tr);
             });
-            lucide.createIcons();
-        }
+            if (window.lucide) window.lucide.createIcons();
+        };
 
-        function toggleSelectAll(masterCheckbox) {
+        window.toggleSelectAll = (masterCheckbox) => {
             const checkboxes = document.querySelectorAll('.row-checkbox');
             checkboxes.forEach(cb => cb.checked = masterCheckbox.checked);
-            updateBulkActionVisibility();
-        }
+            window.updateBulkActionVisibility();
+        };
 
-        function updateBulkActionVisibility() {
+        window.updateBulkActionVisibility = () => {
             const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
             const assignBtn = document.getElementById('bulk-assign-btn');
             const delBtn = document.getElementById('bulk-delete-btn');
-            
+
             if (checkedCount > 0) {
                 assignBtn.classList.remove('hidden');
                 assignBtn.innerHTML = `<i data-lucide="layers" class="w-3 h-3"></i> EDIT (${checkedCount})`;
-                
+
                 delBtn.classList.remove('hidden');
                 delBtn.innerHTML = `<i data-lucide="trash" class="w-3 h-3"></i> DELETE (${checkedCount})`;
-                
-                lucide.createIcons();
-            } else { 
-                assignBtn.classList.add('hidden'); 
+                if (window.lucide) window.lucide.createIcons();
+            } else {
+                assignBtn.classList.add('hidden');
                 delBtn.classList.add('hidden');
             }
-        }
+        };
 
-        function openBulkAssignModal() {
+        window.openBulkAssignModal = () => {
             const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
             if (checkedCount === 0) return;
             document.getElementById('bulk-count').innerText = checkedCount;
             document.getElementById('bulk-property').value = '';
             document.getElementById('bulk-modal').classList.add('active');
             setTimeout(() => document.getElementById('bulk-property').focus(), 100);
-        }
+        };
 
-        function closeBulkAssignModal() { document.getElementById('bulk-modal').classList.remove('active'); }
+        window.closeBulkAssignModal = () => { document.getElementById('bulk-modal').classList.remove('active'); };
 
-        async function applyBulkProperty() {
+        window.applyBulkProperty = async () => {
             const prop = document.getElementById('bulk-property').value.toUpperCase().trim();
             if (!prop) {
-                showToast("Error", "Please enter a property name.", "error");
+                window.showToast("Error", "Please enter a property name.", "error");
                 return;
             }
-            
+
             const checkboxes = document.querySelectorAll('.row-checkbox:checked');
             const btn = document.querySelector('#bulk-modal button.bg-purple-600');
             const origText = btn.innerText;
@@ -650,7 +712,7 @@
                     batch.update(docRef, { property: prop });
                 });
                 await batch.commit();
-                
+
                 checkboxes.forEach(cb => {
                     let hGuest = historyList.find(g => g.id === cb.value);
                     if (hGuest) hGuest.property = prop;
@@ -658,38 +720,38 @@
                     if (qGuest) qGuest.property = prop;
                 });
 
-                showToast("Updated", `Assigned ${prop} to ${checkboxes.length} guests.`, "success");
-                closeBulkAssignModal();
+                window.showToast("Updated", `Assigned ${prop} to ${checkboxes.length} guests.`, "success");
+                window.closeBulkAssignModal();
                 document.getElementById('select-all').checked = false;
-                updateBulkActionVisibility();
-                renderCurrentView(); 
+                window.updateBulkActionVisibility();
+                renderCurrentView();
             } catch (e) {
                 console.error(e);
-                showToast("Error", "Could not apply bulk edit.", "error");
+                window.showToast("Error", "Could not apply bulk edit.", "error");
             } finally {
                 btn.innerText = origText;
                 btn.disabled = false;
             }
-        }
+        };
 
-        function confirmBulkDelete() {
+        window.confirmBulkDelete = () => {
             const checkboxes = document.querySelectorAll('.row-checkbox:checked');
             if (checkboxes.length === 0) return;
-            
+
             document.getElementById('confirm-text').innerText = `Permanently delete ${checkboxes.length} guests?`;
             document.getElementById('confirm-modal').classList.add('active');
-            
+
             document.getElementById('confirm-yes-btn').onclick = () => {
-                closeConfirmModal();
+                window.closeConfirmModal();
                 executeBulkDelete(checkboxes);
             };
-        }
+        };
 
-        function closeConfirmModal() {
+        window.closeConfirmModal = () => {
             document.getElementById('confirm-modal').classList.remove('active');
-        }
+        };
 
-        async function executeBulkDelete(checkboxes) {
+        const executeBulkDelete = async (checkboxes) => {
             const btn = document.getElementById('confirm-yes-btn');
             const origHtml = btn.innerHTML;
             btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> DELETING...`;
@@ -698,60 +760,58 @@
             try {
                 const batch = writeBatch(db);
                 const deletedIds = [];
-                
+
                 checkboxes.forEach(cb => {
                     const docRef = doc(db, 'artifacts', targetAppId, 'public', 'data', 'submissions', cb.value);
                     batch.delete(docRef);
                     deletedIds.push(cb.value);
                 });
-                
+
                 await batch.commit();
-                
+
                 historyList = historyList.filter(g => !deletedIds.includes(g.id));
                 currentSubmissionsList = currentSubmissionsList.filter(g => !deletedIds.includes(g.id));
 
-                showToast("Deleted", `Removed ${checkboxes.length} guests.`, "success");
+                window.showToast("Deleted", `Removed ${checkboxes.length} guests.`, "success");
                 document.getElementById('select-all').checked = false;
-                updateBulkActionVisibility();
-                renderCurrentView(); 
+                window.updateBulkActionVisibility();
+                renderCurrentView();
             } catch (e) {
                 console.error(e);
-                showToast("Error", "Could not delete some guests.", "error");
+                window.showToast("Error", "Could not delete some guests.", "error");
             } finally {
                 btn.innerHTML = origHtml;
                 btn.disabled = false;
-                lucide.createIcons();
+                if (window.lucide) window.lucide.createIcons();
             }
-        }
+        };
 
         let deleteTimers = {};
-        async function deleteGuest(id) {
+        window.deleteGuest = async (id) => {
             const btn = document.getElementById(`del-${id}`);
             if (deleteTimers[id]) {
                 clearTimeout(deleteTimers[id]); delete deleteTimers[id];
                 try {
                     await deleteDoc(doc(db, 'artifacts', targetAppId, 'public', 'data', 'submissions', id));
-                    
                     historyList = historyList.filter(g => g.id !== id);
-                    currentSubmissionsList = currentSubmissionsList.filter(g => g.id !== id);
+                    currentSubmissionsList = currentSubmissionsList.filter(g => !g.id === id);
                     renderCurrentView();
-
-                    showToast("Deleted", "Guest removed.", "success");
-                } catch (e) { showToast("Error", "Could not delete.", "error"); }
+                    window.showToast("Deleted", "Guest removed.", "success");
+                } catch (e) { window.showToast("Error", "Could not delete.", "error"); }
             } else {
                 btn.classList.replace('text-slate-400', 'text-red-500');
                 btn.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>`;
-                lucide.createIcons();
+                if (window.lucide) window.lucide.createIcons();
                 deleteTimers[id] = setTimeout(() => {
                     delete deleteTimers[id];
                     btn.classList.replace('text-red-500', 'text-slate-400');
                     btn.innerHTML = `<i data-lucide="trash" class="w-3.5 h-3.5"></i>`;
-                    lucide.createIcons();
+                    if (window.lucide) window.lucide.createIcons();
                 }, 3000);
             }
-        }
+        };
 
-        function openEditModal(guest) {
+        window.openEditModal = (guest) => {
             document.getElementById('edit-doc-id').value = guest.id;
             document.getElementById('edit-property').value = guest.property || '';
             document.getElementById('edit-first').value = guest.firstName || '';
@@ -766,11 +826,11 @@
             document.getElementById('edit-year').value = guest.dobYear || '';
             document.getElementById('edit-gender').value = guest.gender || '';
             document.getElementById('edit-modal').classList.add('active');
-        }
+        };
 
-        function closeEditModal() { document.getElementById('edit-modal').classList.remove('active'); }
+        window.closeEditModal = () => { document.getElementById('edit-modal').classList.remove('active'); };
 
-        async function saveEdit() {
+        window.saveEdit = async () => {
             const id = document.getElementById('edit-doc-id').value;
             const docRef = doc(db, 'artifacts', targetAppId, 'public', 'data', 'submissions', id);
             try {
@@ -788,11 +848,14 @@
                     dobYear: document.getElementById('edit-year').value.trim(),
                     gender: document.getElementById('edit-gender').value.toUpperCase().trim()
                 });
-                closeEditModal(); showToast("Saved", "Guest updated.", "success");
-            } catch(e) { showToast("Error", "Could not save.", "error"); }
-        }
+                window.closeEditModal();
+                window.showToast("Saved", "Guest updated.", "success");
+            } catch (e) {
+                window.showToast("Error", "Could not save.", "error");
+            }
+        };
 
-        async function markAllAsFiled() {
+        window.markAllAsFiled = async () => {
             const btn = document.getElementById('clear-queue-btn');
             const originalText = btn.innerHTML;
             btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> CLR...`;
@@ -806,7 +869,7 @@
                     if (pRaw === 'WET_POOL') pRaw = 'WET';
                     return pRaw === currentPropFilter;
                 });
-                
+
                 if (searchTerm) {
                     listToClear = listToClear.filter(g =>
                         (g.firstName || "").toLowerCase().includes(searchTerm) ||
@@ -814,7 +877,7 @@
                         (g.property || "").toLowerCase().includes(searchTerm)
                     );
                 }
-                
+
                 const batch = writeBatch(db);
                 for (let guest of listToClear) {
                     const dRef = doc(db, 'artifacts', targetAppId, 'public', 'data', 'submissions', guest.id);
@@ -822,23 +885,24 @@
                 }
                 await batch.commit();
 
-                showToast("Cleared", "Moved to Archive.", "success");
+                window.showToast("Cleared", "Moved to Archive.", "success");
                 document.getElementById('global-search').value = '';
                 document.getElementById('select-all').checked = false;
-                applyFilters(); updateBulkActionVisibility();
-            } catch(e) { 
+                window.applyFilters();
+                window.updateBulkActionVisibility();
+            } catch (e) {
                 console.error(e);
-                showToast("Error", "Could not clear.", "error"); 
+                window.showToast("Error", "Could not clear.", "error");
             }
-            btn.innerHTML = originalText; 
+            btn.innerHTML = originalText;
             btn.disabled = false;
-            lucide.createIcons();
-        }
+            if (window.lucide) window.lucide.createIcons();
+        };
 
-        function exportToExcel() {
+        window.exportToExcel = () => {
             let listToExport = [];
             const checkboxes = document.querySelectorAll('.row-checkbox:checked');
-            
+
             const activeBaseList = (viewMode === 'queue' ? currentSubmissionsList : historyList).filter(g => {
                 if (currentPropFilter === 'ALL') return true;
                 let pRaw = (g.property || 'SWIMS').toUpperCase();
@@ -847,7 +911,7 @@
                 if (pRaw === 'WET_POOL') pRaw = 'WET';
                 return pRaw === currentPropFilter;
             });
-            
+
             if (checkboxes.length > 0) {
                 const selectedIds = Array.from(checkboxes).map(cb => cb.value);
                 listToExport = activeBaseList.filter(g => selectedIds.includes(g.id));
@@ -864,7 +928,7 @@
                 }
             }
 
-            if (listToExport.length === 0) return showToast("Error", "No guests to export.", "error");
+            if (listToExport.length === 0) return window.showToast("Error", "No guests to export.", "error");
 
             const headerRow = [
                 "ชื่อ\nFirst Name *",
@@ -894,23 +958,21 @@
             });
 
             const worksheet = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
-            
             worksheet['!cols'] = [
                 { wch: 20 }, { wch: 15 }, { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 15 }
             ];
 
             const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "TM30_Guests"); 
-            
+            XLSX.utils.book_append_sheet(workbook, worksheet, "TM30_Guests");
+
             const propertyPrefix = (listToExport.length > 0 && listToExport[0].property) ? listToExport[0].property + "_" : "";
             const dateStr = new Date().toISOString().split('T')[0];
-            
-            XLSX.writeFile(workbook, `${propertyPrefix}TM30_Batch_${dateStr}.xlsx`); 
-            
-            showToast("Exported", `TM30 XLSX generated for ${listToExport.length} guests.`, "success");
-        }
 
-        function sendToExtension() {
+            XLSX.writeFile(workbook, `${propertyPrefix}TM30_Batch_${dateStr}.xlsx`);
+            window.showToast("Exported", `TM30 XLSX generated for ${listToExport.length} guests.`, "success");
+        };
+
+        window.sendToExtension = () => {
             const activeBaseList = (viewMode === 'queue' ? currentSubmissionsList : historyList).filter(g => {
                 if (currentPropFilter === 'ALL') return true;
                 let pRaw = (g.property || 'SWIMS').toUpperCase();
@@ -919,7 +981,7 @@
                 if (pRaw === 'WET_POOL') pRaw = 'WET';
                 return pRaw === currentPropFilter;
             });
-            
+
             let listToExport = activeBaseList;
             if (searchTerm) {
                 listToExport = listToExport.filter(g =>
@@ -929,12 +991,12 @@
                     (g.property || "").toLowerCase().includes(searchTerm)
                 );
             }
-            if(listToExport.length === 0) return;
+            if (listToExport.length === 0) return;
 
             const btn = document.getElementById('send-ext-btn');
             const originalHtml = btn.innerHTML;
             btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> LOAD...`;
-            
+
             const payload = listToExport.map(guest => ({
                 tm30Payload: true,
                 firstName: guest.firstName || "",
@@ -948,47 +1010,28 @@
                 gender: (guest.gender || "M").toUpperCase().charAt(0)
             }));
 
-            copyText(JSON.stringify(payload), `Loaded ${payload.length} guests for extension.`);
+            window.copyText(JSON.stringify(payload), `Loaded ${payload.length} guests for extension.`);
             btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> Ready`;
             btn.classList.replace('bg-sky-600', 'bg-emerald-600');
             setTimeout(() => {
                 btn.innerHTML = originalHtml;
                 btn.classList.replace('bg-emerald-600', 'bg-sky-600');
-                lucide.createIcons();
+                if (window.lucide) window.lucide.createIcons();
             }, 3000);
-        }
+        };
 
-        function copyText(text, successMsg) {
-            if(!text) return;
-            const dummy = document.createElement("textarea");
-            document.body.appendChild(dummy);
-            dummy.value = text;
-            dummy.select();
-            document.execCommand("copy");
-            document.body.removeChild(dummy);
-            showToast("Copied", successMsg, "success");
-        }
+        signInAnonymously(auth).catch(() => window.showToast("Connection Error", "Failed to authenticate.", "error"));
 
-        function showToast(title, text, type = "success") {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            const bgColor = type === "success" ? "bg-emerald-600 border-emerald-500 shadow-emerald-500/20" : "bg-red-600 border-red-500 shadow-red-500/20";
-            const icon = type === "success" ? `<i data-lucide="check-circle" class="w-4 h-4 text-white"></i>` : `<i data-lucide="alert-circle" class="w-4 h-4 text-white"></i>`;
-            
-            toast.className = `${bgColor} border text-white p-3 rounded-lg shadow-xl transform transition-all duration-300 translate-x-full opacity-0 max-w-xs`;
-            toast.innerHTML = `
-                <div class="flex items-start gap-2">
-                    <div class="mt-0.5">${icon}</div>
-                    <div><h4 class="text-xs font-black uppercase tracking-widest">${title}</h4><p class="text-[11px] font-bold text-white/90 mt-0.5 leading-tight">${text}</p></div>
-                </div>`;
-            container.appendChild(toast);
-            lucide.createIcons();
-            requestAnimationFrame(() => toast.classList.remove('translate-x-full', 'opacity-0'));
-            setTimeout(() => {
-                toast.classList.add('opacity-0', 'translate-x-full');
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
-        }
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                document.getElementById('connection-dot').querySelector('.bg-red-500').classList.replace('bg-red-500', 'bg-emerald-500');
+                document.getElementById('connection-dot').querySelector('.bg-red-400').classList.replace('bg-red-400', 'bg-emerald-400');
+                document.getElementById('connection-dot').title = "Online";
+                startListening();
+            }
+        });
+
+        if (window.lucide) window.lucide.createIcons();
     </script>
 </body>
 </html>
