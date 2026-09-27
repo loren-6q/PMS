@@ -21,6 +21,10 @@
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
+        select option {
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between p-3 sm:p-5 max-w-md mx-auto select-none">
@@ -36,7 +40,7 @@
         </div>
         
         <div class="flex items-center gap-1.5">
-            <select id="property-select" class="bg-slate-900 border border-slate-600 text-emerald-400 text-xs font-black uppercase rounded-lg px-2.5 py-1.5 outline-none cursor-pointer">
+            <select id="property-select" onchange="window.handlePropertyChange(this.value)" class="bg-slate-900 border border-slate-600 text-emerald-400 text-xs font-black uppercase rounded-lg px-2.5 py-1.5 outline-none cursor-pointer">
                 <option value="SWIMS">SWIMS</option>
                 <option value="WET">WET</option>
                 <option value="LOUD">LOUD</option>
@@ -49,22 +53,46 @@
     <!-- Main Scanner Workflow -->
     <main class="flex-1 flex flex-col justify-center my-3 gap-3">
         
-        <!-- Room Tag Card -->
-        <div class="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-3.5 shadow-md">
-            <label class="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-1">Room / Bed Number (Optional)</label>
+        <!-- Typo-Proof Room Dropdown Card -->
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 shadow-md space-y-2">
+            <div class="flex items-center justify-between">
+                <label class="block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                    Room / Bed Assignment
+                </label>
+                <span id="room-status-badge" class="hidden text-[9px] font-black px-1.5 py-0.5 rounded uppercase"></span>
+            </div>
+
             <div class="flex items-center gap-2">
                 <div class="relative flex-1">
                     <i data-lucide="tag" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
-                    <input type="text" id="room-input" placeholder="e.g. 101, A02, C301-2" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-base font-black uppercase text-amber-300 placeholder-slate-500 outline-none focus:border-blue-500">
+                    <select id="room-select" onchange="window.handleRoomSelected(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-8 py-2.5 text-sm font-black uppercase text-amber-300 outline-none focus:border-blue-500 cursor-pointer appearance-none truncate">
+                        <option value="">-- NO ROOM / UNASSIGNED --</option>
+                    </select>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none"></i>
                 </div>
-                <button type="button" onclick="document.getElementById('room-input').value=''" class="bg-slate-700/70 hover:bg-slate-700 text-slate-300 p-2.5 rounded-xl border border-slate-600/50 btn-bounce">
+
+                <button type="button" onclick="window.clearRoomSelection()" class="bg-slate-700/70 hover:bg-slate-700 text-slate-300 p-2.5 rounded-xl border border-slate-600/50 btn-bounce" title="Clear Room">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
+            </div>
+
+            <!-- Custom Room Input (Fallback if custom tag selected) -->
+            <div id="custom-room-wrap" class="hidden pt-1">
+                <input type="text" id="custom-room-input" placeholder="Type custom tag (e.g. Tent 1, Villa, Staff)..." class="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-xs font-black uppercase text-amber-200 placeholder-slate-500 outline-none focus:border-amber-400">
+            </div>
+
+            <!-- In-House Guest Notification Pill -->
+            <div id="matched-guest-pill" class="hidden bg-blue-950/60 border border-blue-600/40 rounded-xl px-2.5 py-1.5 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-1.5 truncate">
+                    <i data-lucide="user" class="w-3.5 h-3.5 text-blue-400 shrink-0"></i>
+                    <span id="matched-guest-name" class="font-black text-slate-200 uppercase truncate">Guest</span>
+                </div>
+                <span id="matched-guest-checkout" class="text-[10px] font-bold text-blue-300 shrink-0">Out: --</span>
             </div>
         </div>
 
         <!-- Camera Trigger Zone -->
-        <div id="capture-zone" class="bg-slate-800/80 border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center shadow-lg transition-colors cursor-pointer min-h-[220px] relative overflow-hidden" onclick="triggerCamera()">
+        <div id="capture-zone" class="bg-slate-800/80 border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center shadow-lg transition-colors cursor-pointer min-h-[200px] relative overflow-hidden" onclick="triggerCamera()">
             
             <!-- Native Rear Camera Input -->
             <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageSelected(event)">
@@ -89,9 +117,12 @@
             <!-- Image Preview & Status Overlay -->
             <div id="preview-state" class="hidden absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-2">
                 <img id="preview-img" src="" alt="Passport Preview" class="w-full h-full object-contain rounded-xl opacity-75">
-                <div id="processing-badge" class="absolute bg-slate-900/90 border border-blue-500/50 px-4 py-2 rounded-xl flex items-center gap-2 shadow-2xl backdrop-blur-sm">
-                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-blue-400"></i>
-                    <span id="processing-text" class="text-xs font-black uppercase tracking-widest text-slate-100">Reading Passport...</span>
+                <div id="processing-badge" class="absolute bg-slate-900/95 border border-blue-500/50 px-4 py-3 rounded-xl flex flex-col items-center gap-1.5 shadow-2xl backdrop-blur-md max-w-[85%] text-center">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-blue-400"></i>
+                        <span id="processing-text" class="text-xs font-black uppercase tracking-widest text-slate-100">Reading Passport (AI)...</span>
+                    </div>
+                    <span id="processing-timer" class="text-[10px] font-bold text-blue-300">0s elapsed</span>
                 </div>
             </div>
         </div>
@@ -164,7 +195,7 @@
             <i id="toast-icon" data-lucide="check-circle" class="w-5 h-5 shrink-0"></i>
             <div class="leading-tight">
                 <h4 id="toast-title" class="text-xs font-black uppercase tracking-wider">Success</h4>
-                <p id="toast-msg" class="text-[11px] font-bold opacity-90">Guest pushed to database.</p>
+                <p id="toast-msg" class="text-[11px] font-bold opacity-90 break-words">Guest pushed to database.</p>
             </div>
         </div>
     </div>
@@ -175,7 +206,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 
@@ -197,6 +228,31 @@
 
         let currentCompressedBase64 = null;
         let uploadedPhotoUrl = null;
+        let timerInterval = null;
+
+        let allPropertiesList = [];
+        let currentPropertyRooms = [];
+        let inHouseBookings = [];
+
+        // Active property mapping
+        const PROP_MAP = {
+            'LOUD': 'loud_samui',
+            'WET': 'wet_pool',
+            'SWIMS': 'swims_resort',
+            'BIGC': 'big_c'
+        };
+
+        // Fallback room array for SWIMS in case of network latency
+        const SWIMS_FALLBACK_ROOMS = [
+            "B01","A01","A02","B02","B03","B05","B07","A03","A04","A06","A08","A10","A12",
+            "C206","C306","C311","B04","B06","B08","C212","A05","A07","A09","A11","C203",
+            "C204","C205","B09","B11","B13","B15","B17","B19","B21","B22","B10","B12",
+            "B14","B16","B18","B20","C201","C202","C207","C208","C209","C210","C211",
+            "C101","C307","C308","C305","C309","C310",
+            "C301-1","C301-2","C301-3","C301-4","C302-1","C302-2","C302-3","C302-4",
+            "C303-1","C303-2","C303-3","C303-4","C304-1","C304-2","C304-3","C304-4",
+            "D01","D02","D03","D04","D05","D06","D07","D08","D09","D10","D11"
+        ];
 
         // Initialize Property from URL or LocalStorage
         const urlParams = new URLSearchParams(window.location.search);
@@ -210,31 +266,174 @@
         const propSelect = document.getElementById('property-select');
         if (propSelect) {
             propSelect.value = savedProp;
-            propSelect.onchange = (e) => {
-                localStorage.setItem('ww_last_scan_prop', e.target.value);
-            };
         }
 
+        window.handlePropertyChange = async (newProp) => {
+            localStorage.setItem('ww_last_scan_prop', newProp);
+            await loadPropertyInventory(newProp);
+        };
+
+        const normalizeRoomId = (r) => {
+            if (r === null || r === undefined) return '';
+            return String(r).trim().toUpperCase();
+        };
+
+        // Load property rooms and active in-house bookings
+        async function loadPropertyInventory(propCode) {
+            const pmsKey = PROP_MAP[propCode] || 'swims_resort';
+            const roomSelect = document.getElementById('room-select');
+            if (!roomSelect) return;
+
+            roomSelect.innerHTML = `<option value="">Loading rooms...</option>`;
+
+            try {
+                // 1. Fetch active property configuration
+                if (allPropertiesList.length === 0) {
+                    const propsSnap = await getDocs(collection(db, 'artifacts', targetAppId, 'public', 'data', 'properties'));
+                    allPropertiesList = propsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                }
+
+                const targetProp = allPropertiesList.find(p => p.id === pmsKey);
+                if (targetProp && Array.isArray(targetProp.rooms) && targetProp.rooms.length > 0) {
+                    currentPropertyRooms = targetProp.rooms;
+                } else if (propCode === 'SWIMS') {
+                    currentPropertyRooms = SWIMS_FALLBACK_ROOMS.map(id => ({ id, type: 'Room' }));
+                } else {
+                    currentPropertyRooms = [];
+                }
+
+                // 2. Fetch active bookings for this property to identify who is in what room
+                const todayStr = new Date().toISOString().split('T')[0];
+                const staffSnap = await getDocs(query(
+                    collection(db, 'artifacts', targetAppId, 'public', 'data', 'staff'),
+                    where("property", "==", pmsKey)
+                ));
+
+                inHouseBookings = [];
+                staffSnap.forEach(d => {
+                    const b = d.data();
+                    if (!['cancelled', 'noshow'].includes(b.status)) {
+                        inHouseBookings.push({ id: d.id, ...b });
+                    }
+                });
+
+                // 3. Populate Room Dropdown
+                populateRoomDropdown(todayStr);
+
+            } catch (err) {
+                console.warn("Could not load dynamic room inventory:", err);
+                currentPropertyRooms = SWIMS_FALLBACK_ROOMS.map(id => ({ id, type: 'Room' }));
+                populateRoomDropdown(new Date().toISOString().split('T')[0]);
+            }
+        }
+
+        function populateRoomDropdown(todayStr) {
+            const roomSelect = document.getElementById('room-select');
+            if (!roomSelect) return;
+
+            let html = `
+                <option value="">-- NO ROOM / UNASSIGNED --</option>
+                <option value="CUSTOM">➕ Type Custom Room / Tag...</option>
+            `;
+
+            // Group rooms by type or list them cleanly
+            const sortedRooms = [...currentPropertyRooms].sort((a, b) => {
+                const idA = normalizeRoomId(a.id || a);
+                const idB = normalizeRoomId(b.id || b);
+                return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+            });
+
+            sortedRooms.forEach(rObj => {
+                const rid = normalizeRoomId(typeof rObj === 'string' ? rObj : rObj.id);
+                if (!rid) return;
+
+                // Check if currently occupied
+                const occupant = inHouseBookings.find(b => {
+                    const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
+                    const matchesRoom = rList.some(r => normalizeRoomId(r) === rid);
+                    if (!matchesRoom) return false;
+                    const cIn = String(b.checkIn || '');
+                    const cOut = String(b.checkOut || '');
+                    return (!cIn || cIn <= todayStr) && (!cOut || cOut >= todayStr);
+                });
+
+                if (occupant) {
+                    const lName = String(occupant.lastName || 'GUEST').toUpperCase();
+                    const outDate = occupant.checkOut ? occupant.checkOut.substr(5) : '--';
+                    html += `<option value="${rid}" class="text-emerald-400 font-bold">🟢 ${rid} — ${lName} (Out: ${outDate})</option>`;
+                } else {
+                    const typeLabel = rObj.type ? ` (${rObj.type})` : '';
+                    html += `<option value="${rid}">${rid}${typeLabel}</option>`;
+                }
+            });
+
+            roomSelect.innerHTML = html;
+            window.handleRoomSelected(roomSelect.value);
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        window.handleRoomSelected = (val) => {
+            const customWrap = document.getElementById('custom-room-wrap');
+            const pill = document.getElementById('matched-guest-pill');
+            const nameEl = document.getElementById('matched-guest-name');
+            const outEl = document.getElementById('matched-guest-checkout');
+
+            if (val === 'CUSTOM') {
+                customWrap.classList.remove('hidden');
+                pill.classList.add('hidden');
+                setTimeout(() => document.getElementById('custom-room-input')?.focus(), 50);
+                return;
+            }
+
+            customWrap.classList.add('hidden');
+
+            if (!val) {
+                pill.classList.add('hidden');
+                return;
+            }
+
+            const cleanVal = normalizeRoomId(val);
+            const occupant = inHouseBookings.find(b => {
+                const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
+                return rList.some(r => normalizeRoomId(r) === cleanVal);
+            });
+
+            if (occupant) {
+                const fName = String(occupant.firstName || '').toUpperCase();
+                const lName = String(occupant.lastName || '').toUpperCase();
+                nameEl.innerText = `${lName}, ${fName}`.trim() || 'In-House Guest';
+                outEl.innerText = `Out: ${occupant.checkOut || '--'}`;
+                pill.classList.remove('hidden');
+            } else {
+                pill.classList.add('hidden');
+            }
+        };
+
+        window.clearRoomSelection = () => {
+            const sel = document.getElementById('room-select');
+            if (sel) sel.value = "";
+            window.handleRoomSelected("");
+        };
+
         // Initialize Auth
-        signInAnonymously(auth).then(() => {
+        signInAnonymously(auth).then(async () => {
             const ind = document.getElementById('conn-indicator');
             ind.classList.remove('bg-amber-400', 'animate-pulse');
             ind.classList.add('bg-emerald-400');
             ind.title = "Connected to Firestore & Storage";
+
+            const activeProp = document.getElementById('property-select')?.value || 'SWIMS';
+            await loadPropertyInventory(activeProp);
         }).catch(err => {
             console.error("Auth error", err);
-            showToast("Offline", "Working in offline fallback mode", "error");
+            showToast("Offline Warning", "Operating in offline mode: " + err.message, "error");
         });
 
-        window.triggerCamera = () => {
-            document.getElementById('camera-input').click();
-        };
-
-        window.triggerGallery = () => {
-            document.getElementById('gallery-input').click();
-        };
+        window.triggerCamera = () => { document.getElementById('camera-input').click(); };
+        window.triggerGallery = () => { document.getElementById('gallery-input').click(); };
 
         window.retakePhoto = () => {
+            if (timerInterval) clearInterval(timerInterval);
             document.getElementById('review-card').classList.add('hidden');
             document.getElementById('preview-state').classList.add('hidden');
             document.getElementById('empty-state').classList.remove('hidden');
@@ -254,6 +453,7 @@
             const reviewCard = document.getElementById('review-card');
             const processingBadge = document.getElementById('processing-badge');
             const processingText = document.getElementById('processing-text');
+            const timerEl = document.getElementById('processing-timer');
 
             emptyState.classList.add('hidden');
             reviewCard.classList.add('hidden');
@@ -261,53 +461,69 @@
             processingBadge.classList.remove('hidden');
             processingText.innerText = "Compressing Photo...";
 
+            let seconds = 0;
+            timerEl.innerText = "0s elapsed";
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                seconds++;
+                timerEl.innerText = `${seconds}s elapsed`;
+            }, 1000);
+
             try {
-                // 1. Client-Side Image Downscaling via Canvas (Converts 12MB photo to ~250KB JPEG)
+                // 1. Downscale on canvas to ~200KB
                 currentCompressedBase64 = await resizeImageToMaxDimension(file, 1400);
                 previewImg.src = `data:image/jpeg;base64,${currentCompressedBase64}`;
-                processingText.innerText = "Archiving Photo & Reading...";
+                processingText.innerText = "Reading Passport (AI)...";
 
-                // 2. Start photo upload to Firebase Storage in parallel
-                const photoUploadPromise = uploadPhotoToStorage(currentCompressedBase64)
-                    .then(url => { uploadedPhotoUrl = url; return url; })
-                    .catch(err => { console.warn("Storage upload warning:", err); return null; });
+                // 2. Non-blocking upload to Storage
+                uploadPhotoToStorage(currentCompressedBase64)
+                    .then(url => { uploadedPhotoUrl = url; })
+                    .catch(err => { console.warn("Storage upload bypassed:", err); });
 
-                // 3. Call backend OCR via Firebase Function (uses protected API keys + model cascade)
-                const parseFn = httpsCallable(functions, 'parsePassportScan');
-                const parsePromise = parseFn({ imageBase64: currentCompressedBase64 });
-
-                const [_, ocrResult] = await Promise.all([photoUploadPromise, parsePromise]);
+                // 3. AI OCR Extraction
+                const parseFn = httpsCallable(functions, 'parsePassportScan', { timeout: 30000 });
+                const ocrResult = await parseFn({ imageBase64: currentCompressedBase64 });
                 const guestData = ocrResult?.data?.data || {};
 
-                // 4. Populate Review Card
+                clearInterval(timerInterval);
                 populateReviewCard(guestData);
                 processingBadge.classList.add('hidden');
                 reviewCard.classList.remove('hidden');
                 lucide.createIcons();
+                showToast("Extracted!", "Review details and push to queue.", "success");
 
             } catch (err) {
-                console.error("Scanning Error:", err);
+                clearInterval(timerInterval);
+                console.error("OCR Extraction Error:", err);
                 processingBadge.classList.add('hidden');
-                showToast("Extraction Issue", "Could not auto-read passport. Please type details manually.", "error");
-                
-                // Allow manual entry on photo preview
                 populateReviewCard({});
                 reviewCard.classList.remove('hidden');
                 lucide.createIcons();
+                showToast("Extraction Issue", err.message || "Manual edit required", "error");
             }
         };
 
         async function uploadPhotoToStorage(base64Data) {
-            const prop = (document.getElementById('property-select')?.value || 'SWIMS').toLowerCase();
-            const timestamp = Date.now();
-            const randId = Math.random().toString(36).substring(2, 8);
-            const path = `passports/${prop}/${timestamp}_${randId}.jpg`;
-            const fileRef = storageRef(storage, path);
-            
-            await uploadString(fileRef, `data:image/jpeg;base64,${base64Data}`, 'data_url', {
-                contentType: 'image/jpeg'
-            });
-            return await getDownloadURL(fileRef);
+            try {
+                const prop = (document.getElementById('property-select')?.value || 'SWIMS').toLowerCase();
+                const timestamp = Date.now();
+                const randId = Math.random().toString(36).substring(2, 8);
+                const path = `passports/${prop}/${timestamp}_${randId}.jpg`;
+                const fileRef = storageRef(storage, path);
+                
+                const uploadPromise = uploadString(fileRef, `data:image/jpeg;base64,${base64Data}`, 'data_url', {
+                    contentType: 'image/jpeg'
+                });
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Storage timeout")), 12000));
+
+                await Promise.race([uploadPromise, timeoutPromise]);
+                const url = await getDownloadURL(fileRef);
+                uploadedPhotoUrl = url;
+                return url;
+            } catch (e) {
+                console.warn("Storage upload warning:", e.message);
+                return null;
+            }
         }
 
         function resizeImageToMaxDimension(file, maxDimension) {
@@ -345,49 +561,120 @@
         }
 
         function populateReviewCard(data) {
-            document.getElementById('f-name').value = (data.firstName || '').toUpperCase();
-            document.getElementById('l-name').value = (data.lastName || '').toUpperCase();
-            document.getElementById('f-passport').value = (data.passportNumber || '').toUpperCase().replace(/\s/g, '');
-            document.getElementById('f-nat').value = (data.nationality || '').toUpperCase().trim();
-            document.getElementById('f-dob-day').value = data.dobDay || '';
-            document.getElementById('f-dob-month').value = data.dobMonth || '';
-            document.getElementById('f-dob-year').value = data.dobYear || '';
-            document.getElementById('f-gender').value = (data.gender || 'M').toUpperCase().charAt(0);
+            document.getElementById('f-name').value = String(data.firstName || '').toUpperCase();
+            document.getElementById('l-name').value = String(data.lastName || '').toUpperCase();
+            document.getElementById('f-passport').value = String(data.passportNumber || '').toUpperCase().replace(/\s/g, '');
+            document.getElementById('f-nat').value = String(data.nationality || '').toUpperCase().trim();
+            document.getElementById('f-dob-day').value = String(data.dobDay || '');
+            document.getElementById('f-dob-month').value = String(data.dobMonth || '');
+            document.getElementById('f-dob-year').value = String(data.dobYear || '');
+            document.getElementById('f-gender').value = String(data.gender || 'M').toUpperCase().charAt(0);
         }
 
+        // ======================================================================
+        // CRASH-PROOF TWO-WAY PMS & TM30 INTEGRATION
+        // Works seamlessly whether Room is chosen first or Passport snapped first!
+        // ======================================================================
         window.saveToFirestoreQueue = async () => {
             const btn = document.getElementById('submit-btn');
             const originalContent = btn.innerHTML;
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Saving...</span>`;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Saving & Syncing...</span>`;
             btn.disabled = true;
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
 
             try {
                 const property = document.getElementById('property-select').value;
-                const roomNumber = document.getElementById('room-input').value.trim().toUpperCase();
-                const firstName = document.getElementById('f-name').value.trim().toUpperCase();
-                const lastName = document.getElementById('l-name').value.trim().toUpperCase();
-                const passportNumber = document.getElementById('f-passport').value.trim().toUpperCase();
-                const nationality = document.getElementById('f-nat').value.trim().toUpperCase();
-                const dobDay = document.getElementById('f-dob-day').value.trim();
-                const dobMonth = document.getElementById('f-dob-month').value.trim();
-                const dobYear = document.getElementById('f-dob-year').value.trim();
-                const gender = (document.getElementById('f-gender').value || 'M').trim().toUpperCase().charAt(0);
+                const pmsPropKey = PROP_MAP[property] || 'swims_resort';
 
-                if (!passportNumber && !lastName) {
-                    throw new Error("Please provide at least a Passport Number or Name");
+                // Resolve Room selection (Dropdown vs Custom tag)
+                const roomDropdownVal = document.getElementById('room-select')?.value || '';
+                let roomNumber = '';
+                if (roomDropdownVal === 'CUSTOM') {
+                    roomNumber = document.getElementById('custom-room-input')?.value.trim().toUpperCase() || '';
+                } else {
+                    roomNumber = roomDropdownVal.trim().toUpperCase();
                 }
 
-                // If storage upload is still pending, make sure we have a reference
-                if (!uploadedPhotoUrl && currentCompressedBase64) {
+                const firstName = (document.getElementById('f-name')?.value || '').trim().toUpperCase();
+                const lastName = (document.getElementById('f-name') ? document.getElementById('l-name')?.value : '').trim().toUpperCase();
+                const passportNumber = (document.getElementById('f-passport')?.value || '').trim().toUpperCase().replace(/\s/g, '');
+                const nationality = (document.getElementById('f-nat')?.value || '').trim().toUpperCase();
+                const dobDay = (document.getElementById('f-dob-day')?.value || '').trim();
+                const dobMonth = (document.getElementById('f-dob-month')?.value || '').trim();
+                const dobYear = (document.getElementById('f-dob-year')?.value || '').trim();
+                const gender = ((document.getElementById('f-gender')?.value || 'M').trim().toUpperCase()).charAt(0) || 'M';
+
+                if (!passportNumber && !lastName) {
+                    throw new Error("Please provide at least a Passport Number or Last Name");
+                }
+
+                // 1. Crash-Proof Matching with Active Bookings
+                let matchedBooking = null;
+
+                if (inHouseBookings.length === 0) {
+                    const staffRef = collection(db, 'artifacts', targetAppId, 'public', 'data', 'staff');
+                    const staffSnap = await getDocs(query(staffRef, where("property", "==", pmsPropKey)));
+                    staffSnap.forEach(d => {
+                        const data = d.data();
+                        if (!['cancelled', 'noshow'].includes(data.status)) {
+                            inHouseBookings.push({ id: d.id, ...data });
+                        }
+                    });
+                }
+
+                // Robust Room Match with safe string conversion (prevents (101).toUpperCase() crashes!)
+                if (roomNumber) {
+                    const searchRooms = [roomNumber];
+                    if (/^[A-Z]0\d$/.test(roomNumber)) searchRooms.push(roomNumber[0] + roomNumber[2]);
+                    else if (/^[A-Z]\d$/.test(roomNumber)) searchRooms.push(roomNumber[0] + '0' + roomNumber[1]);
+
+                    matchedBooking = inHouseBookings.find(b => {
+                        const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
+                        return rList.some(r => {
+                            if (r === null || r === undefined) return false;
+                            const cleanR = String(r).trim().toUpperCase();
+                            return searchRooms.includes(cleanR);
+                        });
+                    });
+                }
+
+                // Fallback Name Match if room was unassigned or not matched
+                if (!matchedBooking && firstName && lastName) {
+                    matchedBooking = inHouseBookings.find(b => {
+                        const bFirst = String(b.firstName || '').toUpperCase();
+                        const bLast = String(b.lastName || '').toUpperCase();
+                        return (bLast.includes(lastName) && (bFirst.includes(firstName) || firstName.includes(bFirst))) ||
+                               (lastName.includes(bLast) && (firstName.includes(bFirst) || bFirst.includes(firstName)));
+                    });
+                }
+
+                let checkoutFormatted = "";
+                let guestPhone = "";
+
+                if (matchedBooking) {
+                    if (matchedBooking.checkOut) {
+                        const p = String(matchedBooking.checkOut).trim().split('-');
+                        if (p.length === 3) checkoutFormatted = `${p[2]}/${p[1]}/${p[0]}`;
+                        else checkoutFormatted = String(matchedBooking.checkOut);
+                    }
+                    guestPhone = String(matchedBooking.phone || "").trim();
+
+                    // Two-Way Injection: Write passport details into PMS folio notes
                     try {
-                        uploadedPhotoUrl = await uploadPhotoToStorage(currentCompressedBase64);
-                    } catch(e) {
-                        console.warn("Storage upload fallback error", e);
+                        const passportNote = `\n\n[PASSPORT SCANNED - ${new Date().toLocaleDateString('en-GB')}]\n• Name: ${firstName} ${lastName}\n• Passport: ${passportNumber || 'N/A'}\n• Nat: ${nationality || 'N/A'}\n• DOB: ${dobYear}-${dobMonth}-${dobDay}`;
+                        const updatedNotes = ((matchedBooking.notes || "") + passportNote).trim();
+
+                        const pmsDocRef = doc(db, 'artifacts', targetAppId, 'public', 'data', 'staff', matchedBooking.id);
+                        const updatePayload = { notes: updatedNotes };
+                        if (!matchedBooking.country && nationality) updatePayload.country = nationality;
+
+                        await updateDoc(pmsDocRef, updatePayload);
+                    } catch (pmsUpdateErr) {
+                        console.warn("Notice: PMS booking note update bypassed:", pmsUpdateErr.message);
                     }
                 }
 
-                // Push directly into Firestore submissions (matching TM30 & PMS collections)
+                // 2. Write to TM30 Submissions Collection with checkout and phone ready
                 await addDoc(collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'), {
                     property: property,
                     roomNumber: roomNumber,
@@ -400,29 +687,30 @@
                     dobMonth: dobMonth,
                     dobYear: dobYear,
                     gender: gender,
-                    checkoutDate: "",
-                    phoneNo: "",
+                    checkoutDate: checkoutFormatted,
+                    phoneNo: guestPhone,
                     photoUrl: uploadedPhotoUrl || "",
                     status: "processing",
                     source: "MOBILE_SCANNER",
+                    pmsSynced: !!matchedBooking,
                     createdAt: serverTimestamp()
                 });
 
-                showToast("Pushed to Queue!", `${firstName || 'Guest'} (${passportNumber || 'N/A'})${roomNumber ? ' • Room ' + roomNumber : ''}`);
-                
-                // Clear state and prepare for next guest
+                const syncMsg = matchedBooking ? `Synced with Booking (${matchedBooking.lastName})!` : 'Pushed to TM30 Queue.';
+                showToast("Directly Recorded!", `${firstName || 'Guest'} (${passportNumber || 'N/A'})\n${syncMsg}`);
+
                 setTimeout(() => {
                     window.retakePhoto();
-                    document.getElementById('room-input').value = '';
+                    window.clearRoomSelection();
                 }, 1200);
 
             } catch (err) {
-                console.error("Firestore push error", err);
+                console.error("Save/Sync error", err);
                 showToast("Save Error", err.message || "Could not write to database", "error");
             } finally {
                 btn.innerHTML = originalContent;
                 btn.disabled = false;
-                lucide.createIcons();
+                if (window.lucide) window.lucide.createIcons();
             }
         };
 
@@ -443,7 +731,7 @@
 
             tTitle.innerText = title;
             tMsg.innerText = msg;
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
 
             toast.classList.remove('-translate-y-24', 'opacity-0');
             toast.classList.add('translate-y-0', 'opacity-100');
@@ -451,10 +739,10 @@
             setTimeout(() => {
                 toast.classList.remove('translate-y-0', 'opacity-100');
                 toast.classList.add('-translate-y-24', 'opacity-0');
-            }, 3500);
+            }, 6000);
         }
 
-        lucide.createIcons();
+        if (window.lucide) window.lucide.createIcons();
     </script>
 </body>
 </html>
