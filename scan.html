@@ -27,164 +27,231 @@
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between p-3 sm:p-5 max-w-md mx-auto select-none">
+<body class="min-h-screen flex flex-col justify-between p-3 sm:p-5 max-w-lg mx-auto select-none">
 
     <!-- Top Status & Property Selector -->
-    <header class="flex items-center justify-between bg-slate-800/90 border border-slate-700/80 px-3 py-2.5 rounded-xl shadow-lg shrink-0">
-        <div class="flex items-center gap-2">
-            <div id="conn-indicator" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" title="Connecting..."></div>
-            <a href="index.html" class="flex items-center gap-1.5 hover:opacity-80 transition-opacity">
-                <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="W&W" class="h-6 w-auto object-contain">
-                <span class="font-black tracking-wider text-sm text-slate-100 uppercase">Scanner</span>
-            </a>
+    <header class="flex flex-col gap-2 bg-slate-800/90 border border-slate-700/80 px-3 py-2.5 rounded-xl shadow-lg shrink-0">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div id="conn-indicator" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" title="Connecting..."></div>
+                <a href="index.html" class="flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+                    <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="W&W" class="h-6 w-auto object-contain">
+                    <span class="font-black tracking-wider text-sm text-slate-100 uppercase">Scanner</span>
+                </a>
+            </div>
+            
+            <div class="flex items-center gap-1.5">
+                <select id="property-select" onchange="window.handlePropertyChange(this.value)" class="bg-slate-900 border border-slate-600 text-emerald-400 text-xs font-black uppercase rounded-lg px-2.5 py-1.5 outline-none cursor-pointer">
+                    <option value="SWIMS">SWIMS</option>
+                    <option value="WET">WET</option>
+                    <option value="LOUD">LOUD</option>
+                    <option value="BIGC">BIGC</option>
+                </select>
+                <a href="tm30.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-200 uppercase bg-slate-700/60 px-2 py-1.5 rounded-lg border border-slate-600/50">TM30 →</a>
+            </div>
         </div>
-        
-        <div class="flex items-center gap-1.5">
-            <select id="property-select" onchange="window.handlePropertyChange(this.value)" class="bg-slate-900 border border-slate-600 text-emerald-400 text-xs font-black uppercase rounded-lg px-2.5 py-1.5 outline-none cursor-pointer">
-                <option value="SWIMS">SWIMS</option>
-                <option value="WET">WET</option>
-                <option value="LOUD">LOUD</option>
-                <option value="BIGC">BIGC</option>
-            </select>
-            <a href="tm30.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-200 uppercase bg-slate-700/60 px-2 py-1.5 rounded-lg border border-slate-600/50">TM30 →</a>
+
+        <!-- Mode Toggle: Single vs Rush / Batch -->
+        <div class="grid grid-cols-2 gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-700/80 text-xs font-black uppercase">
+            <button type="button" id="tab-single-mode" onclick="window.setScannerMode('single')" class="py-1.5 rounded-lg text-center transition-all bg-blue-600 text-white shadow-md flex items-center justify-center gap-1.5">
+                <i data-lucide="scan" class="w-3.5 h-3.5"></i> Single Scan
+            </button>
+            <button type="button" id="tab-rush-mode" onclick="window.setScannerMode('rush')" class="py-1.5 rounded-lg text-center transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5">
+                <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i> ⚡ Rush Mode
+            </button>
         </div>
     </header>
 
     <!-- Main Scanner Workflow -->
-    <main class="flex-1 flex flex-col justify-center my-3 gap-3">
+    <main class="flex-1 flex flex-col justify-start my-3 gap-3">
         
-        <!-- Typo-Proof Room Dropdown Card -->
-        <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 shadow-md space-y-2">
-            <div class="flex items-center justify-between">
-                <label class="block text-[11px] font-black uppercase tracking-widest text-slate-400">
-                    Room / Bed Assignment
-                </label>
-                <span id="room-status-badge" class="hidden text-[9px] font-black px-1.5 py-0.5 rounded uppercase"></span>
-            </div>
-
-            <div class="flex items-center gap-2">
-                <div class="relative flex-1">
-                    <i data-lucide="tag" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
-                    <select id="room-select" onchange="window.handleRoomSelected(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-8 py-2.5 text-sm font-black uppercase text-amber-300 outline-none focus:border-blue-500 cursor-pointer appearance-none truncate">
-                        <option value="">-- NO ROOM / UNASSIGNED --</option>
-                    </select>
-                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none"></i>
+        <!-- ========================================== -->
+        <!-- VIEW 1: SINGLE SCAN WORKFLOW (DEFAULT)    -->
+        <!-- ========================================== -->
+        <div id="single-view-container" class="flex flex-col gap-3">
+            <!-- Typo-Proof Room Dropdown Card -->
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 shadow-md space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        Room / Bed Assignment
+                    </label>
+                    <span id="room-status-badge" class="hidden text-[9px] font-black px-1.5 py-0.5 rounded uppercase"></span>
                 </div>
 
-                <button type="button" onclick="window.clearRoomSelection()" class="bg-slate-700/70 hover:bg-slate-700 text-slate-300 p-2.5 rounded-xl border border-slate-600/50 btn-bounce" title="Clear Room">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-            </div>
+                <div class="flex items-center gap-2">
+                    <div class="relative flex-1">
+                        <i data-lucide="tag" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                        <select id="room-select" onchange="window.handleRoomSelected(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-8 py-2.5 text-sm font-black uppercase text-amber-300 outline-none focus:border-blue-500 cursor-pointer appearance-none truncate">
+                            <option value="">-- NO ROOM / UNASSIGNED --</option>
+                        </select>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none"></i>
+                    </div>
 
-            <!-- Custom Room Input (Fallback if custom tag selected) -->
-            <div id="custom-room-wrap" class="hidden pt-1">
-                <input type="text" id="custom-room-input" placeholder="Type custom tag (e.g. Tent 1, Villa, Staff)..." class="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-xs font-black uppercase text-amber-200 placeholder-slate-500 outline-none focus:border-amber-400">
-            </div>
-
-            <!-- In-House Guest Notification Pill -->
-            <div id="matched-guest-pill" class="hidden bg-blue-950/60 border border-blue-600/40 rounded-xl px-2.5 py-1.5 flex items-center justify-between text-xs">
-                <div class="flex items-center gap-1.5 truncate">
-                    <i data-lucide="user" class="w-3.5 h-3.5 text-blue-400 shrink-0"></i>
-                    <span id="matched-guest-name" class="font-black text-slate-200 uppercase truncate">Guest</span>
-                </div>
-                <span id="matched-guest-checkout" class="text-[10px] font-bold text-blue-300 shrink-0">Out: --</span>
-            </div>
-        </div>
-
-        <!-- Camera Trigger Zone -->
-        <div id="capture-zone" class="bg-slate-800/80 border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center shadow-lg transition-colors cursor-pointer min-h-[200px] relative overflow-hidden" onclick="triggerCamera()">
-            
-            <!-- Native Rear Camera Input -->
-            <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageSelected(event)">
-            <!-- Gallery / Existing File Fallback Input -->
-            <input type="file" id="gallery-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
-
-            <div id="empty-state" class="flex flex-col items-center gap-2 py-4">
-                <div class="w-16 h-16 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shadow-inner">
-                    <i data-lucide="camera" class="w-8 h-8"></i>
-                </div>
-                <div>
-                    <h3 class="text-lg font-black uppercase tracking-wide text-slate-100">Tap to Snap Passport</h3>
-                    <p class="text-xs font-bold text-slate-400 mt-0.5">Captures back camera photo instantly</p>
-                </div>
-                <div class="pt-2">
-                    <button type="button" onclick="event.stopPropagation(); triggerGallery()" class="text-xs font-bold text-blue-400 hover:text-blue-300 underline uppercase tracking-wider py-1 px-2 cursor-pointer">
-                        or pick photo from gallery / file
+                    <button type="button" onclick="window.clearRoomSelection()" class="bg-slate-700/70 hover:bg-slate-700 text-slate-300 p-2.5 rounded-xl border border-slate-600/50 btn-bounce" title="Clear Room">
+                        <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
+
+                <!-- Custom Room Input (Fallback) -->
+                <div id="custom-room-wrap" class="hidden pt-1">
+                    <input type="text" id="custom-room-input" placeholder="Type custom tag (e.g. Tent 1, Villa, Staff)..." class="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-xs font-black uppercase text-amber-200 placeholder-slate-500 outline-none focus:border-amber-400">
+                </div>
+
+                <!-- In-House Guest Notification Pill -->
+                <div id="matched-guest-pill" class="hidden bg-blue-950/60 border border-blue-600/40 rounded-xl px-2.5 py-1.5 flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-1.5 truncate">
+                        <i data-lucide="user" class="w-3.5 h-3.5 text-blue-400 shrink-0"></i>
+                        <span id="matched-guest-name" class="font-black text-slate-200 uppercase truncate">Guest</span>
+                    </div>
+                    <span id="matched-guest-checkout" class="text-[10px] font-bold text-blue-300 shrink-0">Out: --</span>
+                </div>
             </div>
 
-            <!-- Image Preview & Status Overlay -->
-            <div id="preview-state" class="hidden absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-2">
-                <img id="preview-img" src="" alt="Passport Preview" class="w-full h-full object-contain rounded-xl opacity-75">
-                <div id="processing-badge" class="absolute bg-slate-900/95 border border-blue-500/50 px-4 py-3 rounded-xl flex flex-col items-center gap-1.5 shadow-2xl backdrop-blur-md max-w-[85%] text-center">
-                    <div class="flex items-center gap-2">
-                        <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-blue-400"></i>
-                        <span id="processing-text" class="text-xs font-black uppercase tracking-widest text-slate-100">Reading Passport (AI)...</span>
+            <!-- Single Camera Trigger Zone -->
+            <div id="capture-zone" class="bg-slate-800/80 border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center shadow-lg transition-colors cursor-pointer min-h-[190px] relative overflow-hidden" onclick="triggerCamera()">
+                <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageSelected(event)">
+                <input type="file" id="gallery-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
+
+                <div id="empty-state" class="flex flex-col items-center gap-2 py-3">
+                    <div class="w-14 h-14 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shadow-inner">
+                        <i data-lucide="camera" class="w-7 h-7"></i>
                     </div>
-                    <span id="processing-timer" class="text-[10px] font-bold text-blue-300">0s elapsed</span>
+                    <div>
+                        <h3 class="text-base font-black uppercase tracking-wide text-slate-100">Tap to Snap Passport</h3>
+                        <p class="text-xs font-bold text-slate-400 mt-0.5">Captures photo & reviews details</p>
+                    </div>
+                    <div class="pt-1">
+                        <button type="button" onclick="event.stopPropagation(); triggerGallery()" class="text-xs font-bold text-blue-400 hover:text-blue-300 underline uppercase tracking-wider py-1 px-2 cursor-pointer">
+                            or pick from gallery
+                        </button>
+                    </div>
                 </div>
+
+                <!-- Image Preview & Status Overlay -->
+                <div id="preview-state" class="hidden absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-2">
+                    <img id="preview-img" src="" alt="Passport Preview" class="w-full h-full object-contain rounded-xl opacity-75">
+                    <div id="processing-badge" class="absolute bg-slate-900/95 border border-blue-500/50 px-4 py-3 rounded-xl flex flex-col items-center gap-1.5 shadow-2xl backdrop-blur-md max-w-[85%] text-center">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-blue-400"></i>
+                            <span id="processing-text" class="text-xs font-black uppercase tracking-widest text-slate-100">Reading Passport (AI)...</span>
+                        </div>
+                        <span id="processing-timer" class="text-[10px] font-bold text-blue-300">0s elapsed</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Extracted Data Verification Card -->
+            <div id="review-card" class="hidden bg-slate-800 border border-slate-700 rounded-2xl p-3.5 shadow-xl space-y-2.5 animate-in fade-in duration-200">
+                <div class="flex items-center justify-between border-b border-slate-700/80 pb-2">
+                    <div class="flex items-center gap-1.5">
+                        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+                        <span class="text-xs font-black uppercase tracking-wider text-slate-200">Verify Guest Details</span>
+                    </div>
+                    <button type="button" onclick="retakePhoto()" class="text-[10px] font-black uppercase text-slate-400 hover:text-slate-200 bg-slate-700/60 px-2 py-1 rounded border border-slate-600/50">
+                        Retake
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">First Name</label>
+                        <input type="text" id="f-name" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-slate-100 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Last Name</label>
+                        <input type="text" id="l-name" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-slate-100 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Passport Number</label>
+                        <input type="text" id="f-passport" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-mono font-bold uppercase text-amber-300 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Nationality (3-Letter)</label>
+                        <input type="text" id="f-nat" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-purple-300 outline-none text-center">
+                    </div>
+                    <div class="col-span-2 grid grid-cols-4 gap-1.5">
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Day</label>
+                            <input type="text" id="f-dob-day" placeholder="DD" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Month</label>
+                            <input type="text" id="f-dob-month" placeholder="MM" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Year</label>
+                            <input type="text" id="f-dob-year" placeholder="YYYY" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Sex</label>
+                            <input type="text" id="f-gender" placeholder="M/F" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" id="submit-btn" onclick="saveToFirestoreQueue()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-sm uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 btn-bounce">
+                    <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+                    <span>Push to TM30 Queue</span>
+                </button>
             </div>
         </div>
 
-        <!-- Extracted Data Verification Card -->
-        <div id="review-card" class="hidden bg-slate-800 border border-slate-700 rounded-2xl p-3.5 shadow-xl space-y-2.5 animate-in fade-in duration-200">
-            <div class="flex items-center justify-between border-b border-slate-700/80 pb-2">
-                <div class="flex items-center gap-1.5">
-                    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
-                    <span class="text-xs font-black uppercase tracking-wider text-slate-200">Verify Guest Details</span>
-                </div>
-                <button type="button" onclick="retakePhoto()" class="text-[10px] font-black uppercase text-slate-400 hover:text-slate-200 bg-slate-700/60 px-2 py-1 rounded border border-slate-600/50">
-                    Retake
+        <!-- ========================================== -->
+        <!-- VIEW 2: ⚡ RUSH MODE WORKFLOW               -->
+        <!-- ========================================== -->
+        <div id="rush-view-container" class="hidden flex flex-col gap-3">
+            <!-- Rapid Capture Action Buttons -->
+            <div class="grid grid-cols-2 gap-2">
+                <input type="file" id="rush-camera-input" accept="image/*" capture="environment" class="hidden" onchange="window.handleRushImageCaptured(event)">
+                <input type="file" id="rush-batch-input" accept="image/*" multiple class="hidden" onchange="window.handleBatchSelected(event)">
+
+                <button type="button" onclick="document.getElementById('rush-camera-input').click()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black p-4 rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1.5 btn-bounce cursor-pointer border border-amber-400">
+                    <i data-lucide="camera" class="w-7 h-7"></i>
+                    <span class="text-sm uppercase tracking-wide">Rapid Snap</span>
+                    <span class="text-[10px] opacity-80 font-bold uppercase">Snap & Next (Zero Delay)</span>
+                </button>
+
+                <button type="button" onclick="document.getElementById('rush-batch-input').click()" class="bg-slate-800 hover:bg-slate-700 text-white font-black p-4 rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1.5 btn-bounce cursor-pointer border border-slate-600">
+                    <i data-lucide="images" class="w-7 h-7 text-blue-400"></i>
+                    <span class="text-sm uppercase tracking-wide">Batch Gallery</span>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase">Select up to 20 photos</span>
                 </button>
             </div>
 
-            <div class="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                    <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">First Name</label>
-                    <input type="text" id="f-name" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-slate-100 outline-none">
+            <!-- Live Rush Queue Status Banner -->
+            <div id="rush-queue-status" class="bg-slate-800/80 border border-slate-700 px-3.5 py-2 rounded-xl flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="cpu" class="w-4 h-4 text-amber-400"></i>
+                    <span id="rush-status-text" class="font-black uppercase text-slate-200 text-[11px]">Worker Idle</span>
                 </div>
-                <div>
-                    <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Last Name</label>
-                    <input type="text" id="l-name" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-slate-100 outline-none">
-                </div>
-                <div>
-                    <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Passport Number</label>
-                    <input type="text" id="f-passport" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-mono font-bold uppercase text-amber-300 outline-none">
-                </div>
-                <div>
-                    <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Nationality (3-Letter)</label>
-                    <input type="text" id="f-nat" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-purple-300 outline-none text-center">
-                </div>
-                <div class="col-span-2 grid grid-cols-4 gap-1.5">
-                    <div>
-                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Day</label>
-                        <input type="text" id="f-dob-day" placeholder="DD" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Month</label>
-                        <input type="text" id="f-dob-month" placeholder="MM" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Year</label>
-                        <input type="text" id="f-dob-year" placeholder="YYYY" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Sex</label>
-                        <input type="text" id="f-gender" placeholder="M/F" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
-                    </div>
+                <div class="flex items-center gap-2">
+                    <span id="rush-queue-counter" class="text-[10px] font-bold text-slate-400 uppercase">0 in background</span>
+                    <button type="button" onclick="window.refreshRushTray()" class="p-1 text-slate-400 hover:text-white" title="Refresh"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i></button>
                 </div>
             </div>
 
-            <button type="button" id="submit-btn" onclick="saveToFirestoreQueue()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-sm uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 btn-bounce">
-                <i data-lucide="cloud-upload" class="w-4 h-4"></i>
-                <span>Push to TM30 Queue</span>
-            </button>
+            <!-- Staging Grid: Post-Rush Room Assignment -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between px-1">
+                    <span class="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                        Post-Rush Assignment Grid
+                    </span>
+                    <span id="rush-total-counter" class="text-[10px] font-bold text-amber-400 uppercase">0 Passports</span>
+                </div>
+
+                <!-- Grid container for scanned passport cards -->
+                <div id="rush-cards-grid" class="flex flex-col gap-2.5 max-h-[62vh] overflow-y-auto no-scrollbar pb-6">
+                    <div class="text-center py-10 text-slate-500 font-bold uppercase text-xs">
+                        <i data-lucide="layers" class="w-8 h-8 mx-auto mb-2 text-slate-600"></i>
+                        No rush passports yet.<br>Snap photos or upload batch above!
+                    </div>
+                </div>
+            </div>
         </div>
 
     </main>
 
-    <!-- Footer Toast & Instructions -->
+    <!-- Footer Instructions -->
     <footer class="text-center py-2 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
         <span>Wild & Wandering Instant Check-In</span>
     </footer>
@@ -206,7 +273,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 
@@ -233,8 +300,12 @@
         let allPropertiesList = [];
         let currentPropertyRooms = [];
         let inHouseBookings = [];
+        let rushSubmissions = [];
 
-        // Active property mapping
+        // Worker Queue state
+        const localRushQueue = [];
+        let isWorkerActive = false;
+
         const PROP_MAP = {
             'LOUD': 'loud_samui',
             'WET': 'wet_pool',
@@ -242,7 +313,6 @@
             'BIGC': 'big_c'
         };
 
-        // Fallback room array for SWIMS in case of network latency
         const SWIMS_FALLBACK_ROOMS = [
             "B01","A01","A02","B02","B03","B05","B07","A03","A04","A06","A08","A10","A12",
             "C206","C306","C311","B04","B06","B08","C212","A05","A07","A09","A11","C203",
@@ -253,6 +323,30 @@
             "C303-1","C303-2","C303-3","C303-4","C304-1","C304-2","C304-3","C304-4",
             "D01","D02","D03","D04","D05","D06","D07","D08","D09","D10","D11"
         ];
+
+        // Mode Switching
+        let currentMode = 'single';
+        window.setScannerMode = (mode) => {
+            currentMode = mode;
+            const singleBtn = document.getElementById('tab-single-mode');
+            const rushBtn = document.getElementById('tab-rush-mode');
+            const singleView = document.getElementById('single-view-container');
+            const rushView = document.getElementById('rush-view-container');
+
+            if (mode === 'rush') {
+                singleBtn.className = "py-1.5 rounded-lg text-center transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5";
+                rushBtn.className = "py-1.5 rounded-lg text-center transition-all bg-amber-500 text-slate-950 font-black shadow-md flex items-center justify-center gap-1.5";
+                singleView.classList.add('hidden');
+                rushView.classList.remove('hidden');
+                renderRushCardsGrid();
+            } else {
+                rushBtn.className = "py-1.5 rounded-lg text-center transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5";
+                singleBtn.className = "py-1.5 rounded-lg text-center transition-all bg-blue-600 text-white shadow-md flex items-center justify-center gap-1.5";
+                rushView.classList.add('hidden');
+                singleView.classList.remove('hidden');
+            }
+            if (window.lucide) window.lucide.createIcons();
+        };
 
         // Initialize Property from URL or LocalStorage
         const urlParams = new URLSearchParams(window.location.search);
@@ -271,6 +365,7 @@
         window.handlePropertyChange = async (newProp) => {
             localStorage.setItem('ww_last_scan_prop', newProp);
             await loadPropertyInventory(newProp);
+            listenToRushSubmissions();
         };
 
         const normalizeRoomId = (r) => {
@@ -278,16 +373,12 @@
             return String(r).trim().toUpperCase();
         };
 
-        // Load property rooms and active in-house bookings
         async function loadPropertyInventory(propCode) {
             const pmsKey = PROP_MAP[propCode] || 'swims_resort';
             const roomSelect = document.getElementById('room-select');
-            if (!roomSelect) return;
-
-            roomSelect.innerHTML = `<option value="">Loading rooms...</option>`;
+            if (roomSelect) roomSelect.innerHTML = `<option value="">Loading rooms...</option>`;
 
             try {
-                // 1. Fetch active property configuration
                 if (allPropertiesList.length === 0) {
                     const propsSnap = await getDocs(collection(db, 'artifacts', targetAppId, 'public', 'data', 'properties'));
                     allPropertiesList = propsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -302,7 +393,6 @@
                     currentPropertyRooms = [];
                 }
 
-                // 2. Fetch active bookings for this property to identify who is in what room
                 const todayStr = new Date().toISOString().split('T')[0];
                 const staffSnap = await getDocs(query(
                     collection(db, 'artifacts', targetAppId, 'public', 'data', 'staff'),
@@ -317,8 +407,8 @@
                     }
                 });
 
-                // 3. Populate Room Dropdown
                 populateRoomDropdown(todayStr);
+                renderRushCardsGrid();
 
             } catch (err) {
                 console.warn("Could not load dynamic room inventory:", err);
@@ -336,7 +426,6 @@
                 <option value="CUSTOM">➕ Type Custom Room / Tag...</option>
             `;
 
-            // Group rooms by type or list them cleanly
             const sortedRooms = [...currentPropertyRooms].sort((a, b) => {
                 const idA = normalizeRoomId(a.id || a);
                 const idB = normalizeRoomId(b.id || b);
@@ -347,7 +436,6 @@
                 const rid = normalizeRoomId(typeof rObj === 'string' ? rObj : rObj.id);
                 if (!rid) return;
 
-                // Check if currently occupied
                 const occupant = inHouseBookings.find(b => {
                     const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
                     const matchesRoom = rList.some(r => normalizeRoomId(r) === rid);
@@ -415,20 +503,353 @@
             window.handleRoomSelected("");
         };
 
-        // Initialize Auth
-        signInAnonymously(auth).then(async () => {
-            const ind = document.getElementById('conn-indicator');
-            ind.classList.remove('bg-amber-400', 'animate-pulse');
-            ind.classList.add('bg-emerald-400');
-            ind.title = "Connected to Firestore & Storage";
-
+        // Real-time listener for Rush Mode Submissions Tray
+        let unsubsRush = null;
+        function listenToRushSubmissions() {
+            if (unsubsRush) unsubsRush();
             const activeProp = document.getElementById('property-select')?.value || 'SWIMS';
-            await loadPropertyInventory(activeProp);
-        }).catch(err => {
-            console.error("Auth error", err);
-            showToast("Offline Warning", "Operating in offline mode: " + err.message, "error");
-        });
+            const q = query(
+                collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'),
+                where("property", "==", activeProp)
+            );
 
+            unsubsRush = onSnapshot(q, (snapshot) => {
+                rushSubmissions = snapshot.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter(g => g.status !== 'completed'); // Only show active/unarchived
+                
+                // Sort by newest
+                rushSubmissions.sort((a, b) => {
+                    const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.timestamp || 0);
+                    const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.timestamp || 0);
+                    return tB - tA;
+                });
+
+                renderRushCardsGrid();
+            });
+        }
+
+        function renderRushCardsGrid() {
+            const grid = document.getElementById('rush-cards-grid');
+            const totalCounter = document.getElementById('rush-total-counter');
+            if (!grid) return;
+
+            if (rushSubmissions.length === 0) {
+                grid.innerHTML = `
+                    <div class="text-center py-10 text-slate-500 font-bold uppercase text-xs">
+                        <i data-lucide="layers" class="w-8 h-8 mx-auto mb-2 text-slate-600"></i>
+                        No pending rush passports.<br>Snap photos or upload batch above!
+                    </div>`;
+                if (totalCounter) totalCounter.innerText = "0 Passports";
+                if (window.lucide) window.lucide.createIcons();
+                return;
+            }
+
+            if (totalCounter) {
+                totalCounter.innerText = `${rushSubmissions.length} Passport${rushSubmissions.length > 1 ? 's' : ''}`;
+            }
+
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            let html = '';
+            rushSubmissions.forEach(sub => {
+                const assignedRoom = normalizeRoomId(sub.roomNumber || '');
+                const hasRoom = !!assignedRoom;
+                const isOcrPending = sub.status === 'queued' || sub.status === 'ocr_running';
+
+                // Build room options for this card
+                let roomOptionsHtml = `<option value="">-- UNASSIGNED --</option>`;
+                currentPropertyRooms.forEach(rObj => {
+                    const rid = normalizeRoomId(typeof rObj === 'string' ? rObj : rObj.id);
+                    if (!rid) return;
+                    const occupant = inHouseBookings.find(b => {
+                        const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
+                        return rList.some(r => normalizeRoomId(r) === rid);
+                    });
+
+                    const isSel = (assignedRoom === rid) ? 'selected' : '';
+                    if (occupant) {
+                        const lName = String(occupant.lastName || 'GUEST').toUpperCase();
+                        roomOptionsHtml += `<option value="${rid}" ${isSel} class="text-emerald-400 font-bold">🟢 ${rid} — ${lName}</option>`;
+                    } else {
+                        roomOptionsHtml += `<option value="${rid}" ${isSel}>${rid}</option>`;
+                    }
+                });
+
+                const thumb = sub.photoUrl || (sub.photoBase64 ? `data:image/jpeg;base64,${sub.photoBase64}` : '');
+                const nameDisplay = (sub.firstName || sub.lastName) 
+                    ? `${sub.lastName || ''}, ${sub.firstName || ''}`.trim() 
+                    : (isOcrPending ? 'Reading Passport (AI)...' : 'Passport Captured');
+
+                const passDisplay = sub.passportNumber ? `ID: ${sub.passportNumber}` : (isOcrPending ? 'Extracting...' : 'Pending OCR');
+                const natDisplay = sub.nationality ? `NAT: ${sub.nationality}` : '';
+
+                html += `
+                <div id="rush-card-${sub.id}" class="bg-slate-800 border ${hasRoom ? 'border-emerald-500/60 bg-slate-800/90' : 'border-amber-500/40'} rounded-2xl p-2.5 shadow-md flex items-center gap-3 transition-all">
+                    <!-- Photo Thumbnail -->
+                    <div class="w-14 h-14 rounded-xl bg-slate-900 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center relative">
+                        ${thumb ? `<img src="${thumb}" alt="Passport" class="w-full h-full object-cover">` : `<i data-lucide="image" class="w-6 h-6 text-slate-500"></i>`}
+                        ${isOcrPending ? `<div class="absolute inset-0 bg-slate-900/80 flex items-center justify-center"><i data-lucide="loader-2" class="w-4 h-4 animate-spin text-amber-400"></i></div>` : ''}
+                    </div>
+
+                    <!-- Details & Room Dropdown -->
+                    <div class="flex-1 min-w-0 flex flex-col gap-1.5">
+                        <div class="flex items-center justify-between gap-1 leading-tight">
+                            <span class="font-black text-xs uppercase text-slate-100 truncate">${nameDisplay}</span>
+                            <span class="${hasRoom ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'} text-[9px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0">
+                                ${hasRoom ? `✓ ${assignedRoom}` : 'NEEDS ROOM'}
+                            </span>
+                        </div>
+
+                        <div class="text-[10px] font-mono text-slate-400 flex items-center gap-2">
+                            <span>${passDisplay}</span>
+                            ${natDisplay ? `<span class="text-purple-300 font-bold">${natDisplay}</span>` : ''}
+                        </div>
+
+                        <!-- One-Tap Post-Rush Room Selector -->
+                        <div class="flex items-center gap-1.5 mt-0.5">
+                            <select onchange="window.assignRoomToRushCard('${sub.id}', this.value)" class="w-full bg-slate-900 border ${hasRoom ? 'border-emerald-600' : 'border-amber-500/80'} text-amber-300 text-xs font-black uppercase rounded-lg px-2 py-1 outline-none cursor-pointer">
+                                ${roomOptionsHtml}
+                            </select>
+                        </div>
+                    </div>
+                </div>`;
+            });
+
+            grid.innerHTML = html;
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        window.assignRoomToRushCard = async (submissionId, chosenRoom) => {
+            const cleanRoom = normalizeRoomId(chosenRoom);
+            const activeProp = document.getElementById('property-select')?.value || 'SWIMS';
+            const pmsPropKey = PROP_MAP[activeProp] || 'swims_resort';
+
+            showToast("Updating...", `Assigning room ${cleanRoom || 'Unassigned'}`, "success");
+
+            try {
+                // 1. Locate PMS in-house booking matching chosen room
+                let matchedBooking = null;
+                if (cleanRoom) {
+                    const searchRooms = [cleanRoom];
+                    if (/^[A-Z]0\d$/.test(cleanRoom)) searchRooms.push(cleanRoom[0] + cleanRoom[2]);
+                    else if (/^[A-Z]\d$/.test(cleanRoom)) searchRooms.push(cleanRoom[0] + '0' + cleanRoom[1]);
+
+                    matchedBooking = inHouseBookings.find(b => {
+                        const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
+                        return rList.some(r => {
+                            if (!r) return false;
+                            const cr = normalizeRoomId(r);
+                            return searchRooms.includes(cr);
+                        });
+                    });
+                }
+
+                // 2. Fetch the current submission data
+                const subRef = doc(db, 'artifacts', targetAppId, 'public', 'data', 'submissions', submissionId);
+                const subObj = rushSubmissions.find(s => s.id === submissionId) || {};
+
+                let checkoutFormatted = subObj.checkoutDate || "";
+                let guestPhone = subObj.phoneNo || "";
+
+                if (matchedBooking) {
+                    if (matchedBooking.checkOut) {
+                        const p = String(matchedBooking.checkOut).trim().split('-');
+                        if (p.length === 3) checkoutFormatted = `${p[2]}/${p[1]}/${p[0]}`;
+                        else checkoutFormatted = String(matchedBooking.checkOut);
+                    }
+                    guestPhone = String(matchedBooking.phone || "").trim();
+
+                    // Two-Way Sync: Update PMS Folio Notes with passport
+                    try {
+                        const passportNote = `\n\n[PASSPORT SCANNED - ${new Date().toLocaleDateString('en-GB')}]\n• Name: ${subObj.firstName || ''} ${subObj.lastName || ''}\n• Passport: ${subObj.passportNumber || 'N/A'}\n• Nat: ${subObj.nationality || 'N/A'}\n• Room: ${cleanRoom}`;
+                        const updatedNotes = ((matchedBooking.notes || "") + passportNote).trim();
+
+                        const pmsDocRef = doc(db, 'artifacts', targetAppId, 'public', 'data', 'staff', matchedBooking.id);
+                        const updatePayload = { notes: updatedNotes };
+                        if (!matchedBooking.country && subObj.nationality) updatePayload.country = subObj.nationality;
+                        await updateDoc(pmsDocRef, updatePayload);
+                    } catch (e) {
+                        console.warn("PMS update notice:", e);
+                    }
+                }
+
+                // 3. Update Firestore Submission
+                await updateDoc(subRef, {
+                    roomNumber: cleanRoom,
+                    checkoutDate: checkoutFormatted,
+                    phoneNo: guestPhone,
+                    pmsSynced: !!matchedBooking
+                });
+
+                showToast("Synced!", `${cleanRoom ? `Room ${cleanRoom}` : 'Updated'} — ${matchedBooking ? matchedBooking.lastName : 'Saved'}`, "success");
+
+            } catch (err) {
+                console.error("Room assign error:", err);
+                showToast("Update Error", err.message || "Could not link room", "error");
+            }
+        };
+
+        window.refreshRushTray = () => {
+            listenToRushSubmissions();
+            showToast("Refreshed", "Staging tray updated.", "success");
+        };
+
+        window.handleRushImageCaptured = async (event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            // Reset camera input so staff can instantly re-trigger camera
+            event.target.value = '';
+
+            try {
+                showToast("Snapping...", "Downscaling & adding to rush queue...", "success");
+                const compressedBase64 = await resizeImageToMaxDimension(file, 1400);
+
+                // Queue immediately into Firestore & local processor
+                await enqueueRushPassport(compressedBase64);
+
+            } catch (err) {
+                showToast("Capture Error", err.message, "error");
+            }
+        };
+
+        window.handleBatchSelected = async (event) => {
+            const files = Array.from(event.target.files || []);
+            if (files.length === 0) return;
+
+            event.target.value = '';
+            showToast("Queuing Batch", `Compressing ${files.length} passports...`, "success");
+
+            try {
+                for (let i = 0; i < files.length; i++) {
+                    const base64 = await resizeImageToMaxDimension(files[i], 1400);
+                    await enqueueRushPassport(base64, `Passport ${i + 1}`);
+                }
+                showToast("Batch Ready!", `${files.length} passports queued. Background OCR starting.`, "success");
+            } catch (err) {
+                showToast("Batch Error", err.message, "error");
+            }
+        };
+
+        async function enqueueRushPassport(base64Data, label = "Guest") {
+            const activeProp = document.getElementById('property-select')?.value || 'SWIMS';
+
+            // 1. Write skeleton submission to Firestore immediately
+            const docRef = await addDoc(collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'), {
+                property: activeProp,
+                roomNumber: "",
+                firstName: "",
+                middleName: "",
+                lastName: "",
+                passportNumber: "",
+                nationality: "",
+                dobDay: "",
+                dobMonth: "",
+                dobYear: "",
+                gender: "M",
+                checkoutDate: "",
+                phoneNo: "",
+                photoBase64: base64Data, // Temporary for instant local thumb display
+                status: "queued",
+                source: "RUSH_SCANNER",
+                pmsSynced: false,
+                createdAt: serverTimestamp()
+            });
+
+            // 2. Add to sequential local worker queue
+            localRushQueue.push({
+                docId: docRef.id,
+                base64: base64Data,
+                property: activeProp
+            });
+
+            updateWorkerStatus();
+
+            // 3. Trigger sequential background processor if idle
+            if (!isWorkerActive) {
+                processNextInRushQueue();
+            }
+        }
+
+        async function processNextInRushQueue() {
+            if (localRushQueue.length === 0) {
+                isWorkerActive = false;
+                updateWorkerStatus();
+                return;
+            }
+
+            isWorkerActive = true;
+            updateWorkerStatus();
+
+            const job = localRushQueue.shift();
+            const subRef = doc(db, 'artifacts', targetAppId, 'public', 'data', 'submissions', job.docId);
+
+            try {
+                await updateDoc(subRef, { status: "ocr_running" });
+
+                // 1. Call Gemini OCR
+                const parseFn = httpsCallable(functions, 'parsePassportScan', { timeout: 35000 });
+                const ocrResult = await parseFn({ imageBase64: job.base64 });
+                const guestData = ocrResult?.data?.data || {};
+
+                const fName = String(guestData.firstName || '').toUpperCase();
+                const lName = String(guestData.lastName || '').toUpperCase();
+                const pNum = String(guestData.passportNumber || '').toUpperCase().replace(/\s/g, '');
+                const nat = String(guestData.nationality || '').toUpperCase().trim();
+
+                // 2. Upload photo to Storage in background
+                let photoUrl = "";
+                try {
+                    photoUrl = await uploadPhotoToStorage(job.base64, job.property);
+                } catch (e) {
+                    console.warn("Storage upload bypassed:", e);
+                }
+
+                // 3. Update Firestore Submission with parsed details
+                await updateDoc(subRef, {
+                    firstName: fName,
+                    middleName: String(guestData.middleName || '').toUpperCase(),
+                    lastName: lName,
+                    passportNumber: pNum,
+                    nationality: nat,
+                    dobDay: String(guestData.dobDay || ''),
+                    dobMonth: String(guestData.dobMonth || ''),
+                    dobYear: String(guestData.dobYear || ''),
+                    gender: String(guestData.gender || 'M').toUpperCase().charAt(0),
+                    photoUrl: photoUrl || "",
+                    photoBase64: null, // Free memory
+                    status: "processing"
+                });
+
+                showToast("Extracted!", `${fName} ${lName} (${pNum}) ready for room.`, "success");
+
+            } catch (err) {
+                console.error("Rush worker error:", err);
+                await updateDoc(subRef, { status: "processing" }); // Allow manual edit
+            }
+
+            // 4. Polite 2.5-second pacing gap before next AI call
+            await new Promise(r => setTimeout(r, 2500));
+            processNextInRushQueue();
+        }
+
+        function updateWorkerStatus() {
+            const statusText = document.getElementById('rush-status-text');
+            const counterText = document.getElementById('rush-queue-counter');
+            if (statusText) {
+                statusText.innerText = isWorkerActive 
+                    ? `Reading (${localRushQueue.length + 1} remaining)...` 
+                    : 'Worker Idle';
+            }
+            if (counterText) {
+                counterText.innerText = `${localRushQueue.length} queued`;
+            }
+        }
+
+        // ==============================================================
+        // SINGLE SCAN CONTROLLERS (Retained for 1-by-1 manual workflow)
+        // ==============================================================
         window.triggerCamera = () => { document.getElementById('camera-input').click(); };
         window.triggerGallery = () => { document.getElementById('gallery-input').click(); };
 
@@ -470,17 +891,14 @@
             }, 1000);
 
             try {
-                // 1. Downscale on canvas to ~200KB
                 currentCompressedBase64 = await resizeImageToMaxDimension(file, 1400);
                 previewImg.src = `data:image/jpeg;base64,${currentCompressedBase64}`;
                 processingText.innerText = "Reading Passport (AI)...";
 
-                // 2. Non-blocking upload to Storage
                 uploadPhotoToStorage(currentCompressedBase64)
                     .then(url => { uploadedPhotoUrl = url; })
                     .catch(err => { console.warn("Storage upload bypassed:", err); });
 
-                // 3. AI OCR Extraction
                 const parseFn = httpsCallable(functions, 'parsePassportScan', { timeout: 30000 });
                 const ocrResult = await parseFn({ imageBase64: currentCompressedBase64 });
                 const guestData = ocrResult?.data?.data || {};
@@ -489,7 +907,7 @@
                 populateReviewCard(guestData);
                 processingBadge.classList.add('hidden');
                 reviewCard.classList.remove('hidden');
-                lucide.createIcons();
+                if (window.lucide) window.lucide.createIcons();
                 showToast("Extracted!", "Review details and push to queue.", "success");
 
             } catch (err) {
@@ -498,14 +916,135 @@
                 processingBadge.classList.add('hidden');
                 populateReviewCard({});
                 reviewCard.classList.remove('hidden');
-                lucide.createIcons();
+                if (window.lucide) window.lucide.createIcons();
                 showToast("Extraction Issue", err.message || "Manual edit required", "error");
             }
         };
 
-        async function uploadPhotoToStorage(base64Data) {
+        window.saveToFirestoreQueue = async () => {
+            const btn = document.getElementById('submit-btn');
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Saving & Syncing...</span>`;
+            btn.disabled = true;
+            if (window.lucide) window.lucide.createIcons();
+
             try {
-                const prop = (document.getElementById('property-select')?.value || 'SWIMS').toLowerCase();
+                const property = document.getElementById('property-select').value;
+                const pmsPropKey = PROP_MAP[property] || 'swims_resort';
+
+                const roomDropdownVal = document.getElementById('room-select')?.value || '';
+                let roomNumber = '';
+                if (roomDropdownVal === 'CUSTOM') {
+                    roomNumber = document.getElementById('custom-room-input')?.value.trim().toUpperCase() || '';
+                } else {
+                    roomNumber = roomDropdownVal.trim().toUpperCase();
+                }
+
+                const firstName = (document.getElementById('f-name')?.value || '').trim().toUpperCase();
+                const lastName = (document.getElementById('f-name') ? document.getElementById('l-name')?.value : '').trim().toUpperCase();
+                const passportNumber = (document.getElementById('f-passport')?.value || '').trim().toUpperCase().replace(/\s/g, '');
+                const nationality = (document.getElementById('f-nat')?.value || '').trim().toUpperCase();
+                const dobDay = (document.getElementById('f-dob-day')?.value || '').trim();
+                const dobMonth = (document.getElementById('f-dob-month')?.value || '').trim();
+                const dobYear = (document.getElementById('f-dob-year')?.value || '').trim();
+                const gender = ((document.getElementById('f-gender')?.value || 'M').trim().toUpperCase()).charAt(0) || 'M';
+
+                if (!passportNumber && !lastName) {
+                    throw new Error("Please provide at least a Passport Number or Last Name");
+                }
+
+                let matchedBooking = null;
+                if (roomNumber) {
+                    const searchRooms = [roomNumber];
+                    if (/^[A-Z]0\d$/.test(roomNumber)) searchRooms.push(roomNumber[0] + roomNumber[2]);
+                    else if (/^[A-Z]\d$/.test(roomNumber)) searchRooms.push(roomNumber[0] + '0' + roomNumber[1]);
+
+                    matchedBooking = inHouseBookings.find(b => {
+                        const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
+                        return rList.some(r => {
+                            if (!r) return false;
+                            const cleanR = String(r).trim().toUpperCase();
+                            return searchRooms.includes(cleanR);
+                        });
+                    });
+                }
+
+                if (!matchedBooking && firstName && lastName) {
+                    matchedBooking = inHouseBookings.find(b => {
+                        const bFirst = String(b.firstName || '').toUpperCase();
+                        const bLast = String(b.lastName || '').toUpperCase();
+                        return (bLast.includes(lastName) && (bFirst.includes(firstName) || firstName.includes(bFirst))) ||
+                               (lastName.includes(bLast) && (firstName.includes(bFirst) || bFirst.includes(firstName)));
+                    });
+                }
+
+                let checkoutFormatted = "";
+                let guestPhone = "";
+
+                if (matchedBooking) {
+                    if (matchedBooking.checkOut) {
+                        const p = String(matchedBooking.checkOut).trim().split('-');
+                        if (p.length === 3) checkoutFormatted = `${p[2]}/${p[1]}/${p[0]}`;
+                        else checkoutFormatted = String(matchedBooking.checkOut);
+                    }
+                    guestPhone = String(matchedBooking.phone || "").trim();
+
+                    try {
+                        const passportNote = `\n\n[PASSPORT SCANNED - ${new Date().toLocaleDateString('en-GB')}]\n• Name: ${firstName} ${lastName}\n• Passport: ${passportNumber || 'N/A'}\n• Nat: ${nationality || 'N/A'}\n• DOB: ${dobYear}-${dobMonth}-${dobDay}`;
+                        const updatedNotes = ((matchedBooking.notes || "") + passportNote).trim();
+
+                        const pmsDocRef = doc(db, 'artifacts', targetAppId, 'public', 'data', 'staff', matchedBooking.id);
+                        const updatePayload = { notes: updatedNotes };
+                        if (!matchedBooking.country && nationality) updatePayload.country = nationality;
+
+                        await updateDoc(pmsDocRef, updatePayload);
+                    } catch (pmsUpdateErr) {
+                        console.warn("Notice: PMS note update bypassed:", pmsUpdateErr);
+                    }
+                }
+
+                await addDoc(collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'), {
+                    property: property,
+                    roomNumber: roomNumber,
+                    firstName: firstName,
+                    middleName: "",
+                    lastName: lastName,
+                    passportNumber: passportNumber,
+                    nationality: nationality,
+                    dobDay: dobDay,
+                    dobMonth: dobMonth,
+                    dobYear: dobYear,
+                    gender: gender,
+                    checkoutDate: checkoutFormatted,
+                    phoneNo: guestPhone,
+                    photoUrl: uploadedPhotoUrl || "",
+                    status: "processing",
+                    source: "MOBILE_SCANNER",
+                    pmsSynced: !!matchedBooking,
+                    createdAt: serverTimestamp()
+                });
+
+                const syncMsg = matchedBooking ? `Synced with Booking (${matchedBooking.lastName})!` : 'Pushed to TM30 Queue.';
+                showToast("Recorded!", `${firstName || 'Guest'} (${passportNumber || 'N/A'})\n${syncMsg}`);
+
+                setTimeout(() => {
+                    window.retakePhoto();
+                    window.clearRoomSelection();
+                }, 1200);
+
+            } catch (err) {
+                console.error("Save/Sync error", err);
+                showToast("Save Error", err.message || "Could not write to database", "error");
+            } finally {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+                if (window.lucide) window.lucide.createIcons();
+            }
+        };
+
+        async function uploadPhotoToStorage(base64Data, propOverride = null) {
+            try {
+                const prop = (propOverride || document.getElementById('property-select')?.value || 'SWIMS').toLowerCase();
                 const timestamp = Date.now();
                 const randId = Math.random().toString(36).substring(2, 8);
                 const path = `passports/${prop}/${timestamp}_${randId}.jpg`;
@@ -571,149 +1110,6 @@
             document.getElementById('f-gender').value = String(data.gender || 'M').toUpperCase().charAt(0);
         }
 
-        // ======================================================================
-        // CRASH-PROOF TWO-WAY PMS & TM30 INTEGRATION
-        // Works seamlessly whether Room is chosen first or Passport snapped first!
-        // ======================================================================
-        window.saveToFirestoreQueue = async () => {
-            const btn = document.getElementById('submit-btn');
-            const originalContent = btn.innerHTML;
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Saving & Syncing...</span>`;
-            btn.disabled = true;
-            if (window.lucide) window.lucide.createIcons();
-
-            try {
-                const property = document.getElementById('property-select').value;
-                const pmsPropKey = PROP_MAP[property] || 'swims_resort';
-
-                // Resolve Room selection (Dropdown vs Custom tag)
-                const roomDropdownVal = document.getElementById('room-select')?.value || '';
-                let roomNumber = '';
-                if (roomDropdownVal === 'CUSTOM') {
-                    roomNumber = document.getElementById('custom-room-input')?.value.trim().toUpperCase() || '';
-                } else {
-                    roomNumber = roomDropdownVal.trim().toUpperCase();
-                }
-
-                const firstName = (document.getElementById('f-name')?.value || '').trim().toUpperCase();
-                const lastName = (document.getElementById('f-name') ? document.getElementById('l-name')?.value : '').trim().toUpperCase();
-                const passportNumber = (document.getElementById('f-passport')?.value || '').trim().toUpperCase().replace(/\s/g, '');
-                const nationality = (document.getElementById('f-nat')?.value || '').trim().toUpperCase();
-                const dobDay = (document.getElementById('f-dob-day')?.value || '').trim();
-                const dobMonth = (document.getElementById('f-dob-month')?.value || '').trim();
-                const dobYear = (document.getElementById('f-dob-year')?.value || '').trim();
-                const gender = ((document.getElementById('f-gender')?.value || 'M').trim().toUpperCase()).charAt(0) || 'M';
-
-                if (!passportNumber && !lastName) {
-                    throw new Error("Please provide at least a Passport Number or Last Name");
-                }
-
-                // 1. Crash-Proof Matching with Active Bookings
-                let matchedBooking = null;
-
-                if (inHouseBookings.length === 0) {
-                    const staffRef = collection(db, 'artifacts', targetAppId, 'public', 'data', 'staff');
-                    const staffSnap = await getDocs(query(staffRef, where("property", "==", pmsPropKey)));
-                    staffSnap.forEach(d => {
-                        const data = d.data();
-                        if (!['cancelled', 'noshow'].includes(data.status)) {
-                            inHouseBookings.push({ id: d.id, ...data });
-                        }
-                    });
-                }
-
-                // Robust Room Match with safe string conversion (prevents (101).toUpperCase() crashes!)
-                if (roomNumber) {
-                    const searchRooms = [roomNumber];
-                    if (/^[A-Z]0\d$/.test(roomNumber)) searchRooms.push(roomNumber[0] + roomNumber[2]);
-                    else if (/^[A-Z]\d$/.test(roomNumber)) searchRooms.push(roomNumber[0] + '0' + roomNumber[1]);
-
-                    matchedBooking = inHouseBookings.find(b => {
-                        const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
-                        return rList.some(r => {
-                            if (r === null || r === undefined) return false;
-                            const cleanR = String(r).trim().toUpperCase();
-                            return searchRooms.includes(cleanR);
-                        });
-                    });
-                }
-
-                // Fallback Name Match if room was unassigned or not matched
-                if (!matchedBooking && firstName && lastName) {
-                    matchedBooking = inHouseBookings.find(b => {
-                        const bFirst = String(b.firstName || '').toUpperCase();
-                        const bLast = String(b.lastName || '').toUpperCase();
-                        return (bLast.includes(lastName) && (bFirst.includes(firstName) || firstName.includes(bFirst))) ||
-                               (lastName.includes(bLast) && (firstName.includes(bFirst) || bFirst.includes(firstName)));
-                    });
-                }
-
-                let checkoutFormatted = "";
-                let guestPhone = "";
-
-                if (matchedBooking) {
-                    if (matchedBooking.checkOut) {
-                        const p = String(matchedBooking.checkOut).trim().split('-');
-                        if (p.length === 3) checkoutFormatted = `${p[2]}/${p[1]}/${p[0]}`;
-                        else checkoutFormatted = String(matchedBooking.checkOut);
-                    }
-                    guestPhone = String(matchedBooking.phone || "").trim();
-
-                    // Two-Way Injection: Write passport details into PMS folio notes
-                    try {
-                        const passportNote = `\n\n[PASSPORT SCANNED - ${new Date().toLocaleDateString('en-GB')}]\n• Name: ${firstName} ${lastName}\n• Passport: ${passportNumber || 'N/A'}\n• Nat: ${nationality || 'N/A'}\n• DOB: ${dobYear}-${dobMonth}-${dobDay}`;
-                        const updatedNotes = ((matchedBooking.notes || "") + passportNote).trim();
-
-                        const pmsDocRef = doc(db, 'artifacts', targetAppId, 'public', 'data', 'staff', matchedBooking.id);
-                        const updatePayload = { notes: updatedNotes };
-                        if (!matchedBooking.country && nationality) updatePayload.country = nationality;
-
-                        await updateDoc(pmsDocRef, updatePayload);
-                    } catch (pmsUpdateErr) {
-                        console.warn("Notice: PMS booking note update bypassed:", pmsUpdateErr.message);
-                    }
-                }
-
-                // 2. Write to TM30 Submissions Collection with checkout and phone ready
-                await addDoc(collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'), {
-                    property: property,
-                    roomNumber: roomNumber,
-                    firstName: firstName,
-                    middleName: "",
-                    lastName: lastName,
-                    passportNumber: passportNumber,
-                    nationality: nationality,
-                    dobDay: dobDay,
-                    dobMonth: dobMonth,
-                    dobYear: dobYear,
-                    gender: gender,
-                    checkoutDate: checkoutFormatted,
-                    phoneNo: guestPhone,
-                    photoUrl: uploadedPhotoUrl || "",
-                    status: "processing",
-                    source: "MOBILE_SCANNER",
-                    pmsSynced: !!matchedBooking,
-                    createdAt: serverTimestamp()
-                });
-
-                const syncMsg = matchedBooking ? `Synced with Booking (${matchedBooking.lastName})!` : 'Pushed to TM30 Queue.';
-                showToast("Directly Recorded!", `${firstName || 'Guest'} (${passportNumber || 'N/A'})\n${syncMsg}`);
-
-                setTimeout(() => {
-                    window.retakePhoto();
-                    window.clearRoomSelection();
-                }, 1200);
-
-            } catch (err) {
-                console.error("Save/Sync error", err);
-                showToast("Save Error", err.message || "Could not write to database", "error");
-            } finally {
-                btn.innerHTML = originalContent;
-                btn.disabled = false;
-                if (window.lucide) window.lucide.createIcons();
-            }
-        };
-
         function showToast(title, msg, type = "success") {
             const toast = document.getElementById('toast');
             const inner = document.getElementById('toast-inner');
@@ -739,8 +1135,23 @@
             setTimeout(() => {
                 toast.classList.remove('translate-y-0', 'opacity-100');
                 toast.classList.add('-translate-y-24', 'opacity-0');
-            }, 6000);
+            }, 4500);
         }
+
+        // Initialize Auth & Data Listeners
+        signInAnonymously(auth).then(async () => {
+            const ind = document.getElementById('conn-indicator');
+            ind.classList.remove('bg-amber-400', 'animate-pulse');
+            ind.classList.add('bg-emerald-400');
+            ind.title = "Connected to Firestore & Storage";
+
+            const activeProp = document.getElementById('property-select')?.value || 'SWIMS';
+            await loadPropertyInventory(activeProp);
+            listenToRushSubmissions();
+        }).catch(err => {
+            console.error("Auth error", err);
+            showToast("Offline Warning", "Operating in offline mode: " + err.message, "error");
+        });
 
         if (window.lucide) window.lucide.createIcons();
     </script>
