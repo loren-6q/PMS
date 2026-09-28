@@ -4,9 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>W&W | Mobile Passport Scanner</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700;900&display=swap');
         body {
@@ -273,7 +277,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getStorage, ref as storageRef, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 
@@ -402,7 +406,7 @@
                 inHouseBookings = [];
                 staffSnap.forEach(d => {
                     const b = d.data();
-                    if (!['cancelled', 'noshow'].includes(b.status)) {
+                    if (!['cancelled', 'noshow'].includes(b.status) && !b.isMockTest) {
                         inHouseBookings.push({ id: d.id, ...b });
                     }
                 });
@@ -417,7 +421,7 @@
             }
         }
 
-        function populateRoomDropdown(todayStr) {
+        function populateRoomDropdown(targetDateStr) {
             const roomSelect = document.getElementById('room-select');
             if (!roomSelect) return;
 
@@ -442,7 +446,7 @@
                     if (!matchesRoom) return false;
                     const cIn = String(b.checkIn || '');
                     const cOut = String(b.checkOut || '');
-                    return (!cIn || cIn <= todayStr) && (!cOut || cOut >= todayStr);
+                    return (!cIn || cIn <= targetDateStr) && (!cOut || cOut >= targetDateStr);
                 });
 
                 if (occupant) {
@@ -516,7 +520,7 @@
             unsubsRush = onSnapshot(q, (snapshot) => {
                 rushSubmissions = snapshot.docs
                     .map(d => ({ id: d.id, ...d.data() }))
-                    .filter(g => g.status !== 'completed'); // Only show active/unarchived
+                    .filter(g => g.status !== 'completed' && !g.isMockTest); // Only active real submissions
                 
                 // Sort by newest
                 rushSubmissions.sort((a, b) => {
@@ -548,8 +552,6 @@
             if (totalCounter) {
                 totalCounter.innerText = `${rushSubmissions.length} Passport${rushSubmissions.length > 1 ? 's' : ''}`;
             }
-
-            const todayStr = new Date().toISOString().split('T')[0];
 
             let html = '';
             rushSubmissions.forEach(sub => {
