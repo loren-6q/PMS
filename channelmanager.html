@@ -4,140 +4,66 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WILD & WANDERING Channel Manager</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <style type="text/tailwindcss">
-        @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Condensed:wght@400;600;700;800;900&display=swap');
-        
-        @layer components {
-            .input-base { @apply w-full bg-slate-50 border border-slate-300 font-bold text-sm px-2 py-1.5 rounded outline-none focus:ring-2 focus:ring-indigo-500 transition-all; }
-            .label-base { @apply text-[11px] font-black text-slate-500 mb-1 uppercase tracking-widest block; }
-            .grid-toggle { @apply appearance-none w-4 h-4 border-2 border-slate-400 rounded-sm cursor-pointer checked:bg-indigo-500 checked:border-indigo-500 transition-colors relative flex items-center justify-center; }
-            .grid-toggle:checked::after { content: 'x'; @apply block text-[12px] font-black text-white absolute leading-none pb-[2px]; }
-            .tab-btn { @apply px-3 py-1.5 font-black text-xs uppercase rounded transition-colors border border-transparent text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5; }
-            .tab-btn.active { @apply text-indigo-700 bg-white border-slate-200 shadow-sm; }
-            
-            .view-btn { @apply px-2.5 py-1 font-black text-[11px] uppercase rounded transition-colors text-slate-600 hover:text-slate-900 cursor-pointer flex items-center gap-1 border border-slate-300 bg-white shadow-sm; }
-            .view-btn.active-bdc { @apply bg-[#003580] border-[#003580] text-white hover:text-white shadow-md; }
-            .view-btn.active-hw { @apply bg-[#F15A24] border-[#F15A24] text-white hover:text-white shadow-md; }
-            .view-btn.active-direct { @apply bg-emerald-500 border-emerald-500 text-white hover:text-white shadow-md; }
-            
-            .filter-pill { @apply px-2 py-0.5 rounded text-[10px] font-black uppercase border border-slate-300 bg-slate-100 text-slate-600 cursor-pointer transition-all select-none flex items-center gap-1; }
-            .filter-pill.active { @apply bg-indigo-600 border-indigo-600 text-white shadow-sm; }
-        }
-
-        body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; font-size: 1.2rem; overscroll-behavior-y: none; }
-        .unselectable { user-select: none; -webkit-user-select: none; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        
-        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
-        .loading-overlay.active { opacity: 1; pointer-events: auto; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #4f46e5; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* Hyper Compact & Legible Grid - STRICT HEIGHTS */
-        .rate-grid-table { border-spacing: 0; width: max-content; }
-        .rate-grid-table th, .rate-grid-table td { 
-            border-right: 1px solid #cbd5e1; 
-            border-bottom: 1px solid #cbd5e1; 
-            padding: 2px 0px; 
-            text-align: center; 
-            height: 26px;
-            box-sizing: border-box;
-        }
-        
-        .rate-grid-table td input[type="number"], .rate-grid-table td input[type="text"] { 
-            width: 36px; 
-            height: 24px;
-            text-align: center; 
-            font-size: 14px; 
-            font-stretch: condensed; 
-            padding: 0; 
-            border: 1px solid transparent; 
-            border-radius: 0px; 
-            outline: none; 
-            transition: all 0.2s; 
-            -moz-appearance: textfield; 
-            font-weight: 900; 
-            background: transparent;
-        }
-        .rate-grid-table td input[type="number"]::-webkit-outer-spin-button, .rate-grid-table td input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .rate-grid-table td input[type="number"]:focus, .rate-grid-table td input[type="text"]:focus { box-shadow: inset 0 0 0 2px #4f46e5; background: #fff !important; z-index: 10; position: relative; }
-        
-        .is-override { color: #d97706 !important; font-weight: 900 !important; }
-        .is-dirty { box-shadow: inset 0 0 0 2px #f97316 !important; transition: box-shadow 0.2s; }
-        .is-synced { background-color: #ecfdf5 !important; transition: background-color 0.5s; }
-        
-        .override-cell-highlight { background-color: #ffedd5 !important; }
-
-        /* Wide Room Columns */
-        .frozen-col { position: sticky; left: 0; z-index: 20; background: inherit; width: 140px; min-width: 140px; }
-        .frozen-col-2 { position: sticky; left: 140px; z-index: 21; border-right: 2px solid #94a3b8 !important; background: inherit; width: 42px; min-width: 42px; }
-        .frozen-col-header { position: sticky; background: #1e293b; color: #fff; z-index: 30; }
-        .sticky-header { position: sticky; top: 0; background: #1e293b; color: #fff; z-index: 25; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        
-        /* Zebra Striping */
-        .room-group-even td:not(.evt-peak):not(.evt-week) { background-color: #ffffff; }
-        .room-group-odd td:not(.evt-peak):not(.evt-week) { background-color: #f1f5f9; }
-        
-        /* EVENT Glows */
-        td.evt-peak, th.evt-peak { background-color: #fcd34d !important; } 
-        td.evt-week, th.evt-week { background-color: #fef08a !important; } 
-        th.evt-peak { color: #b45309 !important; }
-        th.evt-week { color: #ca8a04 !important; }
-        
-        .evt-text input[type="number"] { color: #db2777 !important; }
-    </style>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 </head>
-<body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
+<body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden bg-slate-100 font-sans">
+
+    <!-- Loading Overlay -->
     <div id="loader" class="loading-overlay active"><div class="spinner"></div><div id="sync-status" class="mt-4 font-black text-indigo-800 uppercase tracking-widest text-center">LOADING DATA...</div></div>
     
+    <!-- Custom Alert Dialog -->
     <div id="custom-alert" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
         <div class="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full text-center border-2 border-slate-800">
             <div class="bg-indigo-100 text-indigo-600 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="info" size="24"></i></div>
-            <p id="custom-alert-msg" class="font-black text-slate-700 mb-6 leading-tight whitespace-pre-wrap"></p>
+            <p id="custom-alert-msg" class="font-black text-slate-700 mb-6 leading-tight whitespace-pre-wrap text-sm"></p>
             <div class="flex gap-2 justify-center">
-                <button id="custom-alert-cancel" onclick="document.getElementById('custom-alert').classList.add('hidden')" class="hidden w-full px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-black uppercase transition-colors">Cancel</button>
-                <button id="custom-alert-confirm" onclick="document.getElementById('custom-alert').classList.add('hidden')" class="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-black uppercase transition-colors">Okay</button>
+                <button id="custom-alert-cancel" onclick="document.getElementById('custom-alert').classList.add('hidden')" class="hidden w-full px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-black uppercase transition-colors text-xs">Cancel</button>
+                <button id="custom-alert-confirm" onclick="document.getElementById('custom-alert').classList.add('hidden')" class="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-black uppercase transition-colors text-xs">Okay</button>
             </div>
         </div>
     </div>
 
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+        <!-- TOP NAVBAR -->
         <div class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-2 shrink-0 z-50 unselectable w-full">
             <div class="flex items-center gap-3 shrink-0 min-w-0">
                 <a href="index.html" class="flex flex-col min-w-0 mr-3 hover:brightness-110 transition-all cursor-pointer hidden sm:block">
                     <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
                 </a>
                 <div class="flex items-center gap-2">
-                    <h1 class="font-black uppercase tracking-widest text-sm sm:text-base text-slate-800 leading-none shrink-0">CHANNEL MGR</h1>
+                    <h1 class="font-black uppercase tracking-widest text-sm sm:text-base text-slate-800 leading-none shrink-0 flex items-center gap-1.5">
+                        <i data-lucide="zap" class="text-indigo-600"></i> CHANNEL MGR
+                    </h1>
                     <select id="property-switcher" onchange="window.handlePropertySwitch(this.value)" class="bg-slate-100 text-blue-600 font-black uppercase tracking-widest text-xs outline-none cursor-pointer border border-slate-300 rounded px-2 py-0.5 max-w-[250px] shadow-sm">
-                        <!-- Populated dynamically -->
                     </select>
                 </div>
             </div>
 
             <div class="flex items-center gap-2 shrink-1 transition-opacity min-w-0 ml-auto">
                 <div id="save-indicator" class="text-[9px] font-black text-emerald-600 uppercase tracking-widest opacity-0 transition-opacity mr-2">Saved</div>
-                <button onclick="window.pushToChannexAPI(this, 'delta')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="zap" size="14"></i> SYNC CHANGES</button>
-                <button onclick="window.pushToChannexAPI(this, 'full')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="cloud-upload" size="14"></i> FULL SYNC</button>
-                <a href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors hidden sm:block ml-2 shrink-0">← Back</a>
+                <button onclick="window.pushToChannexAPI(this, 'delta')" class="px-3 sm:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="zap" size="14"></i> SYNC CHANGES</button>
+                <button onclick="window.pushToChannexAPI(this, 'full')" class="px-3 sm:px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="cloud-upload" size="14"></i> FULL SYNC</button>
+                <a id="nav-pms-btn" href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors hidden sm:block ml-2 shrink-0">← Back</a>
             </div>
         </div>
 
         <div class="flex-1 flex flex-col min-h-0 bg-slate-100 sm:rounded-lg overflow-hidden border-y sm:border border-slate-300 shadow-sm relative z-0">
+            <!-- MODULE TABS -->
             <div class="flex px-2 pt-2 bg-slate-200 border-b border-slate-300 shrink-0 gap-1 overflow-x-auto no-scrollbar shadow-inner unselectable">
                 <button onclick="window.switchTab('grid')" id="tab-grid" class="tab-btn active"><i data-lucide="calendar" size="14"></i> Calendar</button>
+                <button onclick="window.switchTab('promos')" id="tab-promos" class="tab-btn"><i data-lucide="tags" size="14" class="text-pink-600"></i> Promo & Deals Engine</button>
                 <button onclick="window.switchTab('smart')" id="tab-smart" class="tab-btn"><i data-lucide="wand-2" size="14" class="text-amber-500"></i> Autofiller</button>
                 <button onclick="window.switchTab('relational')" id="tab-relational" class="tab-btn"><i data-lucide="link" size="14" class="text-indigo-500"></i> Linking</button>
-                <button onclick="window.switchTab('mapping')" id="tab-mapping" class="tab-btn"><i data-lucide="network" size="14" class="text-pink-500"></i> OTA Mapping</button>
+                <button onclick="window.switchTab('mapping')" id="tab-mapping" class="tab-btn"><i data-lucide="network" size="14" class="text-purple-500"></i> OTA Mapping</button>
             </div>
 
+            <!-- TAB 1: CALENDAR MATRIX VIEW -->
             <div id="view-grid" class="flex-1 flex flex-col min-h-0 relative">
                 <div class="flex flex-wrap items-center justify-between gap-2 px-2 py-1.5 bg-white border-b border-slate-200 shrink-0 shadow-sm z-30 relative">
                     <div class="flex items-center gap-1">
@@ -214,6 +140,53 @@
                 </div>
             </div>
 
+            <!-- TAB 2: PROMOTIONS & DEALS ENGINE -->
+            <div id="view-promos" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
+                <div class="max-w-5xl mx-auto space-y-4">
+                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                            <div>
+                                <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2">
+                                    <i data-lucide="tags" class="text-pink-600"></i> OTA Promotions & Deals Engine
+                                </h2>
+                                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">
+                                    Automatically applies exact inverse markups to offset OTA discounts & preserve net room revenue.
+                                </p>
+                            </div>
+                            <button onclick="window.openAddPromoModal()" class="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
+                                <i data-lucide="plus" size="14"></i> Add Promo Rule
+                            </button>
+                        </div>
+
+                        <!-- Active Promos Ledger Table -->
+                        <div class="overflow-x-auto border border-slate-200 rounded-lg shadow-inner bg-slate-50 no-scrollbar mb-6">
+                            <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+                                <thead class="bg-slate-800 text-white font-black uppercase text-[10px] tracking-wider sticky top-0 z-10">
+                                    <tr>
+                                        <th class="py-2 px-3 border-r border-slate-700">Channel</th>
+                                        <th class="py-2 px-3 border-r border-slate-700">Promo Campaign</th>
+                                        <th class="py-2 px-3 border-r border-slate-700">Date Window</th>
+                                        <th class="py-2 px-3 border-r border-slate-700 text-center">OTA Discount</th>
+                                        <th class="py-2 px-3 border-r border-slate-700 text-center text-pink-300">Required Markup</th>
+                                        <th class="py-2 px-3 border-r border-slate-700">Room Scope</th>
+                                        <th class="py-2 px-3 border-r border-slate-700 text-center">Status</th>
+                                        <th class="py-2 px-3 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="promo-table-body" class="bg-white text-slate-800 font-bold">
+                                    <tr>
+                                        <td colspan="8" class="text-center py-8 text-slate-400 font-bold uppercase tracking-widest">
+                                            No active OTA promo rules configured. Click "+ Add Promo Rule" above.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: AUTOFILLER VIEW -->
             <div id="view-smart" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-4xl mx-auto space-y-4">
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
@@ -325,6 +298,7 @@
                 </div>
             </div>
 
+            <!-- TAB 4: RELATIONAL LINKING VIEW -->
             <div id="view-relational" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-4xl mx-auto space-y-4">
                     <div class="bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden flex flex-col">
@@ -351,11 +325,12 @@
                 </div>
             </div>
 
+            <!-- TAB 5: OTA MAPPING SUITE -->
             <div id="view-mapping" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-4xl mx-auto space-y-4">
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm mb-4 bg-indigo-50/50 border-indigo-200">
                         <h2 class="text-sm font-black uppercase text-indigo-700 mb-2 border-b border-indigo-200 pb-2 flex items-center gap-2">
-                            <i data-lucide="key-round" size="16"></i> Channex Credentials
+                            <i data-lucide="key-round" size="16"></i> Channex Credentials (Production)
                         </h2>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
                             <div>
@@ -364,7 +339,7 @@
                             </div>
                             <div>
                                 <label class="label-base text-indigo-600">Channex Property ID</label>
-                                <input type="text" id="chan-prop-id" class="input-base border-indigo-300 bg-white" placeholder="e.g. 5d5a7d9b-...">
+                                <input type="text" id="chan-prop-id" class="input-base border-indigo-300 bg-white" placeholder="e.g. be74cdc9-2581-4f1d-ba9b-fbb4b44337d8">
                             </div>
                         </div>
                         <div class="mt-3 flex justify-end">
@@ -420,13 +395,112 @@
         </div>
     </div>
 
+    <!-- MODAL: ADD PROMO RULE MODAL -->
+    <div id="promo-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md border-2 border-slate-800 flex flex-col overflow-hidden">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm">
+                <div class="flex items-center gap-2"><i data-lucide="tag" class="w-4 h-4 text-pink-400"></i> Configure OTA Promo Rule</div>
+                <button onclick="window.closeModal('promo-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="p-4 space-y-3 text-xs">
+                <input type="hidden" id="promo-rule-id">
+                
+                <div>
+                    <label class="label-base">OTA Channel</label>
+                    <select id="promo-channel" class="input-base cursor-pointer">
+                        <option value="Booking.com">Booking.com</option>
+                        <option value="Agoda">Agoda</option>
+                        <option value="Hostelworld">Hostelworld</option>
+                        <option value="Expedia">Expedia</option>
+                        <option value="Airbnb">Airbnb</option>
+                        <option value="ALL">All Channels</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="label-base">Promo Name / Campaign</label>
+                    <input type="text" id="promo-name" placeholder="e.g. October Flash Sale, Genius 15%, Mobile Deal" class="input-base">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="label-base">OTA Discount (%)</label>
+                        <input type="number" id="promo-discount-pct" value="15" min="1" max="99" oninput="window.updatePromoModalMath()" class="input-base font-black text-pink-600">
+                    </div>
+                    <div>
+                        <label class="label-base">Required Markup (%)</label>
+                        <input type="text" id="promo-calculated-markup" value="+17.6%" readonly class="input-base bg-slate-100 font-black text-emerald-700 text-center">
+                    </div>
+                </div>
+
+                <div class="space-y-1 pt-1 border-t border-slate-200">
+                    <div class="flex items-center justify-between">
+                        <label class="label-base mb-0">Date Window</label>
+                        <label class="text-[10px] font-bold text-slate-500 flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="promo-always-active" onchange="window.togglePromoDateInputs(this.checked)" class="row-checkbox"> Always Active
+                        </label>
+                    </div>
+                    <div id="promo-date-wrap" class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="label-base">Start Date</label>
+                            <input type="date" id="promo-start-date" class="input-base">
+                        </div>
+                        <div>
+                            <label class="label-base">End Date</label>
+                            <input type="date" id="promo-end-date" class="input-base">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="label-base">Room Category Scope</label>
+                    <select id="promo-room-scope" class="input-base cursor-pointer">
+                        <option value="ALL">All Categories</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2 pt-2 border-t border-slate-200">
+                    <input type="checkbox" id="promo-active-toggle" checked class="row-checkbox">
+                    <label for="promo-active-toggle" class="text-xs font-black uppercase text-slate-700 cursor-pointer">
+                        Rule Active (Auto-Expires on End Date)
+                    </label>
+                </div>
+            </div>
+            <div class="p-3 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button onclick="window.closeModal('promo-modal')" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300 !py-1.5">Cancel</button>
+                <button onclick="window.savePromoRule()" class="btn-modal bg-pink-600 hover:bg-pink-700 text-white !py-1.5 shadow">Save Promo Rule</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
         const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app); const appId = 'hotel-pms-v1';
+
+        const PROP_MAP = { 'LOUD': 'loud_samui', 'WET': 'wet_pool', 'SWIMS': 'swims_resort' };
+        const PROP_REVERSE_MAP = { 'loud_samui': 'LOUD', 'wet_pool': 'WET', 'swims_resort': 'SWIMS' };
+
+        // PRE-CONFIGURED CHANNEX IDs
+        const PRECONFIGURED_CHANNEX_IDS = {
+            'loud_samui': 'be74cdc9-2581-4f1d-ba9b-fbb4b44337d8',
+            'LOUD': 'be74cdc9-2581-4f1d-ba9b-fbb4b44337d8'
+        };
+
+        // Top-level module helper so it is available globally across all methods
+        const dbToUiRoom = (rid) => {
+            if (!rid) return rid;
+            let nid = rid.toUpperCase();
+            if (hotelRooms.some(r => r.id === nid || r.id === rid)) return rid;
+            if (currentPropertyId === 'swims_resort') {
+                if (/^[ABFD]\d$/.test(nid)) return nid[0] + '0' + nid.substring(1);
+                if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) return 'C' + nid;
+            }
+            return rid;
+        };
 
         let currentPropertyId = 'swims_resort';
         let windowPropertiesList = [];
@@ -448,6 +522,65 @@
         window.dirtyFields = {}; 
 
         window.activeMetrics = new Set(['rates', 'avail', 'min', 'stop']);
+
+        window.safeUpdateUrlParam = (paramName, paramVal) => {
+            try {
+                if (typeof window === 'undefined' || !window.location) return;
+                if (!window.location.protocol.startsWith('http')) return;
+                const url = new URL(window.location.href);
+                url.searchParams.set(paramName, paramVal);
+                window.history.replaceState({}, '', url.pathname + url.search);
+            } catch(e) {}
+        };
+
+        window.resolveTargetPropertyId = (propsList) => {
+            let pRaw = '';
+            try {
+                const params = new URLSearchParams(window.location.search);
+                pRaw = (params.get('p') || params.get('prop') || params.get('property') || '').trim();
+            } catch(e) {}
+
+            let storedRaw = '';
+            try {
+                storedRaw = (localStorage.getItem('last_prop') || localStorage.getItem('pms_active_property') || '').trim();
+            } catch(e) {}
+
+            const candidates = [pRaw, storedRaw].filter(Boolean);
+
+            for (const raw of candidates) {
+                const upperRaw = raw.toUpperCase();
+                const mappedId = PROP_MAP[upperRaw] || raw;
+
+                const exact = propsList.find(p => p.id.toLowerCase() === mappedId.toLowerCase());
+                if (exact) return exact.id;
+
+                const matchShort = propsList.find(p => (PROP_REVERSE_MAP[p.id] || '').toUpperCase() === upperRaw);
+                if (matchShort) return matchShort.id;
+
+                const partial = propsList.find(p => p.id.toLowerCase().includes(raw.toLowerCase()) || (p.name && p.name.toLowerCase().includes(raw.toLowerCase())));
+                if (partial) return partial.id;
+            }
+
+            return propsList[0]?.id || 'swims_resort';
+        };
+
+        window.syncNavLinks = (propId) => {
+            const shortKey = PROP_REVERSE_MAP[propId] || 'SWIMS';
+            const backBtn = document.getElementById('nav-pms-btn');
+            if (backBtn) backBtn.href = `index.html?p=${shortKey}`;
+
+            document.querySelectorAll('a[href]').forEach(a => {
+                const href = a.getAttribute('href');
+                if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('mailto')) {
+                    try {
+                        const baseOrigin = window.location.protocol.startsWith('http') ? window.location.origin : 'https://localhost';
+                        const url = new URL(href, baseOrigin);
+                        url.searchParams.set('p', shortKey);
+                        a.setAttribute('href', url.pathname + url.search);
+                    } catch(e) {}
+                }
+            });
+        };
 
         window.toggleFilter = (metric) => {
             if (window.activeMetrics.has(metric)) window.activeMetrics.delete(metric);
@@ -475,6 +608,14 @@
             });
         };
 
+        window.closeModal = id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.remove('active');
+                el.style.display = 'none';
+            }
+        };
+
         const categoryResolver = (catName) => {
             if(!catName) return "";
             const clean = catName.toUpperCase().trim();
@@ -487,13 +628,6 @@
         
         const rawRooms = "B01|Oceanfront King^A01|Oceanfront King^A02|Oceanfront King^B02|Oceanfront Twin^B03|Oceanview King Room^B05|Oceanview King Room^B07|Oceanview King Room^A03|Oceanview King Room^A04|Oceanview King Room^A06|Oceanview King Room^A08|Oceanview King Room^A10|Oceanview King Room^A12|Oceanview King Room^C206|Oceanview King Room^C306|Oceanview King Room^C311|Oceanview King Room^B04|Oceanview Twin Room^B06|Oceanview Twin Room^B08|Oceanview Twin Room^C212|Oceanview Twin Room^A05|Partial Oceanview King Room^A07|Partial Oceanview King Room^A09|Partial Oceanview King Room^A11|Partial Oceanview King Room^C203|Partial Oceanview King Room^C204|Partial Oceanview King Room^C205|Partial Oceanview King Room^B09|Gardenview King Room^B11|Gardenview King Room^B13|Gardenview King Room^B15|Gardenview King Room^B17|Gardenview King Room^B19|Gardenview King Room^B21|Gardenview King Room^B22|Gardenview King Room^B10|Gardenview Twin Room^B12|Gardenview Twin Room^B14|Gardenview Twin Room^B16|Gardenview Twin Room^B18|Gardenview Twin Room^B20|Gardenview Twin Room^C201|Gardenview Twin Room^C202|Gardenview Twin Room^C207|Gardenview Twin Room^C208|Gardenview Twin Room^C209|Gardenview Twin Room^C210|Gardenview Twin Room^C211|Gardenview Twin Room^C101|Gardenview Twin Room^C307|Partial Oceanview Triple Room^C308|Partial Oceanview Triple Room^C305|Partial Oceanview Triple Room^C309|Partial Oceanview Triple Room^C310|Partial Oceanview Triple Room^C301-1|Standard Quad Dorm^C301-2|Standard Quad Dorm^C301-3|Standard Quad Dorm^C301-4|Standard Quad Dorm^C302-1|Standard Quad Dorm^C302-2|Standard Quad Dorm^C302-3|Standard Quad Dorm^C302-4|Standard Quad Dorm^C303-1|Standard Quad Dorm^C303-2|Standard Quad Dorm^C303-3|Standard Quad Dorm^C303-4|Standard Quad Dorm^C304-1|Standard Quad Dorm^C304-2|Standard Quad Dorm^C304-3|Standard Quad Dorm^C304-4|Standard Quad Dorm^D01|BUNGALOWS^D02|BUNGALOWS^D03|BUNGALOWS^D04|BUNGALOWS^D05|BUNGALOWS^D06|BUNGALOWS^D07|BUNGALOWS^D08|BUNGALOWS^D09|BUNGALOWS^D10|BUNGALOWS^D11|BUNGALOWS";
         const hardcodedRooms = rawRooms.split('^').map(r => { const p = r.split('|'); return { id: p[0], type: p[1] }; });
-        
-        const dbToUiRoom = (rid) => {
-            if (!rid) return rid; let nid = rid.toUpperCase();
-            if (/^[ABFD]\d$/.test(nid)) return nid[0] + '0' + nid.substring(1);
-            if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) return 'C' + nid;
-            return nid;
-        };
 
         window.customAlert = (msg, isConfirm = false, onConfirm = null) => {
             document.getElementById('custom-alert-msg').innerText = msg;
@@ -517,12 +651,21 @@
                 windowPropertiesList = [];
                 propsSnap.forEach(docSnap => windowPropertiesList.push({ id: docSnap.id, ...docSnap.data() }));
 
+                const targetPropId = window.resolveTargetPropertyId(windowPropertiesList);
+                currentPropertyId = targetPropId;
+
+                try { 
+                    localStorage.setItem('last_prop', currentPropertyId); 
+                    localStorage.setItem('pms_active_property', currentPropertyId); 
+                } catch(e) {}
+
+                const shortKey = PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
+                window.safeUpdateUrlParam('p', shortKey);
+                window.syncNavLinks(currentPropertyId);
+
                 const switcher = document.getElementById('property-switcher');
                 if (switcher && windowPropertiesList.length > 0) {
-                    switcher.innerHTML = windowPropertiesList.map(p => `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`).join('');
-                    if(!windowPropertiesList.find(p => p.id === currentPropertyId)) {
-                        currentPropertyId = windowPropertiesList[0].id;
-                    }
+                    switcher.innerHTML = windowPropertiesList.map(p => `<option value="${p.id}" ${p.id === currentPropertyId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`).join('');
                     switcher.value = currentPropertyId;
                 }
 
@@ -533,21 +676,29 @@
                     window.channexConfig = propToLoad.channex || {};
                     window.channexMap = propToLoad.channexMap || [];
                     window.channexRateMap = propToLoad.channexRateMap || [];
+                    window.promoRules = propToLoad.promoRules || [];
                 } else {
-                    hotelRooms = [...hardcodedRooms]; eventDates = []; window.channexConfig = {}; window.channexMap = []; window.channexRateMap = [];
+                    hotelRooms = [...hardcodedRooms]; eventDates = []; window.channexConfig = {}; window.channexMap = []; window.channexRateMap = []; window.promoRules = [];
+                }
+
+                // Pre-bind LOUD Channex ID if not set
+                if ((currentPropertyId === 'loud_samui' || currentPropertyId === 'LOUD') && !window.channexConfig.propId) {
+                    window.channexConfig.propId = PRECONFIGURED_CHANNEX_IDS['loud_samui'];
                 }
 
                 roomTypes = [];
                 totalRoomsByType = {};
                 
                 hotelRooms.forEach(r => {
-                    if (!roomTypes.includes(r.type)) roomTypes.push(r.type);
-                    totalRoomsByType[r.type] = (totalRoomsByType[r.type] || 0) + 1;
+                    if (r && r.type) {
+                        if (!roomTypes.includes(r.type)) roomTypes.push(r.type);
+                        totalRoomsByType[r.type] = (totalRoomsByType[r.type] || 0) + 1;
+                    }
                 });
 
                 displayAbbrev = {};
                 roomTypes.forEach(rt => {
-                    const firstRoomOfCat = hotelRooms.find(r => r.type === rt);
+                    const firstRoomOfCat = hotelRooms.find(r => r && r.type === rt);
                     if (firstRoomOfCat && firstRoomOfCat.short) {
                         displayAbbrev[rt] = firstRoomOfCat.short;
                     } else {
@@ -567,11 +718,15 @@
                 document.querySelectorAll('.no-evt-column').forEach(el => el.style.display = hasEvents ? 'none' : 'block');
                 
                 masterPricing = { relationships: [], timeline: {} };
-                let snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${currentPropertyId}`));
-                if (snap.exists()) { 
-                    const d = snap.data(); 
-                    if (d.timeline) masterPricing.timeline = d.timeline; 
-                    if (d.relationships) masterPricing.relationships = d.relationships; 
+                try {
+                    let snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${currentPropertyId}`));
+                    if (snap.exists()) { 
+                        const d = snap.data(); 
+                        if (d.timeline) masterPricing.timeline = d.timeline; 
+                        if (d.relationships) masterPricing.relationships = d.relationships; 
+                    }
+                } catch (pErr) {
+                    console.warn("Pricing load notice:", pErr);
                 }
 
                 if(masterPricing.relationships.length === 0 && roomTypes.length > 0) {
@@ -582,42 +737,258 @@
                 if (selP) selP.innerHTML = roomTypes.filter(t => !t.toLowerCase().includes('dorm')).map(t => `<option value="${t}">${t}</option>`).join('');
                 if (selD) selD.innerHTML = roomTypes.filter(t => t.toLowerCase().includes('dorm')).map(t => `<option value="${t}">${t}</option>`).join('');
                 
-                document.getElementById('chan-api-key').value = window.channexConfig.apiKey || '';
-                document.getElementById('chan-prop-id').value = window.channexConfig.propId || '';
-                window.renderChannexMapping();
+                populatePromoScopeDropdown();
+                renderPromoRulesTable();
+
+                const apiKeyEl = document.getElementById('chan-api-key');
+                const propIdEl = document.getElementById('chan-prop-id');
+                if (apiKeyEl) apiKeyEl.value = window.channexConfig.apiKey || '';
+                if (propIdEl) propIdEl.value = window.channexConfig.propId || '';
+                if (window.renderChannexMapping) window.renderChannexMapping();
                 
             } catch (err) { console.error("Error loading property config:", err); }
         };
 
         window.handlePropertySwitch = async (propId) => {
             if (propId === currentPropertyId) return;
-            document.getElementById('loader').classList.add('active');
-            document.getElementById('sync-status').innerText = 'SWITCHING PROPERTY...';
+            const loader = document.getElementById('loader');
+            if (loader) { loader.style.display = 'flex'; loader.classList.add('active'); }
+            const statusEl = document.getElementById('sync-status');
+            if (statusEl) statusEl.innerText = 'SWITCHING PROPERTY...';
             currentPropertyId = propId;
+
+            try { 
+                localStorage.setItem('last_prop', currentPropertyId); 
+                localStorage.setItem('pms_active_property', currentPropertyId); 
+            } catch(e) {}
+
+            const shortKey = PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
+            window.safeUpdateUrlParam('p', shortKey);
+            window.syncNavLinks(currentPropertyId);
+
             await loadPropertyConfig();
             window.renderGrid();
-            document.getElementById('loader').classList.remove('active');
+            if (loader) { loader.style.display = 'none'; loader.classList.remove('active'); }
         };
+
+        // =========================================================
+        // PROMO ENGINE MODULE FUNCTIONS
+        // =========================================================
+        function populatePromoScopeDropdown() {
+            const scopeEl = document.getElementById('promo-room-scope');
+            if (scopeEl) {
+                scopeEl.innerHTML = `<option value="ALL">All Categories</option>` +
+                    roomTypes.map(t => `<option value="${t}">${t}</option>`).join('');
+            }
+        }
+
+        window.openAddPromoModal = () => {
+            document.getElementById('promo-rule-id').value = '';
+            document.getElementById('promo-name').value = '';
+            document.getElementById('promo-discount-pct').value = '15';
+            document.getElementById('promo-always-active').checked = false;
+            window.togglePromoDateInputs(false);
+
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('promo-start-date').value = today;
+            document.getElementById('promo-end-date').value = today;
+
+            document.getElementById('promo-modal').classList.add('active');
+            document.getElementById('promo-modal').style.display = 'flex';
+            window.updatePromoModalMath();
+        };
+
+        window.togglePromoDateInputs = (isAlways) => {
+            const wrap = document.getElementById('promo-date-wrap');
+            if (wrap) {
+                if (isAlways) wrap.classList.add('opacity-40', 'pointer-events-none');
+                else wrap.classList.remove('opacity-40', 'pointer-events-none');
+            }
+        };
+
+        window.updatePromoModalMath = () => {
+            const disc = parseFloat(document.getElementById('promo-discount-pct')?.value) || 0;
+            const calcEl = document.getElementById('promo-calculated-markup');
+            if (disc <= 0 || disc >= 100) {
+                calcEl.value = "+0%";
+            } else {
+                const markup = ((1 / (1 - (disc / 100))) - 1) * 100;
+                calcEl.value = `+${markup.toFixed(1)}%`;
+            }
+        };
+
+        window.runLiveCalculator = () => {
+            const targetRate = parseFloat(document.getElementById('calc-target-rate')?.value) || 0;
+            const discountPct = parseFloat(document.getElementById('calc-discount-pct')?.value) || 0;
+
+            const markupPctEl = document.getElementById('calc-markup-pct');
+            const pushedRateEl = document.getElementById('calc-pushed-rate');
+
+            if (discountPct <= 0 || discountPct >= 100) {
+                if (markupPctEl) markupPctEl.innerText = "+0%";
+                if (pushedRateEl) pushedRateEl.innerText = `฿${targetRate.toFixed(2)}`;
+                return;
+            }
+
+            const decimalDiscount = discountPct / 100;
+            const requiredMarkupPct = (((1 / (1 - decimalDiscount)) - 1) * 100).toFixed(1);
+            const pushedRate = targetRate / (1 - decimalDiscount);
+
+            if (markupPctEl) markupPctEl.innerText = `+${requiredMarkupPct}%`;
+            if (pushedRateEl) pushedRateEl.innerText = `฿${pushedRate.toFixed(2)}`;
+        };
+
+        window.savePromoRule = async () => {
+            const name = document.getElementById('promo-name').value.trim();
+            const discountPct = parseFloat(document.getElementById('promo-discount-pct').value) || 0;
+            const channel = document.getElementById('promo-channel').value;
+            const isAlways = document.getElementById('promo-always-active').checked;
+            const startDate = document.getElementById('promo-start-date').value;
+            const endDate = document.getElementById('promo-end-date').value;
+            const scope = document.getElementById('promo-room-scope').value;
+            const active = document.getElementById('promo-active-toggle').checked;
+
+            if (!name) return window.customAlert("Please enter a Promo Name.");
+            if (discountPct <= 0 || discountPct >= 100) return window.customAlert("Please enter a valid Discount % (1-99).");
+
+            const ruleId = document.getElementById('promo-rule-id').value || 'rule_' + Math.random().toString(36).substr(2, 9);
+            const promoRules = window.promoRules || [];
+
+            const existingIdx = promoRules.findIndex(r => r.id === ruleId);
+            const newRule = {
+                id: ruleId,
+                name: name.toUpperCase(),
+                channel,
+                discountPct,
+                isAlways,
+                startDate: isAlways ? null : startDate,
+                endDate: isAlways ? null : endDate,
+                scope,
+                active,
+                createdAt: new Date().toISOString()
+            };
+
+            if (existingIdx > -1) promoRules[existingIdx] = newRule;
+            else promoRules.push(newRule);
+
+            try {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentPropertyId), { promoRules });
+                window.promoRules = promoRules;
+                window.closeModal('promo-modal');
+                renderPromoRulesTable();
+                
+                // Flag affected date range as dirty for Channex Delta Sync
+                if (isAlways) {
+                    Object.keys(masterPricing.timeline || {}).forEach(d => window.dirtyDates.add(d));
+                } else if (startDate && endDate) {
+                    let c = new Date(startDate + "T12:00:00Z");
+                    const eD = new Date(endDate + "T12:00:00Z");
+                    while (c <= eD) {
+                        window.dirtyDates.add(c.toISOString().split('T')[0]);
+                        c.setUTCDate(c.getUTCDate() + 1);
+                    }
+                }
+
+                window.renderGrid();
+                window.customAlert(`Promo rule "${name}" saved! Affected dates marked dirty for sync.`);
+            } catch (err) {
+                window.customAlert("Save Error: " + err.message);
+            }
+        };
+
+        window.togglePromoRuleActive = async (ruleId, isActive) => {
+            const promoRules = window.promoRules || [];
+            const target = promoRules.find(r => r.id === ruleId);
+            if (target) {
+                target.active = isActive;
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentPropertyId), { promoRules });
+                renderPromoRulesTable();
+                window.renderGrid();
+            }
+        };
+
+        window.deletePromoRule = async (ruleId) => {
+            window.customAlert("Delete this promotional rule?", true, async () => {
+                const promoRules = (window.promoRules || []).filter(r => r.id !== ruleId);
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentPropertyId), { promoRules });
+                window.promoRules = promoRules;
+                renderPromoRulesTable();
+                window.renderGrid();
+            });
+        };
+
+        function renderPromoRulesTable() {
+            const tbody = document.getElementById('promo-table-body');
+            if (!tbody) return;
+
+            const rules = window.promoRules || [];
+            const today = new Date().toISOString().split('T')[0];
+
+            if (rules.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-8 text-slate-400 font-bold uppercase tracking-widest">
+                            No active OTA promo rules configured. Click "+ Add Promo Rule" above.
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            let html = '';
+            rules.forEach(r => {
+                const isExpired = !r.isAlways && r.endDate && r.endDate < today;
+                const isCurrentlyActive = r.active && !isExpired;
+
+                const markupPct = ((1 / (1 - (r.discountPct / 100))) - 1) * 100;
+                const dateDisplay = r.isAlways ? '<span class="text-blue-600">ALWAYS ACTIVE</span>' : `${r.startDate || '--'} → ${r.endDate || '--'}`;
+
+                html += `
+                <tr class="border-b border-slate-200 hover:bg-slate-50 transition-colors ${isExpired ? 'opacity-50 grayscale' : ''}">
+                    <td class="py-2 px-3 border-r border-slate-200 font-black text-blue-700">${r.channel}</td>
+                    <td class="py-2 px-3 border-r border-slate-200">${r.name}</td>
+                    <td class="py-2 px-3 border-r border-slate-200 font-mono text-xs">${dateDisplay}</td>
+                    <td class="py-2 px-3 border-r border-slate-200 text-center text-pink-600 font-black">${r.discountPct}%</td>
+                    <td class="py-2 px-3 border-r border-slate-200 text-center text-emerald-600 font-black">+${markupPct.toFixed(1)}%</td>
+                    <td class="py-2 px-3 border-r border-slate-200 font-bold text-slate-600">${r.scope}</td>
+                    <td class="py-2 px-3 border-r border-slate-200 text-center">
+                        <span class="px-2 py-0.5 text-[9px] rounded font-black uppercase ${isCurrentlyActive ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-200 text-slate-600'}">
+                            ${isExpired ? 'EXPIRED' : (r.active ? 'ACTIVE' : 'OFF')}
+                        </span>
+                    </td>
+                    <td class="py-2 px-3 text-center">
+                        <div class="flex items-center justify-center gap-2">
+                            <button onclick="window.togglePromoRuleActive('${r.id}', ${!r.active})" class="p-1 text-slate-400 hover:text-blue-600 cursor-pointer" title="Toggle Active">
+                                <i data-lucide="${r.active ? 'power' : 'power-off'}" size="14"></i>
+                            </button>
+                            <button onclick="window.deletePromoRule('${r.id}')" class="p-1 text-slate-400 hover:text-red-600 cursor-pointer" title="Delete">
+                                <i data-lucide="trash-2" size="14"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>`;
+            });
+
+            tbody.innerHTML = html;
+            if (window.lucide) window.lucide.createIcons();
+        }
 
         const applyMath = (baseVal, type, modifier, isReverse = false) => {
             if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
             let val = parseFloat(baseVal); let mod = parseFloat(modifier); if (isNaN(mod)) mod = 0; 
             
-            const calc = (n) => n;
-            
-            if (type === '=') return calc(val);
+            if (type === '=') return val;
             if (!isReverse) {
-                if (type === '+') return Math.max(0, calc(val + mod));
-                if (type === '-') return Math.max(0, calc(val - mod));
-                if (type === '+%') return calc(val * (1 + (mod/100)));
-                if (type === '-%') return Math.max(0, calc(val * (1 - (mod/100))));
+                if (type === '+') return Math.max(0, val + mod);
+                if (type === '-') return Math.max(0, val - mod);
+                if (type === '+%') return val * (1 + (mod/100));
+                if (type === '-%') return Math.max(0, val * (1 - (mod/100)));
             } else {
-                if (type === '+') return Math.max(0, calc(val - mod));
-                if (type === '-') return Math.max(0, calc(val + mod));
-                if (type === '+%') return calc(val / (1 + (mod/100)));
-                if (type === '-%') return Math.max(0, calc(val / (1 - (mod/100))));
+                if (type === '+') return Math.max(0, val - mod);
+                if (type === '-') return Math.max(0, val + mod);
+                if (type === '+%') return val / (1 + (mod/100));
+                if (type === '-%') return Math.max(0, val / (1 - (mod/100)));
             }
-            return calc(val);
+            return val;
         };
 
         const getNearestEvent = (unixMs) => {
@@ -700,12 +1071,16 @@
         };
 
         window.switchTab = (tab) => {
-            ['grid', 'smart', 'relational', 'mapping'].forEach(t => {
+            ['grid', 'promos', 'smart', 'relational', 'mapping'].forEach(t => {
                 const el = document.getElementById(`view-${t}`);
                 if (el) el.style.display = t === tab ? 'flex' : 'none';
                 const btn = document.getElementById(`tab-${t}`);
                 if (btn) btn.classList.toggle('active', t === tab);
             });
+            if(tab === 'promos') {
+                renderPromoRulesTable();
+                window.runLiveCalculator();
+            }
             if(tab === 'relational') window.renderRelationships();
             if(tab === 'smart') {
                 const selP = document.getElementById('w-anchor-private'); const selD = document.getElementById('w-anchor-dorm');
@@ -738,7 +1113,7 @@
                 btn.innerHTML = '<i data-lucide="link-2-off" size="12"></i> LINKS: OFF';
                 btn.classList.replace('!bg-indigo-100', '!bg-slate-100'); btn.classList.replace('!text-indigo-700', '!text-slate-500');
             }
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
         };
 
         window.toggleQuickBulk = (forceClose = false) => {
@@ -753,7 +1128,6 @@
             let html = '';
             const inptCls = "input-base !py-0.5 !px-1 text-center text-[10px] w-14 font-black transition-colors focus:bg-indigo-50 border border-transparent focus:border-indigo-300 hover:bg-slate-50 placeholder-slate-400";
 
-            // GLOBAL
             html += `<tr class="bg-slate-200 border-b border-slate-300" data-type="global" data-id="GLOBAL">
                 <td class="p-1.5 font-black text-[10px] uppercase text-slate-800 border-r border-slate-300">🌍 GLOBAL (ALL ROOMS)</td>
                 <td class="p-1 text-center border-r border-slate-300"><input type="text" class="${inptCls} bg-slate-100/50 cursor-not-allowed" disabled></td>
@@ -765,7 +1139,6 @@
                 <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
             </tr>`;
 
-            // ROOMS & OTA Rates
             roomTypes.forEach(r => {
                 html += `<tr class="bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors" data-type="room" data-id="${r}">
                     <td class="p-1.5 font-bold text-[10px] text-slate-600 pl-4 border-r border-slate-200">🚪 ${displayAbbrev[r]||r} <span class="text-[8px] text-slate-400 font-black uppercase ml-1">(Base)</span></td>
@@ -839,7 +1212,6 @@
                 let dateStr = getLocalYMD(new Date(d));
                 masterPricing.timeline[dateStr] = masterPricing.timeline[dateStr] || {};
                 
-                // Track memory for Delta Sync payload isolation
                 window.dirtyDates.add(dateStr);
                 window.syncedDates.delete(dateStr);
                 window.dirtyFields = window.dirtyFields || {};
@@ -858,7 +1230,6 @@
                                     masterPricing.timeline[dateStr]['GLOBAL'].isOverride[f] = true;
                                 }
                                 
-                                // Tag all OTA Rates as dirty since Global affects everything
                                 (window.channexRateMap || []).forEach(rate => {
                                     window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
                                     let fMap = f === 'min_arr' ? 'min' : f;
@@ -882,7 +1253,6 @@
                                 rippleDay(dateStr, r.id); 
                             }
                             
-                            // Tag all child OTA Rates
                             (window.channexRateMap || []).filter(m => categoryResolver(m.pmsCategory) === r.id).forEach(rate => {
                                 window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
                                 window.dirtyFields[dateStr][rate.ratePlanId].add('rate');
@@ -899,7 +1269,6 @@
                                     masterPricing.timeline[dateStr][r.id].isOverride[f] = true;
                                 }
                                 
-                                // Tag all child OTA Rates
                                 (window.channexRateMap || []).filter(m => categoryResolver(m.pmsCategory) === r.id).forEach(rate => {
                                     window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
                                     let fMap = f === 'min_arr' ? 'min' : f;
@@ -923,7 +1292,6 @@
                 document.querySelectorAll('#qb-grid-body input:not([type="date"]):not([disabled])').forEach(i => i.value = "");
             }
             
-            const count = Object.keys(rules).length;
             const sInd = document.getElementById('save-indicator');
             sInd.innerText = isClear ? 'OVERRIDES CLEARED' : `APPLIED TO ${((eU - sU) / 86400000) + 1} DAYS`; 
             sInd.classList.replace('text-emerald-600', 'text-indigo-600'); sInd.style.opacity = '1'; setTimeout(() => { sInd.style.opacity = '0'; }, 3000);
@@ -1033,8 +1401,25 @@
                                         let msDiff = getNearestEvent(parseYMD(dateStr));
                                         if (Math.abs(msDiff) <= 6) activePrice = data.fmp;
                                     }
+
+                                    // Check active Promo Rules for this channel/date
+                                    let promoMultiplier = 1.0;
+                                    (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
+                                        const isChannelMatch = pr.channel === 'ALL' || rate.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase());
+                                        const isScopeMatch = pr.scope === 'ALL' || pr.scope === room;
+                                        const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dateStr >= pr.startDate && dateStr <= pr.endDate);
+
+                                        if (isChannelMatch && isScopeMatch && isDateMatch) {
+                                            const disc = pr.discountPct / 100;
+                                            if (disc > 0 && disc < 1) {
+                                                promoMultiplier *= (1 / (1 - disc));
+                                            }
+                                        }
+                                    });
+
                                     if (activePrice !== "" && activePrice !== undefined) {
                                         let modified = applyMath(activePrice, rate.ruleType || "=", rate.ruleVal || 0);
+                                        modified *= promoMultiplier;
                                         otaInput.value = formatDisplay(modified * mult);
                                         otaInput.classList.remove('!text-pink-600', 'font-black', '!bg-pink-100', '!text-pink-700');
                                     } else {
@@ -1164,7 +1549,6 @@
                 });
             });
 
-            // --- AUTO-TAG BACKGROUND CHANGES ---
             if (oldInventoryStr !== "{}" && oldInventoryStr !== "undefined") {
                 try {
                     const oldInvObj = JSON.parse(oldInventoryStr);
@@ -1175,18 +1559,13 @@
                             const oldVal = oldInvObj[dStr] ? oldInvObj[dStr][room] : null;
                             const newVal = liveInventory[dStr][room];
                             
-                            // If the inventory dropped due to a new booking
                             if (oldVal !== null && oldVal !== undefined && newVal < oldVal) {
                                 window.dirtyDates.add(dStr);
                                 window.syncedDates.delete(dStr);
-                                
                                 window.dirtyFields = window.dirtyFields || {};
                                 window.dirtyFields[dStr] = window.dirtyFields[dStr] || {};
-                                
-                                // Tag the specific room type using a SET to prevent crash
                                 window.dirtyFields[dStr][room] = window.dirtyFields[dStr][room] || new Set();
                                 window.dirtyFields[dStr][room].add('avail');
-                                
                                 changesFound = true;
                             }
                         });
@@ -1199,11 +1578,8 @@
                             sInd.classList.replace('text-emerald-600', 'text-amber-500'); 
                             sInd.style.opacity = '1'; 
                         }
-                        window.customAlert("⚠️ PMS UPDATE DETECTED\n\nA new background booking has modified your live inventory. Please click Sync Changes to push the new availability to Channex.");
                     }
-                } catch (e) {
-                    console.error("Error parsing old inventory:", e);
-                }
+                } catch (e) { console.error("Error parsing old inventory:", e); }
             }
         };
 
@@ -1437,7 +1813,7 @@
                 roomTypes.forEach(room => updateDOMCell(dateStr, room));
                 updateDOMCell(dateStr, 'GLOBAL');
             }
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
         };
 
         window.healDay = (dateStr) => {
@@ -1739,7 +2115,7 @@
                     </td>
                 `; body.appendChild(tr);
             });
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
         };
 
         window.saveRelationships = () => {
@@ -1756,7 +2132,7 @@
             window.renderGrid();
         };
 
-        window.addRelationshipRow = () => { masterPricing.relationships.push({ anchor: roomTypes[0], target: roomTypes[1] || roomTypes[0], type: "=", val: 0, typeFmp: "=", valFmp: 0 }); window.renderRelationships(); window.saveRelationships(); };
+        const getChannexBaseUrl = () => 'https://app.channex.io/api/v1';
 
         window.saveCredentialsAndFetch = async () => {
             const apiKey = document.getElementById('chan-api-key').value.trim();
@@ -1766,14 +2142,15 @@
             document.getElementById('loader').classList.add('active');
             document.getElementById('sync-status').innerText = 'FETCHING CHANNEX...';
 
-            window.channexConfig = { apiKey, propId };
+            window.channexConfig = { apiKey, propId, env: 'production' };
+            const baseUrl = getChannexBaseUrl();
 
             try {
-                const rRes = await fetch(`https://staging.channex.io/api/v1/room_types?filter[property_id]=${propId}`, { headers: { "user-api-key": apiKey } });
+                const rRes = await fetch(`${baseUrl}/room_types?filter[property_id]=${propId}`, { headers: { "user-api-key": apiKey } });
                 if (!rRes.ok) throw new Error("Channex Rooms API returned " + rRes.status);
                 const rData = await rRes.json();
                 
-                const rateRes = await fetch(`https://staging.channex.io/api/v1/rate_plans?filter[property_id]=${propId}`, { headers: { "user-api-key": apiKey } });
+                const rateRes = await fetch(`${baseUrl}/rate_plans?filter[property_id]=${propId}`, { headers: { "user-api-key": apiKey } });
                 if (!rateRes.ok) throw new Error("Channex Rates API returned " + rateRes.status);
                 const rateData = await rateRes.json();
 
@@ -1798,8 +2175,8 @@
         window.fetchChannexData = () => { window.saveCredentialsAndFetch(); };
 
         window.renderChannexMappingUI = (channexRooms, channexRates) => {
-            if (!channexRooms || channexRooms.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-4 text-red-500 font-bold text-xs'>No Room Types found in Channex for this Property.</div>";
-            if (roomTypes.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-4 text-orange-500 font-bold text-xs'>No PMS Room Categories found.</div>";
+            if (!channexRooms || channexRooms.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-6 text-red-500 font-bold text-xs'>No Room Types found in Channex for this Property.</div>";
+            if (roomTypes.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-6 text-orange-500 font-bold text-xs'>No PMS Room Categories found.</div>";
 
             const pmsOptions = `<option value="">-- DO NOT MAP --</option>` + roomTypes.map(t => `<option value="${t}">${t}</option>`).join('');
             
@@ -1856,11 +2233,12 @@
                 document.getElementById('channex-rate-mapping-card').classList.add('hidden');
                 document.getElementById('channex-rate-mapping-card').style.display = 'none';
             }
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
         };
 
         window.renderChannexMapping = () => {
             const mapContainer = document.getElementById('channex-mapping-container');
+            if (!mapContainer) return;
             const map = window.channexMap || [];
             if (map.length > 0) {
                 let html = '<div class="flex flex-col gap-1.5 opacity-70 hover:opacity-100 transition-opacity">';
@@ -1875,14 +2253,15 @@
                 html += '</div>';
                 mapContainer.innerHTML = html;
             } else {
-                mapContainer.innerHTML = "<div class='text-center py-4 text-slate-400 font-bold text-xs italic'>Enter API key and click Fetch to map rooms.</div>";
+                mapContainer.innerHTML = "<div class='text-center py-6 text-slate-400 font-bold text-xs italic'>Enter API key and click Fetch to map rooms.</div>";
             }
             
             const rateContainer = document.getElementById('channex-rate-mapping-container');
+            if (!rateContainer) return;
             const rateMap = window.channexRateMap || [];
+            const rateCard = document.getElementById('channex-rate-mapping-card');
             if (rateMap.length > 0) {
-                document.getElementById('channex-rate-mapping-card').classList.remove('hidden');
-                document.getElementById('channex-rate-mapping-card').style.display = 'flex';
+                if (rateCard) { rateCard.classList.remove('hidden'); rateCard.style.display = 'flex'; }
                 let rHtml = '<div class="flex flex-col gap-1.5 opacity-70 hover:opacity-100 transition-opacity">';
                 rateMap.forEach(m => {
                     let ruleType = m.ruleType || "=";
@@ -1908,10 +2287,9 @@
                 rHtml += '</div>';
                 rateContainer.innerHTML = rHtml;
             } else {
-                document.getElementById('channex-rate-mapping-card').classList.add('hidden');
-                document.getElementById('channex-rate-mapping-card').style.display = 'none';
+                if (rateCard) { rateCard.classList.add('hidden'); rateCard.style.display = 'none'; }
             }
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
         };
 
         window.saveMappingToDB = async () => {
@@ -1968,6 +2346,7 @@
             if (!window.channexConfig || !window.channexConfig.apiKey) return window.customAlert("Missing API Key.");
             
             const propId = window.channexConfig.propId;
+            const baseUrl = getChannexBaseUrl();
             const twin = document.getElementById('cert-twin-room').value;
             const dbl = document.getElementById('cert-double-room').value;
             
@@ -1981,7 +2360,7 @@
             document.getElementById('loader').classList.add('active');
             document.getElementById('sync-status').innerText = `RUNNING TEST: ${testGroup.toUpperCase()}...`;
 
-            let url = "https://staging.channex.io/api/v1/restrictions";
+            let url = `${baseUrl}/restrictions`;
             let payload = [];
 
             if (testGroup === 'rates') {
@@ -2016,7 +2395,7 @@
                     { property_id: propId, rate_plan_id: dblBar, date_from: "2026-12-01", date_to: "2027-05-01", min_stay_arrival: 3, min_stay_through: 3 }
                 ];
             } else if (testGroup === 'availability') {
-                url = "https://staging.channex.io/api/v1/availability";
+                url = `${baseUrl}/availability`;
                 payload = [
                     { property_id: propId, room_type_id: twin, date_from: "2026-11-21", date_to: "2026-11-21", availability: 7 },
                     { property_id: propId, room_type_id: dbl, date_from: "2026-11-25", date_to: "2026-11-25", availability: 0 },
@@ -2093,7 +2472,7 @@
                 if (mode === 'delta') {
                     if (window.dirtyDates.size === 0) {
                         document.getElementById('loader').classList.remove('active');
-                        btn.innerHTML = origHtml; btn.disabled = false; lucide.createIcons();
+                        btn.innerHTML = origHtml; btn.disabled = false; if (window.lucide) window.lucide.createIcons();
                         return window.customAlert("No changes to sync! Cells will turn orange when edited.");
                     }
                     datesToProcess = Array.from(window.dirtyDates).sort();
@@ -2174,7 +2553,6 @@
                         const dMs = parseYMD(dStr);
                         const dayData = masterPricing.timeline[dStr] || {};
                         
-                        // ISOLATION LOCK: Skip this date for this room if it wasn't explicitly edited
                         if (mode === 'delta') {
                             const dFields = window.dirtyFields?.[dStr]?.[pmsCat];
                             if (!dFields || !dFields.has('avail')) {
@@ -2263,6 +2641,22 @@
                             modifiedPrice = otaOverride;
                         } else if (activePrice !== undefined && activePrice !== "") {
                             modifiedPrice = applyMath(activePrice, ruleType, ruleVal);
+
+                            // Apply Promo Rules
+                            let promoMultiplier = 1.0;
+                            (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
+                                const isChannelMatch = pr.channel === 'ALL' || mapRule.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase());
+                                const isScopeMatch = pr.scope === 'ALL' || pr.scope === pmsCat;
+                                const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dStr >= pr.startDate && dStr <= pr.endDate);
+
+                                if (isChannelMatch && isScopeMatch && isDateMatch) {
+                                    const disc = pr.discountPct / 100;
+                                    if (disc > 0 && disc < 1) {
+                                        promoMultiplier *= (1 / (1 - disc));
+                                    }
+                                }
+                            });
+                            modifiedPrice *= promoMultiplier;
                         }
                         
                         const fullState = {};
@@ -2288,13 +2682,29 @@
                         fullState.closed_to_departure = otaCtd !== undefined ? otaCtd : (rData.ctd !== undefined ? rData.ctd : (gData.ctd === true));
                         fullState.stop_sell = otaStop !== undefined ? otaStop : (rData.stopSell !== undefined ? rData.stopSell : (gData.stopSell === true));
 
-                        // Ensure every day across all 500 days has a valid rate so end dates stay 100% aligned
                         if (mode === 'full' && (modifiedPrice === null || modifiedPrice === "")) {
                             let isDorm = pmsCat.toLowerCase().includes('dorm');
                             let fallbackBase = isDorm 
                                 ? (parseFloat(document.getElementById('w-d-base')?.value) || parseFloat(document.getElementById('w-d-base-single')?.value) || 199) 
                                 : (parseFloat(document.getElementById('w-p-base')?.value) || parseFloat(document.getElementById('w-p-base-single')?.value) || 899);
                             modifiedPrice = applyMath(fallbackBase, ruleType, ruleVal);
+                            
+                            // Apply Promo Rules to Fallback Price
+                            let promoMultiplier = 1.0;
+                            (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
+                                const isChannelMatch = pr.channel === 'ALL' || mapRule.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase());
+                                const isScopeMatch = pr.scope === 'ALL' || pr.scope === pmsCat;
+                                const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dStr >= pr.startDate && dStr <= pr.endDate);
+
+                                if (isChannelMatch && isScopeMatch && isDateMatch) {
+                                    const disc = pr.discountPct / 100;
+                                    if (disc > 0 && disc < 1) {
+                                        promoMultiplier *= (1 / (1 - disc));
+                                    }
+                                }
+                            });
+                            modifiedPrice *= promoMultiplier;
+
                             fullState.rate = Math.round(modifiedPrice * 100);
                         }
 
@@ -2383,7 +2793,7 @@
 
                 if (availPayload.length > 0) {
                     document.getElementById('sync-status').innerText = `PUSHING INVENTORY TO CHANNEX...`;
-                    const aRes = await fetchWithRetry("https://staging.channex.io/api/v1/availability", {
+                    const aRes = await fetchWithRetry(`${baseUrl}/availability`, {
                         method: "POST",
                         headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
                         body: JSON.stringify({ values: availPayload })
@@ -2396,7 +2806,7 @@
 
                 if (restPayload.length > 0) {
                     document.getElementById('sync-status').innerText = `PUSHING RATES TO CHANNEX...`;
-                    const rRes = await fetchWithRetry("https://staging.channex.io/api/v1/restrictions", {
+                    const rRes = await fetchWithRetry(`${baseUrl}/restrictions`, {
                         method: "POST",
                         headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
                         body: JSON.stringify({ values: restPayload })
@@ -2433,38 +2843,55 @@
                 document.getElementById('loader').classList.remove('active');
                 btn.innerHTML = origHtml;
                 btn.disabled = false;
-                lucide.createIcons();
+                if (window.lucide) window.lucide.createIcons();
             }
         };
 
         const init = async () => {
-            document.getElementById('loader').classList.add('active');
-            try { 
-                await signInAnonymously(auth); 
-                
-                try {
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (staffSnap) => {
-                        staff = staffSnap.docs.map(d => {
-                            let data = d.data();
-                            if (!data.property) data.property = 'swims_resort'; 
-                            return { id: d.id, ...data };
-                        });
-                        
-                        // Live update: Recalculate and re-render grid instantly when new bookings arrive!
-                        if (roomTypes && roomTypes.length > 0) {
-                            window.renderGrid();
-                        }
-                    });
-                } catch (staffErr) {
-                    console.warn("Could not load staff bookings, continuing anyway...", staffErr);
-                }
+            const loader = document.getElementById('loader');
+            if (loader) { loader.style.display = 'flex'; loader.classList.add('active'); }
 
+            const safetyTimer = setTimeout(() => {
+                const l = document.getElementById('loader');
+                if (l) { l.style.display = 'none'; l.classList.remove('active'); }
+            }, 5000);
+
+            try { 
+                if (typeof window.__initial_auth_token !== 'undefined') {
+                    try { await signInWithCustomToken(auth, window.__initial_auth_token); }
+                    catch (e) { await signInAnonymously(auth); }
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (aErr) {
+                console.warn("Auth initialization notice:", aErr);
+            }
+
+            try {
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (staffSnap) => {
+                    staff = staffSnap.docs.map(d => {
+                        let data = d.data();
+                        if (!data.property) data.property = 'swims_resort'; 
+                        return { id: d.id, ...data };
+                    });
+                    
+                    if (roomTypes && roomTypes.length > 0) {
+                        window.renderGrid();
+                    }
+                }, (snapErr) => console.warn("Staff snapshot warning:", snapErr));
+            } catch (staffErr) {
+                console.warn("Could not load staff bookings, continuing anyway...", staffErr);
+            }
+
+            try {
                 await loadPropertyConfig();
-            } catch (e) { console.warn("Initialization error.", e); }
+            } catch (e) { console.warn("Config load error:", e); }
 
             const today = new Date(); 
-            document.getElementById('tape-start').value = getLocalYMD(today); 
-            document.getElementById('w-start-date').value = getLocalYMD(today);
+            const tapeStart = document.getElementById('tape-start');
+            if (tapeStart) tapeStart.value = getLocalYMD(today); 
+            const wStart = document.getElementById('w-start-date');
+            if (wStart) wStart.value = getLocalYMD(today);
             
             const nextM = new Date(today); nextM.setDate(today.getDate() + 30);
             const qbStart = document.getElementById('qb-start'); if(qbStart) qbStart.value = getLocalYMD(today);
@@ -2472,10 +2899,11 @@
 
             window.switchTab('grid'); 
             window.syncFilterPills();
-            window.renderGrid(); 
-            document.getElementById('loader').classList.remove('active');
+            try { window.renderGrid(); } catch(gErr) { console.warn("Grid render error:", gErr); }
+
+            clearTimeout(safetyTimer);
+            if (loader) { loader.style.display = 'none'; loader.classList.remove('active'); }
             
-            // EXCEL-LIKE NAVIGATION ENGINES
             document.body.addEventListener('mouseover', (e) => {
                 if (e.target.tagName === 'INPUT' && (e.target.closest('.rate-grid-table') || e.target.closest('#qb-grid-body'))) {
                     if (document.activeElement !== e.target && e.target.type !== 'date' && !e.target.disabled) {
