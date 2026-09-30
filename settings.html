@@ -4,38 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Property Configuration</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <style type="text/tailwindcss">
-        @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Condensed:wght@400;700;900&display=swap');
-        
-        @layer components {
-            .btn-action { @apply px-2 py-1 text-white rounded shadow text-xs font-black uppercase flex items-center gap-1 hover:brightness-110 active:scale-95 transition-all cursor-pointer; }
-            .btn-modal { @apply px-6 py-2 rounded-lg font-black text-sm uppercase transition-colors cursor-pointer; }
-            .input-base { @apply w-full bg-white border border-slate-300 font-bold text-xs px-1.5 py-1 rounded outline-none focus:ring-2 focus:ring-blue-500 uppercase shadow-inner; }
-            .field-label { @apply text-[10px] font-black text-slate-500 uppercase block mb-[-2px] tracking-widest; }
-            .section-header { @apply bg-slate-200 hover:bg-slate-300 px-2 py-1 text-[0.75rem] font-black uppercase text-slate-600 cursor-pointer flex justify-between items-center border-y border-slate-300 transition-colors; }
-            .tab-btn { @apply px-3 py-1.5 font-black text-xs uppercase rounded transition-colors border border-transparent text-slate-500 hover:text-slate-800 cursor-pointer flex items-center gap-1.5; }
-            .tab-btn.active { @apply text-blue-700 bg-white border-slate-200 shadow-sm; }
-            .dash-card { @apply bg-white border border-slate-200 rounded-lg shadow-sm p-3 flex flex-col gap-2 overflow-hidden flex-1; }
-            .dash-title { @apply text-xs font-black uppercase text-slate-500 border-b border-slate-100 pb-1 flex items-center gap-2; }
-        }
-
-        body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; font-size: 1.2rem; overscroll-behavior-y: none; }
-        .unselectable { user-select: none; -webkit-user-select: none; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-
-        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        .alert-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 200; pointer-events: auto;}
-        .alert-modal-overlay.active { display: flex; }
-
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
+    <style>
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
         .dragging { opacity: 0.5; background: #f8fafc; }
@@ -121,7 +97,7 @@
                 <button onclick="window.saveConfig()" class="px-2 sm:px-4 py-1 sm:py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-black text-[10px] sm:text-xs uppercase shadow-md transition-colors flex items-center gap-1 cursor-pointer shrink-0">
                     <i data-lucide="save" size="14"></i> Save
                 </button>
-                <a href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors hidden sm:block ml-2 shrink-0">← Back</a>
+                <a id="nav-pms-btn" href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors hidden sm:block ml-2 shrink-0">← Back</a>
             </div>
         </div>
 
@@ -134,7 +110,6 @@
                 <button onclick="window.switchTab('rooms')" id="tab-rooms" class="tab-btn"><i data-lucide="bed-double" size="14"></i> Inventory</button>
                 <button onclick="window.switchTab('presets')" id="tab-presets" class="tab-btn"><i data-lucide="tags" size="14" class="text-emerald-600"></i> Charge Presets</button>
                 <button onclick="window.switchTab('events')" id="tab-events" class="tab-btn"><i data-lucide="calendar-star" size="14" class="text-pink-500"></i> Events</button>
-                <button onclick="window.switchTab('channex')" id="tab-channex" class="tab-btn"><i data-lucide="network" size="14" class="text-indigo-600"></i> OTA Mapping</button>
             </div>
 
             <!-- Tab Content Containers -->
@@ -144,8 +119,8 @@
                 <div id="view-general" class="max-w-3xl mx-auto space-y-4">
                     <div class="dash-card">
                         <h2 class="dash-title"><i data-lucide="hotel" class="text-blue-500"></i> Property Details</h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-                            <div class="col-span-1 sm:col-span-2">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1">
+                            <div class="col-span-1 sm:col-span-3">
                                 <label class="field-label">Property Name</label>
                                 <input type="text" id="prop-name" class="input-base !text-sm !py-1.5" placeholder="e.g. SWIMS Resort">
                             </div>
@@ -156,6 +131,10 @@
                             <div>
                                 <label class="field-label">Base Currency</label>
                                 <input type="text" id="prop-currency" class="input-base" value="THB" placeholder="e.g. THB">
+                            </div>
+                            <div>
+                                <label class="field-label">Number of Floors</label>
+                                <input type="number" id="prop-floors" class="input-base text-center font-black text-blue-700" value="3" min="1" max="20" onchange="window.updateFloorDropdowns()">
                             </div>
                         </div>
                     </div>
@@ -185,11 +164,11 @@
                                     <tr>
                                         <th class="p-1.5 w-8 text-center"><i data-lucide="grip-vertical" size="12" class="mx-auto opacity-50"></i></th>
                                         <th class="p-1.5 w-8 text-center">Del</th>
-                                        <th class="p-1.5 w-24 border-r border-slate-300">Room ID</th>
+                                        <th class="p-1.5 w-28 border-r border-slate-300">Room ID</th>
                                         <th class="p-1.5 w-40 border-r border-slate-300">PMS Category</th>
                                         <th class="p-1.5 w-28 border-r border-slate-300 bg-blue-100/50">Short Name</th>
                                         <th class="p-1.5 w-24 border-r border-slate-300">Bed Type</th>
-                                        <th class="p-1.5 w-24 border-r border-slate-300">Floor</th>
+                                        <th class="p-1.5 w-20 border-r border-slate-300 text-center">Floor</th>
                                         <th class="p-1.5 w-24">Bunk Pos</th>
                                     </tr>
                                 </thead>
@@ -197,7 +176,7 @@
                             </table>
                         </div>
                         <div class="p-1.5 bg-slate-50 border-t border-slate-200 text-[9px] font-bold text-slate-500 text-center uppercase tracking-widest shrink-0">
-                            Drag rows to reorder. Order dictates Calendar UI display. Type Short Name to sync category.
+                            Drag rows to reorder. Changing a room's floor automatically sets the floor for all beds in that same room.
                         </div>
                     </div>
                 </div>
@@ -258,72 +237,6 @@
                     </div>
                 </div>
 
-                <!-- CHANNEX & OTA MAPPING TAB -->
-                <div id="view-channex" class="hidden max-w-4xl mx-auto space-y-4">
-                    <!-- 1. Channex API Credentials -->
-                    <div class="dash-card bg-indigo-50/50 border-indigo-200">
-                        <h2 class="dash-title text-indigo-700 border-indigo-200"><i data-lucide="key-round" size="14"></i> Channex API Credentials</h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-                            <div>
-                                <label class="field-label text-indigo-600">Channex API Key</label>
-                                <input type="password" id="chan-api-key" class="input-base border-indigo-300" placeholder="e.g. a1b2c3d4e5f6g7h8i9j0">
-                            </div>
-                            <div>
-                                <label class="field-label text-indigo-600">Channex Property ID</label>
-                                <input type="text" id="chan-prop-id" class="input-base border-indigo-300" placeholder="e.g. 5d5a7d9b-...">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 2. Direct / OTA Email Keyword Alias Mapping (BDC, Hostelworld, Agoda text matching) -->
-                    <div class="dash-card bg-blue-50/40 border-blue-200">
-                        <div class="flex justify-between items-center border-b border-blue-100 pb-2">
-                            <div>
-                                <h2 class="dash-title border-none pb-0 text-blue-800"><i data-lucide="spell-check" class="text-blue-600"></i> OTA Room Keyword Aliases (Email & Webhook Fallback)</h2>
-                                <p class="text-[10px] font-bold text-slate-500 mt-0.5">Map long OTA titles (e.g. "King Room with Balcony", "Bed in 4-Bed Mixed Dorm") directly to your PMS room category so the system auto-assigns the right room.</p>
-                            </div>
-                            <button onclick="window.addOtaAliasRow()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-black text-[10px] uppercase transition-colors shadow-sm flex items-center gap-1 cursor-pointer shrink-0">
-                                <i data-lucide="plus" size="12"></i> Add Alias
-                            </button>
-                        </div>
-                        
-                        <div class="bg-white p-2 rounded border border-blue-200 shadow-inner">
-                            <div class="grid grid-cols-12 gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 mb-1">
-                                <span class="col-span-1 text-center">Del</span>
-                                <span class="col-span-6">Raw OTA Room Name / Keywords</span>
-                                <span class="col-span-5">Target PMS Category</span>
-                            </div>
-                            <div id="ota-alias-container" class="flex flex-col gap-1.5 max-h-[300px] overflow-y-auto no-scrollbar"></div>
-                        </div>
-                    </div>
-
-                    <!-- 3. Channex Channel Manager Mapping -->
-                    <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden flex flex-col">
-                        <div class="p-2 bg-slate-100 border-b border-slate-300 flex justify-between items-center shrink-0">
-                            <h2 class="font-black text-slate-700 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="arrow-left-right" class="text-emerald-500 w-4 h-4"></i> Channex Room Type Mapping</h2>
-                            <button onclick="window.fetchChannexData()" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[9px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1"><i data-lucide="cloud-download" size="12"></i> Fetch Channex Data</button>
-                        </div>
-                        <div class="p-2 bg-slate-50" id="channex-mapping-container">
-                            <div class="text-center py-6 text-slate-400 font-bold text-xs italic">Enter API key and click Fetch to map rooms.</div>
-                        </div>
-                    </div>
-                    
-                    <div class="bg-amber-50 border border-amber-200 rounded-lg shadow-sm overflow-hidden flex flex-col hidden" id="channex-rate-mapping-card" style="display: none;">
-                        <div class="p-2 bg-amber-100/50 border-b border-amber-200 flex justify-between items-center shrink-0">
-                            <h2 class="font-black text-amber-800 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="tags" class="text-amber-600 w-4 h-4"></i> Rate Plan Mapping</h2>
-                        </div>
-                        <div class="p-2" id="channex-rate-mapping-container"></div>
-                    </div>
-                    
-                    <div class="dash-card border-slate-200 bg-white">
-                        <h2 class="dash-title"><i data-lucide="bug-play" class="text-rose-500"></i> Developer Tools & Testing</h2>
-                        <p class="text-[10px] font-bold text-slate-500 mb-2">Simulate an inbound webhook booking to test room mapping and auto-acknowledgement in the PMS.</p>
-                        <button type="button" onclick="window.simulateWebhookBooking()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded font-black text-[10px] uppercase shadow-sm transition-colors flex items-center justify-center gap-1.5 w-fit cursor-pointer">
-                            <i data-lucide="webhook" size="14"></i> Simulate Inbound Booking
-                        </button>
-                    </div>
-                </div>
-
             </div>
         </div>
     </div>
@@ -336,8 +249,11 @@
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
         const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app); const appId = 'hotel-pms-v1';
 
+        const PROP_MAP = { 'LOUD': 'loud_samui', 'WET': 'wet_pool', 'SWIMS': 'swims_resort' };
+        const PROP_REVERSE_MAP = { 'loud_samui': 'LOUD', 'wet_pool': 'WET', 'swims_resort': 'SWIMS' };
+
         let windowPropertiesList = [];
-        let currentConfig = { id: '', rooms: [], events: [], eventNotes: {}, chargePresets: [], otaMap: [], channexMap: [], channexRateMap: [], channex: {} };
+        let currentConfig = { id: '', name: '', floors: 3, rooms: [], events: [], eventNotes: {}, chargePresets: [] };
         let draggedRow = null;
 
         const DEFAULT_CHARGE_PRESETS = [
@@ -387,40 +303,52 @@
                 const url = new URL(window.location.href);
                 url.searchParams.set(paramName, paramVal);
                 window.history.replaceState({}, '', url.pathname + url.search);
-            } catch(e) {
-                // Silently bypass SecurityError in blob:/sandboxed environments
-            }
+            } catch(e) {}
         };
 
         window.resolveTargetPropertyId = (propsList) => {
-            let paramProp = '';
-            let storedProp = '';
+            let pRaw = '';
             try {
                 const params = new URLSearchParams(window.location.search);
-                paramProp = (params.get('prop') || params.get('property') || '').trim().toLowerCase();
+                pRaw = (params.get('p') || params.get('prop') || params.get('property') || '').trim();
             } catch(e) {}
+
+            let storedRaw = '';
             try {
-                storedProp = (localStorage.getItem('pms_active_property') || '').trim().toLowerCase();
+                storedRaw = (localStorage.getItem('last_prop') || localStorage.getItem('pms_active_property') || '').trim();
             } catch(e) {}
-            
-            const candidates = [paramProp, storedProp].filter(Boolean);
-            for (const cand of candidates) {
-                const exact = propsList.find(p => p.id.toLowerCase() === cand);
+
+            const candidates = [pRaw, storedRaw].filter(Boolean);
+
+            for (const raw of candidates) {
+                const upperRaw = raw.toUpperCase();
+                const mappedId = PROP_MAP[upperRaw] || raw;
+
+                const exact = propsList.find(p => p.id.toLowerCase() === mappedId.toLowerCase());
                 if (exact) return exact.id;
-                const partial = propsList.find(p => p.id.toLowerCase().includes(cand) || (p.name && p.name.toLowerCase().includes(cand)));
+
+                const matchShort = propsList.find(p => (PROP_REVERSE_MAP[p.id] || '').toUpperCase() === upperRaw);
+                if (matchShort) return matchShort.id;
+
+                const partial = propsList.find(p => p.id.toLowerCase().includes(raw.toLowerCase()) || (p.name && p.name.toLowerCase().includes(raw.toLowerCase())));
                 if (partial) return partial.id;
             }
+
             return propsList[0]?.id || 'swims_resort';
         };
 
         window.syncNavLinks = (propId) => {
+            const shortKey = PROP_REVERSE_MAP[propId] || 'SWIMS';
+            const backBtn = document.getElementById('nav-pms-btn');
+            if (backBtn) backBtn.href = `index.html?p=${shortKey}`;
+
             document.querySelectorAll('a[href]').forEach(a => {
                 const href = a.getAttribute('href');
                 if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('mailto')) {
                     try {
                         const baseOrigin = window.location.protocol.startsWith('http') ? window.location.origin : 'https://localhost';
                         const url = new URL(href, baseOrigin);
-                        url.searchParams.set('prop', propId);
+                        url.searchParams.set('p', shortKey);
                         a.setAttribute('href', url.pathname + url.search);
                     } catch(e) {}
                 }
@@ -450,7 +378,7 @@
         };
 
         window.switchTab = (tab) => {
-            ['general', 'rooms', 'presets', 'events', 'channex'].forEach(t => {
+            ['general', 'rooms', 'presets', 'events'].forEach(t => {
                 const view = document.getElementById(`view-${t}`);
                 if (view) {
                     if (t === tab) {
@@ -462,9 +390,6 @@
                 const btn = document.getElementById(`tab-${t}`);
                 if (btn) btn.classList.toggle('active', t === tab);
             });
-            if (tab === 'channex') {
-                window.renderOtaAliases();
-            }
         };
 
         window.handlePropertySwitch = async (propId, updateUrl = true) => {
@@ -477,9 +402,14 @@
                 if (snap.exists()) {
                     currentConfig = { id: snap.id, ...snap.data() };
                     
-                    try { localStorage.setItem('pms_active_property', propId); } catch(e) {}
+                    try { 
+                        localStorage.setItem('last_prop', propId); 
+                        localStorage.setItem('pms_active_property', propId); 
+                    } catch(e) {}
+
+                    const shortKey = PROP_REVERSE_MAP[propId] || 'SWIMS';
                     if (updateUrl) {
-                        window.safeUpdateUrlParam('prop', propId);
+                        window.safeUpdateUrlParam('p', shortKey);
                     }
                     window.syncNavLinks(propId);
                     
@@ -492,18 +422,67 @@
             document.getElementById('loader').style.display = 'none';
         };
 
+        window.getFloorOptionsHtml = (selectedVal = "", numFloors = null) => {
+            if (!numFloors) {
+                numFloors = parseInt(document.getElementById('prop-floors')?.value) || currentConfig.floors || 3;
+            }
+            let html = `<option value="">--</option>`;
+            for (let f = 1; f <= numFloors; f++) {
+                html += `<option value="${f}" ${String(selectedVal) === String(f) ? 'selected' : ''}>${f}</option>`;
+            }
+            return html;
+        };
+
+        window.updateFloorDropdowns = () => {
+            const numFloors = parseInt(document.getElementById('prop-floors')?.value) || 3;
+            document.querySelectorAll('#rooms-body tr').forEach(tr => {
+                const select = tr.querySelector('.room-floor');
+                if (select) {
+                    const currentVal = select.value;
+                    select.innerHTML = window.getFloorOptionsHtml(currentVal, numFloors);
+                }
+            });
+        };
+
+        window.syncRoomFloors = (selectEl) => {
+            const row = selectEl.closest('tr');
+            const roomId = row.querySelector('.room-id').value.trim().toUpperCase();
+            if (!roomId) return;
+
+            const baseRoom = roomId.includes('-') ? roomId.split('-')[0] : roomId;
+            const newFloor = selectEl.value;
+
+            document.querySelectorAll('#rooms-body tr').forEach(tr => {
+                if (tr === row) return;
+                const otherId = tr.querySelector('.room-id').value.trim().toUpperCase();
+                if (!otherId) return;
+                const otherBase = otherId.includes('-') ? otherId.split('-')[0] : otherId;
+
+                if (otherBase === baseRoom) {
+                    const floorSel = tr.querySelector('.room-floor');
+                    if (floorSel) floorSel.value = newFloor;
+                }
+            });
+        };
+
         window.populateForm = () => {
             document.getElementById('prop-name').value = currentConfig.name || '';
             document.getElementById('prop-tz').value = currentConfig.timezone || 'Asia/Bangkok';
             document.getElementById('prop-currency').value = currentConfig.currency || 'THB';
-            document.getElementById('chan-api-key').value = currentConfig.channex?.apiKey || '';
-            document.getElementById('chan-prop-id').value = currentConfig.channex?.propId || '';
+            document.getElementById('prop-floors').value = currentConfig.floors || 3;
 
             const tbody = document.getElementById('rooms-body');
             if (tbody) {
                 tbody.innerHTML = '';
-                const sortedRooms = [...(currentConfig.rooms || [])].sort((a,b) => a.order - b.order);
-                sortedRooms.forEach(r => window.addRoomRow(r));
+                const roomsList = (currentConfig.rooms || []).map((r, i) => ({
+                    ...r,
+                    order: (r.order !== undefined && r.order !== null && !isNaN(parseInt(r.order))) ? parseInt(r.order) : (i + 1)
+                }));
+                roomsList.sort((a, b) => {
+                    if (a.order !== b.order) return a.order - b.order;
+                    return (a.id || '').localeCompare(b.id || '', undefined, { numeric: true, sensitivity: 'base' });
+                });
+                roomsList.forEach((r, idx) => window.addRoomRow({ ...r, order: idx + 1 }));
             }
 
             const evContainer = document.getElementById('events-container');
@@ -514,8 +493,6 @@
             }
 
             window.renderChargePresets();
-            window.renderOtaAliases();
-            window.renderChannexMapping();
         };
 
         window.createProperty = () => {
@@ -525,7 +502,7 @@
             
             if (windowPropertiesList.find(p => p.id === cleanId)) return window.customAlert("Property ID already exists!");
 
-            currentConfig = { id: cleanId, name: cleanId.toUpperCase(), rooms: [], events: [], eventNotes: {}, chargePresets: [...DEFAULT_CHARGE_PRESETS], otaMap: [], channexMap: [], channexRateMap: [], channex: {} };
+            currentConfig = { id: cleanId, name: cleanId.toUpperCase(), floors: 3, rooms: [], events: [], eventNotes: {}, chargePresets: [...DEFAULT_CHARGE_PRESETS] };
             
             const select = document.getElementById('property-switcher');
             const opt = document.createElement('option'); opt.value = cleanId; opt.innerText = currentConfig.name;
@@ -563,19 +540,16 @@
 
             document.getElementById('clone-modal').classList.remove('active');
             
-            if (document.getElementById('clone-opt-rooms').checked) currentConfig.rooms = JSON.parse(JSON.stringify(sourceProp.rooms || []));
+            if (document.getElementById('clone-opt-rooms').checked) {
+                currentConfig.rooms = JSON.parse(JSON.stringify(sourceProp.rooms || []));
+                currentConfig.floors = sourceProp.floors || 3;
+            }
             if (document.getElementById('clone-opt-events').checked) { 
                 currentConfig.events = JSON.parse(JSON.stringify(sourceProp.events || []));
                 currentConfig.eventNotes = JSON.parse(JSON.stringify(sourceProp.eventNotes || {}));
             }
             if (document.getElementById('clone-opt-presets').checked) {
                 currentConfig.chargePresets = JSON.parse(JSON.stringify(sourceProp.chargePresets || DEFAULT_CHARGE_PRESETS));
-            }
-            if (document.getElementById('clone-opt-channex').checked) {
-                currentConfig.channex = JSON.parse(JSON.stringify(sourceProp.channex || {}));
-                currentConfig.otaMap = JSON.parse(JSON.stringify(sourceProp.otaMap || []));
-                currentConfig.channexMap = JSON.parse(JSON.stringify(sourceProp.channexMap || []));
-                currentConfig.channexRateMap = JSON.parse(JSON.stringify(sourceProp.channexRateMap || []));
             }
             
             window.populateForm();
@@ -595,13 +569,14 @@
                 if (draggedIdx < targetIdx) this.parentNode.insertBefore(draggedRow, this.nextSibling);
                 else this.parentNode.insertBefore(draggedRow, this);
             }
+            window.recalculateOrder();
             return false;
         };
 
         window.recalculateOrder = () => {
             document.querySelectorAll('#rooms-body tr').forEach((tr, index) => {
                 const oInp = tr.querySelector('.room-order');
-                if (oInp) oInp.value = index;
+                if (oInp) oInp.value = index + 1;
             });
         };
 
@@ -634,24 +609,29 @@
             });
         };
 
-        window.addRoomRow = (r = {id: '', type: '', short: '', bed: '', floor: '', icon: '', order: 9999}) => {
+        window.addRoomRow = (r = {id: '', type: '', short: '', bed: '', floor: '', icon: '', order: null}) => {
             const tbody = document.getElementById('rooms-body');
+            const existingCount = tbody.children.length;
+            const newOrder = (r.order !== null && r.order !== undefined && !isNaN(parseInt(r.order))) 
+                ? parseInt(r.order) 
+                : (existingCount + 1);
+            
             const tr = document.createElement('tr');
             tr.className = "border-b border-slate-200 hover:bg-slate-50 bg-white transition-colors";
             tr.draggable = true; tr.ondragstart = window.dragStart; tr.ondragend = window.dragEnd;
             tr.innerHTML = `
                 <td class="p-1 text-center border-r border-slate-200"><i data-lucide="grip-vertical" class="w-3 h-3 drag-handle mx-auto text-slate-400"></i></td>
-                <td class="p-1 text-center border-r border-slate-200"><button onclick="this.closest('tr').remove(); window.renderOtaAliases();" class="text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 p-1 rounded border border-slate-200 transition-colors"><i data-lucide="trash-2" size="12" class="mx-auto"></i></button></td>
+                <td class="p-1 text-center border-r border-slate-200"><button onclick="this.closest('tr').remove(); window.recalculateOrder();" class="text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 p-1 rounded border border-slate-200 transition-colors"><i data-lucide="trash-2" size="12" class="mx-auto"></i></button></td>
                 <td class="p-1 border-r border-slate-200"><input type="text" class="room-id w-full bg-transparent font-black text-slate-800 outline-none px-1 uppercase" value="${r.id}" placeholder="ID"></td>
-                <td class="p-1 border-r border-slate-200"><input type="text" class="room-type w-full bg-transparent font-bold text-slate-600 outline-none px-1 uppercase" value="${r.type}" placeholder="CATEGORY" onchange="window.renderOtaAliases()"></td>
-                <td class="p-1 border-r border-slate-200 bg-blue-50/50"><input type="text" class="room-short w-full bg-transparent font-black text-blue-700 outline-none px-1 uppercase text-center" value="${r.short || ''}" placeholder="e.g. OF KING" oninput="window.syncShortNames(this)"></td>
+                <td class="p-1 border-r border-slate-200"><input type="text" class="room-type w-full bg-transparent font-bold text-slate-600 outline-none px-1 uppercase" value="${r.type}" placeholder="CATEGORY"></td>
+                <td class="p-1 border-r border-slate-200 bg-blue-100/50"><input type="text" class="room-short w-full bg-transparent font-black text-blue-700 outline-none px-1 uppercase text-center" value="${r.short || ''}" placeholder="e.g. OF KING" oninput="window.syncShortNames(this)"></td>
                 <td class="p-1 border-r border-slate-200"><input type="text" class="room-bed w-full bg-transparent font-bold text-slate-600 outline-none text-center uppercase" value="${r.bed}" placeholder="BED"></td>
-                <td class="p-1 border-r border-slate-200"><select class="room-floor w-full bg-transparent font-bold text-slate-600 outline-none uppercase text-center cursor-pointer"><option value="">--</option><option value="down" ${r.floor==='down'?'selected':''}>DOWN</option><option value="up" ${r.floor==='up'?'selected':''}>UP</option><option value="double" ${r.floor==='double'?'selected':''}>DOUBLE</option></select></td>
-                <td class="p-1"><select class="room-icon w-full bg-transparent font-bold text-slate-600 outline-none uppercase text-center cursor-pointer"><option value="">--</option><option value="bot" ${r.icon==='bot'?'selected':''}>BOT BUNK</option><option value="top" ${r.icon==='top'?'selected':''}>TOP BUNK</option></select><input type="hidden" class="room-order" value="${r.order}"></td>
+                <td class="p-1 border-r border-slate-200"><select class="room-floor w-full bg-transparent font-bold text-slate-600 outline-none uppercase text-center cursor-pointer" onchange="window.syncRoomFloors(this)">${window.getFloorOptionsHtml(r.floor)}</select></td>
+                <td class="p-1"><select class="room-icon w-full bg-transparent font-bold text-slate-600 outline-none uppercase text-center cursor-pointer"><option value="">--</option><option value="bot" ${r.icon==='bot'?'selected':''}>BOT BUNK</option><option value="top" ${r.icon==='top'?'selected':''}>TOP BUNK</option></select><input type="hidden" class="room-order" value="${newOrder}"></td>
             `;
             tbody.appendChild(tr);
             tr.addEventListener('dragover', window.dragOver); tr.addEventListener('drop', window.dragDrop);
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
             window.recalculateOrder();
         };
 
@@ -683,7 +663,7 @@
                 </div>
             `;
             container.appendChild(div);
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
         };
 
         window.resetDefaultPresets = () => {
@@ -694,7 +674,6 @@
             });
         };
 
-        // --- EVENTS LOGIC ---
         window.addEventRow = (dateStr = "", noteStr = "") => {
             const container = document.getElementById('events-container');
             const div = document.createElement('div');
@@ -704,7 +683,7 @@
                 <input type="text" class="event-note input-base flex-1 !py-0.5 text-slate-600 shadow-none" placeholder="Event Name (e.g. Full Moon)" value="${noteStr}">
                 <button onclick="this.parentElement.remove()" class="p-1 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded border border-slate-200 transition-colors shrink-0"><i data-lucide="trash-2" size="14"></i></button>
             `;
-            container.appendChild(div); lucide.createIcons();
+            container.appendChild(div); if (window.lucide) window.lucide.createIcons();
         };
 
         window.loadOfficialFmpSchedule = () => {
@@ -720,7 +699,6 @@
                     }
                 });
 
-                // Auto-sort chronologically in DOM
                 const rows = Array.from(container.querySelectorAll('.event-row'));
                 rows.sort((a, b) => {
                     const dA = a.querySelector('.event-date').value || '';
@@ -729,257 +707,20 @@
                 });
                 container.innerHTML = '';
                 rows.forEach(r => container.appendChild(r));
-                lucide.createIcons();
+                if (window.lucide) window.lucide.createIcons();
 
                 window.customAlert(`Added ${addedCount} Full Moon Party event dates.\n\nClick SAVE to persist changes.`);
             });
         };
 
-        // --- OTA KEYWORD ALIASES (Direct / Email Parser / Text Matcher) ---
-        window.renderOtaAliases = () => {
-            const container = document.getElementById('ota-alias-container');
-            if (!container) return;
-            container.innerHTML = '';
-
-            const currentAliases = currentConfig.otaMap || [];
-            const roomCategories = [...new Set(Array.from(document.querySelectorAll('.room-type')).map(i => i.value.trim()).filter(Boolean))];
-
-            if (currentAliases.length === 0 && roomCategories.length > 0) {
-                // Seed standard aliases if completely blank
-                roomCategories.forEach(cat => {
-                    window.addOtaAliasRow(cat, cat);
-                });
-            } else {
-                currentAliases.forEach(a => {
-                    window.addOtaAliasRow(a.otaName, a.pmsCategory);
-                });
-            }
-        };
-
-        window.addOtaAliasRow = (otaName = "", pmsCategory = "") => {
-            const container = document.getElementById('ota-alias-container');
-            const roomCategories = [...new Set(Array.from(document.querySelectorAll('.room-type')).map(i => i.value.trim()).filter(Boolean))];
-            
-            const div = document.createElement('div');
-            div.className = "grid grid-cols-12 gap-1.5 items-center ota-alias-row bg-slate-50 p-1 rounded border border-slate-200 shadow-sm";
-            
-            let opts = `<option value="">-- SELECT PMS ROOM TYPE --</option>`;
-            roomCategories.forEach(c => {
-                opts += `<option value="${c}" ${c === pmsCategory ? 'selected' : ''}>${c}</option>`;
-            });
-
-            div.innerHTML = `
-                <div class="col-span-1 text-center">
-                    <button onclick="this.closest('.ota-alias-row').remove()" class="p-1 text-slate-400 hover:text-red-500 bg-white hover:bg-red-50 rounded border border-slate-200 transition-colors"><i data-lucide="trash-2" size="12"></i></button>
-                </div>
-                <div class="col-span-6">
-                    <input type="text" class="alias-ota-name input-base !py-0.5 bg-white" placeholder="e.g. King Room with Balcony" value="${otaName}">
-                </div>
-                <div class="col-span-5">
-                    <select class="alias-pms-cat input-base !py-0.5 bg-white text-blue-700 font-black cursor-pointer">
-                        ${opts}
-                    </select>
-                </div>
-            `;
-            container.appendChild(div);
-            lucide.createIcons();
-        };
-
-        // --- CHANNEX MAPPING LOGIC ---
-        window.fetchChannexData = async () => {
-            const apiKey = document.getElementById('chan-api-key').value.trim();
-            const propId = document.getElementById('chan-prop-id').value.trim();
-            
-            if (!apiKey || !propId) return window.customAlert("API Key and Property ID are required.");
-            
-            const btn = document.querySelector('button[onclick="window.fetchChannexData()"]');
-            btn.innerHTML = '<i data-lucide="loader-2" size="12" class="animate-spin inline"></i> FETCHING...'; btn.disabled = true;
-
-            try {
-                // Fetch Room Types
-                const rRes = await fetch(`https://staging.channex.io/api/v1/room_types?filter[property_id]=${propId}`, { headers: { "user-api-key": apiKey } });
-                if (!rRes.ok) throw new Error("Channex Rooms API returned " + rRes.status);
-                const rData = await rRes.json();
-                
-                // Fetch Rate Plans
-                const rateRes = await fetch(`https://staging.channex.io/api/v1/rate_plans?filter[property_id]=${propId}`, { headers: { "user-api-key": apiKey } });
-                if (!rateRes.ok) throw new Error("Channex Rates API returned " + rateRes.status);
-                const rateData = await rateRes.json();
-
-                window.renderChannexMappingUI(rData.data, rateData.data);
-
-            } catch (e) {
-                console.error(e); window.customAlert("Failed to fetch Channex configuration.\n\n" + e.message);
-            }
-            
-            btn.innerHTML = '<i data-lucide="cloud-download" size="12"></i> Fetch Channex Data'; btn.disabled = false; lucide.createIcons();
-        };
-
-        window.renderChannexMappingUI = (channexRooms, channexRates) => {
-            if (!channexRooms || channexRooms.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-4 text-red-500 font-bold text-xs'>No Room Types found in Channex for this Property.</div>";
-            
-            const roomTypes = [...new Set(Array.from(document.querySelectorAll('.room-type')).map(i => i.value.trim().toUpperCase()).filter(Boolean))];
-            if (roomTypes.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-4 text-orange-500 font-bold text-xs'>No PMS Room Categories found. Add rooms in the Inventory tab first!</div>";
-
-            const pmsOptions = `<option value="">-- DO NOT MAP --</option>` + roomTypes.map(t => `<option value="${t}">${t}</option>`).join('');
-            
-            // 1. Render Room Types Mapping
-            let html = '<div class="flex flex-col gap-1.5">';
-            channexRooms.forEach(cr => {
-                const existingMap = (currentConfig.channexMap || []).find(m => m.channexId === cr.id);
-                let selectedVal = existingMap ? existingMap.pmsCategory : '';
-                
-                html += `
-                    <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-chan-id="${cr.id}">
-                        <div class="flex-1 font-bold text-slate-700 text-[11px] truncate pl-1" title="${cr.attributes.title}">${cr.attributes.title}</div>
-                        <i data-lucide="arrow-right" size="12" class="text-emerald-500 shrink-0"></i>
-                        <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-pms-sel bg-slate-50 border-emerald-300 text-emerald-800 shadow-none">
-                            ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
-                        </select>
-                    </div>`;
-            });
-            html += '</div>';
-            document.getElementById('channex-mapping-container').innerHTML = html;
-
-            // 2. Render Rate Plans Mapping
-            if (channexRates && channexRates.length > 0) {
-                document.getElementById('channex-rate-mapping-card').classList.remove('hidden');
-                document.getElementById('channex-rate-mapping-card').style.display = 'flex';
-                let rHtml = '<div class="flex flex-col gap-1.5">';
-                channexRates.forEach(rate => {
-                    const existingMap = (currentConfig.channexRateMap || []).find(m => m.ratePlanId === rate.id);
-                    let selectedVal = existingMap ? existingMap.pmsCategory : '';
-                    
-                    rHtml += `
-                        <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${rate.id}" data-rate-title="${rate.attributes.title}">
-                            <div class="flex-1 flex flex-col min-w-0 pl-1">
-                                <span class="font-bold text-slate-800 text-[11px] truncate" title="${rate.attributes.title}">${rate.attributes.title}</span>
-                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
-                            </div>
-                            <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
-                            <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none">
-                                ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
-                            </select>
-                        </div>`;
-                });
-                rHtml += '</div>';
-                document.getElementById('channex-rate-mapping-container').innerHTML = rHtml;
-            } else {
-                document.getElementById('channex-rate-mapping-card').classList.add('hidden');
-                document.getElementById('channex-rate-mapping-card').style.display = 'none';
-            }
-
-            lucide.createIcons();
-            window.customAlert(`Successfully fetched ${channexRooms.length} Rooms and ${channexRates ? channexRates.length : 0} Rate Plans from Channex.\n\nPlease complete the mapping and hit SAVE.`);
-        };
-
-        window.renderChannexMapping = () => {
-            const mapContainer = document.getElementById('channex-mapping-container');
-            const map = currentConfig.channexMap || [];
-            if (map.length > 0) {
-                let html = '<div class="flex flex-col gap-1.5 opacity-70 hover:opacity-100 transition-opacity">';
-                map.forEach(m => {
-                    html += `
-                        <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-chan-id="${m.channexId}">
-                            <div class="flex-1 font-bold text-slate-700 text-[11px] truncate pl-1">${m.channexTitle || 'Mapped Room'}</div>
-                            <i data-lucide="arrow-right" size="12" class="text-emerald-500 shrink-0"></i>
-                            <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-pms-sel bg-slate-50 border-emerald-300 text-emerald-800 shadow-none"><option value="${m.pmsCategory}" selected>${m.pmsCategory}</option></select>
-                        </div>`;
-                });
-                html += '</div><div class="text-center mt-2"><button onclick="window.fetchChannexData()" class="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 underline uppercase">Refresh Live Mapping</button></div>';
-                mapContainer.innerHTML = html;
-            } else {
-                mapContainer.innerHTML = "<div class='text-center py-4 text-slate-400 font-bold text-xs italic'>Enter API key and click Fetch to map rooms.</div>";
-            }
-            
-            const rateContainer = document.getElementById('channex-rate-mapping-container');
-            const rateMap = currentConfig.channexRateMap || [];
-            if (rateMap.length > 0) {
-                document.getElementById('channex-rate-mapping-card').classList.remove('hidden');
-                document.getElementById('channex-rate-mapping-card').style.display = 'flex';
-                let rHtml = '<div class="flex flex-col gap-1.5 opacity-70 hover:opacity-100 transition-opacity">';
-                rateMap.forEach(m => {
-                    rHtml += `
-                        <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${m.ratePlanId}" data-rate-title="${m.ratePlanTitle}">
-                            <div class="flex-1 flex flex-col min-w-0 pl-1">
-                                <span class="font-bold text-slate-800 text-[11px] truncate">${m.ratePlanTitle || 'Mapped Rate'}</span>
-                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
-                            </div>
-                            <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
-                            <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none"><option value="${m.pmsCategory}" selected>${m.pmsCategory}</option></select>
-                        </div>`;
-                });
-                rHtml += '</div>';
-                rateContainer.innerHTML = rHtml;
-            } else {
-                document.getElementById('channex-rate-mapping-card').classList.add('hidden');
-                document.getElementById('channex-rate-mapping-card').style.display = 'none';
-            }
-            lucide.createIcons();
-        };
-
-        window.simulateWebhookBooking = async () => {
-            const btn = document.querySelector('button[onclick="window.simulateWebhookBooking()"]');
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<i data-lucide="loader-2" size="14" class="animate-spin inline"></i> FIRING...'; btn.disabled = true;
-
-            try {
-                if (!currentConfig.channex || !currentConfig.channex.propId) throw new Error("Please save your Channex Property ID first.");
-                if (!currentConfig.channexMap || currentConfig.channexMap.length === 0) throw new Error("Please map your rooms first so the webhook knows what to book.");
-
-                const randomMappedRoom = currentConfig.channexMap[Math.floor(Math.random() * currentConfig.channexMap.length)];
-                const today = new Date();
-                const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-
-                const fakePayload = {
-                    booking_revision_id: "SIM_REV_" + Math.random().toString(36).substr(2, 9),
-                    property_id: currentConfig.channex.propId,
-                    raw_message: {
-                        ota_reservation_code: "SIM" + Math.floor(100000 + Math.random() * 900000),
-                        ota_name: "BookingCom",
-                        status: "new",
-                        property_id: currentConfig.channex.propId,
-                        arrival_date: getLocalYMD(today),
-                        departure_date: getLocalYMD(tomorrow),
-                        amount: 3500,
-                        currency: "USD",
-                        customer: { name: "Simulated", surname: "Tester", mail: "test@channex.io", phone: "+1234567890", country: "US" },
-                        rooms: [
-                            {
-                                room_type_id: randomMappedRoom.channexId,
-                                checkin_date: getLocalYMD(today),
-                                checkout_date: getLocalYMD(tomorrow),
-                                occupancy: { adults: 2, children: 0 },
-                                amount: 3500,
-                                days: { [getLocalYMD(today)]: 3500 }
-                            }
-                        ]
-                    }
-                };
-
-                const res = await fetch("https://asia-southeast1-swimspms.cloudfunctions.net/channexWebhook", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(fakePayload)
-                });
-
-                if (!res.ok) throw new Error("Webhook rejected request with status: " + res.status);
-                window.customAlert("✅ Webhook Simulated Successfully!\n\nA fake Certification Booking should now be in your PMS Dashboard.");
-
-            } catch (e) {
-                console.error(e);
-                window.customAlert("Simulation Failed:\n\n" + e.message, false, null, 'danger');
-            }
-
-            btn.innerHTML = originalHtml; btn.disabled = false; lucide.createIcons();
-        };
-
-        // --- MAIN SAVE FUNCTION ---
         window.saveConfig = async () => {
             const propId = currentConfig.id;
             if (!propId) return window.customAlert("No active property to save.");
             
-            document.getElementById('loader').style.display = 'flex'; document.getElementById('sync-status').innerText = 'SAVING CONFIG...';
+            document.getElementById('loader').style.display = 'flex'; 
+            document.getElementById('sync-status').innerText = 'SAVING CONFIG...';
+
+            window.recalculateOrder();
 
             try {
                 const newConfig = {
@@ -987,22 +728,15 @@
                     name: document.getElementById('prop-name').value.trim(),
                     timezone: document.getElementById('prop-tz').value.trim(), 
                     currency: document.getElementById('prop-currency').value.trim(),
-                    channex: { 
-                        apiKey: document.getElementById('chan-api-key').value.trim(), 
-                        propId: document.getElementById('chan-prop-id').value.trim() 
-                    },
+                    floors: parseInt(document.getElementById('prop-floors').value) || 3,
                     rooms: [], 
                     events: [], 
                     eventNotes: {}, 
                     rates: currentConfig.rates || {},
-                    chargePresets: [], 
-                    otaMap: [], 
-                    channexMap: [], 
-                    channexRateMap: []
+                    chargePresets: []
                 };
 
-                // 1. Rooms
-                document.querySelectorAll('#rooms-body tr').forEach(tr => {
+                document.querySelectorAll('#rooms-body tr').forEach((tr, index) => {
                     const id = tr.querySelector('.room-id').value.trim().toUpperCase();
                     if (id) newConfig.rooms.push({ 
                         id, 
@@ -1011,11 +745,10 @@
                         bed: tr.querySelector('.room-bed').value.trim().toUpperCase(), 
                         floor: tr.querySelector('.room-floor').value.trim(), 
                         icon: tr.querySelector('.room-icon').value, 
-                        order: parseInt(tr.querySelector('.room-order').value) || 9999 
+                        order: index + 1 
                     });
                 });
 
-                // 2. Events
                 document.querySelectorAll('.event-row').forEach(div => {
                     const d = div.querySelector('.event-date').value;
                     const n = div.querySelector('.event-note').value.trim();
@@ -1026,40 +759,19 @@
                 });
                 newConfig.events = [...new Set(newConfig.events)].sort();
 
-                // 3. Charge Presets
                 document.querySelectorAll('.preset-row').forEach(div => {
                     const pName = div.querySelector('.preset-name').value.trim();
                     const pPrice = parseFloat(div.querySelector('.preset-price').value) || 0;
                     if (pName) newConfig.chargePresets.push({ name: pName, price: pPrice });
                 });
 
-                // 4. OTA Keyword Alias Mapping
-                document.querySelectorAll('.ota-alias-row').forEach(div => {
-                    const otaName = div.querySelector('.alias-ota-name').value.trim();
-                    const pmsCat = div.querySelector('.alias-pms-cat').value.trim();
-                    if (otaName && pmsCat) newConfig.otaMap.push({ otaName, pmsCategory: pmsCat });
-                });
-
-                // 5. Channex Maps
-                document.querySelectorAll('.chan-map-row').forEach(row => {
-                    const cId = row.getAttribute('data-chan-id');
-                    const cTitle = row.querySelector('.font-bold').innerText;
-                    const pCat = row.querySelector('.chan-pms-sel').value;
-                    if (cId && pCat) newConfig.channexMap.push({ channexId: cId, channexTitle: cTitle, pmsCategory: pCat });
-                });
-                
-                document.querySelectorAll('.chan-rate-map-row').forEach(row => {
-                    const rId = row.getAttribute('data-rate-id');
-                    const rTitle = row.getAttribute('data-rate-title');
-                    const pCat = row.querySelector('.chan-rate-pms-sel').value;
-                    if (rId && pCat) newConfig.channexRateMap.push({ ratePlanId: rId, ratePlanTitle: rTitle, pmsCategory: pCat });
-                });
-
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), newConfig, { merge: true });
                 currentConfig = newConfig;
                 
                 const switcher = document.getElementById('property-switcher');
-                Array.from(switcher.options).forEach(opt => { if (opt.value === propId) opt.innerText = newConfig.name; });
+                if (switcher) {
+                    Array.from(switcher.options).forEach(opt => { if (opt.value === propId) opt.innerText = newConfig.name; });
+                }
 
                 window.customAlert("Configuration Saved Successfully!");
 
@@ -1070,8 +782,6 @@
             document.getElementById('loader').style.display = 'none';
         };
 
-        const getLocalYMD = (d) => { const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)); return o.toISOString().split('T')[0]; };
-
         const init = async () => {
             try { 
                 await signInAnonymously(auth); 
@@ -1081,7 +791,7 @@
                 propsSnap.forEach(docSnap => windowPropertiesList.push({ id: docSnap.id, ...docSnap.data() }));
                 
                 if (windowPropertiesList.length === 0) {
-                    currentConfig = { id: 'swims_resort', name: 'SWIMS RESORT', rooms: [], events: [], eventNotes: {}, chargePresets: [...DEFAULT_CHARGE_PRESETS], otaMap: [], channexMap: [], channexRateMap: [], channex: {} };
+                    currentConfig = { id: 'swims_resort', name: 'SWIMS RESORT', floors: 3, rooms: [], events: [], eventNotes: {}, chargePresets: [...DEFAULT_CHARGE_PRESETS] };
                     windowPropertiesList.push(currentConfig);
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentConfig.id), currentConfig);
                 }
@@ -1089,7 +799,9 @@
                 const targetPropId = window.resolveTargetPropertyId(windowPropertiesList);
 
                 const switcher = document.getElementById('property-switcher');
-                switcher.innerHTML = windowPropertiesList.map(p => `<option value="${p.id}" ${p.id === targetPropId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`).join('');
+                if (switcher) {
+                    switcher.innerHTML = windowPropertiesList.map(p => `<option value="${p.id}" ${p.id === targetPropId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`).join('');
+                }
                 
                 await window.handlePropertySwitch(targetPropId, false);
 
