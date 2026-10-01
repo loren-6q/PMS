@@ -9,14 +9,12 @@
 
     const getStaffList = () => window.staff || (window.getStaff ? window.getStaff() : []);
     const getHotelRoomsList = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
-    const getPropId = () => window.getCurrentPropertyId ? window.getCurrentPropertyId() : (window.currentPropertyId || 'swims_resort');
+    const getPropId = () => {
+        const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
+        return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
+    };
     const getSearchVal = () => window.getSearchTerm ? window.getSearchTerm() : (window.searchTerm || '');
     const getRoomsHelper = () => window.getRooms || (s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : [])));
-    const getParseYMD = () => window.parseYMD || (str => {
-        if (!str || typeof str !== 'string') return 0;
-        const p = str.split('-');
-        return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
-    });
     const getLocalYMD = () => window.getLocalYMD || (d => {
         if (!d) d = new Date();
         const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
@@ -137,7 +135,8 @@
         const getRooms = getRoomsHelper();
 
         return staffList.filter(s => {
-            if (s.property !== curProp) return false;
+            const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+            if (sProp !== curProp) return false;
             if (statF.length > 0 && !statF.includes(s.status)) return false;
 
             const fN = ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase();
@@ -161,7 +160,8 @@
                 const wU = rF.includes('UNASSIGNED');
                 const hU = rL.length === 0 || rL.includes("");
                 const hT = rL.some(r => {
-                    const hr = hotelRooms.find(x => x.id === r);
+                    const normR = window.normalizeRoomId ? window.normalizeRoomId(r, curProp) : r;
+                    const hr = hotelRooms.find(x => x.id === r || x.id === normR);
                     return hr && rF.includes(hr.type);
                 });
                 if (!hT && (!wU || !hU)) return false;
@@ -243,9 +243,9 @@
             const loader = $('boot-loader');
             if (loader) loader.style.display = 'flex';
 
-            const db = getDb();
-            const appId = getAppId();
-            const { doc, deleteDoc } = getFs();
+            const db = window.db;
+            const appId = window.appId || 'hotel-pms-v1';
+            const { doc, deleteDoc } = window.fs || {};
 
             try {
                 await Promise.all(Array.from(rows).map(tr => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', tr.dataset.recordId))));
