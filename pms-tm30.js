@@ -11,7 +11,13 @@
     const getAppId = () => window.appId || 'hotel-pms-v1';
     const getFs = () => window.fs || {};
     const getStaffList = () => window.staff || (window.getStaff ? window.getStaff() : []);
-    const getPropId = () => window.getCurrentPropertyId ? window.getCurrentPropertyId() : (window.currentPropertyId || 'swims_resort');
+    
+    // Core property ID accessor utilizing pms-core.js
+    const getPropId = () => {
+        const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
+        return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
+    };
+    
     const getRoomsHelper = () => window.getRooms || (s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : [])));
 
     window.globalPassportSync = async () => {
@@ -26,13 +32,14 @@
         const appId = getAppId();
         const { collection, query, where, getDocs, doc, updateDoc } = getFs();
         const curProp = getPropId();
+        const displayKey = window.toDisplayPropKey ? window.toDisplayPropKey(curProp) : 'SWIMS';
         const staffList = getStaffList();
         const getRooms = getRoomsHelper();
 
         try {
             const passSnap = await getDocs(query(
                 collection(db, 'artifacts', appId, 'public', 'data', 'submissions'),
-                where("property", "==", curProp === 'swims_resort' ? 'SWIMS' : curProp.toUpperCase())
+                where("property", "==", curProp)
             ));
 
             let foundPassports = [];
@@ -44,7 +51,7 @@
             });
 
             if (foundPassports.length === 0) {
-                window.showAlert(`No pending unsynced passports found for ${curProp.toUpperCase()}.`);
+                window.showAlert(`No pending unsynced passports found for ${displayKey}.`);
                 if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
                 if (window.lucide) window.lucide.createIcons();
                 return;
@@ -58,18 +65,32 @@
                 let matchedBooking = null;
                 if (p.roomNumber) {
                     let searchRooms = [p.roomNumber];
+                    const normRoom = window.normalizeRoomId ? window.normalizeRoomId(p.roomNumber, curProp) : p.roomNumber;
+                    searchRooms.push(normRoom);
+                    
                     if (/^[a-zA-Z]0\d$/.test(p.roomNumber)) searchRooms.push(p.roomNumber[0] + p.roomNumber[2]);
                     else if (/^[a-zA-Z]\d$/.test(p.roomNumber)) searchRooms.push(p.roomNumber[0] + '0' + p.roomNumber[1]);
                     
-                    matchedBooking = staffList.filter(x => x.property === curProp).find(s => {
-                        if (s.status === 'cancelled' || s.status === 'noshow') return false;
-                        return getRooms(s).some(r => searchRooms.includes(r));
+                    matchedBooking = staffList.filter(x => {
+                        const xProp = window.toCanonicalPropId ? window.toCanonicalPropId(x.property) : x.property;
+                        return xProp === curProp;
+                    }).find(s => {
+                        const isOcc = window.isOccupyingBooking ? window.isOccupyingBooking(s.status) : (s.status !== 'cancelled' && s.status !== 'noshow');
+                        if (!isOcc) return false;
+                        return getRooms(s).some(r => {
+                            const normR = window.normalizeRoomId ? window.normalizeRoomId(r, curProp) : r;
+                            return searchRooms.includes(r) || searchRooms.includes(normR);
+                        });
                     });
                 }
 
                 if (!matchedBooking && p.firstName && p.lastName) {
-                    matchedBooking = staffList.filter(x => x.property === curProp).find(s => {
-                        if (s.status === 'cancelled' || s.status === 'noshow') return false;
+                    matchedBooking = staffList.filter(x => {
+                        const xProp = window.toCanonicalPropId ? window.toCanonicalPropId(x.property) : x.property;
+                        return xProp === curProp;
+                    }).find(s => {
+                        const isOcc = window.isOccupyingBooking ? window.isOccupyingBooking(s.status) : (s.status !== 'cancelled' && s.status !== 'noshow');
+                        if (!isOcc) return false;
                         const bName = ((s.firstName || '') + " " + (s.lastName || '')).toUpperCase();
                         return bName.includes(p.lastName.toUpperCase()) && bName.includes(p.firstName.toUpperCase());
                     });
@@ -138,7 +159,7 @@
 
             const q = query(
                 collection(db, 'artifacts', appId, 'public', 'data', 'submissions'),
-                where("property", "==", curProp === 'swims_resort' ? 'SWIMS' : curProp.toUpperCase())
+                where("property", "==", curProp)
             );
             const passSnap = await getDocs(q);
             let pendingPassports = [];
@@ -200,9 +221,16 @@
                 let match = false;
                 if (data.roomNumber) {
                     let searchRooms = [data.roomNumber];
+                    const normRoom = window.normalizeRoomId ? window.normalizeRoomId(data.roomNumber, curProp) : data.roomNumber;
+                    searchRooms.push(normRoom);
+
                     if (/^[a-zA-Z]0\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + data.roomNumber[2]);
                     else if (/^[a-zA-Z]\d$/.test(data.roomNumber)) searchRooms.push(data.roomNumber[0] + '0' + data.roomNumber[1]);
-                    if (rL.some(r => searchRooms.includes(r))) match = true;
+                    
+                    if (rL.some(r => {
+                        const normR = window.normalizeRoomId ? window.normalizeRoomId(r, curProp) : r;
+                        return searchRooms.includes(r) || searchRooms.includes(normR);
+                    })) match = true;
                 }
 
                 if (!match && data.firstName && data.lastName && gFirstName && gLastName) {
