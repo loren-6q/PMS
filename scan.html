@@ -9,6 +9,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://loren-6q.github.io/PMS/pms-core.js"></script>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
     <style>
@@ -373,12 +374,13 @@
         };
 
         const normalizeRoomId = (r) => {
+            if (window.normalizeRoomId) return window.normalizeRoomId(r);
             if (r === null || r === undefined) return '';
             return String(r).trim().toUpperCase();
         };
 
         async function loadPropertyInventory(propCode) {
-            const pmsKey = PROP_MAP[propCode] || 'swims_resort';
+            const pmsKey = window.toCanonicalPropId ? window.toCanonicalPropId(propCode) : (PROP_MAP[propCode] || 'swims_resort');
             const roomSelect = document.getElementById('room-select');
             if (roomSelect) roomSelect.innerHTML = `<option value="">Loading rooms...</option>`;
 
@@ -512,9 +514,11 @@
         function listenToRushSubmissions() {
             if (unsubsRush) unsubsRush();
             const activeProp = document.getElementById('property-select')?.value || 'SWIMS';
+            const canonicalProp = window.toCanonicalPropId ? window.toCanonicalPropId(activeProp) : activeProp;
+            
             const q = query(
                 collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'),
-                where("property", "==", activeProp)
+                where("property", "==", canonicalProp)
             );
 
             unsubsRush = onSnapshot(q, (snapshot) => {
@@ -625,7 +629,7 @@
         window.assignRoomToRushCard = async (submissionId, chosenRoom) => {
             const cleanRoom = normalizeRoomId(chosenRoom);
             const activeProp = document.getElementById('property-select')?.value || 'SWIMS';
-            const pmsPropKey = PROP_MAP[activeProp] || 'swims_resort';
+            const pmsPropKey = window.toCanonicalPropId ? window.toCanonicalPropId(activeProp) : (PROP_MAP[activeProp] || 'swims_resort');
 
             showToast("Updating...", `Assigning room ${cleanRoom || 'Unassigned'}`, "success");
 
@@ -736,10 +740,11 @@
 
         async function enqueueRushPassport(base64Data, label = "Guest") {
             const activeProp = document.getElementById('property-select')?.value || 'SWIMS';
+            const canonicalProp = window.toCanonicalPropId ? window.toCanonicalPropId(activeProp) : activeProp;
 
             // 1. Write skeleton submission to Firestore immediately
             const docRef = await addDoc(collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'), {
-                property: activeProp,
+                property: canonicalProp,
                 roomNumber: "",
                 firstName: "",
                 middleName: "",
@@ -763,7 +768,7 @@
             localRushQueue.push({
                 docId: docRef.id,
                 base64: base64Data,
-                property: activeProp
+                property: canonicalProp
             });
 
             updateWorkerStatus();
@@ -932,7 +937,7 @@
 
             try {
                 const property = document.getElementById('property-select').value;
-                const pmsPropKey = PROP_MAP[property] || 'swims_resort';
+                const canonicalProp = window.toCanonicalPropId ? window.toCanonicalPropId(property) : (PROP_MAP[property] || 'swims_resort');
 
                 const roomDropdownVal = document.getElementById('room-select')?.value || '';
                 let roomNumber = '';
@@ -1006,7 +1011,7 @@
                 }
 
                 await addDoc(collection(db, 'artifacts', targetAppId, 'public', 'data', 'submissions'), {
-                    property: property,
+                    property: canonicalProp,
                     roomNumber: roomNumber,
                     firstName: firstName,
                     middleName: "",
@@ -1046,7 +1051,8 @@
 
         async function uploadPhotoToStorage(base64Data, propOverride = null) {
             try {
-                const prop = (propOverride || document.getElementById('property-select')?.value || 'SWIMS').toLowerCase();
+                const propInput = propOverride || document.getElementById('property-select')?.value || 'SWIMS';
+                const prop = window.toCanonicalPropId ? window.toCanonicalPropId(propInput) : propInput.toLowerCase();
                 const timestamp = Date.now();
                 const randId = Math.random().toString(36).substring(2, 8);
                 const path = `passports/${prop}/${timestamp}_${randId}.jpg`;
