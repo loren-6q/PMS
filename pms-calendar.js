@@ -38,7 +38,10 @@
 
     const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
     const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
-    const getPropId = () => window.getCurrentPropertyId ? window.getCurrentPropertyId() : (window.currentPropertyId || 'swims_resort');
+    const getPropId = () => {
+        const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
+        return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
+    };
     const getFmpDates = () => window.fmpDates || [];
     const getSearchTerm = () => (window.getSearchTerm ? window.getSearchTerm() : window.searchTerm) || "";
     const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
@@ -92,7 +95,12 @@
         const jb = $('search-jump-btn'), mc = $('match-counter');
         const stList = getStaff();
         const term = window.searchTerm;
-        const m = stList.filter(s => ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(term) || (s.bookId || '').toUpperCase().includes(term));
+        const curProp = getPropId();
+        const m = stList.filter(s => {
+            const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+            if (sProp !== curProp) return false;
+            return ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(term) || (s.bookId || '').toUpperCase().includes(term);
+        });
         if (term && m.length > 0) {
             jb?.classList.replace('hidden', 'flex');
             if (mc) mc.innerText = `Match ${window.searchMatchIndex + 1} of ${m.length}`;
@@ -128,8 +136,13 @@
     window.jumpToSearchMatch = () => {
         const stList = getStaff();
         const term = window.searchTerm;
-        const m = stList.filter(s => ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(term) || (s.bookId || '').toUpperCase().includes(term))
-            .sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+        const curProp = getPropId();
+        const m = stList.filter(s => {
+            const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+            if (sProp !== curProp) return false;
+            return ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(term) || (s.bookId || '').toUpperCase().includes(term);
+        }).sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+
         if (m.length > 0) {
             const idx = (window.searchMatchIndex || 0) % m.length;
             const d = new Date(m[idx].checkIn + "T12:00:00");
@@ -206,7 +219,7 @@
             return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Bottom Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
         }
         if (bStr === 'top' || bStr === 'bunk-top') {
-            return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 5 19 12"></polyline></svg>`;
+            return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
         }
         return '';
     };
@@ -273,7 +286,14 @@
         const hotelRooms = getHotelRooms();
         const fmpDates = getFmpDates();
         const searchTerm = getSearchTerm();
-        const actStaff = getStaff().filter(s => s.property === curProp && s.status !== 'cancelled' && s.status !== 'noshow');
+
+        const actStaff = getStaff().filter(s => {
+            const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+            if (sProp !== curProp) return false;
+            const rList = getRooms(s);
+            const isUnassigned = rList.length === 0 || rList[0] === "";
+            return window.isOccupyingBooking ? window.isOccupyingBooking(s.status, isUnassigned) : (s.status !== 'cancelled' && s.status !== 'noshow');
+        });
 
         const vsUTC = parseYMD(getYmd(vS));
         const veUTC = vsUTC + dShow * 86400000;
@@ -285,7 +305,10 @@
             if (s.status === 'unconfirmed' || s.status === 'charged') {
                 for (let i = 0; i < Math.max(1, rL.length); i++) uConf.push(s);
             } else {
-                const uCount = rL.filter(rid => !rid || !hotelRooms.some(h => h.id === rid)).length;
+                const uCount = rL.filter(rid => {
+                    const normR = window.normalizeRoomId ? window.normalizeRoomId(rid, curProp) : rid;
+                    return !rid || !hotelRooms.some(h => h.id === rid || h.id === normR);
+                }).length;
                 for (let i = 0; i < uCount; i++) uConf.push(s);
             }
         });
@@ -324,12 +347,20 @@
 
                 tRows.push({
                     isRoom: true, isBed: true, id: r.id, displayId: r.id, type: r.type, bed: r.bed, floor: '', icon: r.icon,
-                    bookings: actStaff.filter(s => getRooms(s).includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC)
+                    bookings: actStaff.filter(s => {
+                        const rList = getRooms(s).map(rm => window.normalizeRoomId ? window.normalizeRoomId(rm, curProp) : rm);
+                        const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
+                        return (rList.includes(r.id) || rList.includes(normR)) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+                    })
                 });
             } else {
                 tRows.push({
                     isRoom: true, isPrivate: true, id: r.id, displayId: r.id, type: r.type, bed: r.bed, floor: r.floor, icon: r.icon,
-                    bookings: actStaff.filter(s => getRooms(s).includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC)
+                    bookings: actStaff.filter(s => {
+                        const rList = getRooms(s).map(rm => window.normalizeRoomId ? window.normalizeRoomId(rm, curProp) : rm);
+                        const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
+                        return (rList.includes(r.id) || rList.includes(normR)) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+                    })
                 });
             }
         });
@@ -365,7 +396,10 @@
                         actStaff.forEach(s => {
                             if (['unconfirmed', 'charged', 'cancelled', 'noshow'].includes(s.status)) return;
                             if (dT >= parseYMD(s.checkIn) && dT < parseYMD(s.checkOut)) {
-                                getRooms(s).forEach(r => { if (r && tRIds.includes(r)) occ.add(r); });
+                                getRooms(s).forEach(r => {
+                                    const normR = window.normalizeRoomId ? window.normalizeRoomId(r, curProp) : r;
+                                    if (r && (tRIds.includes(r) || tRIds.includes(normR))) occ.add(r);
+                                });
                             }
                         });
                         const av = cap - occ.size;
