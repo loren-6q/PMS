@@ -10,6 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://loren-6q.github.io/PMS/pms-core.js"></script>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 </head>
@@ -314,16 +315,10 @@
         let viewMode = 'queue';
         let currentPropFilter = 'ALL';
 
-        const PROP_MAP = { 'LOUD': 'loud_samui', 'WET': 'wet_pool', 'SWIMS': 'swims_resort' };
-        const PROP_REVERSE_MAP = { 'loud_samui': 'LOUD', 'wet_pool': 'WET', 'swims_resort': 'SWIMS' };
-
         const urlParams = new URLSearchParams(window.location.search);
         const pParam = urlParams.get('p');
         if (pParam) {
-            let pClean = pParam.toUpperCase();
-            if (pClean === 'LOUD_SAMUI') pClean = 'LOUD';
-            if (pClean === 'WET_POOL') pClean = 'WET';
-            if (pClean === 'SWIMS_RESORT') pClean = 'SWIMS';
+            let pClean = window.toDisplayPropKey ? window.toDisplayPropKey(pParam) : pParam.toUpperCase();
             currentPropFilter = pClean;
             document.addEventListener('DOMContentLoaded', () => {
                 const f = document.getElementById('property-filter');
@@ -526,11 +521,9 @@
 
             list = list.filter(g => {
                 if (currentPropFilter === 'ALL') return true;
-                let pRaw = (g.property || 'SWIMS').toUpperCase();
-                if (pRaw === 'SWIMS_RESORT') pRaw = 'SWIMS';
-                if (pRaw === 'LOUD_SAMUI') pRaw = 'LOUD';
-                if (pRaw === 'WET_POOL') pRaw = 'WET';
-                return pRaw === currentPropFilter;
+                const gCanon = window.toCanonicalPropId ? window.toCanonicalPropId(g.property) : (g.property || 'swims_resort');
+                const filterCanon = window.toCanonicalPropId ? window.toCanonicalPropId(currentPropFilter) : currentPropFilter;
+                return gCanon === filterCanon;
             });
 
             if (searchTerm) {
@@ -635,12 +628,14 @@
                     }
                 }
 
+                const displayProp = window.toDisplayPropKey ? window.toDisplayPropKey(guest.property) : (guest.property || 'UNASSIGNED');
+
                 tr.innerHTML = `
                     <td class="py-1 px-2 border-r border-slate-200 text-center bg-slate-50">
                         <input type="checkbox" class="row-checkbox" value="${guest.id}" onchange="window.updateBulkActionVisibility()">
                     </td>
                     ${actsColumn}
-                    <td class="py-1 px-2 border-r border-slate-200 font-black text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors" onclick="window.copyText('${guest.property || 'UNASSIGNED'}', 'Property copied')">${guest.property || 'UNASSIGNED'}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-black text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors" onclick="window.copyText('${displayProp}', 'Property copied')">${displayProp}</td>
                     <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.firstName || ''}', 'First Name copied')">${guest.firstName || ''}</td>
                     <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.middleName || ''}', 'Middle Name copied')">${guest.middleName || ''}</td>
                     <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.lastName || ''}', 'Last Name copied')">${guest.lastName || ''}</td>
@@ -693,11 +688,12 @@
         window.closeBulkAssignModal = () => { document.getElementById('bulk-modal').classList.remove('active'); };
 
         window.applyBulkProperty = async () => {
-            const prop = document.getElementById('bulk-property').value.toUpperCase().trim();
-            if (!prop) {
+            const rawProp = document.getElementById('bulk-property').value.toUpperCase().trim();
+            if (!rawProp) {
                 window.showToast("Error", "Please enter a property name.", "error");
                 return;
             }
+            const prop = window.toCanonicalPropId ? window.toCanonicalPropId(rawProp) : rawProp;
 
             const checkboxes = document.querySelectorAll('.row-checkbox:checked');
             const btn = document.querySelector('#bulk-modal button.bg-purple-600');
@@ -720,7 +716,7 @@
                     if (qGuest) qGuest.property = prop;
                 });
 
-                window.showToast("Updated", `Assigned ${prop} to ${checkboxes.length} guests.`, "success");
+                window.showToast("Updated", `Assigned ${window.toDisplayPropKey(prop)} to ${checkboxes.length} guests.`, "success");
                 window.closeBulkAssignModal();
                 document.getElementById('select-all').checked = false;
                 window.updateBulkActionVisibility();
@@ -813,7 +809,7 @@
 
         window.openEditModal = (guest) => {
             document.getElementById('edit-doc-id').value = guest.id;
-            document.getElementById('edit-property').value = guest.property || '';
+            document.getElementById('edit-property').value = window.toDisplayPropKey ? window.toDisplayPropKey(guest.property) : (guest.property || '');
             document.getElementById('edit-first').value = guest.firstName || '';
             document.getElementById('edit-middle').value = guest.middleName || '';
             document.getElementById('edit-last').value = guest.lastName || '';
@@ -833,9 +829,12 @@
         window.saveEdit = async () => {
             const id = document.getElementById('edit-doc-id').value;
             const docRef = doc(db, 'artifacts', targetAppId, 'public', 'data', 'submissions', id);
+            const rawProp = document.getElementById('edit-property').value.toUpperCase().trim();
+            const canonProp = window.toCanonicalPropId ? window.toCanonicalPropId(rawProp) : rawProp;
+
             try {
                 await updateDoc(docRef, {
-                    property: document.getElementById('edit-property').value.toUpperCase().trim(),
+                    property: canonProp,
                     firstName: document.getElementById('edit-first').value.toUpperCase().trim(),
                     middleName: document.getElementById('edit-middle').value.toUpperCase().trim(),
                     lastName: document.getElementById('edit-last').value.toUpperCase().trim(),
@@ -863,11 +862,9 @@
             try {
                 let listToClear = currentSubmissionsList.filter(g => {
                     if (currentPropFilter === 'ALL') return true;
-                    let pRaw = (g.property || 'SWIMS').toUpperCase();
-                    if (pRaw === 'SWIMS_RESORT') pRaw = 'SWIMS';
-                    if (pRaw === 'LOUD_SAMUI') pRaw = 'LOUD';
-                    if (pRaw === 'WET_POOL') pRaw = 'WET';
-                    return pRaw === currentPropFilter;
+                    const gCanon = window.toCanonicalPropId ? window.toCanonicalPropId(g.property) : (g.property || 'swims_resort');
+                    const filterCanon = window.toCanonicalPropId ? window.toCanonicalPropId(currentPropFilter) : currentPropFilter;
+                    return gCanon === filterCanon;
                 });
 
                 if (searchTerm) {
@@ -905,11 +902,9 @@
 
             const activeBaseList = (viewMode === 'queue' ? currentSubmissionsList : historyList).filter(g => {
                 if (currentPropFilter === 'ALL') return true;
-                let pRaw = (g.property || 'SWIMS').toUpperCase();
-                if (pRaw === 'SWIMS_RESORT') pRaw = 'SWIMS';
-                if (pRaw === 'LOUD_SAMUI') pRaw = 'LOUD';
-                if (pRaw === 'WET_POOL') pRaw = 'WET';
-                return pRaw === currentPropFilter;
+                const gCanon = window.toCanonicalPropId ? window.toCanonicalPropId(g.property) : (g.property || 'swims_resort');
+                const filterCanon = window.toCanonicalPropId ? window.toCanonicalPropId(currentPropFilter) : currentPropFilter;
+                return gCanon === filterCanon;
             });
 
             if (checkboxes.length > 0) {
@@ -965,7 +960,7 @@
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "TM30_Guests");
 
-            const propertyPrefix = (listToExport.length > 0 && listToExport[0].property) ? listToExport[0].property + "_" : "";
+            const propertyPrefix = (listToExport.length > 0 && listToExport[0].property) ? window.toDisplayPropKey(listToExport[0].property) + "_" : "";
             const dateStr = new Date().toISOString().split('T')[0];
 
             XLSX.writeFile(workbook, `${propertyPrefix}TM30_Batch_${dateStr}.xlsx`);
@@ -975,11 +970,9 @@
         window.sendToExtension = () => {
             const activeBaseList = (viewMode === 'queue' ? currentSubmissionsList : historyList).filter(g => {
                 if (currentPropFilter === 'ALL') return true;
-                let pRaw = (g.property || 'SWIMS').toUpperCase();
-                if (pRaw === 'SWIMS_RESORT') pRaw = 'SWIMS';
-                if (pRaw === 'LOUD_SAMUI') pRaw = 'LOUD';
-                if (pRaw === 'WET_POOL') pRaw = 'WET';
-                return pRaw === currentPropFilter;
+                const gCanon = window.toCanonicalPropId ? window.toCanonicalPropId(g.property) : (g.property || 'swims_resort');
+                const filterCanon = window.toCanonicalPropId ? window.toCanonicalPropId(currentPropFilter) : currentPropFilter;
+                return gCanon === filterCanon;
             });
 
             let listToExport = activeBaseList;
