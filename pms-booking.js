@@ -64,9 +64,11 @@
         getStaff().forEach(s => {
             if (s.id === excludeBookingId) return;
             
+            // Standardize Property Comparison via pms-core
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
             if (sProp !== curProp) return;
 
+            // Universal Status Occupancy Evaluator via pms-core
             const rList = getRooms(s);
             const isUnassigned = rList.length === 0 || rList[0] === "";
             const isOccupying = window.isOccupyingBooking 
@@ -274,16 +276,14 @@
         el.innerText = labels[state];
         el.className = id.includes('email')
             ? `flex-1 min-w-[80px] unselectable multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border text-center whitespace-nowrap ${classes[state]}`
-            : `flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border text-center ${classes[state]}`;
+            : `flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border ${classes[state]}`;
     };
-
-    window.setMulti = setMulti;
 
     window.cycleMulti = (el, labels, classes) => {
         if (!el) return;
-        const curState = parseInt(el.dataset.state || 0);
-        const nextState = (curState + 1) % labels.length;
-        setMulti(el.id, nextState, labels, classes);
+        const cur = parseInt(el.dataset.state || 0);
+        const next = (cur + 1) % labels.length;
+        setMulti(el.id, next, labels, classes);
     };
 
     window.populateStaffForm = (s = {}) => {
@@ -347,6 +347,9 @@
         setMulti('rating-btn', !s.rating || s.rating === 'none' ? 0 : (s.rating === 'good' ? 1 : 2), ['FEEDBACK: --', 'FEEDBACK: ✔ GOOD', 'FEEDBACK: ❌ BAD'], ['text-slate-400', 'bg-green-100 text-green-700 border-green-400', 'bg-red-100 text-red-700 border-red-400']);
         setMulti('ext-btn', s.extended ? 1 : 0, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']);
 
+        // Render Dynamic Stay Itinerary Stripe
+        if (window.renderItineraryStripe) window.renderItineraryStripe(s);
+
         if ($('ext-days')) $('ext-days').value = 1;
         if ($('ext-avg-rate')) { $('ext-avg-rate').value = ''; $('ext-avg-rate').classList.remove('text-pink-600', 'bg-pink-100'); }
         if ($('ext-price')) $('ext-price').value = '';
@@ -389,304 +392,88 @@
         if (window.lucide) window.lucide.createIcons();
     };
 
-    window.requestDelete = () => {
-        const id = $('guest-id')?.value;
-        if (!id) return;
-        const staffList = getStaff();
-        const s = staffList.find(x => x.id === id);
-        const name = s ? `${s.firstName || ''} ${s.lastName || ''}`.trim() : 'this booking';
+    window.renderItineraryStripe = s => {
+        const stripe = $('itinerary-stripe');
+        if (!stripe) return;
 
-        window.showAlert(`Permanently delete booking for ${name.toUpperCase()}?\n\nThis cannot be undone.`, true, async () => {
-            const delBtn = $('delete-btn');
-            if (delBtn) { delBtn.disabled = true; delBtn.innerHTML = '...'; }
-
-            const db = getDb();
-            const appId = getAppId();
-            const { doc, deleteDoc } = getFs();
-
-            try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id));
-                if (window.triggerAutoSync && s) {
-                    window.triggerAutoSync(s.checkIn, s.checkOut);
-                }
-                window.closeGuestModal();
-            } catch (e) {
-                console.error("Delete Error", e);
-                window.showAlert("Delete failed: " + e.message);
-            } finally {
-                if (delBtn) { delBtn.disabled = false; delBtn.innerHTML = '<i data-lucide="trash-2" size="14"></i>'; if (window.lucide) window.lucide.createIcons(); }
-            }
-        });
-    };
-
-    window.requestDuplicate = () => {
-        const id = $('guest-id')?.value;
-        if (!id) return;
-        const staffList = getStaff();
-        const s = staffList.find(x => x.id === id);
-        if (!s) return;
-
-        const clone = JSON.parse(JSON.stringify(s));
-        delete clone.id;
-        clone.bookId = "";
-        clone.payments = [];
-        clone.extraCharges = [];
-        clone.status = "future";
-        clone.notes = `[DUPLICATE of booking ${s.bookId || s.id}]\n${clone.notes || ''}`.trim();
-
-        window.populateStaffForm(clone);
-        const gId = $('guest-id');
-        if (gId) gId.value = '';
-        window.showAlert("Booking cloned as NEW record.\n\nAdjust dates/room as needed and click Save.");
-    };
-
-    window.requestSplit = () => {
-        const currentId = $('guest-id')?.value;
-        if (!currentId) return window.showAlert("Please save this booking first before splitting.");
-
-        const s = getStaff().find(x => x.id === currentId);
-        if (!s || !s.checkIn || !s.checkOut) return window.showAlert("Missing check-in or check-out dates.");
-
-        const parseFn = window.parseYMD || (str => Date.parse(str));
-        const diffDays = Math.round((parseFn(s.checkOut) - parseFn(s.checkIn)) / 86400000);
-        if (diffDays <= 1) return window.showAlert("Cannot split a 1-night stay.");
-
-        const splitInput = $('split-date');
-        if (splitInput) {
-            const d = new Date(s.checkIn + "T12:00:00Z");
-            d.setUTCDate(d.getUTCDate() + 1);
-            splitInput.value = d.toISOString().split('T')[0];
-            splitInput.min = s.checkIn;
-            splitInput.max = s.checkOut;
-        }
-
-        const container = $('split-room-dropdown-container');
-        if (container) {
-            let opts = '<option value="">-- KEEP CURRENT ROOM --</option>';
-            getHotelRooms().forEach(r => {
-                opts += `<option value="${r.id}">${r.id} (${r.type})</option>`;
-            });
-            container.innerHTML = `<label class="field-label mb-1 text-left">New Room for Split Segment</label><select id="split-new-room" class="input-base !text-sm cursor-pointer">${opts}</select>`;
-        }
-
-        const modal = $('split-modal');
-        if (modal) {
-            modal.classList.add('active');
-            modal.style.display = 'flex';
-        }
-    };
-
-    window.confirmSplit = async () => {
-        const currentId = $('guest-id')?.value;
-        const splitDate = $('split-date')?.value;
-        if (!currentId || !splitDate) return;
-
-        const staffList = getStaff();
-        const orig = staffList.find(x => x.id === currentId);
-        if (!orig) return;
-
-        if (splitDate <= orig.checkIn || splitDate >= orig.checkOut) {
-            return window.showAlert("Split date must be strictly between Check-in and Check-out.");
-        }
-
-        const newRoomVal = $('split-new-room')?.value;
-        const assignedNewRooms = newRoomVal ? [newRoomVal] : (orig.rooms || [orig.room]);
-
-        const splitConfirmBtn = document.querySelector('#split-modal button.bg-orange-600');
-        if (splitConfirmBtn) { splitConfirmBtn.disabled = true; splitConfirmBtn.innerText = "Splitting..."; }
-
-        const db = getDb();
-        const appId = getAppId();
-        const { collection, doc, updateDoc, setDoc } = getFs();
-
-        try {
-            const origRef = doc(db, 'artifacts', appId, 'public', 'data', 'staff', currentId);
-            const linkCode = orig.linkedId || Math.random().toString(36).substr(2, 6).toUpperCase();
-
-            // 1. Shorten original booking segment
-            await updateDoc(origRef, {
-                checkOut: splitDate,
-                linkedId: linkCode,
-                notes: (`[SPLIT SEGMENT 1] Linked: ${linkCode}\n` + (orig.notes || '')).trim()
-            });
-
-            // 2. Create second segment with $0 due (absorbed into parent)
-            const newDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
-            const newSegment = {
-                ...orig,
-                id: newDocRef.id,
-                checkIn: splitDate,
-                checkOut: orig.checkOut,
-                room: assignedNewRooms[0] || "",
-                rooms: assignedNewRooms,
-                totalPrice: 0,
-                netPrice: 0,
-                payments: [],
-                extraCharges: [],
-                linkedId: linkCode,
-                notes: (`[SPLIT SEGMENT 2] Moved from ${orig.checkIn}. Linked: ${linkCode}\n` + (orig.notes || '')).trim(),
-                createdAt: new Date().toISOString(),
-                auditLog: [{ ts: new Date().toISOString(), user: window.currentUserEmail || 'admin', msg: `Created split segment from ${currentId}` }]
-            };
-
-            await setDoc(newDocRef, newSegment);
-
-            if (window.closeModal) window.closeModal('split-modal');
-            window.closeGuestModal();
-            window.showAlert(`Stay split successfully!\n\nSegment 1: ${orig.checkIn} → ${splitDate}\nSegment 2: ${splitDate} → ${orig.checkOut}\nLink Code: ${linkCode}`);
-        } catch (e) {
-            console.error("Split Error", e);
-            window.showAlert("Split failed: " + e.message);
-        } finally {
-            if (splitConfirmBtn) { splitConfirmBtn.disabled = false; splitConfirmBtn.innerText = "Split"; }
-        }
-    };
-
-    window.requestMerge = () => {
-        const currentId = $('guest-id')?.value;
-        if (!currentId) return window.showAlert("Please save this booking first before merging.");
-
-        const targetSelect = $('merge-target');
-        if (!targetSelect) return;
-
-        const staffList = getStaff();
-        const curBooking = staffList.find(x => x.id === currentId);
-        if (!curBooking) return;
-
-        const parseFn = window.parseYMD || (str => Date.parse(str));
-        const cInMs = parseFn(curBooking.checkIn);
-        const cOutMs = parseFn(curBooking.checkOut);
         const curProp = getPropId();
+        const staff = getStaff();
+        const linkCode = (s.linkedId || $('link-code')?.value || '').trim().toUpperCase();
 
-        const curFirst = (curBooking.firstName || '').trim().toUpperCase();
-        const curLast = (curBooking.lastName || '').trim().toUpperCase();
-        const curRooms = (curBooking.rooms || [curBooking.room]).filter(Boolean).map(r => r.toUpperCase());
+        let linkedGroup = [];
+        if (linkCode) {
+            linkedGroup = staff.filter(b => {
+                const bProp = window.toCanonicalPropId ? window.toCanonicalPropId(b.property) : b.property;
+                if (bProp !== curProp || b.status === 'cancelled') return false;
+                const bLink = (b.linkedId || '').trim().toUpperCase();
+                return bLink === linkCode || b.id === linkCode || (s.id && bLink === s.id);
+            });
+        }
 
-        // 1. FILTER CANDIDATES: Only bookings immediately preceding, following, or overlapping
-        const candidates = staffList.filter(s => {
-            if (s.id === currentId || s.status === 'cancelled' || s.status === 'noshow') return false;
-            const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-            if (sProp !== curProp) return false;
-            if (!s.checkIn || !s.checkOut) return false;
+        if (linkedGroup.length <= 1 && s.id) {
+            const byId = staff.filter(b => {
+                const bProp = window.toCanonicalPropId ? window.toCanonicalPropId(b.property) : b.property;
+                if (bProp !== curProp || b.status === 'cancelled') return false;
+                return (b.linkedId || '').trim().toUpperCase() === s.id;
+            });
+            if (byId.length > 0) linkedGroup = [s, ...byId];
+        }
 
-            const sInMs = parseFn(s.checkIn);
-            const sOutMs = parseFn(s.checkOut);
+        // Sort chronologically by check-in date
+        linkedGroup.sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
 
-            // Preceding: checkout within +/- 2 days of current check-in
-            const isPreceding = Math.abs(sOutMs - cInMs) <= 86400000 * 2;
-            // Following: checkin within +/- 2 days of current check-out
-            const isFollowing = Math.abs(sInMs - cOutMs) <= 86400000 * 2;
-            // Overlapping stay dates
-            const isOverlapping = sInMs < cOutMs && cInMs < sOutMs;
-
-            return isPreceding || isFollowing || isOverlapping;
-        });
-
-        if (candidates.length === 0) {
-            targetSelect.innerHTML = '<option value="">-- NO ADJACENT BOOKINGS FOUND (PRECEDING/FOLLOWING) --</option>';
-            const modal = $('merge-modal');
-            if (modal) { modal.classList.add('active'); modal.style.display = 'flex'; }
+        if (linkedGroup.length <= 1) {
+            stripe.classList.add('hidden');
+            stripe.innerHTML = '';
             return;
         }
 
-        // 2. SCORE CANDIDATES FOR LOGICAL MATCHING
-        const scoredCandidates = candidates.map(s => {
-            let score = 0;
-            const sFirst = (s.firstName || '').trim().toUpperCase();
-            const sLast = (s.lastName || '').trim().toUpperCase();
-            const sRooms = (s.rooms || [s.room]).filter(Boolean).map(r => r.toUpperCase());
-            const sInMs = parseFn(s.checkIn);
-            const sOutMs = parseFn(s.checkOut);
+        stripe.classList.remove('hidden');
 
-            let reasons = [];
+        let html = `
+            <div class="flex items-center gap-1 shrink-0 pr-2 border-r border-slate-700">
+                <span class="text-amber-400 flex items-center gap-1 text-[10px] font-black uppercase tracking-wider">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    STAY ITINERARY:
+                </span>
+            </div>
+            <div class="flex items-center gap-1 flex-1 overflow-x-auto no-scrollbar py-0.5">
+        `;
 
-            // Matching Name
-            if (curLast && sLast && curLast === sLast) { score += 50; reasons.push("Same Last Name"); }
-            if (curFirst && sFirst && (curFirst.includes(sFirst) || sFirst.includes(curFirst))) { score += 30; reasons.push("Same First Name"); }
+        linkedGroup.forEach((leg, idx) => {
+            const isCurrent = leg.id === s.id;
+            const rList = getRooms(leg).filter(Boolean);
+            const roomName = rList.length > 0 ? rList.join(',') : (leg.room || 'UNASSIGNED');
+            const dIn = leg.checkIn ? leg.checkIn.substr(5) : '??';
+            const dOut = leg.checkOut ? leg.checkOut.substr(5) : '??';
 
-            // Contiguous / Back-to-Back dates
-            if (s.checkOut === curBooking.checkIn) { score += 45; reasons.push("Checked out on arrival date"); }
-            else if (s.checkIn === curBooking.checkOut) { score += 45; reasons.push("Checks in on departure date"); }
+            const pillClass = isCurrent
+                ? 'bg-blue-600 text-white border-blue-400 shadow-md ring-1 ring-white/50 cursor-default'
+                : 'bg-slate-700/80 hover:bg-slate-600 text-slate-300 border-slate-600 cursor-pointer';
 
-            // Matching Room
-            if (sRooms.some(r => curRooms.includes(r))) { score += 20; reasons.push("Same Room"); }
+            html += `
+                <button type="button" onclick="${isCurrent ? '' : `window.editStaff('${leg.id}')`}" class="px-2 py-0.5 rounded border text-[10px] font-black flex items-center gap-1 transition-all whitespace-nowrap shrink-0 ${pillClass}" title="${leg.checkIn} to ${leg.checkOut} (${roomName})">
+                    ${isCurrent ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>' : ''}
+                    <span>Leg ${idx + 1}: ${roomName}</span>
+                    <span class="opacity-70 text-[9px] font-mono">(${dIn}→${dOut})</span>
+                </button>
+            `;
 
-            // Shared Link Code
-            if (s.linkedId && curBooking.linkedId && s.linkedId === curBooking.linkedId) { score += 60; reasons.push("Shared Link Code"); }
-
-            return { s, score, reasonText: reasons.join(', ') };
+            if (idx < linkedGroup.length - 1) {
+                html += `<span class="text-slate-500 font-bold px-0.5">➔</span>`;
+            }
         });
 
-        scoredCandidates.sort((a, b) => b.score - a.score || a.s.checkIn.localeCompare(b.s.checkIn));
+        html += `
+            </div>
+            <div class="flex items-center gap-1 shrink-0 pl-1 border-l border-slate-700">
+                <button type="button" onclick="window.requestSplit()" class="px-1.5 py-0.5 rounded bg-orange-600/80 hover:bg-orange-500 text-white font-black text-[9px] uppercase tracking-wide cursor-pointer transition-colors shadow-sm" title="Split current stay into a new room leg">
+                    + Split Room
+                </button>
+            </div>
+        `;
 
-        // 3. POPULATE DROPDOWN WITH BADGES
-        targetSelect.innerHTML = '<option value="">-- SELECT BOOKING TO ABSORB --</option>';
-        scoredCandidates.forEach((item, idx) => {
-            const { s, score, reasonText } = item;
-            const name = `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Unknown';
-            const roomStr = (s.rooms || [s.room]).filter(Boolean).join(',') || 'Unassigned';
-            const isBest = idx === 0 && score > 0;
-            const badge = isBest ? '⭐ [BEST MATCH]' : (score >= 40 ? '✓ [LOGICAL]' : '');
-            const reasonTag = reasonText ? ` (${reasonText})` : '';
-
-            targetSelect.innerHTML += `<option value="${s.id}" ${isBest ? 'selected' : ''}>${badge} [${roomStr}] ${name} (${s.checkIn} to ${s.checkOut}) - ฿${s.totalPrice || 0}${reasonTag}</option>`;
-        });
-
-        const modal = $('merge-modal');
-        if (modal) {
-            modal.classList.add('active');
-            modal.style.display = 'flex';
-        }
-    };
-
-    window.confirmMerge = async () => {
-        const currentId = $('guest-id')?.value;
-        const targetId = $('merge-target')?.value;
-        if (!targetId || !currentId) return window.showAlert("Please select a booking to absorb.");
-
-        const staffList = getStaff();
-        const sourceDoc = staffList.find(s => s.id === currentId);
-        const targetDoc = staffList.find(s => s.id === targetId);
-        if (!sourceDoc || !targetDoc) return;
-
-        const mergeBtn = $('merge-confirm-btn');
-        if (mergeBtn) { mergeBtn.innerText = "Merging..."; mergeBtn.disabled = true; }
-
-        const db = getDb();
-        const appId = getAppId();
-        const { doc, updateDoc, deleteDoc } = getFs();
-
-        try {
-            const curRef = doc(db, 'artifacts', appId, 'public', 'data', 'staff', currentId);
-            const targetRef = doc(db, 'artifacts', appId, 'public', 'data', 'staff', targetId);
-
-            // Consolidate financials and notes
-            const combinedPayments = [...(sourceDoc.payments || []), ...(targetDoc.payments || [])];
-            const combinedCharges = [...(sourceDoc.extraCharges || []), ...(targetDoc.extraCharges || [])];
-            const newTotal = (Number(sourceDoc.totalPrice) || 0) + (Number(targetDoc.totalPrice) || 0);
-            const newNet = (Number(sourceDoc.netPrice) || 0) + (Number(targetDoc.netPrice) || 0);
-
-            const mergeNote = `\n[MERGED BOOKING ${targetDoc.bookId || targetId}] ${targetDoc.firstName || ''} ${targetDoc.lastName || ''} (${targetDoc.checkIn} to ${targetDoc.checkOut})\n` + (targetDoc.notes || '');
-
-            await updateDoc(curRef, {
-                totalPrice: newTotal,
-                netPrice: newNet,
-                payments: combinedPayments,
-                extraCharges: combinedCharges,
-                notes: ((sourceDoc.notes || '') + '\n' + mergeNote).trim()
-            });
-
-            await deleteDoc(targetRef);
-
-            if (window.closeModal) window.closeModal('merge-modal');
-            window.closeGuestModal();
-            window.showAlert(`Booking merged successfully!\n\nAbsorbed ${targetDoc.firstName || ''} ${targetDoc.lastName || ''} into this booking.\nNew Total: ฿${newTotal}`);
-        } catch (e) {
-            console.error("Merge Error", e);
-            window.showAlert("Merge failed: " + e.message);
-        } finally {
-            if (mergeBtn) { mergeBtn.innerText = "Merge"; mergeBtn.disabled = false; }
-        }
+        stripe.innerHTML = html;
     };
 
     window.editStaff = id => {
@@ -752,28 +539,27 @@
 
             const bId = $('booking-id')?.value.trim() || '';
             const curProp = getPropId();
-            const curLinked = $('link-code')?.value.trim().toUpperCase() || '';
+            const currentLink = $('link-code')?.value.trim().toUpperCase() || '';
 
-            // Duplicate Verification: Permits contiguous split segments with non-overlapping dates or shared link codes
             if (bId) {
+                const parseYMD = window.parseYMD || (s => Date.parse(s));
                 const dupe = getStaff().find(s => {
                     const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
                     const isOcc = window.isOccupyingBooking ? window.isOccupyingBooking(s.status) : (s.status !== 'cancelled');
                     if (sProp !== curProp || s.bookId !== bId || s.id === id || !isOcc) return false;
 
-                    // Allow contiguous or linked split segments
-                    if ((curLinked && s.linkedId && curLinked === s.linkedId) || (s.checkOut <= cI || s.checkIn >= cO)) {
-                        return false;
-                    }
+                    // Allow contiguous or shared linked legs
+                    const isLinkedLeg = (currentLink && s.linkedId && s.linkedId === currentLink) || (s.linkedId === id) || (currentLink === s.id);
+                    const isNonOverlapping = (parseYMD(cI) >= parseYMD(s.checkOut) || parseYMD(cO) <= parseYMD(s.checkIn));
+                    if (isLinkedLeg || isNonOverlapping) return false;
+
                     return true;
                 });
+
                 if (dupe) {
                     if (sB) { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; }
                     if (window.lucide) window.lucide.createIcons();
-                    if (window.closeModal) window.closeModal('email-modal');
-                    window.showAlert(`Duplicate Blocked:\nBooking ID ${bId} already exists in the system!\n\nOpening original record now...`);
-                    setTimeout(() => { if (window.closeAlert) window.closeAlert(); window.editStaff(dupe.id); }, 2500);
-                    return;
+                    return window.showAlert(`Duplicate Blocked:\nBooking ID ${bId} already overlaps with an active booking in the system!`);
                 }
             }
 
@@ -827,7 +613,7 @@
                 source: $('booking-source')?.value || 'direct',
                 bookDate: $('booking-date')?.value || '',
                 bookId: $('booking-id')?.value || '',
-                linkedId: curLinked,
+                linkedId: $('link-code')?.value.trim().toUpperCase() || '',
                 totalPrice: Number($('total-price')?.value) || 0,
                 netPrice: Number($('net-price')?.value) || 0,
                 netOverride: $('net-price')?.dataset.override === 'true',
@@ -884,6 +670,395 @@
         } finally {
             if (sB) { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; }
             if (window.lucide) window.lucide.createIcons();
+        }
+    };
+
+    window.requestDelete = () => {
+        const id = $('guest-id')?.value;
+        if (!id) return;
+
+        window.showAlert("PERMANENTLY DELETE THIS BOOKING?\n\nThis will remove the guest record from your calendar and database.", true, async () => {
+            const btn = $('delete-btn');
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) btn.innerHTML = '...';
+
+            try {
+                const db = getDb();
+                const appId = getAppId();
+                const { doc, deleteDoc } = getFs();
+
+                const staff = getStaff();
+                const target = staff.find(s => s.id === id);
+
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id));
+
+                if (target && window.triggerAutoSync) {
+                    const rL = getRooms(target);
+                    const hotelRooms = getHotelRooms();
+                    const rTypes = Array.from(new Set([
+                        ...rL.map(rId => hotelRooms.find(hr => hr.id === rId)?.type).filter(Boolean),
+                        target.bookedType
+                    ])).filter(Boolean);
+                    window.triggerAutoSync(target.checkIn, target.checkOut, rTypes);
+                }
+
+                window.closeGuestModal();
+                if (window.showAlert) window.showAlert("Booking deleted successfully.");
+            } catch (err) {
+                console.error("Delete Error:", err);
+                window.showAlert("Delete failed: " + err.message);
+            } finally {
+                if (btn) btn.innerHTML = origHtml;
+                if (window.lucide) window.lucide.createIcons();
+            }
+        });
+    };
+
+    window.requestDuplicate = () => {
+        const id = $('guest-id')?.value;
+        if (!id) return;
+
+        const staff = getStaff();
+        const orig = staff.find(s => s.id === id);
+        if (!orig) return;
+
+        const copy = JSON.parse(JSON.stringify(orig));
+        delete copy.id;
+        copy.status = 'new';
+        copy.payments = [];
+        copy.extraCharges = [];
+        copy.notes = `[DUPLICATE OF ${orig.id} - ${orig.bookId || 'DIRECT'}]\n` + (orig.notes || '');
+
+        window.populateStaffForm(copy);
+        $('guest-id').value = '';
+
+        if (window.showAlert) {
+            window.showAlert("Booking duplicated as NEW!\n\nReview the room and dates, then click Save.");
+        }
+    };
+
+    window.requestSplit = () => {
+        const id = $('guest-id')?.value;
+        if (!id) return window.showAlert("Please save this booking first before splitting.");
+
+        const staff = getStaff();
+        const orig = staff.find(s => s.id === id);
+        if (!orig || !orig.checkIn || !orig.checkOut) return;
+
+        const parseYMD = window.parseYMD || (s => Date.parse(s));
+        const sU = parseYMD(orig.checkIn), eU = parseYMD(orig.checkOut);
+        const midMs = sU + Math.round((eU - sU) / 2);
+        const getYmd = window.getLocalYMD || (d => new Date(d).toISOString().split('T')[0]);
+        const defaultSplitDate = getYmd(new Date(midMs));
+
+        const dateInput = $('split-date');
+        if (dateInput) {
+            dateInput.min = orig.checkIn;
+            dateInput.max = orig.checkOut;
+            dateInput.value = defaultSplitDate;
+            dateInput.onchange = () => window.updateSplitRoomDropdown(orig);
+        }
+
+        window.updateSplitRoomDropdown(orig);
+
+        const modal = $('split-modal');
+        if (modal) {
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+        }
+        if (window.lucide) window.lucide.createIcons();
+    };
+
+    window.updateSplitRoomDropdown = orig => {
+        const splitDate = $('split-date')?.value || orig.checkIn;
+        const curProp = getPropId();
+        const hotelRooms = getHotelRooms();
+        const occupied = getOccupiedRooms(splitDate, orig.checkOut, orig.id);
+
+        const container = $('split-room-dropdown-container');
+        if (!container) return;
+
+        const sel = document.createElement('select');
+        sel.id = 'split-next-room';
+        sel.className = 'input-base !text-sm !p-2 cursor-pointer font-bold uppercase';
+
+        let html = '<option value="">-- AUTO-ASSIGN / SAME ROOM TYPE --</option>';
+        hotelRooms.forEach(r => {
+            const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
+            const isOcc = occupied.has(r.id) || occupied.has(normR);
+            html += `<option value="${r.id}" ${isOcc ? 'disabled class="text-slate-400"' : 'class="font-black text-slate-800"'}>ROOM ${r.id} (${r.type || '?'}) ${isOcc ? '[OCCUPIED]' : '[AVAILABLE]'}</option>`;
+        });
+        sel.innerHTML = html;
+
+        container.innerHTML = '';
+        container.appendChild(sel);
+    };
+
+    window.confirmSplit = async () => {
+        const id = $('guest-id')?.value;
+        const splitDate = $('split-date')?.value;
+        const nextRoom = $('split-next-room')?.value || "";
+
+        if (!id || !splitDate) return window.showAlert("Please select a split date.");
+
+        const staff = getStaff();
+        const orig = staff.find(s => s.id === id);
+        if (!orig) return;
+
+        if (splitDate <= orig.checkIn || splitDate >= orig.checkOut) {
+            return window.showAlert("INVALID SPLIT DATE:\nSplit date must be strictly between Arrival and Departure.");
+        }
+
+        const commonLink = orig.linkedId || ('LK' + Math.random().toString(36).substr(2, 5).toUpperCase());
+        const origOut = orig.checkOut;
+        const dbNextRoom = nextRoom ? (window.uiToDbRoom ? window.uiToDbRoom(nextRoom) : nextRoom) : "";
+
+        const newId = Math.random().toString(36).substr(2, 9);
+        const curProp = getPropId();
+        const userEmail = window.currentUserEmail || 'admin';
+        const now = new Date().toISOString();
+
+        const splitSegment = {
+            id: newId,
+            property: curProp,
+            firstName: orig.firstName || '',
+            lastName: orig.lastName || '',
+            status: orig.status || 'future',
+            bookedType: orig.bookedType || '',
+            room: dbNextRoom,
+            rooms: dbNextRoom ? [dbNextRoom] : [],
+            checkIn: splitDate,
+            checkOut: origOut,
+            pax: orig.pax || 1,
+            country: orig.country || '',
+            phone: orig.phone || '',
+            email: orig.email || '',
+            source: orig.source || 'direct',
+            bookDate: orig.bookDate || '',
+            bookId: orig.bookId || '',
+            linkedId: commonLink,
+            totalPrice: 0,
+            netPrice: 0,
+            netOverride: false,
+            badCC: false,
+            payments: [],
+            extraCharges: [],
+            emailConfirm: false,
+            emailPrePost: false,
+            emailSpecial: false,
+            refundability: orig.refundability || 'unknown',
+            upgrade: 'none',
+            rating: 'none',
+            extended: false,
+            notes: `[SPLIT STAY LEG 2 - FROM ${orig.id}]\nMove to room ${nextRoom || 'unassigned'} on ${splitDate}.\n` + (orig.notes || ''),
+            createdAt: now,
+            createdBy: userEmail,
+            lastEditedAt: now,
+            lastEditedBy: userEmail,
+            auditLog: [{ ts: now, user: userEmail, msg: `Created as Split Leg 2 from booking ${orig.id}` }]
+        };
+
+        try {
+            const db = getDb();
+            const appId = getAppId();
+            const { doc, setDoc } = getFs();
+
+            // 1. Shorten leg 1 and tag with commonLink
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
+                checkOut: splitDate,
+                linkedId: commonLink,
+                lastEditedAt: now,
+                lastEditedBy: userEmail
+            }, { merge: true });
+
+            // 2. Save leg 2
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', newId), splitSegment);
+
+            if (window.closeModal) window.closeModal('split-modal');
+
+            // 3. Immediately switch modal to leg 2 to review the move
+            window.editStaff(newId);
+
+            if (window.showAlert) {
+                window.showAlert(`Stay split into linked legs!\n\nLeg 1: ${orig.checkIn} → ${splitDate}\nLeg 2: ${splitDate} → ${origOut} (Room: ${nextRoom || 'Unassigned'})\nLink Code: ${commonLink}`);
+            }
+        } catch (err) {
+            console.error("Split Error:", err);
+            window.showAlert("Split failed: " + err.message);
+        }
+    };
+
+    window.requestMerge = () => {
+        const id = $('guest-id')?.value;
+        if (!id) return window.showAlert("Please save this booking first before merging.");
+
+        const staff = getStaff();
+        const current = staff.find(s => s.id === id);
+        if (!current) return;
+
+        const curProp = getPropId();
+        const parseYMD = window.parseYMD || (s => Date.parse(s));
+        const cIn = parseYMD(current.checkIn);
+        const cOut = parseYMD(current.checkOut);
+        const twoDaysMs = 2 * 86400000;
+
+        const candidates = staff.filter(s => {
+            if (s.id === id || s.status === 'cancelled' || s.status === 'noshow') return false;
+            const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+            if (sProp !== curProp) return false;
+
+            const sIn = parseYMD(s.checkIn);
+            const sOut = parseYMD(s.checkOut);
+
+            const isAdjacentPreceding = Math.abs(cIn - sOut) <= twoDaysMs;
+            const isAdjacentFollowing = Math.abs(cOut - sIn) <= twoDaysMs;
+            const isOverlap = (cIn < sOut && sIn < cOut);
+
+            return isAdjacentPreceding || isAdjacentFollowing || isOverlap;
+        });
+
+        const targetSelect = $('merge-target');
+        if (!targetSelect) return;
+
+        if (candidates.length === 0) {
+            targetSelect.innerHTML = '<option value="">-- NO ADJACENT BOOKINGS FOUND (±2 DAYS) --</option>';
+        } else {
+            const scoredCandidates = candidates.map(c => {
+                let score = 0;
+                const cLast = (current.lastName || '').toUpperCase();
+                const tLast = (c.lastName || '').toUpperCase();
+                if (cLast && tLast && (cLast === tLast || cLast.includes(tLast) || tLast.includes(cLast))) score += 40;
+
+                const cFirst = (current.firstName || '').toUpperCase();
+                const tFirst = (c.firstName || '').toUpperCase();
+                if (cFirst && tFirst && (cFirst === tFirst || cFirst.includes(tFirst) || tFirst.includes(cFirst))) score += 20;
+
+                const sIn = parseYMD(c.checkIn);
+                const sOut = parseYMD(c.checkOut);
+                if (sOut === cIn || sIn === cOut) score += 30;
+
+                const cRooms = getRooms(current);
+                const tRooms = getRooms(c);
+                if (cRooms.some(r => tRooms.includes(r))) score += 15;
+
+                if (current.linkedId && c.linkedId && current.linkedId === c.linkedId) score += 50;
+
+                return { c, score };
+            });
+
+            scoredCandidates.sort((a, b) => b.score - a.score);
+
+            let html = '<option value="">-- SELECT BOOKING TO ABSORB --</option>';
+            scoredCandidates.forEach((item, index) => {
+                const s = item.c;
+                const name = `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Unknown';
+                const dates = `${s.checkIn?.substr(5) || '??'} → ${s.checkOut?.substr(5) || '??'}`;
+                const rNames = getRooms(s).filter(Boolean).join(',') || s.room || 'No Room';
+                const starBadge = (index === 0 && item.score >= 40) ? '⭐ ' : '';
+                html += `<option value="${s.id}" ${index === 0 && item.score >= 40 ? 'selected' : ''}>${starBadge}${name} (${dates} | ${rNames}) [${s.status.toUpperCase()}]</option>`;
+            });
+            targetSelect.innerHTML = html;
+        }
+
+        const modal = $('merge-modal');
+        if (modal) {
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+        }
+        if (window.lucide) window.lucide.createIcons();
+    };
+
+    window.confirmMerge = async () => {
+        const currentId = $('guest-id')?.value;
+        const targetId = $('merge-target')?.value;
+        if (!currentId || !targetId) return window.showAlert("Please select a booking to merge.");
+
+        const staff = getStaff();
+        const currentDoc = staff.find(s => s.id === currentId);
+        const targetDoc = staff.find(s => s.id === targetId);
+
+        if (!currentDoc || !targetDoc) return window.showAlert("Booking record not found.");
+
+        const btn = $('merge-confirm-btn');
+        if (btn) btn.innerText = "Merging...";
+
+        try {
+            const db = getDb();
+            const appId = getAppId();
+            const { doc, setDoc, deleteDoc } = getFs();
+
+            // Combined Payments and Charges
+            const combinedPayments = [...(currentDoc.payments || []), ...(targetDoc.payments || [])];
+            const combinedCharges = [...(currentDoc.extraCharges || []), ...(targetDoc.extraCharges || [])];
+
+            const newTotal = Number(((Number(currentDoc.totalPrice) || 0) + (Number(targetDoc.totalPrice) || 0)).toFixed(2));
+            const newNet = Number(((Number(currentDoc.netPrice) || 0) + (Number(targetDoc.netPrice) || 0)).toFixed(2));
+
+            // Expanded Date Boundaries
+            const newIn = currentDoc.checkIn < targetDoc.checkIn ? currentDoc.checkIn : targetDoc.checkIn;
+            const newOut = currentDoc.checkOut > targetDoc.checkOut ? currentDoc.checkOut : targetDoc.checkOut;
+
+            // Combined Rooms
+            const combinedRooms = Array.from(new Set([...getRooms(currentDoc), ...getRooms(targetDoc)].filter(Boolean)));
+
+            const todayStr = new Date().toLocaleDateString('en-GB');
+            const mergeNote = `\n\n[MERGED ON ${todayStr} - ABSORBED ID: ${targetDoc.id} (${targetDoc.bookId || 'DIRECT'})]\nDates: ${targetDoc.checkIn} to ${targetDoc.checkOut} | Rooms: ${getRooms(targetDoc).join(',') || 'None'}\n` + (targetDoc.notes || '');
+
+            const updatedNotes = ((currentDoc.notes || '') + mergeNote).trim();
+
+            const userEmail = window.currentUserEmail || 'admin';
+            const now = new Date().toISOString();
+
+            const updatedCurrent = {
+                ...currentDoc,
+                checkIn: newIn,
+                checkOut: newOut,
+                rooms: combinedRooms,
+                room: combinedRooms[0] || "",
+                totalPrice: newTotal,
+                netPrice: newNet,
+                payments: combinedPayments,
+                extraCharges: combinedCharges,
+                notes: updatedNotes,
+                lastEditedAt: now,
+                lastEditedBy: userEmail
+            };
+
+            // 1. Update Current Document in Firestore
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', currentId), updatedCurrent, { merge: true });
+
+            // 2. Delete Absorbed Document
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', targetId));
+
+            if (window.closeModal) window.closeModal('merge-modal');
+
+            // 3. Refresh Form with merged data
+            window.populateStaffForm(updatedCurrent);
+
+            if (window.showAlert) {
+                window.showAlert(`Bookings Merged Successfully!\n\nAbsorbed ${targetDoc.firstName} ${targetDoc.lastName}.\nStay dates: ${newIn} → ${newOut}\nTotal: ฿${newTotal}`);
+            }
+        } catch (err) {
+            console.error("Merge Error:", err);
+            window.showAlert("Merge failed: " + err.message);
+        } finally {
+            if (btn) btn.innerText = "Merge";
+            if (window.lucide) window.lucide.createIcons();
+        }
+    };
+
+    window.resetGuestForm = () => {
+        const gForm = $('guest-form');
+        if (gForm) gForm.reset();
+        const gId = $('guest-id');
+        if (gId) gId.value = '';
+    };
+
+    window.closeModal = id => {
+        const m = $(id);
+        if (m) {
+            m.classList.remove('active');
+            m.style.display = 'none';
         }
     };
 })();
