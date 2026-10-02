@@ -10,12 +10,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Core External PMS Modules -->
+    <script src="https://loren-6q.github.io/PMS/pms-core.js"></script>
     <script src="https://loren-6q.github.io/PMS/pms-folio.js"></script>
     <script src="https://loren-6q.github.io/PMS/pms-tm30.js"></script>
     <script src="https://loren-6q.github.io/PMS/pms-db.js"></script>
     <script src="https://loren-6q.github.io/PMS/pms-calendar.js"></script>
     <script src="https://loren-6q.github.io/PMS/pms-booking.js"></script>
     <script src="https://loren-6q.github.io/PMS/parser.js"></script>
+    <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 </head>
 
@@ -60,8 +62,9 @@
                 </div>
                 
                 <div class="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-0 sm:ml-1">
-                    <a href="scan.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-amber-600 bg-white border border-slate-200 hover:bg-amber-50 rounded shadow-sm transition-colors cursor-pointer" title="Mobile Passport Scanner"><i data-lucide="scan" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
+                    <!-- Swapped: Import Booking now comes before Scanner -->
                     <button onclick="window.openEmailParserModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-purple-600 bg-white border border-slate-200 hover:bg-purple-50 rounded shadow-sm transition-colors cursor-pointer" title="Import Booking"><i data-lucide="mail-plus" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                    <a href="scan.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-amber-600 bg-white border border-slate-200 hover:bg-amber-50 rounded shadow-sm transition-colors cursor-pointer" title="Mobile Passport Scanner"><i data-lucide="scan" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
                     <button onclick="window.openPriceCheckModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-pink-600 bg-white border border-slate-200 hover:bg-pink-50 rounded shadow-sm transition-colors cursor-pointer" title="Price Check"><i data-lucide="tag" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
                     <a href="sync.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-blue-600 bg-white border border-slate-200 hover:bg-blue-50 rounded shadow-sm transition-colors cursor-pointer" title="OTA Sync"><i data-lucide="refresh-cw" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
                     <a href="tm30.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-emerald-600 bg-white border border-slate-200 hover:bg-emerald-50 rounded shadow-sm transition-colors cursor-pointer" title="TM30 Dashboard"><i data-lucide="id-card" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
@@ -322,15 +325,13 @@
         const db = getFirestore(app);
         const functions = getFunctions(app, 'asia-southeast1');
 
-        const PROP_MAP = { 'LOUD': 'loud_samui', 'WET': 'wet_pool', 'SWIMS': 'swims_resort' };
-        const PROP_REVERSE_MAP = { 'loud_samui': 'LOUD', 'wet_pool': 'WET', 'swims_resort': 'SWIMS' };
-
         let initialP = null;
         try { initialP = new URLSearchParams(window.location.search).get('p')?.toUpperCase(); } catch (e) {}
         let storedProp = null;
         try { storedProp = localStorage.getItem('last_prop'); } catch (e) {}
 
-        let currentPropertyId = PROP_MAP[initialP] || storedProp || 'swims_resort';
+        const rawPropCandidate = initialP || storedProp || 'swims_resort';
+        let currentPropertyId = window.toCanonicalPropId ? window.toCanonicalPropId(rawPropCandidate) : rawPropCandidate;
         try { localStorage.setItem('last_prop', currentPropertyId); } catch (e) {}
 
         let currentUserRole = null, currentUserEmail = 'unknown';
@@ -343,8 +344,8 @@
         window.activeExtraCharges = [];
         window.viewStart = viewStart;
 
-        const parseYMD = str => { if (!str || typeof str !== 'string') return 0; const p = str.split('-'); return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); };
-        const getLocalYMD = d => {
+        const parseYMD = window.parseYMD || (str => { if (!str || typeof str !== 'string') return 0; const p = str.split('-'); return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); });
+        const getLocalYMD = window.getLocalYMD || (d => {
             if (!d) d = new Date();
             if (typeof d === 'string') {
                 const trimmed = d.trim();
@@ -359,10 +360,11 @@
             } catch (e) {
                 return new Date().toISOString().split('T')[0];
             }
-        };
+        });
 
         const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
         const dbToUiRoom = rid => {
+            if (window.normalizeRoomId) return window.normalizeRoomId(rid, currentPropertyId);
             if (!rid) return rid;
             let nid = rid.toUpperCase();
             if (hotelRooms.some(r => r.id === nid || r.id === rid)) return rid;
@@ -393,8 +395,6 @@
         window.getRooms = getRooms;
         window.uiToDbRoom = uiToDbRoom;
         window.dbToUiRoom = dbToUiRoom;
-        window.PROP_MAP = PROP_MAP;
-        window.PROP_REVERSE_MAP = PROP_REVERSE_MAP;
         window.getCurrentPropertyId = () => currentPropertyId;
         window.getHotelRooms = () => hotelRooms;
         window.getStaff = () => staff;
@@ -414,8 +414,17 @@
             return changes.length > 0 ? changes.join(' | ') : "Saved without major changes.";
         };
 
+        window.openEmailParserModal = () => {
+            const m = $('email-modal');
+            if (m) {
+                m.classList.add('active');
+                m.style.display = 'flex';
+                setTimeout(() => $('email-textarea')?.focus(), 50);
+            }
+        };
+
         window.updateNavLinks = shortKey => {
-            const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
+            const key = shortKey || (window.toDisplayPropKey ? window.toDisplayPropKey(currentPropertyId) : 'SWIMS');
             document.querySelectorAll('a[href*=".html"]').forEach(a => {
                 const href = a.getAttribute('href');
                 if (!href) return;
@@ -425,7 +434,7 @@
         };
 
         window.syncPropertyUrl = propId => {
-            const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
+            const shortKey = window.toDisplayPropKey ? window.toDisplayPropKey(propId) : 'SWIMS';
             try {
                 if (window.location.protocol !== 'blob:') {
                     const url = new URL(window.location.href);
@@ -511,9 +520,9 @@
             if (!propId || propId === currentPropertyId) return;
             $('boot-loader').style.display = 'flex';
             $('sync-status').innerText = 'Switching Property...';
-            currentPropertyId = propId;
-            try { localStorage.setItem('last_prop', propId); } catch (e) {}
-            window.syncPropertyUrl(propId);
+            currentPropertyId = window.toCanonicalPropId ? window.toCanonicalPropId(propId) : propId;
+            try { localStorage.setItem('last_prop', currentPropertyId); } catch (e) {}
+            window.syncPropertyUrl(currentPropertyId);
             await loadPropertyConfig();
             if (window.render) window.render();
             if (window.renderDashboard) window.renderDashboard();
@@ -545,7 +554,10 @@
             $('dash-date-display').innerText = todayStr;
             const arr = [], dep = [], stay = [], act = [];
 
-            const sortedStaff = [...staff].filter(x => x.property === currentPropertyId).sort((a, b) => {
+            const sortedStaff = [...staff].filter(x => {
+                const xProp = window.toCanonicalPropId ? window.toCanonicalPropId(x.property) : x.property;
+                return xProp === currentPropertyId;
+            }).sort((a, b) => {
                 let ra = a.rooms?.[0] || a.room || 'ZZZ';
                 let rb = b.rooms?.[0] || b.room || 'ZZZ';
                 return ra.localeCompare(rb);
