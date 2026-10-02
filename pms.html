@@ -17,6 +17,7 @@
     <script src="https://loren-6q.github.io/PMS/pms-calendar.js"></script>
     <script src="https://loren-6q.github.io/PMS/pms-booking.js"></script>
     <script src="https://loren-6q.github.io/PMS/parser.js"></script>
+    <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 </head>
 
@@ -61,6 +62,7 @@
                 </div>
                 
                 <div class="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-0 sm:ml-1">
+                    <!-- Import Booking before Scanner -->
                     <button onclick="window.openEmailParserModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-purple-600 bg-white border border-slate-200 hover:bg-purple-50 rounded shadow-sm transition-colors cursor-pointer" title="Import Booking"><i data-lucide="mail-plus" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
                     <a href="scan.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-amber-600 bg-white border border-slate-200 hover:bg-amber-50 rounded shadow-sm transition-colors cursor-pointer" title="Mobile Passport Scanner"><i data-lucide="scan" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
                     <button onclick="window.openPriceCheckModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-pink-600 bg-white border border-slate-200 hover:bg-pink-50 rounded shadow-sm transition-colors cursor-pointer" title="Price Check"><i data-lucide="tag" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
@@ -510,7 +512,8 @@
 
         window.handlePropertySwitch = async propId => {
             if (!propId || propId === currentPropertyId) return;
-            $('boot-loader').style.display = 'flex';$('sync-status').innerText = 'Switching Property...';
+            $('boot-loader').style.display = 'flex';
+            $('sync-status').innerText = 'Switching Property...';
             currentPropertyId = propId;
             try { localStorage.setItem('last_prop', propId); } catch (e) {}
             window.syncPropertyUrl(propId);
@@ -522,73 +525,19 @@
         };
 
         // ==========================================================================
-        // 🚀 DEVELOPMENT STAGING DOCK
+        // 🚀 DEVELOPMENT STAGING DOCK: PASTE MODULE CODE HERE TO TEST IN CANVAS
+        // Any functions pasted here immediately override the external scripts.
+        // When finished testing in Canvas, cut it out and paste into the external .js file.
         // ==========================================================================
 
-        window.openEmailParserModal = function() {
-            const txt = document.getElementById('email-textarea');
-            if (txt) txt.value = '';
-            const modal = document.getElementById('email-modal');
-            if (modal) {
-                modal.classList.add('active');
-                modal.style.display = 'flex';
-                setTimeout(() => txt?.focus(), 100);
-            }
-        };
 
-        window.parseEmail = function() {
-            const txt = document.getElementById('email-textarea');
-            const raw = txt ? txt.value : '';
-            if (!raw || !raw.trim()) {
-                if (window.showAlert) window.showAlert("Please paste booking text first.");
-                return;
-            }
 
-            if (typeof window.extractBookingData !== 'function') {
-                if (window.showAlert) window.showAlert("Parser engine (parser.js) is not loaded.");
-                return;
-            }
 
-            const res = window.extractBookingData(raw);
-            if (!res || !res.s) {
-                if (window.showAlert) window.showAlert("Could not extract booking data from text.");
-                return;
-            }
 
-            const s = res.s;
 
-            if (res.summary) {
-                s.notes = (res.summary + (s.notes ? '\n\n' : '') + (s.notes || '')).trim();
-            }
 
-            if (txt) txt.value = '';
-            if (window.closeModal) window.closeModal('email-modal');
 
-            const gId = document.getElementById('guest-id');
-            if (gId) gId.value = '';
 
-            if ((!s.rooms || s.rooms.length === 0) && s.bookedType) {
-                if (typeof window.suggestAvailableRoom === 'function') {
-                    const assigned = window.suggestAvailableRoom(s.bookedType, s.checkIn, s.checkOut, s.pax || 1, s.units || 1);
-                    if (assigned && assigned.length > 0) {
-                        s.rooms = assigned;
-                        s.room = assigned[0];
-                    }
-                }
-            }
-
-            if (typeof window.populateStaffForm === 'function') {
-                window.populateStaffForm(s);
-            }
-
-            const gModal = document.getElementById('guest-modal');
-            if (gModal) {
-                gModal.classList.add('active');
-                gModal.style.display = 'flex';
-            }
-
-            if (window.lucide) window.lucide.createIcons();
-        };
 
         // ==========================================================================
         // 🚀 END DEVELOPMENT STAGING DOCK
@@ -652,9 +601,12 @@
         };
 
         window.switchTab = t => {
-            $('dashboard-view').style.display = t === 'dashboard' ? 'flex' : 'none';$('calendar-view').style.display = t === 'calendar' ? 'flex' : 'none';
-            $('database-view').style.display = t === 'database' ? 'flex' : 'none';$('tab-dash').classList.toggle('active', t === 'dashboard');
-            $('tab-cal').classList.toggle('active', t === 'calendar');$('tab-db').classList.toggle('active', t === 'database');
+            $('dashboard-view').style.display = t === 'dashboard' ? 'flex' : 'none';
+            $('calendar-view').style.display = t === 'calendar' ? 'flex' : 'none';
+            $('database-view').style.display = t === 'database' ? 'flex' : 'none';
+            $('tab-dash').classList.toggle('active', t === 'dashboard');
+            $('tab-cal').classList.toggle('active', t === 'calendar');
+            $('tab-db').classList.toggle('active', t === 'database');
 
             const ctxCal = $('context-tools-cal');
             if (ctxCal) {
@@ -677,10 +629,64 @@
                 });
                 window.staff = staff;
 
-                const base = ["France", "Germany", "United Kingdom", "United States", "Australia", "Netherlands", "Israel", "Spain", "Italy", "Switzerland", "Canada", "Sweden", "Denmark", "Russia", "Thailand", "Belgium", "Austria", "Ireland", "Norway", "Finland", "Brazil", "Argentina", "South Korea", "Japan", "China", "India", "Mexico", "New Zealand", "South Africa", "Portugal", "Greece"];
-                const dbC = staff.map(s => s.country).filter(Boolean).map(c => c.length > 2 ? c.charAt(0).toUpperCase() + c.slice(1).toLowerCase() : c);
+                // Canonical country normalizer map to filter legacy dirty database records
+                const COUNTRY_CANONICAL = {
+                    'US': 'United States', 'USA': 'United States', 'UNITED STATES': 'United States',
+                    'UK': 'United Kingdom', 'GB': 'United Kingdom', 'UNITED KINGDOM': 'United Kingdom',
+                    'TH': 'Thailand', 'THAILAND': 'Thailand',
+                    'DE': 'Germany', 'GERMAN': 'Germany', 'GERMANY': 'Germany',
+                    'FR': 'France', 'FRENCH': 'France', 'FRANCE': 'France',
+                    'IL': 'Israel', 'ISRAEL': 'Israel',
+                    'AU': 'Australia', 'AUSTRALIA': 'Australia',
+                    'NL': 'Netherlands', 'NETHERLANDS': 'Netherlands',
+                    'ES': 'Spain', 'SPAIN': 'Spain',
+                    'IT': 'Italy', 'ITALY': 'Italy',
+                    'CH': 'Switzerland', 'SWITZERLAND': 'Switzerland',
+                    'CA': 'Canada', 'CANADA': 'Canada',
+                    'SE': 'Sweden', 'SWEDEN': 'Sweden',
+                    'DK': 'Denmark', 'DENMARK': 'Denmark',
+                    'RU': 'Russia', 'RUSSIA': 'Russia',
+                    'BE': 'Belgium', 'BELGIUM': 'Belgium',
+                    'AT': 'Austria', 'AUSTRIA': 'Austria',
+                    'IE': 'Ireland', 'IRELAND': 'Ireland',
+                    'NO': 'Norway', 'NORWAY': 'Norway',
+                    'FI': 'Finland', 'FINLAND': 'Finland',
+                    'BR': 'Brazil', 'BRAZIL': 'Brazil',
+                    'AR': 'Argentina', 'ARGENTINA': 'Argentina',
+                    'KR': 'South Korea', 'SOUTH KOREA': 'South Korea', 'SOUHT KOREA': 'South Korea',
+                    'JP': 'Japan', 'JAPAN': 'Japan',
+                    'CN': 'China', 'CHINA': 'China',
+                    'IN': 'India', 'INDIA': 'India',
+                    'MX': 'Mexico', 'MEXICO': 'Mexico',
+                    'NZ': 'New Zealand', 'NEW ZEALAND': 'New Zealand',
+                    'ZA': 'South Africa', 'SOUTH AFRICA': 'South Africa',
+                    'PT': 'Portugal', 'PORTUGAL': 'Portugal',
+                    'GR': 'Greece', 'GREECE': 'Greece',
+                    'TR': 'Turkey', 'TURKEY': 'Turkey', 'TURKIYE': 'Turkey',
+                    'HK': 'Hong Kong', 'HONG KONG': 'Hong Kong',
+                    'BY': 'Belarus', 'BELARUS': 'Belarus',
+                    'DZ': 'Algeria', 'ALGERIENNE': 'Algeria', 'ALGERIA': 'Algeria'
+                };
+
+                const cleanCountryList = new Set([
+                    "Argentina", "Australia", "Austria", "Belarus", "Belgium", "Brazil", "Canada",
+                    "China", "Denmark", "Finland", "France", "Germany", "Greece", "Hong Kong",
+                    "India", "Ireland", "Israel", "Italy", "Japan", "Mexico", "Netherlands",
+                    "New Zealand", "Norway", "Portugal", "Russia", "South Africa", "South Korea",
+                    "Spain", "Sweden", "Switzerland", "Thailand", "Turkey", "United Kingdom", "United States"
+                ]);
+
+                // Map database entries through canonical dictionary and drop corrupt entries (e.g. "Folio no")
+                staff.forEach(s => {
+                    if (!s.country) return;
+                    const rawUpper = s.country.trim().toUpperCase();
+                    if (COUNTRY_CANONICAL[rawUpper]) {
+                        cleanCountryList.add(COUNTRY_CANONICAL[rawUpper]);
+                    }
+                });
+
                 const dl = $('country-list');
-                if (dl) dl.innerHTML = [...new Set([...base, ...dbC])].sort().map(c => `<option value="${c}"></option>`).join('');
+                if (dl) dl.innerHTML = Array.from(cleanCountryList).sort().map(c => `<option value="${c}"></option>`).join('');
 
                 if ($('calendar-view')?.style.display !== 'none' && window.render) window.render();
                 if ($('dashboard-view')?.style.display === 'flex') window.renderDashboard();
@@ -702,7 +708,8 @@
                     currentUserEmail = 'admin';
                     window.currentUserRole = currentUserRole;
                     window.currentUserEmail = currentUserEmail;
-                    $('boot-loader').style.display = 'none';$$('.admin-only').forEach(el => el.classList.remove('hidden'));
+                    $('boot-loader').style.display = 'none';
+                    $$('.admin-only').forEach(el => el.classList.remove('hidden'));
                     await loadPropertyConfig();
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
                         window.showAlert("Database Permission Denied.");
@@ -727,7 +734,8 @@
                         currentUserEmail = userKey;
                         window.currentUserRole = currentUserRole;
                         window.currentUserEmail = currentUserEmail;
-                        $('boot-loader').style.display = 'none';                         if (currentUserRole === 'admin') $$('.admin-only').forEach(el => el.classList.remove('hidden'));
+                        $('boot-loader').style.display = 'none';
+                        if (currentUserRole === 'admin') $$('.admin-only').forEach(el => el.classList.remove('hidden'));
                         await loadPropertyConfig();
                         onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
                             window.showAlert("Database Permission Denied.");
@@ -739,7 +747,12 @@
                 });
             }
 
-            const tBodyEl = $('timeline-body');             tBodyEl.addEventListener('mouseover', e => {                 const col = e.target.closest('.day-column');                 if (col && col.dataset.colIndex !== undefined) {                     const idx = col.dataset.colIndex;                     $$(`[data-col-index="${idx}"]`).forEach(el => el.classList.add('hover-col'));
+            const tBodyEl = $('timeline-body');
+            tBodyEl.addEventListener('mouseover', e => {
+                const col = e.target.closest('.day-column');
+                if (col && col.dataset.colIndex !== undefined) {
+                    const idx = col.dataset.colIndex;
+                    $$(`[data-col-index="${idx}"]`).forEach(el => el.classList.add('hover-col'));
                 }
             });
 
@@ -758,7 +771,11 @@
                 const rId = col.dataset.roomId || "";
                 if (!dStr) return;
 
-                const modal = $('guest-modal');                 const isModalOpen = modal && (modal.classList.contains('active') \vert{}\vert{} window.getComputedStyle(modal).display !== 'none');                 if (isModalOpen) {                     if (rId) {                         const curSelects = Array.from($$('.assigned-room-select'));
+                const modal = $('guest-modal');
+                const isModalOpen = modal && (modal.classList.contains('active') || window.getComputedStyle(modal).display !== 'none');
+                if (isModalOpen) {
+                    if (rId) {
+                        const curSelects = Array.from($$('.assigned-room-select'));
                         const emptySelect = curSelects.find(s => !s.value);
                         if (emptySelect) emptySelect.value = rId;
                         else if (!curSelects.some(s => s.value === rId)) window.addRoomSelect(rId);
