@@ -48,7 +48,6 @@ const parseAnyDateToYMD = (input, defaultYear) => {
     }
 
     // 4. Month Name + Day + (Optional) Year: "November 24, 2026", "Sep 26, 2026", or "Sep 25"
-    // Note: \b(\d{1,2})\b prevents matching the first two digits of a year like 2026 as day 20!
     const mdyMatch = str.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s,]+(\d{1,2})(?:st|nd|rd|th)?\b(?:[\s,]+(\d{4}))?/i);
     if (mdyMatch) {
         const mKey = mdyMatch[1].toLowerCase().slice(0, 3);
@@ -103,6 +102,16 @@ window.extractBookingData = (raw) => {
     else if (rawLower.includes('agoda')) s.source = 'agoda';
     else if (rawLower.includes('airbnb')) s.source = 'airbnb';
     else if (rawLower.includes('trip.com') || rawLower.includes('ctrip')) s.source = 'ctrip';
+
+    const countryMap = { 
+        'IL': 'Israel', 'US': 'United States', 'GB': 'United Kingdom', 'UK': 'United Kingdom', 
+        'FR': 'France', 'DE': 'Germany', 'AU': 'Australia', 'NL': 'Netherlands', 'ES': 'Spain', 
+        'IT': 'Italy', 'CH': 'Switzerland', 'CA': 'Canada', 'SE': 'Sweden', 'DK': 'Denmark', 
+        'RU': 'Russia', 'TH': 'Thailand', 'BE': 'Belgium', 'AT': 'Austria', 'IE': 'Ireland', 
+        'NO': 'Norway', 'FI': 'Finland', 'BR': 'Brazil', 'AR': 'Argentina', 'KR': 'South Korea', 
+        'JP': 'Japan', 'CN': 'China', 'IN': 'India', 'MX': 'Mexico', 'NZ': 'New Zealand', 
+        'ZA': 'South Africa', 'PT': 'Portugal', 'GR': 'Greece' 
+    };
 
     // ---------------------------------------------------------
     // HOSTELWORLD PARSER
@@ -207,19 +216,39 @@ window.extractBookingData = (raw) => {
             let nameLine = lines[gnIdx + 1].trim().replace(/\bGENIUS\b/i, '').trim();
             let nameParts = nameLine.split(/\s+/).filter(Boolean);
             
+            // Check if last token is a 2-letter country code attached by BDC (e.g., "Silas Mund  de")
+            if (nameParts.length > 2 && /^[a-zA-Z]{2}$/.test(nameParts[nameParts.length - 1])) {
+                let cc = nameParts.pop().toUpperCase();
+                s.country = countryMap[cc] || cc;
+            }
+
             s.firstName = nameParts[0] || '';
             s.lastName = nameParts.slice(1).join(' ');
 
-            if (lines.length > gnIdx + 2) {
+            if (!s.country && lines.length > gnIdx + 2) {
                 let potCountry = lines[gnIdx + 2].trim();
                 if (!potCountry.includes('@')) {
                     let match = potCountry.match(/([a-zA-Z]{2})$/);
                     if (match) {
                         let cc = match[1].toUpperCase();
-                        const countryMap = { 'IL': 'Israel', 'US': 'United States', 'GB': 'United Kingdom', 'UK': 'United Kingdom', 'FR': 'France', 'DE': 'Germany', 'AU': 'Australia', 'NL': 'Netherlands', 'ES': 'Spain', 'IT': 'Italy', 'CH': 'Switzerland', 'CA': 'Canada', 'SE': 'Sweden', 'DK': 'Denmark', 'RU': 'Russia', 'TH': 'Thailand', 'BE': 'Belgium', 'AT': 'Austria', 'IE': 'Ireland', 'NO': 'Norway', 'FI': 'Finland', 'BR': 'Brazil', 'AR': 'Argentina', 'KR': 'South Korea', 'JP': 'Japan', 'CN': 'China', 'IN': 'India', 'MX': 'Mexico', 'NZ': 'New Zealand', 'ZA': 'South Africa', 'PT': 'Portugal', 'GR': 'Greece' };
                         s.country = countryMap[cc] || cc;
                     }
                 }
+            }
+        }
+
+        // Language fallback for country if not yet set
+        if (!s.country) {
+            let langIdx = lines.findIndex(l => l === 'Preferred language');
+            if (langIdx > -1 && lines.length > langIdx + 1) {
+                let lang = lines[langIdx + 1].toLowerCase();
+                if (lang.includes('german')) s.country = 'Germany';
+                else if (lang.includes('french')) s.country = 'France';
+                else if (lang.includes('hebrew')) s.country = 'Israel';
+                else if (lang.includes('spanish')) s.country = 'Spain';
+                else if (lang.includes('italian')) s.country = 'Italy';
+                else if (lang.includes('dutch')) s.country = 'Netherlands';
+                else if (lang.includes('russian')) s.country = 'Russia';
             }
         }
 
@@ -284,12 +313,10 @@ window.extractBookingData = (raw) => {
     } else if (s.source === 'agoda') {
         const flatRaw = normalized.replace(/\s+/g, ' ');
 
-        // 1. Booking ID
         let bIdMatch = normalized.match(/(?:Booking\s*ID|Booking\s*Reference(?:\s*No\.?)?|Reference\s*ID)\s*:?\s*(\d{7,15})/i)
                     || flatRaw.match(/Booking\s*ID\s*(\d{7,15})/i);
         if (bIdMatch) s.bookId = bIdMatch[1];
 
-        // 2. Guest Name
         let nameMatch = normalized.match(/Customer\s*First\s*Name\s*:?\s*([A-Za-z\u00C0-\u024F\s\-'\.]+?)\s*Customer\s*Last\s*Name\s*:?\s*([A-Za-z\u00C0-\u024F\s\-'\.]+?)(?:Country\s*of\s*Residence|Check-in|Other\s*Guests|\n|City|$)/i);
         if (nameMatch) {
             s.firstName = nameMatch[1].trim();
@@ -319,13 +346,11 @@ window.extractBookingData = (raw) => {
             }
         }
 
-        // 3. Country of Residence
         let countryMatch = normalized.match(/Country\s*of\s*Residence\s*:?\s*([A-Za-z\s]+?)(?:Check-in|Check-out|City|Other\s*Guests|Room\s*Type|\n|$)/i);
         if (countryMatch) {
             s.country = countryMatch[1].trim();
         }
 
-        // 4. Check-in & Check-out Dates
         let ciMatch = normalized.match(/Check-in\s*(?:Date)?\s*:?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i);
         if (ciMatch) {
             s.checkIn = parseAnyDateToYMD(ciMatch[1]);
@@ -336,7 +361,6 @@ window.extractBookingData = (raw) => {
             s.checkOut = parseAnyDateToYMD(coMatch[1]);
         }
 
-        // 5. Booking Date
         let bdMatch = normalized.match(/agoda\.com\s*<no-reply@agoda\.com>[\s\S]{0,120}?(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)?,?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i)
                    || normalized.match(/Booked\s*on\s*:?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i);
         if (bdMatch) {
@@ -344,14 +368,12 @@ window.extractBookingData = (raw) => {
         }
         if (!s.bookDate) s.bookDate = safeGetLocalYMD();
 
-        // 6. Occupancy / Pax
         let paxMatch = normalized.match(/(\d+)\s*Adult/i);
         if (paxMatch) {
             let pStr = paxMatch[1];
             s.pax = parseInt(pStr.length > 1 ? pStr.slice(-1) : pStr) || 1;
         }
 
-        // 7. Room Type
         let rtMatch = normalized.match(/No\.\s*of\s*Extra\s*Bed\s*([\s\S]+?)(?:\(null\))?\s*\d*\s*\d+\s*Adult/i)
                    || normalized.match(/Room\s*Type\s*:?\s*([\s\S]+?)(?:\(null\))?\s*(?:No\.\s*of\s*Rooms|Occupancy|\d+\s*Adult)/i);
         if (rtMatch) {
@@ -367,7 +389,6 @@ window.extractBookingData = (raw) => {
             }
         }
 
-        // 8. Financials: Total Price and Net Payout
         let sellMatch = normalized.match(/Reference\s*sell\s*rate[^\d]*([\d,]+(?:\.\d+)?)/i)
                      || normalized.match(/Total\s*(?:Price|Amount)?[^\d]*([\d,]+(?:\.\d+)?)/i);
         let netMatch = normalized.match(/Net\s*rate[^\d]*([\d,]+(?:\.\d+)?)/i)
@@ -410,12 +431,10 @@ window.extractBookingData = (raw) => {
     } else if (s.source === 'expedia') {
         const flatRaw = normalized.replace(/\s+/g, ' ');
 
-        // 1. Booking ID (Reservation ID)
         let idMatch = normalized.match(/Reservation\s*ID\s*:?\s*(\d{8,14})/i)
                    || flatRaw.match(/Reservation\s*ID\s*:?\s*(\d{8,14})/i);
         if (idMatch) s.bookId = idMatch[1];
 
-        // 2. Guest Name
         let guestMatch = normalized.match(/Guest\s*:\s*([A-Za-z\u00C0-\u024F\s\-'\.]+?)(?:Booked\s*on|Guest\s*Email|Room\s*Type|\n|$)/i);
         if (guestMatch) {
             let rawName = guestMatch[1].replace(/^(?:mr\.|mrs\.|ms\.|miss|dr\.)\s+/i, '').trim();
@@ -428,27 +447,23 @@ window.extractBookingData = (raw) => {
             }
         }
 
-        // 3. Guest Email & Phone
         let emailMatch = normalized.match(/Guest\s*Email\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
         if (emailMatch) s.email = emailMatch[1].trim();
 
         let phoneMatch = normalized.match(/(?:PST|PDT|AM|PM)\s*(\+?[\d\s()\-]{7,25})\s*Guest\s*Email/i);
         if (phoneMatch) s.phone = phoneMatch[1].trim();
 
-        // 4. Book Date
         let bdMatch = normalized.match(/Booked\s*on\s*:?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i);
         if (bdMatch) {
             s.bookDate = parseAnyDateToYMD(bdMatch[1]);
         }
         if (!s.bookDate) s.bookDate = safeGetLocalYMD();
 
-        // 5. Room Type Name
         let rtMatch = normalized.match(/Room\s*Type\s*Name\s*:?\s*([\s\S]+?)(?:Pricing\s*Model|Payment\s*Instructions|Check-In|Rate\s*Code|Daily\s*Base\s*Rate|\n|$)/i);
         if (rtMatch) {
             s.bookedType = rtMatch[1].replace(/\r?\n/g, ' ').trim();
         }
 
-        // 6. Check-In & Check-Out Dates
         const mPattern = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
         const dateSectionRegex = new RegExp(`Check-In[\\s\\S]{0,120}?Check-Out[\\s\\S]{0,120}?(${mPattern}\\s+\\d{1,2},?\\s+\\d{4})\\s*(${mPattern}\\s+\\d{1,2},?\\s+\\d{4})(\\d{1,3})?`, 'i');
         
@@ -473,13 +488,11 @@ window.extractBookingData = (raw) => {
             if (singleOut) s.checkOut = parseAnyDateToYMD(singleOut[1]);
         }
 
-        // 7. Adults / PAX Fallback
         if (!s.pax || s.pax === 1) {
             let paxMatch = normalized.match(/Adults\s*:?\s*(\d+)/i) || flatRaw.match(/(\d+)\s*Adult/i);
             if (paxMatch) s.pax = Math.max(1, parseInt(paxMatch[1]) || 1);
         }
 
-        // 8. Financials
         let totalMatch = normalized.match(/Total\s*Booking\s*Amount\s*:?\s*([\d,]+(?:\.\d+)?)/i)
                       || flatRaw.match(/Total\s*(?:Booking\s*Amount|Amount)?[^\d]*([\d,]+(?:\.\d+)?)\s*(?:THB|USD|EUR|GBP|฿|\$)/i);
         let netMatch = normalized.match(/Amount\s*to\s*Charge\s*Expedia\s*Group\s*:?\s*([\d,]+(?:\.\d+)?)/i)
@@ -496,7 +509,6 @@ window.extractBookingData = (raw) => {
             s.totalPrice = Number((netAmt / 0.82).toFixed(2));
         }
 
-        // 9. Prepayments & Collection Status
         let isExpediaCollect = rawLower.includes('expedia collects payment') || 
                                rawLower.includes('guest has pre-paid') || 
                                rawLower.includes('hotel invoices expedia');
@@ -527,7 +539,6 @@ window.extractBookingData = (raw) => {
     } else if (raw.toLowerCase().includes('airbnb') || s.source === 'airbnb') {
         s.source = 'airbnb';
 
-        // 1. Booking ID
         let idIdx = lines.findIndex(l => l.includes('Confirmation code'));
         if (idIdx > -1 && lines.length > idIdx + 1) {
             s.bookId = lines[idIdx + 1].trim();
@@ -536,7 +547,6 @@ window.extractBookingData = (raw) => {
             if (idM) s.bookId = idM[1];
         }
 
-        // 2. Guest Name
         let nameM = raw.match(/Reservation confirmed - (.*?)\s+arrives/i) || raw.match(/New booking confirmed![\s\S]*?\n[\s\S]*?\n(.*?)(?:\n|Identity)/i);
         if (nameM) {
             let parts = nameM[1].trim().split(' ');
@@ -544,7 +554,6 @@ window.extractBookingData = (raw) => {
             s.lastName = parts.slice(1).join(' ') || 'GUEST';
         }
 
-        // 3. Country
         let countryMatch = raw.match(/Identity verified.*?\n(.*?)\n/i);
         if (countryMatch) {
             let locationString = countryMatch[1].trim();
@@ -552,7 +561,6 @@ window.extractBookingData = (raw) => {
             s.country = locParts[locParts.length - 1].trim();
         }
 
-        // 4. Book Date
         let bookDateMatch = raw.match(/Airbnb\s*\n(.*?)\n/i);
         if (bookDateMatch) {
             let timeString = bookDateMatch[1].trim();
@@ -566,7 +574,6 @@ window.extractBookingData = (raw) => {
 
         const refYear = parseInt((s.bookDate || '').split('-')[0]) || (new Date()).getFullYear();
 
-        // 5. Check-In & 6. Check-Out
         let ciIdx = lines.findIndex(l => l.includes('Check-in') || l.includes('Check in'));
         if (ciIdx > -1 && lines.length > ciIdx + 1) {
             let dateStr = lines[ciIdx + 1].replace(/^[A-Za-z]{3},\s*/, '').trim();
@@ -579,7 +586,6 @@ window.extractBookingData = (raw) => {
             s.checkOut = parseAnyDateToYMD(dateStr, refYear);
         }
 
-        // Handle year boundary transitions (e.g., booking made in late Dec for early Jan)
         if (s.checkIn && s.bookDate && s.checkIn < s.bookDate) {
             const p = s.checkIn.split('-');
             s.checkIn = `${parseInt(p[0]) + 1}-${p[1]}-${p[2]}`;
@@ -589,14 +595,12 @@ window.extractBookingData = (raw) => {
             s.checkOut = `${parseInt(p[0]) + 1}-${p[1]}-${p[2]}`;
         }
 
-        // 7. PAX
         let paxIdx = lines.findIndex(l => l.includes('Guests'));
         if (paxIdx > -1 && lines.length > paxIdx + 1) {
              let paxMatch = lines[paxIdx + 1].match(/(\d+)/);
              if (paxMatch) s.pax = parseInt(paxMatch[1]);
         }
 
-        // 8. Prices (Gross and Net) & Payments
         let totIdx = lines.findIndex(l => l.toLowerCase().includes('total (thb)') || l.toLowerCase() === 'total');
         if (totIdx > -1 && lines.length > totIdx + 1) {
             let totMatch = lines[totIdx + 1].match(/[\d,]+\.\d{2}/);
@@ -619,7 +623,6 @@ window.extractBookingData = (raw) => {
             s.payments.push({ date: payDate, amt: Number(commAmt.toFixed(2)), method: 'airbnb-kp' });
         }
 
-        // 9. Booked Room Type
         let rtIdx = lines.findIndex(l => l.includes('Add guest details'));
         if (rtIdx > -1 && lines.length > rtIdx + 1) {
             s.bookedType = lines[rtIdx + 1].trim();
@@ -685,4 +688,97 @@ window.extractBookingData = (raw) => {
     summary += `\n----------------------------\n`;
 
     return { s, summary };
+};
+
+// =========================================================
+// UI BRIDGE: Triggered by the "Extract" button in PMS modal
+// =========================================================
+window.parseEmail = () => {
+    const textarea = document.getElementById('email-textarea');
+    const raw = textarea ? textarea.value : '';
+    if (!raw.trim()) {
+        if (window.showAlert) window.showAlert("Please paste confirmation text into the box first.");
+        return;
+    }
+
+    if (typeof window.extractBookingData !== 'function') {
+        if (window.showAlert) window.showAlert("Parser engine not loaded.");
+        return;
+    }
+
+    const { s, summary } = window.extractBookingData(raw);
+
+    // 1. CLEAR TEXTAREA IMMEDIATELY
+    if (textarea) textarea.value = '';
+
+    // 2. CLOSE IMPORT MODAL
+    if (typeof window.closeModal === 'function') {
+        window.closeModal('email-modal');
+    }
+
+    // 3. DUPLICATE & MERGED BOOKING DETECTION
+    const staffList = window.staff || (window.getStaff ? window.getStaff() : []);
+    let existingMatch = null;
+
+    if (s.bookId) {
+        const cleanId = String(s.bookId).trim();
+        existingMatch = staffList.find(b => {
+            if (b.status === 'cancelled') return false;
+            // Direct ID match
+            if (b.bookId && String(b.bookId).trim() === cleanId) return true;
+            // Merged booking search in notes
+            if (b.notes && (
+                b.notes.includes(cleanId) ||
+                b.notes.includes(`[MERGED FROM ID: ${cleanId}]`) ||
+                b.notes.includes(`Book ID: ${cleanId}`)
+            )) return true;
+            return false;
+        });
+    }
+
+    // If duplicate or merged booking is found, alert and open the original
+    if (existingMatch) {
+        if (window.showAlert) {
+            const guestName = `${existingMatch.firstName || ''} ${existingMatch.lastName || ''}`.trim() || 'Guest';
+            window.showAlert(`Duplicate Blocked:\nBooking ID ${s.bookId} is already in the system (${guestName})!\n\nOpening existing record now...`);
+        }
+        if (typeof window.editStaff === 'function') {
+            window.editStaff(existingMatch.id);
+        }
+        return;
+    }
+
+    // 4. FOR FRESH BOOKINGS: CLEAR PREVIOUS ID TO PREVENT OVERWRITES
+    const gIdInput = document.getElementById('guest-id');
+    if (gIdInput) gIdInput.value = '';
+
+    // Merge generated original summary into guest notes
+    s.notes = (summary + (s.notes || '')).trim();
+
+    // 5. POPULATE THE PMS FORM
+    if (typeof window.populateStaffForm === 'function') {
+        window.populateStaffForm(s);
+    }
+
+    // 6. AUTO-ASSIGN ROOM MATCHING BOOKED TYPE IF UNASSIGNED
+    if (window.suggestAvailableRoom && s.bookedType) {
+        const currentAssigned = Array.from(document.querySelectorAll('.assigned-room-select')).map(sel => sel.value).filter(Boolean);
+        if (currentAssigned.length === 0) {
+            const suggested = window.suggestAvailableRoom(s.bookedType);
+            if (suggested) {
+                const roomContainer = document.getElementById('assigned-rooms-container');
+                if (roomContainer) roomContainer.innerHTML = '';
+                if (window.addRoomSelect) window.addRoomSelect(suggested);
+            }
+        }
+    }
+
+    // Open guest modal
+    const guestModal = document.getElementById('guest-modal');
+    if (guestModal) {
+        guestModal.classList.add('active');
+        guestModal.style.display = 'flex';
+    }
+
+    if (window.lucide) window.lucide.createIcons();
 };
