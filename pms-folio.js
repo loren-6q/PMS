@@ -95,6 +95,18 @@
         }
     };
 
+    window.openEmailParserModal = () => {
+        const txt = $('email-textarea');
+        if (txt) txt.value = '';
+        const m = $('email-modal');
+        if (m) {
+            m.classList.add('active');
+            m.style.display = 'flex';
+        }
+        setTimeout(() => $('email-textarea')?.focus(), 50);
+        if (window.lucide) window.lucide.createIcons();
+    };
+
     window.toggleSection = (sectionId, chevronId, forceState = null) => {
         const sec = $(sectionId), icon = $(chevronId);
         if (!sec) return;
