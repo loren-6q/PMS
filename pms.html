@@ -17,7 +17,6 @@
     <script src="https://loren-6q.github.io/PMS/pms-calendar.js"></script>
     <script src="https://loren-6q.github.io/PMS/pms-booking.js"></script>
     <script src="https://loren-6q.github.io/PMS/parser.js"></script>
-    <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 </head>
 
@@ -62,7 +61,6 @@
                 </div>
                 
                 <div class="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-0 sm:ml-1">
-                    <!-- Swapped: Import Booking before Scanner -->
                     <button onclick="window.openEmailParserModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-purple-600 bg-white border border-slate-200 hover:bg-purple-50 rounded shadow-sm transition-colors cursor-pointer" title="Import Booking"><i data-lucide="mail-plus" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
                     <a href="scan.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-amber-600 bg-white border border-slate-200 hover:bg-amber-50 rounded shadow-sm transition-colors cursor-pointer" title="Mobile Passport Scanner"><i data-lucide="scan" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
                     <button onclick="window.openPriceCheckModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-pink-600 bg-white border border-slate-200 hover:bg-pink-50 rounded shadow-sm transition-colors cursor-pointer" title="Price Check"><i data-lucide="tag" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
@@ -325,13 +323,15 @@
         const db = getFirestore(app);
         const functions = getFunctions(app, 'asia-southeast1');
 
+        const PROP_MAP = { 'LOUD': 'loud_samui', 'WET': 'wet_pool', 'SWIMS': 'swims_resort' };
+        const PROP_REVERSE_MAP = { 'loud_samui': 'LOUD', 'wet_pool': 'WET', 'swims_resort': 'SWIMS' };
+
         let initialP = null;
         try { initialP = new URLSearchParams(window.location.search).get('p')?.toUpperCase(); } catch (e) {}
         let storedProp = null;
         try { storedProp = localStorage.getItem('last_prop'); } catch (e) {}
 
-        const rawPropCandidate = initialP || storedProp || 'swims_resort';
-        let currentPropertyId = window.toCanonicalPropId ? window.toCanonicalPropId(rawPropCandidate) : rawPropCandidate;
+        let currentPropertyId = PROP_MAP[initialP] || storedProp || 'swims_resort';
         try { localStorage.setItem('last_prop', currentPropertyId); } catch (e) {}
 
         let currentUserRole = null, currentUserEmail = 'unknown';
@@ -344,8 +344,8 @@
         window.activeExtraCharges = [];
         window.viewStart = viewStart;
 
-        const parseYMD = window.parseYMD || (str => { if (!str || typeof str !== 'string') return 0; const p = str.split('-'); return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); });
-        const getLocalYMD = window.getLocalYMD || (d => {
+        const parseYMD = str => { if (!str || typeof str !== 'string') return 0; const p = str.split('-'); return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); };
+        const getLocalYMD = d => {
             if (!d) d = new Date();
             if (typeof d === 'string') {
                 const trimmed = d.trim();
@@ -360,11 +360,10 @@
             } catch (e) {
                 return new Date().toISOString().split('T')[0];
             }
-        });
+        };
 
         const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
         const dbToUiRoom = rid => {
-            if (window.normalizeRoomId) return window.normalizeRoomId(rid, currentPropertyId);
             if (!rid) return rid;
             let nid = rid.toUpperCase();
             if (hotelRooms.some(r => r.id === nid || r.id === rid)) return rid;
@@ -395,6 +394,8 @@
         window.getRooms = getRooms;
         window.uiToDbRoom = uiToDbRoom;
         window.dbToUiRoom = dbToUiRoom;
+        window.PROP_MAP = PROP_MAP;
+        window.PROP_REVERSE_MAP = PROP_REVERSE_MAP;
         window.getCurrentPropertyId = () => currentPropertyId;
         window.getHotelRooms = () => hotelRooms;
         window.getStaff = () => staff;
@@ -414,42 +415,8 @@
             return changes.length > 0 ? changes.join(' | ') : "Saved without major changes.";
         };
 
-        window.openEmailParserModal = () => {
-            const m = $('email-modal');
-            if (m) {
-                m.classList.add('active');
-                m.style.display = 'flex';
-                setTimeout(() => $('email-textarea')?.focus(), 50);
-            }
-        };
-
-        window.parseEmail = () => {
-            const textarea = $('email-textarea');
-            const raw = textarea ? textarea.value : '';
-            if (!raw.trim()) {
-                if (window.showAlert) window.showAlert("Please paste confirmation text into the box first.");
-                return;
-            }
-            if (typeof window.extractBookingData !== 'function') {
-                if (window.showAlert) window.showAlert("Parser engine not loaded.");
-                return;
-            }
-            const { s, summary } = window.extractBookingData(raw);
-            s.notes = (summary + (s.notes || '')).trim();
-            if (window.suggestAvailableRoom && s.bookedType) {
-                const suggested = window.suggestAvailableRoom(s.bookedType);
-                if (suggested) s.rooms = [suggested];
-            }
-            if (typeof window.populateStaffForm === 'function') {
-                window.populateStaffForm(s);
-            }
-            if (typeof window.closeModal === 'function') {
-                window.closeModal('email-modal');
-            }
-        };
-
         window.updateNavLinks = shortKey => {
-            const key = shortKey || (window.toDisplayPropKey ? window.toDisplayPropKey(currentPropertyId) : 'SWIMS');
+            const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
             document.querySelectorAll('a[href*=".html"]').forEach(a => {
                 const href = a.getAttribute('href');
                 if (!href) return;
@@ -459,7 +426,7 @@
         };
 
         window.syncPropertyUrl = propId => {
-            const shortKey = window.toDisplayPropKey ? window.toDisplayPropKey(propId) : 'SWIMS';
+            const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
             try {
                 if (window.location.protocol !== 'blob:') {
                     const url = new URL(window.location.href);
@@ -543,11 +510,10 @@
 
         window.handlePropertySwitch = async propId => {
             if (!propId || propId === currentPropertyId) return;
-            $('boot-loader').style.display = 'flex';
-            $('sync-status').innerText = 'Switching Property...';
-            currentPropertyId = window.toCanonicalPropId ? window.toCanonicalPropId(propId) : propId;
-            try { localStorage.setItem('last_prop', currentPropertyId); } catch (e) {}
-            window.syncPropertyUrl(currentPropertyId);
+            $('boot-loader').style.display = 'flex';$('sync-status').innerText = 'Switching Property...';
+            currentPropertyId = propId;
+            try { localStorage.setItem('last_prop', propId); } catch (e) {}
+            window.syncPropertyUrl(propId);
             await loadPropertyConfig();
             if (window.render) window.render();
             if (window.renderDashboard) window.renderDashboard();
@@ -556,19 +522,73 @@
         };
 
         // ==========================================================================
-        // 🚀 DEVELOPMENT STAGING DOCK: PASTE MODULE CODE HERE TO TEST IN CANVAS
-        // Any functions pasted here immediately override the external scripts.
-        // When finished testing in Canvas, cut it out and paste into the external .js file.
+        // 🚀 DEVELOPMENT STAGING DOCK
         // ==========================================================================
 
+        window.openEmailParserModal = function() {
+            const txt = document.getElementById('email-textarea');
+            if (txt) txt.value = '';
+            const modal = document.getElementById('email-modal');
+            if (modal) {
+                modal.classList.add('active');
+                modal.style.display = 'flex';
+                setTimeout(() => txt?.focus(), 100);
+            }
+        };
 
+        window.parseEmail = function() {
+            const txt = document.getElementById('email-textarea');
+            const raw = txt ? txt.value : '';
+            if (!raw || !raw.trim()) {
+                if (window.showAlert) window.showAlert("Please paste booking text first.");
+                return;
+            }
 
+            if (typeof window.extractBookingData !== 'function') {
+                if (window.showAlert) window.showAlert("Parser engine (parser.js) is not loaded.");
+                return;
+            }
 
+            const res = window.extractBookingData(raw);
+            if (!res || !res.s) {
+                if (window.showAlert) window.showAlert("Could not extract booking data from text.");
+                return;
+            }
 
+            const s = res.s;
 
+            if (res.summary) {
+                s.notes = (res.summary + (s.notes ? '\n\n' : '') + (s.notes || '')).trim();
+            }
 
+            if (txt) txt.value = '';
+            if (window.closeModal) window.closeModal('email-modal');
 
+            const gId = document.getElementById('guest-id');
+            if (gId) gId.value = '';
 
+            if ((!s.rooms || s.rooms.length === 0) && s.bookedType) {
+                if (typeof window.suggestAvailableRoom === 'function') {
+                    const assigned = window.suggestAvailableRoom(s.bookedType, s.checkIn, s.checkOut, s.pax || 1, s.units || 1);
+                    if (assigned && assigned.length > 0) {
+                        s.rooms = assigned;
+                        s.room = assigned[0];
+                    }
+                }
+            }
+
+            if (typeof window.populateStaffForm === 'function') {
+                window.populateStaffForm(s);
+            }
+
+            const gModal = document.getElementById('guest-modal');
+            if (gModal) {
+                gModal.classList.add('active');
+                gModal.style.display = 'flex';
+            }
+
+            if (window.lucide) window.lucide.createIcons();
+        };
 
         // ==========================================================================
         // 🚀 END DEVELOPMENT STAGING DOCK
@@ -579,10 +599,7 @@
             $('dash-date-display').innerText = todayStr;
             const arr = [], dep = [], stay = [], act = [];
 
-            const sortedStaff = [...staff].filter(x => {
-                const xProp = window.toCanonicalPropId ? window.toCanonicalPropId(x.property) : x.property;
-                return xProp === currentPropertyId;
-            }).sort((a, b) => {
+            const sortedStaff = [...staff].filter(x => x.property === currentPropertyId).sort((a, b) => {
                 let ra = a.rooms?.[0] || a.room || 'ZZZ';
                 let rb = b.rooms?.[0] || b.room || 'ZZZ';
                 return ra.localeCompare(rb);
@@ -635,12 +652,9 @@
         };
 
         window.switchTab = t => {
-            $('dashboard-view').style.display = t === 'dashboard' ? 'flex' : 'none';
-            $('calendar-view').style.display = t === 'calendar' ? 'flex' : 'none';
-            $('database-view').style.display = t === 'database' ? 'flex' : 'none';
-            $('tab-dash').classList.toggle('active', t === 'dashboard');
-            $('tab-cal').classList.toggle('active', t === 'calendar');
-            $('tab-db').classList.toggle('active', t === 'database');
+            $('dashboard-view').style.display = t === 'dashboard' ? 'flex' : 'none';$('calendar-view').style.display = t === 'calendar' ? 'flex' : 'none';
+            $('database-view').style.display = t === 'database' ? 'flex' : 'none';$('tab-dash').classList.toggle('active', t === 'dashboard');
+            $('tab-cal').classList.toggle('active', t === 'calendar');$('tab-db').classList.toggle('active', t === 'database');
 
             const ctxCal = $('context-tools-cal');
             if (ctxCal) {
@@ -688,8 +702,7 @@
                     currentUserEmail = 'admin';
                     window.currentUserRole = currentUserRole;
                     window.currentUserEmail = currentUserEmail;
-                    $('boot-loader').style.display = 'none';
-                    $$('.admin-only').forEach(el => el.classList.remove('hidden'));
+                    $('boot-loader').style.display = 'none';$$('.admin-only').forEach(el => el.classList.remove('hidden'));
                     await loadPropertyConfig();
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
                         window.showAlert("Database Permission Denied.");
@@ -714,8 +727,7 @@
                         currentUserEmail = userKey;
                         window.currentUserRole = currentUserRole;
                         window.currentUserEmail = currentUserEmail;
-                        $('boot-loader').style.display = 'none';
-                        if (currentUserRole === 'admin') $$('.admin-only').forEach(el => el.classList.remove('hidden'));
+                        $('boot-loader').style.display = 'none';                         if (currentUserRole === 'admin') $$('.admin-only').forEach(el => el.classList.remove('hidden'));
                         await loadPropertyConfig();
                         onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
                             window.showAlert("Database Permission Denied.");
@@ -727,12 +739,7 @@
                 });
             }
 
-            const tBodyEl = $('timeline-body');
-            tBodyEl.addEventListener('mouseover', e => {
-                const col = e.target.closest('.day-column');
-                if (col && col.dataset.colIndex !== undefined) {
-                    const idx = col.dataset.colIndex;
-                    $$(`[data-col-index="${idx}"]`).forEach(el => el.classList.add('hover-col'));
+            const tBodyEl = $('timeline-body');             tBodyEl.addEventListener('mouseover', e => {                 const col = e.target.closest('.day-column');                 if (col && col.dataset.colIndex !== undefined) {                     const idx = col.dataset.colIndex;                     $$(`[data-col-index="${idx}"]`).forEach(el => el.classList.add('hover-col'));
                 }
             });
 
@@ -751,11 +758,7 @@
                 const rId = col.dataset.roomId || "";
                 if (!dStr) return;
 
-                const modal = $('guest-modal');
-                const isModalOpen = modal && (modal.classList.contains('active') || window.getComputedStyle(modal).display !== 'none');
-                if (isModalOpen) {
-                    if (rId) {
-                        const curSelects = Array.from($$('.assigned-room-select'));
+                const modal = $('guest-modal');                 const isModalOpen = modal && (modal.classList.contains('active') \vert{}\vert{} window.getComputedStyle(modal).display !== 'none');                 if (isModalOpen) {                     if (rId) {                         const curSelects = Array.from($$('.assigned-room-select'));
                         const emptySelect = curSelects.find(s => !s.value);
                         if (emptySelect) emptySelect.value = rId;
                         else if (!curSelects.some(s => s.value === rId)) window.addRoomSelect(rId);
