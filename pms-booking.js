@@ -64,11 +64,9 @@
         getStaff().forEach(s => {
             if (s.id === excludeBookingId) return;
             
-            // Standardize Property Comparison via pms-core
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
             if (sProp !== curProp) return;
 
-            // Universal Status Occupancy Evaluator via pms-core
             const rList = getRooms(s);
             const isUnassigned = rList.length === 0 || rList[0] === "";
             const isOccupying = window.isOccupyingBooking 
@@ -247,7 +245,6 @@
             og.appendChild(opt);
         });
 
-        // Auto-assign open room if val is empty
         if (!val) {
             const suggested = window.suggestAvailableRoom($('booked-type')?.value);
             if (suggested) val = suggested;
@@ -392,9 +389,6 @@
         if (window.lucide) window.lucide.createIcons();
     };
 
-    // ----------------------------------------------------------------------
-    // GUEST MODAL ACTIONS: DELETE, DUPLICATE, SPLIT, MERGE
-    // ----------------------------------------------------------------------
     window.requestDelete = () => {
         const id = $('guest-id')?.value;
         if (!id) return;
@@ -403,8 +397,8 @@
         const name = s ? `${s.firstName || ''} ${s.lastName || ''}`.trim() : 'this booking';
 
         window.showAlert(`Permanently delete booking for ${name.toUpperCase()}?\n\nThis cannot be undone.`, true, async () => {
-            const loader = $('boot-loader');
-            if (loader) loader.style.display = 'flex';
+            const delBtn = $('delete-btn');
+            if (delBtn) { delBtn.disabled = true; delBtn.innerHTML = '...'; }
 
             const db = getDb();
             const appId = getAppId();
@@ -420,7 +414,7 @@
                 console.error("Delete Error", e);
                 window.showAlert("Delete failed: " + e.message);
             } finally {
-                if (loader) loader.style.display = 'none';
+                if (delBtn) { delBtn.disabled = false; delBtn.innerHTML = '<i data-lucide="trash-2" size="14"></i>'; if (window.lucide) window.lucide.createIcons(); }
             }
         });
     };
@@ -432,7 +426,6 @@
         const s = staffList.find(x => x.id === id);
         if (!s) return;
 
-        // Clone record, strip document ID and payments for fresh new booking
         const clone = JSON.parse(JSON.stringify(s));
         delete clone.id;
         clone.bookId = "";
@@ -499,8 +492,8 @@
         const newRoomVal = $('split-new-room')?.value;
         const assignedNewRooms = newRoomVal ? [newRoomVal] : (orig.rooms || [orig.room]);
 
-        const loader = $('boot-loader');
-        if (loader) loader.style.display = 'flex';
+        const splitConfirmBtn = document.querySelector('#split-modal button.bg-orange-600');
+        if (splitConfirmBtn) { splitConfirmBtn.disabled = true; splitConfirmBtn.innerText = "Splitting..."; }
 
         const db = getDb();
         const appId = getAppId();
@@ -545,7 +538,7 @@
             console.error("Split Error", e);
             window.showAlert("Split failed: " + e.message);
         } finally {
-            if (loader) loader.style.display = 'none';
+            if (splitConfirmBtn) { splitConfirmBtn.disabled = false; splitConfirmBtn.innerText = "Split"; }
         }
     };
 
@@ -556,16 +549,87 @@
         const targetSelect = $('merge-target');
         if (!targetSelect) return;
 
-        targetSelect.innerHTML = '<option value="">-- SELECT BOOKING TO ABSORB --</option>';
+        const staffList = getStaff();
+        const curBooking = staffList.find(x => x.id === currentId);
+        if (!curBooking) return;
+
+        const parseFn = window.parseYMD || (str => Date.parse(str));
+        const cInMs = parseFn(curBooking.checkIn);
+        const cOutMs = parseFn(curBooking.checkOut);
         const curProp = getPropId();
 
-        getStaff().filter(s => {
+        const curFirst = (curBooking.firstName || '').trim().toUpperCase();
+        const curLast = (curBooking.lastName || '').trim().toUpperCase();
+        const curRooms = (curBooking.rooms || [curBooking.room]).filter(Boolean).map(r => r.toUpperCase());
+
+        // 1. FILTER CANDIDATES: Only bookings immediately preceding, following, or overlapping
+        const candidates = staffList.filter(s => {
+            if (s.id === currentId || s.status === 'cancelled' || s.status === 'noshow') return false;
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-            return sProp === curProp && s.id !== currentId && s.status !== 'cancelled' && s.status !== 'noshow';
-        }).forEach(s => {
+            if (sProp !== curProp) return false;
+            if (!s.checkIn || !s.checkOut) return false;
+
+            const sInMs = parseFn(s.checkIn);
+            const sOutMs = parseFn(s.checkOut);
+
+            // Preceding: checkout within +/- 2 days of current check-in
+            const isPreceding = Math.abs(sOutMs - cInMs) <= 86400000 * 2;
+            // Following: checkin within +/- 2 days of current check-out
+            const isFollowing = Math.abs(sInMs - cOutMs) <= 86400000 * 2;
+            // Overlapping stay dates
+            const isOverlapping = sInMs < cOutMs && cInMs < sOutMs;
+
+            return isPreceding || isFollowing || isOverlapping;
+        });
+
+        if (candidates.length === 0) {
+            targetSelect.innerHTML = '<option value="">-- NO ADJACENT BOOKINGS FOUND (PRECEDING/FOLLOWING) --</option>';
+            const modal = $('merge-modal');
+            if (modal) { modal.classList.add('active'); modal.style.display = 'flex'; }
+            return;
+        }
+
+        // 2. SCORE CANDIDATES FOR LOGICAL MATCHING
+        const scoredCandidates = candidates.map(s => {
+            let score = 0;
+            const sFirst = (s.firstName || '').trim().toUpperCase();
+            const sLast = (s.lastName || '').trim().toUpperCase();
+            const sRooms = (s.rooms || [s.room]).filter(Boolean).map(r => r.toUpperCase());
+            const sInMs = parseFn(s.checkIn);
+            const sOutMs = parseFn(s.checkOut);
+
+            let reasons = [];
+
+            // Matching Name
+            if (curLast && sLast && curLast === sLast) { score += 50; reasons.push("Same Last Name"); }
+            if (curFirst && sFirst && (curFirst.includes(sFirst) || sFirst.includes(curFirst))) { score += 30; reasons.push("Same First Name"); }
+
+            // Contiguous / Back-to-Back dates
+            if (s.checkOut === curBooking.checkIn) { score += 45; reasons.push("Checked out on arrival date"); }
+            else if (s.checkIn === curBooking.checkOut) { score += 45; reasons.push("Checks in on departure date"); }
+
+            // Matching Room
+            if (sRooms.some(r => curRooms.includes(r))) { score += 20; reasons.push("Same Room"); }
+
+            // Shared Link Code
+            if (s.linkedId && curBooking.linkedId && s.linkedId === curBooking.linkedId) { score += 60; reasons.push("Shared Link Code"); }
+
+            return { s, score, reasonText: reasons.join(', ') };
+        });
+
+        scoredCandidates.sort((a, b) => b.score - a.score || a.s.checkIn.localeCompare(b.s.checkIn));
+
+        // 3. POPULATE DROPDOWN WITH BADGES
+        targetSelect.innerHTML = '<option value="">-- SELECT BOOKING TO ABSORB --</option>';
+        scoredCandidates.forEach((item, idx) => {
+            const { s, score, reasonText } = item;
             const name = `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Unknown';
             const roomStr = (s.rooms || [s.room]).filter(Boolean).join(',') || 'Unassigned';
-            targetSelect.innerHTML += `<option value="${s.id}">[${roomStr}] ${name} (${s.checkIn} to ${s.checkOut}) - ฿${s.totalPrice || 0}</option>`;
+            const isBest = idx === 0 && score > 0;
+            const badge = isBest ? '⭐ [BEST MATCH]' : (score >= 40 ? '✓ [LOGICAL]' : '');
+            const reasonTag = reasonText ? ` (${reasonText})` : '';
+
+            targetSelect.innerHTML += `<option value="${s.id}" ${isBest ? 'selected' : ''}>${badge} [${roomStr}] ${name} (${s.checkIn} to ${s.checkOut}) - ฿${s.totalPrice || 0}${reasonTag}</option>`;
         });
 
         const modal = $('merge-modal');
@@ -599,32 +663,24 @@
             // Consolidate financials and notes
             const combinedPayments = [...(sourceDoc.payments || []), ...(targetDoc.payments || [])];
             const combinedCharges = [...(sourceDoc.extraCharges || []), ...(targetDoc.extraCharges || [])];
-            const newTotal = Number(((Number(sourceDoc.totalPrice) || 0) + (Number(targetDoc.totalPrice) || 0)).toFixed(2));
-            const newNet = Number(((Number(sourceDoc.netPrice) || 0) + (Number(targetDoc.netPrice) || 0)).toFixed(2));
+            const newTotal = (Number(sourceDoc.totalPrice) || 0) + (Number(targetDoc.totalPrice) || 0);
+            const newNet = (Number(sourceDoc.netPrice) || 0) + (Number(targetDoc.netPrice) || 0);
 
-            const newCheckOut = sourceDoc.checkOut < targetDoc.checkOut ? targetDoc.checkOut : sourceDoc.checkOut;
-            const newCheckIn = sourceDoc.checkIn > targetDoc.checkIn ? targetDoc.checkIn : sourceDoc.checkIn;
-
-            const targetName = `${targetDoc.firstName || ''} ${targetDoc.lastName || ''}`.trim();
-            const mergeNote = `[MERGED WITH BOOKING ${targetDoc.bookId || targetId}]\nAbsorbed: ${targetName} (${targetDoc.checkIn} to ${targetDoc.checkOut})\n${targetDoc.notes || ''}`;
-            const mergedNotes = (sourceDoc.notes ? sourceDoc.notes + '\n\n' : '') + mergeNote;
+            const mergeNote = `\n[MERGED BOOKING ${targetDoc.bookId || targetId}] ${targetDoc.firstName || ''} ${targetDoc.lastName || ''} (${targetDoc.checkIn} to ${targetDoc.checkOut})\n` + (targetDoc.notes || '');
 
             await updateDoc(curRef, {
-                checkIn: newCheckIn,
-                checkOut: newCheckOut,
-                payments: combinedPayments,
-                extraCharges: combinedCharges,
                 totalPrice: newTotal,
                 netPrice: newNet,
-                notes: mergedNotes.trim()
+                payments: combinedPayments,
+                extraCharges: combinedCharges,
+                notes: ((sourceDoc.notes || '') + '\n' + mergeNote).trim()
             });
 
-            // Delete absorbed record
             await deleteDoc(targetRef);
 
             if (window.closeModal) window.closeModal('merge-modal');
             window.closeGuestModal();
-            window.showAlert(`Successfully merged ${targetName} into this booking!\n\nFolio, payments, and stay dates have been consolidated.`);
+            window.showAlert(`Booking merged successfully!\n\nAbsorbed ${targetDoc.firstName || ''} ${targetDoc.lastName || ''} into this booking.\nNew Total: ฿${newTotal}`);
         } catch (e) {
             console.error("Merge Error", e);
             window.showAlert("Merge failed: " + e.message);
@@ -644,7 +700,6 @@
             m.classList.remove('active');
             m.style.display = 'none';
         }
-        try { window.history.replaceState({}, document.title, window.location.pathname); } catch (e) {}
     };
 
     window.quickAdd = (r, d) => {
@@ -697,11 +752,20 @@
 
             const bId = $('booking-id')?.value.trim() || '';
             const curProp = getPropId();
+            const curLinked = $('link-code')?.value.trim().toUpperCase() || '';
+
+            // Duplicate Verification: Permits contiguous split segments with non-overlapping dates or shared link codes
             if (bId) {
                 const dupe = getStaff().find(s => {
                     const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
                     const isOcc = window.isOccupyingBooking ? window.isOccupyingBooking(s.status) : (s.status !== 'cancelled');
-                    return sProp === curProp && s.bookId === bId && s.id !== id && isOcc;
+                    if (sProp !== curProp || s.bookId !== bId || s.id === id || !isOcc) return false;
+
+                    // Allow contiguous or linked split segments
+                    if ((curLinked && s.linkedId && curLinked === s.linkedId) || (s.checkOut <= cI || s.checkIn >= cO)) {
+                        return false;
+                    }
+                    return true;
                 });
                 if (dupe) {
                     if (sB) { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; }
@@ -763,7 +827,7 @@
                 source: $('booking-source')?.value || 'direct',
                 bookDate: $('booking-date')?.value || '',
                 bookId: $('booking-id')?.value || '',
-                linkedId: $('link-code')?.value.trim().toUpperCase() || '',
+                linkedId: curLinked,
                 totalPrice: Number($('total-price')?.value) || 0,
                 netPrice: Number($('net-price')?.value) || 0,
                 netOverride: $('net-price')?.dataset.override === 'true',
