@@ -36,6 +36,8 @@
         { val: 'unconfirmed', bg: '#f3e8ff', txt: '#581c87' }
     ];
 
+    window.masterState = 0;
+
     const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
     const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
     const getPropId = () => {
@@ -574,7 +576,7 @@
             body.appendChild(row);
         });
 
-        if (window.masterState !== 0) {
+        if (window.masterState && window.masterState !== 0) {
             const g = new Set();
             $$('.group-header').forEach(el => { if (el.dataset.group) g.add(el.dataset.group); });
             g.forEach(grp => window.toggleGroup(grp, window.masterState));
