@@ -4,8 +4,7 @@
 // ==========================================================================
 
 (function() {
-    const $ = id => document.getElementById(id);
-    const $$ = s => document.querySelectorAll(s);
+    const $ = id => document.getElementById(id);     const $$ = s => document.querySelectorAll(s);
 
     const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
@@ -94,7 +93,7 @@
     window.handleSearch = v => {
         window.searchTerm = v.trim().toUpperCase();
         window.searchMatchIndex = 0;
-        const jb = $('search-jump-btn'), mc = $('match-counter');
+        const jb = $('search-jump-btn'), mc =$('match-counter');
         const stList = getStaff();
         const term = window.searchTerm;
         const curProp = getPropId();
@@ -194,6 +193,10 @@
                 r.style.display = (cS === 3) ? 'none' : 'grid';
                 return;
             }
+            if (r.classList.contains('sub-header-row')) {
+                r.style.display = (cS === 3) ? 'none' : 'grid';
+                return;
+            }
             const isE = r.querySelectorAll('.staff-bar').length === 0;
             r.style.display = (isE ? s.showEmp : s.showOcc) ? 'grid' : 'none';
         });
@@ -254,7 +257,7 @@
             jm.value = `${vS.getFullYear()}-${String(vS.getMonth() + 1).padStart(2, '0')}`;
         }
 
-        const mGrid = $('calendar-header-months'), dGrid = $('calendar-header-days'), body = $('timeline-body');
+        const mGrid = $('calendar-header-months'), dGrid = $('calendar-header-days'), body =$('timeline-body');
         if (!mGrid || !dGrid || !body) return;
 
         mGrid.innerHTML = `<div class="border-r border-slate-700 flex items-center justify-center h-full sticky left-0 z-[60] bg-slate-800 w-[var(--sidebar-w)]"></div>`;
@@ -422,7 +425,7 @@
 
             if (rD.isSubHeader) {
                 const sRow = document.createElement('div');
-                sRow.className = `timeline-grid group-${cGrp} h-[22px]`;
+                sRow.className = `timeline-grid group-${cGrp} sub-header-row h-[22px]`;
                 sRow.innerHTML = `
                     <div class="bg-slate-200 border-y border-slate-300 flex items-center px-2 sticky left-0 z-20 shadow-sm unselectable" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;">
                         <div class="flex items-center gap-1 sticky left-0 bg-slate-200 pr-2">
@@ -563,22 +566,7 @@
                     tt.style.top = (e.clientY + 165 > window.innerHeight ? e.clientY - 165 : e.clientY + 15) + 'px';
                 };
                 bar.onmouseleave = () => {
-                    if (s.linkedId) $$('.linked-' + s.linkedId).forEach(el => el.classList.remove('link-glow'));
-                    if (tt) tt.style.display = 'none';
-                };
-                bar.onclick = e => {
-                    e.stopPropagation();
-                    if (tt) tt.style.display = 'none';
-                    if (window.editStaff) window.editStaff(s.id);
-                };
-                row.appendChild(bar);
-            });
-            body.appendChild(row);
-        });
-
-        if (window.masterState && window.masterState !== 0) {
-            const g = new Set();
-            $$('.group-header').forEach(el => { if (el.dataset.group) g.add(el.dataset.group); });
+                    if (s.linkedId) $$('.linked-' + s.linkedId).forEach(el => el.classList.remove('link-glow'));                     if (tt) tt.style.display = 'none';                 };                 bar.onclick = e => {                     e.stopPropagation();                     if (tt) tt.style.display = 'none';                     if (window.editStaff) window.editStaff(s.id);                 };                 row.appendChild(bar);             });             body.appendChild(row);         });          if (window.masterState && window.masterState !== 0) {             const g = new Set();             $$('.group-header').forEach(el => { if (el.dataset.group) g.add(el.dataset.group); });
             g.forEach(grp => window.toggleGroup(grp, window.masterState));
         }
 
