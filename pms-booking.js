@@ -277,7 +277,16 @@
         el.innerText = labels[state];
         el.className = id.includes('email')
             ? `flex-1 min-w-[80px] unselectable multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border text-center whitespace-nowrap ${classes[state]}`
-            : `flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border ${classes[state]}`;
+            : `flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border text-center ${classes[state]}`;
+    };
+
+    window.setMulti = setMulti;
+
+    window.cycleMulti = (el, labels, classes) => {
+        if (!el) return;
+        const curState = parseInt(el.dataset.state || 0);
+        const nextState = (curState + 1) % labels.length;
+        setMulti(el.id, nextState, labels, classes);
     };
 
     window.populateStaffForm = (s = {}) => {
