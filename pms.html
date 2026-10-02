@@ -17,7 +17,6 @@
     <script src="https://loren-6q.github.io/PMS/pms-calendar.js"></script>
     <script src="https://loren-6q.github.io/PMS/pms-booking.js"></script>
     <script src="https://loren-6q.github.io/PMS/parser.js"></script>
-    <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 </head>
 
@@ -62,7 +61,6 @@
                 </div>
                 
                 <div class="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-0 sm:ml-1">
-                    <!-- Import Booking before Scanner -->
                     <button onclick="window.openEmailParserModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-purple-600 bg-white border border-slate-200 hover:bg-purple-50 rounded shadow-sm transition-colors cursor-pointer" title="Import Booking"><i data-lucide="mail-plus" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
                     <a href="scan.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-amber-600 bg-white border border-slate-200 hover:bg-amber-50 rounded shadow-sm transition-colors cursor-pointer" title="Mobile Passport Scanner"><i data-lucide="scan" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
                     <button onclick="window.openPriceCheckModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-pink-600 bg-white border border-slate-200 hover:bg-pink-50 rounded shadow-sm transition-colors cursor-pointer" title="Price Check"><i data-lucide="tag" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
@@ -154,6 +152,9 @@
                 </div>
             </div>
 
+            <!-- Dynamic Stay Itinerary Stripe (Shows linked legs for room splits / multiple stays) -->
+            <div id="itinerary-stripe" class="hidden bg-slate-900 border-b border-slate-700 px-2 py-1 text-white flex items-center justify-between gap-1 overflow-x-auto no-scrollbar unselectable text-xs"></div>
+
             <form id="guest-form" class="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 no-scrollbar relative">
                 <input type="hidden" id="guest-id"> <input type="hidden" id="created-at"> <input type="hidden" id="created-by"> <input type="hidden" id="guest-status-hidden">
                 
@@ -169,7 +170,6 @@
                     <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200 mt-1 unselectable overflow-x-auto no-scrollbar"><div id="email-confirm-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['CONFIRM: --', 'CONFIRM: SENT'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400'])">CONFIRM: --</div><div id="email-prepost-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['PRE/POST: --', 'PRE/POST: SENT', 'PRE/POST: CONF'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400'])">PRE/POST: --</div><div id="email-special-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['SPECIAL: --', 'SPECIAL: SENT'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400'])">SPECIAL: --</div></div>
                 </div>
 
-                <!-- DATES, NIGHTS, ARROWS & ACTION CONTROLLER -->
                 <div class="bg-slate-50 p-1.5 rounded-md border border-slate-200 space-y-1.5">
                     <div class="flex items-center gap-1.5">
                         <div class="w-[130px] shrink-0">
@@ -293,7 +293,6 @@
         </div>
     </div>
 
-    <!-- Secondary Modals -->
     <div id="charge-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span class="flex items-center gap-1.5"><i data-lucide="plus-circle" size="16" class="text-blue-400"></i> Add Itemized Charge</span><button type="button" onclick="window.closeModal('charge-modal')" class="p-1 hover:bg-slate-800 rounded cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><div><label class="field-label mb-1">Quick Presets</label><div class="flex flex-wrap gap-1"><span class="preset-pill" onclick="window.applyChargePreset('Ferry Ticket', 400)">Ferry ฿400</span><span class="preset-pill" onclick="window.applyChargePreset('Van Transfer', 300)">Transfer ฿300</span><span class="preset-pill" onclick="window.applyChargePreset('Drink Package', 350)">Drinks ฿350</span><span class="preset-pill" onclick="window.applyChargePreset('Tour Package', 1200)">Tour ฿1200</span><span class="preset-pill" onclick="window.applyChargePreset('Laundry', 100)">Laundry ฿100</span><span class="preset-pill" onclick="window.applyChargePreset('Late Checkout', 300)">Late Out ฿300</span><span class="preset-pill" onclick="window.applyChargePreset('Scooter Rental', 250)">Scooter ฿250</span></div></div><div><label class="field-label mb-0.5">Description</label><input type="text" id="charge-desc" placeholder="e.g. Airport Van, Towel Rental..." class="input-base !p-2 !text-xs uppercase font-black"></div><div class="grid grid-cols-2 gap-2"><div><label class="field-label mb-0.5">Amount (฿)</label><input type="number" id="charge-amount" step="any" placeholder="0" class="input-base !p-2 !text-sm font-black text-blue-700"></div><div><label class="field-label mb-0.5">Date</label><input type="date" id="charge-date" class="input-base !p-2 !text-xs font-black cursor-pointer"></div></div><div class="flex gap-2 justify-end mt-2"><button type="button" onclick="window.closeModal('charge-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button><button type="button" onclick="window.confirmAddCharge()" class="btn-modal bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 shadow-md"><i data-lucide="check" size="14"></i> Add to Folio</button></div></div></div></div>
     <div id="email-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Data Import</span><button type="button" onclick="window.closeModal('email-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><p class="text-xs font-bold text-slate-500 leading-tight">Paste a confirmation email from Booking.com, Airbnb, or Hostelworld.</p><textarea id="email-textarea" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2" placeholder="Paste text here..."></textarea><div class="flex gap-2 justify-end mt-2"><button onclick="window.closeModal('email-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button><button onclick="window.parseEmail()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1">Extract</button></div></div></div></div>
     <div id="price-check-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Quick Price Check</span><button type="button" onclick="window.closeModal('price-check-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><div class="grid grid-cols-2 gap-3"><div class="col-span-2"><label class="field-label">Check-In</label><input type="date" id="pc-checkin" class="input-base !p-2 !text-sm"></div><div><label class="field-label">Nights</label><input type="number" id="pc-nights" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div><div><label class="field-label">PAX</label><input type="number" id="pc-pax" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div></div><button onclick="window.runPriceCheck()" class="w-full mt-2 btn-modal bg-pink-600 hover:bg-pink-700 text-white flex justify-center items-center gap-2"><i data-lucide="external-link" size="16"></i> Check BDC</button></div></div></div>
@@ -386,7 +385,6 @@
             return rid;
         };
 
-        // Shared Global Bridge
         window.db = db;
         window.appId = appId;
         window.fs = { collection, doc, query, where, getDocs, updateDoc, setDoc, deleteDoc };
@@ -629,11 +627,10 @@
                 });
                 window.staff = staff;
 
-                // Canonical country normalizer map to filter legacy dirty database records
+                const base = ["France", "Germany", "United Kingdom", "United States", "Australia", "Netherlands", "Israel", "Spain", "Italy", "Switzerland", "Canada", "Sweden", "Denmark", "Russia", "Thailand", "Belgium", "Austria", "Ireland", "Norway", "Finland", "Brazil", "Argentina", "South Korea", "Japan", "China", "India", "Mexico", "New Zealand", "South Africa", "Portugal", "Greece"];
                 const COUNTRY_CANONICAL = {
                     'US': 'United States', 'USA': 'United States', 'UNITED STATES': 'United States',
                     'UK': 'United Kingdom', 'GB': 'United Kingdom', 'UNITED KINGDOM': 'United Kingdom',
-                    'TH': 'Thailand', 'THAILAND': 'Thailand',
                     'DE': 'Germany', 'GERMAN': 'Germany', 'GERMANY': 'Germany',
                     'FR': 'France', 'FRENCH': 'France', 'FRANCE': 'France',
                     'IL': 'Israel', 'ISRAEL': 'Israel',
@@ -646,47 +643,31 @@
                     'SE': 'Sweden', 'SWEDEN': 'Sweden',
                     'DK': 'Denmark', 'DENMARK': 'Denmark',
                     'RU': 'Russia', 'RUSSIA': 'Russia',
-                    'BE': 'Belgium', 'BELGIUM': 'Belgium',
-                    'AT': 'Austria', 'AUSTRIA': 'Austria',
-                    'IE': 'Ireland', 'IRELAND': 'Ireland',
-                    'NO': 'Norway', 'NORWAY': 'Norway',
-                    'FI': 'Finland', 'FINLAND': 'Finland',
-                    'BR': 'Brazil', 'BRAZIL': 'Brazil',
-                    'AR': 'Argentina', 'ARGENTINA': 'Argentina',
+                    'TH': 'Thailand', 'THAILAND': 'Thailand',
                     'KR': 'South Korea', 'SOUTH KOREA': 'South Korea', 'SOUHT KOREA': 'South Korea',
-                    'JP': 'Japan', 'JAPAN': 'Japan',
-                    'CN': 'China', 'CHINA': 'China',
-                    'IN': 'India', 'INDIA': 'India',
-                    'MX': 'Mexico', 'MEXICO': 'Mexico',
+                    'ALGERIA': 'Algeria', 'ALGERIENNE': 'Algeria',
+                    'TR': 'Turkey', 'TURKEY': 'Turkey',
                     'NZ': 'New Zealand', 'NEW ZEALAND': 'New Zealand',
-                    'ZA': 'South Africa', 'SOUTH AFRICA': 'South Africa',
-                    'PT': 'Portugal', 'PORTUGAL': 'Portugal',
-                    'GR': 'Greece', 'GREECE': 'Greece',
-                    'TR': 'Turkey', 'TURKEY': 'Turkey', 'TURKIYE': 'Turkey',
                     'HK': 'Hong Kong', 'HONG KONG': 'Hong Kong',
-                    'BY': 'Belarus', 'BELARUS': 'Belarus',
-                    'DZ': 'Algeria', 'ALGERIENNE': 'Algeria', 'ALGERIA': 'Algeria'
+                    'BY': 'Belarus', 'BELARUS': 'Belarus'
                 };
 
-                const cleanCountryList = new Set([
-                    "Argentina", "Australia", "Austria", "Belarus", "Belgium", "Brazil", "Canada",
-                    "China", "Denmark", "Finland", "France", "Germany", "Greece", "Hong Kong",
-                    "India", "Ireland", "Israel", "Italy", "Japan", "Mexico", "Netherlands",
-                    "New Zealand", "Norway", "Portugal", "Russia", "South Africa", "South Korea",
-                    "Spain", "Sweden", "Switzerland", "Thailand", "Turkey", "United Kingdom", "United States"
-                ]);
-
-                // Map database entries through canonical dictionary and drop corrupt entries (e.g. "Folio no")
+                const cleanCountries = new Set(base);
                 staff.forEach(s => {
                     if (!s.country) return;
-                    const rawUpper = s.country.trim().toUpperCase();
-                    if (COUNTRY_CANONICAL[rawUpper]) {
-                        cleanCountryList.add(COUNTRY_CANONICAL[rawUpper]);
+                    const raw = s.country.trim();
+                    if (!raw || raw.toLowerCase().includes('folio') || raw.toLowerCase().includes('invoice') || raw.length < 2) return;
+                    const lookup = raw.toUpperCase();
+                    if (COUNTRY_CANONICAL[lookup]) {
+                        cleanCountries.add(COUNTRY_CANONICAL[lookup]);
+                    } else if (raw.length > 2 && /^[A-Za-z\s\-]+$/.test(raw)) {
+                        const formatted = raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                        cleanCountries.add(formatted);
                     }
                 });
 
                 const dl = $('country-list');
-                if (dl) dl.innerHTML = Array.from(cleanCountryList).sort().map(c => `<option value="${c}"></option>`).join('');
+                if (dl) dl.innerHTML = [...cleanCountries].sort().map(c => `<option value="${c}"></option>`).join('');
 
                 if ($('calendar-view')?.style.display !== 'none' && window.render) window.render();
                 if ($('dashboard-view')?.style.display === 'flex') window.renderDashboard();
@@ -697,6 +678,13 @@
             };
 
             const bypassLogin = async () => {
+                const safetyTimer = setTimeout(() => {
+                    const bl = $('boot-loader');
+                    if (bl && bl.style.display !== 'none') {
+                        bl.style.display = 'none';
+                    }
+                }, 3500);
+
                 try {
                     if (typeof window.__initial_auth_token !== 'undefined') {
                         try { await signInWithCustomToken(auth, window.__initial_auth_token); }
@@ -708,16 +696,18 @@
                     currentUserEmail = 'admin';
                     window.currentUserRole = currentUserRole;
                     window.currentUserEmail = currentUserEmail;
-                    $('boot-loader').style.display = 'none';
                     $$('.admin-only').forEach(el => el.classList.remove('hidden'));
                     await loadPropertyConfig();
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
                         window.showAlert("Database Permission Denied.");
-                        $('boot-loader').style.display = 'none';
                     });
                 } catch (e) {
-                    console.error(e);
+                    console.error("Auth bypass error:", e);
                     $('sync-status').innerText = "Auth Error";
+                } finally {
+                    clearTimeout(safetyTimer);
+                    const bl = $('boot-loader');
+                    if (bl) bl.style.display = 'none';
                 }
             };
 
