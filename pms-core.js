@@ -63,7 +63,18 @@
         return true;
     };
 
-    // 5. Shared Date Helpers
+    // 5. Shared URL Parameter Utility
+    window.safeUpdateUrlParam = function(paramName, paramVal) {
+        try {
+            if (typeof window === 'undefined' || !window.location) return;
+            if (!window.location.protocol.startsWith('http')) return;
+            const url = new URL(window.location.href);
+            url.searchParams.set(paramName, paramVal);
+            window.history.replaceState({}, '', url.pathname + url.search);
+        } catch(e) {}
+    };
+
+    // 6. Shared Date Helpers
     window.parseYMD = window.parseYMD || function(str) {
         if (!str || typeof str !== 'string') return 0;
         const p = str.split('-');
