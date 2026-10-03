@@ -33,6 +33,9 @@
     </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between p-3 sm:p-5 max-w-lg mx-auto select-none">
+    <!-- Hidden Native File Pickers: Placed outside clickable containers so gallery does not trigger camera -->
+    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageSelected(event)">
+    <input type="file" id="gallery-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
 
     <!-- Top Status & Property Selector -->
     <header class="flex flex-col gap-2 bg-slate-800/90 border border-slate-700/80 px-3 py-2.5 rounded-xl shadow-lg shrink-0">
@@ -69,7 +72,6 @@
 
     <!-- Main Scanner Workflow -->
     <main class="flex-1 flex flex-col justify-start my-3 gap-3">
-        
         <!-- ========================================== -->
         <!-- VIEW 1: SINGLE SCAN WORKFLOW (DEFAULT)    -->
         <!-- ========================================== -->
@@ -102,7 +104,7 @@
                     <input type="text" id="custom-room-input" placeholder="Type custom tag (e.g. Tent 1, Villa, Staff)..." class="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-xs font-black uppercase text-amber-200 placeholder-slate-500 outline-none focus:border-amber-400">
                 </div>
 
-                <!-- In-House Guest Notification Pill -->
+                <!-- In-House Guest Notification Pill (Shows guest occupying room TODAY) -->
                 <div id="matched-guest-pill" class="hidden bg-blue-950/60 border border-blue-600/40 rounded-xl px-2.5 py-1.5 flex items-center justify-between text-xs">
                     <div class="flex items-center gap-1.5 truncate">
                         <i data-lucide="user" class="w-3.5 h-3.5 text-blue-400 shrink-0"></i>
@@ -114,9 +116,6 @@
 
             <!-- Single Camera Trigger Zone -->
             <div id="capture-zone" class="bg-slate-800/80 border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center shadow-lg transition-colors cursor-pointer min-h-[190px] relative overflow-hidden" onclick="triggerCamera()">
-                <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageSelected(event)">
-                <input type="file" id="gallery-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
-
                 <div id="empty-state" class="flex flex-col items-center gap-2 py-3">
                     <div class="w-14 h-14 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shadow-inner">
                         <i data-lucide="camera" class="w-7 h-7"></i>
@@ -126,7 +125,7 @@
                         <p class="text-xs font-bold text-slate-400 mt-0.5">Captures photo & reviews details</p>
                     </div>
                     <div class="pt-1">
-                        <button type="button" onclick="event.stopPropagation(); triggerGallery()" class="text-xs font-bold text-blue-400 hover:text-blue-300 underline uppercase tracking-wider py-1 px-2 cursor-pointer">
+                        <button type="button" onclick="event.stopPropagation(); triggerGallery(event)" class="text-xs font-bold text-blue-400 hover:text-blue-300 underline uppercase tracking-wider py-1 px-2 cursor-pointer">
                             or pick from gallery
                         </button>
                     </div>
@@ -253,7 +252,6 @@
                 </div>
             </div>
         </div>
-
     </main>
 
     <!-- Footer Instructions -->
@@ -399,7 +397,7 @@
                     currentPropertyRooms = [];
                 }
 
-                const todayStr = new Date().toISOString().split('T')[0];
+                const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
                 const staffSnap = await getDocs(query(
                     collection(db, 'artifacts', targetAppId, 'public', 'data', 'staff'),
                     where("property", "==", pmsKey)
@@ -487,9 +485,16 @@
             }
 
             const cleanVal = normalizeRoomId(val);
+            const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+
+            // Strict check: only matches guest occupying room TODAY
             const occupant = inHouseBookings.find(b => {
                 const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
-                return rList.some(r => normalizeRoomId(r) === cleanVal);
+                const matches = rList.some(r => normalizeRoomId(r) === cleanVal);
+                if (!matches) return false;
+                const cIn = String(b.checkIn || '');
+                const cOut = String(b.checkOut || '');
+                return (!cIn || cIn <= todayStr) && (!cOut || cOut >= todayStr);
             });
 
             if (occupant) {
@@ -525,7 +530,7 @@
                 rushSubmissions = snapshot.docs
                     .map(d => ({ id: d.id, ...d.data() }))
                     .filter(g => g.status !== 'completed' && !g.isMockTest); // Only active real submissions
-                
+
                 // Sort by newest
                 rushSubmissions.sort((a, b) => {
                     const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.timestamp || 0);
@@ -557,6 +562,7 @@
                 totalCounter.innerText = `${rushSubmissions.length} Passport${rushSubmissions.length > 1 ? 's' : ''}`;
             }
 
+            const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
             let html = '';
             rushSubmissions.forEach(sub => {
                 const assignedRoom = normalizeRoomId(sub.roomNumber || '');
@@ -570,7 +576,11 @@
                     if (!rid) return;
                     const occupant = inHouseBookings.find(b => {
                         const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
-                        return rList.some(r => normalizeRoomId(r) === rid);
+                        const matches = rList.some(r => normalizeRoomId(r) === rid);
+                        if (!matches) return false;
+                        const cIn = String(b.checkIn || '');
+                        const cOut = String(b.checkOut || '');
+                        return (!cIn || cIn <= todayStr) && (!cOut || cOut >= todayStr);
                     });
 
                     const isSel = (assignedRoom === rid) ? 'selected' : '';
@@ -634,8 +644,9 @@
             showToast("Updating...", `Assigning room ${cleanRoom || 'Unassigned'}`, "success");
 
             try {
-                // 1. Locate PMS in-house booking matching chosen room
+                // 1. Locate PMS in-house booking matching chosen room TODAY
                 let matchedBooking = null;
+                const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
                 if (cleanRoom) {
                     const searchRooms = [cleanRoom];
                     if (/^[A-Z]0\d$/.test(cleanRoom)) searchRooms.push(cleanRoom[0] + cleanRoom[2]);
@@ -643,11 +654,15 @@
 
                     matchedBooking = inHouseBookings.find(b => {
                         const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
-                        return rList.some(r => {
+                        const matches = rList.some(r => {
                             if (!r) return false;
                             const cr = normalizeRoomId(r);
                             return searchRooms.includes(cr);
                         });
+                        if (!matches) return false;
+                        const cIn = String(b.checkIn || '');
+                        const cOut = String(b.checkOut || '');
+                        return (!cIn || cIn <= todayStr) && (!cOut || cOut >= todayStr);
                     });
                 }
 
@@ -857,8 +872,17 @@
         // ==============================================================
         // SINGLE SCAN CONTROLLERS (Retained for 1-by-1 manual workflow)
         // ==============================================================
-        window.triggerCamera = () => { document.getElementById('camera-input').click(); };
-        window.triggerGallery = () => { document.getElementById('gallery-input').click(); };
+        window.triggerCamera = () => { 
+            document.getElementById('camera-input').click(); 
+        };
+
+        window.triggerGallery = (event) => { 
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            document.getElementById('gallery-input').click(); 
+        };
 
         window.retakePhoto = () => {
             if (timerInterval) clearInterval(timerInterval);
@@ -961,6 +985,8 @@
                 }
 
                 let matchedBooking = null;
+                const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+
                 if (roomNumber) {
                     const searchRooms = [roomNumber];
                     if (/^[A-Z]0\d$/.test(roomNumber)) searchRooms.push(roomNumber[0] + roomNumber[2]);
@@ -968,16 +994,23 @@
 
                     matchedBooking = inHouseBookings.find(b => {
                         const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
-                        return rList.some(r => {
+                        const matches = rList.some(r => {
                             if (!r) return false;
                             const cleanR = String(r).trim().toUpperCase();
                             return searchRooms.includes(cleanR);
                         });
+                        if (!matches) return false;
+                        const cIn = String(b.checkIn || '');
+                        const cOut = String(b.checkOut || '');
+                        return (!cIn || cIn <= todayStr) && (!cOut || cOut >= todayStr);
                     });
                 }
 
                 if (!matchedBooking && firstName && lastName) {
                     matchedBooking = inHouseBookings.find(b => {
+                        const cIn = String(b.checkIn || '');
+                        const cOut = String(b.checkOut || '');
+                        if ((cIn && cIn > todayStr) || (cOut && cOut < todayStr)) return false;
                         const bFirst = String(b.firstName || '').toUpperCase();
                         const bLast = String(b.lastName || '').toUpperCase();
                         return (bLast.includes(lastName) && (bFirst.includes(firstName) || firstName.includes(bFirst))) ||
