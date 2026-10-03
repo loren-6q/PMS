@@ -9,6 +9,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://loren-6q.github.io/PMS/pms-core.js"></script>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
     <style>
@@ -88,6 +89,9 @@
             </div>
 
             <div class="flex items-center gap-2 shrink-1 transition-opacity min-w-0 ml-auto">
+                <button onclick="window.reloadSettings()" class="p-1 sm:px-2 sm:py-1 bg-white border border-slate-300 rounded font-bold text-[9px] sm:text-xs uppercase hover:bg-slate-50 text-slate-600 shrink-0 cursor-pointer shadow-sm flex items-center gap-1" title="Reload from Database">
+                    <i data-lucide="refresh-cw" size="14"></i> <span class="hidden sm:inline">Refresh</span>
+                </button>
                 <button onclick="window.createProperty()" class="p-1 sm:px-2 sm:py-1 bg-white border border-slate-300 rounded font-bold text-[9px] sm:text-xs uppercase hover:bg-slate-50 text-slate-600 shrink-0 cursor-pointer shadow-sm flex items-center gap-1" title="New Property">
                     <i data-lucide="plus" size="14"></i> <span class="hidden sm:inline">New</span>
                 </button>
@@ -714,8 +718,9 @@
         };
 
         window.saveConfig = async () => {
-            const propId = currentConfig.id;
-            if (!propId) return window.customAlert("No active property to save.");
+            const rawPropId = currentConfig.id;
+            if (!rawPropId) return window.customAlert("No active property to save.");
+            const propId = window.toCanonicalPropId ? window.toCanonicalPropId(rawPropId) : rawPropId;
             
             document.getElementById('loader').style.display = 'flex'; 
             document.getElementById('sync-status').innerText = 'SAVING CONFIG...';
@@ -725,9 +730,9 @@
             try {
                 const newConfig = {
                     id: propId, 
-                    name: document.getElementById('prop-name').value.trim(),
-                    timezone: document.getElementById('prop-tz').value.trim(), 
-                    currency: document.getElementById('prop-currency').value.trim(),
+                    name: document.getElementById('prop-name').value.trim() || propId.toUpperCase(),
+                    timezone: document.getElementById('prop-tz').value.trim() || 'Asia/Bangkok', 
+                    currency: document.getElementById('prop-currency').value.trim() || 'THB',
                     floors: parseInt(document.getElementById('prop-floors').value) || 3,
                     rooms: [], 
                     events: [], 
@@ -767,6 +772,11 @@
 
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), newConfig, { merge: true });
                 currentConfig = newConfig;
+
+                // Keep local property cache in sync
+                const cIdx = windowPropertiesList.findIndex(p => p.id === propId);
+                if (cIdx > -1) windowPropertiesList[cIdx] = JSON.parse(JSON.stringify(newConfig));
+                else windowPropertiesList.push(JSON.parse(JSON.stringify(newConfig)));
                 
                 const switcher = document.getElementById('property-switcher');
                 if (switcher) {
@@ -778,6 +788,23 @@
             } catch (e) { 
                 console.error("Save failed", e); 
                 window.customAlert("Failed to save configuration: " + e.message); 
+            }
+            document.getElementById('loader').style.display = 'none';
+        };
+
+        window.reloadSettings = async () => {
+            document.getElementById('loader').style.display = 'flex';
+            document.getElementById('sync-status').innerText = 'REFRESHING SETTINGS...';
+            try {
+                const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
+                const propsSnap = await getDocs(propsRef);
+                windowPropertiesList = [];
+                propsSnap.forEach(docSnap => windowPropertiesList.push({ id: docSnap.id, ...docSnap.data() }));
+                await window.handlePropertySwitch(currentConfig.id || windowPropertiesList[0]?.id, false);
+                window.customAlert("Latest settings loaded from database!");
+            } catch (e) {
+                console.error(e);
+                window.customAlert("Failed to reload settings: " + e.message);
             }
             document.getElementById('loader').style.display = 'none';
         };
