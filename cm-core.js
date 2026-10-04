@@ -128,7 +128,6 @@ window.closeModal = (id) => {
 };
 
 // --- 4. FORMATTERS & MATH HELPERS ---
-// Universal Currency Rounder: Strict whole integer for zero-decimal currencies (THB, JPY), 2 decimals for others
 window.roundCurrency = (val, currency = (window.currentCurrency || 'THB')) => {
     if (val === "" || val === null || val === undefined || isNaN(val)) return "";
     const num = Number(val);
@@ -137,7 +136,7 @@ window.roundCurrency = (val, currency = (window.currentCurrency || 'THB')) => {
     if (decimalCurrencies.includes(cur)) {
         return Math.round(num * 100) / 100;
     }
-    return Math.round(num); // Unconditional whole integer rounding for THB
+    return Math.round(num);
 };
 
 window.formatDisplay = (val) => {
@@ -145,16 +144,33 @@ window.formatDisplay = (val) => {
     return window.roundCurrency(val);
 };
 
-window.formatRatePlanTitle = (rawTitle) => {
+// Clean Rate Plan Formatter that handles Channex's actual occupancy syntax
+window.formatRatePlanTitle = (rawTitle, includeRoom = false) => {
     if (!rawTitle) return "Standard";
-    let t = rawTitle.replace(/\[.*?\]/g, '').trim();
-    t = t.replace(/\s+Rate$/i, '').trim();
-    const lower = t.toLowerCase();
-    if (lower.includes('non-ref') || lower.includes('non ref')) return "Non-Refundable";
-    if (lower.includes('standard') || lower.includes('flex') || lower.includes('refundable')) return "Standard";
-    if (lower.includes('breakfast')) return "Bed & Breakfast";
-    if (lower.includes('monthly') || lower.includes('long stay')) return "Monthly / Long";
-    return t || "Rate Plan";
+
+    // 1. Extract Room bracket if present (e.g. [Female Dorm])
+    const roomMatch = rawTitle.match(/\[(.*?)\]/);
+    const roomTag = roomMatch ? ` [${roomMatch[1].trim()}]` : "";
+
+    // 2. Strip Channex occupancy suffixes like "(Per Room, 1 Persons, THB)"
+    let clean = rawTitle
+        .replace(/\[.*?\]/g, '')
+        .replace(/\(Per Room.*?\)/gi, '')
+        .replace(/\(.*?Persons.*?\)/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // 3. For calendar grid view (includeRoom === false), shorten long names
+    if (!includeRoom) {
+        if (/bdc.*non-?ref/i.test(clean)) return "BDC Non-Ref";
+        if (/bdc.*ref/i.test(clean) || /bdc.*standard/i.test(clean)) return "BDC Standard";
+        if (/non-?ref/i.test(clean)) return "Non-Ref";
+        if (/refundable/i.test(clean) || /standard/i.test(clean)) return "Standard";
+        return clean.replace(/Rate$/i, '').trim();
+    }
+
+    // 4. In mapping view, keep clean name + room tag
+    return `${clean}${roomTag}`;
 };
 
 window.cleanPayload = (obj) => {
@@ -210,10 +226,8 @@ window.isRatePlanMatchingChannel = (ratePlanTitle = '', channel = '') => {
     const titleLower = ratePlanTitle.toLowerCase();
     const chLower = channel.toLowerCase();
 
-    // Direct containment check
     if (titleLower.includes(chLower)) return true;
 
-    // Industry OTA alias dictionary
     const aliases = {
         'booking.com': ['booking.com', 'booking', 'bdc'],
         'hostelworld': ['hostelworld', 'hw'],
@@ -413,7 +427,6 @@ window.loadPropertyConfig = async () => {
         window.safeUpdateUrlParam('p', shortKey);
         window.syncNavLinks(window.currentPropertyId);
 
-        // Populate switcher with canonical names
         const switcher = document.getElementById('property-switcher');
         if (switcher && window.windowPropertiesList.length > 0) {
             const seen = new Set();
@@ -453,7 +466,6 @@ window.loadPropertyConfig = async () => {
             window.promoRules = [];
         }
 
-        // Restore Channex credentials to input fields
         let apiKey = window.channexConfig?.apiKey || '';
         let chanPropId = window.channexConfig?.propId || '';
 
@@ -473,7 +485,6 @@ window.loadPropertyConfig = async () => {
             window.channexConfig = { apiKey, propId: chanPropId, env: 'production' };
         }
 
-        // Derive active room categories strictly from hotelRooms
         window.roomTypes = [];
         window.totalRoomsByType = {};
         
@@ -499,7 +510,6 @@ window.loadPropertyConfig = async () => {
         window.syncFilterPills();
         window.masterPricing = { relationships: [], timeline: {} };
         
-        // Document recovery
         const canonPropId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
         const shortPropId = window.toDisplayPropKey ? window.toDisplayPropKey(canonPropId) : '';
         const possibleDocIds = [...new Set([`master_${canonPropId}`, `master_${window.currentPropertyId}`, `master_${shortPropId}`].filter(Boolean))];
@@ -617,7 +627,6 @@ window.savePricingToCloud = async (silent = false) => {
 };
 
 // --- 9. COMBINED "SAVE & SYNC" ENGINE ---
-// Replaces separate Save Pricing and Sync Changes buttons with one seamless action
 window.saveAndSync = async (btn) => {
     const origHtml = btn ? btn.innerHTML : '';
     if (btn) {
@@ -626,11 +635,9 @@ window.saveAndSync = async (btn) => {
     }
 
     try {
-        // Step 1: Commit in-memory changes to Firebase Cloud
         const saveOk = await window.savePricingToCloud(true);
         if (!saveOk) throw new Error("Could not commit pricing to Firestore.");
 
-        // Step 2: Push pending delta changes to Channex if configured
         const hasChannex = window.channexConfig?.apiKey && window.channexConfig?.propId;
         if (hasChannex && window.pushToChannexAPI) {
             if (window.dirtyDates.size > 0) {
@@ -672,7 +679,6 @@ window.initCmCore = async () => {
         console.warn("Auth initialization notice:", aErr);
     }
 
-    // Realtime Staff Bookings listener for availability calculation
     try {
         onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (staffSnap) => {
             window.staff = staffSnap.docs.map(d => {
@@ -695,7 +701,6 @@ window.initCmCore = async () => {
         if (window.loadPropertyBaseline) await window.loadPropertyBaseline();
     } catch (e) { console.warn("Config load error:", e); }
 
-    // Date range initializations
     const today = new Date(); 
     const tapeStart = document.getElementById('tape-start');
     if (tapeStart) tapeStart.value = window.getLocalYMD(today); 
@@ -715,7 +720,6 @@ window.initCmCore = async () => {
     const qbEnd = document.getElementById('qb-end'); 
     if(qbEnd) qbEnd.value = window.getLocalYMD(nextM);
 
-    // Restore platform view
     try {
         const savedView = localStorage.getItem('cm_platform_view');
         if (savedView && ['direct', 'bdc', 'hw'].includes(savedView)) {
