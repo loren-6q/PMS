@@ -124,7 +124,9 @@ window.updateDOMCell = (dateStr, room) => {
 
                             let promoMultiplier = 1.0;
                             (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
-                                const isChannelMatch = pr.channel === 'ALL' || rate.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase());
+                                const isChannelMatch = window.isRatePlanMatchingChannel 
+                                    ? window.isRatePlanMatchingChannel(rate.ratePlanTitle, pr.channel)
+                                    : (pr.channel === 'ALL' || rate.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase()));
                                 const isScopeMatch = pr.scope === 'ALL' || pr.scope === room;
                                 const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dateStr >= pr.startDate && dateStr <= pr.endDate);
 
