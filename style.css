@@ -871,7 +871,6 @@ width: 14px;
 height: 14px;
 }
 
-/* ... existing code ... */
 
 /* ==========================================================================
 11. CHANNEL MANAGER & PROMO ENGINE STYLES
@@ -1084,4 +1083,81 @@ color: #ffffff;
 font-size: 11px;
 font-weight: 900;
 line-height: 1;
+}
+
+
+/* --------------------------------------------------------------------------
+ADDITIONAL CHANNEL MANAGER STYLES (Sync Table, Boundaries & Matrix Tuning)
+Append these to Section 11 of style.css
+-------------------------------------------------------------------------- */
+
+/* 1. Manual Sync & Auditor Table (Tab 6) */
+.sync-table {
+width: 100%;
+border-collapse: collapse;
+text-align: center;
+font-size: 11px;
+}
+.sync-table th,
+.sync-table td {
+border: 1px solid #cbd5e1;
+padding: 4px 2px;
+}
+.sync-table th.frozen-corner {
+position: sticky;
+left: 0;
+z-index: 30;
+background: #1e293b;
+color: #fff;
+}
+.sync-table td.frozen-col {
+position: sticky;
+left: 0;
+z-index: 20;
+background: #f8fafc;
+font-weight: 900;
+}
+.sync-table tr.frozen-row th {
+position: sticky;
+top: 0;
+z-index: 25;
+background: #1e293b;
+color: #fff;
+}
+
+/* 2. Ultra-Compact Typography & Row Heights for 42-Day Rate Grid */
+.rate-grid-table {
+border-collapse: collapse;
+font-family: 'Roboto Condensed', system-ui, -apple-system, sans-serif;
+}
+.rate-grid-table td,
+.rate-grid-table th {
+padding: 0px 1px !important;
+height: 20px !important;
+line-height: 1 !important;
+}
+.rate-grid-table input {
+font-family: 'Roboto Condensed', system-ui, -apple-system, sans-serif !important;
+letter-spacing: -0.02em !important;
+font-variant-numeric: tabular-nums;
+font-weight: 500 !important;
+font-size: 11px !important;
+height: 18px !important;
+padding: 0px 1px !important;
+}
+
+/* 3. Number Spinners Removal (Firefox & WebKit) */
+.rate-grid-table input[type="number"]::-webkit-outer-spin-button,
+.rate-grid-table input[type="number"]::-webkit-inner-spin-button {
+-webkit-appearance: none;
+margin: 0;
+}
+.rate-grid-table input[type="number"] {
+-moz-appearance: textfield;
+}
+
+/* 4. Solid 4px Black Divider Between Room Categories */
+tr.room-boundary-bottom > td,
+tr.room-boundary-bottom > th {
+border-bottom: 4px solid #0f172a !important;
 }
