@@ -498,7 +498,9 @@ window.pushToChannexAPI = async (btn, mode = 'full') => {
 
                     let promoMultiplier = 1.0;
                     (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
-                        const isChannelMatch = pr.channel === 'ALL' || mapRule.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase());
+                        const isChannelMatch = window.isRatePlanMatchingChannel
+                            ? window.isRatePlanMatchingChannel(mapRule.ratePlanTitle, pr.channel)
+                            : (pr.channel === 'ALL' || mapRule.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase()));
                         const isScopeMatch = pr.scope === 'ALL' || pr.scope === pmsCat;
                         const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dStr >= pr.startDate && dStr <= pr.endDate);
 
@@ -546,7 +548,9 @@ window.pushToChannexAPI = async (btn, mode = 'full') => {
 
                     let promoMultiplier = 1.0;
                     (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
-                        const isChannelMatch = pr.channel === 'ALL' || mapRule.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase());
+                        const isChannelMatch = window.isRatePlanMatchingChannel
+                            ? window.isRatePlanMatchingChannel(mapRule.ratePlanTitle, pr.channel)
+                            : (pr.channel === 'ALL' || mapRule.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase()));
                         const isScopeMatch = pr.scope === 'ALL' || pr.scope === pmsCat;
                         const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dStr >= pr.startDate && dStr <= pr.endDate);
 
