@@ -98,11 +98,11 @@
                 <button onclick="window.reloadSettingsConfig()" class="px-2.5 sm:px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer" title="Reload room inventory & event settings from database">
                     <i data-lucide="refresh-cw" size="14"></i> REFRESH CONFIG
                 </button>
-                <button id="btn-save-cloud" onclick="window.savePricingToCloud(false)" class="px-3 sm:px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-1.5 transition-colors cursor-pointer" title="Save in-memory edits to database">
-                    <i data-lucide="save" size="14"></i> SAVE PRICING
+                <!-- UNIFIED SAVE & SYNC BUTTON -->
+                <button id="btn-save-sync" onclick="window.saveAndSync(this)" class="px-3 sm:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer" title="Save pricing to database and push all changes directly to Channex">
+                    <i data-lucide="zap" size="14"></i> SAVE & SYNC
                 </button>
-                <button onclick="window.pushToChannexAPI(this, 'delta')" class="px-3 sm:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="zap" size="14"></i> SYNC CHANGES</button>
-                <button onclick="window.pushToChannexAPI(this, 'full')" class="px-3 sm:px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="cloud-upload" size="14"></i> FULL SYNC</button>
+                <button onclick="window.pushToChannexAPI(this, 'full')" class="px-3 sm:px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer" title="Force a full 500-day sync to Channex"><i data-lucide="cloud-upload" size="14"></i> FULL SYNC</button>
                 <a id="nav-pms-btn" href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors hidden sm:block ml-2 shrink-0">← Back</a>
             </div>
         </div>
@@ -2095,7 +2095,7 @@
 
         window.updateSaveIndicator = () => {
             const si = document.getElementById('save-indicator');
-            const saveBtn = document.getElementById('btn-save-cloud');
+            const saveBtn = document.getElementById('btn-save-sync');
             if (!si) return;
             if (window.hasUnsavedChanges) {
                 si.innerText = '● UNSAVED CHANGES';
@@ -2809,7 +2809,7 @@
         window.nukeDatabase = () => {
             window.customAlert("WIPE ALL PRICING DATA?\n\nThis will completely clear your entire pricing matrix from the database, resetting everything to blank.", true, () => {
                 masterPricing.timeline = {};
-                window.savePricingToCloud();
+                window.savePricingToCloud(false);
                 window.renderGrid();
             });
         };
@@ -3297,13 +3297,45 @@
                     hideLoader(); 
                     window.customAlert("Save Error:\n\nCould not write to Firebase: " + err.message); 
                 }
+                throw err;
+            }
+        };
+
+        // Unified 1-Click Save & Sync
+        window.saveAndSync = async (btn) => {
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin inline" size="14"></i> SAVING & SYNCING...';
+            btn.disabled = true;
+            if (window.lucide) window.lucide.createIcons();
+
+            try {
+                // 1. Commit to Firestore database first
+                await window.savePricingToCloud(true);
+
+                // 2. Check if we have modified dates in queue to push to Channex
+                if (window.dirtyDates.size > 0) {
+                    await window.pushToChannexAPI(btn, 'delta');
+                } else {
+                    hideLoader();
+                    window.customAlert("✅ Pricing saved to database!\n\n(No new modified dates needed pushing to Channex).");
+                }
+            } catch (err) {
+                console.error("Save & Sync Error:", err);
+                hideLoader();
+                window.customAlert("❌ Save & Sync Failed:\n\n" + err.message);
+            } finally {
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
+                if (window.lucide) window.lucide.createIcons();
             }
         };
 
         window.pushToChannexAPI = async (btn, mode = 'full') => {
-            const origHtml = btn.innerHTML;
-            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin inline" size="14"></i> SYNCING...';
-            btn.disabled = true;
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin inline" size="14"></i> SYNCING...';
+                btn.disabled = true;
+            }
             document.getElementById('loader').classList.add('active');
             document.getElementById('sync-status').innerText = 'COMPRESSING PAYLOAD...';
 
@@ -3323,7 +3355,8 @@
                 if (mode === 'delta') {
                     if (window.dirtyDates.size === 0) {
                         document.getElementById('loader').classList.remove('active');
-                        btn.innerHTML = origHtml; btn.disabled = false; if (window.lucide) window.lucide.createIcons();
+                        if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
+                        if (window.lucide) window.lucide.createIcons();
                         return window.customAlert("No changes to sync! Cells will turn orange when edited.");
                     }
                     datesToProcess = Array.from(window.dirtyDates).sort();
@@ -3690,8 +3723,10 @@
                 window.customAlert("❌ Sync Failed:\n\n" + err.message);
             } finally {
                 hideLoader();
-                btn.innerHTML = origHtml;
-                btn.disabled = false;
+                if (btn) {
+                    btn.innerHTML = origHtml;
+                    btn.disabled = false;
+                }
                 if (window.lucide) window.lucide.createIcons();
             }
         };
