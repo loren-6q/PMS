@@ -118,7 +118,7 @@ window.fetchChannexData = async () => {
         const roomData = await window.fetchAllChannex('room_types', apiKey, propId);
         const rawRateData = await window.fetchAllChannex('rate_plans', apiKey, propId);
 
-        // Strict Filter: Remove Channex auto-generated derived channel rate plans
+        // Filter out Channex auto-generated derived channel rate plans
         const rateData = rawRateData.filter(rate => {
             if (rate.attributes?.parent_rate_plan_id) return false;
             if (rate.relationships?.parent_rate_plan?.data?.id) return false;
@@ -244,7 +244,6 @@ window.renderChannexRateMapping = (channexRates = null) => {
             return;
         }
 
-        // Clean out any stale child channel rate plans from cached data
         const cleanRateMap = window.channexRateMap.filter(rate => {
             const title = rate.ratePlanTitle || '';
             if (/ - (BookingCom|Hostelworld|Agoda|Expedia|Airbnb|Hotelbeds|Ctrip|TripCom)\b/i.test(title)) return false;
@@ -310,7 +309,6 @@ window.renderChannexRateMapping = (channexRates = null) => {
             rateCard.classList.remove('hidden');
         }
 
-        // Clean out any stale child channel rate plans from incoming API payload
         const cleanRates = channexRates.filter(rate => {
             if (rate.attributes?.parent_rate_plan_id) return false;
             if (rate.relationships?.parent_rate_plan?.data?.id) return false;
@@ -450,7 +448,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
         const availPayload = [];
         const restrPayload = [];
 
-        // Availability: Group by Channex Room Type
+        // 1. Availability: Group by Channex Room Type
         window.channexMap.forEach(rule => {
             if (!rule.channexId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -461,24 +459,6 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
             for (let i = 0; i < datesToProcess.length; i++) {
                 const dStr = datesToProcess[i];
-
-                if (mode === 'delta') {
-                    const isAvailDirty = window.dirtyFields?.[dStr]?.[pmsCat]?.has('avail');
-                    if (!isAvailDirty) {
-                        if (rangeStart !== null && currentAvail !== null) {
-                            availPayload.push({
-                                property_id: propId,
-                                room_type_id: roomTypeId,
-                                date_from: rangeStart,
-                                date_to: datesToProcess[i - 1],
-                                availability: currentAvail
-                            });
-                            rangeStart = null;
-                            currentAvail = null;
-                        }
-                        continue;
-                    }
-                }
 
                 let otaAvail = window.masterPricing.timeline[dStr]?.otaOverrides?.[`${pmsCat}_avail`];
                 let live = (window.liveInventory[dStr] && window.liveInventory[dStr][pmsCat] !== undefined)
@@ -519,7 +499,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // Rates & Restrictions: Group by Channex Rate Plan
+        // 2. Rates & Restrictions: Group by Channex Rate Plan with explicit null deletion
         (window.channexRateMap || []).forEach(rule => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -537,10 +517,18 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 const roomObj = dayObj[pmsCat] || {};
                 const globObj = dayObj['GLOBAL'] || {};
 
+                const dirtyFieldsSet = window.dirtyFields?.[dStr]?.[ratePlanId];
+                const isMinDirty = dirtyFieldsSet?.has('min') || dirtyFieldsSet?.has('GLOBAL_min');
+                const isMinArrDirty = dirtyFieldsSet?.has('min_arr') || dirtyFieldsSet?.has('GLOBAL_min_arr');
+                const isMaxDirty = dirtyFieldsSet?.has('max') || dirtyFieldsSet?.has('GLOBAL_max');
+                const isCtaDirty = dirtyFieldsSet?.has('cta') || dirtyFieldsSet?.has('GLOBAL_cta');
+                const isCtdDirty = dirtyFieldsSet?.has('ctd') || dirtyFieldsSet?.has('GLOBAL_ctd');
+                const isStopDirty = dirtyFieldsSet?.has('stop') || dirtyFieldsSet?.has('stopSell') || dirtyFieldsSet?.has('GLOBAL_stopSell');
+
+                // In delta mode, only process rate plans that have pending changes on this date
                 if (mode === 'delta') {
-                    const dirtyFieldsSet = window.dirtyFields?.[dStr]?.[ratePlanId];
                     if (!dirtyFieldsSet || dirtyFieldsSet.size === 0) {
-                        if (rangeStart !== null && currentItem !== null) {
+                        if (rangeStart !== null && currentItem !== null && Object.keys(currentItem).length > 0) {
                             restrPayload.push({
                                 property_id: propId,
                                 rate_plan_id: ratePlanId,
@@ -555,7 +543,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     }
                 }
 
-                // 1. Calculate Live Price
+                // Calculate Live Price
                 let calculatedPrice = null;
                 const otaPriceOverride = dayObj.otaOverrides?.[ratePlanId];
 
@@ -589,7 +577,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     }
                 }
 
-                // 2. Resolve Restrictions
+                // Resolve Restrictions: Specific OTA override -> Room level -> Global level
                 const getRestr = (f) => {
                     const otaVal = dayObj.otaOverrides?.[`${ratePlanId}_${f}`];
                     if (otaVal !== undefined && otaVal !== "") return otaVal;
@@ -599,25 +587,57 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 };
 
                 const todayRestrictions = {};
-                if (calculatedPrice !== null && !isNaN(calculatedPrice)) todayRestrictions.rate = calculatedPrice;
+                if (calculatedPrice !== null && !isNaN(calculatedPrice)) {
+                    todayRestrictions.rate = calculatedPrice;
+                }
 
+                // Min Stay Arrival (Explicit null removes it in Channex)
                 const minS = getRestr('min');
-                if (minS !== null) todayRestrictions.min_stay_arrival = parseInt(minS);
+                if (minS !== null && minS !== "") {
+                    todayRestrictions.min_stay_arrival = parseInt(minS);
+                } else if (mode === 'full' || isMinDirty) {
+                    todayRestrictions.min_stay_arrival = null;
+                }
 
+                // Min Stay Through (Min on Arrival)
                 const minArr = getRestr('min_arr');
-                if (minArr !== null) todayRestrictions.min_stay_through = parseInt(minArr);
+                if (minArr !== null && minArr !== "") {
+                    todayRestrictions.min_stay_through = parseInt(minArr);
+                } else if (mode === 'full' || isMinArrDirty) {
+                    todayRestrictions.min_stay_through = null;
+                }
 
+                // Max Stay
                 const maxS = getRestr('max');
-                if (maxS !== null) todayRestrictions.max_stay = parseInt(maxS);
+                if (maxS !== null && maxS !== "") {
+                    todayRestrictions.max_stay = parseInt(maxS);
+                } else if (mode === 'full' || isMaxDirty) {
+                    todayRestrictions.max_stay = null;
+                }
 
+                // Closed to Arrival (CTA)
                 const cta = getRestr('cta');
-                if (cta !== null) todayRestrictions.closed_to_arrival = !!cta;
+                if (cta !== null && cta !== "") {
+                    todayRestrictions.closed_to_arrival = !!cta;
+                } else if (mode === 'full' || isCtaDirty) {
+                    todayRestrictions.closed_to_arrival = false;
+                }
 
+                // Closed to Departure (CTD)
                 const ctd = getRestr('ctd');
-                if (ctd !== null) todayRestrictions.closed_to_departure = !!ctd;
+                if (ctd !== null && ctd !== "") {
+                    todayRestrictions.closed_to_departure = !!ctd;
+                } else if (mode === 'full' || isCtdDirty) {
+                    todayRestrictions.closed_to_departure = false;
+                }
 
+                // Stop Sell
                 const stop = getRestr('stopSell');
-                if (stop !== null) todayRestrictions.stop_sell = !!stop;
+                if (stop !== null && stop !== "") {
+                    todayRestrictions.stop_sell = !!stop;
+                } else if (mode === 'full' || isStopDirty) {
+                    todayRestrictions.stop_sell = false;
+                }
 
                 const itemJson = JSON.stringify(todayRestrictions);
 
@@ -672,7 +692,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
         }
 
         if (restrPayload.length > 0) {
-            console.log("Pushing Rate/Restriction Ranges to Channex:", restrPayload);
+            console.log("Pushing Restrictions to Channex with smart delta updates:", restrPayload);
             const rRes = await fetch(`https://app.channex.io/api/v1/restrictions`, {
                 method: "POST",
                 headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
@@ -695,7 +715,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             window.updateSaveIndicator();
             if (window.renderGrid) window.renderGrid();
 
-            window.customAlert(`Sync Successful!\n\nPushed ${availPayload.length} availability ranges and ${restrPayload.length} rate/restriction ranges directly to Channex.`);
+            window.customAlert(`Sync Successful!\n\nPushed ${availPayload.length} availability ranges and ${restrPayload.length} rate/restriction ranges to Channex.`);
         } else {
             throw new Error("One or more Channex endpoints rejected the payload. Check DevTools console for details.");
         }
