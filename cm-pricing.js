@@ -98,7 +98,6 @@ window.rippleDay = (dateStr, startRoom) => {
                 
                 queue.push(edge.to);
 
-                // Register rippled rate plans as dirty for seamless delta sync
                 window.dirtyDates.add(dateStr);
                 window.syncedDates.delete(dateStr);
                 window.dirtyFields = window.dirtyFields || {};
@@ -359,6 +358,16 @@ window.toggleAutofillEventMode = (enabled) => {
     document.querySelectorAll('.no-evt-column').forEach(el => el.style.display = enabled ? 'none' : 'block');
 };
 
+window.toggleEvtRestrInputs = (enabled) => {
+    const wrap = document.getElementById('evt-restr-table-wrap');
+    if (!wrap) return;
+    if (enabled) {
+        wrap.classList.remove('opacity-50', 'pointer-events-none');
+    } else {
+        wrap.classList.add('opacity-50', 'pointer-events-none');
+    }
+};
+
 window.populateAutofillBaselines = (b) => {
     if (!b) return;
     window.savedAutofillBaselines = b;
@@ -366,6 +375,11 @@ window.populateAutofillBaselines = (b) => {
         const el = document.getElementById(id);
         if (el && val !== undefined && val !== null) el.value = val;
     };
+    const setCheck = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val !== undefined) el.checked = !!val;
+    };
+
     setVal('w-p-base', b.p_base);
     setVal('w-p-base-single', b.p_base);
     setVal('w-p-pkg', b.p_pkg);
@@ -383,6 +397,28 @@ window.populateAutofillBaselines = (b) => {
     setVal('w-d-0', b.d_0);
     setVal('w-d-p1', b.d_p1);
     setVal('w-d-p2', b.d_p2);
+
+    // Event Stay Restrictions Curve inputs
+    setCheck('w-enable-evt-restr', b.enable_evt_restr);
+    window.toggleEvtRestrInputs(!!b.enable_evt_restr);
+
+    setVal('w-r-min-m2', b.r_min_m2 !== undefined ? b.r_min_m2 : "");
+    setVal('w-r-min-m1', b.r_min_m1 !== undefined ? b.r_min_m1 : "");
+    setVal('w-r-min-0', b.r_min_0 !== undefined ? b.r_min_0 : "");
+    setVal('w-r-min-p1', b.r_min_p1 !== undefined ? b.r_min_p1 : "");
+    setVal('w-r-min-p2', b.r_min_p2 !== undefined ? b.r_min_p2 : "");
+
+    setVal('w-r-minarr-m2', b.r_minarr_m2 !== undefined ? b.r_minarr_m2 : "");
+    setVal('w-r-minarr-m1', b.r_minarr_m1 !== undefined ? b.r_minarr_m1 : "");
+    setVal('w-r-minarr-0', b.r_minarr_0 !== undefined ? b.r_minarr_0 : "");
+    setVal('w-r-minarr-p1', b.r_minarr_p1 !== undefined ? b.r_minarr_p1 : "");
+    setVal('w-r-minarr-p2', b.r_minarr_p2 !== undefined ? b.r_minarr_p2 : "");
+
+    setCheck('w-r-cta-m2', b.r_cta_m2);
+    setCheck('w-r-cta-m1', b.r_cta_m1);
+    setCheck('w-r-cta-0', b.r_cta_0);
+    setCheck('w-r-cta-p1', b.r_cta_p1);
+    setCheck('w-r-cta-p2', b.r_cta_p2);
 
     if (b.anchor_p) {
         const pEl = document.getElementById('w-anchor-private');
@@ -406,6 +442,15 @@ window.saveAutofillBaselines = async (notify = false) => {
         const el = document.getElementById(id);
         return el ? (parseFloat(el.value) || 0) : 0;
     };
+    const getRaw = id => {
+        const el = document.getElementById(id);
+        return el ? el.value.trim() : "";
+    };
+    const getBool = id => {
+        const el = document.getElementById(id);
+        return el ? el.checked : false;
+    };
+
     const baselines = {
         anchor_p: document.getElementById('w-anchor-private')?.value || '',
         anchor_d: document.getElementById('w-anchor-dorm')?.value || '',
@@ -422,7 +467,26 @@ window.saveAutofillBaselines = async (notify = false) => {
         d_m1: getVal('w-d-m1'),
         d_0: getVal('w-d-0'),
         d_p1: getVal('w-d-p1'),
-        d_p2: getVal('w-d-p2')
+        d_p2: getVal('w-d-p2'),
+
+        enable_evt_restr: getBool('w-enable-evt-restr'),
+        r_min_m2: getRaw('w-r-min-m2'),
+        r_min_m1: getRaw('w-r-min-m1'),
+        r_min_0: getRaw('w-r-min-0'),
+        r_min_p1: getRaw('w-r-min-p1'),
+        r_min_p2: getRaw('w-r-min-p2'),
+
+        r_minarr_m2: getRaw('w-r-minarr-m2'),
+        r_minarr_m1: getRaw('w-r-minarr-m1'),
+        r_minarr_0: getRaw('w-r-minarr-0'),
+        r_minarr_p1: getRaw('w-r-minarr-p1'),
+        r_minarr_p2: getRaw('w-r-minarr-p2'),
+
+        r_cta_m2: getBool('w-r-cta-m2'),
+        r_cta_m1: getBool('w-r-cta-m1'),
+        r_cta_0: getBool('w-r-cta-0'),
+        r_cta_p1: getBool('w-r-cta-p1'),
+        r_cta_p2: getBool('w-r-cta-p2')
     };
     window.savedAutofillBaselines = baselines;
 
@@ -433,7 +497,7 @@ window.saveAutofillBaselines = async (notify = false) => {
             autofillBaselines: baselines,
             updatedAt: new Date().toISOString()
         }, { merge: true });
-        if (notify) window.customAlert("Autofiller baseline prices and anchors saved to database!");
+        if (notify) window.customAlert("Autofiller baseline prices and restrictions saved to database!");
     } catch (e) {
         console.error("Failed to save baselines:", e);
         if (notify) window.customAlert("Could not save baselines: " + e.message);
@@ -494,6 +558,21 @@ window.runAutomator = () => {
     const d_0 = parseFloat(document.getElementById('w-d-0')?.value) || d_base;
     const d_p1 = parseFloat(document.getElementById('w-d-p1')?.value) || d_base;
     const d_p2 = parseFloat(document.getElementById('w-d-p2')?.value) || d_base;
+
+    const enableRestr = document.getElementById('w-enable-evt-restr')?.checked;
+    const getRestrVal = id => {
+        const v = document.getElementById(id)?.value?.trim();
+        return (v !== "" && !isNaN(parseInt(v))) ? parseInt(v) : "";
+    };
+    const getRestrCta = id => document.getElementById(id)?.checked || false;
+
+    const restrMap = {
+        "-2": { min: getRestrVal('w-r-min-m2'), min_arr: getRestrVal('w-r-minarr-m2'), cta: getRestrCta('w-r-cta-m2') },
+        "-1": { min: getRestrVal('w-r-min-m1'), min_arr: getRestrVal('w-r-minarr-m1'), cta: getRestrCta('w-r-cta-m1') },
+        "0":  { min: getRestrVal('w-r-min-0'),  min_arr: getRestrVal('w-r-minarr-0'),  cta: getRestrCta('w-r-cta-0') },
+        "1":  { min: getRestrVal('w-r-min-p1'), min_arr: getRestrVal('w-r-minarr-p1'), cta: getRestrCta('w-r-cta-p1') },
+        "2":  { min: getRestrVal('w-r-min-p2'), min_arr: getRestrVal('w-r-minarr-p2'), cta: getRestrCta('w-r-cta-p2') }
+    };
     
     if (!sDate || !eDate) return window.customAlert("Please select both a Start Date and an End Date.");
     if (sDate > eDate) return window.customAlert("End Date must be on or after Start Date.");
@@ -508,7 +587,6 @@ window.runAutomator = () => {
 
         let stdP = p_base, fmpP = ""; 
         let stdD = d_base, fmpD = "";
-        let min = "", min_arr = "", cta = false;
         
         if (hasEvents) {
             if (Math.abs(minDiff) <= 6 && minDiff !== 0) { 
@@ -525,26 +603,34 @@ window.runAutomator = () => {
                 stdP = p_0; fmpP = p_0; 
                 stdD = d_0; fmpD = d_0; 
             }
-            
-            if (minDiff < 0 && minDiff >= -6) {
-                min = Math.abs(minDiff) + 1;
-            } else if (minDiff === 0) {
-                min = 1;
-            } else if (minDiff > 0 && minDiff <= 6) {
-                min = ""; 
-                min_arr = 5; 
-                cta = true; 
-            } else {
-                min = ""; min_arr = ""; cta = false;
-            }
         }
 
         window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-        window.masterPricing.timeline[dateStr]['GLOBAL'] = window.masterPricing.timeline[dateStr]['GLOBAL'] || { isOverride: {} };
-        const curG = window.masterPricing.timeline[dateStr]['GLOBAL'];
-        if (!curG.isOverride.min && min !== "") curG.min = min; else if (!curG.isOverride.min && min === "") curG.min = "";
-        if (!curG.isOverride.min_arr && min_arr !== "") curG.min_arr = min_arr; else if (!curG.isOverride.min_arr && min_arr === "") curG.min_arr = "";
-        if (!curG.isOverride.cta) curG.cta = cta;
+        
+        // Apply restrictions ONLY if enabled by the user
+        if (hasEvents && enableRestr) {
+            const restrConfig = restrMap[String(minDiff)];
+            if (restrConfig) {
+                window.masterPricing.timeline[dateStr]['GLOBAL'] = window.masterPricing.timeline[dateStr]['GLOBAL'] || { isOverride: {} };
+                const curG = window.masterPricing.timeline[dateStr]['GLOBAL'];
+
+                if (!curG.isOverride.min && restrConfig.min !== "") curG.min = restrConfig.min;
+                if (!curG.isOverride.min_arr && restrConfig.min_arr !== "") curG.min_arr = restrConfig.min_arr;
+                if (!curG.isOverride.cta) curG.cta = restrConfig.cta;
+
+                (window.channexRateMap || []).forEach(rate => {
+                    window.dirtyFields = window.dirtyFields || {};
+                    window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
+                    window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
+                    window.dirtyFields[dateStr][rate.ratePlanId].add('min');
+                    window.dirtyFields[dateStr][rate.ratePlanId].add('min_arr');
+                    window.dirtyFields[dateStr][rate.ratePlanId].add('cta');
+                    window.dirtyFields[dateStr][rate.ratePlanId].add('GLOBAL_min');
+                    window.dirtyFields[dateStr][rate.ratePlanId].add('GLOBAL_min_arr');
+                    window.dirtyFields[dateStr][rate.ratePlanId].add('GLOBAL_cta');
+                });
+            }
+        }
         
         if (anchorP) {
             window.masterPricing.timeline[dateStr][anchorP] = window.masterPricing.timeline[dateStr][anchorP] || { isOverride: {} };
