@@ -4,72 +4,134 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-channex.js
 // ==========================================================================
 
-window.getChannexBaseUrl = () => 'https://app.channex.io/api/v1';
-
-window.fetchWithRetry = async (url, options, retries = 3, backoff = 2000) => {
-    for (let i = 0; i < retries; i++) {
+// --- 1. CHANNEX REST API CLIENT WITH EXPONENTIAL BACKOFF RETRY ---
+window.fetchWithRetry = async (url, options = {}, retries = 4, backoff = 1000) => {
+    try {
         const res = await fetch(url, options);
         if (res.status === 429) {
-            const statusEl = document.getElementById('sync-status');
-            if (statusEl) statusEl.innerText = `RATE LIMIT HIT. RETRYING IN ${backoff / 1000}s...`;
-            await new Promise(r => setTimeout(r, backoff));
-            backoff *= 2;
-            continue;
+            const retryAfter = res.headers.get('Retry-After');
+            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : backoff;
+            console.warn(`⏳ Channex Rate limit (429). Retrying in ${waitTime}ms...`);
+            await new Promise(r => setTimeout(r, waitTime));
+            return window.fetchWithRetry(url, options, retries - 1, backoff * 2);
         }
         return res;
+    } catch (err) {
+        if (retries > 0) {
+            console.warn(`⚠️ Network fetch error. Retrying in ${backoff}ms...`, err);
+            await new Promise(r => setTimeout(r, backoff));
+            return window.fetchWithRetry(url, options, retries - 1, backoff * 2);
+        }
+        throw err;
     }
-    return await fetch(url, options);
 };
 
 window.fetchAllChannex = async (endpoint, apiKey, propId) => {
-    let allItems = [];
+    let allData = [];
     let page = 1;
-    let totalPages = 1;
-    const baseUrl = window.getChannexBaseUrl();
+    let hasMore = true;
 
-    while (page <= totalPages) {
-        const res = await fetch(`${baseUrl}/${endpoint}?filter[property_id]=${propId}&pagination[page]=${page}&pagination[limit]=100`, {
-            headers: { "user-api-key": apiKey }
+    while (hasMore) {
+        const url = `https://app.channex.io/api/v1/${endpoint}?filter[property_id]=${propId}&page=${page}&limit=100`;
+        const res = await window.fetchWithRetry(url, {
+            headers: {
+                "user-api-key": apiKey,
+                "Content-Type": "application/json"
+            }
         });
-        if (!res.ok) throw new Error(`Channex API returned HTTP ${res.status} for ${endpoint}`);
-        const data = await res.json();
 
-        if (data && Array.isArray(data.data)) {
-            allItems = allItems.concat(data.data);
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData?.errors?.title || `Channex API error: ${res.statusText}`);
         }
-        if (data && data.meta && data.meta.pagination) {
-            totalPages = data.meta.pagination.total_pages || 1;
-        } else if (data && data.meta) {
-            totalPages = data.meta.total_pages || 1;
+
+        const json = await res.json();
+        const data = json.data || [];
+        allData = allData.concat(data);
+
+        if (json.meta && json.meta.page && json.meta.total_pages) {
+            hasMore = json.meta.page < json.meta.total_pages;
+        } else {
+            hasMore = data.length >= 100;
         }
         page++;
     }
-    return allItems;
+    return allData;
 };
 
+// --- 2. CREDENTIALS & INITIAL DISCOVERY ---
 window.saveCredentialsAndFetch = async () => {
     const apiKey = document.getElementById('chan-api-key')?.value.trim();
     const propId = document.getElementById('chan-prop-id')?.value.trim();
-    if (!apiKey || !propId) return window.customAlert("API Key and Property ID are required.");
 
-    window.showLoader('FETCHING CHANNEX DATA...');
-    window.channexConfig = { apiKey, propId, env: 'production' };
+    if (!apiKey || !propId) {
+        return window.customAlert("Please enter both your Channex API Key and Property ID.");
+    }
 
-    try {
-        localStorage.setItem(`cm_channex_${window.currentPropertyId}`, JSON.stringify(window.channexConfig));
-        localStorage.setItem('cm_channex_last_used', JSON.stringify(window.channexConfig));
-    } catch (e) {}
+    window.showLoader('VALIDATING & CONNECTING...');
 
     try {
-        if (window.loadPropertyConfig) {
-            await window.loadPropertyConfig();
+        const testRes = await fetch(`https://app.channex.io/api/v1/properties/${propId}`, {
+            headers: {
+                "user-api-key": apiKey,
+                "Content-Type": "application/json"
+            }
+        });
+
+        if (!testRes.ok) {
+            const err = await testRes.json().catch(() => ({}));
+            throw new Error(err?.errors?.title || "Invalid API Key or Property ID.");
         }
 
+        const propJson = await testRes.json();
+        const propTitle = propJson.data?.attributes?.title || 'Unknown Property';
+
+        window.channexConfig = { apiKey, propId, env: 'production' };
+        localStorage.setItem(`cm_channex_${window.currentPropertyId}`, JSON.stringify(window.channexConfig));
+
+        const { doc, updateDoc } = window.cmFs;
+        await updateDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId), {
+            channex: window.channexConfig
+        });
+
+        window.customAlert(`Success!\n\nConnected to Channex: "${propTitle}". Fetching room inventory and rate plans...`);
+        await window.fetchChannexData();
+
+    } catch (err) {
+        console.error("Credentials error:", err);
+        window.hideLoader();
+        window.customAlert("Connection Failed:\n\n" + err.message);
+    }
+};
+
+window.fetchChannexData = async () => {
+    const apiKey = window.channexConfig?.apiKey || document.getElementById('chan-api-key')?.value.trim();
+    const propId = window.channexConfig?.propId || document.getElementById('chan-prop-id')?.value.trim();
+
+    if (!apiKey || !propId) {
+        return window.customAlert("Channex credentials missing. Enter API key and Property ID first.");
+    }
+
+    window.showLoader('FETCHING CHANNEX INVENTORY...');
+
+    try {
         const roomData = await window.fetchAllChannex('room_types', apiKey, propId);
-        const rateData = await window.fetchAllChannex('rate_plans', apiKey, propId);
+        const rawRateData = await window.fetchAllChannex('rate_plans', apiKey, propId);
+
+        // Strict Filter: Remove Channex auto-generated derived channel rate plans
+        const rateData = rawRateData.filter(rate => {
+            if (rate.attributes?.parent_rate_plan_id) return false;
+            if (rate.relationships?.parent_rate_plan?.data?.id) return false;
+            const title = rate.attributes?.title || '';
+            if (/ - (BookingCom|Hostelworld|Agoda|Expedia|Airbnb|Hotelbeds|Ctrip|TripCom)\b/i.test(title)) return false;
+            return true;
+        });
 
         const roomNameMap = {};
-        roomData.forEach(r => { roomNameMap[r.id] = r.attributes.title; });
+        roomData.forEach(r => {
+            roomNameMap[r.id] = r.attributes.title;
+        });
+
         rateData.forEach(rate => {
             const parentRoomId = rate.relationships?.room_type?.data?.id;
             if (parentRoomId && roomNameMap[parentRoomId]) {
@@ -77,67 +139,190 @@ window.saveCredentialsAndFetch = async () => {
             }
         });
 
-        window.renderChannexMappingUI(roomData, rateData);
-
-        const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
-        const { doc, setDoc } = window.cmFs;
-        await Promise.all([
-            setDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId), { channex: window.channexConfig }, { merge: true }),
-            setDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'pricing', `master_${canonId}`), { channex: window.channexConfig }, { merge: true })
-        ]);
-    } catch (e) {
-        console.error(e);
-        window.customAlert("Failed to fetch Channex configuration.\n\n" + e.message);
+        window.renderChannexMapping(roomData);
+        window.renderChannexRateMapping(rateData);
+        window.hideLoader();
+        window.customAlert(`Fetched ${roomData.length} Room Types and ${rateData.length} Master Rate Plans from Channex!`);
+    } catch (err) {
+        console.error("Fetch Channex Data error:", err);
+        window.hideLoader();
+        window.customAlert("Fetch Error:\n\n" + err.message);
     }
-    window.hideLoader();
 };
 
-window.fetchChannexData = () => {
-    window.saveCredentialsAndFetch();
+// --- 3. MAPPING UI RENDERERS ---
+window.getPmsCategoryOptionsHtml = () => {
+    let opts = '<option value="">-- UNMAPPED / IGNORED --</option>';
+    (window.roomTypes || []).forEach(rt => {
+        opts += `<option value="${rt}">${rt}</option>`;
+    });
+    return opts;
 };
 
-window.renderChannexMappingUI = (channexRooms, channexRates) => {
-    const mapContainer = document.getElementById('channex-mapping-container');
-    if (!mapContainer) return;
+window.renderChannexMapping = (channexRooms = null) => {
+    const container = document.getElementById('channex-mapping-container');
+    if (!container) return;
 
-    if (!channexRooms || channexRooms.length === 0) {
-        mapContainer.innerHTML = "<div class='text-center py-6 text-red-500 font-bold text-xs'>No Room Types found in Channex for this Property.</div>";
+    if (!channexRooms) {
+        if (!window.channexMap || window.channexMap.length === 0) {
+            container.innerHTML = `<div class="text-center py-6 text-slate-400 font-bold text-xs italic">No room mappings configured yet. Click Save & Fetch above.</div>`;
+            return;
+        }
+
+        const pmsOptions = window.getPmsCategoryOptionsHtml();
+        let html = '<div class="flex flex-col gap-1.5">';
+        window.channexMap.forEach(map => {
+            let catOptions = pmsOptions;
+            let warningTag = '';
+
+            if (map.pmsCategory && !(window.roomTypes || []).includes(map.pmsCategory)) {
+                catOptions = `<option value="${map.pmsCategory}" selected class="text-red-600 font-black">⚠️ ${map.pmsCategory} (RENAMED / NOT IN SETTINGS)</option>` + pmsOptions;
+                warningTag = ` <span class="text-red-500 font-black text-[9px]">(RENAMED IN SETTINGS)</span>`;
+            } else {
+                catOptions = catOptions.replace(`value="${map.pmsCategory}"`, `value="${map.pmsCategory}" selected`);
+            }
+
+            html += `
+                <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-channex-id="${map.channexId}" data-channex-title="${map.channexTitle}">
+                    <div class="flex-1 flex flex-col min-w-0 pl-1">
+                        <span class="font-bold text-slate-800 text-[11px] truncate" title="${map.channexTitle}">${map.channexTitle}${warningTag}</span>
+                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex ID: ${map.channexId}</span>
+                    </div>
+                    <i data-lucide="arrow-right" size="14" class="text-slate-400 shrink-0"></i>
+                    <select class="input-base !py-1 !text-xs !w-44 cursor-pointer chan-pms-sel bg-slate-50 border-slate-300 text-slate-700 font-bold">
+                        ${catOptions}
+                    </select>
+                </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+        if (window.renderChannexRateMapping) window.renderChannexRateMapping();
+        if (window.lucide) window.lucide.createIcons();
         return;
     }
-    if ((window.roomTypes || []).length === 0) {
-        mapContainer.innerHTML = "<div class='text-center py-6 text-orange-500 font-bold text-xs'>No PMS Room Categories configured in settings.html.</div>";
-        return;
-    }
 
-    const pmsOptions = `<option value="">-- DO NOT MAP --</option>` + (window.roomTypes || []).map(t => `<option value="${t}">${t}</option>`).join('');
-
+    const pmsOptions = window.getPmsCategoryOptionsHtml();
     let html = '<div class="flex flex-col gap-1.5">';
-    channexRooms.forEach(cr => {
-        const existingMap = (window.channexMap || []).find(m => m.channexId === cr.id);
+    channexRooms.forEach(room => {
+        const existingMap = (window.channexMap || []).find(m => m.channexId === room.id);
         let selectedVal = existingMap ? existingMap.pmsCategory : '';
+        let catOptions = pmsOptions;
+        let warningTag = '';
+
+        if (selectedVal && !(window.roomTypes || []).includes(selectedVal)) {
+            catOptions = `<option value="${selectedVal}" selected class="text-red-600 font-black">⚠️ ${selectedVal} (RENAMED / NOT IN SETTINGS)</option>` + pmsOptions;
+            warningTag = ` <span class="text-red-500 font-black text-[9px]">(RENAMED IN SETTINGS)</span>`;
+        } else {
+            catOptions = catOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`);
+        }
 
         html += `
-            <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-chan-id="${cr.id}">
-                <div class="flex-1 font-bold text-slate-700 text-[11px] truncate pl-1" title="${cr.attributes.title}">${cr.attributes.title}</div>
-                <i data-lucide="arrow-right" size="12" class="text-emerald-500 shrink-0"></i>
-                <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-pms-sel bg-slate-50 border-emerald-300 text-emerald-800 shadow-none">
-                    ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
+            <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-channex-id="${room.id}" data-channex-title="${room.attributes.title}">
+                <div class="flex-1 flex flex-col min-w-0 pl-1">
+                    <span class="font-bold text-slate-800 text-[11px] truncate" title="${room.attributes.title}">${room.attributes.title}${warningTag}</span>
+                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex ID: ${room.id}</span>
+                </div>
+                <i data-lucide="arrow-right" size="14" class="text-slate-400 shrink-0"></i>
+                <select class="input-base !py-1 !text-xs !w-44 cursor-pointer chan-pms-sel bg-slate-50 border-slate-300 text-slate-700 font-bold">
+                    ${catOptions}
                 </select>
             </div>`;
     });
     html += '</div>';
-    mapContainer.innerHTML = html;
+    container.innerHTML = html;
+    if (window.lucide) window.lucide.createIcons();
+};
 
-    const rateCard = document.getElementById('channex-rate-mapping-card');
+window.renderChannexRateMapping = (channexRates = null) => {
     const rateContainer = document.getElementById('channex-rate-mapping-container');
+    const rateCard = document.getElementById('channex-rate-mapping-card');
+    if (!rateContainer) return;
 
-    if (channexRates && channexRates.length > 0 && rateContainer) {
-        if (rateCard) {
-            rateCard.classList.remove('hidden');
-            rateCard.style.display = 'flex';
+    if (!channexRates) {
+        if (!window.channexRateMap || window.channexRateMap.length === 0) {
+            if (rateCard) rateCard.style.display = 'none';
+            return;
         }
+
+        // Clean out any stale child channel rate plans from cached data
+        const cleanRateMap = window.channexRateMap.filter(rate => {
+            const title = rate.ratePlanTitle || '';
+            if (/ - (BookingCom|Hostelworld|Agoda|Expedia|Airbnb|Hotelbeds|Ctrip|TripCom)\b/i.test(title)) return false;
+            return true;
+        });
+
+        if (rateCard) {
+            rateCard.style.display = 'flex';
+            rateCard.classList.remove('hidden');
+        }
+
+        const pmsOptions = window.getPmsCategoryOptionsHtml();
         let rHtml = '<div class="flex flex-col gap-1.5">';
-        channexRates.forEach(rate => {
+        cleanRateMap.forEach(map => {
+            let catOptions = pmsOptions;
+            let warningTag = '';
+
+            if (map.pmsCategory && !(window.roomTypes || []).includes(map.pmsCategory)) {
+                catOptions = `<option value="${map.pmsCategory}" selected class="text-red-600 font-black">⚠️ ${map.pmsCategory} (RENAMED / NOT IN SETTINGS)</option>` + pmsOptions;
+                warningTag = ` <span class="text-red-500 font-black text-[9px]">(RENAMED IN SETTINGS)</span>`;
+            } else {
+                catOptions = catOptions.replace(`value="${map.pmsCategory}"`, `value="${map.pmsCategory}" selected`);
+            }
+
+            const ruleType = map.ruleType || "=";
+            const ruleVal = map.ruleVal !== undefined ? map.ruleVal : "";
+            const rateSource = map.rateSource || "std";
+            const displayTitle = window.formatRatePlanTitle ? window.formatRatePlanTitle(map.ratePlanTitle, true) : map.ratePlanTitle;
+
+            rHtml += `
+                <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${map.ratePlanId}" data-rate-title="${map.ratePlanTitle}">
+                    <div class="flex-1 flex flex-col min-w-0 pl-1">
+                        <span class="font-bold text-slate-800 text-[11px] truncate" title="${map.ratePlanTitle}">${displayTitle}${warningTag}</span>
+                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
+                    </div>
+                    <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
+                    <select class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none font-bold">
+                        ${catOptions}
+                    </select>
+                    <select class="input-base !py-0.5 !text-[10px] !w-20 cursor-pointer chan-rate-source bg-slate-50 border-amber-300 text-amber-900 shadow-none font-black text-center" title="Base rate source">
+                        <option value="std" ${rateSource === 'evt' ? '' : 'selected'}>STD Rate</option>
+                        <option value="evt" ${rateSource === 'evt' ? 'selected' : ''}>EVT Pkg</option>
+                    </select>
+                    <select class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center">
+                        <option value="=" ${ruleType === '=' ? 'selected' : ''}>=</option>
+                        <option value="+" ${ruleType === '+' ? 'selected' : ''}>+$</option>
+                        <option value="-" ${ruleType === '-' ? 'selected' : ''}>-$</option>
+                        <option value="+%" ${ruleType === '+%' ? 'selected' : ''}>+%</option>
+                        <option value="-%" ${ruleType === '-%' ? 'selected' : ''}>-%</option>
+                    </select>
+                    <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white" placeholder="0" value="${ruleVal}">
+                </div>`;
+        });
+        rHtml += '</div>';
+        rateContainer.innerHTML = rHtml;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+    }
+
+    if (channexRates && channexRates.length > 0) {
+        if (rateCard) {
+            rateCard.style.display = 'flex';
+            rateCard.classList.remove('hidden');
+        }
+
+        // Clean out any stale child channel rate plans from incoming API payload
+        const cleanRates = channexRates.filter(rate => {
+            if (rate.attributes?.parent_rate_plan_id) return false;
+            if (rate.relationships?.parent_rate_plan?.data?.id) return false;
+            const title = rate.attributes?.title || '';
+            if (/ - (BookingCom|Hostelworld|Agoda|Expedia|Airbnb|Hotelbeds|Ctrip|TripCom)\b/i.test(title)) return false;
+            return true;
+        });
+
+        const pmsOptions = window.getPmsCategoryOptionsHtml();
+
+        let rHtml = '<div class="flex flex-col gap-1.5">';
+        cleanRates.forEach(rate => {
             const existingMap = (window.channexRateMap || []).find(m => m.ratePlanId === rate.id);
             let selectedVal = existingMap ? existingMap.pmsCategory : '';
             let ruleType = existingMap ? (existingMap.ruleType || "=") : "=";
@@ -162,293 +347,159 @@ window.renderChannexMappingUI = (channexRooms, channexRates) => {
                     </select>
                     <select class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center">
                         <option value="=" ${ruleType === '=' ? 'selected' : ''}>=</option>
-                        <option value="+" ${ruleType === '+' ? 'selected' : ''}>+฿</option>
-                        <option value="-" ${ruleType === '-' ? 'selected' : ''}>-฿</option>
+                        <option value="+" ${ruleType === '+' ? 'selected' : ''}>+$</option>
+                        <option value="-" ${ruleType === '-' ? 'selected' : ''}>-$</option>
                         <option value="+%" ${ruleType === '+%' ? 'selected' : ''}>+%</option>
                         <option value="-%" ${ruleType === '-%' ? 'selected' : ''}>-%</option>
                     </select>
-                    <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white font-bold" placeholder="0" value="${ruleVal}">
+                    <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white" placeholder="0" value="${ruleVal}">
                 </div>`;
         });
         rHtml += '</div>';
         rateContainer.innerHTML = rHtml;
     } else if (rateCard) {
-        rateCard.classList.add('hidden');
         rateCard.style.display = 'none';
     }
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.renderChannexMapping = () => {
-    const mapContainer = document.getElementById('channex-mapping-container');
-    if (!mapContainer) return;
-    const map = window.channexMap || [];
-
-    const buildCategoryOptions = (currentCat) => {
-        const resolved = window.categoryResolver ? window.categoryResolver(currentCat) : currentCat;
-        let optionsHtml = `<option value="">-- DO NOT MAP / UNMAPPED --</option>`;
-        (window.roomTypes || []).forEach(t => {
-            const isSelected = (t === resolved) || (t === currentCat);
-            optionsHtml += `<option value="${t}" ${isSelected ? 'selected' : ''}>${t}</option>`;
-        });
-        if (currentCat && !resolved && !(window.roomTypes || []).includes(currentCat)) {
-            optionsHtml += `<option value="${currentCat}" selected class="text-rose-600 font-bold">⚠️ ${currentCat} (RENAMED / NOT IN SETTINGS)</option>`;
-        }
-        return optionsHtml;
-    };
-
-    if (map.length > 0) {
-        let html = '<div class="flex flex-col gap-1.5">';
-        map.forEach(m => {
-            html += `
-                <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-chan-id="${m.channexId}">
-                    <div class="flex-1 font-bold text-slate-700 text-[11px] truncate pl-1" title="${m.channexTitle || ''}">${m.channexTitle || 'Mapped Room'}</div>
-                    <i data-lucide="arrow-right" size="12" class="text-emerald-500 shrink-0"></i>
-                    <select onchange="window.markUnsavedChanges()" class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-pms-sel bg-slate-50 border-emerald-300 text-emerald-800 shadow-none">
-                        ${buildCategoryOptions(m.pmsCategory)}
-                    </select>
-                </div>`;
-        });
-        html += '</div>';
-        mapContainer.innerHTML = html;
-    } else {
-        mapContainer.innerHTML = "<div class='text-center py-6 text-slate-400 font-bold text-xs italic'>Enter API key and click Save & Fetch to map rooms.</div>";
-    }
-
-    const rateContainer = document.getElementById('channex-rate-mapping-container');
-    if (!rateContainer) return;
-    const rateMap = window.channexRateMap || [];
-    const rateCard = document.getElementById('channex-rate-mapping-card');
-
-    if (rateMap.length > 0) {
-        if (rateCard) { rateCard.classList.remove('hidden'); rateCard.style.display = 'flex'; }
-        let rHtml = '<div class="flex flex-col gap-1.5">';
-        rateMap.forEach(m => {
-            let ruleType = m.ruleType || "=";
-            let ruleVal = m.ruleVal !== undefined ? m.ruleVal : "";
-            let rateSource = m.rateSource || "std";
-
-            const displayTitle = window.formatRatePlanTitle ? window.formatRatePlanTitle(m.ratePlanTitle, true) : (m.ratePlanTitle || 'Mapped Rate');
-
-            rHtml += `
-                <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${m.ratePlanId}" data-rate-title="${m.ratePlanTitle}">
-                    <div class="flex-1 flex flex-col min-w-0 pl-1">
-                        <span class="font-bold text-slate-800 text-[11px] truncate" title="${m.ratePlanTitle || ''}">${displayTitle}</span>
-                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
-                    </div>
-                    <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
-                    <select onchange="window.markUnsavedChanges()" class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none">
-                        ${buildCategoryOptions(m.pmsCategory)}
-                    </select>
-                    <select onchange="window.markUnsavedChanges()" class="input-base !py-0.5 !text-[10px] !w-20 cursor-pointer chan-rate-source bg-slate-50 border-amber-300 text-amber-900 shadow-none font-black text-center" title="Base rate source">
-                        <option value="std" ${rateSource === 'evt' ? '' : 'selected'}>STD Rate</option>
-                        <option value="evt" ${rateSource === 'evt' ? 'selected' : ''}>EVT Pkg</option>
-                    </select>
-                    <select onchange="window.markUnsavedChanges()" class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center">
-                        <option value="=" ${ruleType === '=' ? 'selected' : ''}>=</option>
-                        <option value="+" ${ruleType === '+' ? 'selected' : ''}>+฿</option>
-                        <option value="-" ${ruleType === '-' ? 'selected' : ''}>-฿</option>
-                        <option value="+%" ${ruleType === '+%' ? 'selected' : ''}>+%</option>
-                        <option value="-%" ${ruleType === '-%' ? 'selected' : ''}>-%</option>
-                    </select>
-                    <input type="number" oninput="window.markUnsavedChanges()" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white font-bold" placeholder="0" value="${ruleVal}">
-                </div>`;
-        });
-        rHtml += '</div>';
-        rateContainer.innerHTML = rHtml;
-    } else {
-        rateContainer.innerHTML = "<div class='text-center py-6 text-slate-400 font-bold text-xs italic'>No Rate Plans mapped yet.</div>";
-    }
-    if (window.lucide) window.lucide.createIcons();
-};
-
+// --- 4. PERSIST MAPPINGS TO CLOUD ---
 window.saveMappingToDB = async (notify = false) => {
-    window.channexMap = [];
-    document.querySelectorAll('.chan-map-row').forEach(row => {
-        const cId = row.getAttribute('data-chan-id');
-        const cTitle = row.querySelector('.font-bold')?.innerText || '';
-        const pCat = row.querySelector('.chan-pms-sel')?.value || '';
-        if (cId) window.channexMap.push({ channexId: cId, channexTitle: cTitle, pmsCategory: pCat || "" });
+    const rows = document.querySelectorAll('.chan-map-row');
+    const newMap = [];
+    rows.forEach(r => {
+        const cId = r.dataset.channexId;
+        const cTitle = r.dataset.channexTitle;
+        const sel = r.querySelector('.chan-pms-sel');
+        const pmsCat = sel ? sel.value : '';
+        if (cId && pmsCat) {
+            newMap.push({ channexId: cId, channexTitle: cTitle, pmsCategory: pmsCat });
+        }
     });
 
-    window.channexRateMap = [];
-    document.querySelectorAll('.chan-rate-map-row').forEach(row => {
-        const rId = row.getAttribute('data-rate-id');
-        const rTitle = row.getAttribute('data-rate-title') || row.querySelector('.font-bold')?.innerText || '';
-        const pCat = row.querySelector('.chan-rate-pms-sel')?.value || '';
-        const ruleType = row.querySelector('.chan-rate-rule-type')?.value || '=';
-        const ruleVal = parseFloat(row.querySelector('.chan-rate-rule-val')?.value) || 0;
-        const rateSource = row.querySelector('.chan-rate-source')?.value || 'std';
+    const rateRows = document.querySelectorAll('.chan-rate-map-row');
+    const newRateMap = [];
+    rateRows.forEach(r => {
+        const rId = r.dataset.rateId;
+        const rTitle = r.dataset.rateTitle;
+        const sel = r.querySelector('.chan-rate-pms-sel');
+        const pmsCat = sel ? sel.value : '';
+        const srcSel = r.querySelector('.chan-rate-source');
+        const rateSource = srcSel ? srcSel.value : 'std';
+        const typeSel = r.querySelector('.chan-rate-rule-type');
+        const ruleType = typeSel ? typeSel.value : '=';
+        const valInp = r.querySelector('.chan-rate-rule-val');
+        const ruleVal = valInp && valInp.value !== '' ? parseFloat(valInp.value) : 0;
 
-        if (rId) window.channexRateMap.push({
-            ratePlanId: rId,
-            ratePlanTitle: rTitle,
-            pmsCategory: pCat || "",
-            ruleType: ruleType,
-            ruleVal: ruleVal,
-            rateSource: rateSource
-        });
+        if (rId && pmsCat) {
+            newRateMap.push({ ratePlanId: rId, ratePlanTitle: rTitle, pmsCategory: pmsCat, rateSource, ruleType, ruleVal });
+        }
     });
 
     try {
-        const { doc, setDoc } = window.cmFs;
-        await setDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId), {
-            channexMap: window.channexMap,
-            channexRateMap: window.channexRateMap
-        }, { merge: true });
+        const { doc, updateDoc } = window.cmFs;
+        await updateDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId), {
+            channexMap: newMap,
+            channexRateMap: newRateMap
+        });
+        window.channexMap = newMap;
+        window.channexRateMap = newRateMap;
 
-        if (notify) {
-            window.customAlert("✅ Room and Rate Plan Mappings saved to database successfully!");
-        }
+        if (notify) window.customAlert("Mappings successfully saved to database!");
         if (window.renderGrid) window.renderGrid();
-    } catch (e) {
-        console.error("Mapping Save Error:", e);
-        if (notify) window.customAlert("Failed to save mappings: " + e.message);
+    } catch (err) {
+        console.error("Save mapping error:", err);
+        if (notify) window.customAlert("Save Error:\n\n" + err.message);
     }
 };
 
-window.pushToChannexAPI = async (btn, mode = 'full') => {
+// --- 5. COMPRESS CONTIGUOUS RANGES & DISPATCH TO CHANNEX ---
+window.pushToChannexAPI = async (btn, mode = 'delta') => {
+    const apiKey = window.channexConfig?.apiKey;
+    const propId = window.channexConfig?.propId;
+
+    if (!apiKey || !propId) {
+        return window.customAlert("Channex credentials not set up. Please map Channex in Tab 5 first.");
+    }
+    if (!window.channexMap || window.channexMap.length === 0) {
+        return window.customAlert("No room mappings found. Please map your room types in Tab 5 first.");
+    }
+
     const origHtml = btn ? btn.innerHTML : '';
     if (btn) {
         btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin inline" size="14"></i> SYNCING...';
         btn.disabled = true;
     }
-    const loader = document.getElementById('loader');
-    if (loader) {
-        loader.classList.add('active');
-        loader.style.display = 'flex';
-    }
-    const statusEl = document.getElementById('sync-status');
-    if (statusEl) statusEl.innerText = 'COMPRESSING PAYLOAD...';
 
     try {
-        if (!window.channexConfig || !window.channexConfig.apiKey || !window.channexConfig.propId) {
-            throw new Error("Channex API Key or Property ID missing. Please check OTA Mapping Tab.");
-        }
-
-        const apiKey = window.channexConfig.apiKey;
-        const propId = window.channexConfig.propId;
-        const rMap = window.channexMap || [];
-        const rateMap = window.channexRateMap || [];
-
-        if (rMap.length === 0) throw new Error("No Room mappings found. Please map Room Types in the OTA Mapping tab.");
-
         let datesToProcess = [];
         if (mode === 'delta') {
-            if (window.dirtyDates.size === 0) {
-                if (loader) { loader.classList.remove('active'); loader.style.display = 'none'; }
-                if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
-                if (window.lucide) window.lucide.createIcons();
-                return window.customAlert("No changes to sync! Cells will turn orange when edited.");
-            }
             datesToProcess = Array.from(window.dirtyDates).sort();
+            if (datesToProcess.length === 0) {
+                if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
+                return window.customAlert("All clear! No unsynced changes to push.");
+            }
         } else {
-            let dTemp = new Date();
-            let currentDate = new Date(Date.UTC(dTemp.getFullYear(), dTemp.getMonth(), dTemp.getDate(), 12, 0, 0));
+            const startStr = document.getElementById('tape-start')?.value || window.getLocalYMD(new Date());
+            const sU = window.parseYMD(startStr);
             for (let i = 0; i < 500; i++) {
-                const d = new Date(currentDate.getTime() + (i * 86400000));
-                datesToProcess.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
+                datesToProcess.push(window.getLocalYMD(new Date(sU + (i * 86400000))));
             }
         }
 
-        const availMap = {};
-        datesToProcess.forEach(dStr => {
-            availMap[dStr] = {};
-            (window.roomTypes || []).forEach(t => availMap[dStr][t] = window.totalRoomsByType[t] || 0);
-        });
-
-        const activeStaff = (window.staff || []).filter(s => {
-            const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-            const isOcc = window.isOccupyingBooking
-                ? window.isOccupyingBooking(s.status)
-                : (s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed' && s.status !== 'charged');
-            return sProp === window.currentPropertyId && isOcc;
-        });
-
-        activeStaff.forEach(s => {
-            if (!s.checkIn || !s.checkOut) return;
-            const rList = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
-            const isUnassigned = rList.length === 0 || rList[0] === "";
-            if (s.status === 'special' && isUnassigned) return;
-
-            const inMs = window.parseYMD(s.checkIn), outMs = window.parseYMD(s.checkOut);
-            const typesToDeduct = [];
-
-            if (!isUnassigned) {
-                rList.forEach(rid => {
-                    const uiId = window.dbToUiRoom(rid);
-                    const roomDef = (window.hotelRooms || []).find(hr => hr.id === uiId || hr.id === rid);
-                    if (roomDef && roomDef.type) typesToDeduct.push(roomDef.type);
-                });
-            } else if (s.bookedType) {
-                const inferred = window.resolveRoomCategory(s.bookedType);
-                if (inferred) {
-                    let dedCount = inferred.toLowerCase().includes('dorm') ? (s.pax || 1) : Math.max(1, rList.length);
-                    for (let k = 0; k < dedCount; k++) typesToDeduct.push(inferred);
-                }
-            }
-
-            datesToProcess.forEach(dStr => {
-                const dMs = window.parseYMD(dStr);
-                if (dMs >= inMs && dMs < outMs) {
-                    typesToDeduct.forEach(t => {
-                        if (availMap[dStr][t] !== undefined && availMap[dStr][t] > 0) availMap[dStr][t]--;
-                    });
-                }
-            });
-        });
-
         const availPayload = [];
-        const restPayload = [];
+        const restrPayload = [];
 
-        rMap.forEach(roomRule => {
-            const pmsCat = window.categoryResolver(roomRule.pmsCategory);
-            const roomTypeId = roomRule.channexId;
-            if (!pmsCat) return;
+        // Availability: Group by Channex Room Type
+        window.channexMap.forEach(rule => {
+            if (!rule.channexId || !rule.pmsCategory) return;
+            const pmsCat = rule.pmsCategory;
+            const roomTypeId = rule.channexId;
 
             let rangeStart = null;
             let currentAvail = null;
 
             for (let i = 0; i < datesToProcess.length; i++) {
                 const dStr = datesToProcess[i];
-                const dMs = window.parseYMD(dStr);
-                const dayData = window.masterPricing.timeline[dStr] || {};
 
                 if (mode === 'delta') {
-                    const dFields = window.dirtyFields?.[dStr]?.[pmsCat];
-                    if (!dFields || !dFields.has('avail')) {
+                    const isAvailDirty = window.dirtyFields?.[dStr]?.[pmsCat]?.has('avail');
+                    if (!isAvailDirty) {
                         if (rangeStart !== null && currentAvail !== null) {
                             availPayload.push({
-                                property_id: propId, room_type_id: roomTypeId,
-                                date_from: rangeStart, date_to: datesToProcess[i - 1],
+                                property_id: propId,
+                                room_type_id: roomTypeId,
+                                date_from: rangeStart,
+                                date_to: datesToProcess[i - 1],
                                 availability: currentAvail
                             });
+                            rangeStart = null;
+                            currentAvail = null;
                         }
-                        rangeStart = null;
-                        currentAvail = null;
                         continue;
                     }
                 }
 
-                let availToday;
-                const otaAvail = dayData.otaOverrides?.[`${pmsCat}_avail`];
-                if (otaAvail !== undefined) {
-                    availToday = parseInt(otaAvail);
-                } else {
-                    availToday = availMap[dStr][pmsCat] !== undefined ? availMap[dStr][pmsCat] : 0;
-                }
+                let otaAvail = window.masterPricing.timeline[dStr]?.otaOverrides?.[`${pmsCat}_avail`];
+                let live = (window.liveInventory[dStr] && window.liveInventory[dStr][pmsCat] !== undefined)
+                    ? window.liveInventory[dStr][pmsCat]
+                    : 0;
+                let availToday = otaAvail !== undefined ? otaAvail : live;
 
                 let isAdjacent = false;
                 if (i > 0) {
                     const prevMs = window.parseYMD(datesToProcess[i - 1]);
+                    const dMs = window.parseYMD(dStr);
                     if (dMs - prevMs === 86400000) isAdjacent = true;
                 }
 
                 if (availToday !== currentAvail || (i > 0 && !isAdjacent)) {
                     if (rangeStart !== null && currentAvail !== null) {
                         availPayload.push({
-                            property_id: propId, room_type_id: roomTypeId,
-                            date_from: rangeStart, date_to: datesToProcess[i - 1],
+                            property_id: propId,
+                            room_type_id: roomTypeId,
+                            date_from: rangeStart,
+                            date_to: datesToProcess[i - 1],
                             availability: currentAvail
                         });
                     }
@@ -458,231 +509,201 @@ window.pushToChannexAPI = async (btn, mode = 'full') => {
 
                 if (i === datesToProcess.length - 1 && rangeStart !== null && currentAvail !== null) {
                     availPayload.push({
-                        property_id: propId, room_type_id: roomTypeId,
-                        date_from: rangeStart, date_to: dStr,
+                        property_id: propId,
+                        room_type_id: roomTypeId,
+                        date_from: rangeStart,
+                        date_to: dStr,
                         availability: currentAvail
                     });
                 }
             }
         });
 
-        rateMap.forEach(mapRule => {
-            const ratePlanId = mapRule.ratePlanId;
-            const pmsCat = window.categoryResolver(mapRule.pmsCategory);
-            if (!pmsCat) return;
-
-            const ruleType = mapRule.ruleType || "=";
-            const ruleVal = mapRule.ruleVal !== undefined ? parseFloat(mapRule.ruleVal) : 0;
+        // Rates & Restrictions: Group by Channex Rate Plan
+        (window.channexRateMap || []).forEach(rule => {
+            if (!rule.ratePlanId || !rule.pmsCategory) return;
+            const pmsCat = rule.pmsCategory;
+            const ratePlanId = rule.ratePlanId;
+            const rType = rule.ruleType || "=";
+            const rVal = rule.ruleVal !== undefined ? rule.ruleVal : 0;
+            const rateSource = rule.rateSource || "std";
 
             let rangeStart = null;
-            let currentObj = null;
+            let currentItem = null;
 
             for (let i = 0; i < datesToProcess.length; i++) {
                 const dStr = datesToProcess[i];
-                const dMs = window.parseYMD(dStr);
-                const dayData = window.masterPricing.timeline[dStr] || {};
-                const rData = dayData[pmsCat] || {};
-                const gData = dayData['GLOBAL'] || {};
-
-                let dayPayload = {};
-
-                let activePrice = (mapRule.rateSource === 'evt' && rData.fmp && rData.fmp !== "")
-                    ? rData.fmp
-                    : rData.std;
-
-                let modifiedPrice = null;
-                const otaOverride = dayData.otaOverrides?.[ratePlanId];
-
-                if (otaOverride !== undefined) {
-                    modifiedPrice = otaOverride;
-                } else if (activePrice !== undefined && activePrice !== "") {
-                    modifiedPrice = window.applyMath(activePrice, ruleType, ruleVal);
-
-                    let promoMultiplier = 1.0;
-                    (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
-                        const isChannelMatch = window.isRatePlanMatchingChannel
-                            ? window.isRatePlanMatchingChannel(mapRule.ratePlanTitle, pr.channel)
-                            : (pr.channel === 'ALL' || mapRule.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase()));
-                        const isScopeMatch = pr.scope === 'ALL' || pr.scope === pmsCat;
-                        const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dStr >= pr.startDate && dStr <= pr.endDate);
-
-                        if (isChannelMatch && isScopeMatch && isDateMatch) {
-                            const disc = pr.discountPct / 100;
-                            if (disc > 0 && disc < 1) {
-                                promoMultiplier *= (1 / (1 - disc));
-                            }
-                        }
-                    });
-                    modifiedPrice *= promoMultiplier;
-                }
-
-                const fullState = {};
-                if (modifiedPrice !== null && modifiedPrice !== "" && !isNaN(Number(modifiedPrice))) {
-                    fullState.rate = Math.round(Number(modifiedPrice) * 100);
-                }
-
-                const otaMin = dayData.otaOverrides?.[`${ratePlanId}_min`];
-                const otaMinArr = dayData.otaOverrides?.[`${ratePlanId}_min_arr`];
-                const otaMax = dayData.otaOverrides?.[`${ratePlanId}_max`];
-                const otaCta = dayData.otaOverrides?.[`${ratePlanId}_cta`];
-                const otaCtd = dayData.otaOverrides?.[`${ratePlanId}_ctd`];
-                const otaStop = dayData.otaOverrides?.[`${ratePlanId}_stopSell`];
-
-                const minStayThrough = otaMin !== undefined ? otaMin : (rData.min !== undefined && rData.min !== "" ? rData.min : (gData.min !== undefined && gData.min !== "" ? gData.min : 1));
-                const minStayArrival = otaMinArr !== undefined ? otaMinArr : (rData.min_arr !== undefined && rData.min_arr !== "" ? rData.min_arr : (gData.min_arr !== undefined && gData.min_arr !== "" ? gData.min_arr : minStayThrough));
-
-                fullState.min_stay_arrival = parseInt(minStayArrival) || 1;
-                fullState.min_stay_through = parseInt(minStayThrough) || 1;
-
-                const maxStay = otaMax !== undefined ? otaMax : (rData.max !== undefined && rData.max !== "" ? rData.max : (gData.max || 365));
-                fullState.max_stay = parseInt(maxStay) || 365;
-
-                fullState.closed_to_arrival = otaCta !== undefined ? otaCta : (rData.cta !== undefined ? rData.cta : (gData.cta === true));
-                fullState.closed_to_departure = otaCtd !== undefined ? otaCtd : (rData.ctd !== undefined ? rData.ctd : (gData.ctd === true));
-                fullState.stop_sell = otaStop !== undefined ? otaStop : (rData.stopSell !== undefined ? rData.stopSell : (gData.stopSell === true));
-
-                if (mode === 'full' && (modifiedPrice === null || modifiedPrice === "")) {
-                    let isDorm = pmsCat.toLowerCase().includes('dorm');
-                    let fallbackBase = isDorm
-                        ? (parseFloat(document.getElementById('w-d-base')?.value) || parseFloat(document.getElementById('w-d-base-single')?.value) || 199)
-                        : (parseFloat(document.getElementById('w-p-base')?.value) || parseFloat(document.getElementById('w-p-base-single')?.value) || 899);
-                    modifiedPrice = window.applyMath(fallbackBase, ruleType, ruleVal);
-
-                    let promoMultiplier = 1.0;
-                    (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
-                        const isChannelMatch = window.isRatePlanMatchingChannel
-                            ? window.isRatePlanMatchingChannel(mapRule.ratePlanTitle, pr.channel)
-                            : (pr.channel === 'ALL' || mapRule.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase()));
-                        const isScopeMatch = pr.scope === 'ALL' || pr.scope === pmsCat;
-                        const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dStr >= pr.startDate && dStr <= pr.endDate);
-
-                        if (isChannelMatch && isScopeMatch && isDateMatch) {
-                            const disc = pr.discountPct / 100;
-                            if (disc > 0 && disc < 1) {
-                                promoMultiplier *= (1 / (1 - disc));
-                            }
-                        }
-                    });
-                    modifiedPrice *= promoMultiplier;
-                    fullState.rate = Math.round(modifiedPrice * 100);
-                }
+                const dayObj = window.masterPricing.timeline[dStr] || {};
+                const roomObj = dayObj[pmsCat] || {};
+                const globObj = dayObj['GLOBAL'] || {};
 
                 if (mode === 'delta') {
-                    const dFields = window.dirtyFields?.[dStr]?.[ratePlanId];
-                    if (dFields) {
-                        if (dFields.has('rate') && fullState.rate !== undefined) dayPayload.rate = fullState.rate;
-                        if (dFields.has('min_stay_arrival') || dFields.has('min_stay_through') || dFields.has('min') || dFields.has('min_arr')) {
-                            dayPayload.min_stay_arrival = fullState.min_stay_arrival;
-                            dayPayload.min_stay_through = fullState.min_stay_through;
+                    const dirtyFieldsSet = window.dirtyFields?.[dStr]?.[ratePlanId];
+                    if (!dirtyFieldsSet || dirtyFieldsSet.size === 0) {
+                        if (rangeStart !== null && currentItem !== null) {
+                            restrPayload.push({
+                                property_id: propId,
+                                rate_plan_id: ratePlanId,
+                                date_from: rangeStart,
+                                date_to: datesToProcess[i - 1],
+                                ...currentItem
+                            });
+                            rangeStart = null;
+                            currentItem = null;
                         }
-                        if (dFields.has('max') && fullState.max_stay !== undefined) dayPayload.max_stay = fullState.max_stay;
-                        if (dFields.has('cta') && fullState.closed_to_arrival !== undefined) dayPayload.closed_to_arrival = fullState.closed_to_arrival;
-                        if (dFields.has('ctd') && fullState.closed_to_departure !== undefined) dayPayload.closed_to_departure = fullState.closed_to_departure;
-                        if (dFields.has('stopSell') && fullState.stop_sell !== undefined) dayPayload.stop_sell = fullState.stop_sell;
+                        continue;
                     }
+                }
+
+                // 1. Calculate Live Price
+                let calculatedPrice = null;
+                const otaPriceOverride = dayObj.otaOverrides?.[ratePlanId];
+
+                if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
+                    calculatedPrice = window.roundCurrency(otaPriceOverride);
                 } else {
-                    dayPayload = fullState;
-                }
+                    let activeBasePrice = (rateSource === 'evt' && (window.eventDates || []).length > 0 && roomObj.fmp !== undefined && roomObj.fmp !== "")
+                        ? roomObj.fmp
+                        : roomObj.std;
 
-                if (Object.keys(dayPayload).length === 0) {
-                    if (rangeStart !== null) {
-                        restPayload.push({
-                            property_id: propId, rate_plan_id: ratePlanId,
-                            date_from: rangeStart, date_to: datesToProcess[i - 1], ...currentObj
-                        });
-                        rangeStart = null; currentObj = null;
+                    let promoMultiplier = 1.0;
+                    (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
+                        const isChannelMatch = window.isRatePlanMatchingChannel 
+                            ? window.isRatePlanMatchingChannel(rule.ratePlanTitle, pr.channel)
+                            : (pr.channel === 'ALL' || rule.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase()));
+                        const isScopeMatch = pr.scope === 'ALL' || pr.scope === pmsCat;
+                        const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dStr >= pr.startDate && dStr <= pr.endDate);
+
+                        if (isChannelMatch && isScopeMatch && isDateMatch) {
+                            const disc = pr.discountPct / 100;
+                            if (disc > 0 && disc < 1) {
+                                promoMultiplier *= (1 / (1 - disc));
+                            }
+                        }
+                    });
+
+                    if (activeBasePrice !== undefined && activeBasePrice !== "") {
+                        let modPrice = window.applyMath(activeBasePrice, rType, rVal);
+                        modPrice *= promoMultiplier;
+                        calculatedPrice = window.roundCurrency(modPrice);
                     }
-                    continue;
                 }
 
-                const isMatch = currentObj && JSON.stringify(currentObj) === JSON.stringify(dayPayload);
+                // 2. Resolve Restrictions
+                const getRestr = (f) => {
+                    const otaVal = dayObj.otaOverrides?.[`${ratePlanId}_${f}`];
+                    if (otaVal !== undefined && otaVal !== "") return otaVal;
+                    if (roomObj[f] !== undefined && roomObj[f] !== "") return roomObj[f];
+                    if (globObj[f] !== undefined && globObj[f] !== "") return globObj[f];
+                    return null;
+                };
+
+                const todayRestrictions = {};
+                if (calculatedPrice !== null && !isNaN(calculatedPrice)) todayRestrictions.rate = calculatedPrice;
+
+                const minS = getRestr('min');
+                if (minS !== null) todayRestrictions.min_stay_arrival = parseInt(minS);
+
+                const minArr = getRestr('min_arr');
+                if (minArr !== null) todayRestrictions.min_stay_through = parseInt(minArr);
+
+                const maxS = getRestr('max');
+                if (maxS !== null) todayRestrictions.max_stay = parseInt(maxS);
+
+                const cta = getRestr('cta');
+                if (cta !== null) todayRestrictions.closed_to_arrival = !!cta;
+
+                const ctd = getRestr('ctd');
+                if (ctd !== null) todayRestrictions.closed_to_departure = !!ctd;
+
+                const stop = getRestr('stopSell');
+                if (stop !== null) todayRestrictions.stop_sell = !!stop;
+
+                const itemJson = JSON.stringify(todayRestrictions);
 
                 let isAdjacent = false;
                 if (i > 0) {
                     const prevMs = window.parseYMD(datesToProcess[i - 1]);
+                    const dMs = window.parseYMD(dStr);
                     if (dMs - prevMs === 86400000) isAdjacent = true;
                 }
 
-                if (!isMatch || (i > 0 && !isAdjacent)) {
-                    if (rangeStart !== null && Object.keys(currentObj || {}).length > 0) {
-                        restPayload.push({
-                            property_id: propId, rate_plan_id: ratePlanId,
-                            date_from: rangeStart, date_to: datesToProcess[i - 1], ...currentObj
+                if (JSON.stringify(currentItem) !== itemJson || (i > 0 && !isAdjacent)) {
+                    if (rangeStart !== null && currentItem !== null && Object.keys(currentItem).length > 0) {
+                        restrPayload.push({
+                            property_id: propId,
+                            rate_plan_id: ratePlanId,
+                            date_from: rangeStart,
+                            date_to: datesToProcess[i - 1],
+                            ...currentItem
                         });
                     }
-                    rangeStart = Object.keys(dayPayload).length > 0 ? dStr : null;
-                    currentObj = Object.keys(dayPayload).length > 0 ? dayPayload : null;
+                    rangeStart = dStr;
+                    currentItem = todayRestrictions;
                 }
 
-                if (i === datesToProcess.length - 1 && rangeStart !== null && Object.keys(currentObj || {}).length > 0) {
-                    restPayload.push({
-                        property_id: propId, rate_plan_id: ratePlanId,
-                        date_from: rangeStart, date_to: dStr, ...currentObj
+                if (i === datesToProcess.length - 1 && rangeStart !== null && currentItem !== null && Object.keys(currentItem).length > 0) {
+                    restrPayload.push({
+                        property_id: propId,
+                        rate_plan_id: ratePlanId,
+                        date_from: rangeStart,
+                        date_to: dStr,
+                        ...currentItem
                     });
                 }
             }
         });
 
-        if (availPayload.length === 0 && restPayload.length === 0) {
-            if (mode === 'delta') {
-                window.dirtyDates.clear();
-                window.dirtyFields = {};
-                if (window.renderGrid) window.renderGrid();
-                return window.customAlert("✅ All isolated changes have been successfully processed.\n\n(No new restricted payload data required pushing).");
-            } else {
-                throw new Error("Payload is empty. No specific changes were made.");
-            }
-        }
-
-        const baseUrl = window.getChannexBaseUrl();
+        let availSuccess = true;
+        let restrSuccess = true;
 
         if (availPayload.length > 0) {
-            if (statusEl) statusEl.innerText = `PUSHING INVENTORY TO CHANNEX...`;
-            const aRes = await window.fetchWithRetry(`${baseUrl}/availability`, {
+            console.log("Pushing Availability Ranges to Channex:", availPayload);
+            const aRes = await fetch(`https://app.channex.io/api/v1/availability`, {
                 method: "POST",
                 headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
                 body: JSON.stringify({ values: availPayload })
             });
-            const aData = await aRes.json();
-            if (!aRes.ok && aRes.status !== 429) throw new Error("Availability Push Failed: " + JSON.stringify(aData));
-        }
-
-        if (restPayload.length > 0) {
-            if (statusEl) statusEl.innerText = `PUSHING RATES TO CHANNEX...`;
-            const rRes = await window.fetchWithRetry(`${baseUrl}/restrictions`, {
-                method: "POST",
-                headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
-                body: JSON.stringify({ values: restPayload })
-            });
-
-            let responseData;
-            try { responseData = await rRes.json(); } catch (e) { responseData = { error: "Unparseable response" }; }
-
-            if (!rRes.ok && rRes.status !== 429) {
-                let errMsg = "Unknown Error";
-                if (responseData.errors && responseData.errors.length > 0) errMsg = responseData.errors[0].title || responseData.errors[0].detail || JSON.stringify(responseData.errors[0]);
-                else if (responseData.error) errMsg = responseData.error;
-                throw new Error(errMsg + "\n\nRaw Payload Response: " + JSON.stringify(responseData));
+            if (!aRes.ok) {
+                const aErr = await aRes.json().catch(() => ({}));
+                console.error("Availability sync failure:", aErr);
+                availSuccess = false;
             }
         }
 
-        const totalChanges = availPayload.length + restPayload.length;
+        if (restrPayload.length > 0) {
+            console.log("Pushing Rate/Restriction Ranges to Channex:", restrPayload);
+            const rRes = await fetch(`https://app.channex.io/api/v1/restrictions`, {
+                method: "POST",
+                headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+                body: JSON.stringify({ values: restrPayload })
+            });
+            if (!rRes.ok) {
+                const rErr = await rRes.json().catch(() => ({}));
+                console.error("Restrictions sync failure:", rErr);
+                restrSuccess = false;
+            }
+        }
 
-        if (mode === 'delta') {
-            window.syncedDates = new Set(window.dirtyDates);
-            window.dirtyDates.clear();
+        if (availSuccess && restrSuccess) {
+            datesToProcess.forEach(d => {
+                window.syncedDates.add(d);
+                window.dirtyDates.delete(d);
+            });
             window.dirtyFields = {};
+            window.hasUnsavedChanges = false;
+            window.updateSaveIndicator();
             if (window.renderGrid) window.renderGrid();
-            window.customAlert(`✅ ${totalChanges} change${totalChanges === 1 ? '' : 's'} confirmed on Channex!`);
+
+            window.customAlert(`Sync Successful!\n\nPushed ${availPayload.length} availability ranges and ${restrPayload.length} rate/restriction ranges directly to Channex.`);
         } else {
-            window.customAlert("✅ Full 500 day sync confirmed on Channex!");
+            throw new Error("One or more Channex endpoints rejected the payload. Check DevTools console for details.");
         }
 
     } catch (err) {
-        console.error("Channex Sync Error:", err);
-        window.customAlert("❌ Sync Failed:\n\n" + err.message);
+        console.error("Sync to Channex error:", err);
+        window.customAlert("Sync Failed:\n\n" + err.message);
     } finally {
-        window.hideLoader();
         if (btn) {
             btn.innerHTML = origHtml;
             btn.disabled = false;
