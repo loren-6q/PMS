@@ -1834,6 +1834,20 @@
                         }
                         
                         queue.push(edge.to);
+
+                        // Mark rippled room's rate plans as dirty so Channex delta sync includes them
+                        window.dirtyDates.add(dateStr);
+                        window.syncedDates.delete(dateStr);
+                        window.dirtyFields = window.dirtyFields || {};
+                        window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
+                        if (window.channexRateMap) {
+                            const affectedRates = window.channexRateMap.filter(m => categoryResolver(m.pmsCategory) === edge.to);
+                            affectedRates.forEach(rate => {
+                                window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
+                                window.dirtyFields[dateStr][rate.ratePlanId].add('rate');
+                            });
+                        }
+
                         updateDOMCell(dateStr, edge.to);
                     }
                 });
@@ -2834,6 +2848,9 @@
                 let dateStr = getLocalYMD(new Date(d));
                 let minDiff = getNearestEvent(parseYMD(dateStr));
                 
+                window.dirtyDates.add(dateStr);
+                window.syncedDates.delete(dateStr);
+
                 let stdP = p_base, fmpP = ""; 
                 let stdD = d_base, fmpD = "";
                 let min = "", min_arr = "", cta = false;
