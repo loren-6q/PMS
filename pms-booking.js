@@ -21,6 +21,270 @@
     
     const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
+    // ----------------------------------------------------------------------
+    // Native Booking Utilities: Room Mapping, Diffing & Sync Trigger
+    // ----------------------------------------------------------------------
+    window.uiToDbRoom = window.uiToDbRoom || (rid => {
+        if (!rid) return "";
+        const curProp = getPropId();
+        return window.normalizeRoomId ? window.normalizeRoomId(rid, curProp) : rid;
+    });
+
+    window.generateAuditDiff = window.generateAuditDiff || ((prev, next) => {
+        if (!prev) return "Booking created.";
+        const changes = [];
+        if (prev.checkIn !== next.checkIn || prev.checkOut !== next.checkOut) {
+            changes.push(`Dates: ${prev.checkIn || '?'}..${prev.checkOut || '?'} → ${next.checkIn || '?'}..${next.checkOut || '?'}`);
+        }
+        const prevRooms = (prev.rooms || [prev.room]).filter(Boolean).join(',');
+        const nextRooms = (next.rooms || [next.room]).filter(Boolean).join(',');
+        if (prevRooms !== nextRooms) {
+            changes.push(`Rooms: [${prevRooms || 'None'}] → [${nextRooms || 'None'}]`);
+        }
+        if (Number(prev.totalPrice || 0) !== Number(next.totalPrice || 0)) {
+            changes.push(`Total: ฿${Number(prev.totalPrice || 0).toFixed(2)} → ฿${Number(next.totalPrice || 0).toFixed(2)}`);
+        }
+        if (prev.status !== next.status) {
+            changes.push(`Status: ${prev.status || '?'} → ${next.status || '?'}`);
+        }
+        if ((prev.notes || '') !== (next.notes || '')) {
+            changes.push("Notes updated");
+        }
+        const prevPay = (prev.payments || []).reduce((sum, p) => sum + Number(p.amt || 0), 0);
+        const nextPay = (next.payments || []).reduce((sum, p) => sum + Number(p.amt || 0), 0);
+        if (prevPay !== nextPay) {
+            changes.push(`Paid: ฿${prevPay.toFixed(2)} → ฿${nextPay.toFixed(2)}`);
+        }
+        return changes.length > 0 ? changes.join(' | ') : "Booking details re-saved.";
+    });
+
+    const getPropertyChannexInfo = async (canonPropId) => {
+        if (window.pmsPropertyChannexCache && window.pmsPropertyChannexCache[canonPropId]) {
+            return window.pmsPropertyChannexCache[canonPropId];
+        }
+        if (window.channexConfig && window.channexConfig.apiKey && window.channexConfig.propId) {
+            return {
+                channex: window.channexConfig,
+                channexMap: window.channexMap || []
+            };
+        }
+        try {
+            const db = getDb();
+            const appId = getAppId();
+            const { doc, getDoc } = getFs();
+            if (db && getDoc) {
+                const propSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', canonPropId));
+                if (propSnap.exists()) {
+                    const data = propSnap.data();
+                    const config = {
+                        channex: data.channex || null,
+                        channexMap: Array.isArray(data.channexMap) ? data.channexMap : []
+                    };
+                    window.pmsPropertyChannexCache = window.pmsPropertyChannexCache || {};
+                    window.pmsPropertyChannexCache[canonPropId] = config;
+                    return config;
+                }
+            }
+        } catch (e) {
+            console.warn("Could not load Channex config for property:", e);
+        }
+
+        try {
+            const localCreds = JSON.parse(localStorage.getItem(`cm_channex_${canonPropId}`) || '{}');
+            if (localCreds.apiKey && localCreds.propId) {
+                return { channex: localCreds, channexMap: [] };
+            }
+        } catch (e) {}
+
+        return null;
+    };
+
+    window.autoSyncChannexAvailability = async (start, end, roomTypes = [], overrideBooking = null, deletedId = null) => {
+        if (!start || !end) return;
+
+        try {
+            const curProp = getPropId();
+            const canonProp = window.toCanonicalPropId ? window.toCanonicalPropId(curProp) : curProp;
+            const info = await getPropertyChannexInfo(canonProp);
+            if (!info || !info.channex || !info.channex.apiKey || !info.channex.propId) {
+                return; // Property not mapped to Channex
+            }
+
+            const { apiKey, propId } = info.channex;
+            const channexMap = info.channexMap || [];
+            if (channexMap.length === 0) return;
+
+            const parseFn = window.parseYMD || (str => Date.parse(str));
+            const getYmdFn = window.getLocalYMD || (d => new Date(d).toISOString().split('T')[0]);
+
+            const sU = parseFn(start);
+            const eU = parseFn(end);
+            if (!sU || !eU) return;
+
+            const datesToProcess = [];
+            for (let d = sU; d <= eU; d += 86400000) {
+                datesToProcess.push(getYmdFn(new Date(d)));
+            }
+            if (datesToProcess.length === 0) return;
+
+            // In-memory staff list with real-time override/delete compensation
+            let staffList = (getStaff() || []).filter(b => b.id !== deletedId);
+            if (overrideBooking) {
+                const exIdx = staffList.findIndex(b => b.id === overrideBooking.id);
+                if (exIdx > -1) staffList[exIdx] = overrideBooking;
+                else staffList.push(overrideBooking);
+            }
+
+            const activeStaff = staffList.filter(s => {
+                const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+                const rList = getRooms(s);
+                const isUnassigned = rList.length === 0 || rList[0] === "";
+                return sProp === canonProp && (window.isOccupyingBooking ? window.isOccupyingBooking(s.status, isUnassigned) : (s.status !== 'cancelled' && s.status !== 'noshow'));
+            });
+
+            const hotelRooms = getHotelRooms();
+            const totalCapacityByType = {};
+            hotelRooms.forEach(hr => {
+                if (hr && hr.type) {
+                    totalCapacityByType[hr.type] = (totalCapacityByType[hr.type] || 0) + 1;
+                }
+            });
+
+            // Pre-calculate live availability per date per PMS category
+            const availMap = {};
+            datesToProcess.forEach(dStr => {
+                availMap[dStr] = {};
+                Object.keys(totalCapacityByType).forEach(t => {
+                    availMap[dStr][t] = totalCapacityByType[t] || 0;
+                });
+            });
+
+            activeStaff.forEach(s => {
+                if (!s.checkIn || !s.checkOut) return;
+                const inMs = parseFn(s.checkIn);
+                const outMs = parseFn(s.checkOut);
+                const rList = getRooms(s);
+                const isUnassigned = rList.length === 0 || rList[0] === "";
+                if (s.status === 'special' && isUnassigned) return;
+
+                const typesToDeduct = [];
+                if (!isUnassigned) {
+                    rList.forEach(rid => {
+                        const normR = window.normalizeRoomId ? window.normalizeRoomId(rid, canonProp) : rid;
+                        const hrDef = hotelRooms.find(hr => hr.id === rid || hr.id === normR);
+                        if (hrDef && hrDef.type) typesToDeduct.push(hrDef.type);
+                    });
+                } else if (s.bookedType) {
+                    const inferred = window.resolvePmsRoomType ? window.resolvePmsRoomType(s.bookedType) : s.bookedType;
+                    if (inferred) {
+                        const dedCount = inferred.toLowerCase().includes('dorm') ? (s.pax || 1) : Math.max(1, rList.length);
+                        for (let k = 0; k < dedCount; k++) typesToDeduct.push(inferred);
+                    }
+                }
+
+                datesToProcess.forEach(dStr => {
+                    const dMs = parseFn(dStr);
+                    if (dMs >= inMs && dMs < outMs) {
+                        typesToDeduct.forEach(t => {
+                            if (availMap[dStr] && availMap[dStr][t] !== undefined && availMap[dStr][t] > 0) {
+                                availMap[dStr][t]--;
+                            }
+                        });
+                    }
+                });
+            });
+
+            const availPayload = [];
+            channexMap.forEach(rule => {
+                if (!rule.channexId || !rule.pmsCategory) return;
+                const pmsCat = rule.pmsCategory;
+                const roomTypeId = rule.channexId;
+
+                let rangeStart = null;
+                let currentAvail = null;
+
+                for (let i = 0; i < datesToProcess.length; i++) {
+                    const dStr = datesToProcess[i];
+                    const availToday = availMap[dStr]?.[pmsCat] !== undefined ? availMap[dStr][pmsCat] : 0;
+
+                    let isAdjacent = false;
+                    if (i > 0) {
+                        const prevMs = parseFn(datesToProcess[i - 1]);
+                        const dMs = parseFn(dStr);
+                        if (dMs - prevMs === 86400000) isAdjacent = true;
+                    }
+
+                    if (availToday !== currentAvail || (i > 0 && !isAdjacent)) {
+                        if (rangeStart !== null && currentAvail !== null) {
+                            availPayload.push({
+                                property_id: propId,
+                                room_type_id: roomTypeId,
+                                date_from: rangeStart,
+                                date_to: datesToProcess[i - 1],
+                                availability: currentAvail
+                            });
+                        }
+                        rangeStart = dStr;
+                        currentAvail = availToday;
+                    }
+
+                    if (i === datesToProcess.length - 1 && rangeStart !== null && currentAvail !== null) {
+                        availPayload.push({
+                            property_id: propId,
+                            room_type_id: roomTypeId,
+                            date_from: rangeStart,
+                            date_to: dStr,
+                            availability: currentAvail
+                        });
+                    }
+                }
+            });
+
+            if (availPayload.length > 0) {
+                const res = await fetch(`https://app.channex.io/api/v1/availability`, {
+                    method: "POST",
+                    headers: {
+                        "user-api-key": apiKey,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ values: availPayload })
+                });
+
+                if (res.ok) {
+                    console.log(`📡 [Channex Auto-Push] Successfully updated ${availPayload.length} availability ranges for ${canonProp}`);
+                } else {
+                    const errData = await res.json().catch(() => ({}));
+                    console.warn("⚠️ [Channex Auto-Push] Response status:", res.status, errData);
+                }
+            }
+        } catch (err) {
+            console.warn("Channex Auto-Sync dispatch notice:", err);
+        }
+    };
+
+    window.triggerAutoSync = window.triggerAutoSync || ((start, end, roomTypes = [], overrideBooking = null, deletedId = null) => {
+        try {
+            if (window.dirtyDates && start && end) {
+                const sU = window.parseYMD ? window.parseYMD(start) : Date.parse(start);
+                const eU = window.parseYMD ? window.parseYMD(end) : Date.parse(end);
+                for (let d = sU; d <= eU; d += 86400000) {
+                    const dStr = window.getLocalYMD ? window.getLocalYMD(new Date(d)) : new Date(d).toISOString().split('T')[0];
+                    window.dirtyDates.add(dStr);
+                }
+            }
+            if (typeof window.renderGrid === 'function') window.renderGrid();
+        } catch (e) {
+            console.warn("Auto-sync notice:", e);
+        }
+
+        // Auto-push live inventory to Channex in background
+        if (window.autoSyncChannexAvailability && start && end) {
+            window.autoSyncChannexAvailability(start, end, roomTypes, overrideBooking, deletedId).catch(err => {
+                console.warn("[Channex Sync] Auto-push notice:", err);
+            });
+        }
+    });
+
     window.updateHeaderName = () => {
         const fn = $('first-name')?.value.trim().toUpperCase() || '';
         const ln = $('last-name')?.value.trim().toUpperCase() || '';
@@ -468,7 +732,7 @@
                 if (window.triggerAutoSync && s) {
                     const hotelRooms = getHotelRooms();
                     const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
-                    window.triggerAutoSync(s.checkIn, s.checkOut, types);
+                    window.triggerAutoSync(s.checkIn, s.checkOut, types, null, id);
                 }
                 window.closeGuestModal();
             } catch (err) {
@@ -621,6 +885,12 @@
 
             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', newLegId), leg2Booking);
 
+            if (window.triggerAutoSync) {
+                const hotelRooms = getHotelRooms();
+                const types = [...(s.rooms || []), leg2Room].map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
+                window.triggerAutoSync(s.checkIn, s.checkOut, types);
+            }
+
             window.closeModal('split-modal');
             window.closeGuestModal();
             window.showAlert(`Booking split successfully!\n\nLeg 1: ${s.checkIn} → ${splitDate}\nLeg 2: ${splitDate} → ${s.checkOut} (Room: ${leg2Room || 'Same'})\n\nLinked with code: ${linkCode}`);
@@ -728,6 +998,12 @@
             });
 
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', targetId));
+
+            if (window.triggerAutoSync) {
+                const hotelRooms = getHotelRooms();
+                const types = [...(primary.rooms || []), ...(absorbed.rooms || [])].map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
+                window.triggerAutoSync(earliestIn, latestOut, types);
+            }
 
             window.closeModal('merge-modal');
             window.closeGuestModal();
@@ -920,13 +1196,14 @@
                     const hr = hotelRooms.find(hr => hr.id === rId);
                     return hr ? hr.type : null;
                 }).filter(Boolean),
-                $('booked-type')?.value
+                $('booked-type')?.value,
+                ext?.bookedType
             ])).filter(Boolean);
 
             const earliestIn = ext?.checkIn && ext.checkIn < cI ? ext.checkIn : cI;
             const latestOut = ext?.checkOut && ext.checkOut > cO ? ext.checkOut : cO;
 
-            if (window.triggerAutoSync) window.triggerAutoSync(earliestIn, latestOut, bookingRoomTypes);
+            if (window.triggerAutoSync) window.triggerAutoSync(earliestIn, latestOut, bookingRoomTypes, ent);
             if (!keepOpen) window.closeGuestModal();
         } catch (err) {
             console.error("Save Error:", err);
