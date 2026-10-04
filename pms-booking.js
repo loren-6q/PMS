@@ -993,6 +993,7 @@
                 netPrice: combinedNet,
                 payments: combinedPayments,
                 extraCharges: combinedCharges,
+                extended: true,
                 notes: ((primary.notes || '') + mergeNote).trim(),
                 lastEditedAt: new Date().toISOString()
             });
