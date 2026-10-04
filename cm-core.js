@@ -26,6 +26,10 @@ export const auth = getAuth(app);
 export const db = getFirestore(app); 
 export const appId = 'hotel-pms-v1';
 
+// MASTER CHANNEX API KEY (Shared across all properties in your organization)
+// Paste your key inside the quotes below if you want it hardcoded permanently:
+window.MASTER_CHANNEX_API_KEY = window.MASTER_CHANNEX_API_KEY || "Geu79WLLz4n33mnSaefgIYEE8doU2o91wbMN0nk6eR4eE9QveLr0sYPPhFvRPjfT";
+
 // Expose Firestore services on window for other modules
 window.db = db;
 window.auth = auth;
@@ -144,15 +148,12 @@ window.formatDisplay = (val) => {
     return window.roundCurrency(val);
 };
 
-// Clean Rate Plan Formatter that handles Channex's actual occupancy syntax
 window.formatRatePlanTitle = (rawTitle, includeRoom = false) => {
     if (!rawTitle) return "Standard";
 
-    // 1. Extract Room bracket if present (e.g. [Female Dorm])
     const roomMatch = rawTitle.match(/\[(.*?)\]/);
     const roomTag = roomMatch ? ` [${roomMatch[1].trim()}]` : "";
 
-    // 2. Strip Channex occupancy suffixes like "(Per Room, 1 Persons, THB)"
     let clean = rawTitle
         .replace(/\[.*?\]/g, '')
         .replace(/\(Per Room.*?\)/gi, '')
@@ -160,7 +161,6 @@ window.formatRatePlanTitle = (rawTitle, includeRoom = false) => {
         .replace(/\s+/g, ' ')
         .trim();
 
-    // 3. For calendar grid view (includeRoom === false), shorten long names
     if (!includeRoom) {
         if (/bdc.*non-?ref/i.test(clean)) return "BDC Non-Ref";
         if (/bdc.*ref/i.test(clean) || /bdc.*standard/i.test(clean)) return "BDC Standard";
@@ -169,7 +169,6 @@ window.formatRatePlanTitle = (rawTitle, includeRoom = false) => {
         return clean.replace(/Rate$/i, '').trim();
     }
 
-    // 4. In mapping view, keep clean name + room tag
     return `${clean}${roomTag}`;
 };
 
@@ -197,7 +196,6 @@ window.dbToUiRoom = (rid) => {
     return window.normalizeRoomId ? window.normalizeRoomId(rid, window.currentPropertyId) : rid;
 };
 
-// Strict, Non-Heuristic Category Resolver
 window.categoryResolver = (catName) => {
     if (!catName) return "";
     const clean = catName.toUpperCase().trim();
@@ -219,7 +217,6 @@ window.getViewMultiplier = () => {
     return window.currentPlatformView === 'hw' ? 1.25 : 1.0; 
 };
 
-// Universal OTA Channel Matcher (Supports BDC, HW, Agoda, Expedia, Airbnb aliases)
 window.isRatePlanMatchingChannel = (ratePlanTitle = '', channel = '') => {
     if (!channel || channel === 'ALL') return true;
     if (!ratePlanTitle) return false;
@@ -407,7 +404,7 @@ window.updateSaveIndicator = () => {
     }
 };
 
-// --- 7. LOAD PROPERTY CONFIG & PRICING ---
+/* STREAMING_CHUNK:Loading property configuration with automatic API key inheritance... */
 window.loadPropertyConfig = async () => {
     try {
         const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
@@ -466,7 +463,19 @@ window.loadPropertyConfig = async () => {
             window.promoRules = [];
         }
 
-        let apiKey = window.channexConfig?.apiKey || '';
+        // --- GLOBAL API KEY AUTO-INHERITANCE ---
+        let masterApiKey = window.MASTER_CHANNEX_API_KEY || localStorage.getItem('cm_master_channex_api_key') || '';
+        if (!masterApiKey) {
+            for (const p of window.windowPropertiesList) {
+                if (p.channex?.apiKey) {
+                    masterApiKey = p.channex.apiKey;
+                    localStorage.setItem('cm_master_channex_api_key', masterApiKey);
+                    break;
+                }
+            }
+        }
+
+        let apiKey = window.channexConfig?.apiKey || masterApiKey;
         let chanPropId = window.channexConfig?.propId || '';
 
         if (!apiKey || !chanPropId) {
@@ -481,8 +490,14 @@ window.loadPropertyConfig = async () => {
         const propInput = document.getElementById('chan-prop-id');
         if (keyInput) keyInput.value = apiKey;
         if (propInput) propInput.value = chanPropId;
-        if (apiKey && chanPropId) {
-            window.channexConfig = { apiKey, propId: chanPropId, env: 'production' };
+        
+        if (apiKey) {
+            window.channexConfig.apiKey = apiKey;
+            localStorage.setItem('cm_master_channex_api_key', apiKey);
+        }
+        if (chanPropId) {
+            window.channexConfig.propId = chanPropId;
+            window.channexConfig.env = 'production';
         }
 
         window.roomTypes = [];
