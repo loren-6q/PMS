@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head> 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WILD & WANDERING Channel Manager</title>
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://loren-6q.github.io/PMS/pms-core.js"></script>
@@ -18,6 +21,43 @@
         .sync-table th.frozen-corner { position: sticky; left: 0; z-index: 30; background: #1e293b; color: #fff; }
         .sync-table td.frozen-col { position: sticky; left: 0; z-index: 20; background: #f8fafc; font-weight: 900; }
         .sync-table tr.frozen-row th { position: sticky; top: 0; z-index: 25; background: #1e293b; color: #fff; }
+        
+        /* Ultra-compact Roboto Condensed typography for rate grid */
+        .rate-grid-table { 
+            border-collapse: collapse; 
+            font-family: 'Roboto Condensed', system-ui, -apple-system, sans-serif;
+        }
+        .rate-grid-table td, 
+        .rate-grid-table th {
+            padding: 0px 1px !important;
+            height: 20px !important;
+            line-height: 1 !important;
+        }
+        .rate-grid-table input {
+            font-family: 'Roboto Condensed', system-ui, -apple-system, sans-serif !important;
+            letter-spacing: -0.02em !important;
+            font-variant-numeric: tabular-nums;
+            font-weight: 500 !important;
+            font-size: 11px !important;
+            height: 18px !important;
+            padding: 0px 1px !important;
+        }
+
+        /* Disable spinner buttons and prevent mouse-wheel increment on price cells */
+        .rate-grid-table input[type="number"]::-webkit-outer-spin-button,
+        .rate-grid-table input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .rate-grid-table input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        /* Prominent 4px Black Divider Between Room Categories */
+        tr.room-boundary-bottom > td,
+        tr.room-boundary-bottom > th {
+            border-bottom: 4px solid #0f172a !important;
+        }
     </style>
 </head>
 <body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden bg-slate-100 font-sans">
@@ -54,7 +94,13 @@
             </div>
 
             <div class="flex items-center gap-2 shrink-1 transition-opacity min-w-0 ml-auto">
-                <div id="save-indicator" class="text-[9px] font-black text-emerald-600 uppercase tracking-widest opacity-0 transition-opacity mr-2">Saved</div>
+                <div id="save-indicator" class="text-[10px] font-black uppercase tracking-widest transition-all mr-1 opacity-0">PRICING SAVED</div>
+                <button onclick="window.reloadSettingsConfig()" class="px-2.5 sm:px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer" title="Reload room inventory & event settings from database">
+                    <i data-lucide="refresh-cw" size="14"></i> REFRESH CONFIG
+                </button>
+                <button id="btn-save-cloud" onclick="window.savePricingToCloud(false)" class="px-3 sm:px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-1.5 transition-colors cursor-pointer" title="Save in-memory edits to database">
+                    <i data-lucide="save" size="14"></i> SAVE PRICING
+                </button>
                 <button onclick="window.pushToChannexAPI(this, 'delta')" class="px-3 sm:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="zap" size="14"></i> SYNC CHANGES</button>
                 <button onclick="window.pushToChannexAPI(this, 'full')" class="px-3 sm:px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer"><i data-lucide="cloud-upload" size="14"></i> FULL SYNC</button>
                 <a id="nav-pms-btn" href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors hidden sm:block ml-2 shrink-0">← Back</a>
@@ -92,6 +138,7 @@
                         
                         <div class="items-center gap-1 hidden sm:flex">
                             <button onclick="window.toggleFilter('rates')" id="flt-rates" class="filter-pill active">Rates</button>
+                            <button onclick="window.toggleFilter('evt')" id="flt-evt" class="filter-pill active !text-pink-600">EVT</button>
                             <button onclick="window.toggleFilter('avail')" id="flt-avail" class="filter-pill active">Avail</button>
                             <button onclick="window.toggleFilter('min')" id="flt-min" class="filter-pill active">Min</button>
                             <button onclick="window.toggleFilter('max')" id="flt-max" class="filter-pill">Max</button>
@@ -167,7 +214,6 @@
                             </button>
                         </div>
 
-                        <!-- Active Promos Ledger Table -->
                         <div class="overflow-x-auto border border-slate-200 rounded-lg shadow-inner bg-slate-50 no-scrollbar mb-6">
                             <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
                                 <thead class="bg-slate-800 text-white font-black uppercase text-[10px] tracking-wider sticky top-0 z-10">
@@ -199,41 +245,51 @@
             <div id="view-smart" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-4xl mx-auto space-y-4">
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
-                        <h2 class="text-lg font-black uppercase text-slate-800 mb-2 border-b border-slate-200 pb-2 flex items-center justify-between gap-2">
-                            <span><i data-lucide="paintbrush" class="text-indigo-500 inline mb-1"></i> Timeline Autofiller</span>
-                            <button onclick="window.nukeDatabase()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded font-black text-xs uppercase tracking-widest shadow-md cursor-pointer flex items-center gap-1"><i data-lucide="skull" size="14"></i> WIPE ALL PRICING</button>
-                        </h2>
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
+                            <h2 class="text-lg font-black uppercase text-slate-800 flex items-center gap-2">
+                                <i data-lucide="paintbrush" class="text-indigo-500"></i> Timeline Autofiller
+                            </h2>
+                            <div class="flex items-center gap-2">
+                                <label class="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-300 cursor-pointer text-xs font-black uppercase text-pink-700">
+                                    <input type="checkbox" id="w-enable-events" onchange="window.toggleAutofillEventMode(this.checked)" class="row-checkbox"> Event Pricing (EVT)
+                                </label>
+                                <button onclick="window.saveAutofillBaselines(true)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase tracking-widest shadow-sm cursor-pointer flex items-center gap-1"><i data-lucide="save" size="14"></i> SAVE BASE RATES</button>
+                                <button onclick="window.nukeDatabase()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded font-black text-xs uppercase tracking-widest shadow-md cursor-pointer flex items-center gap-1"><i data-lucide="skull" size="14"></i> WIPE ALL PRICING</button>
+                            </div>
+                        </div>
                         <p class="text-[11px] font-bold text-slate-500 mb-4 leading-snug">
-                            Paint your baseline market rates onto the selected Anchor rooms. For properties with Event Dates configured, the system isolates event packages to +/- 6 days, writes global restrictions, and ripples the math perfectly to all linked rooms.
+                            Paint baseline market rates onto selected rooms. Non-anchor rooms calculate automatically using the rules in the <strong>Linking</strong> tab without overwriting custom overrides.
                         </p>
                         
                         <div class="flex flex-wrap items-center gap-4 mb-6 p-3 bg-slate-100 rounded-lg border border-slate-200">
                             <div class="flex-1 min-w-[140px]">
                                 <label class="label-base text-indigo-700">Private Anchor</label>
-                                <select id="w-anchor-private" class="input-base !text-sm !py-1 cursor-pointer text-indigo-700"></select>
+                                <select id="w-anchor-private" class="input-base !text-sm !py-1 cursor-pointer text-indigo-700 font-bold" onchange="window.debounceSaveBaselines()"></select>
                             </div>
                             <div class="flex-1 min-w-[140px]">
                                 <label class="label-base text-orange-700">Dorm Anchor</label>
-                                <select id="w-anchor-dorm" class="input-base !text-sm !py-1 cursor-pointer text-orange-700"></select>
+                                <select id="w-anchor-dorm" class="input-base !text-sm !py-1 cursor-pointer text-orange-700 font-bold" onchange="window.debounceSaveBaselines()"></select>
                             </div>
-                            <div class="flex-1 min-w-[140px]">
+                            <div class="flex-1 min-w-[130px]">
                                 <label class="label-base text-slate-700">Start Date</label>
-                                <input type="date" id="w-start-date" class="input-base !text-sm !py-1 cursor-pointer text-slate-700">
+                                <input type="date" id="w-start-date" class="input-base !text-sm !py-1 cursor-pointer text-slate-700 font-bold">
                             </div>
-                            <div class="flex-1 min-w-[140px]">
-                                <label class="label-base text-slate-700">Duration</label>
-                                <select id="w-duration" class="input-base !text-sm !py-1 cursor-pointer text-slate-700">
-                                    <option value="14">14 Days</option>
-                                    <option value="30">30 Days</option>
-                                    <option value="60">60 Days</option>
-                                    <option value="90" selected>90 Days</option>
-                                    <option value="180">180 Days</option>
-                                    <option value="365">1 Year</option>
-                                </select>
+                            <div class="flex-1 min-w-[130px]">
+                                <label class="label-base text-slate-700">End Date</label>
+                                <input type="date" id="w-end-date" class="input-base !text-sm !py-1 cursor-pointer text-slate-700 font-bold">
+                            </div>
+                            <div class="flex flex-col justify-end">
+                                <label class="label-base text-slate-400">Quick Range</label>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" onclick="window.setAutofillPreset(30)" class="px-2 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-[10px] font-black rounded cursor-pointer transition-colors shadow-sm">30D</button>
+                                    <button type="button" onclick="window.setAutofillPreset(90)" class="px-2 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-[10px] font-black rounded cursor-pointer transition-colors shadow-sm">90D</button>
+                                    <button type="button" onclick="window.setAutofillPreset(180)" class="px-2 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-[10px] font-black rounded cursor-pointer transition-colors shadow-sm">180D</button>
+                                    <button type="button" onclick="window.setAutofillPreset(365)" class="px-2 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-[10px] font-black rounded cursor-pointer transition-colors shadow-sm">1 YR</button>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="mb-6 relative evt-column" style="display: none;">
+                        <div id="autofill-events-panel" class="mb-6 relative evt-column" style="display: none;">
                             <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-300 w-full overflow-x-auto">
                                 <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-3 text-center w-full block">Dual-Curve Event Adjustments (Auto-Mirrored)</span>
                                 <table class="w-full text-center border-separate border-spacing-y-2">
@@ -252,32 +308,32 @@
                                     <tbody>
                                         <tr class="bg-indigo-50/50">
                                             <td class="text-xs font-bold text-indigo-700 text-left pl-2 rounded-l-lg border border-indigo-100 border-r-0">Privates</td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-base" class="input-base text-center !py-1 !px-1" value="899" onfocus="this.select()"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-pkg" class="input-base text-center !py-1 !px-1 text-pink-700" value="1000" onfocus="this.select()"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-m2" class="input-base text-center !py-1 !px-1" value="1099" onfocus="this.select()" oninput="document.getElementById('w-p-p2').value = this.value"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-m1" class="input-base text-center !py-1 !px-1" value="1999" onfocus="this.select()" oninput="document.getElementById('w-p-p1').value = this.value"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="5999" onfocus="this.select()"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-p1" class="input-base text-center !py-1 !px-1" value="1999" onfocus="this.select()" oninput="document.getElementById('w-p-m1').value = this.value"></td>
-                                            <td class="rounded-r-lg border border-indigo-100 border-l-0"><input type="number" step="any" id="w-p-p2" class="input-base text-center !py-1 !px-1" value="1099" onfocus="this.select()" oninput="document.getElementById('w-p-m2').value = this.value"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-base" class="input-base text-center !py-1 !px-1" value="899" onfocus="this.select()" oninput="document.getElementById('w-p-base-single').value = this.value; window.debounceSaveBaselines();"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-pkg" class="input-base text-center !py-1 !px-1 text-pink-700" value="1000" onfocus="this.select()" oninput="window.debounceSaveBaselines()"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-m2" class="input-base text-center !py-1 !px-1" value="1099" onfocus="this.select()" oninput="document.getElementById('w-p-p2').value = this.value; window.debounceSaveBaselines();"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-m1" class="input-base text-center !py-1 !px-1" value="1999" onfocus="this.select()" oninput="document.getElementById('w-p-p1').value = this.value; window.debounceSaveBaselines();"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="5999" onfocus="this.select()" oninput="window.debounceSaveBaselines()"></td>
+                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-p1" class="input-base text-center !py-1 !px-1" value="1999" onfocus="this.select()" oninput="document.getElementById('w-p-m1').value = this.value; window.debounceSaveBaselines();"></td>
+                                            <td class="rounded-r-lg border border-indigo-100 border-l-0"><input type="number" step="any" id="w-p-p2" class="input-base text-center !py-1 !px-1" value="1099" onfocus="this.select()" oninput="document.getElementById('w-p-m2').value = this.value; window.debounceSaveBaselines();"></td>
                                         </tr>
                                         <tr class="bg-orange-50/50">
                                             <td class="text-xs font-bold text-orange-700 text-left pl-2 rounded-l-lg border border-orange-100 border-r-0">Dorms</td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-base" class="input-base text-center !py-1 !px-1" value="199" onfocus="this.select()"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-pkg" class="input-base text-center !py-1 !px-1 text-pink-700" value="200" onfocus="this.select()"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-p2').value = this.value"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-p1').value = this.value"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="2499" onfocus="this.select()"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-p1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-p1').value = this.value"></td>
-                                            <td class="rounded-r-lg border border-orange-100 border-l-0"><input type="number" step="any" id="w-d-p2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-m2').value = this.value"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-base" class="input-base text-center !py-1 !px-1" value="199" onfocus="this.select()" oninput="document.getElementById('w-d-base-single').value = this.value; window.debounceSaveBaselines();"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-pkg" class="input-base text-center !py-1 !px-1 text-pink-700" value="200" onfocus="this.select()" oninput="window.debounceSaveBaselines()"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-p2').value = this.value; window.debounceSaveBaselines();"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-p1').value = this.value; window.debounceSaveBaselines();"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="2499" onfocus="this.select()" oninput="window.debounceSaveBaselines()"></td>
+                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-p1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-m1').value = this.value; window.debounceSaveBaselines();"></td>
+                                            <td class="rounded-r-lg border border-orange-100 border-l-0"><input type="number" step="any" id="w-d-p2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-m2').value = this.value; window.debounceSaveBaselines();"></td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
 
-                        <div class="mb-6 relative no-evt-column">
+                        <div id="autofill-standard-panel" class="mb-6 relative no-evt-column">
                             <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-300 w-full">
-                                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">Standard Pricing (No Events Configured)</span>
+                                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">Standard Pricing (Standard Anchor Rates)</span>
                                 <table class="w-full text-center border-separate border-spacing-y-2">
                                     <thead>
                                         <tr>
@@ -288,11 +344,11 @@
                                     <tbody>
                                         <tr class="bg-indigo-50/50">
                                             <td class="text-xs font-bold text-indigo-700 text-left pl-2 rounded-l-lg border border-indigo-100 border-r-0 py-2">Privates</td>
-                                            <td class="rounded-r-lg border border-indigo-100 border-l-0 px-2 py-2"><input type="number" step="any" id="w-p-base-single" class="input-base text-center !py-1 !px-1 w-32" value="899" onfocus="this.select()" onchange="document.getElementById('w-p-base').value = this.value;"></td>
+                                            <td class="rounded-r-lg border border-indigo-100 border-l-0 px-2 py-2"><input type="number" step="any" id="w-p-base-single" class="input-base text-center !py-1 !px-1 w-32 font-bold" value="899" onfocus="this.select()" oninput="document.getElementById('w-p-base').value = this.value; window.debounceSaveBaselines();"></td>
                                         </tr>
                                         <tr class="bg-orange-50/50">
                                             <td class="text-xs font-bold text-orange-700 text-left pl-2 rounded-l-lg border border-orange-100 border-r-0 py-2">Dorms</td>
-                                            <td class="rounded-r-lg border border-orange-100 border-l-0 px-2 py-2"><input type="number" step="any" id="w-d-base-single" class="input-base text-center !py-1 !px-1 w-32" value="199" onfocus="this.select()" onchange="document.getElementById('w-d-base').value = this.value;"></td>
+                                            <td class="rounded-r-lg border border-orange-100 border-l-0 px-2 py-2"><input type="number" step="any" id="w-d-base-single" class="input-base text-center !py-1 !px-1 w-32 font-bold" value="199" onfocus="this.select()" oninput="document.getElementById('w-d-base').value = this.value; window.debounceSaveBaselines();"></td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -312,8 +368,18 @@
                 <div class="max-w-4xl mx-auto space-y-4">
                     <div class="bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden flex flex-col">
                         <div class="p-3 bg-slate-100 border-b border-slate-300 flex justify-between items-center">
-                            <span class="text-xs font-black uppercase tracking-widest text-slate-700">Bidirectional Pricing Links</span>
-                            <button onclick="window.addRelationshipRow()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded font-black text-[10px] uppercase transition-colors shadow-sm cursor-pointer">+ Add Rule</button>
+                            <div class="flex flex-col">
+                                <span class="text-xs font-black uppercase tracking-widest text-slate-700">Bidirectional Pricing Links</span>
+                                <span class="text-[10px] font-bold text-slate-400">Rules persist automatically and recalculate when rates change.</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="window.saveRelationshipsToCloud(true)" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[10px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1">
+                                    <i data-lucide="save" size="13"></i> Save Rule Links
+                                </button>
+                                <button onclick="window.addRelationshipRow()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded font-black text-[10px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1">
+                                    <i data-lucide="plus" size="13"></i> Add Rule
+                                </button>
+                            </div>
                         </div>
                         <div class="overflow-x-auto p-0">
                             <table class="w-full text-left border-collapse min-w-[700px]">
@@ -334,7 +400,7 @@
                 </div>
             </div>
 
-            <!-- TAB 5: OTA MAPPING SUITE -->
+            <!-- TAB 5: OTA MAPPING SUITE (ONE SINGLE CLEAN SAVE BUTTON PER CARD) -->
             <div id="view-mapping" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-4xl mx-auto space-y-4">
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm mb-4 bg-indigo-50/50 border-indigo-200">
@@ -356,46 +422,31 @@
                         </div>
                     </div>
 
+                    <!-- Room Mapping Card (Single Save Button in Footer) -->
                     <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden flex flex-col">
-                        <div class="p-2 bg-slate-100 border-b border-slate-300 flex justify-between items-center shrink-0">
+                        <div class="p-2.5 bg-slate-100 border-b border-slate-300 flex justify-between items-center shrink-0">
                             <h2 class="font-black text-slate-700 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="arrow-left-right" class="text-emerald-500 w-4 h-4"></i> Room Type Mapping</h2>
-                            <button onclick="window.fetchChannexData()" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[9px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1"><i data-lucide="cloud-download" size="12"></i> Refresh</button>
+                            <button onclick="window.fetchChannexData()" class="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-black text-[9px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1"><i data-lucide="cloud-download" size="12"></i> Refresh</button>
                         </div>
                         <div class="p-2 bg-slate-50" id="channex-mapping-container">
                             <div class="text-center py-6 text-slate-400 font-bold text-xs italic">Enter API key and click Save & Fetch to map rooms.</div>
                         </div>
+                        <div class="p-2.5 bg-white border-t border-slate-200 flex items-center justify-between">
+                            <span class="text-[11px] font-bold text-slate-500 uppercase">Map each Channex Room Type to your active PMS Category.</span>
+                            <button onclick="window.saveMappingToDB(true)" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow flex items-center gap-1.5 cursor-pointer"><i data-lucide="save" size="14"></i> Save Room Mappings</button>
+                        </div>
                     </div>
                     
+                    <!-- Rate Plan Mapping Card (Single Save Button in Footer) -->
                     <div class="bg-amber-50 border border-amber-200 rounded-lg shadow-sm overflow-hidden flex flex-col hidden" id="channex-rate-mapping-card" style="display: none;">
-                        <div class="p-2 bg-amber-100/50 border-b border-amber-200 flex justify-between items-center shrink-0">
+                        <div class="p-2.5 bg-amber-100/50 border-b border-amber-200 flex justify-between items-center shrink-0">
                             <h2 class="font-black text-amber-800 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="tags" class="text-amber-600 w-4 h-4"></i> Rate Plan Mapping</h2>
-                            <button onclick="window.toggleCertSuite()" class="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[9px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1"><i data-lucide="award" size="12"></i> Open Certification Suite</button>
+                            <span class="text-[10px] font-bold text-amber-700 uppercase">OTA Plan Offsets</span>
                         </div>
                         <div class="p-2" id="channex-rate-mapping-container"></div>
-                    </div>
-
-                    <div class="bg-purple-50 border border-purple-200 rounded-lg shadow-sm overflow-hidden flex flex-col hidden mt-4" id="channex-cert-card">
-                        <div class="p-2 bg-purple-200/50 border-b border-purple-300 flex justify-between items-center shrink-0">
-                            <h2 class="font-black text-purple-900 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="graduation-cap" class="text-purple-700 w-4 h-4"></i> Channex Certification Runner</h2>
-                        </div>
-                        <div class="p-3 text-xs">
-                            <p class="font-bold text-slate-600 mb-2">Map IDs for Channex Test Requirements (Grader needs extreme precision):</p>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-                                <div><label class="label-base !text-purple-700">Test: Twin Room</label><select id="cert-twin-room" class="input-base border-purple-300"></select></div>
-                                <div><label class="label-base !text-purple-700">Test: Double Room</label><select id="cert-double-room" class="input-base border-purple-300"></select></div>
-                                <div><label class="label-base !text-purple-700">Test: Twin BAR Rate</label><select id="cert-twin-bar" class="input-base border-purple-300"></select></div>
-                                <div><label class="label-base !text-purple-700">Test: Twin B&B Rate</label><select id="cert-twin-bb" class="input-base border-purple-300"></select></div>
-                                <div><label class="label-base !text-purple-700">Test: Double BAR Rate</label><select id="cert-dbl-bar" class="input-base border-purple-300"></select></div>
-                                <div><label class="label-base !text-purple-700">Test: Double B&B Rate</label><select id="cert-dbl-bb" class="input-base border-purple-300"></select></div>
-                            </div>
-                            <div class="flex flex-wrap gap-2 mb-3">
-                                <button onclick="window.runCertTest('rates')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 2-4: Rates Only</button>
-                                <button onclick="window.runCertTest('min_stay')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Test 5: Min Stay</button>
-                                <button onclick="window.runCertTest('stop_sell')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Test 6: Stop Sell</button>
-                                <button onclick="window.runCertTest('restrictions')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 7-8: Multi Rules</button>
-                                <button onclick="window.runCertTest('availability')" class="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-black text-[10px] uppercase shadow-sm transition-colors cursor-pointer">Tests 9-10: Avail</button>
-                            </div>
-                            <div class="bg-white border border-purple-200 p-2 rounded h-32 overflow-y-auto font-mono text-[10px] text-slate-700 whitespace-pre-wrap" id="cert-log">Ready to run tests...</div>
+                        <div class="p-2.5 bg-amber-50/80 border-t border-amber-200 flex items-center justify-between">
+                            <span class="text-[11px] font-bold text-amber-800 uppercase">Map each OTA Rate Plan to PMS Categories and price offsets.</span>
+                            <button onclick="window.saveMappingToDB(true)" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-black text-xs uppercase shadow flex items-center gap-1.5 cursor-pointer"><i data-lucide="save" size="14"></i> Save Rate Mappings</button>
                         </div>
                     </div>
                 </div>
@@ -542,13 +593,20 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
-        const app = initializeApp(firebaseConfig); const auth = getAuth(app); const db = getFirestore(app); const appId = 'hotel-pms-v1';
+        const app = initializeApp(firebaseConfig); 
+        const auth = getAuth(app); 
+        const db = getFirestore(app); 
+        const appId = 'hotel-pms-v1';
 
         const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+        // State to protect against accidental mouseover re-selection while typing
+        let isUserTyping = false;
+        let typingTimeout = null;
 
         const showLoader = (statusText = 'LOADING DATA...') => {
             const loader = document.getElementById('loader');
@@ -569,15 +627,8 @@
         };
 
         const dbToUiRoom = (rid) => {
-            if (window.normalizeRoomId) return window.normalizeRoomId(rid, currentPropertyId);
-            if (!rid) return rid;
-            let nid = rid.toUpperCase();
-            if (hotelRooms.some(r => r.id === nid || r.id === rid)) return rid;
-            if (currentPropertyId === 'swims_resort') {
-                if (/^[ABFD]\d$/.test(nid)) return nid[0] + '0' + nid.substring(1);
-                if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) return 'C' + nid;
-            }
-            return rid;
+            if (!rid) return "";
+            return window.normalizeRoomId ? window.normalizeRoomId(rid, currentPropertyId) : rid;
         };
 
         let currentPropertyId = 'swims_resort';
@@ -593,18 +644,59 @@
         let totalRoomsByType = {};
         let hotelRooms = [];
         let liveInventory = {};
+        window.currentCurrency = 'THB';
+        window.savedAutofillBaselines = null;
+
+        // State initializations for tracking changes, views, and filter pills
+        window.dirtyDates = new Set();
+        window.syncedDates = new Set();
+        window.dirtyFields = {};
+        window.hasUnsavedChanges = false;
+        
+        // 1. Default Display: RATES and AVAIL ONLY
+        const savedMetrics = (() => {
+            try {
+                const raw = localStorage.getItem('cm_active_metrics');
+                if (raw) return new Set(JSON.parse(raw));
+            } catch(e) {}
+            return new Set(['rates', 'avail']);
+        })();
+        window.activeMetrics = savedMetrics;
 
         // Manual Auditor & Live Matrix State
         let snapshotData = {};
         let dismissedIds = [];
         let viewDates = [];
 
-        // Memory trackers for Delta Sync Payload isolation
-        window.dirtyDates = new Set();
-        window.syncedDates = new Set();
-        window.dirtyFields = {}; 
+        // Universal Currency Rounder: Strict whole integer for zero-decimal currencies (THB, JPY), 2 decimals for others
+        const roundCurrency = (val, currency = (window.currentCurrency || 'THB')) => {
+            if (val === "" || val === null || val === undefined || isNaN(val)) return "";
+            const num = Number(val);
+            const cur = (currency || window.currentCurrency || 'THB').toString().toUpperCase().trim();
+            const decimalCurrencies = ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'SGD', 'NZD'];
+            if (decimalCurrencies.includes(cur)) {
+                return Math.round(num * 100) / 100;
+            }
+            return Math.round(num); // Unconditional whole integer rounding for THB
+        };
 
-        window.activeMetrics = new Set(['rates', 'avail', 'min', 'stop']);
+        const formatDisplay = (val) => {
+            if (val === "" || val === undefined || val === null || isNaN(val)) return "";
+            return roundCurrency(val);
+        };
+
+        // Compact Rate Plan Parser
+        window.formatRatePlanTitle = (rawTitle) => {
+            if (!rawTitle) return "Standard";
+            let t = rawTitle.replace(/\[.*?\]/g, '').trim();
+            t = t.replace(/\s+Rate$/i, '').trim();
+            const lower = t.toLowerCase();
+            if (lower.includes('non-ref') || lower.includes('non ref')) return "Non-Refundable";
+            if (lower.includes('standard') || lower.includes('flex') || lower.includes('refundable')) return "Standard";
+            if (lower.includes('breakfast')) return "Bed & Breakfast";
+            if (lower.includes('monthly') || lower.includes('long stay')) return "Monthly / Long";
+            return t || "Rate Plan";
+        };
 
         window.safeUpdateUrlParam = (paramName, paramVal) => {
             try {
@@ -668,6 +760,7 @@
         window.toggleFilter = (metric) => {
             if (window.activeMetrics.has(metric)) window.activeMetrics.delete(metric);
             else window.activeMetrics.add(metric);
+            window.saveUiPreferences();
             window.syncFilterPills();
             window.renderGrid();
         };
@@ -676,13 +769,21 @@
             if (preset === 'rates') window.activeMetrics = new Set(['rates']);
             else if (preset === 'avail') window.activeMetrics = new Set(['avail']);
             else if (preset === 'min') window.activeMetrics = new Set(['min']);
-            else if (preset === 'full') window.activeMetrics = new Set(['rates', 'avail', 'min', 'max', 'cta', 'ctd', 'stop']);
+            else if (preset === 'full') window.activeMetrics = new Set(['rates', 'evt', 'avail', 'min', 'max', 'cta', 'ctd', 'stop']);
+            window.saveUiPreferences();
             window.syncFilterPills();
             window.renderGrid();
         };
 
+        window.saveUiPreferences = () => {
+            try {
+                localStorage.setItem('cm_active_metrics', JSON.stringify(Array.from(window.activeMetrics)));
+                localStorage.setItem('cm_platform_view', currentPlatformView);
+            } catch(e) {}
+        };
+
         window.syncFilterPills = () => {
-            ['rates', 'avail', 'min', 'max', 'cta', 'ctd', 'stop'].forEach(m => {
+            ['rates', 'evt', 'avail', 'min', 'max', 'cta', 'ctd', 'stop'].forEach(m => {
                 const pill = document.getElementById(`flt-${m}`);
                 if (pill) {
                     if (window.activeMetrics.has(m)) pill.classList.add('active');
@@ -703,14 +804,21 @@
             if(!catName) return "";
             const clean = catName.toUpperCase().trim();
             const actual = roomTypes.find(rt => rt.toUpperCase().trim() === clean);
-            return actual || catName.trim();
+            return actual || "";
+        };
+
+        const resolveRoomCategory = (bookedType) => {
+            if (window.resolvePmsRoomType) {
+                const resolved = window.resolvePmsRoomType(bookedType);
+                if (resolved && roomTypes.includes(resolved)) return resolved;
+            }
+            if (!bookedType) return null;
+            const rawLower = bookedType.toLowerCase();
+            return roomTypes.find(rt => rawLower.includes(rt.toLowerCase()) || rt.toLowerCase().includes(rawLower)) || null;
         };
 
         const getLocalYMD = (d) => { return d.toISOString().split('T')[0]; };
         const parseYMD = (str) => { if(!str) return 0; const p = str.split('-'); return Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2]), 12, 0, 0); };
-        
-        const rawRooms = "B01|Oceanfront King^A01|Oceanfront King^A02|Oceanfront King^B02|Oceanfront Twin^B03|Oceanview King Room^B05|Oceanview King Room^B07|Oceanview King Room^A03|Oceanview King Room^A04|Oceanview King Room^A06|Oceanview King Room^A08|Oceanview King Room^A10|Oceanview King Room^A12|Oceanview King Room^C206|Oceanview King Room^C306|Oceanview King Room^C311|Oceanview King Room^B04|Oceanview Twin Room^B06|Oceanview Twin Room^B08|Oceanview Twin Room^C212|Oceanview Twin Room^A05|Partial Oceanview King Room^A07|Partial Oceanview King Room^A09|Partial Oceanview King Room^A11|Partial Oceanview King Room^C203|Partial Oceanview King Room^C204|Partial Oceanview King Room^C205|Partial Oceanview King Room^B09|Gardenview King Room^B11|Gardenview King Room^B13|Gardenview King Room^B15|Gardenview King Room^B17|Gardenview King Room^B19|Gardenview King Room^B21|Gardenview King Room^B22|Gardenview King Room^B10|Gardenview Twin Room^B12|Gardenview Twin Room^B14|Gardenview Twin Room^B16|Gardenview Twin Room^B18|Gardenview Twin Room^B20|Gardenview Twin Room^C201|Gardenview Twin Room^C202|Gardenview Twin Room^C207|Gardenview Twin Room^C208|Gardenview Twin Room^C209|Gardenview Twin Room^C210|Gardenview Twin Room^C211|Gardenview Twin Room^C101|Gardenview Twin Room^C307|Partial Oceanview Triple Room^C308|Partial Oceanview Triple Room^C305|Partial Oceanview Triple Room^C309|Partial Oceanview Triple Room^C310|Partial Oceanview Triple Room^C301-1|Standard Quad Dorm^C301-2|Standard Quad Dorm^C301-3|Standard Quad Dorm^C301-4|Standard Quad Dorm^C302-1|Standard Quad Dorm^C302-2|Standard Quad Dorm^C302-3|Standard Quad Dorm^C302-4|Standard Quad Dorm^C303-1|Standard Quad Dorm^C303-2|Standard Quad Dorm^C303-3|Standard Quad Dorm^C303-4|Standard Quad Dorm^C304-1|Standard Quad Dorm^C304-2|Standard Quad Dorm^C304-3|Standard Quad Dorm^C304-4|Standard Quad Dorm^D01|BUNGALOWS^D02|BUNGALOWS^D03|BUNGALOWS^D04|BUNGALOWS^D05|BUNGALOWS^D06|BUNGALOWS^D07|BUNGALOWS^D08|BUNGALOWS^D09|BUNGALOWS^D10|BUNGALOWS^D11|BUNGALOWS";
-        const hardcodedRooms = rawRooms.split('^').map(r => { const p = r.split('|'); return { id: p[0], type: p[1] }; });
 
         window.customAlert = (msg, isConfirm = false, onConfirm = null) => {
             document.getElementById('custom-alert-msg').innerText = msg;
@@ -721,7 +829,7 @@
                 confirmBtn.classList.replace('bg-indigo-600', 'bg-red-600'); confirmBtn.classList.replace('hover:bg-indigo-700', 'hover:bg-red-700');
             } else {
                 cancelBtn.classList.add('hidden'); confirmBtn.innerText = 'Okay';
-                confirmBtn.classList.replace('bg-red-600', 'bg-indigo-600'); confirmBtn.classList.replace('hover:bg-red-700', 'hover:bg-indigo-700');
+                confirmBtn.classList.replace('bg-red-600', 'bg-indigo-600'); confirmBtn.classList.replace('hover:bg-indigo-700', 'hover:bg-indigo-700');
             }
             confirmBtn.onclick = () => { if (onConfirm) onConfirm(); document.getElementById('custom-alert').classList.add('hidden'); };
             document.getElementById('custom-alert').classList.remove('hidden');
@@ -746,31 +854,71 @@
                 window.safeUpdateUrlParam('p', shortKey);
                 window.syncNavLinks(currentPropertyId);
 
+                // Populate switcher with canonical names, deduplicated
                 const switcher = document.getElementById('property-switcher');
                 if (switcher && windowPropertiesList.length > 0) {
-                    switcher.innerHTML = windowPropertiesList.map(p => `<option value="${p.id}" ${p.id === currentPropertyId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`).join('');
+                    const seen = new Set();
+                    const optionsHtml = [];
+                    windowPropertiesList.forEach(p => {
+                        const canon = window.toCanonicalPropId ? window.toCanonicalPropId(p.id) : p.id;
+                        if (!seen.has(canon)) {
+                            seen.add(canon);
+                            optionsHtml.push(`<option value="${p.id}" ${p.id === currentPropertyId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`);
+                        }
+                    });
+                    switcher.innerHTML = optionsHtml.join('');
                     switcher.value = currentPropertyId;
                 }
 
-                const propToLoad = windowPropertiesList.find(p => p.id === currentPropertyId);
+                // Explicitly pull exact property document configured in settings.html
+                const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(currentPropertyId) : currentPropertyId;
+                const propToLoad = windowPropertiesList.find(p => p.id === canonId && Array.isArray(p.rooms) && p.rooms.length > 0)
+                    || windowPropertiesList.find(p => (window.toCanonicalPropId ? window.toCanonicalPropId(p.id) : p.id) === canonId)
+                    || windowPropertiesList.find(p => p.id.toLowerCase() === currentPropertyId.toLowerCase())
+                    || windowPropertiesList[0];
+
                 if (propToLoad) {
-                    hotelRooms = propToLoad.rooms && propToLoad.rooms.length > 0 ? [...propToLoad.rooms] : [...hardcodedRooms];
-                    eventDates = propToLoad.events || [];
+                    window.currentCurrency = propToLoad.currency || 'THB';
+                    hotelRooms = Array.isArray(propToLoad.rooms) ? [...propToLoad.rooms] : [];
+                    eventDates = Array.isArray(propToLoad.events) ? [...propToLoad.events] : [];
                     window.channexConfig = propToLoad.channex || {};
-                    window.channexMap = propToLoad.channexMap || [];
-                    window.channexRateMap = propToLoad.channexRateMap || [];
-                    window.promoRules = propToLoad.promoRules || [];
+                    window.channexMap = Array.isArray(propToLoad.channexMap) ? [...propToLoad.channexMap] : [];
+                    window.channexRateMap = Array.isArray(propToLoad.channexRateMap) ? [...propToLoad.channexRateMap] : [];
+                    window.promoRules = Array.isArray(propToLoad.promoRules) ? [...propToLoad.promoRules] : [];
                 } else {
-                    hotelRooms = [...hardcodedRooms]; eventDates = []; window.channexConfig = {}; window.channexMap = []; window.channexRateMap = []; window.promoRules = [];
+                    window.currentCurrency = 'THB';
+                    hotelRooms = []; eventDates = []; window.channexConfig = {}; window.channexMap = []; window.channexRateMap = []; window.promoRules = [];
                 }
 
+                // Restore Channex credentials to input fields (check Firestore prop doc + master doc + localStorage fallback)
+                let apiKey = window.channexConfig?.apiKey || '';
+                let chanPropId = window.channexConfig?.propId || '';
+
+                if (!apiKey || !chanPropId) {
+                    try {
+                        const localCreds = JSON.parse(localStorage.getItem(`cm_channex_${currentPropertyId}`) || '{}');
+                        if (localCreds.apiKey && !apiKey) apiKey = localCreds.apiKey;
+                        if (localCreds.propId && !chanPropId) chanPropId = localCreds.propId;
+                    } catch(e) {}
+                }
+
+                const keyInput = document.getElementById('chan-api-key');
+                const propInput = document.getElementById('chan-prop-id');
+                if (keyInput) keyInput.value = apiKey;
+                if (propInput) propInput.value = chanPropId;
+                if (apiKey && chanPropId) {
+                    window.channexConfig = { apiKey, propId: chanPropId, env: 'production' };
+                }
+
+                // Derive ACTIVE room categories strictly from hotelRooms (Zero hardcoding)
                 roomTypes = [];
                 totalRoomsByType = {};
                 
                 hotelRooms.forEach(r => {
                     if (r && r.type) {
-                        if (!roomTypes.includes(r.type)) roomTypes.push(r.type);
-                        totalRoomsByType[r.type] = (totalRoomsByType[r.type] || 0) + 1;
+                        const cleanType = r.type.trim();
+                        if (!roomTypes.includes(cleanType)) roomTypes.push(cleanType);
+                        totalRoomsByType[cleanType] = (totalRoomsByType[cleanType] || 0) + 1;
                     }
                 });
 
@@ -784,49 +932,264 @@
                     }
                 });
 
+                // Respect saved activeMetrics; do not force-enable EVT unless previously selected
                 const hasEvents = eventDates.length > 0;
-                document.querySelectorAll('.evt-column').forEach(el => {
-                    if (el.tagName === 'TR' || el.tagName === 'TD' || el.tagName === 'TH' || el.tagName === 'OPTION') {
-                        el.style.display = hasEvents ? 'table-cell' : 'none';
-                        if(el.tagName === 'OPTION') el.style.display = hasEvents ? 'block' : 'none';
-                    } else {
-                        el.style.display = hasEvents ? 'block' : 'none';
-                    }
-                });
-                document.querySelectorAll('.no-evt-column').forEach(el => el.style.display = hasEvents ? 'none' : 'block');
+                const evtCheckbox = document.getElementById('w-enable-events');
+                if (evtCheckbox) evtCheckbox.checked = hasEvents;
+                window.toggleAutofillEventMode(hasEvents);
+                
+                window.syncFilterPills();
                 
                 masterPricing = { relationships: [], timeline: {} };
-                try {
-                    let snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${currentPropertyId}`));
-                    if (snap.exists()) { 
-                        const d = snap.data(); 
-                        if (d.timeline) masterPricing.timeline = d.timeline; 
-                        if (d.relationships) masterPricing.relationships = d.relationships; 
-                    }
-                } catch (pErr) {
-                    console.warn("Pricing load notice:", pErr);
-                }
-
-                if(masterPricing.relationships.length === 0 && roomTypes.length > 0) {
-                    roomTypes.forEach(t => masterPricing.relationships.push({ anchor: roomTypes[0], target: t, type: "=", val: 0, typeFmp: "=", valFmp: 0 }));
-                }
-
-                const selP = document.getElementById('w-anchor-private'); const selD = document.getElementById('w-anchor-dorm');
-                if (selP) selP.innerHTML = roomTypes.filter(t => !t.toLowerCase().includes('dorm')).map(t => `<option value="${t}">${t}</option>`).join('');
-                if (selD) selD.innerHTML = roomTypes.filter(t => t.toLowerCase().includes('dorm')).map(t => `<option value="${t}">${t}</option>`).join('');
                 
+                // Multi-key document recovery: check canonical (master_swims_resort) and short-key (master_SWIMS)
+                const canonPropId = window.toCanonicalPropId ? window.toCanonicalPropId(currentPropertyId) : currentPropertyId;
+                const shortPropId = window.toDisplayPropKey ? window.toDisplayPropKey(canonPropId) : '';
+                const possibleDocIds = [...new Set([`master_${canonPropId}`, `master_${currentPropertyId}`, `master_${shortPropId}`].filter(Boolean))];
+
+                let loadedRelationships = null;
+                let loadedBaselines = null;
+                let loadedTimeline = null;
+
+                for (const docId of possibleDocIds) {
+                    try {
+                        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', docId));
+                        if (snap.exists()) {
+                            const d = snap.data();
+                            if (!loadedTimeline && d.timeline && Object.keys(d.timeline).length > 0) {
+                                loadedTimeline = d.timeline;
+                            }
+                            if (!loadedRelationships && Array.isArray(d.relationships) && d.relationships.length > 0) {
+                                loadedRelationships = d.relationships;
+                            }
+                            if (!loadedBaselines && d.autofillBaselines) {
+                                loadedBaselines = d.autofillBaselines;
+                            }
+                            // Also recover Channex credentials from master doc if present
+                            if ((!window.channexConfig?.apiKey || !window.channexConfig?.propId) && d.channex?.apiKey && d.channex?.propId) {
+                                window.channexConfig = d.channex;
+                                if (keyInput && !keyInput.value) keyInput.value = d.channex.apiKey;
+                                if (propInput && !propInput.value) propInput.value = d.channex.propId;
+                            }
+                        }
+                    } catch (pErr) {
+                        console.warn("Pricing load check:", docId, pErr);
+                    }
+                }
+
+                if (loadedTimeline) masterPricing.timeline = loadedTimeline;
+                if (loadedRelationships) masterPricing.relationships = loadedRelationships;
+                if (loadedBaselines) window.populateAutofillBaselines(loadedBaselines);
+
+                // Dynamically resolve anchors/targets without destructively nuking unmatched rules
+                if (Array.isArray(masterPricing.relationships) && masterPricing.relationships.length > 0) {
+                    masterPricing.relationships = masterPricing.relationships.map(rel => ({
+                        ...rel,
+                        anchor: rel.anchor === 'unlinked' ? 'unlinked' : (categoryResolver(rel.anchor) || rel.anchor),
+                        target: categoryResolver(rel.target) || rel.target
+                    }));
+                }
+
+                window.updateAnchorDropdowns();
                 populatePromoScopeDropdown();
                 renderPromoRulesTable();
+                window.renderRelationships();
+                window.renderChannexMapping();
+            } catch (err) {
+                console.error("Config load error:", err);
+            }
+        };
 
-                const apiKeyEl = document.getElementById('chan-api-key');
-                const propIdEl = document.getElementById('chan-prop-id');
-                if (apiKeyEl) apiKeyEl.value = window.channexConfig.apiKey || '';
-                if (propIdEl) propIdEl.value = window.channexConfig.propId || '';
-                if (window.renderChannexMapping) window.renderChannexMapping();
-                
-                await loadPropertyBaseline();
+        window.updateAnchorDropdowns = () => {
+            const selP = document.getElementById('w-anchor-private'); 
+            const selD = document.getElementById('w-anchor-dorm');
+            const curP = selP?.value || window.savedAutofillBaselines?.anchor_p || '';
+            const curD = selD?.value || window.savedAutofillBaselines?.anchor_d || '';
 
-            } catch (err) { console.error("Error loading property config:", err); }
+            if (selP) {
+                const privates = roomTypes.filter(t => !t.toLowerCase().includes('dorm'));
+                const list = privates.length ? privates : roomTypes;
+                selP.innerHTML = list.map(t => `<option value="${t}" ${t === curP ? 'selected' : ''}>${t}</option>`).join('');
+                if (curP && list.includes(curP)) selP.value = curP;
+            }
+            if (selD) {
+                const dorms = roomTypes.filter(t => t.toLowerCase().includes('dorm'));
+                const list = dorms.length ? dorms : roomTypes;
+                selD.innerHTML = list.map(t => `<option value="${t}" ${t === curD ? 'selected' : ''}>${t}</option>`).join('');
+                if (curD && list.includes(curD)) selD.value = curD;
+            }
+        };
+
+        window.toggleAutofillEventMode = (enabled) => {
+            const panel = document.getElementById('autofill-events-panel');
+            const stdPanel = document.getElementById('autofill-standard-panel');
+            if (panel) panel.style.display = enabled ? 'block' : 'none';
+            if (stdPanel) stdPanel.style.display = enabled ? 'none' : 'block';
+            
+            document.querySelectorAll('.evt-column').forEach(el => {
+                if (el.tagName === 'TR' || el.tagName === 'TD' || el.tagName === 'TH' || el.tagName === 'OPTION') {
+                    el.style.display = enabled ? 'table-cell' : 'none';
+                    if(el.tagName === 'OPTION') el.style.display = enabled ? 'block' : 'none';
+                } else {
+                    el.style.display = enabled ? 'block' : 'none';
+                }
+            });
+            document.querySelectorAll('.no-evt-column').forEach(el => el.style.display = enabled ? 'none' : 'block');
+        };
+
+        window.populateAutofillBaselines = (b) => {
+            if (!b) return;
+            window.savedAutofillBaselines = b;
+            const setVal = (id, val) => {
+                const el = document.getElementById(id);
+                if (el && val !== undefined && val !== null) el.value = val;
+            };
+            setVal('w-p-base', b.p_base);
+            setVal('w-p-base-single', b.p_base);
+            setVal('w-p-pkg', b.p_pkg);
+            setVal('w-p-m2', b.p_m2);
+            setVal('w-p-m1', b.p_m1);
+            setVal('w-p-0', b.p_0);
+            setVal('w-p-p1', b.p_p1);
+            setVal('w-p-p2', b.p_p2);
+
+            setVal('w-d-base', b.d_base);
+            setVal('w-d-base-single', b.d_base);
+            setVal('w-d-pkg', b.d_pkg);
+            setVal('w-d-m2', b.d_m2);
+            setVal('w-d-m1', b.d_m1);
+            setVal('w-d-0', b.d_0);
+            setVal('w-d-p1', b.d_p1);
+            setVal('w-d-p2', b.d_p2);
+
+            if (b.anchor_p) {
+                const pEl = document.getElementById('w-anchor-private');
+                if (pEl) pEl.value = b.anchor_p;
+            }
+            if (b.anchor_d) {
+                const dEl = document.getElementById('w-anchor-dorm');
+                if (dEl) dEl.value = b.anchor_d;
+            }
+        };
+
+        window.debounceSaveBaselines = () => {
+            clearTimeout(window._baselineSaveTimer);
+            window._baselineSaveTimer = setTimeout(() => {
+                window.saveAutofillBaselines(false);
+            }, 600);
+        };
+
+        window.saveAutofillBaselines = async (notify = false) => {
+            const getVal = id => {
+                const el = document.getElementById(id);
+                return el ? (parseFloat(el.value) || 0) : 0;
+            };
+            const baselines = {
+                anchor_p: document.getElementById('w-anchor-private')?.value || '',
+                anchor_d: document.getElementById('w-anchor-dorm')?.value || '',
+                p_base: getVal('w-p-base') || getVal('w-p-base-single'),
+                p_pkg: getVal('w-p-pkg'),
+                p_m2: getVal('w-p-m2'),
+                p_m1: getVal('w-p-m1'),
+                p_0: getVal('w-p-0'),
+                p_p1: getVal('w-p-p1'),
+                p_p2: getVal('w-p-p2'),
+                d_base: getVal('w-d-base') || getVal('w-d-base-single'),
+                d_pkg: getVal('w-d-pkg'),
+                d_m2: getVal('w-d-m2'),
+                d_m1: getVal('w-d-m1'),
+                d_0: getVal('w-d-0'),
+                d_p1: getVal('w-d-p1'),
+                d_p2: getVal('w-d-p2')
+            };
+            window.savedAutofillBaselines = baselines;
+
+            try {
+                const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(currentPropertyId) : currentPropertyId;
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`), {
+                    autofillBaselines: baselines,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+                if (notify) window.customAlert("Autofiller baseline prices and anchors saved to database!");
+            } catch (e) {
+                console.error("Failed to save baselines:", e);
+                if (notify) window.customAlert("Could not save baselines: " + e.message);
+            }
+        };
+
+        window.readRelationshipsFromDOM = () => {
+            const rows = document.querySelectorAll('.rel-row');
+            if (rows.length === 0) return;
+            const updated = [];
+            rows.forEach(tr => {
+                const aEl = tr.querySelector('.rel-anchor');
+                const tEl = tr.querySelector('.rel-target');
+                const typeEl = tr.querySelector('.rel-type');
+                const valEl = tr.querySelector('.rel-val');
+                const fmpTypeEl = tr.querySelector('.rel-fmp-type');
+                const fmpValEl = tr.querySelector('.rel-fmp-val');
+                if (aEl && tEl) {
+                    updated.push({
+                        anchor: aEl.value,
+                        target: tEl.value,
+                        type: typeEl ? typeEl.value : "=",
+                        val: valEl ? (parseFloat(valEl.value) || 0) : 0,
+                        typeFmp: fmpTypeEl ? fmpTypeEl.value : "=",
+                        valFmp: fmpValEl ? (parseFloat(fmpValEl.value) || 0) : 0
+                    });
+                }
+            });
+            if (updated.length > 0) {
+                masterPricing.relationships = updated;
+            }
+        };
+
+        window.saveRelationshipsToCloud = async (notify = false) => {
+            window.readRelationshipsFromDOM();
+            const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(currentPropertyId) : currentPropertyId;
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`), {
+                    relationships: masterPricing.relationships,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+                if (notify) {
+                    window.customAlert("Rule links saved to database!");
+                }
+            } catch (e) {
+                console.error("Failed to save relationships to database:", e);
+                if (notify) window.customAlert("Could not save links: " + e.message);
+            }
+        };
+
+        window.saveRelationships = () => {
+            window.readRelationshipsFromDOM();
+            window.markUnsavedChanges();
+            window.renderGrid();
+            // Automatically debounce persist to Firestore so work is never lost on refresh
+            clearTimeout(window._relSaveTimer);
+            window._relSaveTimer = setTimeout(() => {
+                window.saveRelationshipsToCloud(false);
+            }, 800);
+        };
+
+        window.reloadSettingsConfig = async () => {
+            showLoader('RELOADING CONFIG FROM DATABASE...');
+            await loadPropertyConfig();
+            window.renderGrid();
+            window.renderManualGrid();
+            hideLoader();
+            window.customAlert("Inventory & Event settings refreshed from database!");
+        };
+
+        window.setAutofillPreset = (days) => {
+            const startInp = document.getElementById('w-start-date');
+            const endInp = document.getElementById('w-end-date');
+            if (!startInp) return;
+            const startVal = startInp.value || new Date().toISOString().split('T')[0];
+            startInp.value = startVal;
+            const sD = new Date(startVal + "T12:00:00Z");
+            sD.setUTCDate(sD.getUTCDate() + (days - 1));
+            if (endInp) endInp.value = sD.toISOString().split('T')[0];
         };
 
         window.handlePropertySwitch = async (propId) => {
@@ -843,15 +1206,17 @@
             window.safeUpdateUrlParam('p', shortKey);
             window.syncNavLinks(currentPropertyId);
 
+            window.dirtyDates.clear();
+            window.dirtyFields = {};
+            window.hasUnsavedChanges = false;
+            window.updateSaveIndicator();
+
             await loadPropertyConfig();
             window.renderGrid();
             window.renderManualGrid();
             hideLoader();
         };
 
-        // =========================================================
-        // PROMO ENGINE MODULE FUNCTIONS
-        // =========================================================
         function populatePromoScopeDropdown() {
             const scopeEl = document.getElementById('promo-room-scope');
             if (scopeEl) {
@@ -893,27 +1258,6 @@
                 const markup = ((1 / (1 - (disc / 100))) - 1) * 100;
                 calcEl.value = `+${markup.toFixed(1)}%`;
             }
-        };
-
-        window.runLiveCalculator = () => {
-            const targetRate = parseFloat(document.getElementById('calc-target-rate')?.value) || 0;
-            const discountPct = parseFloat(document.getElementById('calc-discount-pct')?.value) || 0;
-
-            const markupPctEl = document.getElementById('calc-markup-pct');
-            const pushedRateEl = document.getElementById('calc-pushed-rate');
-
-            if (discountPct <= 0 || discountPct >= 100) {
-                if (markupPctEl) markupPctEl.innerText = "+0%";
-                if (pushedRateEl) pushedRateEl.innerText = `฿${targetRate.toFixed(2)}`;
-                return;
-            }
-
-            const decimalDiscount = discountPct / 100;
-            const requiredMarkupPct = (((1 / (1 - decimalDiscount)) - 1) * 100).toFixed(1);
-            const pushedRate = targetRate / (1 - decimalDiscount);
-
-            if (markupPctEl) markupPctEl.innerText = `+${requiredMarkupPct}%`;
-            if (pushedRateEl) pushedRateEl.innerText = `฿${pushedRate.toFixed(2)}`;
         };
 
         window.savePromoRule = async () => {
@@ -1049,18 +1393,11 @@
             if (window.lucide) window.lucide.createIcons();
         }
 
-        // =========================================================
-        // MANUAL AUDITOR & LIVE MATRIX FUNCTIONS
-        // =========================================================
         const getBaselineDocId = () => `baseline_${currentPropertyId}`;
 
         const loadPropertyBaseline = async () => {
             try {
                 let baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', getBaselineDocId()));
-                if (!baselineSnap.exists() && currentPropertyId === 'swims_resort') {
-                    baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'));
-                }
-
                 if (baselineSnap.exists()) {
                     snapshotData = baselineSnap.data().matrix || {};
                     dismissedIds = baselineSnap.data().dismissed || [];
@@ -1219,7 +1556,7 @@
             } else if (source === 'airbnb') {
                 let lines = rawText.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
                 for (let i = 0; i < lines.length; i++) {
-                    if (lines[i].toLowerCase().includes('sunset') || lines[i].toLowerCase().includes('entire') || lines[i].toLowerCase().includes('private room') || lines[i].toLowerCase().includes('group')) {
+                    if (lines[i].toLowerCase().includes('entire') || lines[i].toLowerCase().includes('private room') || lines[i].toLowerCase().includes('group')) {
                         let rawName = lines[i - 1];
                         if (!rawName) continue;
 
@@ -1317,7 +1654,6 @@
                 if (filter === 'all') show = true;
                 else {
                     roomTypes.forEach(t => {
-                        if (t === 'BUNGALOWS') return;
                         let live = (liveInventory[d] && liveInventory[d][t] !== undefined) ? liveInventory[d][t] : 0;
                         let snap = snapshotData[d] && snapshotData[d][t] !== undefined ? snapshotData[d][t] : totalRoomsByType[t];
                         let isUrgent = live <= 2 && totalRoomsByType[t] > 2;
@@ -1371,12 +1707,10 @@
             head.innerHTML = trHead;
 
             roomTypes.forEach((t, index) => {
-                let isMuted = t === 'BUNGALOWS';
-                let rowBg = isMuted ? 'bg-slate-200' : (index % 2 === 0 ? 'bg-white' : 'bg-slate-100');
-                let rowOpacity = isMuted ? 'opacity-50 grayscale' : '';
-                let shortName = t.replace("Partial Oceanview", "Partial OV").replace("Standard Quad Dorm", "Quad Dorm").replace(" Room", "");
+                let rowBg = index % 2 === 0 ? 'bg-white' : 'bg-slate-100';
+                let shortName = displayAbbrev[t] || t;
 
-                let tr = `<tr class="${rowOpacity} ${rowBg} hover:bg-slate-200 transition-colors"><td class="frozen-col font-black text-[11px] sm:text-xs leading-snug whitespace-normal break-words ${rowBg}" title="${t}">${shortName}<br><span class="text-slate-400 font-bold text-[9px] uppercase mt-0.5 inline-block tracking-widest">CAP: ${totalRoomsByType[t]}</span>${isMuted ? '<br><span class="text-rose-500 font-black text-[9px] uppercase tracking-widest mt-0.5 inline-block">Muted</span>' : ''}</td>`;
+                let tr = `<tr class="${rowBg} hover:bg-slate-200 transition-colors"><td class="frozen-col font-black text-[11px] sm:text-xs leading-snug whitespace-normal break-words ${rowBg}" title="${t}">${shortName}<br><span class="text-slate-400 font-bold text-[9px] uppercase mt-0.5 inline-block tracking-widest">CAP: ${totalRoomsByType[t]}</span></td>`;
 
                 finalCols.forEach(col => {
                     if (col.type === 'gap') {
@@ -1385,11 +1719,11 @@
                         let d = col.val;
                         let live = (liveInventory[d] && liveInventory[d][t] !== undefined) ? liveInventory[d][t] : 0;
                         let snap = snapshotData[d] && snapshotData[d][t] !== undefined ? snapshotData[d][t] : totalRoomsByType[t];
-                        let isUrgent = live <= 2 && totalRoomsByType[t] > 2 && !isMuted;
+                        let isUrgent = live <= 2 && totalRoomsByType[t] > 2;
 
                         let content = `<span class="font-bold text-sm text-slate-700">${live}</span>`;
 
-                        if (live !== snap && !isMuted) {
+                        if (live !== snap) {
                             content = `<div class="flex flex-col items-center justify-center leading-none"><span class="text-[10px] font-bold text-red-400 line-through mb-0.5">${snap}</span><span class="font-black text-red-600 text-base">${live}</span></div>`;
                         }
                         if (filter === 'urgent' && isUrgent) {
@@ -1409,47 +1743,26 @@
             if (window.lucide) window.lucide.createIcons();
         };
 
-        window.markSynced = () => {
-            const shortKey = window.toDisplayPropKey ? window.toDisplayPropKey(currentPropertyId) : 'SWIMS';
-            window.customAlert(`Mark all current availability as synced for ${shortKey}? This will clear your 'Changes' list until new bookings arrive.`, true, async () => {
-                const loader = document.getElementById('loader');
-                const statusEl = document.getElementById('sync-status');
-                if (loader) loader.style.display = 'flex';
-                if (statusEl) statusEl.innerText = 'SAVING SYNC...';
-
-                snapshotData = JSON.parse(JSON.stringify(liveInventory));
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', getBaselineDocId()), {
-                        matrix: snapshotData,
-                        dismissed: dismissedIds,
-                        property: currentPropertyId,
-                        updatedAt: new Date().toISOString()
-                    });
-                    window.renderManualGrid();
-                } catch (e) {
-                    window.customAlert("Save failed. Check permissions on 'ota_sync' collection: " + e.message);
-                }
-                if (loader) loader.style.display = 'none';
-            });
-        };
-
         const applyMath = (baseVal, type, modifier, isReverse = false) => {
             if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
-            let val = parseFloat(baseVal); let mod = parseFloat(modifier); if (isNaN(mod)) mod = 0; 
+            let val = parseFloat(baseVal); 
+            let mod = parseFloat(modifier); 
+            if (isNaN(mod)) mod = 0; 
             
-            if (type === '=') return val;
-            if (!isReverse) {
-                if (type === '+') return Math.max(0, val + mod);
-                if (type === '-') return Math.max(0, val - mod);
-                if (type === '+%') return val * (1 + (mod/100));
-                if (type === '-%') return Math.max(0, val * (1 - (mod/100)));
+            let res = val;
+            if (type === '=') res = val;
+            else if (!isReverse) {
+                if (type === '+') res = Math.max(0, val + mod);
+                if (type === '-') res = Math.max(0, val - mod);
+                if (type === '+%') res = val * (1 + (mod/100));
+                if (type === '-%') res = Math.max(0, val * (1 - (mod/100)));
             } else {
-                if (type === '+') return Math.max(0, val - mod);
-                if (type === '-') return Math.max(0, val + mod);
-                if (type === '+%') return val / (1 + (mod/100));
-                if (type === '-%') return Math.max(0, val / (1 - (mod/100)));
+                if (type === '+') res = Math.max(0, val - mod);
+                if (type === '-') res = Math.max(0, val + mod);
+                if (type === '+%') res = val / (1 + (mod/100));
+                if (type === '-%') res = Math.max(0, val * (1 - (mod/100)));
             }
-            return val;
+            return roundCurrency(res);
         };
 
         const getNearestEvent = (unixMs) => {
@@ -1469,7 +1782,8 @@
             let minDiff = getNearestEvent(parseYMD(dateStr));
             let isPeak = (minDiff === 0);
 
-            const adj = {}; roomTypes.forEach(r => adj[r] = []);
+            const adj = {}; 
+            roomTypes.forEach(r => adj[r] = []);
             masterPricing.relationships.forEach(rel => {
                 if (rel.anchor === 'unlinked') return; 
                 let aRoom = rel.anchor;
@@ -1482,7 +1796,8 @@
                 adj[tRoom].push({ to: aRoom, type: rel.type, val: rel.val, typeFmp: rel.typeFmp, valFmp: rel.valFmp, isReverse: true });
             });
 
-            let queue = [startRoom]; let visited = new Set([startRoom]);
+            let queue = [startRoom]; 
+            let visited = new Set([startRoom]);
             while(queue.length > 0) {
                 let cur = queue.shift();
                 let curVals = masterPricing.timeline[dateStr][cur] || { std: "", fmp: "", isOverride: {} };
@@ -1540,13 +1855,10 @@
             });
             if(tab === 'promos') {
                 renderPromoRulesTable();
-                window.runLiveCalculator();
             }
             if(tab === 'relational') window.renderRelationships();
             if(tab === 'smart') {
-                const selP = document.getElementById('w-anchor-private'); const selD = document.getElementById('w-anchor-dorm');
-                if (selP) selP.innerHTML = roomTypes.filter(t => !t.toLowerCase().includes('dorm')).map(t => `<option value="${t}">${t}</option>`).join('');
-                if (selD) selD.innerHTML = roomTypes.filter(t => t.toLowerCase().includes('dorm')).map(t => `<option value="${t}">${t}</option>`).join('');
+                window.updateAnchorDropdowns();
             }
             if(tab === 'manual') {
                 window.renderManualGrid();
@@ -1565,6 +1877,7 @@
             currentPlatformView = view;
             ['direct', 'bdc', 'hw'].forEach(v => { document.getElementById(`view-${v}`).classList.remove(`active-${v}`); });
             document.getElementById(`view-${view}`).classList.add(`active-${view}`);
+            window.saveUiPreferences();
             window.renderGrid();
         };
 
@@ -1618,7 +1931,7 @@
 
                 const mappedRates = (window.channexRateMap || []).filter(m => categoryResolver(m.pmsCategory) === r);
                 mappedRates.forEach(m => {
-                    html += `<tr class="bg-indigo-50/20 border-b border-indigo-50 hover:bg-indigo-50/50 transition-colors" data-type="rate" data-id="${m.ratePlanId}" data-parent="${r}" data-ruletype="${m.ruleType || "="}" data-ruleval="${m.ruleVal !== undefined ? m.ruleVal : 0}">
+                    html += `<tr class="bg-indigo-50/20 border-b border-indigo-50 hover:bg-indigo-50/50 transition-colors" data-type="rate" data-id="${m.ratePlanId}" data-parent="${r}" data-ruletype="${m.ruleType || "="}" data-ruleval="${m.ruleVal !== undefined ? m.ruleVal : 0}" data-ratesource="${m.rateSource || 'std'}">
                         <td class="p-1.5 font-bold text-[9px] text-indigo-700 pl-8 border-r border-indigo-100">↳ 📡 ${m.ratePlanTitle}</td>
                         <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-rate !placeholder-indigo-400" placeholder="RATE"></td>
                         <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-min" placeholder="MIN"></td>
@@ -1646,6 +1959,7 @@
                 const parent = tr.dataset.parent;
                 const rType = tr.dataset.ruletype || "=";
                 const rVal = parseFloat(tr.dataset.ruleval) || 0;
+                const rSource = tr.dataset.ratesource || 'std';
 
                 const getVal = (cls, isBool=false) => {
                     const el = tr.querySelector('.' + cls);
@@ -1657,7 +1971,7 @@
                 };
 
                 const rule = {
-                    type, id, parent, rType, rVal,
+                    type, id, parent, rType, rVal, rSource,
                     rate: getVal('qb-val-rate'),
                     min: getVal('qb-val-min'),
                     max: getVal('qb-val-max'),
@@ -1713,7 +2027,7 @@
                                 window.healDay(dateStr); 
                             } else {
                                 const mult = getViewMultiplier();
-                                masterPricing.timeline[dateStr][r.id].std = Number((parseFloat(r.rate) / mult).toFixed(2));
+                                masterPricing.timeline[dateStr][r.id].std = roundCurrency(parseFloat(r.rate) / mult);
                                 masterPricing.timeline[dateStr][r.id].isOverride.std = true;
                                 rippleDay(dateStr, r.id); 
                             }
@@ -1742,34 +2056,43 @@
                             }
                         });
                     } else if (r.type === 'rate') {
-                        if (r.rate !== undefined) window.handleOtaEdit(dateStr, r.id, r.parent, r.rType, r.rVal, 'rate', r.rate);
+                        if (r.rate !== undefined) window.handleOtaEdit(dateStr, r.id, r.parent, r.rType, r.rVal, 'rate', r.rate, r.rSource);
                         ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(f => {
-                            if (r[f] !== undefined) window.handleOtaEdit(dateStr, r.id, r.parent, r.rType, r.rVal, f, r[f]);
+                            if (r[f] !== undefined) window.handleOtaEdit(dateStr, r.id, r.parent, r.rType, r.rVal, f, r[f], r.rSource);
                         });
                     }
                 });
             }
 
             window.renderGrid();
-            window.triggerAutoSave();
+            window.markUnsavedChanges();
             
             if(!isClear) {
                 document.querySelectorAll('#qb-grid-body input:not([type="date"]):not([disabled])').forEach(i => i.value = "");
             }
-            
-            const sInd = document.getElementById('save-indicator');
-            sInd.innerText = isClear ? 'OVERRIDES CLEARED' : `APPLIED TO ${((eU - sU) / 86400000) + 1} DAYS`; 
-            sInd.classList.replace('text-emerald-600', 'text-indigo-600'); sInd.style.opacity = '1'; setTimeout(() => { sInd.style.opacity = '0'; }, 3000);
         };
 
         const getViewMultiplier = () => { return currentPlatformView === 'hw' ? 1.25 : 1.0; };
 
-        window.autoSaveTimer = null;
-        window.triggerAutoSave = () => {
-            clearTimeout(window.autoSaveTimer);
+        window.markUnsavedChanges = () => {
+            window.hasUnsavedChanges = true;
+            window.updateSaveIndicator();
+        };
+
+        window.updateSaveIndicator = () => {
             const si = document.getElementById('save-indicator');
-            si.innerText = 'SAVING...'; si.style.opacity = '1'; si.classList.replace('text-emerald-600', 'text-amber-500');
-            window.autoSaveTimer = setTimeout(() => { window.savePricingToCloud(true); }, 1500);
+            const saveBtn = document.getElementById('btn-save-cloud');
+            if (!si) return;
+            if (window.hasUnsavedChanges) {
+                si.innerText = '● UNSAVED CHANGES';
+                si.className = 'text-[10px] font-black uppercase tracking-widest text-amber-600 mr-2 opacity-100 animate-pulse';
+                if (saveBtn) saveBtn.classList.add('ring-2', 'ring-amber-400');
+            } else {
+                si.innerText = 'PRICING SAVED';
+                si.className = 'text-[10px] font-black uppercase tracking-widest text-emerald-600 mr-2 opacity-100';
+                if (saveBtn) saveBtn.classList.remove('ring-2', 'ring-amber-400');
+                setTimeout(() => { if (!window.hasUnsavedChanges && si) si.classList.add('opacity-0'); }, 3000);
+            }
         };
 
         const updateDOMCell = (dateStr, room) => {
@@ -1782,7 +2105,6 @@
 
             const applyState = (el, isBool = false, targetId = null, targetField = null) => {
                 if(!el) return;
-                
                 let target = isBool ? el.closest('td') : el;
                 if(!target) return;
                 
@@ -1807,9 +2129,8 @@
             };
 
             const formatDisplay = (val) => {
-                if (val === "" || val === undefined || isNaN(val)) return "";
-                let n = Number(val);
-                return Number.isInteger(n) ? n : n.toFixed(2);
+                if (val === "" || val === undefined || val === null || isNaN(val)) return "";
+                return roundCurrency(val);
             };
 
             if (room !== 'GLOBAL') {
@@ -1861,11 +2182,10 @@
                                     otaInput.classList.add('!text-pink-600', 'font-black');
                                     otaInput.classList.remove('!bg-pink-100', '!text-pink-700');
                                 } else {
-                                    let activePrice = data.std;
-                                    if (data.fmp !== undefined && data.fmp !== "" && hasEvents) {
-                                        let msDiff = getNearestEvent(parseYMD(dateStr));
-                                        if (Math.abs(msDiff) <= 6) activePrice = data.fmp;
-                                    }
+                                    // Use std rate curve for normal rate plans; only use fmp if explicitly an EVT package
+                                    let activePrice = (rate.rateSource === 'evt' && data.fmp !== undefined && data.fmp !== "" && hasEvents)
+                                        ? data.fmp
+                                        : data.std;
 
                                     let promoMultiplier = 1.0;
                                     (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
@@ -1982,24 +2302,13 @@
                 if (!isUnassigned) {
                     rList.forEach(rid => {
                         const uiId = dbToUiRoom(rid);
-                        const roomDef = hotelRooms.find(hr => hr.id === uiId);
-                        if(roomDef) typesToDeduct.push(roomDef.type);
+                        const roomDef = hotelRooms.find(hr => hr.id === uiId || hr.id === rid);
+                        if(roomDef && roomDef.type) typesToDeduct.push(roomDef.type);
                     });
                 } else if (s.bookedType) {
-                    let bt = s.bookedType.toUpperCase();
-                    let inferred = null;
-                    if (bt.includes("DORMITORY") || bt.includes("4-BED") || bt.includes("DORM")) inferred = "Standard Quad Dorm"; 
-                    else if (bt.includes("TRIPLE")) inferred = "Partial Oceanview Triple Room"; 
-                    else if (bt.includes("SIDE SEA VIEW") || (bt.includes("PARTIAL") && !bt.includes("TWIN") && !bt.includes("TRIPLE"))) inferred = "Partial Oceanview King Room"; 
-                    else if (bt.includes("DELUXE TWIN") || (bt.includes("OCEANVIEW") && bt.includes("TWIN"))) inferred = "Oceanview Twin Room"; 
-                    else if (bt.includes("DELUXE DOUBLE") || (bt.includes("OCEANVIEW") && !bt.includes("TWIN"))) inferred = "Oceanview King Room"; 
-                    else if (bt.includes("GARDEN") && bt.includes("TWIN")) inferred = "Gardenview Twin Room"; 
-                    else if (bt.includes("GARDEN") && !bt.includes("TWIN")) inferred = "Gardenview King Room"; 
-                    else if (bt.includes("OCEANFRONT")) { inferred = bt.includes("TWIN") ? "Oceanfront Twin" : "Oceanfront King"; } 
-                    else if (bt.includes("BUNGALOW")) inferred = "BUNGALOWS";
-                    
+                    const inferred = resolveRoomCategory(s.bookedType);
                     if(inferred) {
-                        let dedCount = inferred.includes('Dorm') ? (s.pax || 1) : Math.max(1, rList.length);
+                        let dedCount = inferred.toLowerCase().includes('dorm') ? (s.pax || 1) : Math.max(1, rList.length);
                         for(let k=0; k < dedCount; k++) typesToDeduct.push(inferred);
                     }
                 }
@@ -2037,12 +2346,7 @@
                     });
 
                     if (changesFound) {
-                        const sInd = document.getElementById('save-indicator');
-                        if (sInd) {
-                            sInd.innerText = 'PMS UPDATE DETECTED'; 
-                            sInd.classList.replace('text-emerald-600', 'text-amber-500'); 
-                            sInd.style.opacity = '1'; 
-                        }
+                        window.markUnsavedChanges();
                     }
                 } catch (e) { console.error("Error parsing old inventory:", e); }
             }
@@ -2060,9 +2364,9 @@
             head.innerHTML = ''; body.innerHTML = '';
 
             let dObj = new Date(startStr + "T12:00:00Z");
-            const hasEvents = eventDates.length > 0;
+            const hasEvents = eventDates.length > 0 && window.activeMetrics.has('evt');
 
-            let trHead = `<tr class="sticky-header"><th class="frozen-col-header z-30 border-r border-slate-600" style="width: 140px; min-width: 140px; left: 0;"></th><th class="frozen-col-header z-30 border-r-2 border-slate-500" style="width: 42px; min-width: 42px; left: 140px;"></th>`;
+            let trHead = `<tr class="sticky-header"><th class="frozen-col-header z-30 border-r border-slate-600" style="width: 140px; min-width: 140px; left: 0;"></th><th class="frozen-col-header z-30 border-r-2 border-slate-500" style="width: 44px; min-width: 44px; left: 140px;"></th>`;
             for(let i=0; i<daysToRender; i++) {
                 const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
                 const dMs = parseYMD(getLocalYMD(cur));
@@ -2074,16 +2378,16 @@
                     else if (Math.abs(minDiff) <= 2) highlight = 'bg-amber-400 text-amber-900 border-amber-500';
                 }
 
-                trHead += `<th class="px-0 py-1 min-w-[36px] border-b ${highlight}">
-                    <span class="block text-[10px] font-bold uppercase leading-none">${mNames[cur.getUTCMonth()]}</span>
-                    <span class="block text-[15px] font-black leading-tight mt-0.5">${cur.getUTCDate()}</span>
+                trHead += `<th class="px-0 py-0.5 min-w-[50px] w-[50px] border-b ${highlight}">
+                    <span class="block text-[8px] font-bold uppercase leading-none">${mNames[cur.getUTCMonth()]}</span>
+                    <span class="block text-[13px] font-black leading-tight mt-0.5">${cur.getUTCDate()}</span>
                 </th>`;
             }
             trHead += `</tr>`;
             head.innerHTML = trHead;
 
             let allRowsHtml = '';
-            
+
             roomTypes.forEach((room, idx) => {
                 const groupClass = idx % 2 === 0 ? 'room-group-even' : 'room-group-odd';
                 let displayName = displayAbbrev[room] || room;
@@ -2105,33 +2409,49 @@
 
                 if (roomRows.length === 0) return;
 
+                const mappedRates = window.channexRateMap ? window.channexRateMap.filter(m => categoryResolver(m.pmsCategory) === room) : [];
+                const hasMappedRates = mappedRates.length > 0;
                 let totalRoomSpan = roomRows.length;
 
                 roomRows.forEach((rDef, rIdx) => {
-                    let tr = `<tr class="${groupClass} ${rDef.isEvt ? 'evt-text' : ''}">`;
+                    let isLastInRoom = rIdx === totalRoomSpan - 1;
+                    let isAbsoluteBoundary = isLastInRoom && !hasMappedRates;
+                    
+                    let trClass = `${groupClass} ${rDef.isEvt ? 'evt-text' : ''}`;
+                    if (isAbsoluteBoundary) trClass += ' room-boundary-bottom';
+
+                    let cellBottomStyle = isAbsoluteBoundary 
+                        ? 'style="border-bottom: 4px solid #0f172a !important;"' 
+                        : (isLastInRoom ? 'style="border-bottom: 2px solid #a5b4fc !important;"' : 'style="border-bottom: 1px solid #e2e8f0;"');
+
+                    let tr = `<tr class="${trClass}">`;
                     
                     if (rIdx === 0) {
-                        tr += `<td rowspan="${totalRoomSpan}" class="frozen-col !p-0 z-20 align-middle border-r border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                            <div class="w-[140px] flex items-center px-2 h-full font-black text-slate-700 text-left text-[11px] leading-tight whitespace-normal break-words">
+                        let mainRoomBorder = (!hasMappedRates) 
+                            ? 'style="border-bottom: 4px solid #0f172a !important;"' 
+                            : 'style="border-bottom: 1px solid #cbd5e1;"';
+
+                        tr += `<td rowspan="${totalRoomSpan}" ${mainRoomBorder} class="frozen-col !p-0 z-20 align-middle border-r border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                            <div class="w-[140px] flex items-center px-1.5 h-full font-bold text-slate-700 text-left text-[10px] leading-tight whitespace-normal break-words">
                                 ${displayName}
                             </div>
                         </td>`;
                     }
                     
-                    let isLastInRoom = rIdx === totalRoomSpan - 1;
-                    let borderClass = isLastInRoom ? 'border-b-2 border-slate-400' : 'border-b border-slate-200';
-                    let labelColor = rDef.isEvt ? 'text-pink-600' : (rDef.isAvail ? 'text-slate-500 font-black' : 'text-slate-500');
+                    let labelColor = rDef.isEvt ? 'text-pink-600' : (rDef.isAvail ? 'text-slate-500 font-bold' : 'text-slate-500');
                     let labelHtml = rDef.label.replace(' ', '<br>');
 
-                    tr += `<td class="frozen-col-2 !p-0 z-20 align-middle ${borderClass} ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                        <span class="text-[9px] font-black tracking-tighter leading-none block ${labelColor}">${labelHtml}</span>
+                    tr += `<td ${cellBottomStyle} class="frozen-col-2 !p-0 z-20 align-middle ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                        <span class="text-[8px] font-bold tracking-tighter leading-none block ${labelColor}">${labelHtml}</span>
                     </td>`;
 
                     for(let i=0; i<daysToRender; i++) {
                         const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
                         const dateStr = getLocalYMD(cur);
                         const bId = `inp_${dateStr}_${room.replace(/\s+/g, '')}`;
-                        let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? (rDef.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
+                        let isDirty = window.dirtyDates.has(dateStr); 
+                        let isSynced = window.syncedDates.has(dateStr); 
+                        let stateClass = isDirty ? (rDef.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
                         
                         let minDiff = getNearestEvent(parseYMD(dateStr));
                         let evtColor = '';
@@ -2144,24 +2464,23 @@
                             let live = liveInventory[dateStr] && liveInventory[dateStr][room] !== undefined ? liveInventory[dateStr][room] : 0;
                             let otaAvail = masterPricing.timeline[dateStr]?.otaOverrides?.[`${room}_avail`];
                             let displayVal = otaAvail !== undefined ? otaAvail : live;
-                            let availColor = displayVal == 0 ? 'text-rose-600 font-black' : (displayVal <= 2 ? 'text-amber-600 font-black' : 'text-emerald-700 font-black');
+                            let availColor = displayVal == 0 ? 'text-rose-600 font-bold' : (displayVal <= 2 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold');
                             let overrideClass = otaAvail !== undefined ? '!bg-amber-100' : 'bg-slate-50/80';
-                            tr += `<td class="${evtColor} ${borderClass} ${overrideClass} p-0">
-                                <input type="number" step="any" class="w-full h-full text-center outline-none focus:bg-white text-[14px] ${availColor} ${stateClass} font-black bg-transparent" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
+                            tr += `<td ${cellBottomStyle} class="${evtColor} ${overrideClass} p-0 min-w-[50px] w-[50px]">
+                                <input type="number" step="any" class="w-full h-full text-center outline-none focus:bg-white text-[11px] ${availColor} ${stateClass} font-semibold bg-transparent tracking-tight px-0" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
                             </td>`;
                         } else if (rDef.isBool) {
-                            tr += `<td class="${evtColor} ${borderClass} ${stateClass}"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}_${rDef.id}" class="grid-toggle" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.checked)"></div></td>`;
+                            tr += `<td ${cellBottomStyle} class="${evtColor} ${stateClass} min-w-[50px] w-[50px]"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}_${rDef.id}" class="grid-toggle scale-90" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.checked)"></div></td>`;
                         } else {
-                            tr += `<td class="${evtColor} ${borderClass}"><input type="number" step="any" id="${bId}_${rDef.id}" class="w-full text-center outline-none focus:bg-indigo-50 font-bold ${rDef.isEvt ? '!text-pink-600' : '!text-slate-900'} bg-transparent ${stateClass}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.value)"></td>`;
+                            tr += `<td ${cellBottomStyle} class="${evtColor} min-w-[50px] w-[50px]"><input type="number" step="any" id="${bId}_${rDef.id}" class="w-full text-center outline-none focus:bg-indigo-50 font-medium ${rDef.isEvt ? '!text-pink-600' : '!text-slate-800'} bg-transparent ${stateClass} text-[11px] tracking-tight px-0" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.value)"></td>`;
                         }
                     }
                     tr += `</tr>`;
                     allRowsHtml += tr;
                 });
 
-                if (window.channexRateMap) {
-                    const mappedRates = window.channexRateMap.filter(m => categoryResolver(m.pmsCategory) === room);
-                    mappedRates.forEach(rate => {
+                if (hasMappedRates) {
+                    mappedRates.forEach((rate, rateIdx) => {
                         let otaRows = [];
                         if (window.activeMetrics.has('rates')) otaRows.push({ id: 'ota', label: 'RATE', isBool: false, isRate: true });
                         if (window.activeMetrics.has('min')) {
@@ -2179,25 +2498,42 @@
                         let rVal = rate.ruleVal !== undefined ? rate.ruleVal : 0;
                         let ruleText = rType === "=" ? "BASE" : `${rType}${rVal}`;
                         let rateRowspan = otaRows.length;
+                        let isLastRateOfRoom = (rateIdx === mappedRates.length - 1);
+                        const rateSource = rate.rateSource || 'std';
 
                         otaRows.forEach((oDef, oIdx) => {
-                            let trOta = `<tr class="${groupClass} bg-indigo-50/50">`;
+                            let isLastOtaRowOfRate = (oIdx === rateRowspan - 1);
+                            let isAbsoluteLastRowOfRoom = isLastRateOfRoom && isLastOtaRowOfRate;
+
+                            let trOtaClass = `${groupClass} bg-indigo-50/50`;
+                            if (isAbsoluteLastRowOfRoom) trOtaClass += ' room-boundary-bottom';
+
+                            let otaCellBottomStyle = isAbsoluteLastRowOfRoom 
+                                ? 'style="border-bottom: 4px solid #0f172a !important;"' 
+                                : (isLastOtaRowOfRate ? 'style="border-bottom: 2px solid #94a3b8 !important;"' : 'style="border-bottom: 1px solid #c7d2fe;"');
+
+                            let trOta = `<tr class="${trOtaClass}">`;
                             
                             if (oIdx === 0) {
-                                trOta += `<td rowspan="${rateRowspan}" class="frozen-col !p-0 z-20 border-r border-slate-300 bg-indigo-50/50">
-                                    <div class="w-[140px] flex flex-col justify-center px-2 h-full text-left">
-                                        <span class="text-[10px] font-black text-indigo-900 leading-tight whitespace-normal break-words">${rate.ratePlanTitle}</span>
-                                        <span class="text-[8px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">OTA RATE PLAN</span>
+                                let otaMainBorder = isLastRateOfRoom 
+                                    ? 'style="border-bottom: 4px solid #0f172a !important;"' 
+                                    : 'style="border-bottom: 1px solid #cbd5e1;"';
+
+                                const badgeColor = rateSource === 'evt' ? 'text-pink-600 font-black' : 'text-indigo-500 font-black';
+                                const badgeText = rateSource === 'evt' ? 'EVT PKG' : 'RATE PLAN';
+
+                                trOta += `<td rowspan="${rateRowspan}" ${otaMainBorder} class="frozen-col !p-0 z-20 border-r border-slate-300 bg-indigo-50/50">
+                                    <div class="w-[140px] flex flex-col justify-center px-1.5 h-full text-left" title="${rate.ratePlanTitle}">
+                                        <span class="text-[9px] font-bold text-indigo-900 leading-tight whitespace-normal break-words">${window.formatRatePlanTitle(rate.ratePlanTitle)}</span>
+                                        <span class="text-[7px] uppercase tracking-widest mt-0.5 ${badgeColor}">${badgeText}</span>
                                     </div>
                                 </td>`;
                             }
-                            
-                            let isLastOta = oIdx === rateRowspan - 1;
-                            let bClass = isLastOta ? 'border-b-2 border-slate-400' : 'border-b border-indigo-200';
+
                             let labelHtml = oDef.label.replace(' ', '<br>');
 
-                            trOta += `<td class="frozen-col-2 !p-0 z-20 align-middle ${bClass} border-r-2 border-slate-400 bg-indigo-50/50">
-                                <span class="text-[8px] font-black tracking-tighter text-indigo-800 block w-full text-center leading-tight">${labelHtml}</span>
+                            trOta += `<td ${otaCellBottomStyle} class="frozen-col-2 !p-0 z-20 align-middle border-r-2 border-slate-400 bg-indigo-50/50">
+                                <span class="text-[7px] font-bold tracking-tighter text-indigo-800 block w-full text-center leading-tight">${labelHtml}</span>
                                 ${oDef.isRate ? `<span class="text-[7px] font-bold text-slate-500 tracking-tighter block w-full text-center">${ruleText === 'BASE' ? 'BASE' : (ruleText)}</span>` : ''}
                             </td>`;
 
@@ -2205,15 +2541,22 @@
                                 const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
                                 const dateStr = getLocalYMD(cur);
                                 const bId = `inp_${dateStr}_${rate.ratePlanId}`;
-                                let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? (oDef.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
-                                let evtColor = ''; if (hasEvents) { let minDiff = getNearestEvent(parseYMD(dateStr)); if (minDiff === 0) evtColor = 'bg-amber-100/50'; else if (Math.abs(minDiff) <= 2) evtColor = 'bg-yellow-50/50'; }
+                                let isDirty = window.dirtyDates.has(dateStr); 
+                                let isSynced = window.syncedDates.has(dateStr); 
+                                let stateClass = isDirty ? (oDef.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
+                                let evtColor = ''; 
+                                if (hasEvents) { 
+                                    let minDiff = getNearestEvent(parseYMD(dateStr)); 
+                                    if (minDiff === 0) evtColor = 'bg-amber-100/50'; 
+                                    else if (Math.abs(minDiff) <= 2) evtColor = 'bg-yellow-50/50'; 
+                                }
 
                                 if (oDef.isBool) {
-                                    trOta += `<td class="${evtColor} ${bClass} ${stateClass}"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}_${oDef.id}" class="grid-toggle" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.checked)"></div></td>`;
+                                    trOta += `<td ${otaCellBottomStyle} class="${evtColor} ${stateClass} min-w-[50px] w-[50px]"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}_${oDef.id}" class="grid-toggle scale-90" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.checked, '${rateSource}')"></div></td>`;
                                 } else if (oDef.isRate) {
-                                    trOta += `<td class="${evtColor} ${bClass}"><input type="number" step="any" id="${bId}_ota" class="w-full text-center outline-none focus:bg-pink-50 font-bold !text-indigo-800 bg-transparent text-[13px] ${stateClass}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'rate', this.value)"></td>`;
+                                    trOta += `<td ${otaCellBottomStyle} class="${evtColor} min-w-[50px] w-[50px]"><input type="number" step="any" id="${bId}_ota" class="w-full text-center outline-none focus:bg-pink-50 font-medium !text-indigo-800 bg-transparent text-[11px] tracking-tight px-0 ${stateClass}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'rate', this.value, '${rateSource}')"></td>`;
                                 } else {
-                                    trOta += `<td class="${evtColor} ${bClass}"><input type="number" step="any" id="${bId}_${oDef.id}" class="w-full text-center outline-none focus:bg-pink-50 font-bold !text-indigo-600 bg-transparent ${stateClass} !text-[12px]" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.value)"></td>`;
+                                    trOta += `<td ${otaCellBottomStyle} class="${evtColor} min-w-[50px] w-[50px]"><input type="number" step="any" id="${bId}_${oDef.id}" class="w-full text-center outline-none focus:bg-pink-50 font-medium !text-indigo-600 bg-transparent ${stateClass} text-[11px] tracking-tight px-0" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.value, '${rateSource}')"></td>`;
                                 }
                             }
                             trOta += `</tr>`;
@@ -2223,7 +2566,7 @@
                 }
             });
 
-            // GLOBAL PROPERTY RESTRICTIONS ROW
+            // GLOBAL RESTRICTIONS SECTION
             let globalRows = [];
             if (window.activeMetrics.has('min')) {
                 globalRows.push({ id: 'min', lbl: 'MIN NTS', isBool: false });
@@ -2253,16 +2596,19 @@
                         const cur = new Date(dObj); cur.setUTCDate(cur.getUTCDate() + i);
                         const dateStr = getLocalYMD(cur);
                         const bId = `inp_${dateStr}_GLOBAL_${rc.id}`;
-                        let isDirty = window.dirtyDates.has(dateStr); let isSynced = window.syncedDates.has(dateStr); let stateClass = isDirty ? (rc.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
+                        let isDirty = window.dirtyDates.has(dateStr); 
+                        let isSynced = window.syncedDates.has(dateStr); 
+                        let stateClass = isDirty ? (rc.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
                         
                         let minDiff = getNearestEvent(parseYMD(dateStr));
-                        let evtColor = 'bg-white'; if (hasEvents) evtColor = minDiff === 0 ? 'bg-amber-50' : (Math.abs(minDiff) <= 2 ? 'bg-amber-50/50' : 'bg-white');
+                        let evtColor = 'bg-white'; 
+                        if (hasEvents) evtColor = minDiff === 0 ? 'bg-amber-50' : (Math.abs(minDiff) <= 2 ? 'bg-amber-50/50' : 'bg-white');
                         let bTClass = rIndex===0 ? 'border-t-4 border-slate-900' : '';
                         
                         if (rc.isBool) {
-                            tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300 ${stateClass}"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}" class="grid-toggle" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.checked)"></div></td>`;
+                            tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300 ${stateClass} min-w-[50px] w-[50px]"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}" class="grid-toggle" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.checked)"></div></td>`;
                         } else {
-                            tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300"><input type="number" step="any" id="${bId}" class="w-full text-center outline-none focus:bg-indigo-50 font-bold !text-slate-700 bg-transparent !text-[14px] ${stateClass}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.value)"></td>`;
+                            tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300 min-w-[50px] w-[50px]"><input type="number" step="any" id="${bId}" class="w-full text-center outline-none focus:bg-indigo-50 font-black !text-slate-700 bg-transparent text-[13px] tracking-tighter px-0.5 ${stateClass}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.value)"></td>`;
                         }
                     }
                     tr += `</tr>`;
@@ -2288,7 +2634,8 @@
             const p_base = parseFloat(document.getElementById('w-p-base').value) || 0, p_pkg = parseFloat(document.getElementById('w-p-pkg').value) || 0, p_m2 = parseFloat(document.getElementById('w-p-m2').value) || p_base, p_m1 = parseFloat(document.getElementById('w-p-m1').value) || p_base, p_0 = parseFloat(document.getElementById('w-p-0').value) || p_base, p_p1 = parseFloat(document.getElementById('w-p-p1').value) || p_base, p_p2 = parseFloat(document.getElementById('w-p-p2').value) || p_base;
             const d_base = parseFloat(document.getElementById('w-d-base').value) || 0, d_pkg = parseFloat(document.getElementById('w-d-pkg').value) || 0, d_m2 = parseFloat(document.getElementById('w-d-m2').value) || d_base, d_m1 = parseFloat(document.getElementById('w-d-m1').value) || d_base, d_0 = parseFloat(document.getElementById('w-d-0').value) || d_base, d_p1 = parseFloat(document.getElementById('w-d-p1').value) || d_base, d_p2 = parseFloat(document.getElementById('w-d-p2').value) || d_base;
 
-            let stdP = p_base, fmpP = ""; let stdD = d_base, fmpD = "";
+            let stdP = p_base, fmpP = ""; 
+            let stdD = d_base, fmpD = "";
             
             if (hasEvents) {
                 let minDiff = getNearestEvent(parseYMD(dateStr));
@@ -2345,7 +2692,7 @@
             else masterPricing.timeline[dateStr].otaOverrides[`${room}_avail`] = parseInt(value);
             
             updateDOMCell(dateStr, room);
-            window.triggerAutoSave();
+            window.markUnsavedChanges();
         };
 
         window.handleCellEdit = (dateStr, room, field, value) => {
@@ -2375,7 +2722,7 @@
             } else {
                 data.isOverride[field] = true;
                 const mult = getViewMultiplier();
-                if(field === 'std' || field === 'fmp') data[field] = Number((parseFloat(value) / mult).toFixed(2));
+                if(field === 'std' || field === 'fmp') data[field] = roundCurrency(parseFloat(value) / mult);
                 else if (field === 'cta' || field === 'ctd' || field === 'stopSell') data[field] = value;
                 else data[field] = parseInt(value);
             }
@@ -2399,10 +2746,10 @@
                     rippleDay(dateStr, room);
                 }
             }
-            window.triggerAutoSave();
+            window.markUnsavedChanges();
         };
 
-        window.handleOtaEdit = (dateStr, ratePlanId, parentRoom, ruleType, ruleVal, field, value) => {
+        window.handleOtaEdit = (dateStr, ratePlanId, parentRoom, ruleType, ruleVal, field, value, rateSource = 'std') => {
             window.dirtyDates.add(dateStr);
             window.syncedDates.delete(dateStr);
             
@@ -2422,14 +2769,12 @@
             } else {
                 if (field === 'rate') {
                     const mult = getViewMultiplier();
-                    const numVal = Number((parseFloat(value) / mult).toFixed(2));
+                    const numVal = roundCurrency(parseFloat(value) / mult);
                     
                     const roomData = masterPricing.timeline[dateStr][parentRoom] || {};
-                    let activePrice = roomData.std;
-                    if (roomData.fmp && eventDates.length > 0) {
-                        let msDiff = getNearestEvent(parseYMD(dateStr));
-                        if (Math.abs(msDiff) <= 6) activePrice = roomData.fmp;
-                    }
+                    let activePrice = (rateSource === 'evt' && roomData.fmp && eventDates.length > 0)
+                        ? roomData.fmp
+                        : roomData.std;
                     let expectedMathVal = null;
                     if (activePrice !== undefined && activePrice !== "") expectedMathVal = applyMath(activePrice, ruleType, ruleVal);
 
@@ -2444,7 +2789,7 @@
             }
             
             updateDOMCell(dateStr, parentRoom); 
-            window.triggerAutoSave();
+            window.markUnsavedChanges();
         };
 
         window.nukeDatabase = () => {
@@ -2456,9 +2801,11 @@
         };
 
         window.clearOverrides = () => {
-            const sDate = document.getElementById('w-start-date').value; const dur = parseInt(document.getElementById('w-duration').value) || 30;
-            if(!sDate) return window.customAlert("Please select a Start Date.");
-            const startUnix = parseYMD(sDate), endUnix = startUnix + (dur * 86400000); 
+            const sDate = document.getElementById('w-start-date').value; 
+            const eDate = document.getElementById('w-end-date').value;
+            if(!sDate || !eDate) return window.customAlert("Please select both a Start Date and an End Date.");
+            if(sDate > eDate) return window.customAlert("End Date must be on or after Start Date.");
+            const startUnix = parseYMD(sDate), endUnix = parseYMD(eDate); 
             
             for(let d=startUnix; d<=endUnix; d+=86400000) {
                 let dateStr = getLocalYMD(new Date(d));
@@ -2473,20 +2820,22 @@
 
         window.runAutomator = () => {
             const anchorP = document.getElementById('w-anchor-private').value, anchorD = document.getElementById('w-anchor-dorm').value;
-            const sDate = document.getElementById('w-start-date').value, dur = parseInt(document.getElementById('w-duration').value) || 30;
+            const sDate = document.getElementById('w-start-date').value, eDate = document.getElementById('w-end-date').value;
             const hasEvents = eventDates.length > 0;
             
             const p_base = parseFloat(document.getElementById('w-p-base').value) || parseFloat(document.getElementById('w-p-base-single').value) || 0, p_pkg = parseFloat(document.getElementById('w-p-pkg').value) || 0, p_m2 = parseFloat(document.getElementById('w-p-m2').value) || p_base, p_m1 = parseFloat(document.getElementById('w-p-m1').value) || p_base, p_0 = parseFloat(document.getElementById('w-p-0').value) || p_base, p_p1 = parseFloat(document.getElementById('w-p-p1').value) || p_base, p_p2 = parseFloat(document.getElementById('w-p-p2').value) || p_base;
             const d_base = parseFloat(document.getElementById('w-d-base').value) || parseFloat(document.getElementById('w-d-base-single').value) || 0, d_pkg = parseFloat(document.getElementById('w-d-pkg').value) || 0, d_m2 = parseFloat(document.getElementById('w-d-m2').value) || d_base, d_m1 = parseFloat(document.getElementById('w-d-m1').value) || d_base, d_0 = parseFloat(document.getElementById('w-d-0').value) || d_base, d_p1 = parseFloat(document.getElementById('w-d-p1').value) || d_base, d_p2 = parseFloat(document.getElementById('w-d-p2').value) || d_base;
             
-            if(!sDate) return window.customAlert("Please select a Start Date.");
-            const startUnix = parseYMD(sDate), endUnix = startUnix + ((dur - 1) * 86400000); 
+            if(!sDate || !eDate) return window.customAlert("Please select both a Start Date and an End Date.");
+            if(sDate > eDate) return window.customAlert("End Date must be on or after Start Date.");
+            const startUnix = parseYMD(sDate), endUnix = parseYMD(eDate);
             
             for(let d=startUnix; d<=endUnix; d+=86400000) {
                 let dateStr = getLocalYMD(new Date(d));
                 let minDiff = getNearestEvent(parseYMD(dateStr));
                 
-                let stdP = p_base, fmpP = ""; let stdD = d_base, fmpD = "";
+                let stdP = p_base, fmpP = ""; 
+                let stdD = d_base, fmpD = "";
                 let min = "", min_arr = "", cta = false;
                 
                 if (hasEvents) {
@@ -2528,46 +2877,87 @@
                 if (anchorP) {
                     masterPricing.timeline[dateStr][anchorP] = masterPricing.timeline[dateStr][anchorP] || { isOverride: {} };
                     const curP = masterPricing.timeline[dateStr][anchorP];
-                    if (!curP.isOverride.std) curP.std = stdP;
-                    if (!curP.isOverride.fmp) curP.fmp = fmpP;
+                    if (!curP.isOverride.std) curP.std = roundCurrency(stdP);
+                    if (!curP.isOverride.fmp) curP.fmp = fmpP !== "" ? roundCurrency(fmpP) : "";
                     rippleDay(dateStr, anchorP);
                 }
                 
                 if (anchorD) {
                     masterPricing.timeline[dateStr][anchorD] = masterPricing.timeline[dateStr][anchorD] || { isOverride: {} };
                     const curD = masterPricing.timeline[dateStr][anchorD];
-                    if (!curD.isOverride.std) curD.std = stdD;
-                    if (!curD.isOverride.fmp) curD.fmp = fmpD;
+                    if (!curD.isOverride.std) curD.std = roundCurrency(stdD);
+                    if (!curD.isOverride.fmp) curD.fmp = fmpD !== "" ? roundCurrency(fmpD) : "";
                     rippleDay(dateStr, anchorD);
                 }
             }
-            window.triggerAutoSave(); window.renderGrid(); window.switchTab('grid');
+            window.saveAutofillBaselines(false);
+            window.markUnsavedChanges();
+            window.renderGrid(); 
+            window.switchTab('grid');
         };
 
         window.addRelationshipRow = () => {
+            window.readRelationshipsFromDOM();
             masterPricing.relationships = masterPricing.relationships || [];
+            const defaultAnchor = roomTypes[0] || 'unlinked';
+            const defaultTarget = roomTypes.length > 1 ? roomTypes[1] : (roomTypes[0] || '');
             masterPricing.relationships.push({
-                anchor: roomTypes[0] || 'unlinked',
-                target: roomTypes[0] || '',
+                anchor: defaultAnchor,
+                target: defaultTarget,
                 type: '=',
                 val: 0,
                 typeFmp: '=',
                 valFmp: 0
             });
             window.renderRelationships();
-            window.triggerAutoSave();
+            window.markUnsavedChanges();
+            clearTimeout(window._relSaveTimer);
+            window._relSaveTimer = setTimeout(() => {
+                window.saveRelationshipsToCloud(false);
+            }, 800);
         };
 
         window.renderRelationships = () => {
-            const body = document.getElementById('relationships-body'); body.innerHTML = '';
+            const body = document.getElementById('relationships-body'); 
+            if (!body) return;
+            body.innerHTML = '';
             const hasEvents = eventDates.length > 0;
             
-            masterPricing.relationships.forEach((rel, idx) => {
-                const tr = document.createElement('tr'); tr.className = "border-b border-slate-200 rel-row bg-white hover:bg-slate-50 transition-colors";
+            const getAnchorOptionsHtml = (selectedAnchor) => {
+                let html = `<option value="unlinked" ${selectedAnchor === 'unlinked' ? 'selected' : ''} class="font-black text-amber-600">-- UNLINKED --</option>`;
+                const allOptions = [...roomTypes];
+                const cleanSel = (selectedAnchor || '').toUpperCase().trim();
+                if (selectedAnchor && selectedAnchor !== 'unlinked' && !allOptions.some(t => t.toUpperCase().trim() === cleanSel)) {
+                    allOptions.unshift(selectedAnchor);
+                }
+                allOptions.forEach(t => {
+                    const isSel = (t === selectedAnchor) || (t.toUpperCase().trim() === cleanSel);
+                    html += `<option value="${t}" ${isSel ? 'selected' : ''}>${displayAbbrev[t] || t}</option>`;
+                });
+                return html;
+            };
+
+            const getTargetOptionsHtml = (selectedTarget) => {
+                let html = '';
+                const allOptions = [...roomTypes];
+                const cleanSel = (selectedTarget || '').toUpperCase().trim();
+                if (selectedTarget && !allOptions.some(t => t.toUpperCase().trim() === cleanSel)) {
+                    allOptions.unshift(selectedTarget);
+                }
+                allOptions.forEach(t => {
+                    const isSel = (t === selectedTarget) || (t.toUpperCase().trim() === cleanSel);
+                    html += `<option value="${t}" ${isSel ? 'selected' : ''}>${displayAbbrev[t] || t}</option>`;
+                });
+                return html;
+            };
+
+            (masterPricing.relationships || []).forEach((rel) => {
+                const tr = document.createElement('tr'); 
+                tr.className = "border-b border-slate-200 rel-row bg-white hover:bg-slate-50 transition-colors";
                 tr.innerHTML = `
                     <td class="p-0 text-center"><button onclick="this.closest('tr').remove(); window.saveRelationships()" class="text-slate-400 hover:text-red-500 transition-colors p-1 cursor-pointer"><i data-lucide="trash-2" size="16"></i></button></td>
-                    <td class="p-0 border-r border-slate-200 w-1/4"><select class="rel-anchor input-base !text-xs !py-1 cursor-pointer w-full" onchange="window.saveRelationships()"><option value="unlinked" ${rel.anchor==='unlinked'?'selected':''} class="font-black text-amber-600">-- UNLINKED --</option>${roomTypes.map(t => `<option value="${t}" ${t===rel.anchor?'selected':''}>${displayAbbrev[t]||t}</option>`).join('')}</select></td>
-                    <td class="p-0 border-r border-slate-200 w-1/4"><select class="rel-target input-base !text-xs !py-1 cursor-pointer w-full" onchange="window.saveRelationships()">${roomTypes.map(t => `<option value="${t}" ${t===rel.target?'selected':''}>${displayAbbrev[t]||t}</option>`).join('')}</select></td>
+                    <td class="p-0 border-r border-slate-200 w-1/4"><select class="rel-anchor input-base !text-xs !py-1 cursor-pointer w-full" onchange="window.saveRelationships()">${getAnchorOptionsHtml(rel.anchor)}</select></td>
+                    <td class="p-0 border-r border-slate-200 w-1/4"><select class="rel-target input-base !text-xs !py-1 cursor-pointer w-full" onchange="window.saveRelationships()">${getTargetOptionsHtml(rel.target)}</select></td>
                     <td class="p-0 border-r border-slate-200 bg-slate-50">
                         <div class="flex items-center justify-center">
                             <select class="rel-type input-base !text-xs !py-1 w-auto min-w-[80px] text-center cursor-pointer font-black text-indigo-700" onchange="window.saveRelationships()">
@@ -2577,7 +2967,7 @@
                                 <option value="+" ${rel.type==='+'?'selected':''}>+ ฿</option>
                                 <option value="-" ${rel.type==='-'?'selected':''}>- ฿</option>
                             </select>
-                            <input type="number" class="rel-val input-base !text-sm !py-1 w-20 text-center font-black" placeholder="Val" value="${rel.val === 0 ? '' : rel.val}" onchange="window.saveRelationships()">
+                            <input type="number" class="rel-val input-base !text-sm !py-1 w-20 text-center font-black" placeholder="Val" value="${rel.val === 0 ? '' : rel.val}" oninput="window.saveRelationships()" onchange="window.saveRelationships()">
                         </div>
                     </td>
                     <td class="p-0 bg-pink-50/50 evt-column" style="${hasEvents ? '' : 'display:none;'}">
@@ -2589,26 +2979,13 @@
                                 <option value="+" ${rel.typeFmp==='+'?'selected':''}>+ ฿</option>
                                 <option value="-" ${rel.typeFmp==='-'?'selected':''}>- ฿</option>
                             </select>
-                            <input type="number" class="rel-fmp-val input-base !text-sm !py-1 w-20 text-center font-black" placeholder="Val" value="${rel.valFmp === 0 || rel.valFmp === undefined ? '' : rel.valFmp}" onchange="window.saveRelationships()">
+                            <input type="number" class="rel-fmp-val input-base !text-sm !py-1 w-20 text-center font-black" placeholder="Val" value="${rel.valFmp === 0 || rel.valFmp === undefined ? '' : rel.valFmp}" oninput="window.saveRelationships()" onchange="window.saveRelationships()">
                         </div>
                     </td>
-                `; body.appendChild(tr);
+                `; 
+                body.appendChild(tr);
             });
             if (window.lucide) window.lucide.createIcons();
-        };
-
-        window.saveRelationships = () => {
-            masterPricing.relationships = [];
-            document.querySelectorAll('.rel-row').forEach(tr => {
-                masterPricing.relationships.push({
-                    anchor: tr.querySelector('.rel-anchor').value, target: tr.querySelector('.rel-target').value,
-                    type: tr.querySelector('.rel-type').value, val: parseFloat(tr.querySelector('.rel-val').value) || 0,
-                    typeFmp: tr.querySelector('.rel-fmp-type') ? tr.querySelector('.rel-fmp-type').value : "=", 
-                    valFmp: tr.querySelector('.rel-fmp-val') ? (parseFloat(tr.querySelector('.rel-fmp-val').value) || 0) : 0
-                });
-            });
-            window.triggerAutoSave();
-            window.renderGrid();
         };
 
         const getChannexBaseUrl = () => 'https://app.channex.io/api/v1';
@@ -2645,8 +3022,13 @@
             if (!apiKey || !propId) return window.customAlert("API Key and Property ID are required.");
             
             showLoader('FETCHING CHANNEX DATA...');
-
             window.channexConfig = { apiKey, propId, env: 'production' };
+
+            // Persist to localStorage immediately for instant local resilience
+            try {
+                localStorage.setItem(`cm_channex_${currentPropertyId}`, JSON.stringify(window.channexConfig));
+                localStorage.setItem('cm_channex_last_used', JSON.stringify(window.channexConfig));
+            } catch(e) {}
 
             try {
                 const roomData = await fetchAllChannex('room_types', apiKey, propId);
@@ -2662,10 +3044,17 @@
                 });
 
                 window.renderChannexMappingUI(roomData, rateData);
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentPropertyId), { channex: window.channexConfig }, { merge: true });
+
+                // Save to canonical property doc AND master pricing doc
+                const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(currentPropertyId) : currentPropertyId;
+                await Promise.all([
+                    setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentPropertyId), { channex: window.channexConfig }, { merge: true }),
+                    setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`), { channex: window.channexConfig }, { merge: true })
+                ]);
 
             } catch (e) {
-                console.error(e); window.customAlert("Failed to fetch Channex configuration.\n\n" + e.message);
+                console.error(e); 
+                window.customAlert("Failed to fetch Channex configuration.\n\n" + e.message);
             }
             hideLoader();
         };
@@ -2674,7 +3063,7 @@
 
         window.renderChannexMappingUI = (channexRooms, channexRates) => {
             if (!channexRooms || channexRooms.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-6 text-red-500 font-bold text-xs'>No Room Types found in Channex for this Property.</div>";
-            if (roomTypes.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-6 text-orange-500 font-bold text-xs'>No PMS Room Categories found.</div>";
+            if (roomTypes.length === 0) return document.getElementById('channex-mapping-container').innerHTML = "<div class='text-center py-6 text-orange-500 font-bold text-xs'>No PMS Room Categories configured in settings.html.</div>";
 
             const pmsOptions = `<option value="">-- DO NOT MAP --</option>` + roomTypes.map(t => `<option value="${t}">${t}</option>`).join('');
             
@@ -2687,7 +3076,7 @@
                     <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-chan-id="${cr.id}">
                         <div class="flex-1 font-bold text-slate-700 text-[11px] truncate pl-1" title="${cr.attributes.title}">${cr.attributes.title}</div>
                         <i data-lucide="arrow-right" size="12" class="text-emerald-500 shrink-0"></i>
-                        <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-pms-sel bg-slate-50 border-emerald-300 text-emerald-800 shadow-none" onchange="window.saveMappingToDB()">
+                        <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-pms-sel bg-slate-50 border-emerald-300 text-emerald-800 shadow-none">
                             ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
                         </select>
                     </div>`;
@@ -2704,6 +3093,7 @@
                     let selectedVal = existingMap ? existingMap.pmsCategory : '';
                     let ruleType = existingMap ? (existingMap.ruleType || "=") : "=";
                     let ruleVal = existingMap && existingMap.ruleVal !== undefined ? existingMap.ruleVal : "";
+                    let rateSource = existingMap ? (existingMap.rateSource || "std") : "std";
                     
                     rHtml += `
                         <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${rate.id}" data-rate-title="${rate.attributes.title}">
@@ -2712,17 +3102,21 @@
                                 <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
                             </div>
                             <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
-                            <select class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none" onchange="window.saveMappingToDB()">
+                            <select class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none">
                                 ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
                             </select>
-                            <select class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center" onchange="window.saveMappingToDB()">
+                            <select class="input-base !py-0.5 !text-[10px] !w-20 cursor-pointer chan-rate-source bg-slate-50 border-amber-300 text-amber-900 shadow-none font-black text-center" title="Base rate to calculate from">
+                                <option value="std" ${rateSource === 'evt' ? '' : 'selected'}>STD Rate</option>
+                                <option value="evt" ${rateSource === 'evt' ? 'selected' : ''}>EVT Pkg</option>
+                            </select>
+                            <select class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center">
                                 <option value="=" ${ruleType==='='?'selected':''}>=</option>
                                 <option value="+" ${ruleType==='+'?'selected':''}>+$</option>
                                 <option value="-" ${ruleType==='-'?'selected':''}>-$</option>
                                 <option value="+%" ${ruleType==='+%'?'selected':''}>+%</option>
                                 <option value="-%" ${ruleType==='-%'?'selected':''}>-%</option>
                             </select>
-                            <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white" placeholder="0" value="${ruleVal}" onchange="window.saveMappingToDB()">
+                            <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white" placeholder="0" value="${ruleVal}">
                         </div>`;
                 });
                 rHtml += '</div>';
@@ -2738,20 +3132,36 @@
             const mapContainer = document.getElementById('channex-mapping-container');
             if (!mapContainer) return;
             const map = window.channexMap || [];
+            
+            const buildCategoryOptions = (currentCat) => {
+                const resolved = categoryResolver(currentCat);
+                let optionsHtml = `<option value="">-- DO NOT MAP / UNMAPPED --</option>`;
+                roomTypes.forEach(t => {
+                    const isSelected = (t === resolved) || (t === currentCat);
+                    optionsHtml += `<option value="${t}" ${isSelected ? 'selected' : ''}>${t}</option>`;
+                });
+                if (currentCat && !resolved && !roomTypes.includes(currentCat)) {
+                    optionsHtml += `<option value="${currentCat}" selected class="text-rose-600 font-bold">⚠️ ${currentCat} (RENAMED)</option>`;
+                }
+                return optionsHtml;
+            };
+
             if (map.length > 0) {
-                let html = '<div class="flex flex-col gap-1.5 opacity-70 hover:opacity-100 transition-opacity">';
+                let html = '<div class="flex flex-col gap-1.5">';
                 map.forEach(m => {
                     html += `
                         <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-chan-id="${m.channexId}">
-                            <div class="flex-1 font-bold text-slate-700 text-[11px] truncate pl-1">${m.channexTitle || 'Mapped Room'}</div>
+                            <div class="flex-1 font-bold text-slate-700 text-[11px] truncate pl-1" title="${m.channexTitle || ''}">${m.channexTitle || 'Mapped Room'}</div>
                             <i data-lucide="arrow-right" size="12" class="text-emerald-500 shrink-0"></i>
-                            <select class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-pms-sel bg-slate-50 border-emerald-300 text-emerald-800 shadow-none" onchange="window.saveMappingToDB()"><option value="${m.pmsCategory}" selected>${m.pmsCategory}</option></select>
+                            <select onchange="window.markUnsavedChanges()" class="input-base !py-0.5 !text-[10px] !w-48 cursor-pointer chan-pms-sel bg-slate-50 border-emerald-300 text-emerald-800 shadow-none">
+                                ${buildCategoryOptions(m.pmsCategory)}
+                            </select>
                         </div>`;
                 });
                 html += '</div>';
                 mapContainer.innerHTML = html;
             } else {
-                mapContainer.innerHTML = "<div class='text-center py-6 text-slate-400 font-bold text-xs italic'>Enter API key and click Fetch to map rooms.</div>";
+                mapContainer.innerHTML = "<div class='text-center py-6 text-slate-400 font-bold text-xs italic'>Enter API key and click Save & Fetch to map rooms.</div>";
             }
             
             const rateContainer = document.getElementById('channex-rate-mapping-container');
@@ -2760,170 +3170,80 @@
             const rateCard = document.getElementById('channex-rate-mapping-card');
             if (rateMap.length > 0) {
                 if (rateCard) { rateCard.classList.remove('hidden'); rateCard.style.display = 'flex'; }
-                let rHtml = '<div class="flex flex-col gap-1.5 opacity-70 hover:opacity-100 transition-opacity">';
+                let rHtml = '<div class="flex flex-col gap-1.5">';
                 rateMap.forEach(m => {
                     let ruleType = m.ruleType || "=";
                     let ruleVal = m.ruleVal !== undefined ? m.ruleVal : "";
+                    let rateSource = m.rateSource || "std";
                     rHtml += `
                         <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${m.ratePlanId}" data-rate-title="${m.ratePlanTitle}">
                             <div class="flex-1 flex flex-col min-w-0 pl-1">
-                                <span class="font-bold text-slate-800 text-[11px] truncate">${m.ratePlanTitle || 'Mapped Rate'}</span>
+                                <span class="font-bold text-slate-800 text-[11px] truncate" title="${m.ratePlanTitle || ''}">${window.formatRatePlanTitle(m.ratePlanTitle) || 'Mapped Rate'}</span>
                                 <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
                             </div>
                             <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
-                            <select class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none" onchange="window.saveMappingToDB()"><option value="${m.pmsCategory}" selected>${m.pmsCategory || '-- UNMAPPED --'}</option></select>
-                            <select class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center" onchange="window.saveMappingToDB()">
+                            <select onchange="window.markUnsavedChanges()" class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none">
+                                ${buildCategoryOptions(m.pmsCategory)}
+                            </select>
+                            <select onchange="window.markUnsavedChanges()" class="input-base !py-0.5 !text-[10px] !w-20 cursor-pointer chan-rate-source bg-slate-50 border-amber-300 text-amber-900 shadow-none font-black text-center" title="Base rate to calculate from">
+                                <option value="std" ${rateSource === 'evt' ? '' : 'selected'}>STD Rate</option>
+                                <option value="evt" ${rateSource === 'evt' ? 'selected' : ''}>EVT Pkg</option>
+                            </select>
+                            <select onchange="window.markUnsavedChanges()" class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center">
                                 <option value="=" ${ruleType==='='?'selected':''}>=</option>
-                                <option value="+" ${ruleType==='+'?'selected':''}>+$</option>
-                                <option value="-" ${ruleType==='-'?'selected':''}>-$</option>
+                                <option value="+" ${ruleType==='+'?'selected':''}>+฿</option>
+                                <option value="-" ${ruleType==='-'?'selected':''}>-฿</option>
                                 <option value="+%" ${ruleType==='+%'?'selected':''}>+%</option>
                                 <option value="-%" ${ruleType==='-%'?'selected':''}>-%</option>
                             </select>
-                            <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white" placeholder="0" value="${ruleVal}" onchange="window.saveMappingToDB()">
+                            <input type="number" oninput="window.markUnsavedChanges()" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white font-bold" placeholder="0" value="${ruleVal}">
                         </div>`;
                 });
                 rHtml += '</div>';
                 rateContainer.innerHTML = rHtml;
             } else {
-                if (rateCard) { rateCard.classList.add('hidden'); rateCard.style.display = 'none'; }
+                rateContainer.innerHTML = "<div class='text-center py-6 text-slate-400 font-bold text-xs italic'>No Rate Plans mapped yet.</div>";
             }
             if (window.lucide) window.lucide.createIcons();
         };
 
-        window.saveMappingToDB = async () => {
+        window.saveMappingToDB = async (notify = false) => {
             window.channexMap = [];
             document.querySelectorAll('.chan-map-row').forEach(row => {
                 const cId = row.getAttribute('data-chan-id');
-                const cTitle = row.querySelector('.font-bold').innerText;
-                const pCat = row.querySelector('.chan-pms-sel').value;
+                const cTitle = row.querySelector('.font-bold')?.innerText || '';
+                const pCat = row.querySelector('.chan-pms-sel')?.value || '';
                 if (cId) window.channexMap.push({ channexId: cId, channexTitle: cTitle, pmsCategory: pCat || "" });
             });
             
             window.channexRateMap = [];
             document.querySelectorAll('.chan-rate-map-row').forEach(row => {
                 const rId = row.getAttribute('data-rate-id');
-                const rTitle = row.getAttribute('data-rate-title');
-                const pCat = row.querySelector('.chan-rate-pms-sel').value;
-                const ruleType = row.querySelector('.chan-rate-rule-type').value;
-                const ruleVal = parseFloat(row.querySelector('.chan-rate-rule-val').value) || 0;
+                const rTitle = row.getAttribute('data-rate-title') || row.querySelector('.font-bold')?.innerText || '';
+                const pCat = row.querySelector('.chan-rate-pms-sel')?.value || '';
+                const ruleType = row.querySelector('.chan-rate-rule-type')?.value || '=';
+                const ruleVal = parseFloat(row.querySelector('.chan-rate-rule-val')?.value) || 0;
+                const rateSource = row.querySelector('.chan-rate-source')?.value || 'std';
                 
-                if (rId) window.channexRateMap.push({ ratePlanId: rId, ratePlanTitle: rTitle, pmsCategory: pCat || "", ruleType: ruleType, ruleVal: ruleVal });
+                if (rId) window.channexRateMap.push({ 
+                    ratePlanId: rId, 
+                    ratePlanTitle: rTitle, 
+                    pmsCategory: pCat || "", 
+                    ruleType: ruleType, 
+                    ruleVal: ruleVal,
+                    rateSource: rateSource
+                });
             });
 
             try {
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', currentPropertyId), { channexMap: window.channexMap, channexRateMap: window.channexRateMap }, { merge: true });
-                const si = document.getElementById('save-indicator'); si.innerText = 'MAPPING SAVED'; si.classList.replace('text-emerald-600', 'text-indigo-600'); si.style.opacity = '1'; setTimeout(() => { si.style.opacity = '0'; }, 2000);
+                if (notify) {
+                    window.customAlert("✅ Room and Rate Plan Mappings saved to database successfully!");
+                }
+                window.renderGrid();
             } catch (e) {
                 console.error("Mapping Save Error:", e);
-            }
-        };
-
-        window.toggleCertSuite = () => {
-            const card = document.getElementById('channex-cert-card');
-            card.classList.toggle('hidden');
-            if (!card.classList.contains('hidden')) {
-                const rooms = window.channexMap || [];
-                const rates = window.channexRateMap || [];
-
-                const roomOpts = `<option value="">-- SELECT TEST ROOM --</option>` + rooms.map(r => `<option value="${r.channexId}">${r.channexTitle || r.pmsCategory}</option>`).join('');
-                const rateOpts = `<option value="">-- SELECT TEST RATE --</option>` + rates.map(r => `<option value="${r.ratePlanId}">${r.ratePlanTitle || r.pmsCategory}</option>`).join('');
-
-                document.getElementById('cert-twin-room').innerHTML = roomOpts;
-                document.getElementById('cert-double-room').innerHTML = roomOpts;
-                
-                document.getElementById('cert-twin-bar').innerHTML = rateOpts;
-                document.getElementById('cert-twin-bb').innerHTML = rateOpts;
-                document.getElementById('cert-dbl-bar').innerHTML = rateOpts;
-                document.getElementById('cert-dbl-bb').innerHTML = rateOpts;
-                
-                setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'end' }), 100);
-            }
-        };
-
-        window.runCertTest = async (testGroup) => {
-            if (!window.channexConfig || !window.channexConfig.apiKey) return window.customAlert("Missing API Key.");
-            
-            const propId = window.channexConfig.propId;
-            const baseUrl = getChannexBaseUrl();
-            const twin = document.getElementById('cert-twin-room').value;
-            const dbl = document.getElementById('cert-double-room').value;
-            
-            const twinBar = document.getElementById('cert-twin-bar').value;
-            const twinBb = document.getElementById('cert-twin-bb').value;
-            const dblBar = document.getElementById('cert-dbl-bar').value;
-            const dblBb = document.getElementById('cert-dbl-bb').value;
-
-            if(!twin || !dbl || !twinBar || !twinBb || !dblBar || !dblBb) return window.customAlert("Please map all 6 dropdowns to assign test IDs.");
-
-            document.getElementById('loader').classList.add('active');
-            document.getElementById('sync-status').innerText = `RUNNING TEST: ${testGroup.toUpperCase()}...`;
-
-            let url = `${baseUrl}/restrictions`;
-            let payload = [];
-
-            if (testGroup === 'rates') {
-                payload = [
-                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-22", date_to: "2026-11-22", rate: 33300 },
-                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-21", date_to: "2026-11-21", rate: 33300 },
-                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-11-25", date_to: "2026-11-25", rate: 44400 },
-                    { property_id: propId, rate_plan_id: dblBb, date_from: "2026-11-29", date_to: "2026-11-29", rate: 45623 },
-                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-01", date_to: "2026-11-10", rate: 24100 },
-                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-11-10", date_to: "2026-11-16", rate: 31266 },
-                    { property_id: propId, rate_plan_id: dblBb, date_from: "2026-11-01", date_to: "2026-11-20", rate: 11100 }
-                ];
-            } else if (testGroup === 'min_stay') {
-                payload = [
-                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-23", date_to: "2026-11-23", min_stay_arrival: 3, min_stay_through: 3 },
-                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-11-25", date_to: "2026-11-25", min_stay_arrival: 2, min_stay_through: 2 },
-                    { property_id: propId, rate_plan_id: dblBb, date_from: "2026-11-15", date_to: "2026-11-15", min_stay_arrival: 5, min_stay_through: 5 }
-                ];
-            } else if (testGroup === 'stop_sell') {
-                payload = [
-                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-14", date_to: "2026-11-14", stop_sell: true },
-                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-11-16", date_to: "2026-11-16", stop_sell: true },
-                    { property_id: propId, rate_plan_id: dblBb, date_from: "2026-11-20", date_to: "2026-11-20", stop_sell: true }
-                ];
-            } else if (testGroup === 'restrictions') {
-                payload = [
-                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-11-01", date_to: "2026-11-10", closed_to_arrival: true, max_stay: 4, min_stay_arrival: 1, min_stay_through: 1 },
-                    { property_id: propId, rate_plan_id: twinBb, date_from: "2026-11-12", date_to: "2026-11-16", closed_to_departure: true, min_stay_arrival: 6, min_stay_through: 6 },
-                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-11-10", date_to: "2026-11-16", closed_to_arrival: true, min_stay_arrival: 2, min_stay_through: 2 },
-                    { property_id: propId, rate_plan_id: dblBb, date_from: "2026-11-01", date_to: "2026-11-20", min_stay_arrival: 10, min_stay_through: 10 },
-                    { property_id: propId, rate_plan_id: twinBar, date_from: "2026-12-01", date_to: "2027-05-01", min_stay_arrival: 2, min_stay_through: 2 },
-                    { property_id: propId, rate_plan_id: dblBar, date_from: "2026-12-01", date_to: "2027-05-01", min_stay_arrival: 3, min_stay_through: 3 }
-                ];
-            } else if (testGroup === 'availability') {
-                url = `${baseUrl}/availability`;
-                payload = [
-                    { property_id: propId, room_type_id: twin, date_from: "2026-11-21", date_to: "2026-11-21", availability: 7 },
-                    { property_id: propId, room_type_id: dbl, date_from: "2026-11-25", date_to: "2026-11-25", availability: 0 },
-                    { property_id: propId, room_type_id: twin, date_from: "2026-11-10", date_to: "2026-11-16", availability: 3 },
-                    { property_id: propId, room_type_id: dbl, date_from: "2026-11-17", date_to: "2026-11-24", availability: 4 }
-                ];
-            }
-
-            try {
-                const res = await fetch(url, {
-                    method: "POST",
-                    headers: { "user-api-key": window.channexConfig.apiKey, "Content-Type": "application/json" },
-                    body: JSON.stringify({ values: payload })
-                });
-                const data = await res.json();
-                const logEl = document.getElementById('cert-log');
-                
-                if (data.data && data.data[0]) {
-                    const tId = data.data[0].id;
-                    logEl.innerHTML = `[SUCCESS] ${new Date().toLocaleTimeString()}\nGroup: ${testGroup.toUpperCase()}\nBatched ${payload.length} API rules successfully.\n\nTask ID: ${tId}\n\n${logEl.innerHTML}`;
-                    window.customAlert(`✅ ${payload.length} test change${payload.length === 1 ? '' : 's'} confirmed!`);
-                } else {
-                    logEl.innerHTML = `[ERROR] ${new Date().toLocaleTimeString()}\nPayload: ${JSON.stringify(payload, null, 2)}\nResponse: ${JSON.stringify(data, null, 2)}\n\n${logEl.innerHTML}`;
-                    window.customAlert("Error running test. Check log box.");
-                }
-            } catch (e) {
-                document.getElementById('cert-log').innerText = `[CRASH] ${e.message}\n\n` + document.getElementById('cert-log').innerText;
-                window.customAlert("Failed to push: " + e.message);
-            } finally {
-                document.getElementById('loader').classList.remove('active');
+                if (notify) window.customAlert("Failed to save mappings: " + e.message);
             }
         };
 
@@ -2936,32 +3256,30 @@
         window.savePricingToCloud = async (silent = false) => {
             if (!silent) showLoader('SAVING TO CLOUD...');
             try {
+                window.readRelationshipsFromDOM();
+                const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(currentPropertyId) : currentPropertyId;
                 const payload = cleanPayload(JSON.parse(JSON.stringify(masterPricing)));
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${currentPropertyId}`), { ...payload, updatedAt: new Date().toISOString() });
+                if (window.savedAutofillBaselines) {
+                    payload.autofillBaselines = window.savedAutofillBaselines;
+                }
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`), { 
+                    ...payload, 
+                    updatedAt: new Date().toISOString() 
+                }, { merge: true });
                 
-                if (!silent) { hideLoader(); window.customAlert("Success!\n\nYour Master Pricing Matrix has been saved to the cloud."); } 
-                else { const si = document.getElementById('save-indicator'); si.innerText = 'SAVED'; si.classList.replace('text-amber-500', 'text-emerald-600'); si.style.opacity = '1'; setTimeout(() => { si.style.opacity = '0'; }, 2000); }
+                window.hasUnsavedChanges = false;
+                window.updateSaveIndicator();
+
+                if (!silent) { 
+                    hideLoader(); 
+                    window.customAlert("Success!\n\nYour Master Pricing Matrix and Rule Links have been saved to the database."); 
+                }
             } catch (err) {
                 console.warn(err);
-                if (!silent) { hideLoader(); window.customAlert("Saved locally only.\n\nCould not write to Firebase."); }
-            }
-        };
-
-        window.pushToChannexAPI = async (btn, mode = 'full') => {
-            const origHtml = btn.innerHTML;
-            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin inline" size="14"></i> SYNCING...';
-            btn.disabled = true;
-            showLoader('COMPRESSING PAYLOAD...');
-
-            try {
-                const payload = cleanPayload(JSON.parse(JSON.stringify(masterPricing)));
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${currentPropertyId}`), { ...payload, updatedAt: new Date().toISOString() });
-                
-                if (!silent) { document.getElementById('loader').classList.remove('active'); window.customAlert("Success!\n\nYour Master Pricing Matrix has been saved to the cloud."); } 
-                else { const si = document.getElementById('save-indicator'); si.innerText = 'SAVED'; si.classList.replace('text-amber-500', 'text-emerald-600'); si.style.opacity = '1'; setTimeout(() => { si.style.opacity = '0'; }, 2000); }
-            } catch (err) {
-                console.warn(err);
-                if (!silent) { document.getElementById('loader').classList.remove('active'); window.customAlert("Saved locally only.\n\nCould not write to Firebase."); }
+                if (!silent) { 
+                    hideLoader(); 
+                    window.customAlert("Save Error:\n\nCould not write to Firebase: " + err.message); 
+                }
             }
         };
 
@@ -3024,24 +3342,13 @@
                     if (!isUnassigned) {
                         rList.forEach(rid => {
                             const uiId = dbToUiRoom(rid);
-                            const roomDef = hotelRooms.find(hr => hr.id === uiId);
-                            if(roomDef) typesToDeduct.push(roomDef.type);
+                            const roomDef = hotelRooms.find(hr => hr.id === uiId || hr.id === rid);
+                            if(roomDef && roomDef.type) typesToDeduct.push(roomDef.type);
                         });
                     } else if (s.bookedType) {
-                        let bt = s.bookedType.toUpperCase();
-                        let inferred = null;
-                        if (bt.includes("DORMITORY") || bt.includes("4-BED") || bt.includes("DORM")) inferred = "Standard Quad Dorm"; 
-                        else if (bt.includes("TRIPLE")) inferred = "Partial Oceanview Triple Room"; 
-                        else if (bt.includes("SIDE SEA VIEW") || (bt.includes("PARTIAL") && !bt.includes("TWIN") && !bt.includes("TRIPLE"))) inferred = "Partial Oceanview King Room"; 
-                        else if (bt.includes("DELUXE TWIN") || (bt.includes("OCEANVIEW") && bt.includes("TWIN"))) inferred = "Oceanview Twin Room"; 
-                        else if (bt.includes("DELUXE DOUBLE") || (bt.includes("OCEANVIEW") && !bt.includes("TWIN"))) inferred = "Oceanview King Room"; 
-                        else if (bt.includes("GARDEN") && bt.includes("TWIN")) inferred = "Gardenview Twin Room"; 
-                        else if (bt.includes("GARDEN") && !bt.includes("TWIN")) inferred = "Gardenview King Room"; 
-                        else if (bt.includes("OCEANFRONT")) { inferred = bt.includes("TWIN") ? "Oceanfront Twin" : "Oceanfront King"; } 
-                        else if (bt.includes("BUNGALOW")) inferred = "BUNGALOWS";
-                        
+                        const inferred = resolveRoomCategory(s.bookedType);
                         if(inferred) {
-                            let dedCount = inferred.includes('Dorm') ? (s.pax || 1) : Math.max(1, rList.length);
+                            let dedCount = inferred.toLowerCase().includes('dorm') ? (s.pax || 1) : Math.max(1, rList.length);
                             for(let k=0; k < dedCount; k++) typesToDeduct.push(inferred);
                         }
                     }
@@ -3064,6 +3371,7 @@
                 rMap.forEach(roomRule => {
                     const pmsCat = categoryResolver(roomRule.pmsCategory);
                     const roomTypeId = roomRule.channexId;
+                    if (!pmsCat) return; // Ignore unmapped or removed categories
                     
                     let rangeStart = null;
                     let currentAvail = null;
@@ -3132,6 +3440,9 @@
 
                 rateMap.forEach(mapRule => {
                     const ratePlanId = mapRule.ratePlanId;
+                    const pmsCat = categoryResolver(mapRule.pmsCategory);
+                    if (!pmsCat) return; // Ignore unmapped or removed categories
+
                     const ruleType = mapRule.ruleType || "=";
                     const ruleVal = mapRule.ruleVal !== undefined ? parseFloat(mapRule.ruleVal) : 0;
                     
@@ -3142,17 +3453,16 @@
                         const dStr = datesToProcess[i];
                         const dMs = parseYMD(dStr);
                         const dayData = masterPricing.timeline[dStr] || {};
-                        const pmsCat = categoryResolver(mapRule.pmsCategory);
                         const rData = dayData[pmsCat] || {};
                         const gData = dayData['GLOBAL'] || {};
 
                         let dayPayload = {};
 
-                        let activePrice = rData.std;
-                        if (rData.fmp && rData.fmp !== "") {
-                            let minDiff = getNearestEvent(parseYMD(dStr));
-                            if (Math.abs(minDiff) <= 6) activePrice = rData.fmp; 
-                        }
+                        // Standard and Non-Refundable rates follow rData.std (which holds standard pricing arc)
+                        // Only rate plans explicitly configured as EVT packages use rData.fmp
+                        let activePrice = (mapRule.rateSource === 'evt' && rData.fmp && rData.fmp !== "")
+                            ? rData.fmp
+                            : rData.std;
                         
                         let modifiedPrice = null;
                         const otaOverride = dayData.otaOverrides?.[ratePlanId];
@@ -3179,7 +3489,9 @@
                         }
                         
                         const fullState = {};
-                        if (modifiedPrice !== null) fullState.rate = Math.round(modifiedPrice * 100);
+                        if (modifiedPrice !== null && modifiedPrice !== "" && !isNaN(Number(modifiedPrice))) {
+                            fullState.rate = Math.round(Number(modifiedPrice) * 100);
+                        }
 
                         const otaMin = dayData.otaOverrides?.[`${ratePlanId}_min`];
                         const otaMinArr = dayData.otaOverrides?.[`${ratePlanId}_min_arr`];
@@ -3309,6 +3621,8 @@
                     return await fetch(url, options);
                 };
 
+                const baseUrl = getChannexBaseUrl();
+
                 if (availPayload.length > 0) {
                     document.getElementById('sync-status').innerText = `PUSHING INVENTORY TO CHANNEX...`;
                     const aRes = await fetchWithRetry(`${baseUrl}/availability`, {
@@ -3402,6 +3716,7 @@
 
             try {
                 await loadPropertyConfig();
+                await loadPropertyBaseline();
             } catch (e) { console.warn("Config load error:", e); }
 
             const today = new Date(); 
@@ -3409,10 +3724,26 @@
             if (tapeStart) tapeStart.value = getLocalYMD(today); 
             const wStart = document.getElementById('w-start-date');
             if (wStart) wStart.value = getLocalYMD(today);
+            const wEnd = document.getElementById('w-end-date');
+            if (wEnd) {
+                const next90 = new Date(today);
+                next90.setDate(today.getDate() + 89);
+                wEnd.value = getLocalYMD(next90);
+            }
             
             const nextM = new Date(today); nextM.setDate(today.getDate() + 30);
             const qbStart = document.getElementById('qb-start'); if(qbStart) qbStart.value = getLocalYMD(today);
             const qbEnd = document.getElementById('qb-end'); if(qbEnd) qbEnd.value = getLocalYMD(nextM);
+
+            // Restore saved platform view if exists
+            try {
+                const savedView = localStorage.getItem('cm_platform_view');
+                if (savedView && ['direct', 'bdc', 'hw'].includes(savedView)) {
+                    currentPlatformView = savedView;
+                    ['direct', 'bdc', 'hw'].forEach(v => document.getElementById(`view-${v}`)?.classList.remove(`active-${v}`));
+                    document.getElementById(`view-${savedView}`)?.classList.add(`active-${savedView}`);
+                }
+            } catch(e) {}
 
             window.switchTab('grid'); 
             window.syncFilterPills();
@@ -3424,10 +3755,28 @@
             clearTimeout(safetyTimer);
             hideLoader();
             
+            // Track when user is actively typing so mouse movements don't steal focus or re-select
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' && (e.target.closest('.rate-grid-table') || e.target.closest('#qb-grid-body'))) {
+                    isUserTyping = true;
+                    clearTimeout(typingTimeout);
+                    typingTimeout = setTimeout(() => { isUserTyping = false; }, 800);
+                }
+            });
+
+            // Prevent mouse wheel from changing input values when scrolling the grid
+            window.addEventListener('wheel', (e) => {
+                if (document.activeElement && document.activeElement.tagName === 'INPUT' && document.activeElement.closest('.rate-grid-table')) {
+                    document.activeElement.blur();
+                }
+            }, { passive: true });
+
+            // Safe mouseover focus: only focuses and selects when user is NOT actively typing
             document.body.addEventListener('mouseover', (e) => {
+                if (isUserTyping) return;
                 if (e.target.tagName === 'INPUT' && (e.target.closest('.rate-grid-table') || e.target.closest('#qb-grid-body'))) {
                     if (document.activeElement !== e.target && e.target.type !== 'date' && !e.target.disabled) {
-                        e.target.focus();
+                        e.target.focus({ preventScroll: true });
                         if(e.target.type === 'number' || e.target.type === 'text') e.target.select();
                     }
                 }
