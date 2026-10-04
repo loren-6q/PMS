@@ -61,7 +61,6 @@ window.saveCredentialsAndFetch = async () => {
     } catch (e) {}
 
     try {
-        // Re-read latest room inventory from Firestore in case rooms were renamed in settings.html
         if (window.loadPropertyConfig) {
             await window.loadPropertyConfig();
         }
@@ -145,10 +144,12 @@ window.renderChannexMappingUI = (channexRooms, channexRates) => {
             let ruleVal = existingMap && existingMap.ruleVal !== undefined ? existingMap.ruleVal : "";
             let rateSource = existingMap ? (existingMap.rateSource || "std") : "std";
 
+            const displayTitle = window.formatRatePlanTitle ? window.formatRatePlanTitle(rate.attributes.title, true) : rate.attributes.title;
+
             rHtml += `
                 <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${rate.id}" data-rate-title="${rate.attributes.title}">
                     <div class="flex-1 flex flex-col min-w-0 pl-1">
-                        <span class="font-bold text-slate-800 text-[11px] truncate" title="${rate.attributes.title}">${rate.attributes.title}</span>
+                        <span class="font-bold text-slate-800 text-[11px] truncate" title="${rate.attributes.title}">${displayTitle}</span>
                         <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
                     </div>
                     <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
@@ -161,12 +162,12 @@ window.renderChannexMappingUI = (channexRooms, channexRates) => {
                     </select>
                     <select class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center">
                         <option value="=" ${ruleType === '=' ? 'selected' : ''}>=</option>
-                        <option value="+" ${ruleType === '+' ? 'selected' : ''}>+$</option>
-                        <option value="-" ${ruleType === '-' ? 'selected' : ''}>-$</option>
+                        <option value="+" ${ruleType === '+' ? 'selected' : ''}>+฿</option>
+                        <option value="-" ${ruleType === '-' ? 'selected' : ''}>-฿</option>
                         <option value="+%" ${ruleType === '+%' ? 'selected' : ''}>+%</option>
                         <option value="-%" ${ruleType === '-%' ? 'selected' : ''}>-%</option>
                     </select>
-                    <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white" placeholder="0" value="${ruleVal}">
+                    <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white font-bold" placeholder="0" value="${ruleVal}">
                 </div>`;
         });
         rHtml += '</div>';
@@ -226,10 +227,13 @@ window.renderChannexMapping = () => {
             let ruleType = m.ruleType || "=";
             let ruleVal = m.ruleVal !== undefined ? m.ruleVal : "";
             let rateSource = m.rateSource || "std";
+
+            const displayTitle = window.formatRatePlanTitle ? window.formatRatePlanTitle(m.ratePlanTitle, true) : (m.ratePlanTitle || 'Mapped Rate');
+
             rHtml += `
                 <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${m.ratePlanId}" data-rate-title="${m.ratePlanTitle}">
                     <div class="flex-1 flex flex-col min-w-0 pl-1">
-                        <span class="font-bold text-slate-800 text-[11px] truncate" title="${m.ratePlanTitle || ''}">${window.formatRatePlanTitle(m.ratePlanTitle) || 'Mapped Rate'}</span>
+                        <span class="font-bold text-slate-800 text-[11px] truncate" title="${m.ratePlanTitle || ''}">${displayTitle}</span>
                         <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
                     </div>
                     <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
@@ -482,8 +486,6 @@ window.pushToChannexAPI = async (btn, mode = 'full') => {
 
                 let dayPayload = {};
 
-                // Standard and Non-Refundable rates derive from rData.std (which holds the standard pricing arc)
-                // Only rate plans explicitly configured as EVT packages use rData.fmp
                 let activePrice = (mapRule.rateSource === 'evt' && rData.fmp && rData.fmp !== "")
                     ? rData.fmp
                     : rData.std;
