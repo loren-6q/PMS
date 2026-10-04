@@ -664,19 +664,41 @@ window.savePromoRule = async () => {
         window.closeModal('promo-modal');
         window.renderPromoRulesTable();
         
+        const markDatesAndRatePlans = (dateList) => {
+            window.dirtyFields = window.dirtyFields || {};
+            const mappedRates = (window.channexRateMap || []).filter(m => {
+                const matchChan = window.isRatePlanMatchingChannel ? window.isRatePlanMatchingChannel(m.ratePlanTitle, channel) : true;
+                const matchScope = scope === 'ALL' || window.categoryResolver(m.pmsCategory) === scope;
+                return matchChan && matchScope;
+            });
+
+            dateList.forEach(d => {
+                window.dirtyDates.add(d);
+                window.syncedDates.delete(d);
+                window.dirtyFields[d] = window.dirtyFields[d] || {};
+                mappedRates.forEach(rate => {
+                    window.dirtyFields[d][rate.ratePlanId] = window.dirtyFields[d][rate.ratePlanId] || new Set();
+                    window.dirtyFields[d][rate.ratePlanId].add('rate');
+                });
+            });
+        };
+
         if (isAlways) {
-            Object.keys(window.masterPricing.timeline || {}).forEach(d => window.dirtyDates.add(d));
+            markDatesAndRatePlans(Object.keys(window.masterPricing.timeline || {}));
         } else if (startDate && endDate) {
             let c = new Date(startDate + "T12:00:00Z");
             const eD = new Date(endDate + "T12:00:00Z");
+            const dList = [];
             while (c <= eD) {
-                window.dirtyDates.add(c.toISOString().split('T')[0]);
+                dList.push(c.toISOString().split('T')[0]);
                 c.setUTCDate(c.getUTCDate() + 1);
             }
+            markDatesAndRatePlans(dList);
         }
 
+        window.markUnsavedChanges();
         if (window.renderGrid) window.renderGrid();
-        window.customAlert(`Promo rule "${name}" saved! Affected dates marked dirty for sync.`);
+        window.customAlert(`Promo rule "${name}" saved! Affected ${channel} rates marked for sync.`);
     } catch (err) {
         window.customAlert("Save Error: " + err.message);
     }
@@ -690,6 +712,27 @@ window.togglePromoRuleActive = async (ruleId, isActive) => {
         const { doc, updateDoc } = window.cmFs;
         await updateDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId), { promoRules });
         window.renderPromoRulesTable();
+
+        if (target.isAlways) {
+            Object.keys(window.masterPricing.timeline || {}).forEach(d => window.dirtyDates.add(d));
+        } else if (target.startDate && target.endDate) {
+            let c = new Date(target.startDate + "T12:00:00Z");
+            const eD = new Date(target.endDate + "T12:00:00Z");
+            while (c <= eD) {
+                const dStr = c.toISOString().split('T')[0];
+                window.dirtyDates.add(dStr);
+                window.dirtyFields = window.dirtyFields || {};
+                window.dirtyFields[dStr] = window.dirtyFields[dStr] || {};
+                (window.channexRateMap || []).forEach(rate => {
+                    if (window.isRatePlanMatchingChannel && window.isRatePlanMatchingChannel(rate.ratePlanTitle, target.channel)) {
+                        window.dirtyFields[dStr][rate.ratePlanId] = window.dirtyFields[dStr][rate.ratePlanId] || new Set();
+                        window.dirtyFields[dStr][rate.ratePlanId].add('rate');
+                    }
+                });
+                c.setUTCDate(c.getUTCDate() + 1);
+            }
+        }
+        window.markUnsavedChanges();
         if (window.renderGrid) window.renderGrid();
     }
 };
@@ -701,6 +744,7 @@ window.deletePromoRule = async (ruleId) => {
         await updateDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId), { promoRules });
         window.promoRules = promoRules;
         window.renderPromoRulesTable();
+        window.markUnsavedChanges();
         if (window.renderGrid) window.renderGrid();
     });
 };
