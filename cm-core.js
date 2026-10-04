@@ -203,6 +203,36 @@ window.getViewMultiplier = () => {
     return window.currentPlatformView === 'hw' ? 1.25 : 1.0; 
 };
 
+// Universal OTA Channel Matcher (Supports BDC, HW, Agoda, Expedia, Airbnb aliases)
+window.isRatePlanMatchingChannel = (ratePlanTitle = '', channel = '') => {
+    if (!channel || channel === 'ALL') return true;
+    if (!ratePlanTitle) return false;
+    const titleLower = ratePlanTitle.toLowerCase();
+    const chLower = channel.toLowerCase();
+
+    // Direct containment check
+    if (titleLower.includes(chLower)) return true;
+
+    // Industry OTA alias dictionary
+    const aliases = {
+        'booking.com': ['booking.com', 'booking', 'bdc'],
+        'hostelworld': ['hostelworld', 'hw'],
+        'agoda': ['agoda', 'ago', 'ycs'],
+        'expedia': ['expedia', 'exp', 'epc'],
+        'airbnb': ['airbnb', 'abnb']
+    };
+
+    for (const [key, aliasList] of Object.entries(aliases)) {
+        if (chLower.includes(key) || key.includes(chLower)) {
+            if (aliasList.some(alias => titleLower.includes(alias) || new RegExp(`\\b${alias}\\b`, 'i').test(titleLower))) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+};
+
 // --- 5. PROPERTY & URL RESOLUTION ---
 window.safeUpdateUrlParam = (paramName, paramVal) => {
     try {
@@ -287,6 +317,39 @@ window.toggleFilter = (metric) => {
     window.saveUiPreferences();
     window.syncFilterPills();
     if (window.renderGrid) window.renderGrid();
+};
+
+window.switchTab = (tab) => {
+    const tabs = ['grid', 'promos', 'smart', 'relational', 'mapping', 'manual'];
+    tabs.forEach(t => {
+        const el = document.getElementById(`view-${t}`);
+        const btn = document.getElementById(`tab-${t}`);
+        if (el) {
+            if (t === tab) {
+                el.style.display = (t === 'manual' || t === 'grid') ? 'flex' : 'block';
+                el.classList.remove('hidden');
+            } else {
+                el.style.display = 'none';
+                el.classList.add('hidden');
+            }
+        }
+        if (btn) {
+            btn.classList.toggle('active', t === tab);
+        }
+    });
+
+    try {
+        if (tab === 'promos' && typeof window.renderPromoRulesTable === 'function') window.renderPromoRulesTable();
+        if (tab === 'relational' && typeof window.renderRelationships === 'function') window.renderRelationships();
+        if (tab === 'smart' && typeof window.updateAnchorDropdowns === 'function') window.updateAnchorDropdowns();
+        if (tab === 'manual') {
+            if (typeof window.renderManualGrid === 'function') window.renderManualGrid();
+            if (typeof window.checkMissing === 'function') window.checkMissing();
+        }
+        if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
+    } catch (err) {
+        console.warn("Tab view refresh notice:", err);
+    }
 };
 
 window.setPreset = (preset) => {
