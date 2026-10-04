@@ -32,7 +32,8 @@ window.fetchAllChannex = async (endpoint, apiKey, propId) => {
     let hasMore = true;
 
     while (hasMore) {
-        const url = `https://app.channex.io/api/v1/${endpoint}?filter[property_id]=${propId}&page=${page}&limit=100`;
+        // Channex strictly requires pagination[page] and pagination[limit] (max 100 per page)
+        const url = `https://app.channex.io/api/v1/${endpoint}?filter[property_id]=${propId}&pagination[page]=${page}&pagination[limit]=100`;
         const res = await window.fetchWithRetry(url, {
             headers: {
                 "user-api-key": apiKey,
@@ -49,8 +50,9 @@ window.fetchAllChannex = async (endpoint, apiKey, propId) => {
         const data = json.data || [];
         allData = allData.concat(data);
 
-        if (json.meta && json.meta.page && json.meta.total_pages) {
-            hasMore = json.meta.page < json.meta.total_pages;
+        // Channex meta schema: { limit: 100, page: 1, total: 32 }
+        if (json.meta && json.meta.total !== undefined) {
+            hasMore = allData.length < json.meta.total;
         } else {
             hasMore = data.length >= 100;
         }
@@ -75,7 +77,6 @@ window.saveCredentialsAndFetch = async () => {
         return window.customAlert("Please provide both your Channex API Key and Property ID.");
     }
 
-    // Cache globally for all properties
     localStorage.setItem('cm_master_channex_api_key', apiKey);
     window.MASTER_CHANNEX_API_KEY = apiKey;
 
