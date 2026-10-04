@@ -61,12 +61,23 @@ window.fetchAllChannex = async (endpoint, apiKey, propId) => {
 
 // --- 2. CREDENTIALS & INITIAL DISCOVERY ---
 window.saveCredentialsAndFetch = async () => {
-    const apiKey = document.getElementById('chan-api-key')?.value.trim();
-    const propId = document.getElementById('chan-prop-id')?.value.trim();
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() 
+        || window.channexConfig?.apiKey 
+        || window.MASTER_CHANNEX_API_KEY 
+        || localStorage.getItem('cm_master_channex_api_key') 
+        || "";
+
+    const propId = document.getElementById('chan-prop-id')?.value.trim() 
+        || window.channexConfig?.propId 
+        || "";
 
     if (!apiKey || !propId) {
-        return window.customAlert("Please enter both your Channex API Key and Property ID.");
+        return window.customAlert("Please provide both your Channex API Key and Property ID.");
     }
+
+    // Cache globally for all properties
+    localStorage.setItem('cm_master_channex_api_key', apiKey);
+    window.MASTER_CHANNEX_API_KEY = apiKey;
 
     window.showLoader('VALIDATING & CONNECTING...');
 
@@ -105,7 +116,11 @@ window.saveCredentialsAndFetch = async () => {
 };
 
 window.fetchChannexData = async () => {
-    const apiKey = window.channexConfig?.apiKey || document.getElementById('chan-api-key')?.value.trim();
+    const apiKey = window.channexConfig?.apiKey 
+        || document.getElementById('chan-api-key')?.value.trim() 
+        || window.MASTER_CHANNEX_API_KEY 
+        || localStorage.getItem('cm_master_channex_api_key');
+
     const propId = window.channexConfig?.propId || document.getElementById('chan-prop-id')?.value.trim();
 
     if (!apiKey || !propId) {
@@ -413,7 +428,10 @@ window.saveMappingToDB = async (notify = false) => {
 
 // --- 5. COMPRESS CONTIGUOUS RANGES & DISPATCH TO CHANNEX ---
 window.pushToChannexAPI = async (btn, mode = 'delta') => {
-    const apiKey = window.channexConfig?.apiKey;
+    const apiKey = window.channexConfig?.apiKey 
+        || window.MASTER_CHANNEX_API_KEY 
+        || localStorage.getItem('cm_master_channex_api_key');
+
     const propId = window.channexConfig?.propId;
 
     if (!apiKey || !propId) {
