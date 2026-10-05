@@ -518,7 +518,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // 2. Rates & Restrictions: Group by Channex Rate Plan with explicit null deletion
+        // 2. Rates & Restrictions: Group by Channex Rate Plan
         (window.channexRateMap || []).forEach(rule => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -607,13 +607,11 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
                 const todayRestrictions = {};
                 if (calculatedPrice !== null && !isNaN(calculatedPrice)) {
-    // Channex API accepts rates in minor units (satang); * 100 ensures price exceeds property floor
-    todayRestrictions.rate = Math.round(calculatedPrice * 100);
-} {
-                    todayRestrictions.rate = calculatedPrice;
+                    // Convert THB to satang minor units (* 100) so rates exceed property minimum rate floor
+                    todayRestrictions.rate = Math.round(calculatedPrice * 100);
                 }
 
-                // Min Stay Arrival (Explicit null removes it in Channex)
+                // Min Stay Arrival
                 const minS = getRestr('min');
                 if (minS !== null && minS !== "") {
                     todayRestrictions.min_stay_arrival = parseInt(minS);
@@ -621,7 +619,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     todayRestrictions.min_stay_arrival = null;
                 }
 
-                // Min Stay Through (Min on Arrival)
+                // Min Stay Through
                 const minArr = getRestr('min_arr');
                 if (minArr !== null && minArr !== "") {
                     todayRestrictions.min_stay_through = parseInt(minArr);
@@ -696,35 +694,37 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
+        // 3. Dispatch Payloads in 50-Item Chunks to Prevent Batch Rejection
         let availSuccess = true;
         let restrSuccess = true;
 
-        if (availPayload.length > 0) {
-            console.log("Pushing Availability Ranges to Channex:", availPayload);
-            const aRes = await fetch(`https://app.channex.io/api/v1/availability`, {
-                method: "POST",
-                headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
-                body: JSON.stringify({ values: availPayload })
-            });
-            if (!aRes.ok) {
-                const aErr = await aRes.json().catch(() => ({}));
-                console.error("Availability sync failure:", aErr);
-                availSuccess = false;
+        const sendBatches = async (endpoint, payload) => {
+            const chunkSize = 50;
+            let allOk = true;
+            for (let i = 0; i < payload.length; i += chunkSize) {
+                const chunk = payload.slice(i, i + chunkSize);
+                const res = await window.fetchWithRetry(`https://app.channex.io/api/v1/${endpoint}`, {
+                    method: "POST",
+                    headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+                    body: JSON.stringify({ values: chunk })
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    console.error(`❌ Channex ${endpoint} sync failure on batch ${i}:`, err);
+                    allOk = false;
+                }
             }
+            return allOk;
+        };
+
+        if (availPayload.length > 0) {
+            console.log("Pushing Availability Ranges to Channex (Chunked):", availPayload);
+            availSuccess = await sendBatches('availability', availPayload);
         }
 
         if (restrPayload.length > 0) {
-            console.log("Pushing Restrictions to Channex with smart delta updates:", restrPayload);
-            const rRes = await fetch(`https://app.channex.io/api/v1/restrictions`, {
-                method: "POST",
-                headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
-                body: JSON.stringify({ values: restrPayload })
-            });
-            if (!rRes.ok) {
-                const rErr = await rRes.json().catch(() => ({}));
-                console.error("Restrictions sync failure:", rErr);
-                restrSuccess = false;
-            }
+            console.log("Pushing Restrictions to Channex (Chunked):", restrPayload);
+            restrSuccess = await sendBatches('restrictions', restrPayload);
         }
 
         if (availSuccess && restrSuccess) {
