@@ -518,7 +518,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // 2. Rates & Restrictions: Group by Channex Rate Plan
+        // 2. Rates & Restrictions: Group by Channex Rate Plan with explicit null deletion
         (window.channexRateMap || []).forEach(rule => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -607,11 +607,11 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
                 const todayRestrictions = {};
                 if (calculatedPrice !== null && !isNaN(calculatedPrice)) {
-                    // Convert THB to satang minor units (* 100) so rates exceed property minimum rate floor
+                    // Channex API accepts rates in minor units (satang); * 100 ensures price exceeds property floor
                     todayRestrictions.rate = Math.round(calculatedPrice * 100);
                 }
 
-                // Min Stay Arrival
+                // Min Stay Arrival (Explicit null removes it in Channex)
                 const minS = getRestr('min');
                 if (minS !== null && minS !== "") {
                     todayRestrictions.min_stay_arrival = parseInt(minS);
@@ -619,7 +619,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     todayRestrictions.min_stay_arrival = null;
                 }
 
-                // Min Stay Through
+                // Min Stay Through (Min on Arrival)
                 const minArr = getRestr('min_arr');
                 if (minArr !== null && minArr !== "") {
                     todayRestrictions.min_stay_through = parseInt(minArr);
@@ -694,7 +694,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // 3. Dispatch Payloads in 50-Item Chunks to Prevent Batch Rejection
+        // 3. Dispatch Payloads in 50-Item Chunks
         let availSuccess = true;
         let restrSuccess = true;
 
