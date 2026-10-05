@@ -464,11 +464,59 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
         const availPayload = [];
         const restrPayload = [];
 
-        // 1. Availability: Group by Channex Room Type
+        // Helper: Detect Peak Capacity from liveInventory or category name
+        const getPeakCategoryCapacity = (pmsCat) => {
+            let maxSeen = 0;
+            if (window.liveInventory) {
+                Object.values(window.liveInventory).forEach(dayObj => {
+                    if (dayObj && typeof dayObj[pmsCat] === 'number' && dayObj[pmsCat] > maxSeen) {
+                        maxSeen = dayObj[pmsCat];
+                    }
+                });
+            }
+            if (maxSeen > 0) return maxSeen;
+
+            const match = pmsCat.match(/(\d+)\s*(-|\s*)(bed|bunk|dorm)/i);
+            if (match && match[1]) return parseInt(match[1], 10);
+
+            return 1;
+        };
+
+        // Helper: Calculate true net availability (Capacity - Active Bookings)
+        const getNetAvailabilityForDate = (pmsCat, dStr, peakCap) => {
+            if (window.liveInventory && window.liveInventory[dStr] && typeof window.liveInventory[dStr][pmsCat] === 'number') {
+                return window.liveInventory[dStr][pmsCat];
+            }
+
+            const bookingsList = window.bookings || window.reservations || window.masterPricing?.bookings || [];
+            let occupied = 0;
+
+            if (Array.isArray(bookingsList)) {
+                for (let i = 0; i < bookingsList.length; i++) {
+                    const b = bookingsList[i];
+                    if (!b || (b.status && b.status.toLowerCase() === 'cancelled')) continue;
+
+                    const catMatch = b.category === pmsCat || b.roomType === pmsCat || b.pmsCategory === pmsCat;
+                    if (!catMatch) continue;
+
+                    const cIn = b.checkIn || b.start || b.startDate;
+                    const cOut = b.checkOut || b.end || b.endDate;
+
+                    if (cIn && cOut && dStr >= cIn && dStr < cOut) {
+                        occupied += parseInt(b.bedCount || b.roomsCount || b.quantity || b.numBeds || 1, 10);
+                    }
+                }
+            }
+
+            return Math.max(0, peakCap - occupied);
+        };
+
+        // 1. AVAILABILITY: Group by Channex Room Type across all 500 days
         window.channexMap.forEach(rule => {
             if (!rule.channexId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
             const roomTypeId = rule.channexId;
+            const peakCapacity = getPeakCategoryCapacity(pmsCat);
 
             let rangeStart = null;
             let currentAvail = null;
@@ -476,10 +524,8 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             for (let i = 0; i < datesToProcess.length; i++) {
                 const dStr = datesToProcess[i];
 
-                let otaAvail = window.masterPricing.timeline[dStr]?.otaOverrides?.[`${pmsCat}_avail`];
-                let live = (window.liveInventory[dStr] && window.liveInventory[dStr][pmsCat] !== undefined)
-                    ? window.liveInventory[dStr][pmsCat]
-                    : 0;
+                let otaAvail = window.masterPricing?.timeline?.[dStr]?.otaOverrides?.[`${pmsCat}_avail`];
+                let live = getNetAvailabilityForDate(pmsCat, dStr, peakCapacity);
                 let availToday = otaAvail !== undefined ? otaAvail : live;
 
                 let isAdjacent = false;
@@ -515,7 +561,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // 2. Rates & Restrictions: Clean objects containing ONLY non-null active fields
+        // 2. RATES & RESTRICTIONS: Group by Channex Rate Plan across all 500 days
         (window.channexRateMap || []).forEach(rule => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -529,13 +575,12 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
             for (let i = 0; i < datesToProcess.length; i++) {
                 const dStr = datesToProcess[i];
-                const dayObj = window.masterPricing.timeline[dStr] || {};
+                const dayObj = window.masterPricing?.timeline?.[dStr] || {};
                 const roomObj = dayObj[pmsCat] || {};
                 const globObj = dayObj['GLOBAL'] || {};
 
                 const dirtyFieldsSet = window.dirtyFields?.[dStr]?.[ratePlanId];
 
-                // In delta mode, skip dates that have no modified fields
                 if (mode === 'delta') {
                     if (!dirtyFieldsSet || dirtyFieldsSet.size === 0) {
                         if (rangeStart !== null && currentItem !== null && Object.keys(currentItem).length > 0) {
@@ -553,16 +598,18 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     }
                 }
 
-                // Calculate Live Price
                 let calculatedPrice = null;
                 const otaPriceOverride = dayObj.otaOverrides?.[ratePlanId];
 
                 if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
                     calculatedPrice = window.roundCurrency(otaPriceOverride);
                 } else {
+                    // Safe base rate resolution: roomObj.std -> timeline default -> master base rates
                     let activeBasePrice = (rateSource === 'evt' && (window.eventDates || []).length > 0 && roomObj.fmp !== undefined && roomObj.fmp !== "")
                         ? roomObj.fmp
-                        : roomObj.std;
+                        : (roomObj.std !== undefined && roomObj.std !== "" 
+                            ? roomObj.std 
+                            : (window.masterPricing?.baseRates?.[pmsCat] || window.categoryBaseRates?.[pmsCat]));
 
                     let promoMultiplier = 1.0;
                     (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
@@ -587,6 +634,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     }
                 }
 
+                // 3-Tier Priority Fallback: OTA Override -> Room Level -> Global Level
                 const getRestr = (f) => {
                     const otaVal = dayObj.otaOverrides?.[`${ratePlanId}_${f}`];
                     if (otaVal !== undefined && otaVal !== "") return otaVal;
@@ -595,7 +643,6 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     return null;
                 };
 
-                // Build restriction object WITHOUT explicit null properties
                 const todayRestrictions = {};
                 if (calculatedPrice !== null && !isNaN(calculatedPrice) && calculatedPrice > 0) {
                     todayRestrictions.rate = Math.round(calculatedPrice * 100);
@@ -654,7 +701,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // 3. Dispatch Payloads in 50-Item Chunks
+        // 3. DISPATCH PAYLOADS IN BATCHES OF 50
         let availSuccess = true;
         let restrSuccess = true;
 
