@@ -32,7 +32,6 @@ window.fetchAllChannex = async (endpoint, apiKey, propId) => {
     let hasMore = true;
 
     while (hasMore) {
-        // Channex strictly requires pagination[page] and pagination[limit] (max 100 per page)
         const url = `https://app.channex.io/api/v1/${endpoint}?filter[property_id]=${propId}&pagination[page]=${page}&pagination[limit]=100`;
         const res = await window.fetchWithRetry(url, {
             headers: {
@@ -50,7 +49,6 @@ window.fetchAllChannex = async (endpoint, apiKey, propId) => {
         const data = json.data || [];
         allData = allData.concat(data);
 
-        // Channex meta schema: { limit: 100, page: 1, total: 32 }
         if (json.meta && json.meta.total !== undefined) {
             hasMore = allData.length < json.meta.total;
         } else {
@@ -134,7 +132,6 @@ window.fetchChannexData = async () => {
         const roomData = await window.fetchAllChannex('room_types', apiKey, propId);
         const rawRateData = await window.fetchAllChannex('rate_plans', apiKey, propId);
 
-        // Filter out Channex auto-generated derived channel rate plans
         const rateData = rawRateData.filter(rate => {
             if (rate.attributes?.parent_rate_plan_id) return false;
             if (rate.relationships?.parent_rate_plan?.data?.id) return false;
@@ -518,7 +515,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // 2. Rates & Restrictions: Group by Channex Rate Plan with explicit null deletion
+        // 2. Rates & Restrictions: Clean objects containing ONLY non-null active fields
         (window.channexRateMap || []).forEach(rule => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -537,14 +534,8 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 const globObj = dayObj['GLOBAL'] || {};
 
                 const dirtyFieldsSet = window.dirtyFields?.[dStr]?.[ratePlanId];
-                const isMinDirty = dirtyFieldsSet?.has('min') || dirtyFieldsSet?.has('GLOBAL_min');
-                const isMinArrDirty = dirtyFieldsSet?.has('min_arr') || dirtyFieldsSet?.has('GLOBAL_min_arr');
-                const isMaxDirty = dirtyFieldsSet?.has('max') || dirtyFieldsSet?.has('GLOBAL_max');
-                const isCtaDirty = dirtyFieldsSet?.has('cta') || dirtyFieldsSet?.has('GLOBAL_cta');
-                const isCtdDirty = dirtyFieldsSet?.has('ctd') || dirtyFieldsSet?.has('GLOBAL_ctd');
-                const isStopDirty = dirtyFieldsSet?.has('stop') || dirtyFieldsSet?.has('stopSell') || dirtyFieldsSet?.has('GLOBAL_stopSell');
 
-                // In delta mode, only process rate plans that have pending changes on this date
+                // In delta mode, skip dates that have no modified fields
                 if (mode === 'delta') {
                     if (!dirtyFieldsSet || dirtyFieldsSet.size === 0) {
                         if (rangeStart !== null && currentItem !== null && Object.keys(currentItem).length > 0) {
@@ -596,7 +587,6 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     }
                 }
 
-                // Resolve Restrictions: Specific OTA override -> Room level -> Global level
                 const getRestr = (f) => {
                     const otaVal = dayObj.otaOverrides?.[`${ratePlanId}_${f}`];
                     if (otaVal !== undefined && otaVal !== "") return otaVal;
@@ -605,59 +595,29 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     return null;
                 };
 
+                // Build restriction object WITHOUT explicit null properties
                 const todayRestrictions = {};
-                if (calculatedPrice !== null && !isNaN(calculatedPrice)) {
-                    // Channex API accepts rates in minor units (satang); * 100 ensures price exceeds property floor
+                if (calculatedPrice !== null && !isNaN(calculatedPrice) && calculatedPrice > 0) {
                     todayRestrictions.rate = Math.round(calculatedPrice * 100);
                 }
 
-                // Min Stay Arrival (Explicit null removes it in Channex)
                 const minS = getRestr('min');
-                if (minS !== null && minS !== "") {
-                    todayRestrictions.min_stay_arrival = parseInt(minS);
-                } else if (mode === 'full' || isMinDirty) {
-                    todayRestrictions.min_stay_arrival = null;
-                }
+                if (minS !== null && minS !== "") todayRestrictions.min_stay_arrival = parseInt(minS);
 
-                // Min Stay Through (Min on Arrival)
                 const minArr = getRestr('min_arr');
-                if (minArr !== null && minArr !== "") {
-                    todayRestrictions.min_stay_through = parseInt(minArr);
-                } else if (mode === 'full' || isMinArrDirty) {
-                    todayRestrictions.min_stay_through = null;
-                }
+                if (minArr !== null && minArr !== "") todayRestrictions.min_stay_through = parseInt(minArr);
 
-                // Max Stay
                 const maxS = getRestr('max');
-                if (maxS !== null && maxS !== "") {
-                    todayRestrictions.max_stay = parseInt(maxS);
-                } else if (mode === 'full' || isMaxDirty) {
-                    todayRestrictions.max_stay = null;
-                }
+                if (maxS !== null && maxS !== "") todayRestrictions.max_stay = parseInt(maxS);
 
-                // Closed to Arrival (CTA)
                 const cta = getRestr('cta');
-                if (cta !== null && cta !== "") {
-                    todayRestrictions.closed_to_arrival = !!cta;
-                } else if (mode === 'full' || isCtaDirty) {
-                    todayRestrictions.closed_to_arrival = false;
-                }
+                if (cta !== null && cta !== "") todayRestrictions.closed_to_arrival = !!cta;
 
-                // Closed to Departure (CTD)
                 const ctd = getRestr('ctd');
-                if (ctd !== null && ctd !== "") {
-                    todayRestrictions.closed_to_departure = !!ctd;
-                } else if (mode === 'full' || isCtdDirty) {
-                    todayRestrictions.closed_to_departure = false;
-                }
+                if (ctd !== null && ctd !== "") todayRestrictions.closed_to_departure = !!ctd;
 
-                // Stop Sell
                 const stop = getRestr('stopSell');
-                if (stop !== null && stop !== "") {
-                    todayRestrictions.stop_sell = !!stop;
-                } else if (mode === 'full' || isStopDirty) {
-                    todayRestrictions.stop_sell = false;
-                }
+                if (stop !== null && stop !== "") todayRestrictions.stop_sell = !!stop;
 
                 const itemJson = JSON.stringify(todayRestrictions);
 
