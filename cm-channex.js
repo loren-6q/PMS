@@ -607,6 +607,9 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
                 const todayRestrictions = {};
                 if (calculatedPrice !== null && !isNaN(calculatedPrice)) {
+    // Channex API accepts rates in minor units (satang); * 100 ensures price exceeds property floor
+    todayRestrictions.rate = Math.round(calculatedPrice * 100);
+} {
                     todayRestrictions.rate = calculatedPrice;
                 }
 
