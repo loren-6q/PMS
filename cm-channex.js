@@ -4,6 +4,48 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-channex.js
 // ==========================================================================
 
+// --- 0. FIRESTORE PRICING SERIALIZATION HELPERS ---
+window.unpackMasterPricing = (rawPricing) => {
+    if (typeof rawPricing === 'string') {
+        try {
+            return JSON.parse(rawPricing);
+        } catch (e) {
+            console.error("❌ Failed to parse stringified masterPricing:", e);
+            return { timeline: {} };
+        }
+    }
+    if (typeof rawPricing === 'object' && rawPricing !== null) {
+        return rawPricing;
+    }
+    return { timeline: {} };
+};
+
+window.savePricingToFirestore = async () => {
+    if (!window.cmFs || !window.db || !window.currentPropertyId) {
+        console.warn("⚠️ Cannot save pricing to Firestore: Database context missing.");
+        return;
+    }
+
+    try {
+        const { doc, updateDoc } = window.cmFs;
+        const ref = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId);
+
+        // Convert masterPricing to a clean JSON string to prevent Firestore index overflow
+        const cleanPricing = JSON.parse(JSON.stringify(window.masterPricing || { timeline: {} }));
+        const stringifiedPricing = JSON.stringify(cleanPricing);
+
+        await updateDoc(ref, {
+            masterPricing: stringifiedPricing,
+            lastUpdated: new Date().toISOString()
+        });
+
+        console.log("✅ masterPricing saved to Firestore as serialized JSON.");
+    } catch (err) {
+        console.error("❌ Error saving masterPricing to Firestore:", err);
+        throw new Error("Could not commit pricing to Firestore: " + err.message);
+    }
+};
+
 // --- 1. CHANNEX REST API CLIENT WITH EXPONENTIAL BACKOFF RETRY ---
 window.fetchWithRetry = async (url, options = {}, retries = 4, backoff = 1000) => {
     try {
@@ -446,6 +488,9 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
     }
 
     try {
+        // Automatically persist pricing to Firestore without hitting index limits
+        await window.savePricingToFirestore().catch(e => console.warn("Firestore pre-sync save warning:", e));
+
         let datesToProcess = [];
         if (mode === 'delta') {
             datesToProcess = Array.from(window.dirtyDates).sort();
@@ -511,7 +556,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             return Math.max(0, peakCap - occupied);
         };
 
-        // 1. AVAILABILITY: Group by Channex Room Type across all 500 days
+        // 1. AVAILABILITY: Group by Channex Room Type
         window.channexMap.forEach(rule => {
             if (!rule.channexId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -561,7 +606,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // 2. RATES & RESTRICTIONS: Group by Channex Rate Plan across all 500 days
+        // 2. RATES & RESTRICTIONS: Group by Channex Rate Plan
         (window.channexRateMap || []).forEach(rule => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -604,7 +649,6 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
                     calculatedPrice = window.roundCurrency(otaPriceOverride);
                 } else {
-                    // Safe base rate resolution: roomObj.std -> timeline default -> master base rates
                     let activeBasePrice = (rateSource === 'evt' && (window.eventDates || []).length > 0 && roomObj.fmp !== undefined && roomObj.fmp !== "")
                         ? roomObj.fmp
                         : (roomObj.std !== undefined && roomObj.std !== "" 
@@ -634,7 +678,6 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     }
                 }
 
-                // 3-Tier Priority Fallback: OTA Override -> Room Level -> Global Level
                 const getRestr = (f) => {
                     const otaVal = dayObj.otaOverrides?.[`${ratePlanId}_${f}`];
                     if (otaVal !== undefined && otaVal !== "") return otaVal;
