@@ -216,7 +216,6 @@ window.calculateLiveInventory = () => {
     window.liveInventory = {};
     window.viewDates = [];
 
-    // Automatically calculate max days that fit page width (35px per column, minus 184px frozen sidebar)
     const container = document.getElementById('grid-container');
     const availableWidth = container ? container.clientWidth - 185 : (window.innerWidth - 185);
     window.daysToRender = Math.max(30, Math.floor(availableWidth / 35));
@@ -304,6 +303,13 @@ window.calculateLiveInventory = () => {
 
             if (changesFound) {
                 window.markUnsavedChanges();
+                // AUTOMATED BACKGROUND SYNC: Trigger immediate update to Channex and Firestore without user interaction
+                if (window.pushToChannexAPI) {
+                    console.log("⚡ Auto-detected inventory change! Dispatching live sync to Channex & Firestore...");
+                    window.pushToChannexAPI(null, 'delta').catch(err => {
+                        console.error("⚠️ Background Channex sync error:", err);
+                    });
+                }
             }
         } catch (e) {
             console.error("Error parsing old inventory:", e);
@@ -537,7 +543,7 @@ window.renderGrid = () => {
     if (window.activeMetrics.has('max') && window.currentPlatformView !== 'hw') globalRows.push({ id: 'max', lbl: 'MAX NTS', isBool: false });
     if (window.activeMetrics.has('cta') && window.currentPlatformView !== 'hw') globalRows.push({ id: 'cta', lbl: 'CTA', isBool: true });
     if (window.activeMetrics.has('ctd') && window.currentPlatformView !== 'hw') globalRows.push({ id: 'ctd', lbl: 'CTD', isBool: true });
-    if (window.activeMetrics.has('stop')) globalRows.push({ id: 'stopSell', lbl: 'STOP SELL', isBool: true });
+    if (window.activeMetrics.has('stop') && window.currentPlatformView !== 'hw') globalRows.push({ id: 'stopSell', lbl: 'STOP SELL', isBool: true });
 
     if (globalRows.length > 0) {
         globalRows.forEach((rc, rIndex) => {
@@ -615,6 +621,10 @@ window.handleAvailEdit = (dateStr, room, value) => {
 
     window.updateDOMCell(dateStr, room);
     window.markUnsavedChanges();
+
+    if (window.pushToChannexAPI) {
+        window.pushToChannexAPI(null, 'delta').catch(err => console.error("⚠️ Background sync error:", err));
+    }
 };
 
 window.handleCellEdit = (dateStr, room, field, value) => {
@@ -674,6 +684,10 @@ window.handleCellEdit = (dateStr, room, field, value) => {
         }
     }
     window.markUnsavedChanges();
+
+    if (window.pushToChannexAPI) {
+        window.pushToChannexAPI(null, 'delta').catch(err => console.error("⚠️ Background sync error:", err));
+    }
 };
 
 window.handleOtaEdit = (dateStr, ratePlanId, parentRoom, ruleType, ruleVal, field, value, rateSource = 'std') => {
@@ -717,6 +731,10 @@ window.handleOtaEdit = (dateStr, ratePlanId, parentRoom, ruleType, ruleVal, fiel
 
     window.updateDOMCell(dateStr, parentRoom);
     window.markUnsavedChanges();
+
+    if (window.pushToChannexAPI) {
+        window.pushToChannexAPI(null, 'delta').catch(err => console.error("⚠️ Background sync error:", err));
+    }
 };
 
 window.shiftTape = (days) => {
@@ -919,12 +937,15 @@ window.applyBulkGrid = (isClear = false) => {
     window.renderGrid();
     window.markUnsavedChanges();
 
+    if (window.pushToChannexAPI) {
+        window.pushToChannexAPI(null, 'delta').catch(err => console.error("⚠️ Background sync error:", err));
+    }
+
     if (!isClear) {
         document.querySelectorAll('#qb-grid-body input:not([type="date"]):not([disabled])').forEach(i => i.value = "");
     }
 };
 
-// Re-render when viewport changes to maintain screen-fitting width
 let _resizeDebounce = null;
 window.addEventListener('resize', () => {
     clearTimeout(_resizeDebounce);
