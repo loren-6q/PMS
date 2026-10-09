@@ -26,10 +26,6 @@ export const auth = getAuth(app);
 export const db = getFirestore(app); 
 export const appId = 'hotel-pms-v1';
 
-// MASTER CHANNEX API KEY (Shared across all properties in your organization)
-// Paste your key inside the quotes below if you want it hardcoded permanently:
-window.MASTER_CHANNEX_API_KEY = window.MASTER_CHANNEX_API_KEY || "Geu79WLLz4n33mnSaefgIYEE8doU2o91wbMN0nk6eR4eE9QveLr0sYPPhFvRPjfT";
-
 // Expose Firestore services on window for other modules
 window.db = db;
 window.auth = auth;
@@ -404,7 +400,7 @@ window.updateSaveIndicator = () => {
     }
 };
 
-/* STREAMING_CHUNK:Loading property configuration with automatic API key inheritance... */
+// --- 7. LOAD PROPERTY CONFIG & PRICING ---
 window.loadPropertyConfig = async () => {
     try {
         const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
@@ -463,19 +459,7 @@ window.loadPropertyConfig = async () => {
             window.promoRules = [];
         }
 
-        // --- GLOBAL API KEY AUTO-INHERITANCE ---
-        let masterApiKey = window.MASTER_CHANNEX_API_KEY || localStorage.getItem('cm_master_channex_api_key') || '';
-        if (!masterApiKey) {
-            for (const p of window.windowPropertiesList) {
-                if (p.channex?.apiKey) {
-                    masterApiKey = p.channex.apiKey;
-                    localStorage.setItem('cm_master_channex_api_key', masterApiKey);
-                    break;
-                }
-            }
-        }
-
-        let apiKey = window.channexConfig?.apiKey || masterApiKey;
+        let apiKey = window.channexConfig?.apiKey || '';
         let chanPropId = window.channexConfig?.propId || '';
 
         if (!apiKey || !chanPropId) {
@@ -490,14 +474,8 @@ window.loadPropertyConfig = async () => {
         const propInput = document.getElementById('chan-prop-id');
         if (keyInput) keyInput.value = apiKey;
         if (propInput) propInput.value = chanPropId;
-        
-        if (apiKey) {
-            window.channexConfig.apiKey = apiKey;
-            localStorage.setItem('cm_master_channex_api_key', apiKey);
-        }
-        if (chanPropId) {
-            window.channexConfig.propId = chanPropId;
-            window.channexConfig.env = 'production';
+        if (apiKey && chanPropId) {
+            window.channexConfig = { apiKey, propId: chanPropId, env: 'production' };
         }
 
         window.roomTypes = [];
@@ -538,7 +516,19 @@ window.loadPropertyConfig = async () => {
                 const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', docId));
                 if (snap.exists()) {
                     const d = snap.data();
-                    if (!loadedTimeline && d.timeline && Object.keys(d.timeline).length > 0) loadedTimeline = d.timeline;
+                    if (!loadedTimeline && d.timeline) {
+                        // Safely unpack timeline whether stored as stringified JSON or legacy object
+                        if (typeof d.timeline === 'string') {
+                            try {
+                                loadedTimeline = JSON.parse(d.timeline);
+                            } catch(e) {
+                                console.error("Error parsing timeline JSON string:", e);
+                                loadedTimeline = {};
+                            }
+                        } else if (typeof d.timeline === 'object' && Object.keys(d.timeline).length > 0) {
+                            loadedTimeline = d.timeline;
+                        }
+                    }
                     if (!loadedRelationships && Array.isArray(d.relationships) && d.relationships.length > 0) loadedRelationships = d.relationships;
                     if (!loadedBaselines && d.autofillBaselines) loadedBaselines = d.autofillBaselines;
                     if ((!window.channexConfig?.apiKey || !window.channexConfig?.propId) && d.channex?.apiKey && d.channex?.propId) {
@@ -608,20 +598,25 @@ window.reloadSettingsConfig = async () => {
     window.customAlert("Inventory & Event settings refreshed from database!");
 };
 
-// --- 8. SAVE PRICING TO CLOUD ---
+// --- 8. SAVE PRICING TO CLOUD (STRINGIFIED SERIALIZATION TO BYPASS 40k INDEX LIMIT) ---
 window.savePricingToCloud = async (silent = false) => {
     if (!silent) window.showLoader('SAVING TO CLOUD...');
     try {
         if (window.readRelationshipsFromDOM) window.readRelationshipsFromDOM();
         const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
-        const payload = window.cleanPayload(JSON.parse(JSON.stringify(window.masterPricing)));
+
+        // Stringify timeline to prevent Firestore from generating 45,000+ key indexes
+        const payload = {
+            relationships: window.cleanPayload(window.masterPricing.relationships || []),
+            timeline: JSON.stringify(window.cleanPayload(window.masterPricing.timeline || {})),
+            updatedAt: new Date().toISOString()
+        };
+
         if (window.savedAutofillBaselines) {
-            payload.autofillBaselines = window.savedAutofillBaselines;
+            payload.autofillBaselines = window.cleanPayload(window.savedAutofillBaselines);
         }
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`), { 
-            ...payload, 
-            updatedAt: new Date().toISOString() 
-        }, { merge: true });
+
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`), payload, { merge: true });
         
         window.hasUnsavedChanges = false;
         window.updateSaveIndicator();
@@ -632,7 +627,7 @@ window.savePricingToCloud = async (silent = false) => {
         }
         return true;
     } catch (err) {
-        console.warn(err);
+        console.error("Firestore Save Error:", err);
         if (!silent) { 
             window.hideLoader(); 
             window.customAlert("Save Error:\n\nCould not write to Firebase: " + err.message); 
