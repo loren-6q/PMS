@@ -392,7 +392,7 @@ window.renderChannexRateMapping = (channexRates = null) => {
                     </div>
                     <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
                     <select class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none">
-                        ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
+                        ${pmsOptions.replace(`value="\${selectedVal}"`, `value="\${selectedVal}" selected`)}
                     </select>
                     <select class="input-base !py-0.5 !text-[10px] !w-20 cursor-pointer chan-rate-source bg-slate-50 border-amber-300 text-amber-900 shadow-none font-black text-center" title="Base rate source">
                         <option value="std" ${rateSource === 'evt' ? '' : 'selected'}>STD Rate</option>
