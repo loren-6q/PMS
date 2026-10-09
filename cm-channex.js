@@ -4,55 +4,13 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-channex.js
 // ==========================================================================
 
-// --- 0. FIRESTORE PRICING SERIALIZATION HELPERS ---
-window.unpackMasterPricing = (rawPricing) => {
-    if (typeof rawPricing === 'string') {
-        try {
-            return JSON.parse(rawPricing);
-        } catch (e) {
-            console.error("❌ Failed to parse stringified masterPricing:", e);
-            return { timeline: {} };
-        }
-    }
-    if (typeof rawPricing === 'object' && rawPricing !== null) {
-        return rawPricing;
-    }
-    return { timeline: {} };
-};
-
-window.savePricingToFirestore = async () => {
-    if (!window.cmFs || !window.db || !window.currentPropertyId) {
-        console.warn("⚠️ Cannot save pricing to Firestore: Database context missing.");
-        return;
-    }
-
-    try {
-        const { doc, updateDoc } = window.cmFs;
-        const ref = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId);
-
-        // Convert masterPricing to a clean JSON string to prevent Firestore index overflow
-        const cleanPricing = JSON.parse(JSON.stringify(window.masterPricing || { timeline: {} }));
-        const stringifiedPricing = JSON.stringify(cleanPricing);
-
-        await updateDoc(ref, {
-            masterPricing: stringifiedPricing,
-            lastUpdated: new Date().toISOString()
-        });
-
-        console.log("✅ masterPricing saved to Firestore as serialized JSON.");
-    } catch (err) {
-        console.error("❌ Error saving masterPricing to Firestore:", err);
-        throw new Error("Could not commit pricing to Firestore: " + err.message);
-    }
-};
-
 // --- 1. CHANNEX REST API CLIENT WITH EXPONENTIAL BACKOFF RETRY ---
 window.fetchWithRetry = async (url, options = {}, retries = 4, backoff = 1000) => {
     try {
         const res = await fetch(url, options);
         if (res.status === 429) {
             const retryAfter = res.headers.get('Retry-After');
-            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : backoff;
+            const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : backoff;
             console.warn(`⏳ Channex Rate limit (429). Retrying in ${waitTime}ms...`);
             await new Promise(r => setTimeout(r, waitTime));
             return window.fetchWithRetry(url, options, retries - 1, backoff * 2);
@@ -392,7 +350,7 @@ window.renderChannexRateMapping = (channexRates = null) => {
                     </div>
                     <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
                     <select class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none">
-                        ${pmsOptions.replace(`value="\${selectedVal}"`, `value="\${selectedVal}" selected`)}
+                        ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
                     </select>
                     <select class="input-base !py-0.5 !text-[10px] !w-20 cursor-pointer chan-rate-source bg-slate-50 border-amber-300 text-amber-900 shadow-none font-black text-center" title="Base rate source">
                         <option value="std" ${rateSource === 'evt' ? '' : 'selected'}>STD Rate</option>
@@ -488,9 +446,6 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
     }
 
     try {
-        // Automatically persist pricing to Firestore without hitting index limits
-        await window.savePricingToFirestore().catch(e => console.warn("Firestore pre-sync save warning:", e));
-
         let datesToProcess = [];
         if (mode === 'delta') {
             datesToProcess = Array.from(window.dirtyDates).sort();
@@ -527,28 +482,48 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             return 1;
         };
 
-        // Helper: Calculate true net availability (Capacity - Active Bookings)
+        // Helper: Calculate true net availability (Capacity - Active Bookings from staff list)
         const getNetAvailabilityForDate = (pmsCat, dStr, peakCap) => {
             if (window.liveInventory && window.liveInventory[dStr] && typeof window.liveInventory[dStr][pmsCat] === 'number') {
                 return window.liveInventory[dStr][pmsCat];
             }
 
-            const bookingsList = window.bookings || window.reservations || window.masterPricing?.bookings || [];
+            const staffList = (window.staff && window.staff.length > 0)
+                ? window.staff
+                : (window.bookings || window.reservations || window.masterPricing?.bookings || []);
+
             let occupied = 0;
+            const curProp = window.currentPropertyId;
 
-            if (Array.isArray(bookingsList)) {
-                for (let i = 0; i < bookingsList.length; i++) {
-                    const b = bookingsList[i];
-                    if (!b || (b.status && b.status.toLowerCase() === 'cancelled')) continue;
+            if (Array.isArray(staffList)) {
+                for (let i = 0; i < staffList.length; i++) {
+                    const s = staffList[i];
+                    if (!s) continue;
+                    
+                    const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+                    if (sProp && curProp && sProp !== curProp) continue;
 
-                    const catMatch = b.category === pmsCat || b.roomType === pmsCat || b.pmsCategory === pmsCat;
-                    if (!catMatch) continue;
+                    const status = (s.status || '').toLowerCase();
+                    if (['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(status)) continue;
 
-                    const cIn = b.checkIn || b.start || b.startDate;
-                    const cOut = b.checkOut || b.end || b.endDate;
+                    const rList = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
+                    const isUnassigned = rList.length === 0 || rList[0] === "";
+                    if (status === 'special' && isUnassigned) continue;
+
+                    const catMatch = (s.bookedType && (s.bookedType === pmsCat || s.bookedType.includes(pmsCat) || pmsCat.includes(s.bookedType)))
+                        || (s.category === pmsCat || s.roomType === pmsCat);
+
+                    if (!catMatch && isUnassigned) continue;
+
+                    const cIn = s.checkIn || s.start || s.startDate;
+                    const cOut = s.checkOut || s.end || s.endDate;
 
                     if (cIn && cOut && dStr >= cIn && dStr < cOut) {
-                        occupied += parseInt(b.bedCount || b.roomsCount || b.quantity || b.numBeds || 1, 10);
+                        if (pmsCat.toLowerCase().includes('dorm')) {
+                            occupied += parseInt(s.pax || s.bedCount || 1, 10);
+                        } else {
+                            occupied += Math.max(1, rList.length);
+                        }
                     }
                 }
             }
@@ -556,7 +531,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             return Math.max(0, peakCap - occupied);
         };
 
-        // 1. AVAILABILITY: Group by Channex Room Type
+        // 1. AVAILABILITY: Group by Channex Room Type across all dates
         window.channexMap.forEach(rule => {
             if (!rule.channexId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -606,7 +581,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // 2. RATES & RESTRICTIONS: Group by Channex Rate Plan
+        // 2. RATES & RESTRICTIONS: Group by Channex Rate Plan across all dates
         (window.channexRateMap || []).forEach(rule => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -692,13 +667,13 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 }
 
                 const minS = getRestr('min');
-                if (minS !== null && minS !== "") todayRestrictions.min_stay_arrival = parseInt(minS);
+                if (minS !== null && minS !== "") todayRestrictions.min_stay_arrival = parseInt(minS, 10);
 
                 const minArr = getRestr('min_arr');
-                if (minArr !== null && minArr !== "") todayRestrictions.min_stay_through = parseInt(minArr);
+                if (minArr !== null && minArr !== "") todayRestrictions.min_stay_through = parseInt(minArr, 10);
 
                 const maxS = getRestr('max');
-                if (maxS !== null && maxS !== "") todayRestrictions.max_stay = parseInt(maxS);
+                if (maxS !== null && maxS !== "") todayRestrictions.max_stay = parseInt(maxS, 10);
 
                 const cta = getRestr('cta');
                 if (cta !== null && cta !== "") todayRestrictions.closed_to_arrival = !!cta;
