@@ -121,7 +121,116 @@
                 <div id="calendar-header-days" class="timeline-grid sticky top-[26px] z-[50] bg-slate-100 shadow-sm border-b border-slate-400 h-[28px] box-border"></div>
                 <div id="timeline-body" class="relative pb-2"></div>
             </div>
-            <footer id="calendar-legend" class="mt-1 bg-white p-1.5 sm:rounded-lg border border-slate-200 flex flex-col md:flex-row flex-wrap shrink-0 items-center justify-center gap-x-4 gap-y-2 text-center text-[10px] md:text-[11px]"></footer>
+            <footer id="calendar-legend" class="mt-1 bg-white p-1.5 sm:rounded-lg border border-slate-200 flex flex-col md:flex-row flex-wrap shrink-0 items-center justify-center gap-x-4 gap-y-2 text-center text-[10px] md:text-[11px]">
+
+               <div id="calendar-view" class="flex-1 flex flex-col min-h-0 unselectable">
+            <div id="calendar-scroll-container" class="flex-1 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-auto relative overscroll-none">
+                <div id="calendar-header-months" class="timeline-grid sticky top-0 z-[60] bg-slate-800 shadow-sm border-b border-slate-700 h-[26px] box-border"></div>
+                <div id="calendar-header-days" class="timeline-grid sticky top-[26px] z-[50] bg-slate-100 shadow-sm border-b border-slate-400 h-[28px] box-border"></div>
+                <div id="timeline-body" class="relative pb-2"></div>
+            </div>
+            <footer id="calendar-legend" class="mt-1 bg-white p-2 sm:rounded-lg border border-slate-200 flex flex-col lg:flex-row flex-wrap shrink-0 items-center justify-between gap-x-4 gap-y-2 text-center text-[10px] md:text-[11px] select-none shadow-xs">
+                <!-- 1. The 11 Real Status Cycles from window.STATUS_CYCLE -->
+                <div class="flex items-center gap-1.5 flex-wrap justify-center">
+                    <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-1">Status:</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs" style="background:#ec4899; color:#fff;">NEW</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs" style="background:#7fc6f5; color:#1e293b;">FUTURE</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs" style="background:#dcfce7; color:#14532d;">HERE</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs" style="background:#aba39d; color:#1e293b;">LEFT</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs line-through" style="background:#e5e7eb; color:#1e293b;">CANCELLED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs" style="background:#e5e7eb; color:#64748b;">NO-SHOW</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs" style="background:#fef08a; color:#1e293b;">SPECIAL</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs" style="background:#475569; color:#fff;">BLOCKED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs" style="background:#0f172a; color:#fbbf24;">CHARGED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs" style="background:#fbcfe8; color:#831843;">VOL</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs" style="background:#f3e8ff; color:#581c87;">UNCONFIRMED</span>
+                </div>
+
+                <!-- 2. The Real SVGS Indicators from window.SVGS and Typography Flags -->
+                <div id="calendar-legend-icons" class="flex items-center gap-3 text-[10px] font-bold text-slate-600 flex-wrap justify-center">
+                    <!-- Upgrades -->
+                    <div class="flex items-center gap-1" title="Free Room Upgrade">
+                        <span id="leg-svg-upFree" class="w-3.5 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Free Up</span>
+                    </div>
+                    <div class="flex items-center gap-1" title="Paid Room Upgrade">
+                        <span id="leg-svg-upPaid" class="w-3.5 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Paid Up</span>
+                    </div>
+
+                    <!-- Stay Modifications -->
+                    <div class="flex items-center gap-1" title="Stay Extended">
+                        <span id="leg-svg-ext" class="w-3.5 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Ext</span>
+                    </div>
+                    <div class="flex items-center gap-1" title="Linked / Split Reservation Leg">
+                        <span id="leg-svg-link" class="w-3.5 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Linked</span>
+                    </div>
+
+                    <!-- Email Lifecycle -->
+                    <div class="flex items-center gap-1" title="Confirmation Email Sent">
+                        <span id="leg-svg-mailConf" class="w-3.5 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Conf Email</span>
+                    </div>
+                    <div class="flex items-center gap-1" title="Pre/Post Arrival Email Sent">
+                        <span id="leg-svg-mailPre" class="w-3.5 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Pre/Post Sent</span>
+                    </div>
+                    <div class="flex items-center gap-1" title="Pre/Post Arrival Confirmed by Guest">
+                        <span id="leg-svg-mailPreConf" class="w-3.5 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Pre/Post Conf</span>
+                    </div>
+                    <div class="flex items-center gap-1" title="Special Instructions Email Sent">
+                        <span id="leg-svg-mailSpec" class="w-3.5 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Special Mail</span>
+                    </div>
+
+                    <!-- Guest Feedback -->
+                    <div class="flex items-center gap-1" title="Positive Guest Feedback">
+                        <span id="leg-svg-fbGood" class="w-3.5 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Good</span>
+                    </div>
+                    <div class="flex items-center gap-1" title="Negative Feedback / Flagged">
+                        <span id="leg-svg-fbBad" class="w-3.5 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Warn</span>
+                    </div>
+
+                    <!-- Bad CC & Refundability Typography -->
+                    <div class="flex items-center gap-1" title="Declined / Bad Credit Card">
+                        <span class="w-3.5 h-3.5 bg-red-600 rounded text-white text-[9px] font-black flex items-center justify-center leading-none">X</span>
+                        <span class="text-red-600 font-black">Bad CC</span>
+                    </div>
+                    <div class="flex items-center gap-1 pl-1 border-l border-slate-300" title="Italic = Refundable (>7 days out), Bold = Non-Refundable">
+                        <span class="italic font-black text-slate-800">Smith</span>
+                        <span class="text-slate-400 font-normal">/</span>
+                        <span class="font-bold text-slate-800">Jones</span>
+                        <span class="text-[9px] text-slate-500 font-bold">(Ref / Non-Ref)</span>
+                    </div>
+                </div>
+
+                <!-- Self-Mount Script: Pulls live SVG strings directly from window.SVGS -->
+                <script>
+                    (function initCalendarLegendSvgs() {
+                        const mountSvgs = () => {
+                            if (!window.SVGS) return false;
+                            const keys = ['upFree', 'upPaid', 'ext', 'link', 'mailConf', 'mailPre', 'mailPreConf', 'mailSpec', 'fbGood', 'fbBad'];
+                            keys.forEach(k => {
+                                const el = document.getElementById('leg-svg-' + k);
+                                if (el && window.SVGS[k]) {
+                                    el.innerHTML = window.SVGS[k];
+                                }
+                            });
+                            return true;
+                        };
+                        if (!mountSvgs()) {
+                            window.addEventListener('DOMContentLoaded', mountSvgs);
+                            setTimeout(mountSvgs, 500);
+                            setTimeout(mountSvgs, 1500);
+                        }
+                    })();
+                </script>
+            </footer>
         </div>
 
         <div id="database-view" class="flex-1 flex flex-col min-h-0 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-hidden hidden">
