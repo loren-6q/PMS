@@ -582,6 +582,9 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
         });
 
         // 2. RATES & RESTRICTIONS: Group by Channex Rate Plan across all dates
+        // STAMPING RULES:
+        // - Global restrictions stamp down onto EVERY Standard rate plan (Standard Ref & Standard Non-Ref).
+        // - Event cascading restrictions stamp specifically down onto BOTH Event rate plans (Event Ref & Event Non-Ref).
         (window.channexRateMap || []).forEach(rule => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -589,6 +592,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             const rType = rule.ruleType || "=";
             const rVal = rule.ruleVal !== undefined ? rule.ruleVal : 0;
             const rateSource = rule.rateSource || "std";
+            const isEvtRate = (rateSource === 'evt') || /evt|fmp|event|pkg/i.test(rule.ratePlanTitle || '');
 
             let rangeStart = null;
             let currentItem = null;
@@ -599,32 +603,13 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 const roomObj = dayObj[pmsCat] || {};
                 const globObj = dayObj['GLOBAL'] || {};
 
-                const dirtyFieldsSet = window.dirtyFields?.[dStr]?.[ratePlanId];
-
-                if (mode === 'delta') {
-                    if (!dirtyFieldsSet || dirtyFieldsSet.size === 0) {
-                        if (rangeStart !== null && currentItem !== null && Object.keys(currentItem).length > 0) {
-                            restrPayload.push({
-                                property_id: propId,
-                                rate_plan_id: ratePlanId,
-                                date_from: rangeStart,
-                                date_to: datesToProcess[i - 1],
-                                ...currentItem
-                            });
-                            rangeStart = null;
-                            currentItem = null;
-                        }
-                        continue;
-                    }
-                }
-
                 let calculatedPrice = null;
                 const otaPriceOverride = dayObj.otaOverrides?.[ratePlanId];
 
                 if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
                     calculatedPrice = window.roundCurrency(otaPriceOverride);
                 } else {
-                    let activeBasePrice = (rateSource === 'evt' && (window.eventDates || []).length > 0 && roomObj.fmp !== undefined && roomObj.fmp !== "")
+                    let activeBasePrice = (isEvtRate && (window.eventDates || []).length > 0 && roomObj.fmp !== undefined && roomObj.fmp !== "")
                         ? roomObj.fmp
                         : (roomObj.std !== undefined && roomObj.std !== "" 
                             ? roomObj.std 
@@ -653,9 +638,19 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     }
                 }
 
+                // DUAL-CURVE RESTRICTION RESOLUTION:
+                // 1. Direct plan override (e.g. set by Event Autofill on this plan ID)
+                // 2. If Event Plan: reads dayObj.evtRestrictions (cascading minimums)
+                // 3. Category-level roomObj restriction
+                // 4. Global restriction: stamps down onto all standard plans (and event plans if no event restriction exists)
                 const getRestr = (f) => {
                     const otaVal = dayObj.otaOverrides?.[`${ratePlanId}_${f}`];
                     if (otaVal !== undefined && otaVal !== "") return otaVal;
+
+                    if (isEvtRate && dayObj.evtRestrictions && dayObj.evtRestrictions[f] !== undefined && dayObj.evtRestrictions[f] !== "") {
+                        return dayObj.evtRestrictions[f];
+                    }
+
                     if (roomObj[f] !== undefined && roomObj[f] !== "") return roomObj[f];
                     if (globObj[f] !== undefined && globObj[f] !== "") return globObj[f];
                     return null;
