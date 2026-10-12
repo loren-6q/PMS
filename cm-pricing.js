@@ -530,6 +530,7 @@ window.clearOverrides = () => {
                 if (window.masterPricing.timeline[dateStr][r]) window.masterPricing.timeline[dateStr][r].isOverride = {}; 
             });
             if (window.masterPricing.timeline[dateStr]['GLOBAL']) window.masterPricing.timeline[dateStr]['GLOBAL'].isOverride = {};
+            delete window.masterPricing.timeline[dateStr].evtRestrictions;
             window.masterPricing.timeline[dateStr].otaOverrides = {};
         }
     }
@@ -591,8 +592,8 @@ window.runAutomator = () => {
         if (hasEvents) {
             if (Math.abs(minDiff) <= 6 && minDiff !== 0) { 
                 fmpP = p_pkg; fmpD = d_pkg; 
-            } else if (Math.abs(minDiff) > 6) {
-                fmpP = ""; fmpD = "";
+            } else if (Math.abs(minDiff) > 6) { 
+                fmpP = ""; fmpD = ""; 
             }
             
             if (minDiff === -2) { stdP = p_m2; stdD = d_m2; }
@@ -607,29 +608,41 @@ window.runAutomator = () => {
 
         window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
         
-        // Apply restrictions ONLY if enabled by the user
+        // ISOLATED EVENT RESTRICTIONS:
+        // Do NOT contaminate GLOBAL! Event cascading stay rules target ONLY both Event rate plans (Refundable & Non-Refundable).
         if (hasEvents && enableRestr) {
             const restrConfig = restrMap[String(minDiff)];
             if (restrConfig) {
-                window.masterPricing.timeline[dateStr]['GLOBAL'] = window.masterPricing.timeline[dateStr]['GLOBAL'] || { isOverride: {} };
-                const curG = window.masterPricing.timeline[dateStr]['GLOBAL'];
+                // Record the event restriction isolated on this date
+                window.masterPricing.timeline[dateStr].evtRestrictions = {
+                    min: restrConfig.min,
+                    min_arr: restrConfig.min_arr,
+                    cta: restrConfig.cta
+                };
 
-                if (!curG.isOverride.min && restrConfig.min !== "") curG.min = restrConfig.min;
-                if (!curG.isOverride.min_arr && restrConfig.min_arr !== "") curG.min_arr = restrConfig.min_arr;
-                if (!curG.isOverride.cta) curG.cta = restrConfig.cta;
-
+                // Explicitly stamp onto BOTH Event Rate Plans (Event Refundable & Event Non-Refundable)
                 (window.channexRateMap || []).forEach(rate => {
-                    window.dirtyFields = window.dirtyFields || {};
-                    window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
-                    window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
-                    window.dirtyFields[dateStr][rate.ratePlanId].add('min');
-                    window.dirtyFields[dateStr][rate.ratePlanId].add('min_arr');
-                    window.dirtyFields[dateStr][rate.ratePlanId].add('cta');
-                    window.dirtyFields[dateStr][rate.ratePlanId].add('GLOBAL_min');
-                    window.dirtyFields[dateStr][rate.ratePlanId].add('GLOBAL_min_arr');
-                    window.dirtyFields[dateStr][rate.ratePlanId].add('GLOBAL_cta');
+                    const isEvtRate = (rate.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(rate.ratePlanTitle || '');
+                    if (isEvtRate) {
+                        window.masterPricing.timeline[dateStr].otaOverrides = window.masterPricing.timeline[dateStr].otaOverrides || {};
+                        const otaO = window.masterPricing.timeline[dateStr].otaOverrides;
+                        if (restrConfig.min !== "") otaO[`${rate.ratePlanId}_min`] = restrConfig.min;
+                        if (restrConfig.min_arr !== "") otaO[`${rate.ratePlanId}_min_arr`] = restrConfig.min_arr;
+                        otaO[`${rate.ratePlanId}_cta`] = !!restrConfig.cta;
+
+                        window.dirtyFields = window.dirtyFields || {};
+                        window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
+                        window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
+                        window.dirtyFields[dateStr][rate.ratePlanId].add('min');
+                        window.dirtyFields[dateStr][rate.ratePlanId].add('min_arr');
+                        window.dirtyFields[dateStr][rate.ratePlanId].add('cta');
+                    }
                 });
+            } else {
+                delete window.masterPricing.timeline[dateStr].evtRestrictions;
             }
+        } else {
+            delete window.masterPricing.timeline[dateStr].evtRestrictions;
         }
         
         if (anchorP) {
