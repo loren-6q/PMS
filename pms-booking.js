@@ -1165,7 +1165,7 @@
                     method: r.querySelector('.pay-method')?.value || 'cash'
                 })),
                 extraCharges: window.activeExtraCharges || [],
-                emailConfirm: parseInt($('email-confirm-btn')?.dataset?.state || 0) === 1,
+                emailConfirm: parseInt($('email-confirm-btn')?.dataset?.state || 0, 10),
                 emailPrePost: parseInt($('email-prepost-btn')?.dataset?.state || 0) > 0 ? (parseInt($('email-prepost-btn')?.dataset?.state) === 1 ? 'sent' : 'confirmed') : false,
                 emailSpecial: parseInt($('email-special-btn')?.dataset?.state || 0) === 1,
                 refundability: parseInt($('refund-btn')?.dataset?.state || 0) === 1 ? 'non-ref' : (parseInt($('refund-btn')?.dataset?.state || 0) === 2 ? 'ref' : 'unknown'),
