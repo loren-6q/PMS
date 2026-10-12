@@ -513,7 +513,10 @@
                     'direct': { bg: 'bg-emerald-500', text: 'D' },
                     'expedia': { bg: 'bg-[#facc15]', text: '<span class="text-[#003580]">E</span>' },
                     'ctrip': { bg: 'bg-[#3b82f6]', text: 'T' }
+                    'walkin': { bg: 'bg-slate-600', text: 'W' },
+                    'walk-in': { bg: 'bg-slate-600', text: 'W' }
                 };
+                
                 const src = srcC[s.source] || { bg: 'bg-slate-700', text: '?' };
                 const bar = document.createElement('div');
                 bar.className = `unselectable staff-bar status-${s.status} ${bSty} ${s.linkedId ? 'linked-' + s.linkedId : ''}`;
