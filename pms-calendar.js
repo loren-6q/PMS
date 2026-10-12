@@ -4,7 +4,8 @@
 // ==========================================================================
 
 (function() {
-    const $ = id => document.getElementById(id);     const $$ = s => document.querySelectorAll(s);
+    const $ = id => document.getElementById(id);
+    const $$ = s => document.querySelectorAll(s);
 
     const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
@@ -14,6 +15,7 @@
         ext: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M4 12h12v-5l8 8-8 8v-5H4z" fill="#3b82f6" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
         link: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" fill="none" stroke="#64748b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
         mailConf: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><rect x="1" y="4" width="22" height="16" rx="2" fill="#fff" stroke="#000" stroke-width="2"/><path d="M1 6l11 8 11-8" fill="none" stroke="#000" stroke-width="2"/></svg>`,
+        mailNotFmp: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><rect x="1" y="4" width="22" height="16" rx="2" fill="#94a3b8" stroke="#334155" stroke-width="2"/><path d="M1 6l11 8 11-8" fill="none" stroke="#334155" stroke-width="2"/></svg>`,
         mailPre: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><rect x="1" y="4" width="22" height="16" rx="2" fill="#f87171" stroke="#000" stroke-width="2"/><path d="M1 6l11 8 11-8" fill="none" stroke="#000" stroke-width="2"/></svg>`,
         mailPreConf: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><rect x="1" y="4" width="22" height="16" rx="2" fill="#4ade80" stroke="#000" stroke-width="2"/><path d="M1 6l11 8 11-8" fill="none" stroke="#000" stroke-width="2"/></svg>`,
         mailSpec: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><rect x="1" y="4" width="22" height="16" rx="2" fill="#facc15" stroke="#000" stroke-width="2"/><path d="M1 6l11 8 11-8" fill="none" stroke="#000" stroke-width="2"/></svg>`,
@@ -93,7 +95,7 @@
     window.handleSearch = v => {
         window.searchTerm = v.trim().toUpperCase();
         window.searchMatchIndex = 0;
-        const jb = $('search-jump-btn'), mc =$('match-counter');
+        const jb = $('search-jump-btn'), mc = $('match-counter');
         const stList = getStaff();
         const term = window.searchTerm;
         const curProp = getPropId();
@@ -257,7 +259,7 @@
             jm.value = `${vS.getFullYear()}-${String(vS.getMonth() + 1).padStart(2, '0')}`;
         }
 
-        const mGrid = $('calendar-header-months'), dGrid = $('calendar-header-days'), body =$('timeline-body');
+        const mGrid = $('calendar-header-months'), dGrid = $('calendar-header-days'), body = $('timeline-body');
         if (!mGrid || !dGrid || !body) return;
 
         mGrid.innerHTML = `<div class="border-r border-slate-700 flex items-center justify-center h-full sticky left-0 z-[60] bg-slate-800 w-[var(--sidebar-w)]"></div>`;
@@ -512,9 +514,9 @@
                     'airbnb': { bg: 'bg-[#FF5A5F]', text: 'A' },
                     'direct': { bg: 'bg-emerald-500', text: 'D' },
                     'expedia': { bg: 'bg-[#facc15]', text: '<span class="text-[#003580]">E</span>' },
-                    'ctrip': { bg: 'bg-[#3b82f6]', text: 'T' }
-                    'walkin': { bg: 'bg-slate-600', text: 'W' },
-                    'walk-in': { bg: 'bg-slate-600', text: 'W' }
+                    'ctrip': { bg: 'bg-[#3b82f6]', text: 'T' },
+                    'walk-in': { bg: 'bg-slate-600', text: 'W' },
+                    'walkin': { bg: 'bg-slate-600', text: 'W' }
                 };
                 
                 const src = srcC[s.source] || { bg: 'bg-slate-700', text: '?' };
@@ -549,7 +551,8 @@
                 if (s.upgrade === 'free') tags.push('Free Upgrade');
                 if (s.upgrade === 'paid') tags.push('Paid Upgrade');
                 if (s.extended) tags.push('Extended');
-                if (s.emailConfirm) tags.push('Conf Sent');
+                if (s.emailConfirm === 2 || s.emailConfirm === 'not_fmp') tags.push('Conf Sent (Not FMP)');
+                else if (s.emailConfirm) tags.push('Conf Sent');
                 if (s.emailPrePost) tags.push(`Pre/Post ${s.emailPrePost}`);
                 if (s.emailSpecial) tags.push('Special Sent');
                 if (s.linkedId) tags.push(`Linked: ${s.linkedId}`);
@@ -570,7 +573,22 @@
                     tt.style.top = (e.clientY + 165 > window.innerHeight ? e.clientY - 165 : e.clientY + 15) + 'px';
                 };
                 bar.onmouseleave = () => {
-                    if (s.linkedId) $$('.linked-' + s.linkedId).forEach(el => el.classList.remove('link-glow'));                     if (tt) tt.style.display = 'none';                 };                 bar.onclick = e => {                     e.stopPropagation();                     if (tt) tt.style.display = 'none';                     if (window.editStaff) window.editStaff(s.id);                 };                 row.appendChild(bar);             });             body.appendChild(row);         });          if (window.masterState && window.masterState !== 0) {             const g = new Set();             $$('.group-header').forEach(el => { if (el.dataset.group) g.add(el.dataset.group); });
+                    if (s.linkedId) $$('.linked-' + s.linkedId).forEach(el => el.classList.remove('link-glow'));
+                    if (tt) tt.style.display = 'none';
+                };
+                bar.onclick = e => {
+                    e.stopPropagation();
+                    if (tt) tt.style.display = 'none';
+                    if (window.editStaff) window.editStaff(s.id);
+                };
+                row.appendChild(bar);
+            });
+            body.appendChild(row);
+        });
+
+        if (window.masterState && window.masterState !== 0) {
+            const g = new Set();
+            $$('.group-header').forEach(el => { if (el.dataset.group) g.add(el.dataset.group); });
             g.forEach(grp => window.toggleGroup(grp, window.masterState));
         }
 
