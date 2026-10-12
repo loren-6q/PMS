@@ -539,6 +539,7 @@
                 if (s.emailSpecial) bHtml += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${window.SVGS.mailSpec}</div>`;
                 else if (s.emailPrePost === 'confirmed') bHtml += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${window.SVGS.mailPreConf}</div>`;
                 else if (s.emailPrePost === 'sent' || s.emailPrePost === true) bHtml += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${window.SVGS.mailPre}</div>`;
+                else if (s.emailConfirm === 2 || s.emailConfirm === 'not_fmp') bHtml += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${window.SVGS.mailNotFmp}</div>`;
                 else if (s.emailConfirm) bHtml += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${window.SVGS.mailConf}</div>`;
                 bHtml += `<div class="ml-1 ${src.bg} text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">${src.text}</div><div class="w-2 shrink-0"></div></div>`;
                 bar.innerHTML = bHtml;
