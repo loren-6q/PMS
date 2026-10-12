@@ -259,7 +259,9 @@
             jm.value = `${vS.getFullYear()}-${String(vS.getMonth() + 1).padStart(2, '0')}`;
         }
 
-        const mGrid = $('calendar-header-months'), dGrid = $('calendar-header-days'), body = $('timeline-body');
+        const mGrid = $('calendar-header-months');
+        const dGrid = $('calendar-header-days');
+        const body = $('timeline-body');
         if (!mGrid || !dGrid || !body) return;
 
         mGrid.innerHTML = `<div class="border-r border-slate-700 flex items-center justify-center h-full sticky left-0 z-[60] bg-slate-800 w-[var(--sidebar-w)]"></div>`;
@@ -267,14 +269,21 @@
         body.innerHTML = '';
 
         const days = Array.from({ length: dShow }, (_, i) => new Date(vS.getFullYear(), vS.getMonth(), vS.getDate() + i, 12, 0, 0));
-        let cMon = -1, cSpan = 0;
+        let cMon = -1;
+        let cSpan = 0;
         days.forEach((d, i) => {
             if (d.getMonth() !== cMon) {
-                if (cMon !== -1) mGrid.innerHTML += `<div style="grid-column: span ${cSpan}" class="unselectable flex items-center justify-center month-divider py-1 border-b border-slate-700 text-white text-[11px] font-bold uppercase tracking-widest">${mNames[cMon]} ${days[i - 1].getFullYear()}</div>`;
+                if (cMon !== -1) {
+                    mGrid.innerHTML += `<div style="grid-column: span ${cSpan}" class="unselectable flex items-center justify-center month-divider py-1 border-b border-slate-700 text-white text-[11px] font-bold uppercase tracking-widest">${mNames[cMon]} ${days[i - 1].getFullYear()}</div>`;
+                }
                 cMon = d.getMonth();
                 cSpan = 1;
-            } else cSpan++;
-            if (i === days.length - 1) mGrid.innerHTML += `<div style="grid-column: span ${cSpan}" class="unselectable flex items-center justify-center month-divider py-1 border-b border-slate-700 text-white text-[11px] font-bold uppercase tracking-widest">${mNames[cMon]} ${d.getFullYear()}</div>`;
+            } else {
+                cSpan++;
+            }
+            if (i === days.length - 1) {
+                mGrid.innerHTML += `<div style="grid-column: span ${cSpan}" class="unselectable flex items-center justify-center month-divider py-1 border-b border-slate-700 text-white text-[11px] font-bold uppercase tracking-widest">${mNames[cMon]} ${d.getFullYear()}</div>`;
+            }
         });
 
         const getYmd = window.getLocalYMD || (d => new Date(d).toISOString().split('T')[0]);
@@ -304,7 +313,8 @@
 
         const vsUTC = parseYMD(getYmd(vS));
         const veUTC = vsUTC + dShow * 86400000;
-        const tRows = [], uConf = [];
+        const tRows = [];
+        const uConf = [];
 
         actStaff.forEach(s => {
             if (parseYMD(s.checkIn) > veUTC || parseYMD(s.checkOut) < vsUTC) return;
@@ -339,7 +349,9 @@
 
         hotelRooms.forEach((r, idx, arr) => {
             if (!r.type || !r.id) return;
-            if (r.type !== (idx > 0 && arr[idx - 1] ? arr[idx - 1].type : null)) tRows.push({ isDivider: true, label: r.type });
+            if (r.type !== (idx > 0 && arr[idx - 1] ? arr[idx - 1].type : null)) {
+                tRows.push({ isDivider: true, label: r.type });
+            }
 
             const hasDash = r.id.includes('-');
             if (hasDash) {
@@ -385,7 +397,8 @@
 
                 if (rD.isUnconfirmedZone) {
                     hRow.innerHTML = `<div class="unassigned-header bg-amber-200 hover:bg-amber-300 text-slate-800 p-0.5 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-md" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span>${rD.label}</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}" style="${isDCol ? 'transform: rotate(180deg);' : ''}"></i></div>`;
-                    return body.appendChild(hRow);
+                    body.appendChild(hRow);
+                    return;
                 } else {
                     hRow.innerHTML = `<div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-[var(--sidebar-w)]" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span class="truncate pr-1">${rD.label}</span><div class="flex items-center gap-1 shrink-0"><span id="state-${cGrp}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div></div>`;
                     body.appendChild(hRow);
@@ -421,7 +434,8 @@
                         cHtml += `<div class="flex items-center justify-center border-r border-slate-800 text-[10px] font-black ${cCls}">${av}</div>`;
                     }
                     aRow.innerHTML = cHtml;
-                    return body.appendChild(aRow);
+                    body.appendChild(aRow);
+                    return;
                 }
             }
 
@@ -435,7 +449,8 @@
                             ${getFloorIcon(rD.floor)}
                         </div>
                     </div>`;
-                return body.appendChild(sRow);
+                body.appendChild(sRow);
+                return;
             }
 
             const row = document.createElement('div');
@@ -487,11 +502,13 @@
             }
 
             rD.bookings.forEach(s => {
-                const eS = getDayIndex(s.checkIn) + 0.3, eE = getDayIndex(s.checkOut) + 0.25;
+                const eS = getDayIndex(s.checkIn) + 0.3;
+                const eE = getDayIndex(s.checkOut) + 0.25;
                 if (eS >= dShow || eE <= 0) return;
                 const due = window.getDue ? window.getDue(s) : 0;
                 const owes = due > 0;
-                let bSty = 'border border-black/10', isA = false;
+                let bSty = 'border border-black/10';
+                let isA = false;
 
                 if (s.status === 'future' || s.status === 'new') {
                     if (s.checkIn === todayStr) { bSty += ' checkin-today'; isA = true; }
@@ -518,7 +535,7 @@
                     'walk-in': { bg: 'bg-slate-600', text: 'W' },
                     'walkin': { bg: 'bg-slate-600', text: 'W' }
                 };
-                
+
                 const src = srcC[s.source] || { bg: 'bg-slate-700', text: '?' };
                 const bar = document.createElement('div');
                 bar.className = `unselectable staff-bar status-${s.status} ${bSty} ${s.linkedId ? 'linked-' + s.linkedId : ''}`;
