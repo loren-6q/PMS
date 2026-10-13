@@ -362,9 +362,9 @@ window.toggleEvtRestrInputs = (enabled) => {
     const wrap = document.getElementById('evt-restr-table-wrap');
     if (!wrap) return;
     if (enabled) {
-        wrap.classList.remove('opacity-50', 'pointer-events-none');
+        wrap.classList.remove('opacity-40', 'pointer-events-none');
     } else {
-        wrap.classList.add('opacity-50', 'pointer-events-none');
+        wrap.classList.add('opacity-40', 'pointer-events-none');
     }
 };
 
@@ -399,14 +399,16 @@ window.populateAutofillBaselines = (b) => {
     setVal('w-d-p2', b.d_p2);
 
     // Event Stay Restrictions Curve inputs
-    setCheck('w-enable-evt-restr', b.enable_evt_restr);
-    window.toggleEvtRestrInputs(!!b.enable_evt_restr);
+    if (b.enable_evt_restr !== undefined) {
+        setCheck('w-enable-evt-restr', b.enable_evt_restr);
+        window.toggleEvtRestrInputs(!!b.enable_evt_restr);
+    }
 
-    setVal('w-r-min-m2', b.r_min_m2 !== undefined ? b.r_min_m2 : "");
-    setVal('w-r-min-m1', b.r_min_m1 !== undefined ? b.r_min_m1 : "");
-    setVal('w-r-min-0', b.r_min_0 !== undefined ? b.r_min_0 : "");
-    setVal('w-r-min-p1', b.r_min_p1 !== undefined ? b.r_min_p1 : "");
-    setVal('w-r-min-p2', b.r_min_p2 !== undefined ? b.r_min_p2 : "");
+    setVal('w-r-min-m2', b.r_min_m2 !== undefined ? b.r_min_m2 : "2");
+    setVal('w-r-min-m1', b.r_min_m1 !== undefined ? b.r_min_m1 : "3");
+    setVal('w-r-min-0', b.r_min_0 !== undefined ? b.r_min_0 : "3");
+    setVal('w-r-min-p1', b.r_min_p1 !== undefined ? b.r_min_p1 : "2");
+    setVal('w-r-min-p2', b.r_min_p2 !== undefined ? b.r_min_p2 : "2");
 
     setVal('w-r-minarr-m2', b.r_minarr_m2 !== undefined ? b.r_minarr_m2 : "");
     setVal('w-r-minarr-m1', b.r_minarr_m1 !== undefined ? b.r_minarr_m1 : "");
@@ -469,12 +471,12 @@ window.saveAutofillBaselines = async (notify = false) => {
         d_p1: getVal('w-d-p1'),
         d_p2: getVal('w-d-p2'),
 
-        enable_evt_restr: getBool('w-enable-evt-restr'),
-        r_min_m2: getRaw('w-r-min-m2'),
-        r_min_m1: getRaw('w-r-min-m1'),
-        r_min_0: getRaw('w-r-min-0'),
-        r_min_p1: getRaw('w-r-min-p1'),
-        r_min_p2: getRaw('w-r-min-p2'),
+        enable_evt_restr: document.getElementById('w-enable-evt-restr') ? getBool('w-enable-evt-restr') : true,
+        r_min_m2: getRaw('w-r-min-m2') || "2",
+        r_min_m1: getRaw('w-r-min-m1') || "3",
+        r_min_0: getRaw('w-r-min-0') || "3",
+        r_min_p1: getRaw('w-r-min-p1') || "2",
+        r_min_p2: getRaw('w-r-min-p2') || "2",
 
         r_minarr_m2: getRaw('w-r-minarr-m2'),
         r_minarr_m1: getRaw('w-r-minarr-m1'),
@@ -560,24 +562,34 @@ window.runAutomator = () => {
     const d_p1 = parseFloat(document.getElementById('w-d-p1')?.value) || d_base;
     const d_p2 = parseFloat(document.getElementById('w-d-p2')?.value) || d_base;
 
-    const enableRestr = document.getElementById('w-enable-evt-restr')?.checked;
-    const getRestrVal = id => {
-        const v = document.getElementById(id)?.value?.trim();
-        return (v !== "" && !isNaN(parseInt(v))) ? parseInt(v) : "";
+    // Check if restrictions curve is explicitly enabled; default to true if element absent
+    const restrCheckEl = document.getElementById('w-enable-evt-restr');
+    const enableRestr = restrCheckEl ? restrCheckEl.checked : true;
+
+    const getRestrVal = (id, fallback = "") => {
+        const el = document.getElementById(id);
+        if (el) {
+            const v = el.value?.trim();
+            return (v !== "" && !isNaN(parseInt(v))) ? parseInt(v) : fallback;
+        }
+        return fallback;
     };
     const getRestrCta = id => document.getElementById(id)?.checked || false;
 
+    // Cascading stay curves with intelligent defaults
     const restrMap = {
-        "-2": { min: getRestrVal('w-r-min-m2'), min_arr: getRestrVal('w-r-minarr-m2'), cta: getRestrCta('w-r-cta-m2') },
-        "-1": { min: getRestrVal('w-r-min-m1'), min_arr: getRestrVal('w-r-minarr-m1'), cta: getRestrCta('w-r-cta-m1') },
-        "0":  { min: getRestrVal('w-r-min-0'),  min_arr: getRestrVal('w-r-minarr-0'),  cta: getRestrCta('w-r-cta-0') },
-        "1":  { min: getRestrVal('w-r-min-p1'), min_arr: getRestrVal('w-r-minarr-p1'), cta: getRestrCta('w-r-cta-p1') },
-        "2":  { min: getRestrVal('w-r-min-p2'), min_arr: getRestrVal('w-r-minarr-p2'), cta: getRestrCta('w-r-cta-p2') }
+        "-2": { min: getRestrVal('w-r-min-m2', 2), min_arr: getRestrVal('w-r-minarr-m2', ""), cta: getRestrCta('w-r-cta-m2') },
+        "-1": { min: getRestrVal('w-r-min-m1', 3), min_arr: getRestrVal('w-r-minarr-m1', ""), cta: getRestrCta('w-r-cta-m1') },
+        "0":  { min: getRestrVal('w-r-min-0', 3),  min_arr: getRestrVal('w-r-minarr-0', ""),  cta: getRestrCta('w-r-cta-0') },
+        "1":  { min: getRestrVal('w-r-min-p1', 2), min_arr: getRestrVal('w-r-minarr-p1', ""), cta: getRestrCta('w-r-cta-p1') },
+        "2":  { min: getRestrVal('w-r-min-p2', 2), min_arr: getRestrVal('w-r-minarr-p2', ""), cta: getRestrCta('w-r-cta-p2') }
     };
     
     if (!sDate || !eDate) return window.customAlert("Please select both a Start Date and an End Date.");
     if (sDate > eDate) return window.customAlert("End Date must be on or after Start Date.");
     const startUnix = window.parseYMD(sDate), endUnix = window.parseYMD(eDate);
+
+    let eventDatesUpdated = 0;
     
     for (let d = startUnix; d <= endUnix; d += 86400000) {
         let dateStr = window.getLocalYMD(new Date(d));
@@ -608,19 +620,22 @@ window.runAutomator = () => {
 
         window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
         
-        // ISOLATED EVENT RESTRICTIONS:
-        // Do NOT contaminate GLOBAL! Event cascading stay rules target ONLY both Event rate plans (Refundable & Non-Refundable).
+        // =========================================================================
+        // STRICT RESTRICTION SCOPE ISOLATION:
+        // Event restrictions are isolated strictly to EVT rate plans.
+        // GLOBAL and standard rate plans are NEVER contaminated with event curves!
+        // =========================================================================
         if (hasEvents && enableRestr) {
             const restrConfig = restrMap[String(minDiff)];
             if (restrConfig) {
-                // Record the event restriction isolated on this date
+                eventDatesUpdated++;
                 window.masterPricing.timeline[dateStr].evtRestrictions = {
                     min: restrConfig.min,
                     min_arr: restrConfig.min_arr,
                     cta: restrConfig.cta
                 };
 
-                // Explicitly stamp onto BOTH Event Rate Plans (Event Refundable & Event Non-Refundable)
+                // Explicitly stamp strictly onto BOTH Event Rate Plans (Event Refundable & Event Non-Refundable)
                 (window.channexRateMap || []).forEach(rate => {
                     const isEvtRate = (rate.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(rate.ratePlanTitle || '');
                     if (isEvtRate) {
@@ -661,10 +676,17 @@ window.runAutomator = () => {
             window.rippleDay(dateStr, anchorD);
         }
     }
+
     window.saveAutofillBaselines(false);
     window.markUnsavedChanges();
     if (window.renderGrid) window.renderGrid(); 
     if (window.switchTab) window.switchTab('grid');
+
+    window.customAlert(`Timeline Painted Successfully!\n\n` +
+        `• Period: ${sDate} → ${eDate}\n` +
+        `• EVT Rate Plans: Event minimum stays & CTA applied exclusively to EVT rate plans (${eventDatesUpdated} event dates affected).\n` +
+        `• Standard Rate Plans: Kept on standard rules (NO event restrictions applied).\n` +
+        `• Click "SAVE & SYNC" to push these values to Channex.`);
 };
 
 window.nukeDatabase = () => {
