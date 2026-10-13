@@ -259,9 +259,11 @@
                             </div>
                         </div>
                         
-                        <div id="autofill-events-panel" class="mb-6 relative evt-column" style="display: none;">
+                        <!-- DUAL-CURVE EVENT PANEL (PRICES & STAY RESTRICTIONS) -->
+                        <div id="autofill-events-panel" class="mb-6 space-y-4 evt-column" style="display: none;">
+                            <!-- 1. DUAL-CURVE EVENT ADJUSTMENTS (PRICES) -->
                             <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-300 w-full overflow-x-auto">
-                                <span class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-3 text-center w-full block">Dual-Curve Event Adjustments (Auto-Mirrored)</span>
+                                <span class="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3 text-center w-full block">Dual-Curve Event Adjustments (Prices Auto-Mirrored)</span>
                                 <table class="w-full text-center border-separate border-spacing-y-2">
                                     <thead>
                                         <tr>
@@ -298,6 +300,59 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+
+                            <!-- 2. DUAL-CURVE EVENT STAY RESTRICTIONS (APPLIED STRICTLY TO EVT RATE PLANS) -->
+                            <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-300 w-full overflow-x-auto">
+                                <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <i data-lucide="shield-alert" size="16" class="text-pink-600"></i>
+                                        <span class="text-[10px] font-black text-pink-700 uppercase tracking-widest">Event Stay Restrictions Curve (Strictly EVT Rate Plans Only)</span>
+                                    </div>
+                                    <label class="flex items-center gap-1.5 bg-pink-50 px-2 py-0.5 rounded border border-pink-200 cursor-pointer text-[10px] font-black uppercase text-pink-700">
+                                        <input type="checkbox" id="w-enable-evt-restr" checked onchange="window.toggleEvtRestrInputs(this.checked); window.debounceSaveBaselines();" class="row-checkbox"> Enable Restrictions Curve
+                                    </label>
+                                </div>
+                                <div id="evt-restr-table-wrap">
+                                    <table class="w-full text-center border-separate border-spacing-y-1.5">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-[9px] font-black uppercase text-slate-400 text-left pl-2">Rule Type</th>
+                                                <th class="text-[9px] font-black uppercase text-slate-400">EVT -2</th>
+                                                <th class="text-[9px] font-black uppercase text-slate-400">EVT -1</th>
+                                                <th class="text-[10px] font-black uppercase text-amber-600">Peak Day (0)</th>
+                                                <th class="text-[9px] font-black uppercase text-slate-400">EVT +1</th>
+                                                <th class="text-[9px] font-black uppercase text-slate-400">EVT +2</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr class="bg-pink-50/40">
+                                                <td class="text-xs font-bold text-pink-900 text-left pl-2 rounded-l-lg border border-pink-100 border-r-0 py-1">Min Stay (Nts)</td>
+                                                <td class="border-y border-pink-100"><input type="number" min="1" id="w-r-min-m2" class="input-base text-center !py-1 !px-1 text-pink-800 font-black" value="2" onfocus="this.select()" oninput="document.getElementById('w-r-min-p2').value = this.value; window.debounceSaveBaselines();"></td>
+                                                <td class="border-y border-pink-100"><input type="number" min="1" id="w-r-min-m1" class="input-base text-center !py-1 !px-1 text-pink-800 font-black" value="3" onfocus="this.select()" oninput="document.getElementById('w-r-min-p1').value = this.value; window.debounceSaveBaselines();"></td>
+                                                <td class="border-y border-pink-100"><input type="number" min="1" id="w-r-min-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-800 border-amber-400 relative z-10 scale-105 shadow-md bg-amber-50" value="3" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
+                                                <td class="border-y border-pink-100"><input type="number" min="1" id="w-r-min-p1" class="input-base text-center !py-1 !px-1 text-pink-800 font-black" value="3" onfocus="this.select()" oninput="document.getElementById('w-r-min-m1').value = this.value; window.debounceSaveBaselines();"></td>
+                                                <td class="rounded-r-lg border border-pink-100 border-l-0"><input type="number" min="1" id="w-r-min-p2" class="input-base text-center !py-1 !px-1 text-pink-800 font-black" value="2" onfocus="this.select()" oninput="document.getElementById('w-r-min-m2').value = this.value; window.debounceSaveBaselines();"></td>
+                                            </tr>
+                                            <tr class="bg-slate-50">
+                                                <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Min on Arrival</td>
+                                                <td class="border-y border-slate-200"><input type="number" min="1" id="w-r-minarr-m2" class="input-base text-center !py-1 !px-1" placeholder="--" onfocus="this.select()" oninput="document.getElementById('w-r-minarr-p2').value = this.value; window.debounceSaveBaselines();"></td>
+                                                <td class="border-y border-slate-200"><input type="number" min="1" id="w-r-minarr-m1" class="input-base text-center !py-1 !px-1" placeholder="--" onfocus="this.select()" oninput="document.getElementById('w-r-minarr-p1').value = this.value; window.debounceSaveBaselines();"></td>
+                                                <td class="border-y border-slate-200"><input type="number" min="1" id="w-r-minarr-0" class="input-base text-center !py-1 !px-1 font-bold text-amber-700" placeholder="--" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
+                                                <td class="border-y border-slate-200"><input type="number" min="1" id="w-r-minarr-p1" class="input-base text-center !py-1 !px-1" placeholder="--" onfocus="this.select()" oninput="document.getElementById('w-r-minarr-m1').value = this.value; window.debounceSaveBaselines();"></td>
+                                                <td class="rounded-r-lg border border-slate-200 border-l-0"><input type="number" min="1" id="w-r-minarr-p2" class="input-base text-center !py-1 !px-1" placeholder="--" onfocus="this.select()" oninput="document.getElementById('w-r-minarr-m2').value = this.value; window.debounceSaveBaselines();"></td>
+                                            </tr>
+                                            <tr class="bg-slate-50">
+                                                <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Close to Arrival (CTA)</td>
+                                                <td class="border-y border-slate-200 py-1"><input type="checkbox" id="w-r-cta-m2" class="row-checkbox" onchange="document.getElementById('w-r-cta-p2').checked = this.checked; window.debounceSaveBaselines();"></td>
+                                                <td class="border-y border-slate-200 py-1"><input type="checkbox" id="w-r-cta-m1" class="row-checkbox" onchange="document.getElementById('w-r-cta-p1').checked = this.checked; window.debounceSaveBaselines();"></td>
+                                                <td class="border-y border-slate-200 py-1"><input type="checkbox" id="w-r-cta-0" class="row-checkbox" onchange="window.debounceSaveBaselines();"></td>
+                                                <td class="border-y border-slate-200 py-1"><input type="checkbox" id="w-r-cta-p1" class="row-checkbox" onchange="document.getElementById('w-r-cta-m1').checked = this.checked; window.debounceSaveBaselines();"></td>
+                                                <td class="rounded-r-lg border border-slate-200 border-l-0 py-1"><input type="checkbox" id="w-r-cta-p2" class="row-checkbox" onchange="document.getElementById('w-r-cta-m2').checked = this.checked; window.debounceSaveBaselines();"></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
 
