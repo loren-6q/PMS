@@ -4,7 +4,18 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-grid.js
 // ==========================================================================
 
-// --- 1. DATA ACCESSORS & CELL STATE RETRIEVAL ---
+window.drillLevel = window.drillLevel || 'room'; // 'driver' | 'room' | 'rates'
+window.expandedRooms = window.expandedRooms || new Set();
+
+window.toggleRoomExpand = (room) => {
+    if (window.expandedRooms.has(room)) {
+        window.expandedRooms.delete(room);
+    } else {
+        window.expandedRooms.add(room);
+    }
+    if (window.renderGrid) window.renderGrid();
+};
+
 window.getCellData = (dateStr, room) => {
     const data = (window.masterPricing.timeline[dateStr] || {})[room] || {};
     if (room === 'GLOBAL') {
@@ -14,7 +25,7 @@ window.getCellData = (dateStr, room) => {
             min_arr: data.min_arr !== undefined ? data.min_arr : "",
             cta: data.cta || false,
             ctd: data.ctd || false,
-            stopSell: data.stopSell || false,
+            stopSell: data.stop || data.stopSell || false,
             isOverride: data.isOverride || {}
         };
     }
@@ -26,7 +37,7 @@ window.getCellData = (dateStr, room) => {
         min_arr: data.min_arr !== undefined ? data.min_arr : "",
         cta: data.cta || false,
         ctd: data.ctd || false,
-        stopSell: data.stopSell || false,
+        stopSell: data.stop || data.stopSell || false,
         isOverride: data.isOverride || {}
     };
 };
@@ -35,7 +46,6 @@ window.updateDOMCell = (dateStr, room) => {
     const bId = `inp_${dateStr}_${room.replace(/\s+/g, '')}`;
     const data = window.getCellData(dateStr, room);
     const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
-    const hasEvents = (window.eventDates || []).length > 0;
     const isDirtyDate = window.dirtyDates.has(dateStr);
     const isSyncedDate = window.syncedDates.has(dateStr);
 
@@ -65,149 +75,19 @@ window.updateDOMCell = (dateStr, room) => {
     };
 
     if (room !== 'GLOBAL') {
-        if (window.activeMetrics.has('rates')) {
-            const elStd = document.getElementById(`${bId}_std`);
-            if (elStd) {
-                elStd.value = data.std !== "" && !isNaN(data.std) ? window.formatDisplay(data.std * mult) : "";
-                if (data.isOverride.std) elStd.classList.add('is-override');
-                else elStd.classList.remove('is-override');
-                applyState(elStd, false, room, 'rate');
+        const elStd = document.getElementById(`${bId}_std`);
+        if (elStd) {
+            elStd.value = data.std !== "" && !isNaN(data.std) ? window.formatDisplay(data.std * mult) : "";
+            const td = elStd.closest('td');
+            if (td) {
+                if (data.isOverride.std) td.classList.add('rate-cell-pinned');
+                else td.classList.remove('rate-cell-pinned');
+
+                if (data.stopSell) td.classList.add('rate-cell-stopped');
+                else td.classList.remove('rate-cell-stopped');
             }
-            const elFmp = document.getElementById(`${bId}_fmp`);
-            if (elFmp && hasEvents) {
-                elFmp.value = data.fmp !== "" && !isNaN(data.fmp) ? window.formatDisplay(data.fmp * mult) : "";
-                if (data.isOverride.fmp) elFmp.classList.add('is-override');
-                else elFmp.classList.remove('is-override');
-                applyState(elFmp, false, room, 'rate');
-            }
+            applyState(elStd, false, room, 'rate');
         }
-
-        ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(fKey => {
-            let mapKey = fKey === 'stopSell' ? 'stop' : (fKey === 'min_arr' ? 'min' : fKey);
-            if (window.activeMetrics.has(mapKey)) {
-                const el = document.getElementById(`${bId}_${fKey}`);
-                if (el) {
-                    let fCheck = fKey === 'min_arr' ? 'min' : fKey;
-                    if (fKey === 'cta' || fKey === 'ctd' || fKey === 'stopSell') {
-                        el.checked = data[fKey] === true;
-                        const td = el.closest('td');
-                        if (td) applyState(el, true, room, fCheck);
-                        if (data.isOverride[fKey]) td.classList.add('!border', '!border-orange-500');
-                        else td.classList.remove('!border', '!border-orange-500');
-                    } else {
-                        el.value = data[fKey] !== undefined ? data[fKey] : "";
-                        if (data.isOverride[fKey]) el.classList.add('is-override');
-                        else el.classList.remove('is-override');
-                        applyState(el, false, room, fCheck);
-                    }
-                }
-            }
-        });
-
-        if (window.channexRateMap) {
-            const mappedRates = window.channexRateMap.filter(m => window.categoryResolver(m.pmsCategory) === room);
-            mappedRates.forEach(rate => {
-                const otaId = `inp_${dateStr}_${rate.ratePlanId}`;
-
-                if (window.activeMetrics.has('rates')) {
-                    const otaInput = document.getElementById(`${otaId}_ota`);
-                    if (otaInput) {
-                        const otaOverride = window.masterPricing.timeline[dateStr]?.otaOverrides?.[rate.ratePlanId];
-                        if (otaOverride !== undefined) {
-                            otaInput.value = window.formatDisplay(otaOverride);
-                            otaInput.classList.add('!text-pink-600', 'font-black');
-                            otaInput.classList.remove('!bg-pink-100', '!text-pink-700');
-                        } else {
-                            let activePrice = (rate.rateSource === 'evt' && data.fmp !== undefined && data.fmp !== "" && hasEvents)
-                                ? data.fmp
-                                : data.std;
-
-                            let promoMultiplier = 1.0;
-                            (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
-                                const isChannelMatch = window.isRatePlanMatchingChannel 
-                                    ? window.isRatePlanMatchingChannel(rate.ratePlanTitle, pr.channel)
-                                    : (pr.channel === 'ALL' || rate.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase()));
-                                const isScopeMatch = pr.scope === 'ALL' || pr.scope === room;
-                                const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dateStr >= pr.startDate && dateStr <= pr.endDate);
-
-                                if (isChannelMatch && isScopeMatch && isDateMatch) {
-                                    const disc = pr.discountPct / 100;
-                                    if (disc > 0 && disc < 1) {
-                                        promoMultiplier *= (1 / (1 - disc));
-                                    }
-                                }
-                            });
-
-                            if (activePrice !== "" && activePrice !== undefined) {
-                                let modified = window.applyMath(activePrice, rate.ruleType || "=", rate.ruleVal || 0);
-                                modified *= promoMultiplier;
-                                otaInput.value = window.formatDisplay(modified * mult);
-                                otaInput.classList.remove('!text-pink-600', 'font-black', '!bg-pink-100', '!text-pink-700');
-                            } else {
-                                otaInput.value = "";
-                                otaInput.classList.remove('!text-pink-600', 'font-black', '!bg-pink-100', '!text-pink-700');
-                            }
-                        }
-                        applyState(otaInput, false, rate.ratePlanId, 'rate');
-                    }
-                }
-
-                ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(fKey => {
-                    let mapKey = fKey === 'stopSell' ? 'stop' : (fKey === 'min_arr' ? 'min' : fKey);
-                    if (window.activeMetrics.has(mapKey)) {
-                        const rEl = document.getElementById(`${otaId}_${fKey}`);
-                        if (rEl) {
-                            let fCheck = fKey === 'min_arr' ? 'min' : fKey;
-                            const val = window.masterPricing.timeline[dateStr]?.otaOverrides?.[`${rate.ratePlanId}_${fKey}`];
-                            if (fKey === 'cta' || fKey === 'ctd' || fKey === 'stopSell') {
-                                rEl.checked = val === true;
-                                const td = rEl.closest('td');
-                                if (td) applyState(rEl, true, rate.ratePlanId, fCheck);
-                                if (val !== undefined) td.classList.add('!border', '!border-orange-500');
-                                else td.classList.remove('!border', '!border-orange-500');
-                            } else {
-                                rEl.value = val !== undefined ? val : "";
-                                if (val !== undefined) rEl.classList.add('!text-pink-600', 'font-black');
-                                else rEl.classList.remove('!text-pink-600', 'font-black');
-                                applyState(rEl, false, rate.ratePlanId, fCheck);
-                            }
-                        }
-                    }
-                });
-            });
-        }
-    } else {
-        ['min', 'max', 'min_arr'].forEach(k => {
-            let mapKey = k === 'min_arr' ? 'min' : k;
-            if (window.activeMetrics.has(mapKey)) {
-                const el = document.getElementById(`${bId}_${k}`);
-                if (el) {
-                    let displayVal = (data[k] !== undefined && data[k] !== "") ? data[k] : "";
-                    if (k === 'min' && window.currentPlatformView === 'hw' && displayVal === "") {
-                        let msDiff = window.getNearestEvent(window.parseYMD(dateStr));
-                        if (msDiff > 0 && msDiff <= 6) displayVal = msDiff + 1;
-                    }
-                    el.value = displayVal;
-                    if (data.isOverride[k]) el.classList.add('is-override');
-                    else el.classList.remove('is-override');
-                    applyState(el, false, 'GLOBAL', k);
-                }
-            }
-        });
-
-        ['cta', 'ctd', 'stopSell'].forEach(k => {
-            let mapKey = k === 'stopSell' ? 'stop' : k;
-            if (window.activeMetrics.has(mapKey)) {
-                const elBool = document.getElementById(`${bId}_${k}`);
-                if (elBool) {
-                    elBool.checked = data[k] === true;
-                    const td = elBool.closest('td');
-                    if (td) applyState(elBool, true, 'GLOBAL', k);
-                    if (data.isOverride[k]) td.classList.add('!border', '!border-orange-500');
-                    else td.classList.remove('!border', '!border-orange-500');
-                }
-            }
-        });
     }
 };
 
@@ -303,9 +183,8 @@ window.calculateLiveInventory = () => {
 
             if (changesFound) {
                 window.markUnsavedChanges();
-                // AUTOMATED BACKGROUND SYNC: Trigger immediate update to Channex and Firestore without user interaction
                 if (window.pushToChannexAPI) {
-                    console.log("⚡ Auto-detected inventory change! Dispatching live sync to Channex & Firestore...");
+                    console.log("⚡ Auto-detected inventory change! Dispatching live sync to Channex...");
                     window.pushToChannexAPI(null, 'delta').catch(err => {
                         console.error("⚠️ Background Channex sync error:", err);
                     });
@@ -331,269 +210,250 @@ window.renderGrid = () => {
 
     let dObj = new Date(startStr + "T12:00:00Z");
     const hasEvents = (window.eventDates || []).length > 0 && window.activeMetrics.has('evt');
+    const drill = window.drillLevel || 'room';
 
-    let trHead = `<tr class="sticky-header"><th class="frozen-col-header z-30 border-r border-slate-600" style="width: 140px; min-width: 140px; left: 0;"></th><th class="frozen-col-header z-30 border-r-2 border-slate-500" style="width: 44px; min-width: 44px; left: 140px;"></th>`;
-    for (let i = 0; i < window.daysToRender; i++) {
-        const cur = new Date(dObj);
-        cur.setUTCDate(cur.getUTCDate() + i);
-        const dMs = window.parseYMD(window.getLocalYMD(cur));
-        let minDiff = window.getNearestEvent(dMs);
-
-        let highlight = 'bg-slate-900 border-slate-700 text-white';
-        if (hasEvents) {
-            if (minDiff === 0) highlight = 'evt-peak !bg-amber-500';
-            else if (Math.abs(minDiff) <= 2) highlight = 'bg-amber-400 text-amber-900 border-amber-500';
-        }
-
-        trHead += `<th class="px-0 py-0.5 min-w-[35px] w-[35px] border-b ${highlight}">
-            <span class="block text-[8px] font-bold uppercase leading-none">${window.mNames[cur.getUTCMonth()]}</span>
-            <span class="block text-[12px] font-black leading-tight mt-0.5">${cur.getUTCDate()}</span>
-        </th>`;
-    }
-    trHead += `</tr>`;
-    head.innerHTML = trHead;
-
-    let allRowsHtml = '';
-
-    (window.roomTypes || []).forEach((room, idx) => {
-        const groupClass = idx % 2 === 0 ? 'room-group-even' : 'room-group-odd';
-        let displayName = window.displayAbbrev[room] || room;
-
-        let roomRows = [];
-        if (window.activeMetrics.has('avail')) roomRows.push({ id: 'avail', label: 'AVAIL', isBool: false, isAvail: true });
-        if (window.activeMetrics.has('rates')) {
-            roomRows.push({ id: 'std', label: 'STD', isBool: false });
-            if (hasEvents) roomRows.push({ id: 'fmp', label: 'EVT', isBool: false, isEvt: true });
-        }
-        if (window.activeMetrics.has('min')) {
-            roomRows.push({ id: 'min', label: 'MIN NTS', isBool: false });
-            roomRows.push({ id: 'min_arr', label: 'MIN ARR', isBool: false });
-        }
-        if (window.activeMetrics.has('max')) roomRows.push({ id: 'max', label: 'MAX NTS', isBool: false });
-        if (window.activeMetrics.has('cta')) roomRows.push({ id: 'cta', label: 'CTA', isBool: true });
-        if (window.activeMetrics.has('ctd')) roomRows.push({ id: 'ctd', label: 'CTD', isBool: true });
-        if (window.activeMetrics.has('stop')) roomRows.push({ id: 'stopSell', label: 'STOP', isBool: true });
-
-        if (roomRows.length === 0) return;
-
-        const mappedRates = window.channexRateMap ? window.channexRateMap.filter(m => window.categoryResolver(m.pmsCategory) === room) : [];
-        const hasMappedRates = mappedRates.length > 0;
-        let totalRoomSpan = roomRows.length;
-
-        roomRows.forEach((rDef, rIdx) => {
-            let isLastInRoom = rIdx === totalRoomSpan - 1;
-            let isAbsoluteBoundary = isLastInRoom && !hasMappedRates;
-
-            let trClass = `${groupClass} ${rDef.isEvt ? 'evt-text' : ''}`;
-            if (isAbsoluteBoundary) trClass += ' room-boundary-bottom';
-
-            let cellBottomStyle = isAbsoluteBoundary
-                ? 'style="border-bottom: 4px solid #0f172a !important;"'
-                : (isLastInRoom ? 'style="border-bottom: 2px solid #a5b4fc !important;"' : 'style="border-bottom: 1px solid #e2e8f0;"');
-
-            let tr = `<tr class="${trClass}">`;
-
-            if (rIdx === 0) {
-                let mainRoomBorder = (!hasMappedRates)
-                    ? 'style="border-bottom: 4px solid #0f172a !important;"'
-                    : 'style="border-bottom: 1px solid #cbd5e1;"';
-
-                tr += `<td rowspan="${totalRoomSpan}" ${mainRoomBorder} class="frozen-col !p-0 z-20 align-middle border-r border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                    <div class="w-[140px] flex items-center px-1.5 h-full font-bold text-slate-700 text-left text-[10px] leading-tight whitespace-normal break-words">
-                        ${displayName}
-                    </div>
-                </td>`;
-            }
-
-            let labelColor = rDef.isEvt ? 'text-pink-600' : (rDef.isAvail ? 'text-slate-500 font-bold' : 'text-slate-500');
-            let labelHtml = rDef.label.replace(' ', '<br>');
-
-            tr += `<td ${cellBottomStyle} class="frozen-col-2 !p-0 z-20 align-middle ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                <span class="text-[8px] font-bold tracking-tighter leading-none block ${labelColor}">${labelHtml}</span>
-            </td>`;
-
-            for (let i = 0; i < window.daysToRender; i++) {
-                const cur = new Date(dObj);
-                cur.setUTCDate(cur.getUTCDate() + i);
-                const dateStr = window.getLocalYMD(cur);
-                const bId = `inp_${dateStr}_${room.replace(/\s+/g, '')}`;
-                let isDirty = window.dirtyDates.has(dateStr);
-                let isSynced = window.syncedDates.has(dateStr);
-                let stateClass = isDirty ? (rDef.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
-
-                let minDiff = window.getNearestEvent(window.parseYMD(dateStr));
-                let evtColor = '';
-                if (hasEvents) {
-                    if (minDiff === 0) evtColor = 'bg-amber-300';
-                    else if (Math.abs(minDiff) <= 2) evtColor = 'bg-yellow-100';
-                }
-
-                if (rDef.isAvail) {
-                    let live = window.liveInventory[dateStr] && window.liveInventory[dateStr][room] !== undefined ? window.liveInventory[dateStr][room] : 0;
-                    let otaAvail = window.masterPricing.timeline[dateStr]?.otaOverrides?.[`${room}_avail`];
-                    let displayVal = otaAvail !== undefined ? otaAvail : live;
-                    let availColor = displayVal == 0 ? 'text-rose-600 font-bold' : (displayVal <= 2 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold');
-                    let overrideClass = otaAvail !== undefined ? '!bg-amber-100' : 'bg-slate-50/80';
-                    tr += `<td ${cellBottomStyle} class="${evtColor} ${overrideClass} p-0 min-w-[35px] w-[35px]">
-                        <input type="number" step="any" class="w-full h-full text-center outline-none focus:bg-white text-[10px] ${availColor} ${stateClass} font-semibold bg-transparent tracking-tighter px-0" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
-                    </td>`;
-                } else if (rDef.isBool) {
-                    tr += `<td ${cellBottomStyle} class="${evtColor} ${stateClass} min-w-[35px] w-[35px]"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}_${rDef.id}" class="grid-toggle scale-75" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.checked)"></div></td>`;
-                } else {
-                    tr += `<td ${cellBottomStyle} class="${evtColor} min-w-[35px] w-[35px]"><input type="number" step="any" id="${bId}_${rDef.id}" class="w-full text-center outline-none focus:bg-indigo-50 font-medium ${rDef.isEvt ? '!text-pink-600' : '!text-slate-800'} bg-transparent ${stateClass} text-[10px] tracking-tighter px-0" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', '${rDef.id}', this.value)"></td>`;
-                }
-            }
-            tr += `</tr>`;
-            allRowsHtml += tr;
-        });
-
-        if (hasMappedRates) {
-            mappedRates.forEach((rate, rateIdx) => {
-                let otaRows = [];
-                if (window.activeMetrics.has('rates')) otaRows.push({ id: 'ota', label: 'RATE', isBool: false, isRate: true });
-                if (window.activeMetrics.has('min')) {
-                    otaRows.push({ id: 'min', label: 'MIN NTS', isBool: false });
-                    otaRows.push({ id: 'min_arr', label: 'MIN ARR', isBool: false });
-                }
-                if (window.activeMetrics.has('max')) otaRows.push({ id: 'max', label: 'MAX NTS', isBool: false });
-                if (window.activeMetrics.has('cta')) otaRows.push({ id: 'cta', label: 'CTA', isBool: true });
-                if (window.activeMetrics.has('ctd')) otaRows.push({ id: 'ctd', label: 'CTD', isBool: true });
-                if (window.activeMetrics.has('stop')) otaRows.push({ id: 'stopSell', label: 'STOP', isBool: true });
-
-                if (otaRows.length === 0) return;
-
-                let rType = rate.ruleType || "=";
-                let rVal = rate.ruleVal !== undefined ? rate.ruleVal : 0;
-                let ruleText = rType === "=" ? "BASE" : `${rType}${rVal}`;
-                let rateRowspan = otaRows.length;
-                let isLastRateOfRoom = (rateIdx === mappedRates.length - 1);
-                const rateSource = rate.rateSource || 'std';
-
-                otaRows.forEach((oDef, oIdx) => {
-                    let isLastOtaRowOfRate = (oIdx === rateRowspan - 1);
-                    let isAbsoluteLastRowOfRoom = isLastRateOfRoom && isLastOtaRowOfRate;
-
-                    let trOtaClass = `${groupClass} bg-indigo-50/50`;
-                    if (isAbsoluteLastRowOfRoom) trOtaClass += ' room-boundary-bottom';
-
-                    let otaCellBottomStyle = isAbsoluteLastRowOfRoom
-                        ? 'style="border-bottom: 4px solid #0f172a !important;"'
-                        : (isLastOtaRowOfRate ? 'style="border-bottom: 2px solid #94a3b8 !important;"' : 'style="border-bottom: 1px solid #c7d2fe;"');
-
-                    let trOta = `<tr class="${trOtaClass}">`;
-
-                    if (oIdx === 0) {
-                        let otaMainBorder = isLastRateOfRoom
-                            ? 'style="border-bottom: 4px solid #0f172a !important;"'
-                            : 'style="border-bottom: 1px solid #cbd5e1;"';
-
-                        const badgeColor = rateSource === 'evt' ? 'text-pink-600 font-black' : 'text-indigo-500 font-black';
-                        const badgeText = rateSource === 'evt' ? 'EVT PKG' : 'RATE PLAN';
-
-                        trOta += `<td rowspan="${rateRowspan}" ${otaMainBorder} class="frozen-col !p-0 z-20 border-r border-slate-300 bg-indigo-50/50">
-                            <div class="w-[140px] flex flex-col justify-center px-1.5 h-full text-left" title="${rate.ratePlanTitle}">
-                                <span class="text-[9px] font-bold text-indigo-900 leading-tight whitespace-normal break-words">${window.formatRatePlanTitle(rate.ratePlanTitle)}</span>
-                                <span class="text-[7px] uppercase tracking-widest mt-0.5 ${badgeColor}">${badgeText}</span>
-                            </div>
-                        </td>`;
-                    }
-
-                    let labelHtml = oDef.label.replace(' ', '<br>');
-
-                    trOta += `<td ${otaCellBottomStyle} class="frozen-col-2 !p-0 z-20 align-middle border-r-2 border-slate-400 bg-indigo-50/50">
-                        <span class="text-[7px] font-bold tracking-tighter text-indigo-800 block w-full text-center leading-tight">${labelHtml}</span>
-                        ${oDef.isRate ? `<span class="text-[7px] font-bold text-slate-500 tracking-tighter block w-full text-center">${ruleText === 'BASE' ? 'BASE' : (ruleText)}</span>` : ''}
-                    </td>`;
-
-                    for (let i = 0; i < window.daysToRender; i++) {
-                        const cur = new Date(dObj);
-                        cur.setUTCDate(cur.getUTCDate() + i);
-                        const dateStr = window.getLocalYMD(cur);
-                        const bId = `inp_${dateStr}_${rate.ratePlanId}`;
-                        let isDirty = window.dirtyDates.has(dateStr);
-                        let isSynced = window.syncedDates.has(dateStr);
-                        let stateClass = isDirty ? (oDef.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
-                        let evtColor = '';
-                        if (hasEvents) {
-                            let minDiff = window.getNearestEvent(window.parseYMD(dateStr));
-                            if (minDiff === 0) evtColor = 'bg-amber-100/50';
-                            else if (Math.abs(minDiff) <= 2) evtColor = 'bg-yellow-50/50';
-                        }
-
-                        if (oDef.isBool) {
-                            trOta += `<td ${otaCellBottomStyle} class="${evtColor} ${stateClass} min-w-[35px] w-[35px]"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}_${oDef.id}" class="grid-toggle scale-75" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.checked, '${rateSource}')"></div></td>`;
-                        } else if (oDef.isRate) {
-                            trOta += `<td ${otaCellBottomStyle} class="${evtColor} min-w-[35px] w-[35px]"><input type="number" step="any" id="${bId}_ota" class="w-full text-center outline-none focus:bg-pink-50 font-medium !text-indigo-800 bg-transparent text-[10px] tracking-tighter px-0 ${stateClass}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'rate', this.value, '${rateSource}')"></td>`;
-                        } else {
-                            trOta += `<td ${otaCellBottomStyle} class="${evtColor} min-w-[35px] w-[35px]"><input type="number" step="any" id="${bId}_${oDef.id}" class="w-full text-center outline-none focus:bg-pink-50 font-medium !text-indigo-600 bg-transparent ${stateClass} text-[10px] tracking-tighter px-0" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, '${oDef.id}', this.value, '${rateSource}')"></td>`;
-                        }
-                    }
-                    trOta += `</tr>`;
-                    allRowsHtml += trOta;
-                });
-            });
-        }
-    });
-
-    let globalRows = [];
-    if (window.activeMetrics.has('min')) {
-        globalRows.push({ id: 'min', lbl: 'MIN NTS', isBool: false });
-        if (window.currentPlatformView !== 'hw') globalRows.push({ id: 'min_arr', lbl: 'MIN ARR', isBool: false });
-    }
-    if (window.activeMetrics.has('max') && window.currentPlatformView !== 'hw') globalRows.push({ id: 'max', lbl: 'MAX NTS', isBool: false });
-    if (window.activeMetrics.has('cta') && window.currentPlatformView !== 'hw') globalRows.push({ id: 'cta', lbl: 'CTA', isBool: true });
-    if (window.activeMetrics.has('ctd') && window.currentPlatformView !== 'hw') globalRows.push({ id: 'ctd', lbl: 'CTD', isBool: true });
-    if (window.activeMetrics.has('stop') && window.currentPlatformView !== 'hw') globalRows.push({ id: 'stopSell', lbl: 'STOP SELL', isBool: true });
-
-    if (globalRows.length > 0) {
-        globalRows.forEach((rc, rIndex) => {
-            let tr = `<tr class="bg-white border-b border-slate-200 text-slate-700">`;
-
-            if (rIndex === 0) {
-                tr += `<td rowspan="${globalRows.length}" class="frozen-col z-20 bg-slate-800 border-r border-slate-900 border-t-4 border-slate-900 align-middle text-center p-2 min-h-[30px]">
-                    <span class="text-[11px] font-black tracking-widest text-white uppercase break-words whitespace-normal leading-tight block w-full text-center">GLOBAL (ALL)</span>
-                </td>`;
-            }
-
-            let labelHtml = rc.lbl.replace(' ', '<br>');
-            tr += `<td class="frozen-col-2 !p-0 z-20 bg-slate-800 border-r-2 border-slate-900 ${rIndex === 0 ? 'border-t-4 border-slate-900' : ''} align-middle border-b border-slate-700">
-                <div class="text-[9px] font-black !text-slate-300 uppercase tracking-tighter text-center leading-none">${labelHtml}</div>
-            </td>`;
-
-            for (let i = 0; i < window.daysToRender; i++) {
-                const cur = new Date(dObj);
-                cur.setUTCDate(cur.getUTCDate() + i);
-                const dateStr = window.getLocalYMD(cur);
-                const bId = `inp_${dateStr}_GLOBAL_${rc.id}`;
-                let isDirty = window.dirtyDates.has(dateStr);
-                let isSynced = window.syncedDates.has(dateStr);
-                let stateClass = isDirty ? (rc.isBool ? 'override-cell-highlight' : 'is-dirty') : (isSynced ? 'is-synced' : '');
-
-                let minDiff = window.getNearestEvent(window.parseYMD(dateStr));
-                let evtColor = 'bg-white';
-                if (hasEvents) evtColor = minDiff === 0 ? 'bg-amber-50' : (Math.abs(minDiff) <= 2 ? 'bg-amber-50/50' : 'bg-white');
-                let bTClass = rIndex === 0 ? 'border-t-4 border-slate-900' : '';
-
-                if (rc.isBool) {
-                    tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300 ${stateClass} min-w-[35px] w-[35px]"><div class="flex justify-center h-full items-center"><input type="checkbox" id="${bId}" class="grid-toggle scale-75" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.checked)"></div></td>`;
-                } else {
-                    tr += `<td class="${evtColor} ${bTClass} border-b border-slate-300 min-w-[35px] w-[35px]"><input type="number" step="any" id="${bId}" class="w-full text-center outline-none focus:bg-indigo-50 font-black !text-slate-700 bg-transparent text-[11px] tracking-tighter px-0 ${stateClass}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', '${rc.id}', this.value)"></td>`;
-                }
-            }
-            tr += `</tr>`;
-            allRowsHtml += tr;
-        });
-    }
-
-    body.innerHTML = allRowsHtml;
+    // 1. HEADER ROW (Dates + Stop-All shortcut)
+    let trHead = `<tr class="sticky-header">
+        <th class="frozen-col-header z-30 border-r border-slate-600" style="width: 140px; min-width: 140px; left: 0;">Room / Rate Plan</th>
+        <th class="frozen-col-header z-30 border-r-2 border-slate-500" style="width: 44px; min-width: 44px; left: 140px;">Metric</th>`;
 
     for (let i = 0; i < window.daysToRender; i++) {
         const cur = new Date(dObj);
         cur.setUTCDate(cur.getUTCDate() + i);
         const dateStr = window.getLocalYMD(cur);
-        (window.roomTypes || []).forEach(room => window.updateDOMCell(dateStr, room));
-        window.updateDOMCell(dateStr, 'GLOBAL');
+        const dMs = window.parseYMD(dateStr);
+        let minDiff = window.getNearestEvent(dMs);
+
+        let highlight = 'bg-slate-900 border-slate-700 text-white';
+        if (hasEvents) {
+            if (minDiff === 0) highlight = 'evt-peak !bg-amber-500 text-slate-900';
+            else if (Math.abs(minDiff) <= 2) highlight = 'bg-amber-400 text-amber-900 border-amber-500';
+        }
+
+        const isGlobStop = !!window.masterPricing.timeline?.[dateStr]?.GLOBAL?.stop;
+
+        trHead += `<th class="px-0 py-0.5 min-w-[36px] w-[36px] border-b ${highlight} relative group cursor-pointer" onclick="window.handleHeaderStopToggle('${dateStr}')" title="Click to Stop-Sell entire property on ${dateStr}">
+            <span class="block text-[8px] font-bold uppercase leading-none">${window.mNames[cur.getUTCMonth()]}</span>
+            <span class="block text-[12px] font-black leading-tight mt-0.5">${cur.getUTCDate()}</span>
+            <div class="h-1.5 w-full flex items-center justify-center mt-0.5">
+                ${isGlobStop ? '<span class="w-2 h-2 rounded-full bg-red-600 block shadow-xs" title="Entire Property Closed"></span>' : '<span class="w-1.5 h-1.5 rounded-full bg-transparent group-hover:bg-red-400/60 block"></span>'}
+            </div>
+        </th>`;
     }
+    trHead += `</tr>`;
+    head.innerHTML = trHead;
+
+    // 2. ROOM SELECTION BY DRILLDOWN LEVEL
+    let targetRooms = [...(window.roomTypes || [])];
+    const anchorPrivate = window.savedAutofillBaselines?.anchor_p || document.getElementById('w-anchor-private')?.value || targetRooms[0];
+
+    if (drill === 'driver') {
+        targetRooms = [anchorPrivate].filter(Boolean);
+        if (targetRooms.length === 0 && (window.roomTypes || []).length > 0) {
+            targetRooms = [window.roomTypes[0]];
+        }
+    }
+
+    let allRowsHtml = '';
+
+    targetRooms.forEach((room, idx) => {
+        const groupClass = idx % 2 === 0 ? 'room-group-even' : 'room-group-odd';
+        const displayName = window.displayAbbrev[room] || room;
+        const mappedRates = window.channexRateMap ? window.channexRateMap.filter(m => window.categoryResolver(m.pmsCategory) === room) : [];
+        const isExpanded = (drill === 'rates') || window.expandedRooms.has(room);
+
+        // A. AVAILABILITY ROW
+        if (window.activeMetrics.has('avail')) {
+            let trAvail = `<tr class="${groupClass} border-b border-slate-200">
+                <td class="frozen-col !p-0 z-20 align-middle border-r border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full font-black text-slate-800 text-[11px] leading-tight">
+                        <span class="truncate">${displayName}</span>
+                        ${drill !== 'driver' && mappedRates.length > 0 ? `
+                        <button onclick="window.toggleRoomExpand('${room}')" class="px-1 py-0.5 rounded bg-slate-200 hover:bg-indigo-100 text-[9px] text-slate-700 font-bold transition-colors cursor-pointer" title="Toggle rate plan breakdown">
+                            ${isExpanded ? '▼' : '▶'} ${mappedRates.length}
+                        </button>` : ''}
+                    </div>
+                </td>
+                <td class="frozen-col-2 !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                    <span class="text-[8px] font-black text-slate-500 tracking-tighter block w-full text-center">AVAIL</span>
+                </td>`;
+
+            for (let i = 0; i < window.daysToRender; i++) {
+                const cur = new Date(dObj);
+                cur.setUTCDate(cur.getUTCDate() + i);
+                const dateStr = window.getLocalYMD(cur);
+                const live = window.liveInventory[dateStr]?.[room] !== undefined ? window.liveInventory[dateStr][room] : 0;
+                const otaAvail = window.masterPricing.timeline[dateStr]?.otaOverrides?.[`${room}_avail`];
+                const displayVal = otaAvail !== undefined ? otaAvail : live;
+                const availColor = displayVal === 0 ? 'text-rose-600 font-black' : (displayVal <= 2 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold');
+                const overrideBg = otaAvail !== undefined ? '!bg-amber-100' : 'bg-slate-50/80';
+
+                trAvail += `<td class="p-0 min-w-[36px] w-[36px] border-r border-slate-200 ${overrideBg}">
+                    <input type="number" class="w-full h-full text-center outline-none focus:bg-white text-[10px] ${availColor} font-bold bg-transparent tracking-tighter px-0 py-1" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
+                </td>`;
+            }
+            trAvail += `</tr>`;
+            allRowsHtml += trAvail;
+        }
+
+        // B. MASTER ROOM DRIVER / BASE RATE (MULTI-ZONE CELL)
+        let trRate = `<tr class="${groupClass} border-b-2 border-slate-400">
+            <td class="frozen-col !p-0 z-20 align-middle border-r border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
+                    <span class="text-[10px] font-bold text-slate-600 truncate">${displayName} (Base)</span>
+                    <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200">MASTER</span>
+                </div>
+            </td>
+            <td class="frozen-col-2 !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                <span class="text-[8px] font-black text-indigo-700 block w-full text-center">RATE</span>
+            </td>`;
+
+        for (let i = 0; i < window.daysToRender; i++) {
+            const cur = new Date(dObj);
+            cur.setUTCDate(cur.getUTCDate() + i);
+            const dateStr = window.getLocalYMD(cur);
+            const data = window.getCellData(dateStr, room);
+            const isPinned = !!data.isOverride?.std;
+            const isStopped = !!data.stopSell;
+            const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
+            const displayPrice = data.std !== "" && !isNaN(data.std) ? window.formatDisplay(data.std * mult) : "";
+
+            let ctaBadge = '';
+            if (data.cta && data.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-purple-100 text-purple-800">⇄ BLK</span>';
+            else if (data.cta) ctaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-amber-100 text-amber-800">⇥ CTA</span>';
+            else if (data.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-sky-100 text-sky-800">⇤ CTD</span>';
+
+            const minVal = data.min !== "" ? data.min : (data.min_arr ? `${data.min_arr}▸` : "");
+            const maxVal = data.max !== "" ? data.max : "";
+
+            let cellClass = "rate-cell-container p-0 min-w-[36px] w-[36px] border-r border-slate-200 text-center relative ";
+            if (isStopped) cellClass += "rate-cell-stopped ";
+            else if (isPinned) cellClass += "rate-cell-pinned ";
+
+            trRate += `<td class="${cellClass}" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}\\nStop: ${isStopped ? 'YES' : 'NO'}')" onmouseleave="window.hideCmTooltip()">
+                <!-- TOP: Min & Max Stay Inputs -->
+                <div class="flex items-center justify-between px-0.5 text-[8px] font-bold text-slate-400 leading-none h-[11px] pt-0.5">
+                    <input type="text" class="w-3.5 bg-transparent border-none text-left p-0 text-[8px] font-black text-slate-500 outline-none" value="${minVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min', this.value)" title="Min Stay">
+                    <input type="text" class="w-3.5 bg-transparent border-none text-right p-0 text-[8px] text-slate-400 outline-none" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)" title="Max Stay">
+                </div>
+
+                <!-- MID: Clickable Price Input (Alt+Enter pins) -->
+                <div class="h-[18px] flex items-center justify-center">
+                    <input type="number" step="any" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] text-slate-800 px-0" value="${displayPrice}" onfocus="this.select()" onkeydown="if(event.key==='Enter' && event.altKey){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', true); } else if(event.key==='Enter'){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', false); }" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}', false)">
+                </div>
+
+                <!-- BOTTOM: CTA/CTD cycle dot & Ghost Stop-Sell trigger -->
+                <div class="flex items-center justify-between px-1 text-[8px] leading-none h-[11px] pb-0.5">
+                    <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}')" class="cursor-pointer" title="Cycle CTA/CTD restrictions">
+                        ${ctaBadge || '<span class="w-1.5 h-1.5 rounded-full bg-slate-200 inline-block"></span>'}
+                    </button>
+                    <button onclick="window.handleCellStopToggle('${dateStr}', '${room}')" class="cursor-pointer" title="Toggle Stop-Sell">
+                        ${isStopped ? '<span class="px-0.5 py-0.1 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-1.5 h-1.5 rounded-full bg-transparent hover:bg-rose-400 inline-block"></span>'}
+                    </button>
+                </div>
+            </td>`;
+        }
+        trRate += `</tr>`;
+        allRowsHtml += trRate;
+
+        // C. MAPPED RATE PLANS (IF EXPANDED IN ROOM OR ALL-RATES MODE)
+        if (isExpanded && mappedRates.length > 0 && drill !== 'driver') {
+            mappedRates.forEach((rate, rateIdx) => {
+                const rateSource = rate.rateSource || 'std';
+                const isEvtRate = (rateSource === 'evt') || /evt|fmp|event|pkg/i.test(rate.ratePlanTitle || '');
+                const displayTitle = window.formatRatePlanTitle ? window.formatRatePlanTitle(rate.ratePlanTitle) : rate.ratePlanTitle;
+
+                let trOta = `<tr class="bg-indigo-50/40 border-b border-indigo-100">
+                    <td class="frozen-col !p-0 z-20 border-r border-slate-300 bg-indigo-50/70">
+                        <div class="w-[140px] flex flex-col justify-center px-2 h-full text-left" title="${rate.ratePlanTitle}">
+                            <span class="text-[9px] font-bold text-indigo-900 truncate">${displayTitle}</span>
+                            <span class="text-[7px] uppercase tracking-widest ${isEvtRate ? 'text-pink-600 font-black' : 'text-indigo-500 font-bold'}">${isEvtRate ? 'EVT PKG' : 'RATE PLAN'}</span>
+                        </div>
+                    </td>
+                    <td class="frozen-col-2 !p-0 z-20 align-middle border-r-2 border-slate-400 bg-indigo-50/70">
+                        <span class="text-[7px] font-bold text-indigo-700 block w-full text-center">OTA</span>
+                    </td>`;
+
+                for (let i = 0; i < window.daysToRender; i++) {
+                    const cur = new Date(dObj);
+                    cur.setUTCDate(cur.getUTCDate() + i);
+                    const dateStr = window.getLocalYMD(cur);
+                    const dayObj = window.masterPricing.timeline[dateStr] || {};
+                    const otaOverride = dayObj.otaOverrides?.[rate.ratePlanId];
+                    const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
+
+                    let calculatedRate = otaOverride;
+                    if (calculatedRate === undefined) {
+                        const roomData = dayObj[room] || {};
+                        let basePrice = (isEvtRate && roomData.fmp && (window.eventDates || []).length > 0) ? roomData.fmp : roomData.std;
+                        if (basePrice !== undefined && basePrice !== "") {
+                            calculatedRate = window.applyMath(basePrice, rate.ruleType || "=", rate.ruleVal || 0);
+                        }
+                    }
+
+                    const otaMin = dayObj.otaOverrides?.[`${rate.ratePlanId}_min`];
+                    const otaStop = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_stop`];
+                    const otaCta = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_cta`];
+                    const otaCtd = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_ctd`];
+
+                    let otaCtaBadge = '';
+                    if (otaCta && otaCtd) otaCtaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-purple-100 text-purple-800">⇄ BLK</span>';
+                    else if (otaCta) otaCtaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-amber-100 text-amber-800">⇥ CTA</span>';
+                    else if (otaCtd) otaCtaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-sky-100 text-sky-800">⇤ CTD</span>';
+
+                    let cellOtaClass = "rate-cell-container p-0 min-w-[36px] w-[36px] border-r border-indigo-100 text-center relative ";
+                    if (otaStop) cellOtaClass += "rate-cell-stopped ";
+                    else if (otaOverride !== undefined) cellOtaClass += "rate-cell-pinned ";
+
+                    trOta += `<td class="${cellOtaClass}">
+                        <div class="flex items-center justify-between px-0.5 text-[8px] font-bold text-slate-400 leading-none h-[10px] pt-0.5">
+                            <input type="text" class="w-3 bg-transparent border-none text-left p-0 text-[7px] text-indigo-700 outline-none" value="${otaMin || ''}" placeholder="-" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'min', this.value, '${rateSource}')">
+                            <span class="text-[7px] text-slate-300">-</span>
+                        </div>
+                        <div class="h-[16px] flex items-center justify-center">
+                            <input type="number" step="any" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${calculatedRate !== undefined ? window.formatDisplay(calculatedRate * mult) : ''}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'rate', this.value, '${rateSource}')">
+                        </div>
+                        <div class="flex items-center justify-between px-1 text-[8px] leading-none h-[10px] pb-0.5">
+                            <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer">
+                                ${otaCtaBadge || '<span class="w-1.5 h-1.5 rounded-full bg-slate-200 inline-block"></span>'}
+                            </button>
+                            <button onclick="window.handleCellStopToggle('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer">
+                                ${otaStop ? '<span class="px-0.5 py-0.1 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-1.5 h-1.5 rounded-full bg-transparent hover:bg-rose-400 inline-block"></span>'}
+                            </button>
+                        </div>
+                    </td>`;
+                }
+                trOta += `</tr>`;
+                allRowsHtml += trOta;
+            });
+        }
+    });
+
+    // 3. GLOBAL RESTRICTIONS ROW
+    let globalTr = `<tr class="bg-slate-800 text-white border-t-2 border-slate-900">
+        <td class="frozen-col !p-0 z-20 bg-slate-900 border-r border-slate-700">
+            <span class="text-[10px] font-black uppercase tracking-widest block px-2 py-1 text-slate-200">GLOBAL (ALL)</span>
+        </td>
+        <td class="frozen-col-2 !p-0 z-20 bg-slate-900 border-r-2 border-slate-600 text-center">
+            <span class="text-[8px] font-black text-slate-400 uppercase">RESTR</span>
+        </td>`;
+
+    for (let i = 0; i < window.daysToRender; i++) {
+        const cur = new Date(dObj);
+        cur.setUTCDate(cur.getUTCDate() + i);
+        const dateStr = window.getLocalYMD(cur);
+        const gData = window.masterPricing.timeline?.[dateStr]?.GLOBAL || {};
+
+        globalTr += `<td class="p-0 min-w-[36px] w-[36px] border-r border-slate-700 text-center">
+            <div class="flex items-center justify-center gap-0.5 py-1">
+                <input type="text" class="w-4 bg-slate-700 rounded text-center text-[9px] font-black text-white p-0 outline-none" value="${gData.min || ''}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min', this.value)" title="Global Min Stay">
+            </div>
+        </td>`;
+    }
+    globalTr += `</tr>`;
+    allRowsHtml += globalTr;
+
+    body.innerHTML = allRowsHtml;
     if (window.lucide) window.lucide.createIcons();
 };
 
@@ -617,7 +477,7 @@ window.handleAvailEdit = (dateStr, room, value) => {
     window.masterPricing.timeline[dateStr].otaOverrides = window.masterPricing.timeline[dateStr].otaOverrides || {};
 
     if (value === "") delete window.masterPricing.timeline[dateStr].otaOverrides[`${room}_avail`];
-    else window.masterPricing.timeline[dateStr].otaOverrides[`${room}_avail`] = parseInt(value);
+    else window.masterPricing.timeline[dateStr].otaOverrides[`${room}_avail`] = parseInt(value, 10);
 
     window.updateDOMCell(dateStr, room);
     window.markUnsavedChanges();
@@ -657,7 +517,7 @@ window.handleCellEdit = (dateStr, room, field, value) => {
         const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
         if (field === 'std' || field === 'fmp') data[field] = window.roundCurrency(parseFloat(value) / mult);
         else if (field === 'cta' || field === 'ctd' || field === 'stopSell') data[field] = value;
-        else data[field] = parseInt(value);
+        else data[field] = parseInt(value, 10);
     }
 
     let minDiff = window.getNearestEvent(window.parseYMD(dateStr));
@@ -747,6 +607,7 @@ window.shiftTape = (days) => {
 window.toggleRipple = () => {
     window.isRippleEnabled = !window.isRippleEnabled;
     const btn = document.getElementById('ripple-toggle');
+    if (!btn) return;
     if (window.isRippleEnabled) {
         btn.innerHTML = '<i data-lucide="link" size="12"></i> LINKS: ON';
         btn.classList.replace('!bg-slate-100', '!bg-indigo-100');
@@ -761,6 +622,7 @@ window.toggleRipple = () => {
 
 window.toggleQuickBulk = (forceClose = false) => {
     const panel = document.getElementById('quick-bulk-panel');
+    if (!panel) return;
     if (!forceClose && panel.classList.contains('hidden')) {
         panel.classList.remove('hidden');
         panel.classList.add('flex');
@@ -813,12 +675,13 @@ window.renderBulkGrid = () => {
         });
     });
 
-    document.getElementById('qb-grid-body').innerHTML = html;
+    const tbody = document.getElementById('qb-grid-body');
+    if (tbody) tbody.innerHTML = html;
 };
 
 window.applyBulkGrid = (isClear = false) => {
-    const s = document.getElementById('qb-start').value;
-    const e = document.getElementById('qb-end').value;
+    const s = document.getElementById('qb-start')?.value;
+    const e = document.getElementById('qb-end')?.value;
     if (!s || !e) return window.customAlert("Please select Start and End dates.");
     const sU = window.parseYMD(s), eU = window.parseYMD(e);
 
