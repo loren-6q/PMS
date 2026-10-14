@@ -5,6 +5,9 @@
 // ==========================================================================
 
 // --- 1. CORE PRICING MATH & EVENT PROXIMITY ---
+window.editMode = window.editMode || 'ripple'; // 'ripple' | 'pin'
+window.drillLevel = window.drillLevel || 'room';  // 'driver' | 'room' | 'rates'
+
 window.applyMath = (baseVal, type, modifier, isReverse = false) => {
     if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
     let val = parseFloat(baseVal); 
@@ -36,6 +39,184 @@ window.getNearestEvent = (unixMs) => {
         if (Math.abs(diff) < Math.abs(minDiff)) minDiff = diff;
     });
     return minDiff; 
+};
+
+window.toggleEditMode = () => {
+    window.editMode = window.editMode === 'ripple' ? 'pin' : 'ripple';
+    const btn = document.getElementById('mode-toggle-btn');
+    const label = document.getElementById('mode-label');
+    const icon = document.getElementById('mode-icon');
+    if (!btn || !label) return;
+
+    if (window.editMode === 'ripple') {
+        btn.className = "px-2.5 py-1.5 rounded font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200";
+        label.innerText = "RIPPLE MODE";
+        icon.innerHTML = '<i data-lucide="zap" size="14" class="text-amber-600"></i>';
+    } else {
+        btn.className = "px-2.5 py-1.5 rounded font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer bg-indigo-100 text-indigo-800 border border-indigo-300 hover:bg-indigo-200";
+        label.innerText = "PIN (OVERRIDE)";
+        icon.innerHTML = '<i data-lucide="pin" size="14" class="text-indigo-600"></i>';
+    }
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.setDrillLevel = (level) => {
+    window.drillLevel = level;
+    ['driver', 'room', 'rates'].forEach(l => {
+        const btn = document.getElementById(`depth-${l}`);
+        if (btn) {
+            if (l === level) {
+                btn.className = "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-xs font-black";
+            } else {
+                btn.className = "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
+            }
+        }
+    });
+    if (window.renderGrid) window.renderGrid();
+};
+
+window.showCmTooltip = (e, text) => {
+    const tt = document.getElementById('cm-tooltip');
+    if (!tt || !text) return;
+    tt.innerText = text;
+    tt.classList.remove('hidden');
+
+    const pad = 12;
+    let left = e.clientX + pad;
+    let top = e.clientY + pad;
+
+    if (left + 220 > window.innerWidth) left = e.clientX - 230;
+    if (top + 60 > window.innerHeight) top = e.clientY - 70;
+
+    tt.style.left = `${Math.max(10, left)}px`;
+    tt.style.top = `${Math.max(10, top)}px`;
+};
+
+window.hideCmTooltip = () => {
+    const tt = document.getElementById('cm-tooltip');
+    if (tt) tt.classList.add('hidden');
+};
+
+window.handleCellStopToggle = (dateStr, roomType, ratePlanId = null) => {
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+
+    if (ratePlanId) {
+        dObj.otaOverrides = dObj.otaOverrides || {};
+        const cur = !!dObj.otaOverrides[`${ratePlanId}_stop`];
+        dObj.otaOverrides[`${ratePlanId}_stop`] = !cur;
+    } else {
+        dObj[roomType] = dObj[roomType] || { isOverride: {} };
+        const cur = !!dObj[roomType].stop;
+        dObj[roomType].stop = !cur;
+        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
+        dObj[roomType].isOverride.stop = true;
+    }
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+};
+
+window.handleHeaderStopToggle = (dateStr) => {
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+    dObj['GLOBAL'] = dObj['GLOBAL'] || { isOverride: {} };
+    const curGlobalStop = !!dObj['GLOBAL'].stop;
+    const newStop = !curGlobalStop;
+
+    dObj['GLOBAL'].stop = newStop;
+    dObj['GLOBAL'].isOverride = dObj['GLOBAL'].isOverride || {};
+    dObj['GLOBAL'].isOverride.stop = true;
+
+    (window.roomTypes || []).forEach(rt => {
+        dObj[rt] = dObj[rt] || { isOverride: {} };
+        dObj[rt].stop = newStop;
+    });
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+};
+
+window.handleCellCtaCtdCycle = (dateStr, roomType, ratePlanId = null) => {
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+
+    let curCta = false;
+    let curCtd = false;
+
+    if (ratePlanId) {
+        dObj.otaOverrides = dObj.otaOverrides || {};
+        curCta = !!dObj.otaOverrides[`${ratePlanId}_cta`];
+        curCtd = !!dObj.otaOverrides[`${ratePlanId}_ctd`];
+    } else {
+        dObj[roomType] = dObj[roomType] || { isOverride: {} };
+        curCta = !!dObj[roomType].cta;
+        curCtd = !!dObj[roomType].ctd;
+    }
+
+    let nextCta = false;
+    let nextCtd = false;
+
+    if (!curCta && !curCtd) {
+        nextCta = true;
+    } else if (curCta && !curCtd) {
+        nextCta = false;
+        nextCtd = true;
+    } else if (!curCta && curCtd) {
+        nextCta = true;
+        nextCtd = true;
+    } else {
+        nextCta = false;
+        nextCtd = false;
+    }
+
+    if (ratePlanId) {
+        dObj.otaOverrides[`${ratePlanId}_cta`] = nextCta;
+        dObj.otaOverrides[`${ratePlanId}_ctd`] = nextCtd;
+    } else {
+        dObj[roomType].cta = nextCta;
+        dObj[roomType].ctd = nextCtd;
+        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
+        dObj[roomType].isOverride.cta = true;
+        dObj[roomType].isOverride.ctd = true;
+    }
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+};
+
+window.handleCellPriceChange = (e, dateStr, roomType, isAltPin = false) => {
+    const rawVal = e.target.value.trim();
+    if (rawVal === "" || isNaN(parseFloat(rawVal))) return;
+    const newPrice = parseFloat(rawVal);
+
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+    dObj[roomType] = dObj[roomType] || { isOverride: {} };
+
+    const shouldPin = isAltPin || (window.editMode === 'pin');
+
+    if (shouldPin) {
+        dObj[roomType].std = newPrice;
+        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
+        dObj[roomType].isOverride.std = true;
+    } else {
+        dObj[roomType].std = newPrice;
+        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
+        dObj[roomType].isOverride.std = false;
+        window.rippleDay(dateStr, roomType);
+    }
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
 };
 
 // --- 2. RELATIONAL LINKING & RIPPLE ENGINE ---
@@ -73,44 +254,28 @@ window.rippleDay = (dateStr, startRoom) => {
                 window.masterPricing.timeline[dateStr][edge.to] = window.masterPricing.timeline[dateStr][edge.to] || { isOverride: {} };
                 let nextVals = window.masterPricing.timeline[dateStr][edge.to];
                 
+                if (nextVals.isOverride?.std) return;
+
                 if (isPeak) {
                     let ruleType = edge.typeFmp || edge.type;
                     let ruleVal = edge.valFmp !== undefined && edge.valFmp !== "" ? edge.valFmp : edge.val;
                     let basePrice = curVals.std !== "" ? curVals.std : curVals.fmp; 
                     let targetPrice = window.applyMath(basePrice, ruleType, ruleVal, edge.isReverse);
-                    
                     nextVals.std = targetPrice;
                     nextVals.fmp = targetPrice;
-                    nextVals.isOverride.std = false;
-                    nextVals.isOverride.fmp = false;
                 } else {
                     if (curVals.std !== "") {
                         nextVals.std = window.applyMath(curVals.std, edge.type, edge.val, edge.isReverse);
-                        nextVals.isOverride.std = false;
                     }
                     if (curVals.fmp !== "") {
                         let ruleType = edge.typeFmp || edge.type;
                         let ruleVal = edge.valFmp !== undefined && edge.valFmp !== "" ? edge.valFmp : edge.val;
                         nextVals.fmp = window.applyMath(curVals.fmp, ruleType, ruleVal, edge.isReverse);
-                        nextVals.isOverride.fmp = false;
                     }
                 }
                 
                 queue.push(edge.to);
-
                 window.dirtyDates.add(dateStr);
-                window.syncedDates.delete(dateStr);
-                window.dirtyFields = window.dirtyFields || {};
-                window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
-                if (window.channexRateMap) {
-                    const affectedRates = window.channexRateMap.filter(m => window.categoryResolver(m.pmsCategory) === edge.to);
-                    affectedRates.forEach(rate => {
-                        window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
-                        window.dirtyFields[dateStr][rate.ratePlanId].add('rate');
-                    });
-                }
-
-                if (window.updateDOMCell) window.updateDOMCell(dateStr, edge.to);
             }
         });
     }
@@ -362,9 +527,9 @@ window.toggleEvtRestrInputs = (enabled) => {
     const wrap = document.getElementById('evt-restr-table-wrap');
     if (!wrap) return;
     if (enabled) {
-        wrap.classList.remove('opacity-40', 'pointer-events-none');
+        wrap.classList.remove('opacity-50', 'pointer-events-none');
     } else {
-        wrap.classList.add('opacity-40', 'pointer-events-none');
+        wrap.classList.add('opacity-50', 'pointer-events-none');
     }
 };
 
@@ -398,17 +563,14 @@ window.populateAutofillBaselines = (b) => {
     setVal('w-d-p1', b.d_p1);
     setVal('w-d-p2', b.d_p2);
 
-    // Event Stay Restrictions Curve inputs
-    if (b.enable_evt_restr !== undefined) {
-        setCheck('w-enable-evt-restr', b.enable_evt_restr);
-        window.toggleEvtRestrInputs(!!b.enable_evt_restr);
-    }
+    setCheck('w-enable-evt-restr', b.enable_evt_restr);
+    window.toggleEvtRestrInputs(!!b.enable_evt_restr);
 
-    setVal('w-r-min-m2', b.r_min_m2 !== undefined ? b.r_min_m2 : "2");
-    setVal('w-r-min-m1', b.r_min_m1 !== undefined ? b.r_min_m1 : "3");
-    setVal('w-r-min-0', b.r_min_0 !== undefined ? b.r_min_0 : "3");
-    setVal('w-r-min-p1', b.r_min_p1 !== undefined ? b.r_min_p1 : "2");
-    setVal('w-r-min-p2', b.r_min_p2 !== undefined ? b.r_min_p2 : "2");
+    setVal('w-r-min-m2', b.r_min_m2 !== undefined ? b.r_min_m2 : "");
+    setVal('w-r-min-m1', b.r_min_m1 !== undefined ? b.r_min_m1 : "");
+    setVal('w-r-min-0', b.r_min_0 !== undefined ? b.r_min_0 : "");
+    setVal('w-r-min-p1', b.r_min_p1 !== undefined ? b.r_min_p1 : "");
+    setVal('w-r-min-p2', b.r_min_p2 !== undefined ? b.r_min_p2 : "");
 
     setVal('w-r-minarr-m2', b.r_minarr_m2 !== undefined ? b.r_minarr_m2 : "");
     setVal('w-r-minarr-m1', b.r_minarr_m1 !== undefined ? b.r_minarr_m1 : "");
@@ -471,12 +633,12 @@ window.saveAutofillBaselines = async (notify = false) => {
         d_p1: getVal('w-d-p1'),
         d_p2: getVal('w-d-p2'),
 
-        enable_evt_restr: document.getElementById('w-enable-evt-restr') ? getBool('w-enable-evt-restr') : true,
-        r_min_m2: getRaw('w-r-min-m2') || "2",
-        r_min_m1: getRaw('w-r-min-m1') || "3",
-        r_min_0: getRaw('w-r-min-0') || "3",
-        r_min_p1: getRaw('w-r-min-p1') || "2",
-        r_min_p2: getRaw('w-r-min-p2') || "2",
+        enable_evt_restr: getBool('w-enable-evt-restr'),
+        r_min_m2: getRaw('w-r-min-m2'),
+        r_min_m1: getRaw('w-r-min-m1'),
+        r_min_0: getRaw('w-r-min-0'),
+        r_min_p1: getRaw('w-r-min-p1'),
+        r_min_p2: getRaw('w-r-min-p2'),
 
         r_minarr_m2: getRaw('w-r-minarr-m2'),
         r_minarr_m1: getRaw('w-r-minarr-m1'),
@@ -506,7 +668,103 @@ window.saveAutofillBaselines = async (notify = false) => {
     }
 };
 
-// --- 5. TIMELINE AUTOMATOR & OVERRIDE CLEARERS ---
+// --- 5. DYNAMIC ACTIVE OTA CHANNEL PIPELINE ---
+window.renderDynamicOtaRules = () => {
+    const container = document.getElementById('dynamic-ota-rules-container');
+    if (!container) return;
+
+    const activeChannels = new Set();
+    (window.channexRateMap || []).forEach(r => {
+        const title = r.ratePlanTitle || '';
+        if (/bdc|booking/i.test(title)) activeChannels.add('Booking.com');
+        else if (/hw|hostelworld/i.test(title)) activeChannels.add('Hostelworld');
+        else if (/agoda/i.test(title)) activeChannels.add('Agoda');
+        else if (/expedia/i.test(title)) activeChannels.add('Expedia');
+        else if (/airbnb/i.test(title)) activeChannels.add('Airbnb');
+        else activeChannels.add('Direct Website');
+    });
+
+    if (activeChannels.size === 0) {
+        activeChannels.add('Booking.com');
+        activeChannels.add('Hostelworld');
+        activeChannels.add('Direct Website');
+    }
+
+    window.pricingRules = window.pricingRules || {};
+    window.pricingRules.channels = window.pricingRules.channels || {
+        'Booking.com': { type: '=', val: 0 },
+        'Hostelworld': { type: '+%', val: 25 },
+        'Direct Website': { type: '-%', val: 10 }
+    };
+
+    let html = '';
+    activeChannels.forEach(ch => {
+        const conf = window.pricingRules.channels[ch] || { type: '=', val: 0 };
+        html += `
+        <div class="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+            <span class="font-black text-xs text-slate-800 uppercase flex items-center gap-2">
+                <i data-lucide="radio" size="14" class="text-indigo-600"></i> ${ch}
+            </span>
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-slate-500">Master Driver</span>
+                <select class="input-base !w-24 !py-1 font-black text-center" onchange="window.updateChannelRule('${ch}', 'type', this.value)">
+                    <option value="=" ${conf.type === '=' ? 'selected' : ''}>SYNC (=)</option>
+                    <option value="+%" ${conf.type === '+%' ? 'selected' : ''}>+ %</option>
+                    <option value="-%" ${conf.type === '-%' ? 'selected' : ''}>- %</option>
+                    <option value="+" ${conf.type === '+' ? 'selected' : ''}>+ ฿</option>
+                    <option value="-" ${conf.type === '-' ? 'selected' : ''}>- ฿</option>
+                </select>
+                <input type="number" value="${conf.val || 0}" class="input-base !w-20 !py-1 font-black text-center" oninput="window.updateChannelRule('${ch}', 'val', this.value)">
+            </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.updateChannelRule = (channel, field, val) => {
+    window.pricingRules = window.pricingRules || {};
+    window.pricingRules.channels = window.pricingRules.channels || {};
+    window.pricingRules.channels[channel] = window.pricingRules.channels[channel] || { type: '=', val: 0 };
+    window.pricingRules.channels[channel][field] = field === 'val' ? parseFloat(val) || 0 : val;
+    window.markRulesUnsaved();
+};
+
+window.markRulesUnsaved = () => {
+    window.markUnsavedChanges();
+};
+
+window.savePricingRulesToCloud = async (notify = false) => {
+    const rules = {
+        masterDriver: document.getElementById('rule-master-driver')?.value || 'bdc_non_ref',
+        anchorPrivate: document.getElementById('rule-anchor-private')?.value || '',
+        anchorDorm: document.getElementById('rule-anchor-dorm')?.value || '',
+        stdRefType: document.getElementById('rule-std-ref-type')?.value || '+%',
+        stdRefVal: parseFloat(document.getElementById('rule-std-ref-val')?.value) || 10,
+        evtRefType: document.getElementById('rule-evt-ref-type')?.value || '+%',
+        evtRefVal: parseFloat(document.getElementById('rule-evt-ref-val')?.value) || 15,
+        channels: window.pricingRules?.channels || {}
+    };
+
+    window.pricingRules = rules;
+
+    try {
+        const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
+        const { doc, setDoc } = window.cmFs;
+        await setDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'pricing', `master_${canonId}`), {
+            pricingRules: rules,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        if (notify) window.customAlert("Pricing Rules & Channel Multipliers saved to database!");
+    } catch(e) {
+        console.error("Rules Save Error:", e);
+        if (notify) window.customAlert("Failed to save rules: " + e.message);
+    }
+};
+
+// --- 6. TIMELINE AUTOMATOR & OVERRIDE CLEARERS ---
 window.setAutofillPreset = (days) => {
     const startInp = document.getElementById('w-start-date');
     const endInp = document.getElementById('w-end-date');
@@ -532,7 +790,6 @@ window.clearOverrides = () => {
                 if (window.masterPricing.timeline[dateStr][r]) window.masterPricing.timeline[dateStr][r].isOverride = {}; 
             });
             if (window.masterPricing.timeline[dateStr]['GLOBAL']) window.masterPricing.timeline[dateStr]['GLOBAL'].isOverride = {};
-            delete window.masterPricing.timeline[dateStr].evtRestrictions;
             window.masterPricing.timeline[dateStr].otaOverrides = {};
         }
     }
@@ -562,7 +819,6 @@ window.runAutomator = () => {
     const d_p1 = parseFloat(document.getElementById('w-d-p1')?.value) || d_base;
     const d_p2 = parseFloat(document.getElementById('w-d-p2')?.value) || d_base;
 
-    // Check if restrictions curve is explicitly enabled; default to true if element absent
     const restrCheckEl = document.getElementById('w-enable-evt-restr');
     const enableRestr = restrCheckEl ? restrCheckEl.checked : true;
 
@@ -576,7 +832,6 @@ window.runAutomator = () => {
     };
     const getRestrCta = id => document.getElementById(id)?.checked || false;
 
-    // Cascading stay curves with intelligent defaults
     const restrMap = {
         "-2": { min: getRestrVal('w-r-min-m2', 2), min_arr: getRestrVal('w-r-minarr-m2', ""), cta: getRestrCta('w-r-cta-m2') },
         "-1": { min: getRestrVal('w-r-min-m1', 3), min_arr: getRestrVal('w-r-minarr-m1', ""), cta: getRestrCta('w-r-cta-m1') },
@@ -620,11 +875,6 @@ window.runAutomator = () => {
 
         window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
         
-        // =========================================================================
-        // STRICT RESTRICTION SCOPE ISOLATION:
-        // Event restrictions are isolated strictly to EVT rate plans.
-        // GLOBAL and standard rate plans are NEVER contaminated with event curves!
-        // =========================================================================
         if (hasEvents && enableRestr) {
             const restrConfig = restrMap[String(minDiff)];
             if (restrConfig) {
@@ -635,7 +885,6 @@ window.runAutomator = () => {
                     cta: restrConfig.cta
                 };
 
-                // Explicitly stamp strictly onto BOTH Event Rate Plans (Event Refundable & Event Non-Refundable)
                 (window.channexRateMap || []).forEach(rate => {
                     const isEvtRate = (rate.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(rate.ratePlanTitle || '');
                     if (isEvtRate) {
@@ -644,13 +893,6 @@ window.runAutomator = () => {
                         if (restrConfig.min !== "") otaO[`${rate.ratePlanId}_min`] = restrConfig.min;
                         if (restrConfig.min_arr !== "") otaO[`${rate.ratePlanId}_min_arr`] = restrConfig.min_arr;
                         otaO[`${rate.ratePlanId}_cta`] = !!restrConfig.cta;
-
-                        window.dirtyFields = window.dirtyFields || {};
-                        window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
-                        window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
-                        window.dirtyFields[dateStr][rate.ratePlanId].add('min');
-                        window.dirtyFields[dateStr][rate.ratePlanId].add('min_arr');
-                        window.dirtyFields[dateStr][rate.ratePlanId].add('cta');
                     }
                 });
             } else {
@@ -697,7 +939,7 @@ window.nukeDatabase = () => {
     });
 };
 
-// --- 6. PROMOTIONS & DEALS ENGINE ---
+// --- 7. PROMOTIONS & DEALS ENGINE ---
 window.populatePromoScopeDropdown = () => {
     const scopeEl = document.getElementById('promo-room-scope');
     if (scopeEl) {
@@ -707,15 +949,21 @@ window.populatePromoScopeDropdown = () => {
 };
 
 window.openAddPromoModal = () => {
-    document.getElementById('promo-rule-id').value = '';
-    document.getElementById('promo-name').value = '';
-    document.getElementById('promo-discount-pct').value = '15';
-    document.getElementById('promo-always-active').checked = false;
+    const idEl = document.getElementById('promo-rule-id');
+    const nameEl = document.getElementById('promo-name');
+    const discEl = document.getElementById('promo-discount-pct');
+    const alwEl = document.getElementById('promo-always-active');
+    if (idEl) idEl.value = '';
+    if (nameEl) nameEl.value = '';
+    if (discEl) discEl.value = '15';
+    if (alwEl) alwEl.checked = false;
     window.togglePromoDateInputs(false);
 
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('promo-start-date').value = today;
-    document.getElementById('promo-end-date').value = today;
+    const sEl = document.getElementById('promo-start-date');
+    const eEl = document.getElementById('promo-end-date');
+    if (sEl) sEl.value = today;
+    if (eEl) eEl.value = today;
 
     const modal = document.getElementById('promo-modal');
     if (modal) {
@@ -785,41 +1033,9 @@ window.savePromoRule = async () => {
         window.closeModal('promo-modal');
         window.renderPromoRulesTable();
         
-        const markDatesAndRatePlans = (dateList) => {
-            window.dirtyFields = window.dirtyFields || {};
-            const mappedRates = (window.channexRateMap || []).filter(m => {
-                const matchChan = window.isRatePlanMatchingChannel ? window.isRatePlanMatchingChannel(m.ratePlanTitle, channel) : true;
-                const matchScope = scope === 'ALL' || window.categoryResolver(m.pmsCategory) === scope;
-                return matchChan && matchScope;
-            });
-
-            dateList.forEach(d => {
-                window.dirtyDates.add(d);
-                window.syncedDates.delete(d);
-                window.dirtyFields[d] = window.dirtyFields[d] || {};
-                mappedRates.forEach(rate => {
-                    window.dirtyFields[d][rate.ratePlanId] = window.dirtyFields[d][rate.ratePlanId] || new Set();
-                    window.dirtyFields[d][rate.ratePlanId].add('rate');
-                });
-            });
-        };
-
-        if (isAlways) {
-            markDatesAndRatePlans(Object.keys(window.masterPricing.timeline || {}));
-        } else if (startDate && endDate) {
-            let c = new Date(startDate + "T12:00:00Z");
-            const eD = new Date(endDate + "T12:00:00Z");
-            const dList = [];
-            while (c <= eD) {
-                dList.push(c.toISOString().split('T')[0]);
-                c.setUTCDate(c.getUTCDate() + 1);
-            }
-            markDatesAndRatePlans(dList);
-        }
-
         window.markUnsavedChanges();
         if (window.renderGrid) window.renderGrid();
-        window.customAlert(`Promo rule "${name}" saved! Affected ${channel} rates marked for sync.`);
+        window.customAlert(`Promo rule "${name}" saved!`);
     } catch (err) {
         window.customAlert("Save Error: " + err.message);
     }
@@ -833,26 +1049,6 @@ window.togglePromoRuleActive = async (ruleId, isActive) => {
         const { doc, updateDoc } = window.cmFs;
         await updateDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId), { promoRules });
         window.renderPromoRulesTable();
-
-        if (target.isAlways) {
-            Object.keys(window.masterPricing.timeline || {}).forEach(d => window.dirtyDates.add(d));
-        } else if (target.startDate && target.endDate) {
-            let c = new Date(target.startDate + "T12:00:00Z");
-            const eD = new Date(target.endDate + "T12:00:00Z");
-            while (c <= eD) {
-                const dStr = c.toISOString().split('T')[0];
-                window.dirtyDates.add(dStr);
-                window.dirtyFields = window.dirtyFields || {};
-                window.dirtyFields[dStr] = window.dirtyFields[dStr] || {};
-                (window.channexRateMap || []).forEach(rate => {
-                    if (window.isRatePlanMatchingChannel && window.isRatePlanMatchingChannel(rate.ratePlanTitle, target.channel)) {
-                        window.dirtyFields[dStr][rate.ratePlanId] = window.dirtyFields[dStr][rate.ratePlanId] || new Set();
-                        window.dirtyFields[dStr][rate.ratePlanId].add('rate');
-                    }
-                });
-                c.setUTCDate(c.getUTCDate() + 1);
-            }
-        }
         window.markUnsavedChanges();
         if (window.renderGrid) window.renderGrid();
     }
