@@ -4,7 +4,9 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-grid.js
 // ==========================================================================
 
-window.drillLevel = window.drillLevel || 'room'; // 'driver' | 'room' | 'rates'
+window.drillLevel = window.drillLevel || 'room'; // 'master' | 'room' | 'rates'
+window.viewDensity = window.viewDensity || 'full'; // 'avail' | 'compact' | 'minmax' | 'full'
+window.channelPreviewFilter = window.channelPreviewFilter || 'ALL';
 window.expandedRooms = window.expandedRooms || new Set();
 
 window.toggleRoomExpand = (room) => {
@@ -183,12 +185,6 @@ window.calculateLiveInventory = () => {
 
             if (changesFound) {
                 window.markUnsavedChanges();
-                if (window.pushToChannexAPI) {
-                    console.log("⚡ Auto-detected inventory change! Dispatching live sync to Channex...");
-                    window.pushToChannexAPI(null, 'delta').catch(err => {
-                        console.error("⚠️ Background Channex sync error:", err);
-                    });
-                }
             }
         } catch (e) {
             console.error("Error parsing old inventory:", e);
@@ -209,8 +205,9 @@ window.renderGrid = () => {
     body.innerHTML = '';
 
     let dObj = new Date(startStr + "T12:00:00Z");
-    const hasEvents = (window.eventDates || []).length > 0 && window.activeMetrics.has('evt');
+    const hasEvents = (window.eventDates || []).length > 0;
     const drill = window.drillLevel || 'room';
+    const density = window.viewDensity || 'full';
 
     // 1. HEADER ROW (Dates + Stop-All shortcut)
     let trHead = `<tr class="sticky-header">
@@ -243,15 +240,17 @@ window.renderGrid = () => {
     trHead += `</tr>`;
     head.innerHTML = trHead;
 
-    // 2. ROOM SELECTION BY DRILLDOWN LEVEL
+    // 2. ROOM SELECTION (Master Drilldown shows BOTH Private Master and Dorm Master)
     let targetRooms = [...(window.roomTypes || [])];
-    const anchorPrivate = window.savedAutofillBaselines?.anchor_p || document.getElementById('w-anchor-private')?.value || targetRooms[0];
+    const anchorPrivate = window.savedAutofillBaselines?.anchor_p || document.getElementById('w-anchor-private')?.value;
+    const anchorDorm = window.savedAutofillBaselines?.anchor_d || document.getElementById('w-anchor-dorm')?.value;
 
-    if (drill === 'driver') {
-        targetRooms = [anchorPrivate].filter(Boolean);
+    if (drill === 'master' || drill === 'driver') {
+        targetRooms = [anchorPrivate, anchorDorm].filter(Boolean);
         if (targetRooms.length === 0 && (window.roomTypes || []).length > 0) {
             targetRooms = [window.roomTypes[0]];
         }
+        targetRooms = [...new Set(targetRooms)];
     }
 
     let allRowsHtml = '';
@@ -263,38 +262,39 @@ window.renderGrid = () => {
         const isExpanded = (drill === 'rates') || window.expandedRooms.has(room);
 
         // A. AVAILABILITY ROW
-        if (window.activeMetrics.has('avail')) {
-            let trAvail = `<tr class="${groupClass} border-b border-slate-200">
-                <td class="frozen-col !p-0 z-20 align-middle border-r border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full font-black text-slate-800 text-[11px] leading-tight">
-                        <span class="truncate">${displayName}</span>
-                        ${drill !== 'driver' && mappedRates.length > 0 ? `
-                        <button onclick="window.toggleRoomExpand('${room}')" class="px-1 py-0.5 rounded bg-slate-200 hover:bg-indigo-100 text-[9px] text-slate-700 font-bold transition-colors cursor-pointer" title="Toggle rate plan breakdown">
-                            ${isExpanded ? '▼' : '▶'} ${mappedRates.length}
-                        </button>` : ''}
-                    </div>
-                </td>
-                <td class="frozen-col-2 !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                    <span class="text-[8px] font-black text-slate-500 tracking-tighter block w-full text-center">AVAIL</span>
-                </td>`;
+        let trAvail = `<tr class="${groupClass} border-b border-slate-200">
+            <td class="frozen-col !p-0 z-20 align-middle border-r border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                <div class="w-[140px] flex items-center justify-between px-1.5 h-full font-black text-slate-800 text-[11px] leading-tight">
+                    <span class="truncate">${displayName}</span>
+                    ${drill !== 'master' && drill !== 'driver' && mappedRates.length > 0 && density !== 'avail' ? `
+                    <button onclick="window.toggleRoomExpand('${room}')" class="px-1 py-0.5 rounded bg-slate-200 hover:bg-indigo-100 text-[9px] text-slate-700 font-bold transition-colors cursor-pointer" title="Toggle rate plan breakdown">
+                        ${isExpanded ? '▼' : '▶'} ${mappedRates.length}
+                    </button>` : ''}
+                </div>
+            </td>
+            <td class="frozen-col-2 !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                <span class="text-[8px] font-black text-slate-500 tracking-tighter block w-full text-center">AVAIL</span>
+            </td>`;
 
-            for (let i = 0; i < window.daysToRender; i++) {
-                const cur = new Date(dObj);
-                cur.setUTCDate(cur.getUTCDate() + i);
-                const dateStr = window.getLocalYMD(cur);
-                const live = window.liveInventory[dateStr]?.[room] !== undefined ? window.liveInventory[dateStr][room] : 0;
-                const otaAvail = window.masterPricing.timeline[dateStr]?.otaOverrides?.[`${room}_avail`];
-                const displayVal = otaAvail !== undefined ? otaAvail : live;
-                const availColor = displayVal === 0 ? 'text-rose-600 font-black' : (displayVal <= 2 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold');
-                const overrideBg = otaAvail !== undefined ? '!bg-amber-100' : 'bg-slate-50/80';
+        for (let i = 0; i < window.daysToRender; i++) {
+            const cur = new Date(dObj);
+            cur.setUTCDate(cur.getUTCDate() + i);
+            const dateStr = window.getLocalYMD(cur);
+            const live = window.liveInventory[dateStr]?.[room] !== undefined ? window.liveInventory[dateStr][room] : 0;
+            const otaAvail = window.masterPricing.timeline[dateStr]?.otaOverrides?.[`${room}_avail`];
+            const displayVal = otaAvail !== undefined ? otaAvail : live;
+            const availColor = displayVal === 0 ? 'text-rose-600 font-black' : (displayVal <= 2 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold');
+            const overrideBg = otaAvail !== undefined ? '!bg-amber-100' : 'bg-slate-50/80';
 
-                trAvail += `<td class="p-0 min-w-[36px] w-[36px] border-r border-slate-200 ${overrideBg}">
-                    <input type="number" class="w-full h-full text-center outline-none focus:bg-white text-[10px] ${availColor} font-bold bg-transparent tracking-tighter px-0 py-1" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
-                </td>`;
-            }
-            trAvail += `</tr>`;
-            allRowsHtml += trAvail;
+            trAvail += `<td class="p-0 min-w-[36px] w-[36px] border-r border-slate-200 ${overrideBg}">
+                <input type="number" class="w-full h-full text-center outline-none focus:bg-white text-[10px] ${availColor} font-bold bg-transparent tracking-tighter px-0 py-1" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
+            </td>`;
         }
+        trAvail += `</tr>`;
+        allRowsHtml += trAvail;
+
+        // If density is 'avail' ONLY, skip the rate and OTA rows
+        if (density === 'avail') return;
 
         // B. MASTER ROOM DRIVER / BASE RATE (MULTI-ZONE CELL)
         let trRate = `<tr class="${groupClass} border-b-2 border-slate-400">
@@ -323,6 +323,7 @@ window.renderGrid = () => {
             else if (data.cta) ctaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-amber-100 text-amber-800">⇥ CTA</span>';
             else if (data.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-sky-100 text-sky-800">⇤ CTD</span>';
 
+            const isMinArr = !!data.min_arr;
             const minVal = data.min !== "" ? data.min : (data.min_arr ? `${data.min_arr}▸` : "");
             const maxVal = data.max !== "" ? data.max : "";
 
@@ -330,18 +331,23 @@ window.renderGrid = () => {
             if (isStopped) cellClass += "rate-cell-stopped ";
             else if (isPinned) cellClass += "rate-cell-pinned ";
 
-            trRate += `<td class="${cellClass}" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}\\nStop: ${isStopped ? 'YES' : 'NO'}')" onmouseleave="window.hideCmTooltip()">
-                <!-- TOP: Min & Max Stay Inputs -->
+            const showTop = density === 'minmax' || density === 'full';
+            const showBottom = density === 'full';
+
+            trRate += `<td class="${cellClass}" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice}\\nMin: ${minVal || '--'}${isMinArr ? ' (Arrival)' : ''}, Max: ${maxVal || '--'}\\nStop: ${isStopped ? 'YES' : 'NO'}')" onmouseleave="window.hideCmTooltip()">
+                ${showTop ? `
+                <!-- TOP: Min & Max Stay Inputs with arrival toggle -->
                 <div class="flex items-center justify-between px-0.5 text-[8px] font-bold text-slate-400 leading-none h-[11px] pt-0.5">
-                    <input type="text" class="w-3.5 bg-transparent border-none text-left p-0 text-[8px] font-black text-slate-500 outline-none" value="${minVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min', this.value)" title="Min Stay">
+                    <input type="text" class="w-3.5 bg-transparent border-none text-left p-0 text-[8px] font-black ${isMinArr ? 'text-amber-600' : 'text-slate-500'} outline-none" value="${minVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)" title="Type number for Min Stay, or '3a'/'3>' for Min on Arrival">
                     <input type="text" class="w-3.5 bg-transparent border-none text-right p-0 text-[8px] text-slate-400 outline-none" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)" title="Max Stay">
-                </div>
+                </div>` : ''}
 
                 <!-- MID: Clickable Price Input (Alt+Enter pins) -->
-                <div class="h-[18px] flex items-center justify-center">
+                <div class="${density === 'compact' ? 'h-[26px]' : 'h-[18px]'} flex items-center justify-center">
                     <input type="number" step="any" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] text-slate-800 px-0" value="${displayPrice}" onfocus="this.select()" onkeydown="if(event.key==='Enter' && event.altKey){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', true); } else if(event.key==='Enter'){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', false); }" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}', false)">
                 </div>
 
+                ${showBottom ? `
                 <!-- BOTTOM: CTA/CTD cycle dot & Ghost Stop-Sell trigger -->
                 <div class="flex items-center justify-between px-1 text-[8px] leading-none h-[11px] pb-0.5">
                     <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}')" class="cursor-pointer" title="Cycle CTA/CTD restrictions">
@@ -350,15 +356,15 @@ window.renderGrid = () => {
                     <button onclick="window.handleCellStopToggle('${dateStr}', '${room}')" class="cursor-pointer" title="Toggle Stop-Sell">
                         ${isStopped ? '<span class="px-0.5 py-0.1 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-1.5 h-1.5 rounded-full bg-transparent hover:bg-rose-400 inline-block"></span>'}
                     </button>
-                </div>
+                </div>` : ''}
             </td>`;
         }
         trRate += `</tr>`;
         allRowsHtml += trRate;
 
         // C. MAPPED RATE PLANS (IF EXPANDED IN ROOM OR ALL-RATES MODE)
-        if (isExpanded && mappedRates.length > 0 && drill !== 'driver') {
-            mappedRates.forEach((rate, rateIdx) => {
+        if (isExpanded && mappedRates.length > 0 && drill !== 'master' && drill !== 'driver' && density !== 'avail') {
+            mappedRates.forEach((rate) => {
                 const rateSource = rate.rateSource || 'std';
                 const isEvtRate = (rateSource === 'evt') || /evt|fmp|event|pkg/i.test(rate.ratePlanTitle || '');
                 const displayTitle = window.formatRatePlanTitle ? window.formatRatePlanTitle(rate.ratePlanTitle) : rate.ratePlanTitle;
@@ -405,14 +411,19 @@ window.renderGrid = () => {
                     if (otaStop) cellOtaClass += "rate-cell-stopped ";
                     else if (otaOverride !== undefined) cellOtaClass += "rate-cell-pinned ";
 
+                    const showTop = density === 'minmax' || density === 'full';
+                    const showBottom = density === 'full';
+
                     trOta += `<td class="${cellOtaClass}">
+                        ${showTop ? `
                         <div class="flex items-center justify-between px-0.5 text-[8px] font-bold text-slate-400 leading-none h-[10px] pt-0.5">
                             <input type="text" class="w-3 bg-transparent border-none text-left p-0 text-[7px] text-indigo-700 outline-none" value="${otaMin || ''}" placeholder="-" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'min', this.value, '${rateSource}')">
                             <span class="text-[7px] text-slate-300">-</span>
-                        </div>
-                        <div class="h-[16px] flex items-center justify-center">
+                        </div>` : ''}
+                        <div class="${density === 'compact' ? 'h-[24px]' : 'h-[16px]'} flex items-center justify-center">
                             <input type="number" step="any" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${calculatedRate !== undefined ? window.formatDisplay(calculatedRate * mult) : ''}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'rate', this.value, '${rateSource}')">
                         </div>
+                        ${showBottom ? `
                         <div class="flex items-center justify-between px-1 text-[8px] leading-none h-[10px] pb-0.5">
                             <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer">
                                 ${otaCtaBadge || '<span class="w-1.5 h-1.5 rounded-full bg-slate-200 inline-block"></span>'}
@@ -420,7 +431,7 @@ window.renderGrid = () => {
                             <button onclick="window.handleCellStopToggle('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer">
                                 ${otaStop ? '<span class="px-0.5 py-0.1 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-1.5 h-1.5 rounded-full bg-transparent hover:bg-rose-400 inline-block"></span>'}
                             </button>
-                        </div>
+                        </div>` : ''}
                     </td>`;
                 }
                 trOta += `</tr>`;
@@ -430,28 +441,30 @@ window.renderGrid = () => {
     });
 
     // 3. GLOBAL RESTRICTIONS ROW
-    let globalTr = `<tr class="bg-slate-800 text-white border-t-2 border-slate-900">
-        <td class="frozen-col !p-0 z-20 bg-slate-900 border-r border-slate-700">
-            <span class="text-[10px] font-black uppercase tracking-widest block px-2 py-1 text-slate-200">GLOBAL (ALL)</span>
-        </td>
-        <td class="frozen-col-2 !p-0 z-20 bg-slate-900 border-r-2 border-slate-600 text-center">
-            <span class="text-[8px] font-black text-slate-400 uppercase">RESTR</span>
-        </td>`;
+    if (density === 'minmax' || density === 'full') {
+        let globalTr = `<tr class="bg-slate-800 text-white border-t-2 border-slate-900">
+            <td class="frozen-col !p-0 z-20 bg-slate-900 border-r border-slate-700">
+                <span class="text-[10px] font-black uppercase tracking-widest block px-2 py-1 text-slate-200">GLOBAL (ALL)</span>
+            </td>
+            <td class="frozen-col-2 !p-0 z-20 bg-slate-900 border-r-2 border-slate-600 text-center">
+                <span class="text-[8px] font-black text-slate-400 uppercase">RESTR</span>
+            </td>`;
 
-    for (let i = 0; i < window.daysToRender; i++) {
-        const cur = new Date(dObj);
-        cur.setUTCDate(cur.getUTCDate() + i);
-        const dateStr = window.getLocalYMD(cur);
-        const gData = window.masterPricing.timeline?.[dateStr]?.GLOBAL || {};
+        for (let i = 0; i < window.daysToRender; i++) {
+            const cur = new Date(dObj);
+            cur.setUTCDate(cur.getUTCDate() + i);
+            const dateStr = window.getLocalYMD(cur);
+            const gData = window.masterPricing.timeline?.[dateStr]?.GLOBAL || {};
 
-        globalTr += `<td class="p-0 min-w-[36px] w-[36px] border-r border-slate-700 text-center">
-            <div class="flex items-center justify-center gap-0.5 py-1">
-                <input type="text" class="w-4 bg-slate-700 rounded text-center text-[9px] font-black text-white p-0 outline-none" value="${gData.min || ''}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min', this.value)" title="Global Min Stay">
-            </div>
-        </td>`;
+            globalTr += `<td class="p-0 min-w-[36px] w-[36px] border-r border-slate-700 text-center">
+                <div class="flex items-center justify-center gap-0.5 py-1">
+                    <input type="text" class="w-4 bg-slate-700 rounded text-center text-[9px] font-black text-white p-0 outline-none" value="${gData.min || ''}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min', this.value)" title="Global Min Stay">
+                </div>
+            </td>`;
+        }
+        globalTr += `</tr>`;
+        allRowsHtml += globalTr;
     }
-    globalTr += `</tr>`;
-    allRowsHtml += globalTr;
 
     body.innerHTML = allRowsHtml;
     if (window.lucide) window.lucide.createIcons();
@@ -481,10 +494,6 @@ window.handleAvailEdit = (dateStr, room, value) => {
 
     window.updateDOMCell(dateStr, room);
     window.markUnsavedChanges();
-
-    if (window.pushToChannexAPI) {
-        window.pushToChannexAPI(null, 'delta').catch(err => console.error("⚠️ Background sync error:", err));
-    }
 };
 
 window.handleCellEdit = (dateStr, room, field, value) => {
@@ -493,6 +502,39 @@ window.handleCellEdit = (dateStr, room, field, value) => {
 
     window.dirtyFields = window.dirtyFields || {};
     window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
+
+    // Hybrid Min Stay vs Min on Arrival parser (e.g. '3a', '3>', '3▸' -> min_arr)
+    if (field === 'min_hybrid') {
+        const valStr = String(value || '').trim();
+        const isArr = /[a>▸]/i.test(valStr);
+        const cleanNum = valStr.replace(/[^0-9]/g, '');
+
+        window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+        window.masterPricing.timeline[dateStr][room] = window.masterPricing.timeline[dateStr][room] || { isOverride: {} };
+        const data = window.masterPricing.timeline[dateStr][room];
+
+        if (cleanNum === "") {
+            delete data.isOverride.min;
+            delete data.isOverride.min_arr;
+            data.min = "";
+            data.min_arr = "";
+        } else if (isArr) {
+            data.min_arr = parseInt(cleanNum, 10);
+            data.min = "";
+            data.isOverride.min_arr = true;
+            delete data.isOverride.min;
+        } else {
+            data.min = parseInt(cleanNum, 10);
+            data.min_arr = "";
+            data.isOverride.min = true;
+            delete data.isOverride.min_arr;
+        }
+
+        window.updateDOMCell(dateStr, room);
+        window.markUnsavedChanges();
+        if (window.renderGrid) window.renderGrid();
+        return;
+    }
 
     if (window.channexRateMap) {
         let affectedRates = room === 'GLOBAL' ? window.channexRateMap : window.channexRateMap.filter(m => window.categoryResolver(m.pmsCategory) === room);
@@ -544,10 +586,6 @@ window.handleCellEdit = (dateStr, room, field, value) => {
         }
     }
     window.markUnsavedChanges();
-
-    if (window.pushToChannexAPI) {
-        window.pushToChannexAPI(null, 'delta').catch(err => console.error("⚠️ Background sync error:", err));
-    }
 };
 
 window.handleOtaEdit = (dateStr, ratePlanId, parentRoom, ruleType, ruleVal, field, value, rateSource = 'std') => {
@@ -591,92 +629,30 @@ window.handleOtaEdit = (dateStr, ratePlanId, parentRoom, ruleType, ruleVal, fiel
 
     window.updateDOMCell(dateStr, parentRoom);
     window.markUnsavedChanges();
-
-    if (window.pushToChannexAPI) {
-        window.pushToChannexAPI(null, 'delta').catch(err => console.error("⚠️ Background sync error:", err));
-    }
 };
 
-window.shiftTape = (days) => {
-    const current = new Date(document.getElementById('tape-start').value + "T12:00:00Z");
-    current.setUTCDate(current.getUTCDate() + days);
-    document.getElementById('tape-start').value = current.toISOString().split('T')[0];
-    window.renderGrid();
-};
-
-window.toggleRipple = () => {
-    window.isRippleEnabled = !window.isRippleEnabled;
-    const btn = document.getElementById('ripple-toggle');
-    if (!btn) return;
-    if (window.isRippleEnabled) {
-        btn.innerHTML = '<i data-lucide="link" size="12"></i> LINKS: ON';
-        btn.classList.replace('!bg-slate-100', '!bg-indigo-100');
-        btn.classList.replace('!text-slate-500', '!text-indigo-700');
-    } else {
-        btn.innerHTML = '<i data-lucide="link-2-off" size="12"></i> LINKS: OFF';
-        btn.classList.replace('!bg-indigo-100', '!bg-slate-100');
-        btn.classList.replace('!text-indigo-700', '!text-slate-500');
-    }
-    if (window.lucide) window.lucide.createIcons();
-};
-
-window.toggleQuickBulk = (forceClose = false) => {
-    const panel = document.getElementById('quick-bulk-panel');
-    if (!panel) return;
-    if (!forceClose && panel.classList.contains('hidden')) {
-        panel.classList.remove('hidden');
-        panel.classList.add('flex');
-        window.renderBulkGrid();
-    } else {
-        panel.classList.add('hidden');
-        panel.classList.remove('flex');
-    }
-};
-
-window.renderBulkGrid = () => {
-    let html = '';
-    const inptCls = "input-base !py-0.5 !px-1 text-center text-[10px] w-14 font-black transition-colors focus:bg-indigo-50 border border-transparent focus:border-indigo-300 hover:bg-slate-50 placeholder-slate-400";
-
-    html += `<tr class="bg-slate-200 border-b border-slate-300" data-type="global" data-id="GLOBAL">
-        <td class="p-1.5 font-black text-[10px] uppercase text-slate-800 border-r border-slate-300">🌍 GLOBAL (ALL ROOMS)</td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="text" class="${inptCls} bg-slate-100/50 cursor-not-allowed" disabled></td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="number" step="any" class="${inptCls} qb-val-min" placeholder="MIN"></td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="number" step="any" class="${inptCls} qb-val-max" placeholder="MAX"></td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="number" step="any" class="${inptCls} qb-val-min-arr" placeholder="MIN-A"></td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="text" class="${inptCls} qb-val-cta" placeholder="CTA"></td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="text" class="${inptCls} qb-val-ctd" placeholder="CTD"></td>
-        <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
-    </tr>`;
-
-    (window.roomTypes || []).forEach(r => {
-        html += `<tr class="bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors" data-type="room" data-id="${r}">
-            <td class="p-1.5 font-bold text-[10px] text-slate-600 pl-4 border-r border-slate-200">🚪 ${window.displayAbbrev[r] || r} <span class="text-[8px] text-slate-400 font-black uppercase ml-1">(Base)</span></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-rate !placeholder-indigo-400" placeholder="RATE"></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-min" placeholder="MIN"></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-max" placeholder="MAX"></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-min-arr" placeholder="MIN-A"></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="text" class="${inptCls} qb-val-cta" placeholder="CTA"></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="text" class="${inptCls} qb-val-ctd" placeholder="CTD"></td>
-            <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
-        </tr>`;
-
-        const mappedRates = (window.channexRateMap || []).filter(m => window.categoryResolver(m.pmsCategory) === r);
-        mappedRates.forEach(m => {
-            html += `<tr class="bg-indigo-50/20 border-b border-indigo-50 hover:bg-indigo-50/50 transition-colors" data-type="rate" data-id="${m.ratePlanId}" data-parent="${r}" data-ruletype="${m.ruleType || "="}" data-ruleval="${m.ruleVal !== undefined ? m.ruleVal : 0}" data-ratesource="${m.rateSource || 'std'}">
-                <td class="p-1.5 font-bold text-[9px] text-indigo-700 pl-8 border-r border-indigo-100">↳ 📡 ${m.ratePlanTitle}</td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-rate !placeholder-indigo-400" placeholder="RATE"></td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-min" placeholder="MIN"></td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-max" placeholder="MAX"></td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-min-arr" placeholder="MIN-A"></td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="text" class="${inptCls} qb-val-cta" placeholder="CTA"></td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="text" class="${inptCls} qb-val-ctd" placeholder="CTD"></td>
-                <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
-            </tr>`;
-        });
+window.setViewDensity = (density) => {
+    window.viewDensity = density;
+    ['avail', 'compact', 'minmax', 'full'].forEach(d => {
+        const btn = document.getElementById(`density-${d}`);
+        if (btn) {
+            if (d === density) btn.className = "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-xs font-black";
+            else btn.className = "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
+        }
     });
+    if (window.renderGrid) window.renderGrid();
+};
 
-    const tbody = document.getElementById('qb-grid-body');
-    if (tbody) tbody.innerHTML = html;
+window.setDrillLevel = (level) => {
+    window.drillLevel = level;
+    ['master', 'room', 'rates'].forEach(l => {
+        const btn = document.getElementById(`depth-${l}`);
+        if (btn) {
+            if (l === level) btn.className = "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-xs font-black";
+            else btn.className = "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
+        }
+    });
+    if (window.renderGrid) window.renderGrid();
 };
 
 window.applyBulkGrid = (isClear = false) => {
@@ -799,10 +775,6 @@ window.applyBulkGrid = (isClear = false) => {
 
     window.renderGrid();
     window.markUnsavedChanges();
-
-    if (window.pushToChannexAPI) {
-        window.pushToChannexAPI(null, 'delta').catch(err => console.error("⚠️ Background sync error:", err));
-    }
 
     if (!isClear) {
         document.querySelectorAll('#qb-grid-body input:not([type="date"]):not([disabled])').forEach(i => i.value = "");
