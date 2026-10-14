@@ -71,6 +71,10 @@ window.saveCredentialsAndFetch = async () => {
         || window.channexConfig?.propId 
         || "";
 
+    const rateMultiplier = document.getElementById('chan-rate-multiplier') 
+        ? parseFloat(document.getElementById('chan-rate-multiplier').value) 
+        : (window.channexConfig?.rateMultiplier !== undefined ? window.channexConfig.rateMultiplier : 100);
+
     if (!apiKey || !propId) {
         return window.customAlert("Please provide both your Channex API Key and Property ID.");
     }
@@ -96,7 +100,7 @@ window.saveCredentialsAndFetch = async () => {
         const propJson = await testRes.json();
         const propTitle = propJson.data?.attributes?.title || 'Unknown Property';
 
-        window.channexConfig = { apiKey, propId, env: 'production' };
+        window.channexConfig = { apiKey, propId, rateMultiplier, env: 'production' };
         localStorage.setItem(`cm_channex_${window.currentPropertyId}`, JSON.stringify(window.channexConfig));
 
         const { doc, updateDoc } = window.cmFs;
@@ -154,6 +158,7 @@ window.fetchChannexData = async () => {
 
         window.renderChannexMapping(roomData);
         window.renderChannexRateMapping(rateData);
+        if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
         window.hideLoader();
         window.customAlert(`Fetched ${roomData.length} Room Types and ${rateData.length} Master Rate Plans from Channex!`);
     } catch (err) {
@@ -418,6 +423,7 @@ window.saveMappingToDB = async (notify = false) => {
 
         if (notify) window.customAlert("Mappings successfully saved to database!");
         if (window.renderGrid) window.renderGrid();
+        if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
     } catch (err) {
         console.error("Save mapping error:", err);
         if (notify) window.customAlert("Save Error:\n\n" + err.message);
@@ -585,6 +591,10 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
         // STAMPING RULES:
         // - Global restrictions stamp down onto EVERY Standard rate plan (Standard Ref & Standard Non-Ref).
         // - Event cascading restrictions stamp specifically down onto BOTH Event rate plans (Event Ref & Event Non-Ref).
+        const rateMultiplier = (window.channexConfig?.rateMultiplier !== undefined && window.channexConfig?.rateMultiplier !== null)
+            ? Number(window.channexConfig.rateMultiplier)
+            : 100;
+
         (window.channexRateMap || []).forEach(rule => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -638,8 +648,8 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     }
                 }
 
-                // DUAL-CURVE RESTRICTION RESOLUTION:
-                // 1. Direct plan override (e.g. set by Event Autofill on this plan ID)
+                // DUAL-CURVE RESTRICTION RESOLUTION (Global -> Room -> Rate Plan):
+                // 1. Direct plan override (e.g. set by Event Autofill on this plan ID or cell override)
                 // 2. If Event Plan: reads dayObj.evtRestrictions (cascading minimums)
                 // 3. Category-level roomObj restriction
                 // 4. Global restriction: stamps down onto all standard plans (and event plans if no event restriction exists)
@@ -658,7 +668,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
                 const todayRestrictions = {};
                 if (calculatedPrice !== null && !isNaN(calculatedPrice) && calculatedPrice > 0) {
-                    todayRestrictions.rate = Math.round(calculatedPrice * 100);
+                    todayRestrictions.rate = Math.round(calculatedPrice * rateMultiplier);
                 }
 
                 const minS = getRestr('min');
@@ -676,7 +686,9 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 const ctd = getRestr('ctd');
                 if (ctd !== null && ctd !== "") todayRestrictions.closed_to_departure = !!ctd;
 
-                const stop = getRestr('stopSell');
+                // Stop Sell: check both 'stop' and 'stopSell' keys
+                let stop = getRestr('stop');
+                if (stop === null || stop === "") stop = getRestr('stopSell');
                 if (stop !== null && stop !== "") todayRestrictions.stop_sell = !!stop;
 
                 const itemJson = JSON.stringify(todayRestrictions);
