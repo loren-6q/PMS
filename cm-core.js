@@ -26,7 +26,6 @@ export const auth = getAuth(app);
 export const db = getFirestore(app); 
 export const appId = 'hotel-pms-v1';
 
-// Expose Firestore services on window for other modules
 window.db = db;
 window.auth = auth;
 window.appId = appId;
@@ -327,7 +326,7 @@ window.toggleFilter = (metric) => {
 };
 
 window.switchTab = (tab) => {
-    const tabs = ['grid', 'promos', 'smart', 'relational', 'mapping', 'manual'];
+    const tabs = ['grid', 'rules', 'promos', 'smart', 'relational', 'mapping', 'manual'];
     tabs.forEach(t => {
         const el = document.getElementById(`view-${t}`);
         const btn = document.getElementById(`tab-${t}`);
@@ -346,6 +345,7 @@ window.switchTab = (tab) => {
     });
 
     try {
+        if (tab === 'rules' && typeof window.renderDynamicOtaRules === 'function') window.renderDynamicOtaRules();
         if (tab === 'promos' && typeof window.renderPromoRulesTable === 'function') window.renderPromoRulesTable();
         if (tab === 'relational' && typeof window.renderRelationships === 'function') window.renderRelationships();
         if (tab === 'smart' && typeof window.updateAnchorDropdowns === 'function') window.updateAnchorDropdowns();
@@ -517,7 +517,6 @@ window.loadPropertyConfig = async () => {
                 if (snap.exists()) {
                     const d = snap.data();
                     if (!loadedTimeline && d.timeline) {
-                        // Safely unpack timeline whether stored as stringified JSON or legacy object
                         if (typeof d.timeline === 'string') {
                             try {
                                 loadedTimeline = JSON.parse(d.timeline);
@@ -531,6 +530,7 @@ window.loadPropertyConfig = async () => {
                     }
                     if (!loadedRelationships && Array.isArray(d.relationships) && d.relationships.length > 0) loadedRelationships = d.relationships;
                     if (!loadedBaselines && d.autofillBaselines) loadedBaselines = d.autofillBaselines;
+                    if (d.pricingRules) window.pricingRules = d.pricingRules;
                     if ((!window.channexConfig?.apiKey || !window.channexConfig?.propId) && d.channex?.apiKey && d.channex?.propId) {
                         window.channexConfig = d.channex;
                         if (keyInput && !keyInput.value) keyInput.value = d.channex.apiKey;
@@ -559,6 +559,7 @@ window.loadPropertyConfig = async () => {
         if (window.renderPromoRulesTable) window.renderPromoRulesTable();
         if (window.renderRelationships) window.renderRelationships();
         if (window.renderChannexMapping) window.renderChannexMapping();
+        if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
     } catch (err) {
         console.error("Config load error:", err);
     }
@@ -598,14 +599,13 @@ window.reloadSettingsConfig = async () => {
     window.customAlert("Inventory & Event settings refreshed from database!");
 };
 
-// --- 8. SAVE PRICING TO CLOUD (STRINGIFIED SERIALIZATION TO BYPASS 40k INDEX LIMIT) ---
+// --- 8. SAVE PRICING TO CLOUD ---
 window.savePricingToCloud = async (silent = false) => {
     if (!silent) window.showLoader('SAVING TO CLOUD...');
     try {
         if (window.readRelationshipsFromDOM) window.readRelationshipsFromDOM();
         const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
 
-        // Stringify timeline to prevent Firestore from generating 45,000+ key indexes
         const payload = {
             relationships: window.cleanPayload(window.masterPricing.relationships || []),
             timeline: JSON.stringify(window.cleanPayload(window.masterPricing.timeline || {})),
@@ -614,6 +614,9 @@ window.savePricingToCloud = async (silent = false) => {
 
         if (window.savedAutofillBaselines) {
             payload.autofillBaselines = window.cleanPayload(window.savedAutofillBaselines);
+        }
+        if (window.pricingRules) {
+            payload.pricingRules = window.cleanPayload(window.pricingRules);
         }
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`), payload, { merge: true });
