@@ -95,11 +95,14 @@ window.extractBookingData = (raw) => {
     let s = { source: 'other', pax: 1, payments: [], units: 1, rooms: [] };
     let rawLower = normalized.toLowerCase();
 
+    // Check for Agoda partner address signature
+    const isAgodaPartnerAddress = /prudential\s*tower|19\s*cecil|049712/i.test(rawLower);
+
     // Identify Source
     if (rawLower.includes('hostelworld')) s.source = 'hostelworld';
     else if (rawLower.includes('booking.com')) s.source = 'booking.com';
     else if (rawLower.includes('expedia') || rawLower.includes('expediapartnercentral')) s.source = 'expedia';
-    else if (rawLower.includes('agoda')) s.source = 'agoda';
+    else if (rawLower.includes('agoda') || isAgodaPartnerAddress) s.source = 'agoda';
     else if (rawLower.includes('airbnb')) s.source = 'airbnb';
     else if (rawLower.includes('trip.com') || rawLower.includes('ctrip')) s.source = 'ctrip';
 
@@ -190,8 +193,13 @@ window.extractBookingData = (raw) => {
     // ---------------------------------------------------------
     // BOOKING.COM PARSER (EXTRANET OPTIMIZED)
     // ---------------------------------------------------------
-    } else if (s.source === 'booking.com') {
+    } else if (rawLower.includes('booking.com') || s.source === 'booking.com') {
         
+        // If Booking.com email includes Agoda partner corporate address, mark source as Agoda
+        if (isAgodaPartnerAddress) {
+            s.source = 'agoda';
+        }
+
         let emailIdx = lines.findIndex(l => l.includes('@guest.booking.com'));
         if (emailIdx > -1) {
             s.email = lines[emailIdx];
@@ -299,11 +307,14 @@ window.extractBookingData = (raw) => {
         }
 
         if (lines.some(l => l.includes('Payment is facilitated via Payments by Booking.com') || l.includes('Booking.com will collect'))) {
+            const payMethod = s.source === 'agoda' ? 'agoda-pay' : 'bdc-pay';
+            const kpMethod = s.source === 'agoda' ? 'agoda-kp' : 'bdc-kp';
+
             if (s.netPrice && s.totalPrice) {
-                s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: s.netPrice, method: 'bdc-pay' });
-                s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: Number((s.totalPrice - s.netPrice).toFixed(2)), method: 'bdc-kp' });
+                s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: s.netPrice, method: payMethod });
+                s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: Number((s.totalPrice - s.netPrice).toFixed(2)), method: kpMethod });
             } else if (s.totalPrice) {
-                 s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: s.totalPrice, method: 'bdc-pay' });
+                 s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: s.totalPrice, method: payMethod });
             }
         }
 
@@ -390,9 +401,9 @@ window.extractBookingData = (raw) => {
         }
 
         let sellMatch = normalized.match(/Reference\s*sell\s*rate[^\d]*([\d,]+(?:\.\d+)?)/i)
-                     || normalized.match(/Total\s*(?:Price|Amount)?[^\d]*([\d,]+(?:\.\d+)?)/i);
+                      || normalized.match(/Total\s*(?:Price|Amount)?[^\d]*([\d,]+(?:\.\d+)?)/i);
         let netMatch = normalized.match(/Net\s*rate[^\d]*([\d,]+(?:\.\d+)?)/i)
-                    || normalized.match(/Hotel\s*Payout[^\d]*([\d,]+(?:\.\d+)?)/i);
+                     || normalized.match(/Hotel\s*Payout[^\d]*([\d,]+(?:\.\d+)?)/i);
 
         let totalAmt = sellMatch ? parseFloat(sellMatch[1].replace(/,/g, '')) : 0;
         let netAmt = netMatch ? parseFloat(netMatch[1].replace(/,/g, '')) : 0;
@@ -773,7 +784,23 @@ window.parseEmail = () => {
         }
     }
 
-    // Open guest modal
+    // 7. JUMP CALENDAR TAPE TO EXTRACTED CHECK-IN DATE
+    if (s.checkIn) {
+        try {
+            const d = new Date(s.checkIn + "T12:00:00");
+            if (!isNaN(d.getTime())) {
+                d.setDate(d.getDate() - 3); // 3-day lead-in offset so arrival is clearly visible
+                window.viewStart = d;
+                if (typeof window.render === 'function') {
+                    window.render();
+                }
+            }
+        } catch (e) {
+            console.warn("Could not jump calendar to booking date:", e);
+        }
+    }
+
+    // 8. OPEN GUEST MODAL
     const guestModal = document.getElementById('guest-modal');
     if (guestModal) {
         guestModal.classList.add('active');
