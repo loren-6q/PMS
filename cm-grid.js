@@ -358,7 +358,7 @@ window.renderGrid = () => {
             else if (data.ctd) ctaBadge = '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-sky-200 text-sky-900 leading-none">CTD</span>';
 
             const isMinArr = !!data.min_arr;
-            const minVal = data.min !== "" ? data.min : (data.min_arr ? `${data.min_arr}a` : "");
+            const minVal = data.min !== "" ? data.min : (data.min_arr ? `${data.min_arr}▸` : "");
             const maxVal = data.max !== "" ? data.max : "";
 
             let cellClass = "rate-cell-container p-0 min-w-[31px] w-[31px] border-r border-slate-200 text-center relative ";
@@ -372,7 +372,7 @@ window.renderGrid = () => {
                 ${showTop ? `
                 <!-- TOP: Min & Max Stay Inputs with arrival toggle -->
                 <div class="flex items-center justify-between px-0.5 text-[8px] font-bold text-slate-400 leading-none h-[11px] pt-0.5">
-                    <input type="text" class="cell-min-input w-[14px] bg-transparent border-none text-left p-0 text-[8px] font-black ${isMinArr ? 'text-amber-600' : 'text-slate-500'} outline-none" value="${minVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)" title="Type number for Min Stay, or '3a' for Min on Arrival">
+                    <input type="text" class="cell-min-input w-[14px] bg-transparent border-none text-left p-0 text-[8px] font-black ${isMinArr ? 'text-amber-600' : 'text-slate-500'} outline-none" value="${minVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)" title="Type number for Min Stay, or '3>' / '3▸' for Min on Arrival">
                     <input type="text" class="cell-max-input w-[14px] bg-transparent border-none text-right p-0 text-[8px] text-slate-400 outline-none" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)" title="Max Stay">
                 </div>` : ''}
 
@@ -382,6 +382,7 @@ window.renderGrid = () => {
                 </div>
 
                 ${showBottom ? `
+                <!-- BOTTOM: CTA/CTD cycle dot & Ghost Stop-Sell trigger -->
                 <!-- BOTTOM: CTA/CTD cycle dot & Ghost Stop-Sell trigger -->
                 <div class="flex items-center justify-between px-0.5 text-[7px] leading-none h-[11px] pb-0.5">
                     <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}')" class="cursor-pointer" title="Cycle Closed to Arrival / Departure">
