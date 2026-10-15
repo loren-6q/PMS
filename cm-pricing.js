@@ -217,10 +217,20 @@ window.unlockCellOverride = (dateStr, roomType, ratePlanId = null) => {
                 delete rData.isOverride.cta;
                 delete rData.isOverride.ctd;
             }
-            rData.std = "";
-            rData.fmp = "";
+
+            // SMART RESTORATION: Re-ripple from anchor or restore pre-override baseline
+            const rel = (window.masterPricing.relationships || []).find(r => r.target === roomType && r.anchor !== 'unlinked');
+            if (rel) {
+                delete rData.std;
+                delete rData.fmp;
+                window.rippleDay(dateStr, rel.anchor);
+            } else if (rData._baseStd !== undefined && rData._baseStd !== "") {
+                rData.std = rData._baseStd;
+                window.rippleDay(dateStr, roomType);
+            } else {
+                if (window.healDay) window.healDay(dateStr);
+            }
         }
-        if (window.healDay) window.healDay(dateStr);
     }
     window.dirtyDates.add(dateStr);
     window.syncedDates.delete(dateStr);
@@ -231,7 +241,7 @@ window.unlockCellOverride = (dateStr, roomType, ratePlanId = null) => {
 window.handleCellPriceChange = (e, dateStr, roomType, isAltPin = false) => {
     const rawVal = e.target.value.trim();
     if (rawVal === "" || isNaN(parseFloat(rawVal))) {
-        // Clearing price automatically unlocks the override and heals the day!
+        // Clearing price automatically unlocks the override and restores ripple!
         if (window.unlockCellOverride) {
             window.unlockCellOverride(dateStr, roomType);
         }
@@ -246,11 +256,16 @@ window.handleCellPriceChange = (e, dateStr, roomType, isAltPin = false) => {
     const shouldPin = isAltPin || (window.editMode === 'pin');
 
     if (shouldPin) {
+        // Cache the pre-override baseline rate so unlocking restores the exact prior rate
+        if (dObj[roomType]._baseStd === undefined && dObj[roomType].std !== undefined && dObj[roomType].std !== "") {
+            dObj[roomType]._baseStd = dObj[roomType].std;
+        }
         dObj[roomType].std = newPrice;
         dObj[roomType].isOverride = dObj[roomType].isOverride || {};
         dObj[roomType].isOverride.std = true;
     } else {
         dObj[roomType].std = newPrice;
+        dObj[roomType]._baseStd = newPrice;
         dObj[roomType].isOverride = dObj[roomType].isOverride || {};
         dObj[roomType].isOverride.std = false;
         window.rippleDay(dateStr, roomType);
@@ -362,15 +377,26 @@ window.healDay = (dateStr) => {
 
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     
+    // SAFE FALLBACK: Never overwrite an existing day rate with static tab 4 baselines
     if (anchorP) {
         window.masterPricing.timeline[dateStr][anchorP] = window.masterPricing.timeline[dateStr][anchorP] || { isOverride: {} };
-        if (!window.masterPricing.timeline[dateStr][anchorP].isOverride.std) window.masterPricing.timeline[dateStr][anchorP].std = stdP;
-        if (!window.masterPricing.timeline[dateStr][anchorP].isOverride.fmp) window.masterPricing.timeline[dateStr][anchorP].fmp = fmpP;
+        const curStd = window.masterPricing.timeline[dateStr][anchorP].std;
+        if (!window.masterPricing.timeline[dateStr][anchorP].isOverride.std && (curStd === "" || curStd === undefined)) {
+            window.masterPricing.timeline[dateStr][anchorP].std = stdP;
+        }
+        if (!window.masterPricing.timeline[dateStr][anchorP].isOverride.fmp && (window.masterPricing.timeline[dateStr][anchorP].fmp === "" || window.masterPricing.timeline[dateStr][anchorP].fmp === undefined)) {
+            window.masterPricing.timeline[dateStr][anchorP].fmp = fmpP;
+        }
     }
     if (anchorD) {
         window.masterPricing.timeline[dateStr][anchorD] = window.masterPricing.timeline[dateStr][anchorD] || { isOverride: {} };
-        if (!window.masterPricing.timeline[dateStr][anchorD].isOverride.std) window.masterPricing.timeline[dateStr][anchorD].std = stdD;
-        if (!window.masterPricing.timeline[dateStr][anchorD].isOverride.fmp) window.masterPricing.timeline[dateStr][anchorD].fmp = fmpD;
+        const curStdD = window.masterPricing.timeline[dateStr][anchorD].std;
+        if (!window.masterPricing.timeline[dateStr][anchorD].isOverride.std && (curStdD === "" || curStdD === undefined)) {
+            window.masterPricing.timeline[dateStr][anchorD].std = stdD;
+        }
+        if (!window.masterPricing.timeline[dateStr][anchorD].isOverride.fmp && (window.masterPricing.timeline[dateStr][anchorD].fmp === "" || window.masterPricing.timeline[dateStr][anchorD].fmp === undefined)) {
+            window.masterPricing.timeline[dateStr][anchorD].fmp = fmpD;
+        }
     }
     
     const anchors = new Set((window.masterPricing.relationships || []).map(r => r.anchor));
