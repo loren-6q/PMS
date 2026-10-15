@@ -891,6 +891,114 @@ window.savePricingRulesToCloud = async (notify = false) => {
     }
 };
 
+// --- DYNAMIC EVENT RESTRICTION SPAN & TABLE RENDERER (±2D, ±4D, ±7D) ---
+window.evtRestrWindow = window.evtRestrWindow || 2; // 2 | 4 | 7
+
+window.setEvtRestrWindow = (days) => {
+    window.evtRestrWindow = days;
+    [2, 4, 7].forEach(d => {
+        const btn = document.getElementById(`restr-span-${d}`);
+        if (btn) {
+            if (d === days) btn.className = "px-2 py-0.5 rounded bg-white text-indigo-700 shadow-xs font-black cursor-pointer";
+            else btn.className = "px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer";
+        }
+    });
+    window.renderEvtRestrTable();
+};
+
+window.renderEvtRestrTable = () => {
+    const theadRow = document.getElementById('evt-restr-thead-row');
+    const tbody = document.getElementById('evt-restr-tbody');
+    if (!theadRow || !tbody) return;
+
+    const span = window.evtRestrWindow || 2;
+    const offsets = [];
+    for (let i = -span; i <= span; i++) offsets.push(i);
+
+    let thHtml = `<th class="text-[9px] font-black uppercase text-slate-400 text-left pl-2 w-28">Rule Type</th>`;
+    offsets.forEach(off => {
+        if (off === 0) thHtml += `<th class="text-[10px] font-black uppercase text-amber-600">Peak (0)</th>`;
+        else thHtml += `<th class="text-[9px] font-black uppercase text-slate-400">EVT ${off > 0 ? '+' + off : off}</th>`;
+    });
+    theadRow.innerHTML = thHtml;
+
+    const b = window.savedAutofillBaselines || {};
+
+    const getVal = (prefix, off, def = "") => {
+        const key = `${prefix}_${off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off)}`;
+        return b[key] !== undefined ? b[key] : def;
+    };
+
+    const getBool = (prefix, off) => {
+        const key = `${prefix}_${off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off)}`;
+        return !!b[key];
+    };
+
+    let tbHtml = '';
+
+    // Row 1: Min Stay (Nts)
+    tbHtml += `<tr class="bg-pink-50/40">
+        <td class="text-xs font-bold text-pink-900 text-left pl-2 rounded-l-lg border border-pink-100 border-r-0 py-1">Min Stay (Nts)</td>`;
+    offsets.forEach(off => {
+        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+        const defVal = Math.abs(off) <= 1 ? 3 : (Math.abs(off) <= 2 ? 2 : "");
+        const val = getVal('r_min', off, defVal);
+        tbHtml += `<td class="border-y border-pink-100">
+            <input type="number" min="1" id="w-r-min-${tag}" class="input-base text-center !py-1 !px-0.5 text-pink-800 font-black w-12" value="${val}" onfocus="this.select()" oninput="window.handleEvtRestrMirror('min', ${off}, this.value); window.debounceSaveBaselines();">
+        </td>`;
+    });
+    tbHtml += `</tr>`;
+
+    // Row 2: Min on Arrival (min_arr)
+    tbHtml += `<tr class="bg-slate-50">
+        <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Min on Arrival</td>`;
+    offsets.forEach(off => {
+        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+        const val = getVal('r_minarr', off, "");
+        tbHtml += `<td class="border-y border-slate-200">
+            <input type="number" min="1" id="w-r-minarr-${tag}" class="input-base text-center !py-1 !px-0.5 text-amber-700 font-bold w-12" value="${val}" placeholder="--" onfocus="this.select()" oninput="window.handleEvtRestrMirror('minarr', ${off}, this.value); window.debounceSaveBaselines();">
+        </td>`;
+    });
+    tbHtml += `</tr>`;
+
+    // Row 3: Close to Arrival (CTA)
+    tbHtml += `<tr class="bg-slate-50">
+        <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Close to Arrival (CTA)</td>`;
+    offsets.forEach(off => {
+        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+        const chk = getBool('r_cta', off);
+        tbHtml += `<td class="border-y border-slate-200 py-1">
+            <input type="checkbox" id="w-r-cta-${tag}" class="row-checkbox" ${chk ? 'checked' : ''} onchange="window.handleEvtRestrMirror('cta', ${off}, this.checked, true); window.debounceSaveBaselines();">
+        </td>`;
+    });
+    tbHtml += `</tr>`;
+
+    // Row 4: Close to Departure (CTD)
+    tbHtml += `<tr class="bg-slate-50">
+        <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Close to Departure (CTD)</td>`;
+    offsets.forEach(off => {
+        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+        const chk = getBool('r_ctd', off);
+        tbHtml += `<td class="border-y border-slate-200 py-1">
+            <input type="checkbox" id="w-r-ctd-${tag}" class="row-checkbox" ${chk ? 'checked' : ''} onchange="window.handleEvtRestrMirror('ctd', ${off}, this.checked, true); window.debounceSaveBaselines();">
+        </td>`;
+    });
+    tbHtml += `</tr>`;
+
+    tbody.innerHTML = tbHtml;
+};
+
+window.handleEvtRestrMirror = (rule, offset, val, isBool = false) => {
+    if (offset === 0) return;
+    const oppOffset = -offset;
+    const oppTag = oppOffset < 0 ? 'm' + Math.abs(oppOffset) : 'p' + oppOffset;
+    const oppEl = document.getElementById(`w-r-${rule}-${oppTag}`);
+    if (oppEl) {
+        if (isBool) oppEl.checked = !!val;
+        else oppEl.value = val;
+    }
+};
+
 // --- 6. TIMELINE AUTOMATOR & OVERRIDE CLEARERS ---
 window.setAutofillPreset = (days) => {
     const startInp = document.getElementById('w-start-date');
@@ -924,8 +1032,8 @@ window.clearOverrides = () => {
 };
 
 window.runAutomator = () => {
-    const anchorP = document.getElementById('w-anchor-private')?.value;
-    const anchorD = document.getElementById('w-anchor-dorm')?.value;
+    const anchorP = document.getElementById('w-anchor-private')?.value || window.pricingRules?.anchorPrivate;
+    const anchorD = document.getElementById('w-anchor-dorm')?.value || window.pricingRules?.anchorDorm;
     const sDate = document.getElementById('w-start-date')?.value;
     const eDate = document.getElementById('w-end-date')?.value;
     const hasEvents = (window.eventDates || []).length > 0;
@@ -949,23 +1057,26 @@ window.runAutomator = () => {
     const restrCheckEl = document.getElementById('w-enable-evt-restr');
     const enableRestr = restrCheckEl ? restrCheckEl.checked : true;
 
-    const getRestrVal = (id, fallback = "") => {
-        const el = document.getElementById(id);
-        if (el) {
-            const v = el.value?.trim();
-            return (v !== "" && !isNaN(parseInt(v))) ? parseInt(v) : fallback;
-        }
-        return fallback;
-    };
-    const getRestrCta = id => document.getElementById(id)?.checked || false;
+    // Build comprehensive ±7 day restriction map
+    const getRestr = (off) => {
+        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+        const minEl = document.getElementById(`w-r-min-${tag}`);
+        const minArrEl = document.getElementById(`w-r-minarr-${tag}`);
+        const ctaEl = document.getElementById(`w-r-cta-${tag}`);
+        const ctdEl = document.getElementById(`w-r-ctd-${tag}`);
 
-    const restrMap = {
-        "-2": { min: getRestrVal('w-r-min-m2', 2), min_arr: getRestrVal('w-r-minarr-m2', ""), cta: getRestrCta('w-r-cta-m2') },
-        "-1": { min: getRestrVal('w-r-min-m1', 3), min_arr: getRestrVal('w-r-minarr-m1', ""), cta: getRestrCta('w-r-cta-m1') },
-        "0":  { min: getRestrVal('w-r-min-0', 3),  min_arr: getRestrVal('w-r-minarr-0', ""),  cta: getRestrCta('w-r-cta-0') },
-        "1":  { min: getRestrVal('w-r-min-p1', 2), min_arr: getRestrVal('w-r-minarr-p1', ""), cta: getRestrCta('w-r-cta-p1') },
-        "2":  { min: getRestrVal('w-r-min-p2', 2), min_arr: getRestrVal('w-r-minarr-p2', ""), cta: getRestrCta('w-r-cta-p2') }
+        const min = minEl && minEl.value !== "" ? parseInt(minEl.value, 10) : "";
+        const min_arr = minArrEl && minArrEl.value !== "" ? parseInt(minArrEl.value, 10) : "";
+        const cta = ctaEl ? ctaEl.checked : false;
+        const ctd = ctdEl ? ctdEl.checked : false;
+
+        return { min, min_arr, cta, ctd };
     };
+
+    const restrMap = {};
+    for (let off = -7; off <= 7; off++) {
+        restrMap[String(off)] = getRestr(off);
+    }
     
     if (!sDate || !eDate) return window.customAlert("Please select both a Start Date and an End Date.");
     if (sDate > eDate) return window.customAlert("End Date must be on or after Start Date.");
@@ -1002,14 +1113,16 @@ window.runAutomator = () => {
 
         window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
         
+        // Strict EVT restriction enforcement across up to ±7 days
         if (hasEvents && enableRestr) {
             const restrConfig = restrMap[String(minDiff)];
-            if (restrConfig) {
+            if (restrConfig && (restrConfig.min !== "" || restrConfig.min_arr !== "" || restrConfig.cta || restrConfig.ctd)) {
                 eventDatesUpdated++;
                 window.masterPricing.timeline[dateStr].evtRestrictions = {
                     min: restrConfig.min,
                     min_arr: restrConfig.min_arr,
-                    cta: restrConfig.cta
+                    cta: restrConfig.cta,
+                    ctd: restrConfig.ctd
                 };
 
                 (window.channexRateMap || []).forEach(rate => {
@@ -1020,6 +1133,7 @@ window.runAutomator = () => {
                         if (restrConfig.min !== "") otaO[`${rate.ratePlanId}_min`] = restrConfig.min;
                         if (restrConfig.min_arr !== "") otaO[`${rate.ratePlanId}_min_arr`] = restrConfig.min_arr;
                         otaO[`${rate.ratePlanId}_cta`] = !!restrConfig.cta;
+                        otaO[`${rate.ratePlanId}_ctd`] = !!restrConfig.ctd;
                     }
                 });
             } else {
@@ -1053,8 +1167,8 @@ window.runAutomator = () => {
 
     window.customAlert(`Timeline Painted Successfully!\n\n` +
         `• Period: ${sDate} → ${eDate}\n` +
-        `• EVT Rate Plans: Event minimum stays & CTA applied exclusively to EVT rate plans (${eventDatesUpdated} event dates affected).\n` +
-        `• Standard Rate Plans: Kept on standard rules (NO event restrictions applied).\n` +
+        `• EVT Rate Plans: Event minimum stays, CTA, and CTD applied exclusively to EVT plans (${eventDatesUpdated} event dates affected).\n` +
+        `• Standard Rate Plans: Kept on standard open stays (no event restrictions).\n` +
         `• Click "SAVE & SYNC" to push these values to Channex.`);
 };
 
