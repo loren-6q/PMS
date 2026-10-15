@@ -44,6 +44,40 @@ window.getCellData = (dateStr, room) => {
     };
 };
 
+window.unlockCellOverride = (dateStr, room, ratePlanId = null) => {
+    if (ratePlanId) {
+        if (window.masterPricing.timeline[dateStr]?.otaOverrides) {
+            delete window.masterPricing.timeline[dateStr].otaOverrides[ratePlanId];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_rate`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_min`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_cta`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_ctd`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_stop`];
+        }
+    } else {
+        const rData = window.masterPricing.timeline[dateStr]?.[room];
+        if (rData) {
+            if (rData.isOverride) {
+                delete rData.isOverride.std;
+                delete rData.isOverride.fmp;
+                delete rData.isOverride.min;
+                delete rData.isOverride.min_arr;
+                delete rData.isOverride.max;
+                delete rData.isOverride.stop;
+                delete rData.isOverride.cta;
+                delete rData.isOverride.ctd;
+            }
+            rData.std = "";
+            rData.fmp = "";
+        }
+        if (window.healDay) window.healDay(dateStr);
+    }
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+};
+
 window.updateDOMCell = (dateStr, room) => {
     const bId = `inp_${dateStr}_${room.replace(/\s+/g, '')}`;
     const data = window.getCellData(dateStr, room);
@@ -100,7 +134,7 @@ window.calculateLiveInventory = () => {
 
     const container = document.getElementById('grid-container');
     const availableWidth = container ? container.clientWidth - 185 : (window.innerWidth - 185);
-    window.daysToRender = Math.max(30, Math.floor(availableWidth / 35));
+    window.daysToRender = Math.max(30, Math.floor(availableWidth / 31));
 
     const startStr = document.getElementById('tape-start')?.value || new Date().toISOString().split('T')[0];
     const today = new Date(startStr + "T12:00:00Z");
@@ -229,9 +263,9 @@ window.renderGrid = () => {
 
         const isGlobStop = !!window.masterPricing.timeline?.[dateStr]?.GLOBAL?.stop;
 
-        trHead += `<th class="px-0 py-0.5 min-w-[36px] w-[36px] border-b ${highlight} relative group cursor-pointer" onclick="window.handleHeaderStopToggle('${dateStr}')" title="Click to Stop-Sell entire property on ${dateStr}">
+        trHead += `<th class="px-0 py-0.5 min-w-[31px] w-[31px] border-b ${highlight} relative group cursor-pointer" onclick="window.handleHeaderStopToggle('${dateStr}')" title="Click to Stop-Sell entire property on ${dateStr}">
             <span class="block text-[8px] font-bold uppercase leading-none">${window.mNames[cur.getUTCMonth()]}</span>
-            <span class="block text-[12px] font-black leading-tight mt-0.5">${cur.getUTCDate()}</span>
+            <span class="block text-[11px] font-black leading-tight mt-0.5">${cur.getUTCDate()}</span>
             <div class="h-1.5 w-full flex items-center justify-center mt-0.5">
                 ${isGlobStop ? '<span class="w-2 h-2 rounded-full bg-red-600 block shadow-xs" title="Entire Property Closed"></span>' : '<span class="w-1.5 h-1.5 rounded-full bg-transparent group-hover:bg-red-400/60 block"></span>'}
             </div>
@@ -286,8 +320,8 @@ window.renderGrid = () => {
             const availColor = displayVal === 0 ? 'text-rose-600 font-black' : (displayVal <= 2 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold');
             const overrideBg = otaAvail !== undefined ? '!bg-amber-100' : 'bg-slate-50/80';
 
-            trAvail += `<td class="p-0 min-w-[36px] w-[36px] border-r border-slate-200 ${overrideBg}">
-                <input type="number" class="w-full h-full text-center outline-none focus:bg-white text-[10px] ${availColor} font-bold bg-transparent tracking-tighter px-0 py-1" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
+            trAvail += `<td class="p-0 min-w-[31px] w-[31px] border-r border-slate-200 ${overrideBg}">
+                <input type="number" class="cell-avail-input w-full h-full text-center outline-none focus:bg-white text-[10px] ${availColor} font-bold bg-transparent tracking-tighter px-0 py-1" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
             </td>`;
         }
         trAvail += `</tr>`;
@@ -300,7 +334,7 @@ window.renderGrid = () => {
         let trRate = `<tr class="${groupClass} border-b-2 border-slate-400">
             <td class="frozen-col !p-0 z-20 align-middle border-r border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
                 <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                    <span class="text-[10px] font-bold text-slate-600 truncate">${displayName} (Base)</span>
+                    <span class="text-[10px] font-black text-slate-700 truncate">Base</span>
                     <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200">MASTER</span>
                 </div>
             </td>
@@ -319,42 +353,42 @@ window.renderGrid = () => {
             const displayPrice = data.std !== "" && !isNaN(data.std) ? window.formatDisplay(data.std * mult) : "";
 
             let ctaBadge = '';
-            if (data.cta && data.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-purple-100 text-purple-800">⇄ BLK</span>';
-            else if (data.cta) ctaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-amber-100 text-amber-800">⇥ CTA</span>';
-            else if (data.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-sky-100 text-sky-800">⇤ CTD</span>';
+            if (data.cta && data.ctd) ctaBadge = '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-purple-200 text-purple-900 leading-none">BTH</span>';
+            else if (data.cta) ctaBadge = '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-amber-200 text-amber-900 leading-none">CTA</span>';
+            else if (data.ctd) ctaBadge = '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-sky-200 text-sky-900 leading-none">CTD</span>';
 
             const isMinArr = !!data.min_arr;
-            const minVal = data.min !== "" ? data.min : (data.min_arr ? `${data.min_arr}▸` : "");
+            const minVal = data.min !== "" ? data.min : (data.min_arr ? `${data.min_arr}a` : "");
             const maxVal = data.max !== "" ? data.max : "";
 
-            let cellClass = "rate-cell-container p-0 min-w-[36px] w-[36px] border-r border-slate-200 text-center relative ";
+            let cellClass = "rate-cell-container p-0 min-w-[31px] w-[31px] border-r border-slate-200 text-center relative ";
             if (isStopped) cellClass += "rate-cell-stopped ";
             else if (isPinned) cellClass += "rate-cell-pinned ";
 
             const showTop = density === 'minmax' || density === 'full';
             const showBottom = density === 'full';
 
-            trRate += `<td class="${cellClass}" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice}\\nMin: ${minVal || '--'}${isMinArr ? ' (Arrival)' : ''}, Max: ${maxVal || '--'}\\nStop: ${isStopped ? 'YES' : 'NO'}')" onmouseleave="window.hideCmTooltip()">
+            trRate += `<td class="${cellClass}" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice || '--'}${isPinned ? ' (Custom Override - Double-click to unlock)' : ''}\\nMin: ${minVal || '--'}${isMinArr ? ' (Arrival)' : ''}, Max: ${maxVal || '--'}\\nStop: ${isStopped ? 'YES' : 'NO'}')" onmouseleave="window.hideCmTooltip()">
                 ${showTop ? `
                 <!-- TOP: Min & Max Stay Inputs with arrival toggle -->
                 <div class="flex items-center justify-between px-0.5 text-[8px] font-bold text-slate-400 leading-none h-[11px] pt-0.5">
-                    <input type="text" class="w-3.5 bg-transparent border-none text-left p-0 text-[8px] font-black ${isMinArr ? 'text-amber-600' : 'text-slate-500'} outline-none" value="${minVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)" title="Type number for Min Stay, or '3a'/'3>' for Min on Arrival">
-                    <input type="text" class="w-3.5 bg-transparent border-none text-right p-0 text-[8px] text-slate-400 outline-none" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)" title="Max Stay">
+                    <input type="text" class="cell-min-input w-[14px] bg-transparent border-none text-left p-0 text-[8px] font-black ${isMinArr ? 'text-amber-600' : 'text-slate-500'} outline-none" value="${minVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)" title="Type number for Min Stay, or '3a' for Min on Arrival">
+                    <input type="text" class="cell-max-input w-[14px] bg-transparent border-none text-right p-0 text-[8px] text-slate-400 outline-none" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)" title="Max Stay">
                 </div>` : ''}
 
-                <!-- MID: Clickable Price Input (Alt+Enter pins) -->
-                <div class="${density === 'compact' ? 'h-[26px]' : 'h-[18px]'} flex items-center justify-center">
-                    <input type="number" step="any" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] text-slate-800 px-0" value="${displayPrice}" onfocus="this.select()" onkeydown="if(event.key==='Enter' && event.altKey){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', true); } else if(event.key==='Enter'){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', false); }" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}', false)">
+                <!-- MID: Clickable Price Input -->
+                <div class="${density === 'compact' ? 'h-[24px]' : 'h-[17px]'} flex items-center justify-center">
+                    <input type="number" step="any" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-slate-800 px-0" value="${displayPrice}" onfocus="this.select()" onkeydown="if(event.key==='Enter' && event.altKey){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', true); } else if(event.key==='Enter'){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', false); }" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}', false)">
                 </div>
 
                 ${showBottom ? `
                 <!-- BOTTOM: CTA/CTD cycle dot & Ghost Stop-Sell trigger -->
-                <div class="flex items-center justify-between px-1 text-[8px] leading-none h-[11px] pb-0.5">
-                    <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}')" class="cursor-pointer" title="Cycle CTA/CTD restrictions">
+                <div class="flex items-center justify-between px-0.5 text-[7px] leading-none h-[11px] pb-0.5">
+                    <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}')" class="cursor-pointer" title="Cycle Closed to Arrival / Departure">
                         ${ctaBadge || '<span class="w-1.5 h-1.5 rounded-full bg-slate-200 inline-block"></span>'}
                     </button>
                     <button onclick="window.handleCellStopToggle('${dateStr}', '${room}')" class="cursor-pointer" title="Toggle Stop-Sell">
-                        ${isStopped ? '<span class="px-0.5 py-0.1 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-1.5 h-1.5 rounded-full bg-transparent hover:bg-rose-400 inline-block"></span>'}
+                        ${isStopped ? '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-1.5 h-1.5 rounded-full bg-transparent hover:bg-rose-400/60 inline-block"></span>'}
                     </button>
                 </div>` : ''}
             </td>`;
@@ -403,33 +437,33 @@ window.renderGrid = () => {
                     const otaCtd = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_ctd`];
 
                     let otaCtaBadge = '';
-                    if (otaCta && otaCtd) otaCtaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-purple-100 text-purple-800">⇄ BLK</span>';
-                    else if (otaCta) otaCtaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-amber-100 text-amber-800">⇥ CTA</span>';
-                    else if (otaCtd) otaCtaBadge = '<span class="px-1 py-0.2 rounded text-[7px] font-black bg-sky-100 text-sky-800">⇤ CTD</span>';
+                    if (otaCta && otaCtd) otaCtaBadge = '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-purple-200 text-purple-900 leading-none">BTH</span>';
+                    else if (otaCta) otaCtaBadge = '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-amber-200 text-amber-900 leading-none">CTA</span>';
+                    else if (otaCtd) otaCtaBadge = '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-sky-200 text-sky-900 leading-none">CTD</span>';
 
-                    let cellOtaClass = "rate-cell-container p-0 min-w-[36px] w-[36px] border-r border-indigo-100 text-center relative ";
+                    let cellOtaClass = "rate-cell-container p-0 min-w-[31px] w-[31px] border-r border-indigo-100 text-center relative ";
                     if (otaStop) cellOtaClass += "rate-cell-stopped ";
                     else if (otaOverride !== undefined) cellOtaClass += "rate-cell-pinned ";
 
                     const showTop = density === 'minmax' || density === 'full';
                     const showBottom = density === 'full';
 
-                    trOta += `<td class="${cellOtaClass}">
+                    trOta += `<td class="${cellOtaClass}" ondblclick="window.unlockCellOverride('${dateStr}', '${room}', '${rate.ratePlanId}')">
                         ${showTop ? `
                         <div class="flex items-center justify-between px-0.5 text-[8px] font-bold text-slate-400 leading-none h-[10px] pt-0.5">
-                            <input type="text" class="w-3 bg-transparent border-none text-left p-0 text-[7px] text-indigo-700 outline-none" value="${otaMin || ''}" placeholder="-" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'min', this.value, '${rateSource}')">
+                            <input type="text" class="cell-min-input w-[14px] bg-transparent border-none text-left p-0 text-[7px] text-indigo-700 outline-none" value="${otaMin || ''}" placeholder="-" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'min', this.value, '${rateSource}')">
                             <span class="text-[7px] text-slate-300">-</span>
                         </div>` : ''}
-                        <div class="${density === 'compact' ? 'h-[24px]' : 'h-[16px]'} flex items-center justify-center">
+                        <div class="${density === 'compact' ? 'h-[22px]' : 'h-[16px]'} flex items-center justify-center">
                             <input type="number" step="any" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${calculatedRate !== undefined ? window.formatDisplay(calculatedRate * mult) : ''}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '${rate.ruleType || "="}', ${rate.ruleVal || 0}, 'rate', this.value, '${rateSource}')">
                         </div>
                         ${showBottom ? `
-                        <div class="flex items-center justify-between px-1 text-[8px] leading-none h-[10px] pb-0.5">
+                        <div class="flex items-center justify-between px-0.5 text-[7px] leading-none h-[10px] pb-0.5">
                             <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer">
                                 ${otaCtaBadge || '<span class="w-1.5 h-1.5 rounded-full bg-slate-200 inline-block"></span>'}
                             </button>
                             <button onclick="window.handleCellStopToggle('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer">
-                                ${otaStop ? '<span class="px-0.5 py-0.1 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-1.5 h-1.5 rounded-full bg-transparent hover:bg-rose-400 inline-block"></span>'}
+                                ${otaStop ? '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-1.5 h-1.5 rounded-full bg-transparent hover:bg-rose-400/60 inline-block"></span>'}
                             </button>
                         </div>` : ''}
                     </td>`;
@@ -456,7 +490,7 @@ window.renderGrid = () => {
             const dateStr = window.getLocalYMD(cur);
             const gData = window.masterPricing.timeline?.[dateStr]?.GLOBAL || {};
 
-            globalTr += `<td class="p-0 min-w-[36px] w-[36px] border-r border-slate-700 text-center">
+            globalTr += `<td class="p-0 min-w-[31px] w-[31px] border-r border-slate-700 text-center">
                 <div class="flex items-center justify-center gap-0.5 py-1">
                     <input type="text" class="w-4 bg-slate-700 rounded text-center text-[9px] font-black text-white p-0 outline-none" value="${gData.min || ''}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min', this.value)" title="Global Min Stay">
                 </div>
@@ -780,6 +814,34 @@ window.applyBulkGrid = (isClear = false) => {
         document.querySelectorAll('#qb-grid-body input:not([type="date"]):not([disabled])').forEach(i => i.value = "");
     }
 };
+
+// SMART RELEVANT-FIELD TAB NAVIGATION
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+        const target = e.target;
+        if (!target || target.tagName !== 'INPUT') return;
+
+        let targetSelector = '';
+        if (target.classList.contains('cell-price-text')) targetSelector = '.cell-price-text';
+        else if (target.classList.contains('cell-min-input')) targetSelector = '.cell-min-input';
+        else if (target.classList.contains('cell-max-input')) targetSelector = '.cell-max-input';
+        else if (target.classList.contains('cell-avail-input')) targetSelector = '.cell-avail-input';
+
+        if (targetSelector) {
+            e.preventDefault();
+            const inputs = Array.from(document.querySelectorAll(targetSelector)).filter(i => !i.disabled && i.offsetParent !== null);
+            const idx = inputs.indexOf(target);
+            if (idx !== -1) {
+                const nextIdx = e.shiftKey ? (idx - 1 + inputs.length) % inputs.length : (idx + 1) % inputs.length;
+                const nextInput = inputs[nextIdx];
+                if (nextInput) {
+                    nextInput.focus();
+                    if (typeof nextInput.select === 'function') nextInput.select();
+                }
+            }
+        }
+    }
+});
 
 let _resizeDebounce = null;
 window.addEventListener('resize', () => {
