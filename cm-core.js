@@ -332,7 +332,8 @@ window.switchTab = (tab) => {
         const btn = document.getElementById(`tab-${t}`);
         if (el) {
             if (t === tab) {
-                el.style.display = (t === 'manual' || t === 'grid') ? 'flex' : 'block';
+                el.style.display = 'flex';
+                el.style.flexDirection = 'column';
                 el.classList.remove('hidden');
             } else {
                 el.style.display = 'none';
@@ -348,7 +349,10 @@ window.switchTab = (tab) => {
         if (tab === 'rules' && typeof window.renderDynamicOtaRules === 'function') window.renderDynamicOtaRules();
         if (tab === 'promos' && typeof window.renderPromoRulesTable === 'function') window.renderPromoRulesTable();
         if (tab === 'relational' && typeof window.renderRelationships === 'function') window.renderRelationships();
-        if (tab === 'smart' && typeof window.updateAnchorDropdowns === 'function') window.updateAnchorDropdowns();
+        if (tab === 'smart') {
+            if (typeof window.updateAnchorDropdowns === 'function') window.updateAnchorDropdowns();
+            if (typeof window.renderEvtRestrTable === 'function') window.renderEvtRestrTable();
+        }
         if (tab === 'manual') {
             if (typeof window.renderManualGrid === 'function') window.renderManualGrid();
             if (typeof window.checkMissing === 'function') window.checkMissing();
@@ -357,6 +361,65 @@ window.switchTab = (tab) => {
     } catch (err) {
         console.warn("Tab view refresh notice:", err);
     }
+};
+
+// --- SYNCHRONIZED ANCHOR ROOM CONTROLLER (SINGLE SOURCE OF TRUTH) ---
+window.syncAnchorRooms = (type, val) => {
+    window.savedAutofillBaselines = window.savedAutofillBaselines || {};
+    window.pricingRules = window.pricingRules || {};
+
+    if (type === 'private') {
+        window.savedAutofillBaselines.anchor_p = val;
+        window.pricingRules.anchorPrivate = val;
+        const p1 = document.getElementById('rule-anchor-private');
+        const p2 = document.getElementById('w-anchor-private');
+        const disp = document.getElementById('display-anchor-private');
+        if (p1 && p1.value !== val) p1.value = val;
+        if (p2 && p2.value !== val) p2.value = val;
+        if (disp) disp.innerText = val || '--';
+    } else if (type === 'dorm') {
+        window.savedAutofillBaselines.anchor_d = val;
+        window.pricingRules.anchorDorm = val;
+        const d1 = document.getElementById('rule-anchor-dorm');
+        const d2 = document.getElementById('w-anchor-dorm');
+        const disp = document.getElementById('display-anchor-dorm');
+        if (d1 && d1.value !== val) d1.value = val;
+        if (d2 && d2.value !== val) d2.value = val;
+        if (disp) disp.innerText = val || '--';
+    }
+
+    window.markUnsavedChanges();
+    if (window.savePricingRulesToCloud) window.savePricingRulesToCloud(false);
+    if (window.saveAutofillBaselines) window.saveAutofillBaselines(false);
+    if (window.renderGrid) window.renderGrid();
+};
+
+window.updateAnchorDropdowns = () => {
+    const ruleP = document.getElementById('rule-anchor-private');
+    const ruleD = document.getElementById('rule-anchor-dorm');
+    const hidP = document.getElementById('w-anchor-private');
+    const hidD = document.getElementById('w-anchor-dorm');
+    const dispP = document.getElementById('display-anchor-private');
+    const dispD = document.getElementById('display-anchor-dorm');
+
+    const curP = ruleP?.value || hidP?.value || window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || '';
+    const curD = ruleD?.value || hidD?.value || window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || '';
+
+    const privates = (window.roomTypes || []).filter(t => !t.toLowerCase().includes('dorm'));
+    const pList = privates.length ? privates : (window.roomTypes || []);
+    const dorms = (window.roomTypes || []).filter(t => t.toLowerCase().includes('dorm'));
+    const dList = dorms.length ? dorms : (window.roomTypes || []);
+
+    const pOptions = pList.map(t => `<option value="${t}" ${t === curP ? 'selected' : ''}>${t}</option>`).join('');
+    const dOptions = dList.map(t => `<option value="${t}" ${t === curD ? 'selected' : ''}>${t}</option>`).join('');
+
+    if (ruleP) { ruleP.innerHTML = pOptions; if (curP && pList.includes(curP)) ruleP.value = curP; }
+    if (ruleD) { ruleD.innerHTML = dOptions; if (curD && dList.includes(curD)) ruleD.value = curD; }
+
+    if (hidP) hidP.value = curP;
+    if (hidD) hidD.value = curD;
+    if (dispP) dispP.innerText = curP || '--';
+    if (dispD) dispD.innerText = curD || '--';
 };
 
 window.setPreset = (preset) => {
