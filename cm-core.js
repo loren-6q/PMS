@@ -432,10 +432,10 @@ window.loadPropertyConfig = async () => {
                 }
             });
             switcher.innerHTML = optionsHtml.join('');
-            switcher.value = window.currentPropertyId;
-        }
+        switcher.value = window.currentPropertyId;
+    }
 
-        const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
+    const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
         const propToLoad = window.windowPropertiesList.find(p => p.id === canonId && Array.isArray(p.rooms) && p.rooms.length > 0)
             || window.windowPropertiesList.find(p => (window.toCanonicalPropId ? window.toCanonicalPropId(p.id) : p.id) === canonId)
             || window.windowPropertiesList.find(p => p.id.toLowerCase() === window.currentPropertyId.toLowerCase())
@@ -545,6 +545,19 @@ window.loadPropertyConfig = async () => {
         if (loadedTimeline) window.masterPricing.timeline = loadedTimeline;
         if (loadedRelationships) window.masterPricing.relationships = loadedRelationships;
         if (loadedBaselines && window.populateAutofillBaselines) window.populateAutofillBaselines(loadedBaselines);
+
+        if (window.pricingRules) {
+            const rPriv = window.pricingRules.anchorPrivate || window.savedAutofillBaselines?.anchor_p;
+            const rDorm = window.pricingRules.anchorDorm || window.savedAutofillBaselines?.anchor_d;
+            if (rPriv) {
+                const elP = document.getElementById('rule-anchor-private');
+                if (elP) elP.value = rPriv;
+            }
+            if (rDorm) {
+                const elD = document.getElementById('rule-anchor-dorm');
+                if (elD) elD.value = rDorm;
+            }
+        }
 
         if (Array.isArray(window.masterPricing.relationships) && window.masterPricing.relationships.length > 0) {
             window.masterPricing.relationships = window.masterPricing.relationships.map(rel => ({
@@ -670,7 +683,56 @@ window.saveAndSync = async (btn) => {
             btn.disabled = false;
         }
         if (window.lucide) window.lucide.createIcons();
+};
+
+// --- SYNCHRONIZED ANCHOR ROOM CONTROLLER ---
+window.syncAnchorRooms = (type, val) => {
+    window.savedAutofillBaselines = window.savedAutofillBaselines || {};
+    window.pricingRules = window.pricingRules || {};
+
+    if (type === 'private') {
+        window.savedAutofillBaselines.anchor_p = val;
+        window.pricingRules.anchorPrivate = val;
+        const p1 = document.getElementById('rule-anchor-private');
+        const p2 = document.getElementById('w-anchor-private');
+        if (p1 && p1.value !== val) p1.value = val;
+        if (p2 && p2.value !== val) p2.value = val;
+    } else if (type === 'dorm') {
+        window.savedAutofillBaselines.anchor_d = val;
+        window.pricingRules.anchorDorm = val;
+        const d1 = document.getElementById('rule-anchor-dorm');
+        const d2 = document.getElementById('w-anchor-dorm');
+        if (d1 && d1.value !== val) d1.value = val;
+        if (d2 && d2.value !== val) d2.value = val;
     }
+
+    window.markUnsavedChanges();
+    if (window.savePricingRulesToCloud) window.savePricingRulesToCloud(false);
+    if (window.saveAutofillBaselines) window.saveAutofillBaselines(false);
+    if (window.renderGrid) window.renderGrid();
+};
+
+window.updateAnchorDropdowns = () => {
+    const selP = document.getElementById('w-anchor-private');
+    const selD = document.getElementById('w-anchor-dorm');
+    const ruleP = document.getElementById('rule-anchor-private');
+    const ruleD = document.getElementById('rule-anchor-dorm');
+
+    const curP = selP?.value || ruleP?.value || window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || '';
+    const curD = selD?.value || ruleD?.value || window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || '';
+
+    const privates = (window.roomTypes || []).filter(t => !t.toLowerCase().includes('dorm'));
+    const pList = privates.length ? privates : (window.roomTypes || []);
+    const dorms = (window.roomTypes || []).filter(t => t.toLowerCase().includes('dorm'));
+    const dList = dorms.length ? dorms : (window.roomTypes || []);
+
+    const pOptions = pList.map(t => `<option value="${t}" ${t === curP ? 'selected' : ''}>${t}</option>`).join('');
+    const dOptions = dList.map(t => `<option value="${t}" ${t === curD ? 'selected' : ''}>${t}</option>`).join('');
+
+    if (selP) { selP.innerHTML = pOptions; if (curP && pList.includes(curP)) selP.value = curP; }
+    if (ruleP) { ruleP.innerHTML = pOptions; if (curP && pList.includes(curP)) ruleP.value = curP; }
+    if (selD) { selD.innerHTML = dOptions; if (curD && dList.includes(curD)) selD.value = curD; }
+    if (ruleD) { ruleD.innerHTML = dOptions; if (curD && dList.includes(curD)) ruleD.value = curD; }
 };
 
 // --- 10. AUTH & BOOTSTRAP INITIALIZATION ---
