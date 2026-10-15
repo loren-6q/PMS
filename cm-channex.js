@@ -177,78 +177,148 @@ window.getPmsCategoryOptionsHtml = () => {
     return opts;
 };
 
-window.renderChannexMapping = (channexRooms = null) => {
-    const container = document.getElementById('channex-mapping-container');
-    if (!container) return;
+// --- SMART CLASSIFIER FUZZY MATCHER & ALIAS RULES ---
+window.mappingChannelFilter = 'ALL';
 
-    if (!channexRooms) {
-        if (!window.channexMap || window.channexMap.length === 0) {
-            container.innerHTML = `<div class="text-center py-6 text-slate-400 font-bold text-xs italic">No room mappings configured yet. Click Save & Fetch above.</div>`;
-            return;
+window.getClassifierAliases = () => {
+    const defaultAliases = {
+        channels: {
+            'Booking.com': ['bdc', 'booking', 'booking.com', 'b.com', 'bcom'],
+            'Hostelworld': ['hw', 'hostelworld', 'hostel world'],
+            'Agoda': ['agoda', 'ago', 'ycs'],
+            'Direct Website': ['direct', 'website', 'web', 'ibe', 'be', 'direct web'],
+            'Expedia': ['expedia', 'exp', 'epc'],
+            'Airbnb': ['airbnb', 'abnb']
+        },
+        products: {
+            'evt': ['evt', 'event', 'fmp', 'full moon', 'party', 'pkg', 'package'],
+            'std': ['std', 'standard', 'base']
+        },
+        policies: {
+            'ref': ['ref', 'refundable', 'flex', 'flexible', 'std ref', 'standard refundable'],
+            'non-ref': ['non-ref', 'non ref', 'nonref', 'nonrefundable', 'non-refundable', 'nr', 'nref']
         }
+    };
 
-        const pmsOptions = window.getPmsCategoryOptionsHtml();
-        let html = '<div class="flex flex-col gap-1.5">';
-        window.channexMap.forEach(map => {
-            let catOptions = pmsOptions;
-            let warningTag = '';
+    try {
+        const stored = localStorage.getItem(`cm_classifier_aliases_${window.currentPropertyId}`);
+        if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return defaultAliases;
+};
 
-            if (map.pmsCategory && !(window.roomTypes || []).includes(map.pmsCategory)) {
-                catOptions = `<option value="${map.pmsCategory}" selected class="text-red-600 font-black">⚠️ ${map.pmsCategory} (RENAMED / NOT IN SETTINGS)</option>` + pmsOptions;
-                warningTag = ` <span class="text-red-500 font-black text-[9px]">(RENAMED IN SETTINGS)</span>`;
-            } else {
-                catOptions = catOptions.replace(`value="${map.pmsCategory}"`, `value="${map.pmsCategory}" selected`);
-            }
+window.toggleClassifierHelpModal = () => {
+    const modal = document.getElementById('classifier-help-modal');
+    if (!modal) return;
+    const aliases = window.getClassifierAliases();
 
-            html += `
-                <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-channex-id="${map.channexId}" data-channex-title="${map.channexTitle}">
-                    <div class="flex-1 flex flex-col min-w-0 pl-1">
-                        <span class="font-bold text-slate-800 text-[11px] truncate" title="${map.channexTitle}">${map.channexTitle}${warningTag}</span>
-                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex ID: ${map.channexId}</span>
-                    </div>
-                    <i data-lucide="arrow-right" size="14" class="text-slate-400 shrink-0"></i>
-                    <select class="input-base !py-1 !text-xs !w-44 cursor-pointer chan-pms-sel bg-slate-50 border-slate-300 text-slate-700 font-bold">
-                        ${catOptions}
-                    </select>
-                </div>`;
-        });
-        html += '</div>';
-        container.innerHTML = html;
-        if (window.renderChannexRateMapping) window.renderChannexRateMapping();
-        if (window.lucide) window.lucide.createIcons();
-        return;
+    const setVal = (id, arr) => {
+        const el = document.getElementById(id);
+        if (el && arr) el.value = arr.join(', ');
+    };
+
+    setVal('alias-channel-bdc', aliases.channels['Booking.com']);
+    setVal('alias-channel-hw', aliases.channels['Hostelworld']);
+    setVal('alias-channel-agoda', aliases.channels['Agoda']);
+    setVal('alias-channel-direct', aliases.channels['Direct Website']);
+    setVal('alias-product-evt', aliases.products['evt']);
+    setVal('alias-policy-ref', aliases.policies['ref']);
+    setVal('alias-policy-nonref', aliases.policies['non-ref']);
+
+    modal.classList.add('active');
+    modal.style.display = 'flex';
+};
+
+window.saveClassifierAliases = () => {
+    const parseAliases = id => {
+        const val = document.getElementById(id)?.value || '';
+        return val.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    };
+
+    const updated = {
+        channels: {
+            'Booking.com': parseAliases('alias-channel-bdc'),
+            'Hostelworld': parseAliases('alias-channel-hw'),
+            'Agoda': parseAliases('alias-channel-agoda'),
+            'Direct Website': parseAliases('alias-channel-direct'),
+            'Expedia': ['expedia', 'exp', 'epc'],
+            'Airbnb': ['airbnb', 'abnb']
+        },
+        products: {
+            'evt': parseAliases('alias-product-evt'),
+            'std': ['std', 'standard', 'base']
+        },
+        policies: {
+            'ref': parseAliases('alias-policy-ref'),
+            'non-ref': parseAliases('alias-policy-nonref')
+        }
+    };
+
+    localStorage.setItem(`cm_classifier_aliases_${window.currentPropertyId}`, JSON.stringify(updated));
+    window.closeModal('classifier-help-modal');
+    window.autoClassifyAllChannexRates();
+    window.customAlert("Keyword rules saved! Auto-reclassifying rate plans...");
+};
+
+window.fuzzyClassifyTitle = (title) => {
+    const aliases = window.getClassifierAliases();
+    const clean = title.toLowerCase();
+
+    // 1. Channel
+    let detectedChannel = 'Direct Website';
+    for (const [ch, keywords] of Object.entries(aliases.channels)) {
+        if (keywords.some(k => clean.includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(clean))) {
+            detectedChannel = ch;
+            break;
+        }
     }
 
-    const pmsOptions = window.getPmsCategoryOptionsHtml();
-    let html = '<div class="flex flex-col gap-1.5">';
-    channexRooms.forEach(room => {
-        const existingMap = (window.channexMap || []).find(m => m.channexId === room.id);
-        let selectedVal = existingMap ? existingMap.pmsCategory : '';
-        let catOptions = pmsOptions;
-        let warningTag = '';
+    // 2. Product
+    let detectedProduct = 'std';
+    if (aliases.products.evt.some(k => clean.includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(clean))) {
+        detectedProduct = 'evt';
+    }
 
-        if (selectedVal && !(window.roomTypes || []).includes(selectedVal)) {
-            catOptions = `<option value="${selectedVal}" selected class="text-red-600 font-black">⚠️ ${selectedVal} (RENAMED / NOT IN SETTINGS)</option>` + pmsOptions;
-            warningTag = ` <span class="text-red-500 font-black text-[9px]">(RENAMED IN SETTINGS)</span>`;
-        } else {
-            catOptions = catOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`);
+    // 3. Policy (Check non-ref before ref to prevent partial match on 'ref')
+    let detectedPolicy = 'non-ref';
+    if (aliases.policies['non-ref'].some(k => clean.includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(clean))) {
+        detectedPolicy = 'non-ref';
+    } else if (aliases.policies['ref'].some(k => clean.includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(clean))) {
+        detectedPolicy = 'ref';
+    }
+
+    return { channel: detectedChannel, product: detectedProduct, policy: detectedPolicy };
+};
+
+window.setMappingChannelFilter = (channel) => {
+    window.mappingChannelFilter = channel;
+    const filterIds = ['ALL', 'Booking.com', 'Hostelworld', 'Agoda', 'Direct Website', 'OTHER'];
+    filterIds.forEach(f => {
+        const btn = document.getElementById(`map-flt-${f}`);
+        if (btn) {
+            if (f === channel) {
+                btn.className = "px-2 py-0.5 rounded text-[9px] font-black uppercase transition-colors bg-amber-600 text-white shadow-xs";
+            } else {
+                btn.className = "px-2 py-0.5 rounded text-[9px] font-black uppercase transition-colors bg-white text-slate-700 border border-slate-300 hover:bg-amber-50";
+            }
         }
-
-        html += `
-            <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-channex-id="${room.id}" data-channex-title="${room.attributes.title}">
-                <div class="flex-1 flex flex-col min-w-0 pl-1">
-                    <span class="font-bold text-slate-800 text-[11px] truncate" title="${room.attributes.title}">${room.attributes.title}${warningTag}</span>
-                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex ID: ${room.id}</span>
-                </div>
-                <i data-lucide="arrow-right" size="14" class="text-slate-400 shrink-0"></i>
-                <select class="input-base !py-1 !text-xs !w-44 cursor-pointer chan-pms-sel bg-slate-50 border-slate-300 text-slate-700 font-bold">
-                    ${catOptions}
-                </select>
-            </div>`;
     });
-    html += '</div>';
-    container.innerHTML = html;
-    if (window.lucide) window.lucide.createIcons();
+    if (window.renderChannexRateMapping) window.renderChannexRateMapping();
+};
+
+window.autoClassifyAllChannexRates = () => {
+    if (!window.channexRateMap || window.channexRateMap.length === 0) return;
+
+    window.channexRateMap.forEach(map => {
+        const classified = window.fuzzyClassifyTitle(map.ratePlanTitle);
+        map.channel = map.channel || classified.channel;
+        map.product = map.product || classified.product;
+        map.policy = map.policy || classified.policy;
+        map.rateSource = map.product === 'evt' ? 'evt' : 'std';
+    });
+
+    window.renderChannexRateMapping();
+    window.markUnsavedChanges();
 };
 
 window.renderChannexRateMapping = (channexRates = null) => {
@@ -262,57 +332,86 @@ window.renderChannexRateMapping = (channexRates = null) => {
             return;
         }
 
-        const cleanRateMap = window.channexRateMap.filter(rate => {
-            const title = rate.ratePlanTitle || '';
-            if (/ - (BookingCom|Hostelworld|Agoda|Expedia|Airbnb|Hotelbeds|Ctrip|TripCom)\b/i.test(title)) return false;
-            return true;
-        });
-
         if (rateCard) {
             rateCard.style.display = 'flex';
             rateCard.classList.remove('hidden');
         }
 
+        const activeFilter = window.mappingChannelFilter || 'ALL';
+        const cleanRateMap = window.channexRateMap.filter(rate => {
+            const title = rate.ratePlanTitle || '';
+            if (/ - (BookingCom|Hostelworld|Agoda|Expedia|Airbnb|Hotelbeds|Ctrip|TripCom)\b/i.test(title)) return false;
+
+            if (activeFilter !== 'ALL') {
+                const rChan = rate.channel || window.fuzzyClassifyTitle(title).channel;
+                if (activeFilter === 'OTHER') {
+                    return !['Booking.com', 'Hostelworld', 'Agoda', 'Direct Website'].includes(rChan);
+                }
+                return rChan === activeFilter;
+            }
+            return true;
+        });
+
         const pmsOptions = window.getPmsCategoryOptionsHtml();
         let rHtml = '<div class="flex flex-col gap-1.5">';
+
+        if (cleanRateMap.length === 0) {
+            rHtml += `<div class="p-6 text-center text-xs font-bold text-slate-400">No rate plans match the "${activeFilter}" filter.</div>`;
+        }
+
         cleanRateMap.forEach(map => {
             let catOptions = pmsOptions;
             let warningTag = '';
 
             if (map.pmsCategory && !(window.roomTypes || []).includes(map.pmsCategory)) {
-                catOptions = `<option value="${map.pmsCategory}" selected class="text-red-600 font-black">⚠️ ${map.pmsCategory} (RENAMED / NOT IN SETTINGS)</option>` + pmsOptions;
-                warningTag = ` <span class="text-red-500 font-black text-[9px]">(RENAMED IN SETTINGS)</span>`;
+                catOptions = `<option value="${map.pmsCategory}" selected class="text-red-600 font-black">⚠️ ${map.pmsCategory} (NOT IN SETTINGS)</option>` + pmsOptions;
+                warningTag = ` <span class="text-red-500 font-black text-[9px]">(RENAMED)</span>`;
             } else {
                 catOptions = catOptions.replace(`value="${map.pmsCategory}"`, `value="${map.pmsCategory}" selected`);
             }
 
-            const ruleType = map.ruleType || "=";
-            const ruleVal = map.ruleVal !== undefined ? map.ruleVal : "";
-            const rateSource = map.rateSource || "std";
+            const classified = window.fuzzyClassifyTitle(map.ratePlanTitle);
+            const currentChannel = map.channel || classified.channel;
+            const currentProduct = map.product || (map.rateSource === 'evt' ? 'evt' : classified.product);
+            const currentPolicy = map.policy || classified.policy;
+
             const displayTitle = window.formatRatePlanTitle ? window.formatRatePlanTitle(map.ratePlanTitle, true) : map.ratePlanTitle;
 
             rHtml += `
-                <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${map.ratePlanId}" data-rate-title="${map.ratePlanTitle}">
+                <div class="flex items-center gap-2 bg-white p-2 rounded-lg border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${map.ratePlanId}" data-rate-title="${map.ratePlanTitle}">
                     <div class="flex-1 flex flex-col min-w-0 pl-1">
                         <span class="font-bold text-slate-800 text-[11px] truncate" title="${map.ratePlanTitle}">${displayTitle}${warningTag}</span>
-                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
+                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex ID: ${map.ratePlanId}</span>
                     </div>
+
                     <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
-                    <select class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none font-bold">
+
+                    <!-- Category Selector -->
+                    <select class="input-base !py-1 !text-xs !w-40 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-900 font-bold">
                         ${catOptions}
                     </select>
-                    <select class="input-base !py-0.5 !text-[10px] !w-20 cursor-pointer chan-rate-source bg-slate-50 border-amber-300 text-amber-900 shadow-none font-black text-center" title="Base rate source">
-                        <option value="std" ${rateSource === 'evt' ? '' : 'selected'}>STD Rate</option>
-                        <option value="evt" ${rateSource === 'evt' ? 'selected' : ''}>EVT Pkg</option>
+
+                    <!-- Channel Classification Pill -->
+                    <select class="input-base !py-1 !text-[10px] !w-32 cursor-pointer chan-rate-channel bg-indigo-50 border-indigo-200 text-indigo-800 font-black" title="Assigned OTA Channel (inherits Tab 2 multiplier)">
+                        <option value="Booking.com" ${currentChannel === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
+                        <option value="Hostelworld" ${currentChannel === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
+                        <option value="Agoda" ${currentChannel === 'Agoda' ? 'selected' : ''}>Agoda</option>
+                        <option value="Direct Website" ${currentChannel === 'Direct Website' ? 'selected' : ''}>Direct Website</option>
+                        <option value="Expedia" ${currentChannel === 'Expedia' ? 'selected' : ''}>Expedia</option>
+                        <option value="Airbnb" ${currentChannel === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
                     </select>
-                    <select class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center">
-                        <option value="=" ${ruleType === '=' ? 'selected' : ''}>=</option>
-                        <option value="+" ${ruleType === '+' ? 'selected' : ''}>+$</option>
-                        <option value="-" ${ruleType === '-' ? 'selected' : ''}>-$</option>
-                        <option value="+%" ${ruleType === '+%' ? 'selected' : ''}>+%</option>
-                        <option value="-%" ${ruleType === '-%' ? 'selected' : ''}>-%</option>
+
+                    <!-- Product Type Pill (STD vs EVT) -->
+                    <select class="input-base !py-1 !text-[10px] !w-24 cursor-pointer chan-rate-product font-black text-center ${currentProduct === 'evt' ? 'bg-pink-100 text-pink-800 border-pink-300' : 'bg-slate-100 text-slate-700 border-slate-300'}" title="Product Type (Standard vs Event Gated Package)">
+                        <option value="std" ${currentProduct === 'std' ? 'selected' : ''}>STD</option>
+                        <option value="evt" ${currentProduct === 'evt' ? 'selected' : ''}>EVT PKG</option>
                     </select>
-                    <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white" placeholder="0" value="${ruleVal}">
+
+                    <!-- Policy Ratio Pill (Non-Ref vs Ref) -->
+                    <select class="input-base !py-1 !text-[10px] !w-28 cursor-pointer chan-rate-policy font-black text-center ${currentPolicy === 'ref' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-800 border-amber-300'}" title="Cancellation Policy (Non-Ref vs Refundable)">
+                        <option value="non-ref" ${currentPolicy === 'non-ref' ? 'selected' : ''}>Non-Ref (Base)</option>
+                        <option value="ref" ${currentPolicy === 'ref' ? 'selected' : ''}>Refundable (+%)</option>
+                    </select>
                 </div>`;
         });
         rHtml += '</div>';
@@ -335,51 +434,25 @@ window.renderChannexRateMapping = (channexRates = null) => {
             return true;
         });
 
-        const pmsOptions = window.getPmsCategoryOptionsHtml();
-
-        let rHtml = '<div class="flex flex-col gap-1.5">';
-        cleanRates.forEach(rate => {
-            const existingMap = (window.channexRateMap || []).find(m => m.ratePlanId === rate.id);
-            let selectedVal = existingMap ? existingMap.pmsCategory : '';
-            let ruleType = existingMap ? (existingMap.ruleType || "=") : "=";
-            let ruleVal = existingMap && existingMap.ruleVal !== undefined ? existingMap.ruleVal : "";
-            let rateSource = existingMap ? (existingMap.rateSource || "std") : "std";
-
-            const displayTitle = window.formatRatePlanTitle ? window.formatRatePlanTitle(rate.attributes.title, true) : rate.attributes.title;
-
-            rHtml += `
-                <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-amber-200 shadow-sm chan-rate-map-row" data-rate-id="${rate.id}" data-rate-title="${rate.attributes.title}">
-                    <div class="flex-1 flex flex-col min-w-0 pl-1">
-                        <span class="font-bold text-slate-800 text-[11px] truncate" title="${rate.attributes.title}">${displayTitle}</span>
-                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex Rate Plan</span>
-                    </div>
-                    <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
-                    <select class="input-base !py-0.5 !text-[10px] !w-32 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-800 shadow-none">
-                        ${pmsOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
-                    </select>
-                    <select class="input-base !py-0.5 !text-[10px] !w-20 cursor-pointer chan-rate-source bg-slate-50 border-amber-300 text-amber-900 shadow-none font-black text-center" title="Base rate source">
-                        <option value="std" ${rateSource === 'evt' ? '' : 'selected'}>STD Rate</option>
-                        <option value="evt" ${rateSource === 'evt' ? 'selected' : ''}>EVT Pkg</option>
-                    </select>
-                    <select class="input-base !py-0.5 !text-[10px] !w-16 cursor-pointer chan-rate-rule-type bg-slate-50 border-amber-300 text-amber-800 shadow-none font-black text-center">
-                        <option value="=" ${ruleType === '=' ? 'selected' : ''}>=</option>
-                        <option value="+" ${ruleType === '+' ? 'selected' : ''}>+$</option>
-                        <option value="-" ${ruleType === '-' ? 'selected' : ''}>-$</option>
-                        <option value="+%" ${ruleType === '+%' ? 'selected' : ''}>+%</option>
-                        <option value="-%" ${ruleType === '-%' ? 'selected' : ''}>-%</option>
-                    </select>
-                    <input type="number" class="input-base !py-0.5 !text-[10px] !w-16 text-center chan-rate-rule-val border-amber-300 bg-white" placeholder="0" value="${ruleVal}">
-                </div>`;
+        // Initialize mapping list from fetched rates
+        window.channexRateMap = cleanRates.map(rate => {
+            const existing = (window.channexRateMap || []).find(m => m.ratePlanId === rate.id);
+            const classified = window.fuzzyClassifyTitle(rate.attributes.title);
+            return {
+                ratePlanId: rate.id,
+                ratePlanTitle: rate.attributes.title,
+                pmsCategory: existing ? existing.pmsCategory : '',
+                channel: existing?.channel || classified.channel,
+                product: existing?.product || classified.product,
+                policy: existing?.policy || classified.policy,
+                rateSource: (existing?.product || classified.product) === 'evt' ? 'evt' : 'std'
+            };
         });
-        rHtml += '</div>';
-        rateContainer.innerHTML = rHtml;
-    } else if (rateCard) {
-        rateCard.style.display = 'none';
+
+        window.renderChannexRateMapping();
     }
-    if (window.lucide) window.lucide.createIcons();
 };
 
-// --- 4. PERSIST MAPPINGS TO CLOUD ---
 window.saveMappingToDB = async (notify = false) => {
     const rows = document.querySelectorAll('.chan-map-row');
     const newMap = [];
@@ -398,17 +471,21 @@ window.saveMappingToDB = async (notify = false) => {
     rateRows.forEach(r => {
         const rId = r.dataset.rateId;
         const rTitle = r.dataset.rateTitle;
-        const sel = r.querySelector('.chan-rate-pms-sel');
-        const pmsCat = sel ? sel.value : '';
-        const srcSel = r.querySelector('.chan-rate-source');
-        const rateSource = srcSel ? srcSel.value : 'std';
-        const typeSel = r.querySelector('.chan-rate-rule-type');
-        const ruleType = typeSel ? typeSel.value : '=';
-        const valInp = r.querySelector('.chan-rate-rule-val');
-        const ruleVal = valInp && valInp.value !== '' ? parseFloat(valInp.value) : 0;
+        const pmsCat = r.querySelector('.chan-rate-pms-sel')?.value || '';
+        const channel = r.querySelector('.chan-rate-channel')?.value || 'Direct Website';
+        const product = r.querySelector('.chan-rate-product')?.value || 'std';
+        const policy = r.querySelector('.chan-rate-policy')?.value || 'non-ref';
 
         if (rId && pmsCat) {
-            newRateMap.push({ ratePlanId: rId, ratePlanTitle: rTitle, pmsCategory: pmsCat, rateSource, ruleType, ruleVal });
+            newRateMap.push({
+                ratePlanId: rId,
+                ratePlanTitle: rTitle,
+                pmsCategory: pmsCat,
+                channel,
+                product,
+                policy,
+                rateSource: product === 'evt' ? 'evt' : 'std'
+            });
         }
     });
 
@@ -421,7 +498,7 @@ window.saveMappingToDB = async (notify = false) => {
         window.channexMap = newMap;
         window.channexRateMap = newRateMap;
 
-        if (notify) window.customAlert("Mappings successfully saved to database!");
+        if (notify) window.customAlert("Classifications & room mappings successfully saved to database!");
         if (window.renderGrid) window.renderGrid();
         if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
     } catch (err) {
