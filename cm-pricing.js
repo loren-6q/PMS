@@ -8,6 +8,64 @@
 window.editMode = window.editMode || 'ripple'; // 'ripple' | 'pin'
 window.drillLevel = window.drillLevel || 'room';  // 'master' | 'room' | 'rates'
 
+// DYNAMIC 4-QUADRANT RATE COMPUTATION (Master Driver -> Product STD/EVT -> Channel Multiplier -> Policy Ratio -> Promo)
+window.computeDynamicPlanRate = (dateStr, room, ratePlan) => {
+    const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
+    const roomObj = dayObj[room] || {};
+    const hasEvents = (window.eventDates || []).length > 0;
+
+    const isEvtProduct = (ratePlan.product === 'evt') || (ratePlan.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(ratePlan.ratePlanTitle || '');
+    const isRefPolicy = (ratePlan.policy === 'ref') || /ref|refundable/i.test(ratePlan.ratePlanTitle || '') && !/non-?ref/i.test(ratePlan.ratePlanTitle || '');
+
+    // 1. Base Product Rate (Standard vs Event)
+    let basePrice = (isEvtProduct && hasEvents && roomObj.fmp !== undefined && roomObj.fmp !== "")
+        ? roomObj.fmp
+        : roomObj.std;
+
+    if (basePrice === undefined || basePrice === "") {
+        basePrice = window.masterPricing?.baseRates?.[room] || window.categoryBaseRates?.[room];
+    }
+    if (basePrice === undefined || basePrice === "" || isNaN(parseFloat(basePrice))) return null;
+
+    let computed = parseFloat(basePrice);
+
+    // 2. Channel Multiplier (from Tab 2 Pricing Rules)
+    const channelName = ratePlan.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(ratePlan.ratePlanTitle).channel : 'Direct Website');
+    const channelRule = window.pricingRules?.channels?.[channelName] || { type: '=', val: 0 };
+    computed = window.applyMath(computed, channelRule.type || '=', channelRule.val || 0);
+
+    // 3. Policy Ratio (Refundable vs Non-Ref)
+    if (isRefPolicy) {
+        if (isEvtProduct) {
+            const eType = window.pricingRules?.evtRefType || '+%';
+            const eVal = window.pricingRules?.evtRefVal !== undefined ? window.pricingRules.evtRefVal : 15;
+            computed = window.applyMath(computed, eType, eVal);
+        } else {
+            const sType = window.pricingRules?.stdRefType || '+%';
+            const sVal = window.pricingRules?.stdRefVal !== undefined ? window.pricingRules.stdRefVal : 10;
+            computed = window.applyMath(computed, sType, sVal);
+        }
+    }
+
+    // 4. Promo Offsets (from Tab 3 Deals & Promos)
+    let promoMultiplier = 1.0;
+    (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
+        const isChannelMatch = window.isRatePlanMatchingChannel 
+            ? window.isRatePlanMatchingChannel(ratePlan.ratePlanTitle, pr.channel)
+            : (pr.channel === 'ALL' || ratePlan.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase()));
+        const isScopeMatch = pr.scope === 'ALL' || pr.scope === room;
+        const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dateStr >= pr.startDate && dateStr <= pr.endDate);
+
+        if (isChannelMatch && isScopeMatch && isDateMatch) {
+            const disc = pr.discountPct / 100;
+            if (disc > 0 && disc < 1) promoMultiplier *= (1 / (1 - disc));
+        }
+    });
+
+    computed *= promoMultiplier;
+    return window.roundCurrency(computed);
+};
+
 window.applyMath = (baseVal, type, modifier, isReverse = false) => {
     if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
     let val = parseFloat(baseVal); 
