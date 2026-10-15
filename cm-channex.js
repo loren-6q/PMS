@@ -177,6 +177,80 @@ window.getPmsCategoryOptionsHtml = () => {
     return opts;
 };
 
+window.renderChannexMapping = (channexRooms = null) => {
+    const container = document.getElementById('channex-mapping-container');
+    if (!container) return;
+
+    if (!channexRooms) {
+        if (!window.channexMap || window.channexMap.length === 0) {
+            container.innerHTML = `<div class="text-center py-6 text-slate-400 font-bold text-xs italic">No room mappings configured yet. Click Save & Fetch above.</div>`;
+            return;
+        }
+
+        const pmsOptions = window.getPmsCategoryOptionsHtml();
+        let html = '<div class="flex flex-col gap-1.5">';
+        window.channexMap.forEach(map => {
+            let catOptions = pmsOptions;
+            let warningTag = '';
+
+            if (map.pmsCategory && !(window.roomTypes || []).includes(map.pmsCategory)) {
+                catOptions = `<option value="${map.pmsCategory}" selected class="text-red-600 font-black">⚠️ ${map.pmsCategory} (RENAMED / NOT IN SETTINGS)</option>` + pmsOptions;
+                warningTag = ` <span class="text-red-500 font-black text-[9px]">(RENAMED IN SETTINGS)</span>`;
+            } else {
+                catOptions = catOptions.replace(`value="${map.pmsCategory}"`, `value="${map.pmsCategory}" selected`);
+            }
+
+            html += `
+                <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-channex-id="${map.channexId}" data-channex-title="${map.channexTitle}">
+                    <div class="flex-1 flex flex-col min-w-0 pl-1">
+                        <span class="font-bold text-slate-800 text-[11px] truncate" title="${map.channexTitle}">${map.channexTitle}${warningTag}</span>
+                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex ID: ${map.channexId}</span>
+                    </div>
+                    <i data-lucide="arrow-right" size="14" class="text-slate-400 shrink-0"></i>
+                    <select class="input-base !py-1 !text-xs !w-44 cursor-pointer chan-pms-sel bg-slate-50 border-slate-300 text-slate-700 font-bold">
+                        ${catOptions}
+                    </select>
+                </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+        if (window.renderChannexRateMapping) window.renderChannexRateMapping();
+        if (window.lucide) window.lucide.createIcons();
+        return;
+    }
+
+    const pmsOptions = window.getPmsCategoryOptionsHtml();
+    let html = '<div class="flex flex-col gap-1.5">';
+    channexRooms.forEach(room => {
+        const existingMap = (window.channexMap || []).find(m => m.channexId === room.id);
+        let selectedVal = existingMap ? existingMap.pmsCategory : '';
+        let catOptions = pmsOptions;
+        let warningTag = '';
+
+        if (selectedVal && !(window.roomTypes || []).includes(selectedVal)) {
+            catOptions = `<option value="${selectedVal}" selected class="text-red-600 font-black">⚠️ ${selectedVal} (RENAMED / NOT IN SETTINGS)</option>` + pmsOptions;
+            warningTag = ` <span class="text-red-500 font-black text-[9px]">(RENAMED IN SETTINGS)</span>`;
+        } else {
+            catOptions = catOptions.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`);
+        }
+
+        html += `
+            <div class="flex items-center gap-2 bg-white p-1.5 rounded border border-slate-200 shadow-sm chan-map-row" data-channex-id="${room.id}" data-channex-title="${room.attributes.title}">
+                <div class="flex-1 flex flex-col min-w-0 pl-1">
+                    <span class="font-bold text-slate-800 text-[11px] truncate" title="${room.attributes.title}">${room.attributes.title}${warningTag}</span>
+                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">Channex ID: ${room.id}</span>
+                </div>
+                <i data-lucide="arrow-right" size="14" class="text-slate-400 shrink-0"></i>
+                <select class="input-base !py-1 !text-xs !w-44 cursor-pointer chan-pms-sel bg-slate-50 border-slate-300 text-slate-700 font-bold">
+                    ${catOptions}
+                </select>
+            </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+    if (window.lucide) window.lucide.createIcons();
+};
+
 // --- SMART CLASSIFIER FUZZY MATCHER & ALIAS RULES ---
 window.mappingChannelFilter = 'ALL';
 
