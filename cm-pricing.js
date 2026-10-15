@@ -6,7 +6,7 @@
 
 // --- 1. CORE PRICING MATH & EVENT PROXIMITY ---
 window.editMode = window.editMode || 'ripple'; // 'ripple' | 'pin'
-window.drillLevel = window.drillLevel || 'room';  // 'driver' | 'room' | 'rates'
+window.drillLevel = window.drillLevel || 'room';  // 'master' | 'room' | 'rates'
 
 window.applyMath = (baseVal, type, modifier, isReverse = false) => {
     if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
@@ -54,15 +54,15 @@ window.toggleEditMode = () => {
         icon.innerHTML = '<i data-lucide="zap" size="14" class="text-amber-600"></i>';
     } else {
         btn.className = "px-2.5 py-1.5 rounded font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer bg-indigo-100 text-indigo-800 border border-indigo-300 hover:bg-indigo-200";
-        label.innerText = "PIN (OVERRIDE)";
-        icon.innerHTML = '<i data-lucide="pin" size="14" class="text-indigo-600"></i>';
+        label.innerText = "OVERRIDE MODE";
+        icon.innerHTML = '<i data-lucide="edit-3" size="14" class="text-indigo-600"></i>';
     }
     if (window.lucide) window.lucide.createIcons();
 };
 
 window.setDrillLevel = (level) => {
     window.drillLevel = level;
-    ['driver', 'room', 'rates'].forEach(l => {
+    ['master', 'room', 'rates'].forEach(l => {
         const btn = document.getElementById(`depth-${l}`);
         if (btn) {
             if (l === level) {
@@ -107,8 +107,9 @@ window.handleCellStopToggle = (dateStr, roomType, ratePlanId = null) => {
         dObj.otaOverrides[`${ratePlanId}_stop`] = !cur;
     } else {
         dObj[roomType] = dObj[roomType] || { isOverride: {} };
-        const cur = !!dObj[roomType].stop;
+        const cur = !!(dObj[roomType].stop || dObj[roomType].stopSell);
         dObj[roomType].stop = !cur;
+        dObj[roomType].stopSell = !cur;
         dObj[roomType].isOverride = dObj[roomType].isOverride || {};
         dObj[roomType].isOverride.stop = true;
     }
@@ -123,16 +124,18 @@ window.handleHeaderStopToggle = (dateStr) => {
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     const dObj = window.masterPricing.timeline[dateStr];
     dObj['GLOBAL'] = dObj['GLOBAL'] || { isOverride: {} };
-    const curGlobalStop = !!dObj['GLOBAL'].stop;
+    const curGlobalStop = !!(dObj['GLOBAL'].stop || dObj['GLOBAL'].stopSell);
     const newStop = !curGlobalStop;
 
     dObj['GLOBAL'].stop = newStop;
+    dObj['GLOBAL'].stopSell = newStop;
     dObj['GLOBAL'].isOverride = dObj['GLOBAL'].isOverride || {};
     dObj['GLOBAL'].isOverride.stop = true;
 
     (window.roomTypes || []).forEach(rt => {
         dObj[rt] = dObj[rt] || { isOverride: {} };
         dObj[rt].stop = newStop;
+        dObj[rt].stopSell = newStop;
     });
 
     window.dirtyDates.add(dateStr);
@@ -191,9 +194,49 @@ window.handleCellCtaCtdCycle = (dateStr, roomType, ratePlanId = null) => {
     if (window.renderGrid) window.renderGrid();
 };
 
+window.unlockCellOverride = (dateStr, roomType, ratePlanId = null) => {
+    if (ratePlanId) {
+        if (window.masterPricing.timeline[dateStr]?.otaOverrides) {
+            delete window.masterPricing.timeline[dateStr].otaOverrides[ratePlanId];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_rate`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_min`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_cta`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_ctd`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_stop`];
+        }
+    } else {
+        const rData = window.masterPricing.timeline[dateStr]?.[roomType];
+        if (rData) {
+            if (rData.isOverride) {
+                delete rData.isOverride.std;
+                delete rData.isOverride.fmp;
+                delete rData.isOverride.min;
+                delete rData.isOverride.min_arr;
+                delete rData.isOverride.max;
+                delete rData.isOverride.stop;
+                delete rData.isOverride.cta;
+                delete rData.isOverride.ctd;
+            }
+            rData.std = "";
+            rData.fmp = "";
+        }
+        if (window.healDay) window.healDay(dateStr);
+    }
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+};
+
 window.handleCellPriceChange = (e, dateStr, roomType, isAltPin = false) => {
     const rawVal = e.target.value.trim();
-    if (rawVal === "" || isNaN(parseFloat(rawVal))) return;
+    if (rawVal === "" || isNaN(parseFloat(rawVal))) {
+        // Clearing price automatically unlocks the override and heals the day!
+        if (window.unlockCellOverride) {
+            window.unlockCellOverride(dateStr, roomType);
+        }
+        return;
+    }
     const newPrice = parseFloat(rawVal);
 
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
