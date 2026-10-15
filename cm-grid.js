@@ -292,7 +292,20 @@ window.renderGrid = () => {
     targetRooms.forEach((room, idx) => {
         const groupClass = idx % 2 === 0 ? 'room-group-even' : 'room-group-odd';
         const displayName = window.displayAbbrev[room] || room;
-        const mappedRates = window.channexRateMap ? window.channexRateMap.filter(m => window.categoryResolver(m.pmsCategory) === room) : [];
+        const allMappedRates = window.channexRateMap ? window.channexRateMap.filter(m => window.categoryResolver(m.pmsCategory) === room) : [];
+
+        // Apply Channel Preview Filter
+        const filterChannel = window.channelPreviewFilter || 'ALL';
+        const mappedRates = allMappedRates.filter(rate => {
+            if (filterChannel === 'ALL') return true;
+            const rChan = rate.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.ratePlanTitle).channel : '');
+            if (filterChannel === 'BDC') return rChan === 'Booking.com' || /bdc|booking/i.test(rate.ratePlanTitle);
+            if (filterChannel === 'HW') return rChan === 'Hostelworld' || /hw|hostelworld/i.test(rate.ratePlanTitle);
+            if (filterChannel === 'AGODA') return rChan === 'Agoda' || /agoda/i.test(rate.ratePlanTitle);
+            if (filterChannel === 'DIRECT') return rChan === 'Direct Website' || /direct/i.test(rate.ratePlanTitle);
+            return true;
+        });
+
         const isExpanded = (drill === 'rates') || window.expandedRooms.has(room);
 
         // A. AVAILABILITY ROW
@@ -425,10 +438,14 @@ window.renderGrid = () => {
 
                     let calculatedRate = otaOverride;
                     if (calculatedRate === undefined) {
-                        const roomData = dayObj[room] || {};
-                        let basePrice = (isEvtRate && roomData.fmp && (window.eventDates || []).length > 0) ? roomData.fmp : roomData.std;
-                        if (basePrice !== undefined && basePrice !== "") {
-                            calculatedRate = window.applyMath(basePrice, rate.ruleType || "=", rate.ruleVal || 0);
+                        if (window.computeDynamicPlanRate) {
+                            calculatedRate = window.computeDynamicPlanRate(dateStr, room, rate);
+                        } else {
+                            const roomData = dayObj[room] || {};
+                            let basePrice = (isEvtRate && roomData.fmp && (window.eventDates || []).length > 0) ? roomData.fmp : roomData.std;
+                            if (basePrice !== undefined && basePrice !== "") {
+                                calculatedRate = window.applyMath(basePrice, rate.ruleType || "=", rate.ruleVal || 0);
+                            }
                         }
                     }
 
