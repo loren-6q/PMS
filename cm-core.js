@@ -683,6 +683,7 @@ window.saveAndSync = async (btn) => {
             btn.disabled = false;
         }
         if (window.lucide) window.lucide.createIcons();
+    }
 };
 
 // --- SYNCHRONIZED ANCHOR ROOM CONTROLLER ---
