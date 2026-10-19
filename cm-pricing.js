@@ -130,7 +130,7 @@ window.toggleEditMode = () => {
 
 window.setDrillLevel = (level) => {
     window.drillLevel = level;
-    ['master', 'room', 'rates'].forEach(l => {
+    ['master', 'room', 'event', 'rates'].forEach(l => {
         const btn = document.getElementById(`depth-${l}`);
         if (btn) {
             if (l === level) {
