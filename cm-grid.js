@@ -6,6 +6,21 @@
 
 // Safe fallbacks to prevent module loading race conditions
 window.mNames = window.mNames || ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+window.daysToRender = window.daysToRender || 42;
+window.roomTypes = window.roomTypes || [];
+window.displayAbbrev = window.displayAbbrev || {};
+window.eventDates = window.eventDates || [];
+window.totalRoomsByType = window.totalRoomsByType || {};
+window.hotelRooms = window.hotelRooms || [];
+window.liveInventory = window.liveInventory || {};
+window.masterPricing = window.masterPricing || { relationships: [], timeline: {} };
+window.masterPricing.timeline = window.masterPricing.timeline || {};
+window.pricingRules = window.pricingRules || {};
+window.dirtyDates = window.dirtyDates || new Set();
+window.syncedDates = window.syncedDates || new Set();
+window.dirtyFields = window.dirtyFields || {};
+window.expandedRooms = window.expandedRooms || new Set();
+
 window.getLocalYMD = window.getLocalYMD || ((d) => (d instanceof Date ? d : new Date(d)).toISOString().split('T')[0]);
 window.parseYMD = window.parseYMD || ((str) => {
     if (!str) return 0;
@@ -14,11 +29,40 @@ window.parseYMD = window.parseYMD || ((str) => {
 });
 window.roundCurrency = window.roundCurrency || ((val) => (val === "" || val == null || isNaN(val) ? "" : Math.round(Number(val))));
 window.formatDisplay = window.formatDisplay || ((val) => (val === "" || val == null || isNaN(val) ? "" : window.roundCurrency(val)));
+window.categoryResolver = window.categoryResolver || ((catName) => {
+    if (!catName) return "";
+    const clean = catName.toUpperCase().trim();
+    const actual = (window.roomTypes || []).find(rt => rt.toUpperCase().trim() === clean);
+    return actual || "";
+});
+window.getNearestEvent = window.getNearestEvent || ((unixMs) => {
+    if (!window.eventDates || window.eventDates.length === 0) return 999;
+    let minDiff = Infinity;
+    window.eventDates.forEach(evt => {
+        const evtUnix = window.parseYMD(evt);
+        const diff = Math.round((unixMs - evtUnix) / 86400000);
+        if (Math.abs(diff) < Math.abs(minDiff)) minDiff = diff;
+    });
+    return minDiff;
+});
+window.customAlert = window.customAlert || ((msg) => console.log("Alert:", msg));
+window.showCmTooltip = window.showCmTooltip || ((e, text) => {});
+window.hideCmTooltip = window.hideCmTooltip || (() => {});
 
 window.drillLevel = window.drillLevel || 'room'; // 'master' | 'room' | 'event' | 'rates'
 window.viewDensity = window.viewDensity || 'full'; // 'avail' | 'compact' | 'minmax' | 'full'
 window.channelPreviewFilter = window.channelPreviewFilter || 'ALL';
 window.expandedRooms = window.expandedRooms || new Set();
+
+window.toggleRoomExpand = (room) => {
+    window.expandedRooms = window.expandedRooms || new Set();
+    if (window.expandedRooms.has(room)) {
+        window.expandedRooms.delete(room);
+    } else {
+        window.expandedRooms.add(room);
+    }
+    if (window.renderGrid) window.renderGrid();
+};
 
 // Resilient standalone inventory calculator (runs even if cm-auditor is loading)
 window.calculateLiveInventory = window.calculateLiveInventory || function() {
