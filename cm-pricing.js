@@ -158,6 +158,13 @@ window.showCmTooltip = (e, text) => {
 
     tt.style.left = `${Math.max(10, left)}px`;
     tt.style.top = `${Math.max(10, top)}px`;
+};
+
+window.hideCmTooltip = () => {
+    const tt = document.getElementById('cm-tooltip');
+    if (tt) tt.classList.add('hidden');
+};
+
 window.handleCellStopToggle = (dateStr, roomType, ratePlanId = null, isEvt = false) => {
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     const dObj = window.masterPricing.timeline[dateStr];
