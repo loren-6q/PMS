@@ -158,14 +158,7 @@ window.showCmTooltip = (e, text) => {
 
     tt.style.left = `${Math.max(10, left)}px`;
     tt.style.top = `${Math.max(10, top)}px`;
-};
-
-window.hideCmTooltip = () => {
-    const tt = document.getElementById('cm-tooltip');
-    if (tt) tt.classList.add('hidden');
-};
-
-window.handleCellStopToggle = (dateStr, roomType, ratePlanId = null) => {
+window.handleCellStopToggle = (dateStr, roomType, ratePlanId = null, isEvt = false) => {
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     const dObj = window.masterPricing.timeline[dateStr];
 
@@ -173,6 +166,13 @@ window.handleCellStopToggle = (dateStr, roomType, ratePlanId = null) => {
         dObj.otaOverrides = dObj.otaOverrides || {};
         const cur = !!dObj.otaOverrides[`${ratePlanId}_stop`];
         dObj.otaOverrides[`${ratePlanId}_stop`] = !cur;
+    } else if (isEvt) {
+        dObj[roomType] = dObj[roomType] || { isOverride: {} };
+        const cur = !!(dObj[roomType].evt_stop || dObj[roomType].evt_stopSell);
+        dObj[roomType].evt_stop = !cur;
+        dObj[roomType].evt_stopSell = !cur;
+        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
+        dObj[roomType].isOverride.evt_stop = true;
     } else {
         dObj[roomType] = dObj[roomType] || { isOverride: {} };
         const cur = !!(dObj[roomType].stop || dObj[roomType].stopSell);
@@ -212,7 +212,7 @@ window.handleHeaderStopToggle = (dateStr) => {
     if (window.renderGrid) window.renderGrid();
 };
 
-window.handleCellCtaCtdCycle = (dateStr, roomType, ratePlanId = null) => {
+window.handleCellCtaCtdCycle = (dateStr, roomType, ratePlanId = null, isEvt = false) => {
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     const dObj = window.masterPricing.timeline[dateStr];
 
@@ -223,6 +223,11 @@ window.handleCellCtaCtdCycle = (dateStr, roomType, ratePlanId = null) => {
         dObj.otaOverrides = dObj.otaOverrides || {};
         curCta = !!dObj.otaOverrides[`${ratePlanId}_cta`];
         curCtd = !!dObj.otaOverrides[`${ratePlanId}_ctd`];
+    } else if (isEvt) {
+        dObj[roomType] = dObj[roomType] || { isOverride: {} };
+        const evtRestr = dObj.evtRestrictions || {};
+        curCta = dObj[roomType].evt_cta !== undefined ? !!dObj[roomType].evt_cta : !!evtRestr.cta;
+        curCtd = dObj[roomType].evt_ctd !== undefined ? !!dObj[roomType].evt_ctd : !!evtRestr.ctd;
     } else {
         dObj[roomType] = dObj[roomType] || { isOverride: {} };
         curCta = !!dObj[roomType].cta;
@@ -248,6 +253,12 @@ window.handleCellCtaCtdCycle = (dateStr, roomType, ratePlanId = null) => {
     if (ratePlanId) {
         dObj.otaOverrides[`${ratePlanId}_cta`] = nextCta;
         dObj.otaOverrides[`${ratePlanId}_ctd`] = nextCtd;
+    } else if (isEvt) {
+        dObj[roomType].evt_cta = nextCta;
+        dObj[roomType].evt_ctd = nextCtd;
+        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
+        dObj[roomType].isOverride.evt_cta = true;
+        dObj[roomType].isOverride.evt_ctd = true;
     } else {
         dObj[roomType].cta = nextCta;
         dObj[roomType].ctd = nextCtd;
@@ -262,7 +273,7 @@ window.handleCellCtaCtdCycle = (dateStr, roomType, ratePlanId = null) => {
     if (window.renderGrid) window.renderGrid();
 };
 
-window.unlockCellOverride = (dateStr, roomType, ratePlanId = null) => {
+window.unlockCellOverride = (dateStr, roomType, ratePlanId = null, isEvt = false) => {
     if (ratePlanId) {
         if (window.masterPricing.timeline[dateStr]?.otaOverrides) {
             delete window.masterPricing.timeline[dateStr].otaOverrides[ratePlanId];
@@ -271,6 +282,29 @@ window.unlockCellOverride = (dateStr, roomType, ratePlanId = null) => {
             delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_cta`];
             delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_ctd`];
             delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_stop`];
+        }
+    } else if (isEvt) {
+        const rData = window.masterPricing.timeline[dateStr]?.[roomType];
+        if (rData) {
+            delete rData.fmp;
+            delete rData.fmp_ref;
+            delete rData.evt_min;
+            delete rData.evt_min_arr;
+            delete rData.evt_max;
+            delete rData.evt_cta;
+            delete rData.evt_ctd;
+            delete rData.evt_stop;
+            if (rData.isOverride) {
+                delete rData.isOverride.fmp;
+                delete rData.isOverride.fmp_ref;
+                delete rData.isOverride.evt_min;
+                delete rData.isOverride.evt_min_arr;
+                delete rData.isOverride.evt_max;
+                delete rData.isOverride.evt_cta;
+                delete rData.isOverride.evt_ctd;
+                delete rData.isOverride.evt_stop;
+            }
+            if (window.healDay) window.healDay(dateStr);
         }
     } else {
         const rData = window.masterPricing.timeline[dateStr]?.[roomType];
@@ -703,23 +737,14 @@ window.populateAutofillBaselines = (b) => {
     setCheck('w-enable-evt-restr', b.enable_evt_restr);
     window.toggleEvtRestrInputs(!!b.enable_evt_restr);
 
-    setVal('w-r-min-m2', b.r_min_m2 !== undefined ? b.r_min_m2 : "");
-    setVal('w-r-min-m1', b.r_min_m1 !== undefined ? b.r_min_m1 : "");
-    setVal('w-r-min-0', b.r_min_0 !== undefined ? b.r_min_0 : "");
-    setVal('w-r-min-p1', b.r_min_p1 !== undefined ? b.r_min_p1 : "");
-    setVal('w-r-min-p2', b.r_min_p2 !== undefined ? b.r_min_p2 : "");
-
-    setVal('w-r-minarr-m2', b.r_minarr_m2 !== undefined ? b.r_minarr_m2 : "");
-    setVal('w-r-minarr-m1', b.r_minarr_m1 !== undefined ? b.r_minarr_m1 : "");
-    setVal('w-r-minarr-0', b.r_minarr_0 !== undefined ? b.r_minarr_0 : "");
-    setVal('w-r-minarr-p1', b.r_minarr_p1 !== undefined ? b.r_minarr_p1 : "");
-    setVal('w-r-minarr-p2', b.r_minarr_p2 !== undefined ? b.r_minarr_p2 : "");
-
-    setCheck('w-r-cta-m2', b.r_cta_m2);
-    setCheck('w-r-cta-m1', b.r_cta_m1);
-    setCheck('w-r-cta-0', b.r_cta_0);
-    setCheck('w-r-cta-p1', b.r_cta_p1);
-    setCheck('w-r-cta-p2', b.r_cta_p2);
+    // Populate all offsets from -7 to +7 independently
+    for (let off = -7; off <= 7; off++) {
+        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+        if (b[`r_min_${tag}`] !== undefined) setVal(`w-r-min-${tag}`, b[`r_min_${tag}`]);
+        if (b[`r_minarr_${tag}`] !== undefined) setVal(`w-r-minarr-${tag}`, b[`r_minarr_${tag}`]);
+        if (b[`r_cta_${tag}`] !== undefined) setCheck(`w-r-cta-${tag}`, b[`r_cta_${tag}`]);
+        if (b[`r_ctd_${tag}`] !== undefined) setCheck(`w-r-ctd-${tag}`, b[`r_ctd_${tag}`]);
+    }
 
     if (b.anchor_p) {
         const pEl = document.getElementById('w-anchor-private');
@@ -769,26 +794,17 @@ window.saveAutofillBaselines = async (notify = false) => {
         d_0: getVal('w-d-0'),
         d_p1: getVal('w-d-p1'),
         d_p2: getVal('w-d-p2'),
-
-        enable_evt_restr: getBool('w-enable-evt-restr'),
-        r_min_m2: getRaw('w-r-min-m2'),
-        r_min_m1: getRaw('w-r-min-m1'),
-        r_min_0: getRaw('w-r-min-0'),
-        r_min_p1: getRaw('w-r-min-p1'),
-        r_min_p2: getRaw('w-r-min-p2'),
-
-        r_minarr_m2: getRaw('w-r-minarr-m2'),
-        r_minarr_m1: getRaw('w-r-minarr-m1'),
-        r_minarr_0: getRaw('w-r-minarr-0'),
-        r_minarr_p1: getRaw('w-r-minarr-p1'),
-        r_minarr_p2: getRaw('w-r-minarr-p2'),
-
-        r_cta_m2: getBool('w-r-cta-m2'),
-        r_cta_m1: getBool('w-r-cta-m1'),
-        r_cta_0: getBool('w-r-cta-0'),
-        r_cta_p1: getBool('w-r-cta-p1'),
-        r_cta_p2: getBool('w-r-cta-p2')
+        enable_evt_restr: getBool('w-enable-evt-restr')
     };
+
+    // Save all offsets independently without symmetric coupling
+    for (let off = -7; off <= 7; off++) {
+        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+        baselines[`r_min_${tag}`] = getRaw(`w-r-min-${tag}`);
+        baselines[`r_minarr_${tag}`] = getRaw(`w-r-minarr-${tag}`);
+        baselines[`r_cta_${tag}`] = getBool(`w-r-cta-${tag}`);
+        baselines[`r_ctd_${tag}`] = getBool(`w-r-ctd-${tag}`);
+    }
     window.savedAutofillBaselines = baselines;
 
     try {
@@ -946,51 +962,50 @@ window.renderEvtRestrTable = () => {
 
     let tbHtml = '';
 
-    // Row 1: Min Stay (Nts)
+    // Row 1: Min Stay (Nts) - Independent without forced mirror
     tbHtml += `<tr class="bg-pink-50/40">
         <td class="text-xs font-bold text-pink-900 text-left pl-2 rounded-l-lg border border-pink-100 border-r-0 py-1">Min Stay (Nts)</td>`;
     offsets.forEach(off => {
         const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
-        const defVal = Math.abs(off) <= 1 ? 3 : (Math.abs(off) <= 2 ? 2 : "");
-        const val = getVal('r_min', off, defVal);
+        const val = getVal('r_min', off, "");
         tbHtml += `<td class="border-y border-pink-100">
-            <input type="number" min="1" id="w-r-min-${tag}" class="input-base text-center !py-1 !px-0.5 text-pink-800 font-black w-12" value="${val}" onfocus="this.select()" oninput="window.handleEvtRestrMirror('min', ${off}, this.value); window.debounceSaveBaselines();">
+            <input type="number" min="1" id="w-r-min-${tag}" class="input-base text-center !py-1 !px-0.5 text-pink-800 font-black w-12" value="${val}" placeholder="--" onfocus="this.select()" oninput="window.debounceSaveBaselines();">
         </td>`;
     });
     tbHtml += `</tr>`;
 
-    // Row 2: Min on Arrival (min_arr)
+    // Row 2: Min on Arrival (min_arr) - Independent
     tbHtml += `<tr class="bg-slate-50">
         <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Min on Arrival</td>`;
     offsets.forEach(off => {
         const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
         const val = getVal('r_minarr', off, "");
         tbHtml += `<td class="border-y border-slate-200">
-            <input type="number" min="1" id="w-r-minarr-${tag}" class="input-base text-center !py-1 !px-0.5 text-amber-700 font-bold w-12" value="${val}" placeholder="--" onfocus="this.select()" oninput="window.handleEvtRestrMirror('minarr', ${off}, this.value); window.debounceSaveBaselines();">
+            <input type="number" min="1" id="w-r-minarr-${tag}" class="input-base text-center !py-1 !px-0.5 text-amber-700 font-bold w-12" value="${val}" placeholder="--" onfocus="this.select()" oninput="window.debounceSaveBaselines();">
         </td>`;
     });
     tbHtml += `</tr>`;
 
-    // Row 3: Close to Arrival (CTA)
+    // Row 3: Close to Arrival (CTA) - Independent
     tbHtml += `<tr class="bg-slate-50">
         <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Close to Arrival (CTA)</td>`;
     offsets.forEach(off => {
         const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
         const chk = getBool('r_cta', off);
         tbHtml += `<td class="border-y border-slate-200 py-1">
-            <input type="checkbox" id="w-r-cta-${tag}" class="row-checkbox" ${chk ? 'checked' : ''} onchange="window.handleEvtRestrMirror('cta', ${off}, this.checked, true); window.debounceSaveBaselines();">
+            <input type="checkbox" id="w-r-cta-${tag}" class="row-checkbox" ${chk ? 'checked' : ''} onchange="window.debounceSaveBaselines();">
         </td>`;
     });
     tbHtml += `</tr>`;
 
-    // Row 4: Close to Departure (CTD)
+    // Row 4: Close to Departure (CTD) - Independent
     tbHtml += `<tr class="bg-slate-50">
         <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Close to Departure (CTD)</td>`;
     offsets.forEach(off => {
         const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
         const chk = getBool('r_ctd', off);
         tbHtml += `<td class="border-y border-slate-200 py-1">
-            <input type="checkbox" id="w-r-ctd-${tag}" class="row-checkbox" ${chk ? 'checked' : ''} onchange="window.handleEvtRestrMirror('ctd', ${off}, this.checked, true); window.debounceSaveBaselines();">
+            <input type="checkbox" id="w-r-ctd-${tag}" class="row-checkbox" ${chk ? 'checked' : ''} onchange="window.debounceSaveBaselines();">
         </td>`;
     });
     tbHtml += `</tr>`;
