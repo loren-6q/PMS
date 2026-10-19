@@ -82,7 +82,11 @@ window.unlockCellOverride = (dateStr, room, ratePlanId = null) => {
 };
 
 window.renderGrid = () => {
-    const startStr = document.getElementById('tape-start')?.value;
+    const tapeInput = document.getElementById('tape-start');
+    if (tapeInput && !tapeInput.value) {
+        tapeInput.value = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+    }
+    const startStr = tapeInput?.value || (window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0]);
     if (!startStr) return;
 
     window.calculateLiveInventory();
