@@ -773,11 +773,24 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
                     calculatedPrice = window.roundCurrency(otaPriceOverride);
                 } else {
-                    let activeBasePrice = (isEvtRate && (window.eventDates || []).length > 0 && roomObj.fmp !== undefined && roomObj.fmp !== "")
-                        ? roomObj.fmp
-                        : (roomObj.std !== undefined && roomObj.std !== "" 
-                            ? roomObj.std 
-                            : (window.masterPricing?.baseRates?.[pmsCat] || window.categoryBaseRates?.[pmsCat]));
+                    let activeBasePrice = "";
+                    if (isEvtRate && (window.eventDates || []).length > 0) {
+                        if (rule.policy === 'ref' && roomObj.fmp_ref !== undefined && roomObj.fmp_ref !== "") {
+                            activeBasePrice = roomObj.fmp_ref;
+                        } else if (roomObj.fmp !== undefined && roomObj.fmp !== "") {
+                            activeBasePrice = roomObj.fmp;
+                        }
+                    } else {
+                        if (rule.policy === 'ref' && roomObj.std_ref !== undefined && roomObj.std_ref !== "") {
+                            activeBasePrice = roomObj.std_ref;
+                        } else if (roomObj.std !== undefined && roomObj.std !== "") {
+                            activeBasePrice = roomObj.std;
+                        }
+                    }
+
+                    if (activeBasePrice === "" || activeBasePrice === undefined) {
+                        activeBasePrice = window.masterPricing?.baseRates?.[pmsCat] || window.categoryBaseRates?.[pmsCat];
+                    }
 
                     let promoMultiplier = 1.0;
                     (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
@@ -802,17 +815,16 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     }
                 }
 
-                // DUAL-CURVE RESTRICTION RESOLUTION (Global -> Room -> Rate Plan):
-                // 1. Direct plan override (e.g. set by Event Autofill on this plan ID or cell override)
-                // 2. If Event Plan: reads dayObj.evtRestrictions (cascading minimums)
-                // 3. Category-level roomObj restriction
-                // 4. Global restriction: stamps down onto all standard plans (and event plans if no event restriction exists)
+                // DUAL-CURVE RESTRICTION RESOLUTION (Global -> Room -> Event -> Rate Plan):
                 const getRestr = (f) => {
                     const otaVal = dayObj.otaOverrides?.[`${ratePlanId}_${f}`];
                     if (otaVal !== undefined && otaVal !== "") return otaVal;
 
-                    if (isEvtRate && dayObj.evtRestrictions && dayObj.evtRestrictions[f] !== undefined && dayObj.evtRestrictions[f] !== "") {
-                        return dayObj.evtRestrictions[f];
+                    if (isEvtRate) {
+                        if (roomObj[`evt_${f}`] !== undefined && roomObj[`evt_${f}`] !== "") return roomObj[`evt_${f}`];
+                        if (dayObj.evtRestrictions && dayObj.evtRestrictions[f] !== undefined && dayObj.evtRestrictions[f] !== "") {
+                            return dayObj.evtRestrictions[f];
+                        }
                     }
 
                     if (roomObj[f] !== undefined && roomObj[f] !== "") return roomObj[f];
