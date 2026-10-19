@@ -356,6 +356,7 @@ window.switchTab = (tab) => {
         if (tab === 'manual') {
             if (typeof window.checkMissing === 'function') window.checkMissing();
             if (typeof window.renderManualGrid === 'function') window.renderManualGrid();
+            else if (typeof window.renderSyncGrid === 'function') window.renderSyncGrid();
         }
         if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
     } catch (err) {
@@ -676,6 +677,8 @@ window.handlePropertySwitch = async (propId) => {
     window.updateSaveIndicator();
 
     await window.loadPropertyConfig();
+    if (window.loadPropertyBaseline) await window.loadPropertyBaseline();
+    if (window.setupPropertyData) await window.setupPropertyData();
     if (window.renderGrid) window.renderGrid();
     if (window.renderManualGrid) window.renderManualGrid();
     window.hideLoader();
@@ -894,3 +897,14 @@ window.initCmCore = async () => {
         }
     });
 };
+
+// Self-executing initialization: guarantees initCmCore runs regardless of script load timing
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof window.initCmCore === 'function') window.initCmCore();
+    });
+} else {
+    setTimeout(() => {
+        if (typeof window.initCmCore === 'function') window.initCmCore();
+    }, 0);
+}
