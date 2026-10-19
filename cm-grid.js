@@ -133,6 +133,38 @@ window.handleAvailEdit = (dateStr, room, val) => {
     if (window.markUnsavedChanges) window.markUnsavedChanges();
 };
 
+// Smart Arrival Arrow Formatter (converts 3a or 3> into 3▸ with amber styling)
+window.formatMinStayInput = (inputEl, dateStr, room, isEvt = false) => {
+    if (!inputEl) return;
+    const raw = (inputEl.value || "").trim().toLowerCase();
+
+    if (!raw || raw === "-") {
+        inputEl.value = "";
+        inputEl.classList.remove('text-amber-600', 'font-black');
+        inputEl.classList.add('text-slate-600');
+        window.handleCellEdit(dateStr, room, isEvt ? 'evt_min_hybrid' : 'min_hybrid', '');
+        return;
+    }
+
+    if (raw.endsWith('a') || raw.endsWith('>') || raw.endsWith('▸')) {
+        const num = parseInt(raw.replace(/[^\d]/g, ''), 10);
+        if (!isNaN(num) && num > 0) {
+            inputEl.value = `${num}▸`;
+            inputEl.classList.add('text-amber-600', 'font-black');
+            inputEl.classList.remove('text-slate-600');
+            window.handleCellEdit(dateStr, room, isEvt ? 'evt_min_hybrid' : 'min_hybrid', `${num}▸`);
+        }
+    } else {
+        const num = parseInt(raw, 10);
+        if (!isNaN(num) && num > 0) {
+            inputEl.value = `${num}`;
+            inputEl.classList.remove('text-amber-600', 'font-black');
+            inputEl.classList.add('text-slate-600');
+            window.handleCellEdit(dateStr, room, isEvt ? 'evt_min_hybrid' : 'min_hybrid', `${num}`);
+        }
+    }
+};
+
 window.handleCellEdit = (dateStr, room, field, val) => {
     window.masterPricing = window.masterPricing || { relationships: [], timeline: {} };
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
@@ -178,6 +210,32 @@ window.handleCellEdit = (dateStr, room, field, val) => {
                     delete rObj.isOverride.min_arr;
                 }
             }
+        } else if (field === 'evt_min_hybrid') {
+            const clean = String(val).trim().toLowerCase();
+            if (clean === "" || clean === "-") {
+                delete rObj.evt_min;
+                delete rObj.evt_min_arr;
+                if (rObj.isOverride) {
+                    delete rObj.isOverride.evt_min;
+                    delete rObj.isOverride.evt_min_arr;
+                }
+            } else if (clean.endsWith('a') || clean.endsWith('>') || clean.endsWith('▸')) {
+                const num = parseInt(clean.replace(/[^\d]/g, ''), 10);
+                if (!isNaN(num) && num > 0) {
+                    rObj.evt_min_arr = num;
+                    delete rObj.evt_min;
+                    rObj.isOverride.evt_min_arr = true;
+                    delete rObj.isOverride.evt_min;
+                }
+            } else {
+                const num = parseInt(clean, 10);
+                if (!isNaN(num) && num > 0) {
+                    rObj.evt_min = num;
+                    delete rObj.evt_min_arr;
+                    rObj.isOverride.evt_min = true;
+                    delete rObj.isOverride.evt_min_arr;
+                }
+            }
         } else if (field === 'max') {
             const clean = String(val).trim();
             if (clean === "" || clean === "-") {
@@ -190,6 +248,18 @@ window.handleCellEdit = (dateStr, room, field, val) => {
                     rObj.isOverride.max = true;
                 }
             }
+        } else if (field === 'evt_max') {
+            const clean = String(val).trim();
+            if (clean === "" || clean === "-") {
+                delete rObj.evt_max;
+                if (rObj.isOverride) delete rObj.isOverride.evt_max;
+            } else {
+                const num = parseInt(clean, 10);
+                if (!isNaN(num) && num > 0) {
+                    rObj.evt_max = num;
+                    rObj.isOverride.evt_max = true;
+                }
+            }
         } else if (field === 'fmp') {
             const clean = String(val).trim();
             if (clean === "") {
@@ -200,6 +270,15 @@ window.handleCellEdit = (dateStr, room, field, val) => {
                 rObj.isOverride.fmp = true;
                 if (window.rippleDay) window.rippleDay(dateStr, room);
             }
+        } else if (field === 'fmp_ref') {
+            const clean = String(val).trim();
+            if (clean === "") {
+                delete rObj.fmp_ref;
+                delete rObj.isOverride.fmp_ref;
+            } else {
+                rObj.fmp_ref = parseFloat(clean);
+                rObj.isOverride.fmp_ref = true;
+            }
         }
     }
 
@@ -209,43 +288,10 @@ window.handleCellEdit = (dateStr, room, field, val) => {
 };
 
 window.handleOtaEdit = (dateStr, ratePlanId, room, ruleType, ruleVal, field, val, rateSource = 'std') => {
-    window.masterPricing = window.masterPricing || { relationships: [], timeline: {} };
-    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-    const dObj = window.masterPricing.timeline[dateStr];
-    dObj.otaOverrides = dObj.otaOverrides || {};
-
-    if (field === 'rate') {
-        const clean = String(val).trim();
-        if (clean === "") {
-            delete dObj.otaOverrides[ratePlanId];
-        } else {
-            const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
-            dObj.otaOverrides[ratePlanId] = window.roundCurrency(parseFloat(clean) / mult);
-        }
-    } else if (field === 'min') {
-        const clean = String(val).trim();
-        if (clean === "" || clean === "-") delete dObj.otaOverrides[`${ratePlanId}_min`];
-        else dObj.otaOverrides[`${ratePlanId}_min`] = parseInt(clean, 10);
-    } else if (field === 'max') {
-        const clean = String(val).trim();
-        if (clean === "" || clean === "-") delete dObj.otaOverrides[`${ratePlanId}_max`];
-        else dObj.otaOverrides[`${ratePlanId}_max`] = parseInt(clean, 10);
-    } else if (['cta', 'ctd', 'stop', 'stopSell'].includes(field)) {
-        if (val === "" || val === undefined) delete dObj.otaOverrides[`${ratePlanId}_${field}`];
-        else dObj.otaOverrides[`${ratePlanId}_${field}`] = !!val;
-    }
-
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
-    window.dirtyFields = window.dirtyFields || {};
-    window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
-    window.dirtyFields[dateStr][ratePlanId] = window.dirtyFields[dateStr][ratePlanId] || new Set();
-    window.dirtyFields[dateStr][ratePlanId].add(field === 'rate' ? 'rate' : 'restriction');
-    if (window.markUnsavedChanges) window.markUnsavedChanges();
-};
-
-window.getCellData = (dateStr, room) => {
+window.getCellData = (dateStr, room, isEvt = false) => {
     const data = (window.masterPricing.timeline[dateStr] || {})[room] || {};
+    const evtRestr = (window.masterPricing.timeline[dateStr] || {}).evtRestrictions || {};
+
     if (room === 'GLOBAL') {
         return {
             min: data.min !== undefined ? data.min : "",
@@ -257,6 +303,40 @@ window.getCellData = (dateStr, room) => {
             isOverride: data.isOverride || {}
         };
     }
+
+    if (isEvt) {
+        const min = data.evt_min !== undefined ? data.evt_min : (evtRestr.min !== undefined ? evtRestr.min : "");
+        const min_arr = data.evt_min_arr !== undefined ? data.evt_min_arr : (evtRestr.min_arr !== undefined ? evtRestr.min_arr : "");
+        const max = data.evt_max !== undefined ? data.evt_max : "";
+        const cta = data.evt_cta !== undefined ? data.evt_cta : (evtRestr.cta || false);
+        const ctd = data.evt_ctd !== undefined ? data.evt_ctd : (evtRestr.ctd || false);
+        const stopSell = data.evt_stop !== undefined ? data.evt_stop : (data.stop || data.stopSell || false);
+
+        const fmp = data.fmp !== undefined ? data.fmp : "";
+        let fmp_ref = data.fmp_ref;
+        if (fmp_ref === undefined || fmp_ref === "") {
+            if (fmp !== "" && !isNaN(fmp)) {
+                const eType = window.pricingRules?.evtRefType || '+%';
+                const eVal = window.pricingRules?.evtRefVal !== undefined ? window.pricingRules.evtRefVal : 15;
+                fmp_ref = window.applyMath ? window.applyMath(fmp, eType, eVal) : Math.round(Number(fmp) * 1.15);
+            } else {
+                fmp_ref = "";
+            }
+        }
+
+        return {
+            fmp,
+            fmp_ref,
+            min,
+            min_arr,
+            max,
+            cta,
+            ctd,
+            stopSell,
+            isOverride: data.isOverride || {}
+        };
+    }
+
     return {
         std: data.std !== undefined ? data.std : "",
         fmp: data.fmp !== undefined ? data.fmp : "",
@@ -449,7 +529,7 @@ window.renderGrid = () => {
             const cur = new Date(dObj);
             cur.setUTCDate(cur.getUTCDate() + i);
             const dateStr = window.getLocalYMD(cur);
-            const data = window.getCellData(dateStr, room);
+            const data = window.getCellData(dateStr, room, false);
             const isPinned = !!data.isOverride?.std;
             const isStopped = !!data.stopSell;
             const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
@@ -474,7 +554,7 @@ window.renderGrid = () => {
             trRate += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice || '--'}${isPinned ? ' (Custom Override - Double-click to unlock)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
                 ${showTop ? `
                 <div class="flex items-center w-full h-[14px] border-b border-slate-200/70 overflow-hidden leading-none" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; width: 100% !important;">
-                    <input type="text" size="1" style="flex: 1 1 0px !important; width: 0 !important; min-width: 0 !important; max-width: 50% !important; height: 100% !important; padding: 0 !important; margin: 0 !important; box-sizing: border-box !important;" class="cell-min-input text-center bg-transparent border-none text-[8px] font-black ${isMinArr ? 'text-amber-600' : 'text-slate-600'} outline-none" value="${minVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)" title="Min Stay (${isMinArr ? 'On Arrival' : 'Through'})">
+                    <input type="text" size="1" style="flex: 1 1 0px !important; width: 0 !important; min-width: 0 !important; max-width: 50% !important; height: 100% !important; padding: 0 !important; margin: 0 !important; box-sizing: border-box !important;" class="cell-min-input text-center bg-transparent border-none text-[8px] font-black ${isMinArr ? 'text-amber-600' : 'text-slate-600'} outline-none" value="${minVal}" placeholder="-" onfocus="if(this.value.includes('▸')) this.value = this.value.replace('▸','a'); this.select();" onblur="window.formatMinStayInput(this, '${dateStr}', '${room}', false);" onkeydown="if(event.key==='Enter'){ this.blur(); }" title="Min Stay (${isMinArr ? 'On Arrival' : 'Through'})">
                     <input type="text" size="1" style="flex: 1 1 0px !important; width: 0 !important; min-width: 0 !important; max-width: 50% !important; height: 100% !important; padding: 0 !important; margin: 0 !important; box-sizing: border-box !important; border-left: 1px solid rgba(226, 232, 240, 0.8) !important;" class="cell-max-input text-center bg-transparent border-none text-[8px] text-slate-400 outline-none" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)" title="Max Stay">
                 </div>` : ''}
 
@@ -496,12 +576,13 @@ window.renderGrid = () => {
         trRate += `</tr>`;
         allRowsHtml += trRate;
 
-        // C. EVENT BASE RATE (fmp) ROW (Displayed when in Event Depth or when Events are enabled)
+        // C. DUAL EVENT RATES: EVT Non-Ref & EVT Ref (With Multi-Zone Controls)
         if ((drill === 'event' || hasEvents) && density !== 'avail') {
-            let trEvtRate = `<tr class="${groupClass} border-b-2 border-slate-400 bg-pink-50/30">
+            // C1. EVT Non-Ref (Base Event Package)
+            let trEvtNonRef = `<tr class="${groupClass} border-b border-pink-200 bg-pink-50/30">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 bg-pink-50/70">
                     <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                        <span class="text-[10px] font-black text-pink-700 truncate">Event EVT</span>
+                        <span class="text-[10px] font-black text-pink-700 truncate">EVT Non-Ref</span>
                         <span class="text-[7px] font-black uppercase text-pink-700 bg-pink-100 px-1 py-0.5 rounded border border-pink-300">EVT BASE</span>
                     </div>
                 </td>`;
@@ -510,22 +591,119 @@ window.renderGrid = () => {
                 const cur = new Date(dObj);
                 cur.setUTCDate(cur.getUTCDate() + i);
                 const dateStr = window.getLocalYMD(cur);
-                const data = window.getCellData(dateStr, room);
-                const isPinnedFmp = !!data.isOverride?.fmp;
+                const evtData = window.getCellData(dateStr, room, true);
+                const isPinnedFmp = !!evtData.isOverride?.fmp;
+                const isStopped = !!evtData.stopSell;
                 const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
-                const displayFmp = data.fmp !== "" && !isNaN(data.fmp) ? window.formatDisplay(data.fmp * mult) : "";
+                const displayFmp = evtData.fmp !== "" && !isNaN(evtData.fmp) ? window.formatDisplay(evtData.fmp * mult) : "";
 
                 let minDiff = window.getNearestEvent(window.parseYMD(dateStr));
                 let peakBg = minDiff === 0 ? 'bg-amber-100/60' : (Math.abs(minDiff) <= 2 ? 'bg-yellow-50/60' : '');
 
-                trEvtRate += `<td class="rate-cell-container p-0 border-r border-pink-200 text-center relative ${peakBg} ${isPinnedFmp ? 'rate-cell-pinned' : ''}" style="width: 31px; min-width: 31px; max-width: 31px;">
-                    <div class="h-[22px] flex items-center justify-center">
+                let ctaBadge = '';
+                if (evtData.cta && evtData.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 leading-none">B</span>';
+                else if (evtData.cta) ctaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none">A</span>';
+                else if (evtData.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">D</span>';
+
+                const isMinArr = !!evtData.min_arr;
+                const minVal = evtData.min !== "" ? evtData.min : (evtData.min_arr ? `${evtData.min_arr}▸` : "");
+                const maxVal = evtData.max !== "" ? evtData.max : "";
+
+                let cellClass = `rate-cell-container p-0 border-r border-pink-200 text-center relative ${peakBg} `;
+                if (isStopped) cellClass += "rate-cell-stopped ";
+                else if (isPinnedFmp) cellClass += "rate-cell-pinned ";
+
+                const showTop = density === 'minmax' || density === 'full';
+                const showBottom = density === 'full';
+
+                trEvtNonRef += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}', null, true)" onmouseenter="window.showCmTooltip(event, '${displayName} | EVT Non-Ref | ${dateStr}\\nPrice: ฿${displayFmp || '--'}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
+                    ${showTop ? `
+                    <div class="flex items-center w-full h-[14px] border-b border-pink-200/70 overflow-hidden leading-none" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; width: 100% !important;">
+                        <input type="text" size="1" style="flex: 1 1 0px !important; width: 0 !important; min-width: 0 !important; max-width: 50% !important; height: 100% !important; padding: 0 !important; margin: 0 !important; box-sizing: border-box !important;" class="cell-min-input text-center bg-transparent border-none text-[8px] font-black ${isMinArr ? 'text-amber-600' : 'text-pink-700'} outline-none" value="${minVal}" placeholder="-" onfocus="if(this.value.includes('▸')) this.value = this.value.replace('▸','a'); this.select();" onblur="window.formatMinStayInput(this, '${dateStr}', '${room}', true);" onkeydown="if(event.key==='Enter'){ this.blur(); }" title="Event Min Stay (${isMinArr ? 'On Arrival' : 'Through'})">
+                        <input type="text" size="1" style="flex: 1 1 0px !important; width: 0 !important; min-width: 0 !important; max-width: 50% !important; height: 100% !important; padding: 0 !important; margin: 0 !important; box-sizing: border-box !important; border-left: 1px solid rgba(244, 114, 182, 0.4) !important;" class="cell-max-input text-center bg-transparent border-none text-[8px] text-pink-400 outline-none" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'evt_max', this.value)" title="Event Max Stay">
+                    </div>` : ''}
+
+                    <div class="${density === 'compact' ? 'h-[24px]' : 'h-[17px]'} flex items-center justify-center">
                         <input type="number" step="any" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_fmp" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-pink-700 px-0" value="${displayFmp}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp', this.value)">
                     </div>
+
+                    ${showBottom ? `
+                    <div class="flex items-center justify-between px-0.5 text-[7px] leading-none h-[11px] pb-0.5">
+                        <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}', null, true)" class="cursor-pointer" title="EVT Closed Cycle: Arrival (A), Departure (D), Both (B)">
+                            ${ctaBadge || '<span class="w-2 h-2 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>'}
+                        </button>
+                        <button onclick="window.handleCellStopToggle('${dateStr}', '${room}', null, true)" class="cursor-pointer" title="Toggle EVT Stop-Sell">
+                            ${isStopped ? '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-2 h-2 rounded-full bg-transparent hover:bg-rose-400/60 inline-block"></span>'}
+                        </button>
+                    </div>` : ''}
                 </td>`;
             }
-            trEvtRate += `</tr>`;
-            allRowsHtml += trEvtRate;
+            trEvtNonRef += `</tr>`;
+            allRowsHtml += trEvtNonRef;
+
+            // C2. EVT Ref (Refundable Event Package)
+            const eVal = window.pricingRules?.evtRefVal !== undefined ? window.pricingRules.evtRefVal : 15;
+            let trEvtRef = `<tr class="${groupClass} border-b-2 border-slate-400 bg-emerald-50/25">
+                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 bg-emerald-50/60">
+                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
+                        <span class="text-[10px] font-black text-emerald-800 truncate">EVT Ref</span>
+                        <span class="text-[7px] font-black uppercase text-emerald-700 bg-emerald-100 px-1 py-0.5 rounded border border-emerald-300">+${eVal}% REF</span>
+                    </div>
+                </td>`;
+
+            for (let i = 0; i < window.daysToRender; i++) {
+                const cur = new Date(dObj);
+                cur.setUTCDate(cur.getUTCDate() + i);
+                const dateStr = window.getLocalYMD(cur);
+                const evtData = window.getCellData(dateStr, room, true);
+                const isPinnedFmpRef = !!evtData.isOverride?.fmp_ref;
+                const isStopped = !!evtData.stopSell;
+                const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
+                const displayFmpRef = evtData.fmp_ref !== "" && !isNaN(evtData.fmp_ref) ? window.formatDisplay(evtData.fmp_ref * mult) : "";
+
+                let minDiff = window.getNearestEvent(window.parseYMD(dateStr));
+                let peakBg = minDiff === 0 ? 'bg-amber-100/40' : (Math.abs(minDiff) <= 2 ? 'bg-yellow-50/40' : '');
+
+                let ctaBadge = '';
+                if (evtData.cta && evtData.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 leading-none">B</span>';
+                else if (evtData.cta) ctaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none">A</span>';
+                else if (evtData.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">D</span>';
+
+                const isMinArr = !!evtData.min_arr;
+                const minVal = evtData.min !== "" ? evtData.min : (evtData.min_arr ? `${evtData.min_arr}▸` : "");
+                const maxVal = evtData.max !== "" ? evtData.max : "";
+
+                let cellClass = `rate-cell-container p-0 border-r border-emerald-100 text-center relative ${peakBg} `;
+                if (isStopped) cellClass += "rate-cell-stopped ";
+                else if (isPinnedFmpRef) cellClass += "rate-cell-pinned ";
+
+                const showTop = density === 'minmax' || density === 'full';
+                const showBottom = density === 'full';
+
+                trEvtRef += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}', null, true)" onmouseenter="window.showCmTooltip(event, '${displayName} | EVT Ref (+${eVal}%) | ${dateStr}\\nPrice: ฿${displayFmpRef || '--'}${isPinnedFmpRef ? ' (Override)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
+                    ${showTop ? `
+                    <div class="flex items-center w-full h-[14px] border-b border-emerald-100/70 overflow-hidden leading-none" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; width: 100% !important;">
+                        <input type="text" size="1" style="flex: 1 1 0px !important; width: 0 !important; min-width: 0 !important; max-width: 50% !important; height: 100% !important; padding: 0 !important; margin: 0 !important; box-sizing: border-box !important;" class="cell-min-input text-center bg-transparent border-none text-[8px] font-black ${isMinArr ? 'text-amber-600' : 'text-emerald-700'} outline-none" value="${minVal}" placeholder="-" onfocus="if(this.value.includes('▸')) this.value = this.value.replace('▸','a'); this.select();" onblur="window.formatMinStayInput(this, '${dateStr}', '${room}', true);" onkeydown="if(event.key==='Enter'){ this.blur(); }" title="Event Min Stay (${isMinArr ? 'On Arrival' : 'Through'})">
+                        <input type="text" size="1" style="flex: 1 1 0px !important; width: 0 !important; min-width: 0 !important; max-width: 50% !important; height: 100% !important; padding: 0 !important; margin: 0 !important; box-sizing: border-box !important; border-left: 1px solid rgba(167, 243, 208, 0.5) !important;" class="cell-max-input text-center bg-transparent border-none text-[8px] text-emerald-400 outline-none" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'evt_max', this.value)" title="Event Max Stay">
+                    </div>` : ''}
+
+                    <div class="${density === 'compact' ? 'h-[24px]' : 'h-[17px]'} flex items-center justify-center">
+                        <input type="number" step="any" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_fmp_ref" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-emerald-800 px-0" value="${displayFmpRef}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp_ref', this.value)">
+                    </div>
+
+                    ${showBottom ? `
+                    <div class="flex items-center justify-between px-0.5 text-[7px] leading-none h-[11px] pb-0.5">
+                        <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}', null, true)" class="cursor-pointer" title="EVT Closed Cycle: Arrival (A), Departure (D), Both (B)">
+                            ${ctaBadge || '<span class="w-2 h-2 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>'}
+                        </button>
+                        <button onclick="window.handleCellStopToggle('${dateStr}', '${room}', null, true)" class="cursor-pointer" title="Toggle EVT Stop-Sell">
+                            ${isStopped ? '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-2 h-2 rounded-full bg-transparent hover:bg-rose-400/60 inline-block"></span>'}
+                        </button>
+                    </div>` : ''}
+                </td>`;
+            }
+            trEvtRef += `</tr>`;
+            allRowsHtml += trEvtRef;
         }
 
         // D. MAPPED RATE PLANS (IF EXPANDED IN ROOM, EVENT, OR ALL-RATES MODE)
