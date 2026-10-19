@@ -335,6 +335,9 @@ window.saveClassifierAliases = () => {
 };
 
 window.fuzzyClassifyTitle = (title) => {
+    if (!title || typeof title !== 'string') {
+        return { channel: 'Direct Website', product: 'std', policy: 'non-ref' };
+    }
     const aliases = window.getClassifierAliases();
     const clean = title.toLowerCase();
 
