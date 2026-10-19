@@ -4,13 +4,23 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-pricing.js
 // ==========================================================================
 
+// Safe fallbacks to prevent module loading race conditions
+window.masterPricing = window.masterPricing || { relationships: [], timeline: {} };
+window.masterPricing.timeline = window.masterPricing.timeline || {};
+window.pricingRules = window.pricingRules || {};
+window.dirtyDates = window.dirtyDates || new Set();
+window.syncedDates = window.syncedDates || new Set();
+window.dirtyFields = window.dirtyFields || {};
+window.eventDates = window.eventDates || [];
+window.roomTypes = window.roomTypes || [];
+
 // --- 1. CORE PRICING MATH & EVENT PROXIMITY ---
 window.editMode = window.editMode || 'ripple'; // 'ripple' | 'pin'
 window.drillLevel = window.drillLevel || 'room';  // 'master' | 'room' | 'rates'
 
 // DYNAMIC 4-QUADRANT RATE COMPUTATION (Master Driver -> Product STD/EVT -> Channel Multiplier -> Policy Ratio -> Promo)
 window.computeDynamicPlanRate = (dateStr, room, ratePlan) => {
-    const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
+    const dayObj = (window.masterPricing && window.masterPricing.timeline) ? (window.masterPricing.timeline[dateStr] || {}) : {};
     const roomObj = dayObj[room] || {};
     const hasEvents = (window.eventDates || []).length > 0;
 
@@ -892,7 +902,7 @@ window.savePricingRulesToCloud = async (notify = false) => {
 };
 
 // --- DYNAMIC EVENT RESTRICTION SPAN & TABLE RENDERER (±2D, ±4D, ±7D) ---
-window.evtRestrWindow = window.evtRestrWindow || 2; // 2 | 4 | 7
+window.evtRestrWindow = window.evtRestrWindow || 7; // Default to ±7D (15 Days)
 
 window.setEvtRestrWindow = (days) => {
     window.evtRestrWindow = days;
@@ -911,7 +921,7 @@ window.renderEvtRestrTable = () => {
     const tbody = document.getElementById('evt-restr-tbody');
     if (!theadRow || !tbody) return;
 
-    const span = window.evtRestrWindow || 2;
+    const span = window.evtRestrWindow || 7;
     const offsets = [];
     for (let i = -span; i <= span; i++) offsets.push(i);
 
@@ -997,38 +1007,6 @@ window.handleEvtRestrMirror = (rule, offset, val, isBool = false) => {
         if (isBool) oppEl.checked = !!val;
         else oppEl.value = val;
     }
-};
-
-// --- 6. TIMELINE AUTOMATOR & OVERRIDE CLEARERS ---
-window.setAutofillPreset = (days) => {
-    const startInp = document.getElementById('w-start-date');
-    const endInp = document.getElementById('w-end-date');
-    if (!startInp) return;
-    const startVal = startInp.value || new Date().toISOString().split('T')[0];
-    startInp.value = startVal;
-    const sD = new Date(startVal + "T12:00:00Z");
-    sD.setUTCDate(sD.getUTCDate() + (days - 1));
-    if (endInp) endInp.value = sD.toISOString().split('T')[0];
-};
-
-window.clearOverrides = () => {
-    const sDate = document.getElementById('w-start-date')?.value; 
-    const eDate = document.getElementById('w-end-date')?.value;
-    if (!sDate || !eDate) return window.customAlert("Please select both a Start Date and an End Date.");
-    if (sDate > eDate) return window.customAlert("End Date must be on or after Start Date.");
-    const startUnix = window.parseYMD(sDate), endUnix = window.parseYMD(eDate); 
-    
-    for (let d = startUnix; d <= endUnix; d += 86400000) {
-        let dateStr = window.getLocalYMD(new Date(d));
-        if (window.masterPricing.timeline[dateStr]) {
-            (window.roomTypes || []).forEach(r => { 
-                if (window.masterPricing.timeline[dateStr][r]) window.masterPricing.timeline[dateStr][r].isOverride = {}; 
-            });
-            if (window.masterPricing.timeline[dateStr]['GLOBAL']) window.masterPricing.timeline[dateStr]['GLOBAL'].isOverride = {};
-            window.masterPricing.timeline[dateStr].otaOverrides = {};
-        }
-    }
-    window.runAutomator(); 
 };
 
 window.runAutomator = () => {
