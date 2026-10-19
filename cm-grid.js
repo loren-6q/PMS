@@ -4,18 +4,200 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-grid.js
 // ==========================================================================
 
+// Safe fallbacks to prevent module loading race conditions
+window.mNames = window.mNames || ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+window.getLocalYMD = window.getLocalYMD || ((d) => (d instanceof Date ? d : new Date(d)).toISOString().split('T')[0]);
+window.parseYMD = window.parseYMD || ((str) => {
+    if (!str) return 0;
+    const p = str.split('-');
+    return Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10), 12, 0, 0);
+});
+window.roundCurrency = window.roundCurrency || ((val) => (val === "" || val == null || isNaN(val) ? "" : Math.round(Number(val))));
+window.formatDisplay = window.formatDisplay || ((val) => (val === "" || val == null || isNaN(val) ? "" : window.roundCurrency(val)));
+
 window.drillLevel = window.drillLevel || 'room'; // 'master' | 'room' | 'event' | 'rates'
 window.viewDensity = window.viewDensity || 'full'; // 'avail' | 'compact' | 'minmax' | 'full'
 window.channelPreviewFilter = window.channelPreviewFilter || 'ALL';
 window.expandedRooms = window.expandedRooms || new Set();
 
-window.toggleRoomExpand = (room) => {
-    if (window.expandedRooms.has(room)) {
-        window.expandedRooms.delete(room);
-    } else {
-        window.expandedRooms.add(room);
+// Resilient standalone inventory calculator (runs even if cm-auditor is loading)
+window.calculateLiveInventory = window.calculateLiveInventory || function() {
+    window.liveInventory = window.liveInventory || {};
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const rTypes = window.roomTypes || [];
+    const totals = window.totalRoomsByType || {};
+
+    for (let i = 0; i < (window.daysToRender || 42); i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        const dStr = window.getLocalYMD(d);
+        window.liveInventory[dStr] = window.liveInventory[dStr] || {};
+        rTypes.forEach(t => {
+            if (window.liveInventory[dStr][t] === undefined) {
+                window.liveInventory[dStr][t] = totals[t] || 0;
+            }
+        });
     }
-    if (window.renderGrid) window.renderGrid();
+
+    const activeStaff = (window.staff || []).filter(s => {
+        const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+        const curProp = window.currentPropertyId;
+        if (sProp && curProp && sProp !== curProp) return false;
+        return s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed';
+    });
+
+    activeStaff.forEach(s => {
+        if (!s.checkIn || !s.checkOut) return;
+        const rList = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
+        const inMs = window.parseYMD(s.checkIn);
+        const outMs = window.parseYMD(s.checkOut);
+
+        for (let i = 0; i < (window.daysToRender || 42); i++) {
+            const d = new Date(today);
+            d.setDate(d.getDate() + i);
+            const dStr = window.getLocalYMD(d);
+            const dMs = window.parseYMD(dStr);
+            if (dMs >= inMs && dMs < outMs) {
+                rList.forEach(rid => {
+                    const hRoom = (window.hotelRooms || []).find(r => r.id === rid);
+                    const rType = hRoom?.type || s.bookedType;
+                    if (rType && window.liveInventory[dStr] && window.liveInventory[dStr][rType] !== undefined) {
+                        window.liveInventory[dStr][rType] = Math.max(0, window.liveInventory[dStr][rType] - 1);
+                    }
+                });
+            }
+        }
+    });
+};
+
+window.handleAvailEdit = (dateStr, room, val) => {
+    window.masterPricing = window.masterPricing || { relationships: [], timeline: {} };
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+    dObj.otaOverrides = dObj.otaOverrides || {};
+
+    const clean = String(val).trim();
+    if (clean === "") {
+        delete dObj.otaOverrides[`${room}_avail`];
+    } else {
+        dObj.otaOverrides[`${room}_avail`] = Math.max(0, parseInt(clean, 10) || 0);
+    }
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    if (window.markUnsavedChanges) window.markUnsavedChanges();
+};
+
+window.handleCellEdit = (dateStr, room, field, val) => {
+    window.masterPricing = window.masterPricing || { relationships: [], timeline: {} };
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+
+    if (room === 'GLOBAL') {
+        dObj['GLOBAL'] = dObj['GLOBAL'] || { isOverride: {} };
+        const cleanVal = String(val).trim();
+        if (cleanVal === "" || cleanVal === "-") {
+            delete dObj['GLOBAL'][field];
+            if (dObj['GLOBAL'].isOverride) delete dObj['GLOBAL'].isOverride[field];
+        } else {
+            dObj['GLOBAL'][field] = parseInt(cleanVal, 10) || cleanVal;
+            dObj['GLOBAL'].isOverride = dObj['GLOBAL'].isOverride || {};
+            dObj['GLOBAL'].isOverride[field] = true;
+        }
+    } else {
+        dObj[room] = dObj[room] || { isOverride: {} };
+        const rObj = dObj[room];
+        rObj.isOverride = rObj.isOverride || {};
+
+        if (field === 'min_hybrid') {
+            const clean = String(val).trim().toLowerCase();
+            if (clean === "" || clean === "-") {
+                delete rObj.min;
+                delete rObj.min_arr;
+                delete rObj.isOverride.min;
+                delete rObj.isOverride.min_arr;
+            } else if (clean.endsWith('a') || clean.endsWith('>') || clean.endsWith('▸')) {
+                const num = parseInt(clean.replace(/[^\d]/g, ''), 10);
+                if (!isNaN(num) && num > 0) {
+                    rObj.min_arr = num;
+                    delete rObj.min;
+                    rObj.isOverride.min_arr = true;
+                    delete rObj.isOverride.min;
+                }
+            } else {
+                const num = parseInt(clean, 10);
+                if (!isNaN(num) && num > 0) {
+                    rObj.min = num;
+                    delete rObj.min_arr;
+                    rObj.isOverride.min = true;
+                    delete rObj.isOverride.min_arr;
+                }
+            }
+        } else if (field === 'max') {
+            const clean = String(val).trim();
+            if (clean === "" || clean === "-") {
+                delete rObj.max;
+                delete rObj.isOverride.max;
+            } else {
+                const num = parseInt(clean, 10);
+                if (!isNaN(num) && num > 0) {
+                    rObj.max = num;
+                    rObj.isOverride.max = true;
+                }
+            }
+        } else if (field === 'fmp') {
+            const clean = String(val).trim();
+            if (clean === "") {
+                delete rObj.fmp;
+                delete rObj.isOverride.fmp;
+            } else {
+                rObj.fmp = parseFloat(clean);
+                rObj.isOverride.fmp = true;
+                if (window.rippleDay) window.rippleDay(dateStr, room);
+            }
+        }
+    }
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    if (window.markUnsavedChanges) window.markUnsavedChanges();
+};
+
+window.handleOtaEdit = (dateStr, ratePlanId, room, ruleType, ruleVal, field, val, rateSource = 'std') => {
+    window.masterPricing = window.masterPricing || { relationships: [], timeline: {} };
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+    dObj.otaOverrides = dObj.otaOverrides || {};
+
+    if (field === 'rate') {
+        const clean = String(val).trim();
+        if (clean === "") {
+            delete dObj.otaOverrides[ratePlanId];
+        } else {
+            const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
+            dObj.otaOverrides[ratePlanId] = window.roundCurrency(parseFloat(clean) / mult);
+        }
+    } else if (field === 'min') {
+        const clean = String(val).trim();
+        if (clean === "" || clean === "-") delete dObj.otaOverrides[`${ratePlanId}_min`];
+        else dObj.otaOverrides[`${ratePlanId}_min`] = parseInt(clean, 10);
+    } else if (field === 'max') {
+        const clean = String(val).trim();
+        if (clean === "" || clean === "-") delete dObj.otaOverrides[`${ratePlanId}_max`];
+        else dObj.otaOverrides[`${ratePlanId}_max`] = parseInt(clean, 10);
+    } else if (['cta', 'ctd', 'stop', 'stopSell'].includes(field)) {
+        if (val === "" || val === undefined) delete dObj.otaOverrides[`${ratePlanId}_${field}`];
+        else dObj.otaOverrides[`${ratePlanId}_${field}`] = !!val;
+    }
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.dirtyFields = window.dirtyFields || {};
+    window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
+    window.dirtyFields[dateStr][ratePlanId] = window.dirtyFields[dateStr][ratePlanId] || new Set();
+    window.dirtyFields[dateStr][ratePlanId].add(field === 'rate' ? 'rate' : 'restriction');
+    if (window.markUnsavedChanges) window.markUnsavedChanges();
 };
 
 window.getCellData = (dateStr, room) => {
@@ -89,7 +271,9 @@ window.renderGrid = () => {
     const startStr = tapeInput?.value || (window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0]);
     if (!startStr) return;
 
-    window.calculateLiveInventory();
+    if (typeof window.calculateLiveInventory === 'function') {
+        try { window.calculateLiveInventory(); } catch (err) { console.warn("Live inventory calculation notice:", err); }
+    }
 
     const head = document.getElementById('grid-head');
     const body = document.getElementById('grid-body');
