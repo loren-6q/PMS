@@ -97,4 +97,44 @@
             return new Date().toISOString().split('T')[0];
         }
     };
+
+    // 7. Automatic Hostelworld Deposit Self-Healing Engine
+    window.healHostelworldDeposit = function(s, db, appId) {
+        if (!s) return s;
+        const isHw = (s.source || '').toLowerCase() === 'hostelworld';
+        const total = Number(s.totalPrice || 0);
+
+        if (isHw && total > 0) {
+            s.payments = Array.isArray(s.payments) ? s.payments : [];
+            const hasHwDeposit = s.payments.some(p => p.method === 'hw-kp' || (p.notes && p.notes.includes('hw-kp')));
+
+            if (!hasHwDeposit) {
+                // If netPrice is already set lower than totalPrice, use it; otherwise compute 85%
+                const expectedNet = (s.netPrice && s.netPrice > 0 && s.netPrice < total)
+                    ? Number(s.netPrice)
+                    : Number((total * 0.85).toFixed(2));
+                const depositAmt = Number((total - expectedNet).toFixed(2));
+
+                if (depositAmt > 0) {
+                    s.payments.unshift({
+                        amt: depositAmt,
+                        date: s.checkIn || (window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0]),
+                        method: 'hw-kp'
+                    });
+                    s.netPrice = expectedNet;
+
+                    // Silent background heal to Firestore so other devices and views are permanently synced
+                    if (db && window.fs && window.fs.setDoc && window.fs.doc && s.id) {
+                        try {
+                            window.fs.setDoc(window.fs.doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), {
+                                payments: s.payments,
+                                netPrice: expectedNet
+                            }, { merge: true }).catch(() => {});
+                        } catch (e) {}
+                    }
+                }
+            }
+        }
+        return s;
+    };
 })();
