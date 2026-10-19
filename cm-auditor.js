@@ -239,10 +239,10 @@
                     let guestName = rawName.split(/['’]s group/i)[0].trim();
                     let pmsBooking = findPmsBooking(null, s => 
                         s.source === 'airbnb' && s.status !== 'cancelled' && s.status !== 'noshow' &&
-                        (s.firstName.toLowerCase().includes(guestName.toLowerCase()) ||
-                         s.lastName.toLowerCase().includes(guestName.toLowerCase()) ||
-                         guestName.toLowerCase().includes(s.firstName.toLowerCase()) ||
-                         guestName.toLowerCase().includes(s.lastName.toLowerCase()))
+                        (((s.firstName || '').toLowerCase().includes(guestName.toLowerCase())) ||
+                         ((s.lastName || '').toLowerCase().includes(guestName.toLowerCase())) ||
+                         (guestName.toLowerCase().includes((s.firstName || '').toLowerCase())) ||
+                         (guestName.toLowerCase().includes((s.lastName || '').toLowerCase())))
                     );
 
                     if (!pmsBooking) {
