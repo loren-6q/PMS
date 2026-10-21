@@ -12,23 +12,113 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://loren-6q.github.io/PMS/pms-core.js"></script>
-    <link rel="stylesheet" href="style.css">
+
+    <!-- Error Diagnostic Interceptor -->
+    <script>
+        window.addEventListener('error', function(e) {
+            console.error("CM Diagnostic Logger:", {
+                message: e.message,
+                filename: e.filename,
+                lineno: e.lineno,
+                colno: e.colno,
+                error: e.error
+            });
+        }, true);
+    </script>
+
+    <!-- Stylesheets (Local with GitHub Pages Fallback) -->
+    <link rel="stylesheet" href="style.css" onerror="this.onerror=null;this.href='https://loren-6q.github.io/PMS/style.css';">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
 
-    <!-- Channel Manager Modular JS Engines (Hosted on GitHub Pages) -->
-    <script type="module" src="https://loren-6q.github.io/PMS/cm-core.js"></script>
-    <script src="https://loren-6q.github.io/PMS/cm-pricing.js"></script>
-    <script src="https://loren-6q.github.io/PMS/cm-grid.js"></script>
-    <script src="https://loren-6q.github.io/PMS/cm-channex.js"></script>
-    <script src="https://loren-6q.github.io/PMS/cm-auditor.js"></script>
+    <!-- Origin-Aware Smart Script Loader -->
+    <script>
+        (function() {
+            var isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname) || window.location.protocol === 'file:';
+            var remoteBase = 'https://loren-6q.github.io/PMS/';
+            var base = isLocal ? '' : remoteBase;
+
+            function loadScript(file, isModule) {
+                var s = document.createElement('script');
+                if (isModule) s.type = 'module';
+                s.async = false; // Preserves strict execution order
+                s.src = (base ? base : './') + file;
+                
+                s.onerror = function() {
+                    if (isLocal) {
+                        console.warn("Local script failed, falling back to remote:", file);
+                        var fb = document.createElement('script');
+                        if (isModule) fb.type = 'module';
+                        fb.async = false;
+                        fb.src = remoteBase + file;
+                        document.head.appendChild(fb);
+                    }
+                };
+                document.head.appendChild(s);
+            }
+
+            loadScript('pms-core.js', false);
+            loadScript('cm-core.js', true);
+            loadScript('cm-pricing.js', false);
+            loadScript('cm-grid.js', false);
+            loadScript('cm-channex.js', false);
+            loadScript('cm-auditor.js', false);
+        })();
+    </script>
+
+    <style>
+        #cm-tooltip {
+            transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+            pointer-events: none;
+        }
+        .rate-cell-container {
+            position: relative;
+            user-select: none;
+            transition: background-color 0.15s, border-color 0.15s;
+        }
+        .rate-cell-pinned {
+            background-color: #fffbeb !important;
+            border-color: #f59e0b !important;
+        }
+        .rate-cell-pinned::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 0;
+            height: 0;
+            border-top: 6px solid #f59e0b;
+            border-left: 6px solid transparent;
+        }
+        .rate-cell-stopped {
+            background-color: #fef2f2 !important;
+            border-color: #ef4444 !important;
+        }
+        .rate-cell-stopped .cell-price-text {
+            text-decoration: line-through;
+            color: #991b1b !important;
+            opacity: 0.6;
+        }
+        .rate-grid-table {
+            table-layout: fixed;
+            width: max-content;
+            border-collapse: collapse;
+        }
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
 </head>
 <body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden bg-slate-100 font-sans">
 
-    <!-- Loading Overlay -->
-    <div id="loader" class="loading-overlay active">
+    <!-- Loading Overlay with self-dismissing timeout -->
+    <div id="loader" class="loading-overlay" style="display: none;">
         <div class="spinner"></div>
-        <div id="sync-status" class="mt-4 font-black text-indigo-800 uppercase tracking-widest text-center">INITIALIZING...</div>
+        <div id="sync-status" class="mt-4 font-black text-indigo-800 uppercase tracking-widest text-center">INITIALIZING ENGINE...</div>
     </div>
     
     <!-- Custom Alert Dialog -->
@@ -45,6 +135,9 @@
         </div>
     </div>
 
+    <!-- Interactive Desktop Tooltip -->
+    <div id="cm-tooltip" class="fixed hidden z-[10000] bg-slate-900/95 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-2xl border border-slate-700 max-w-xs leading-snug"></div>
+
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
         <!-- TOP NAVBAR -->
         <div class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-2 shrink-0 z-50 unselectable w-full">
@@ -60,17 +153,25 @@
                     </select>
                 </div>
             </div>
-
+            
             <div class="flex items-center gap-2 shrink-1 transition-opacity min-w-0 ml-auto">
                 <div id="save-indicator" class="text-[10px] font-black uppercase tracking-widest transition-all mr-1 opacity-0">PRICING SAVED</div>
+                
+                <!-- RIPPLE VS OVERRIDE MODE TOGGLE BUTTON -->
+                <button id="mode-toggle-btn" onclick="window.toggleEditMode()" class="px-2.5 py-1.5 rounded font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200" title="Toggle between Ripple Mode (propagates downstream) and Override Mode (single cell override). Alt+Enter shortcuts Override in cell.">
+                    <span id="mode-icon"><i data-lucide="zap" size="14" class="text-amber-600"></i></span>
+                    <span id="mode-label">RIPPLE MODE</span>
+                </button>
+
                 <button onclick="window.reloadSettingsConfig()" class="px-2.5 sm:px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer" title="Reload room inventory & event settings from database">
                     <i data-lucide="refresh-cw" size="14"></i> REFRESH CONFIG
                 </button>
+                
                 <!-- Unified Single-Click Save & Sync Button -->
                 <button id="btn-save-sync" onclick="window.saveAndSync(this)" class="px-3 sm:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-1.5 transition-colors cursor-pointer" title="Save pricing matrix to cloud & sync pending changes with Channex">
                     <i data-lucide="zap" size="14"></i> SAVE & SYNC
                 </button>
-                <button onclick="window.pushToChannexAPI(this, 'full')" class="px-3 sm:px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer" title="Push full 500-day matrix to Channex">
+                <button onclick="window.pushToChannexAPI(this, 'full')" class="px-3 sm:px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer" title="Push full matrix to Channex">
                     <i data-lucide="cloud-upload" size="14"></i> FULL SYNC
                 </button>
                 <a id="nav-pms-btn" href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors hidden sm:block ml-2 shrink-0">← Back</a>
@@ -81,6 +182,7 @@
             <!-- MODULE TABS -->
             <div class="flex px-2 pt-2 bg-slate-200 border-b border-slate-300 shrink-0 gap-1 overflow-x-auto no-scrollbar shadow-inner unselectable">
                 <button onclick="window.switchTab('grid')" id="tab-grid" class="tab-btn active"><i data-lucide="calendar" size="14"></i> Calendar</button>
+                <button onclick="window.switchTab('rules')" id="tab-rules" class="tab-btn"><i data-lucide="sliders" size="14" class="text-indigo-600"></i> Pricing Rules & Channels</button>
                 <button onclick="window.switchTab('promos')" id="tab-promos" class="tab-btn"><i data-lucide="tags" size="14" class="text-pink-600"></i> Deals & Promos</button>
                 <button onclick="window.switchTab('smart')" id="tab-smart" class="tab-btn"><i data-lucide="wand-2" size="14" class="text-amber-500"></i> Autofiller</button>
                 <button onclick="window.switchTab('relational')" id="tab-relational" class="tab-btn"><i data-lucide="link" size="14" class="text-indigo-500"></i> Linking</button>
@@ -88,7 +190,7 @@
                 <button onclick="window.switchTab('manual')" id="tab-manual" class="tab-btn"><i data-lucide="refresh-cw" size="14" class="text-emerald-600"></i> Manual Sync</button>
             </div>
 
-            <!-- TAB 1: CALENDAR MATRIX VIEW -->
+            <!-- TAB 1: CALENDAR VIEW -->
             <div id="view-grid" class="flex-1 flex flex-col min-h-0 relative">
                 <div class="flex flex-wrap items-center justify-between gap-2 px-2 py-1.5 bg-white border-b border-slate-200 shrink-0 shadow-sm z-30 relative">
                     <div class="flex items-center gap-1">
@@ -97,36 +199,44 @@
                         <button onclick="window.shiftTape(7)" class="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"><i data-lucide="chevron-right" size="16"></i></button>
                     </div>
 
+                    <!-- DRILLDOWN LEVEL SELECTOR (MASTER | ROOM | EVENT | ALL RATES) -->
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 hidden sm:block">PRESETS:</span>
-                        <button onclick="window.setPreset('rates')" class="view-btn"><i data-lucide="dollar-sign" size="12"></i> Rates</button>
-                        <button onclick="window.setPreset('avail')" class="view-btn"><i data-lucide="layout-grid" size="12" class="text-emerald-500"></i> Avail</button>
-                        <button onclick="window.setPreset('min')" class="view-btn"><i data-lucide="moon" size="12" class="text-amber-500"></i> Min Stay</button>
-                        <button onclick="window.setPreset('full')" class="view-btn"><i data-lucide="layers" size="12" class="text-indigo-500"></i> Full Matrix</button>
+                        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase mr-1">
+                            <span class="px-1.5 text-slate-400">DEPTH:</span>
+                            <button onclick="window.setDrillLevel('master')" id="depth-master" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white" title="Master Anchor Rooms (Private & Dorm) only">Master</button>
+                            <button onclick="window.setDrillLevel('room')" id="depth-room" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-xs font-black" title="Category summary rows">Room</button>
+                            <button onclick="window.setDrillLevel('event')" id="depth-event" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white" title="Show Base Standard + Event Package (EVT) rows">Event</button>
+                            <button onclick="window.setDrillLevel('rates')" id="depth-rates" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white" title="Full OTA Rate Plans breakdown">All Rates</button>
+                        </div>
                         
                         <div class="h-4 w-px bg-slate-300 mx-1 hidden sm:block"></div>
                         
-                        <div class="items-center gap-1 hidden sm:flex">
-                            <button onclick="window.toggleFilter('rates')" id="flt-rates" class="filter-pill active">Rates</button>
-                            <button onclick="window.toggleFilter('evt')" id="flt-evt" class="filter-pill active !text-pink-600">EVT</button>
-                            <button onclick="window.toggleFilter('avail')" id="flt-avail" class="filter-pill active">Avail</button>
-                            <button onclick="window.toggleFilter('min')" id="flt-min" class="filter-pill active">Min</button>
-                            <button onclick="window.toggleFilter('max')" id="flt-max" class="filter-pill">Max</button>
-                            <button onclick="window.toggleFilter('cta')" id="flt-cta" class="filter-pill">CTA</button>
-                            <button onclick="window.toggleFilter('ctd')" id="flt-ctd" class="filter-pill">CTD</button>
-                            <button onclick="window.toggleFilter('stop')" id="flt-stop" class="filter-pill active">Stop</button>
+                        <!-- 4 VIEW DENSITY MODES -->
+                        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
+                            <span class="px-1.5 text-slate-400">VIEW:</span>
+                            <button onclick="window.setViewDensity('avail')" id="density-avail" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white" title="Availability rows only">Avail</button>
+                            <button onclick="window.setViewDensity('compact')" id="density-compact" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white" title="Availability & Rate only">Compact</button>
+                            <button onclick="window.setViewDensity('minmax')" id="density-minmax" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white" title="Avail, Rate, and Min/Max strip">Min/Max</button>
+                            <button onclick="window.setViewDensity('full')" id="density-full" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-xs font-black" title="Full Multi-Zone details">Full</button>
                         </div>
                     </div>
 
                     <div class="flex items-center gap-1.5">
-                        <button onclick="window.setView('direct')" id="view-direct" class="view-btn active-direct"><i data-lucide="globe" size="14"></i> DIR</button>
-                        <button onclick="window.setView('bdc')" id="view-bdc" class="view-btn"><i data-lucide="building" size="14"></i> BDC</button>
-                        <button onclick="window.setView('hw')" id="view-hw" class="view-btn"><i data-lucide="tent" size="14"></i> HW</button>
-                        <button id="ripple-toggle" onclick="window.toggleRipple()" class="view-btn !bg-indigo-100 !text-indigo-700 !border-indigo-300 ml-1"><i data-lucide="link" size="12"></i> LINKS</button>
+                        <div class="flex items-center bg-slate-100 rounded border border-slate-200 px-1 py-0.5 text-xs">
+                            <span class="text-[9px] font-black text-slate-400 uppercase mr-1">PREVIEW:</span>
+                            <select id="channel-preview-select" onchange="window.channelPreviewFilter = this.value; window.renderGrid();" class="bg-transparent font-black text-xs text-indigo-700 outline-none cursor-pointer">
+                                <option value="ALL">All Rates</option>
+                                <option value="DIRECT">Direct Website</option>
+                                <option value="BDC">Booking.com</option>
+                                <option value="HW">Hostelworld</option>
+                                <option value="AGODA">Agoda</option>
+                            </select>
+                        </div>
                         <button onclick="window.toggleQuickBulk()" class="view-btn !bg-slate-100"><i data-lucide="zap" size="12"></i> BULK</button>
                     </div>
                 </div>
 
+                <!-- QUICK BULK PANEL -->
                 <div id="quick-bulk-panel" class="hidden bg-slate-100 border-b border-slate-300 p-2 shrink-0 shadow-inner flex-col gap-2 z-20 relative">
                     <div class="flex items-center justify-between gap-2 w-full flex-wrap border-b border-slate-200 pb-2">
                         <div class="flex items-center gap-2">
@@ -147,7 +257,6 @@
                                     <th class="p-1.5 text-center border-r border-slate-700">Rate ฿</th>
                                     <th class="p-1.5 text-center border-r border-slate-700">Min Nts</th>
                                     <th class="p-1.5 text-center border-r border-slate-700">Max Nts</th>
-                                    <th class="p-1.5 text-center border-r border-slate-700">Min Arr</th>
                                     <th class="p-1.5 text-center border-r border-slate-700">CTA (t/f)</th>
                                     <th class="p-1.5 text-center border-r border-slate-700">CTD (t/f)</th>
                                     <th class="p-1.5 text-center">Stop (t/f)</th>
@@ -158,15 +267,164 @@
                     </div>
                 </div>
 
+                <!-- MAIN INTERACTIVE MATRIX -->
                 <div class="flex-1 overflow-auto bg-slate-200 relative z-10 overscroll-none pt-[5px]" id="grid-container">
                     <table class="rate-grid-table" id="rate-table">
                         <thead id="grid-head"></thead>
                         <tbody id="grid-body"></tbody>
                     </table>
                 </div>
+
+                <!-- SELECTABLE BOTTOM KEY / LEGEND BAR -->
+                <footer id="cm-calendar-legend" class="bg-slate-900 border-t border-slate-800 text-slate-300 px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[10px] shrink-0 select-text z-30">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-0.5">Cell Legend:</span>
+                        
+                        <!-- TOP ROW ZONE -->
+                        <div class="flex items-center gap-1.5 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700">
+                            <span class="font-black text-amber-400 uppercase text-[9px] tracking-wider">TOP:</span>
+                            <span class="text-slate-200 font-bold">Min | Max</span>
+                            <span class="text-slate-400 text-[9px]">(type <code class="text-amber-300 font-mono font-bold">a</code> or <code class="text-amber-300 font-mono font-bold">&gt;</code> for On Arrival: <span class="font-black text-amber-400 bg-slate-900 border border-slate-700 px-1 py-0.2 rounded font-mono">3▸</span>)</span>
+                        </div>
+
+                        <!-- BOTTOM ROW ZONE: SEPARATES LEFT & RIGHT TRIGGERS -->
+                        <div class="flex items-center gap-2 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700">
+                            <span class="font-black text-indigo-400 uppercase text-[9px] tracking-wider">BOTTOM:</span>
+                            
+                            <!-- Left: Closed Cycle -->
+                            <div class="flex items-center gap-1 pr-2 border-r border-slate-700" title="Bottom-Left Trigger: Click to cycle Closed to Arrival (A), Departure (D), or Both (B)">
+                                <span class="text-slate-400 text-[9px] font-bold">[Left] Closed:</span>
+                                <span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900" title="Closed to Arrival (CTA)">A</span>
+                                <span class="text-slate-300 text-[9px]">Arrival</span>
+                                <span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 ml-0.5" title="Closed to Departure (CTD)">D</span>
+                                <span class="text-slate-300 text-[9px]">Departure</span>
+                                <span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 ml-0.5" title="Closed to Both (BTH)">B</span>
+                                <span class="text-slate-300 text-[9px]">Both</span>
+                            </div>
+
+                            <!-- Right: Stop-Sell Trigger -->
+                            <div class="flex items-center gap-1 pl-0.5" title="Bottom-Right Trigger: Click corner or date column header to Stop-Sell">
+                                <span class="text-slate-400 text-[9px] font-bold">[Right]:</span>
+                                <span class="px-1 py-0.2 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>
+                                <span class="text-slate-300 text-[9px]">Stop-Sell</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CUSTOM OVERRIDE INDICATOR -->
+                    <div class="flex items-center gap-1.5 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700 cursor-help" title="Custom Override: cell is customized and unlinked from automatic ripple calculations. Double-click to unlock and restore ripple.">
+                        <div class="w-3.5 h-3.5 bg-amber-100 border border-amber-400 rounded-xs relative shrink-0">
+                            <span class="absolute top-0 right-0 w-1.5 h-1.5 bg-amber-500 rounded-bl"></span>
+                        </div>
+                        <span class="text-amber-300 font-bold text-[9px]">Custom Override <span class="text-slate-400 font-normal">(Double-click cell to unlock)</span></span>
+                    </div>
+                </footer>
             </div>
 
-            <!-- TAB 2: PROMOTIONS & DEALS ENGINE -->
+            <!-- TAB 2: PRICING RULES & CHANNELS -->
+            <div id="view-rules" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
+                <div class="max-w-5xl mx-auto space-y-4">
+                    
+                    <!-- 1. MASTER DRIVER & ANCHOR SETTINGS -->
+                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                            <div>
+                                <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2">
+                                    <i data-lucide="compass" class="text-indigo-600"></i> Master Driver & Currency Anchor
+                                </h2>
+                                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">
+                                    Select the primary baseline rate you input on the calendar. All other channels, policies, and promos ripple from this origin.
+                                </p>
+                            </div>
+                            <button onclick="window.savePricingRulesToCloud(true)" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
+                                <i data-lucide="save" size="14"></i> Save All Rules
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            <div>
+                                <label class="label-base text-indigo-700">Master Origin Driver</label>
+                                <select id="rule-master-driver" class="input-base !text-xs font-black cursor-pointer bg-white" onchange="window.markRulesUnsaved()">
+                                    <option value="bdc_non_ref" selected>Booking.com Non-Refundable (Recommended)</option>
+                                    <option value="direct_non_ref">Direct Website Non-Refundable</option>
+                                    <option value="direct_ref">Direct Website Refundable</option>
+                                    <option value="bdc_ref">Booking.com Standard Refundable</option>
+                                </select>
+                                <span class="text-[9px] font-bold text-slate-400 mt-1 block">Rates typed on your calendar map directly to this plan.</span>
+                            </div>
+
+                            <div>
+                                <label class="label-base text-slate-700">Private Anchor Room</label>
+                                <select id="rule-anchor-private" class="input-base !text-xs font-black cursor-pointer bg-white" onchange="window.syncAnchorRooms('private', this.value)"></select>
+                                <span class="text-[9px] font-bold text-slate-400 mt-1 block">Baseline room for all private room links.</span>
+                            </div>
+
+                            <div>
+                                <label class="label-base text-slate-700">Dorm Anchor Room</label>
+                                <select id="rule-anchor-dorm" class="input-base !text-xs font-black cursor-pointer bg-white" onchange="window.syncAnchorRooms('dorm', this.value)"></select>
+                                <span class="text-[9px] font-bold text-slate-400 mt-1 block">Baseline room for all shared dorm links.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. POLICY RATIOS (REFUNDABLE VS NON-REFUNDABLE) -->
+                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
+                        <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
+                            <i data-lucide="shield-check" class="text-blue-600"></i> Policy Ratios (Refundable vs Non-Refundable)
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex flex-col gap-2">
+                                <span class="text-xs font-black uppercase text-slate-700">Standard Dates Policy</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-slate-600">Refundable = Non-Ref</span>
+                                    <select id="rule-std-ref-type" class="input-base !w-20 !py-1 font-black text-center" onchange="window.markRulesUnsaved()">
+                                        <option value="+%">+ %</option>
+                                        <option value="+">+ ฿</option>
+                                    </select>
+                                    <input type="number" id="rule-std-ref-val" value="10" class="input-base !w-24 !py-1 font-black text-center" oninput="window.markRulesUnsaved()">
+                                </div>
+                                <span class="text-[9px] font-bold text-slate-400">Normal dates automatically add 10% to generate the refundable plan.</span>
+                            </div>
+
+                            <div class="bg-pink-50/50 p-3 rounded-lg border border-pink-200 flex flex-col gap-2">
+                                <span class="text-xs font-black uppercase text-pink-800">Event / Full Moon Dates Policy</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-pink-900">Event Ref = Event Non-Ref</span>
+                                    <select id="rule-evt-ref-type" class="input-base !w-20 !py-1 font-black text-center" onchange="window.markRulesUnsaved()">
+                                        <option value="+%">+ %</option>
+                                        <option value="+">+ ฿</option>
+                                    </select>
+                                    <input type="number" id="rule-evt-ref-val" value="15" class="input-base !w-24 !py-1 font-black text-center" oninput="window.markRulesUnsaved()">
+                                </div>
+                                <span class="text-[9px] font-bold text-pink-700">Peak event dates enforce a higher refundable risk premium (+15%).</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. DYNAMIC ACTIVE OTA CHANNEL PIPELINE -->
+                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                            <div>
+                                <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2">
+                                    <i data-lucide="network" class="text-purple-600"></i> Active Channel Multipliers & Parity
+                                </h2>
+                                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">
+                                    Automatically populated based on your property's active OTA mappings. Define price offsets relative to your Master Driver.
+                                </p>
+                            </div>
+                            <span class="text-[10px] font-black uppercase bg-purple-100 text-purple-800 px-2 py-1 rounded">Auto-Filtered To Mapped OTAs</span>
+                        </div>
+
+                        <div id="dynamic-ota-rules-container" class="space-y-2">
+                            <!-- Populated dynamically with active channels -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- TAB 3: PROMOTIONS & DEALS ENGINE -->
             <div id="view-promos" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-5xl mx-auto space-y-4">
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
@@ -211,7 +469,7 @@
                 </div>
             </div>
 
-            <!-- TAB 3: AUTOFILLER VIEW -->
+            <!-- TAB 4: AUTOFILLER VIEW -->
             <div id="view-smart" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-4xl mx-auto space-y-4">
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
@@ -231,15 +489,18 @@
                             Paint baseline market rates onto selected rooms. Non-anchor rooms calculate automatically using the rules in the <strong>Linking</strong> tab without overwriting custom overrides.
                         </p>
                         
+                        <!-- SELECTABLE ANCHORS (SYNCHRONIZED WITH TAB 2) -->
                         <div class="flex flex-wrap items-center gap-4 mb-6 p-3 bg-slate-100 rounded-lg border border-slate-200">
                             <div class="flex-1 min-w-[140px]">
                                 <label class="label-base text-indigo-700">Private Anchor</label>
-                                <select id="w-anchor-private" class="input-base !text-sm !py-1 cursor-pointer text-indigo-700 font-bold" onchange="window.debounceSaveBaselines()"></select>
+                                <select id="w-anchor-private" class="input-base !text-xs font-black cursor-pointer bg-white" onchange="window.syncAnchorRooms('private', this.value)"></select>
                             </div>
+
                             <div class="flex-1 min-w-[140px]">
                                 <label class="label-base text-orange-700">Dorm Anchor</label>
-                                <select id="w-anchor-dorm" class="input-base !text-sm !py-1 cursor-pointer text-orange-700 font-bold" onchange="window.debounceSaveBaselines()"></select>
+                                <select id="w-anchor-dorm" class="input-base !text-xs font-black cursor-pointer bg-white" onchange="window.syncAnchorRooms('dorm', this.value)"></select>
                             </div>
+
                             <div class="flex-1 min-w-[130px]">
                                 <label class="label-base text-slate-700">Start Date</label>
                                 <input type="date" id="w-start-date" class="input-base !text-sm !py-1 cursor-pointer text-slate-700 font-bold">
@@ -259,11 +520,10 @@
                             </div>
                         </div>
                         
-                        <!-- DUAL-CURVE EVENT PANEL (PRICES & STAY RESTRICTIONS) -->
+                        <!-- DUAL-CURVE EVENT PANEL -->
                         <div id="autofill-events-panel" class="mb-6 space-y-4 evt-column" style="display: none;">
-                            <!-- 1. DUAL-CURVE EVENT ADJUSTMENTS (PRICES) -->
                             <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-300 w-full overflow-x-auto">
-                                <span class="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3 text-center w-full block">Dual-Curve Event Adjustments (Prices Auto-Mirrored)</span>
+                                <span class="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3 text-center w-full block">Dual-Curve Event Pricing (±2 Days Peak Pricing Curve)</span>
                                 <table class="w-full text-center border-separate border-spacing-y-2">
                                     <thead>
                                         <tr>
@@ -296,61 +556,39 @@
                                             <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-p1').value = this.value; window.debounceSaveBaselines();"></td>
                                             <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="2499" onfocus="this.select()" oninput="window.debounceSaveBaselines()"></td>
                                             <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-p1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="document.getElementById('w-d-m1').value = this.value; window.debounceSaveBaselines();"></td>
-                                            <td class="rounded-r-lg border border-orange-100 border-l-0"><input type="number" step="any" id="w-d-p2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-m2').value = this.value; window.debounceSaveBaselines();"></td>
+                                            <td class="rounded-r-lg border border-orange-100 border-l-0"><input type="number" step="any" id="w-d-p2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="document.getElementById('w-d-p2').value = this.value; window.debounceSaveBaselines();"></td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
-
-                            <!-- 2. DUAL-CURVE EVENT STAY RESTRICTIONS (APPLIED STRICTLY TO EVT RATE PLANS) -->
+                            
+                            <!-- EVENT STAY RESTRICTIONS CURVE (±2D, ±4D, ±7D & CTD) -->
                             <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-300 w-full overflow-x-auto">
-                                <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
+                                <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-3 flex-wrap gap-2">
                                     <div class="flex items-center gap-2">
                                         <i data-lucide="shield-alert" size="16" class="text-pink-600"></i>
                                         <span class="text-[10px] font-black text-pink-700 uppercase tracking-widest">Event Stay Restrictions Curve (Strictly EVT Rate Plans Only)</span>
                                     </div>
-                                    <label class="flex items-center gap-1.5 bg-pink-50 px-2 py-0.5 rounded border border-pink-200 cursor-pointer text-[10px] font-black uppercase text-pink-700">
-                                        <input type="checkbox" id="w-enable-evt-restr" checked onchange="window.toggleEvtRestrInputs(this.checked); window.debounceSaveBaselines();" class="row-checkbox"> Enable Restrictions Curve
-                                    </label>
+                                    <div class="flex items-center gap-2">
+                                        <div class="flex items-center bg-slate-100 p-0.5 rounded border border-slate-200 text-[9px] font-black uppercase">
+                                            <span class="px-1.5 text-slate-500">SPAN:</span>
+                                            <button type="button" onclick="window.setEvtRestrWindow(2)" id="restr-span-2" class="px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer">±2D</button>
+                                            <button type="button" onclick="window.setEvtRestrWindow(4)" id="restr-span-4" class="px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer">±4D</button>
+                                            <button type="button" onclick="window.setEvtRestrWindow(7)" id="restr-span-7" class="px-2 py-0.5 rounded bg-white text-indigo-700 shadow-xs font-black cursor-pointer">±7D</button>
+                                        </div>
+                                        <label class="flex items-center gap-1.5 bg-pink-50 px-2 py-0.5 rounded border border-pink-200 cursor-pointer text-[10px] font-black uppercase text-pink-700">
+                                            <input type="checkbox" id="w-enable-evt-restr" checked onchange="window.toggleEvtRestrInputs(this.checked); window.debounceSaveBaselines();" class="row-checkbox"> Enable Restrictions
+                                        </label>
+                                    </div>
                                 </div>
-                                <div id="evt-restr-table-wrap">
-                                    <table class="w-full text-center border-separate border-spacing-y-1.5">
+                                <div id="evt-restr-table-wrap" class="overflow-x-auto">
+                                    <table class="w-full text-center border-separate border-spacing-y-1.5 min-w-[750px]">
                                         <thead>
-                                            <tr>
-                                                <th class="text-[9px] font-black uppercase text-slate-400 text-left pl-2">Rule Type</th>
-                                                <th class="text-[9px] font-black uppercase text-slate-400">EVT -2</th>
-                                                <th class="text-[9px] font-black uppercase text-slate-400">EVT -1</th>
-                                                <th class="text-[10px] font-black uppercase text-amber-600">Peak Day (0)</th>
-                                                <th class="text-[9px] font-black uppercase text-slate-400">EVT +1</th>
-                                                <th class="text-[9px] font-black uppercase text-slate-400">EVT +2</th>
+                                            <tr id="evt-restr-thead-row">
+                                                <th class="text-[9px] font-black uppercase text-slate-400 text-left pl-2 w-28">Rule Type</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
-                                            <tr class="bg-pink-50/40">
-                                                <td class="text-xs font-bold text-pink-900 text-left pl-2 rounded-l-lg border border-pink-100 border-r-0 py-1">Min Stay (Nts)</td>
-                                                <td class="border-y border-pink-100"><input type="number" min="1" id="w-r-min-m2" class="input-base text-center !py-1 !px-1 text-pink-800 font-black" value="2" onfocus="this.select()" oninput="document.getElementById('w-r-min-p2').value = this.value; window.debounceSaveBaselines();"></td>
-                                                <td class="border-y border-pink-100"><input type="number" min="1" id="w-r-min-m1" class="input-base text-center !py-1 !px-1 text-pink-800 font-black" value="3" onfocus="this.select()" oninput="document.getElementById('w-r-min-p1').value = this.value; window.debounceSaveBaselines();"></td>
-                                                <td class="border-y border-pink-100"><input type="number" min="1" id="w-r-min-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-800 border-amber-400 relative z-10 scale-105 shadow-md bg-amber-50" value="3" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
-                                                <td class="border-y border-pink-100"><input type="number" min="1" id="w-r-min-p1" class="input-base text-center !py-1 !px-1 text-pink-800 font-black" value="3" onfocus="this.select()" oninput="document.getElementById('w-r-min-m1').value = this.value; window.debounceSaveBaselines();"></td>
-                                                <td class="rounded-r-lg border border-pink-100 border-l-0"><input type="number" min="1" id="w-r-min-p2" class="input-base text-center !py-1 !px-1 text-pink-800 font-black" value="2" onfocus="this.select()" oninput="document.getElementById('w-r-min-m2').value = this.value; window.debounceSaveBaselines();"></td>
-                                            </tr>
-                                            <tr class="bg-slate-50">
-                                                <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Min on Arrival</td>
-                                                <td class="border-y border-slate-200"><input type="number" min="1" id="w-r-minarr-m2" class="input-base text-center !py-1 !px-1" placeholder="--" onfocus="this.select()" oninput="document.getElementById('w-r-minarr-p2').value = this.value; window.debounceSaveBaselines();"></td>
-                                                <td class="border-y border-slate-200"><input type="number" min="1" id="w-r-minarr-m1" class="input-base text-center !py-1 !px-1" placeholder="--" onfocus="this.select()" oninput="document.getElementById('w-r-minarr-p1').value = this.value; window.debounceSaveBaselines();"></td>
-                                                <td class="border-y border-slate-200"><input type="number" min="1" id="w-r-minarr-0" class="input-base text-center !py-1 !px-1 font-bold text-amber-700" placeholder="--" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
-                                                <td class="border-y border-slate-200"><input type="number" min="1" id="w-r-minarr-p1" class="input-base text-center !py-1 !px-1" placeholder="--" onfocus="this.select()" oninput="document.getElementById('w-r-minarr-m1').value = this.value; window.debounceSaveBaselines();"></td>
-                                                <td class="rounded-r-lg border border-slate-200 border-l-0"><input type="number" min="1" id="w-r-minarr-p2" class="input-base text-center !py-1 !px-1" placeholder="--" onfocus="this.select()" oninput="document.getElementById('w-r-minarr-m2').value = this.value; window.debounceSaveBaselines();"></td>
-                                            </tr>
-                                            <tr class="bg-slate-50">
-                                                <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Close to Arrival (CTA)</td>
-                                                <td class="border-y border-slate-200 py-1"><input type="checkbox" id="w-r-cta-m2" class="row-checkbox" onchange="document.getElementById('w-r-cta-p2').checked = this.checked; window.debounceSaveBaselines();"></td>
-                                                <td class="border-y border-slate-200 py-1"><input type="checkbox" id="w-r-cta-m1" class="row-checkbox" onchange="document.getElementById('w-r-cta-p1').checked = this.checked; window.debounceSaveBaselines();"></td>
-                                                <td class="border-y border-slate-200 py-1"><input type="checkbox" id="w-r-cta-0" class="row-checkbox" onchange="window.debounceSaveBaselines();"></td>
-                                                <td class="border-y border-slate-200 py-1"><input type="checkbox" id="w-r-cta-p1" class="row-checkbox" onchange="document.getElementById('w-r-cta-m1').checked = this.checked; window.debounceSaveBaselines();"></td>
-                                                <td class="rounded-r-lg border border-slate-200 border-l-0 py-1"><input type="checkbox" id="w-r-cta-p2" class="row-checkbox" onchange="document.getElementById('w-r-cta-m2').checked = this.checked; window.debounceSaveBaselines();"></td>
-                                            </tr>
-                                        </tbody>
+                                        <tbody id="evt-restr-tbody"></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -388,7 +626,7 @@
                 </div>
             </div>
 
-            <!-- TAB 4: RELATIONAL LINKING VIEW -->
+            <!-- TAB 5: RELATIONAL LINKING VIEW -->
             <div id="view-relational" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-4xl mx-auto space-y-4">
                     <div class="bg-white border border-slate-300 rounded-lg shadow-sm overflow-hidden flex flex-col">
@@ -425,7 +663,7 @@
                 </div>
             </div>
 
-            <!-- TAB 5: OTA MAPPING SUITE -->
+            <!-- TAB 6: OTA MAPPING SUITE -->
             <div id="view-mapping" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-4xl mx-auto space-y-4">
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm mb-4 bg-indigo-50/50 border-indigo-200">
@@ -448,76 +686,110 @@
                     </div>
 
                     <!-- Room Mapping Card -->
-                    <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden flex flex-col">
-                        <div class="p-2.5 bg-slate-100 border-b border-slate-300 flex justify-between items-center shrink-0">
-                            <h2 class="font-black text-slate-700 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="arrow-left-right" class="text-emerald-500 w-4 h-4"></i> Room Type Mapping</h2>
-                            <button onclick="window.fetchChannexData()" class="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-black text-[9px] uppercase transition-colors shadow-sm cursor-pointer flex items-center gap-1"><i data-lucide="cloud-download" size="12"></i> Refresh</button>
+                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-3">
+                            <div>
+                                <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2">
+                                    <i data-lucide="door-open" class="text-indigo-600"></i> Room Type Mapping
+                                </h2>
+                                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">
+                                    Map Channex room types directly to your PMS categories.
+                                </p>
+                            </div>
+                            <button onclick="window.saveMappingToDB(true)" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
+                                <i data-lucide="save" size="14"></i> Save Mappings
+                            </button>
                         </div>
-                        <div class="p-2 bg-slate-50" id="channex-mapping-container">
-                            <div class="text-center py-6 text-slate-400 font-bold text-xs italic">Enter API key and click Save & Fetch to map rooms.</div>
-                        </div>
-                        <div class="p-2.5 bg-white border-t border-slate-200 flex items-center justify-between">
-                            <span class="text-[11px] font-bold text-slate-500 uppercase">Map each Channex Room Type to your active PMS Category.</span>
-                            <button onclick="window.saveMappingToDB(true)" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow flex items-center gap-1.5 cursor-pointer"><i data-lucide="save" size="14"></i> Save Room Mappings</button>
-                        </div>
+                        <div id="channex-mapping-container" class="space-y-1.5"></div>
                     </div>
-                    
-                    <!-- Rate Plan Mapping Card -->
-                    <div class="bg-amber-50 border border-amber-200 rounded-lg shadow-sm overflow-hidden flex flex-col hidden" id="channex-rate-mapping-card" style="display: none;">
-                        <div class="p-2.5 bg-amber-100/50 border-b border-amber-200 flex justify-between items-center shrink-0">
-                            <h2 class="font-black text-amber-800 uppercase tracking-widest text-xs flex items-center gap-1.5"><i data-lucide="tags" class="text-amber-600 w-4 h-4"></i> Rate Plan Mapping</h2>
-                            <span class="text-[10px] font-bold text-amber-700 uppercase">OTA Plan Offsets</span>
+
+                    <!-- Rate Plan Classification Audit Card -->
+                    <div id="channex-rate-mapping-card" class="bg-white p-5 border border-amber-200 rounded-xl shadow-sm hidden flex-col">
+                        <div class="flex items-center justify-between border-b border-amber-200 pb-3 mb-3 flex-wrap gap-2">
+                            <div>
+                                <h2 class="text-base font-black uppercase text-amber-900 flex items-center gap-2">
+                                    <i data-lucide="tags" class="text-amber-600"></i> Rate Plan Classifications
+                                </h2>
+                                <p class="text-[11px] font-bold text-amber-700/80 uppercase tracking-wide mt-0.5">
+                                    Verify detected Channel, Product (STD vs EVT), and Policy (Non-Ref vs Ref) for each plan.
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="window.toggleClassifierHelpModal()" class="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg font-black text-xs uppercase border border-amber-300 transition-colors flex items-center gap-1 shadow-sm cursor-pointer">
+                                    <i data-lucide="book-open" size="14"></i> Keyword Rules
+                                </button>
+                                <button onclick="window.autoClassifyAllChannexRates()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-black text-xs uppercase shadow-sm flex items-center gap-1 transition-colors cursor-pointer">
+                                    <i data-lucide="wand-2" size="14"></i> Auto-Classify All
+                                </button>
+                                <button onclick="window.saveMappingToDB(true)" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
+                                    <i data-lucide="save" size="14"></i> Save Classifications
+                                </button>
+                            </div>
                         </div>
-                        <div class="p-2" id="channex-rate-mapping-container"></div>
-                        <div class="p-2.5 bg-amber-50/80 border-t border-amber-200 flex items-center justify-between">
-                            <span class="text-[11px] font-bold text-amber-800 uppercase">Map each OTA Rate Plan to PMS Categories and price offsets.</span>
-                            <button onclick="window.saveMappingToDB(true)" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-black text-xs uppercase shadow flex items-center gap-1.5 cursor-pointer"><i data-lucide="save" size="14"></i> Save Rate Mappings</button>
+
+                        <!-- Channel Filter Tabs -->
+                        <div class="flex items-center gap-1 pb-3 overflow-x-auto no-scrollbar border-b border-slate-100 mb-3">
+                            <span class="text-[9px] font-black uppercase text-slate-400 mr-1">Filter Channel:</span>
+                            <button id="map-flt-ALL" onclick="window.setMappingChannelFilter('ALL')" class="px-2 py-0.5 rounded text-[9px] font-black uppercase transition-colors bg-amber-600 text-white shadow-xs">ALL</button>
+                            <button id="map-flt-Booking.com" onclick="window.setMappingChannelFilter('Booking.com')" class="px-2 py-0.5 rounded text-[9px] font-black uppercase transition-colors bg-white text-slate-700 border border-slate-300 hover:bg-amber-50">Booking.com</button>
+                            <button id="map-flt-Hostelworld" onclick="window.setMappingChannelFilter('Hostelworld')" class="px-2 py-0.5 rounded text-[9px] font-black uppercase transition-colors bg-white text-slate-700 border border-slate-300 hover:bg-amber-50">Hostelworld</button>
+                            <button id="map-flt-Agoda" onclick="window.setMappingChannelFilter('Agoda')" class="px-2 py-0.5 rounded text-[9px] font-black uppercase transition-colors bg-white text-slate-700 border border-slate-300 hover:bg-amber-50">Agoda</button>
+                            <button id="map-flt-Direct Website" onclick="window.setMappingChannelFilter('Direct Website')" class="px-2 py-0.5 rounded text-[9px] font-black uppercase transition-colors bg-white text-slate-700 border border-slate-300 hover:bg-amber-50">Direct Web</button>
+                            <button id="map-flt-OTHER" onclick="window.setMappingChannelFilter('OTHER')" class="px-2 py-0.5 rounded text-[9px] font-black uppercase transition-colors bg-white text-slate-700 border border-slate-300 hover:bg-amber-50">Other</button>
                         </div>
+
+                        <div id="channex-rate-mapping-container" class="space-y-1.5"></div>
                     </div>
                 </div>
             </div>
 
-            <!-- TAB 6: MANUAL SYNC & AUDITOR VIEW -->
-            <div id="view-manual" class="hidden flex-1 overflow-y-auto bg-slate-50 p-3 flex flex-col gap-3">
+            <!-- TAB 7: MANUAL SYNC & AUDITOR (MATCHING SYNC.HTML EXACTLY) -->
+            <div id="view-manual" class="hidden flex-1 flex flex-col p-2 sm:p-3 gap-2 bg-white min-h-0 overflow-y-auto">
+                <div class="flex items-center justify-between pb-1 shrink-0 border-b border-slate-200">
+                    <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-1.5">
+                        <i data-lucide="refresh-cw" size="18" class="text-emerald-600"></i> OTA Sync & Auditor
+                    </h2>
+                    <div class="flex items-center gap-2">
+                        <button id="reset-dismissed-btn" onclick="window.resetDismissed()" class="hidden text-xs font-black text-amber-600 hover:text-amber-700 uppercase bg-amber-50 border border-amber-200 px-2 py-1 rounded shadow-sm transition-colors cursor-pointer">
+                            Reset Dismissed
+                        </button>
+                    </div>
+                </div>
+
                 <!-- 1. MISSING BOOKING AUDITOR -->
-                <div class="w-full flex flex-col border border-slate-300 rounded-lg shrink-0 bg-white overflow-hidden shadow-sm">
+                <div class="w-full flex flex-col border border-slate-300 rounded-lg shrink-0 bg-slate-50 overflow-hidden shadow-sm">
                     <div class="bg-slate-200 p-2 px-3 font-black text-slate-700 uppercase flex items-center justify-between shrink-0 border-b border-slate-300">
                         <span class="text-xs sm:text-sm flex items-center gap-1.5">
                             <i data-lucide="search" size="14" class="text-blue-600"></i> 1. Missing Booking Auditor
                         </span>
-                        <div class="flex items-center gap-2">
-                            <button id="reset-dismissed-btn" onclick="window.resetDismissed()" class="hidden text-[10px] font-black text-amber-600 hover:text-amber-700 uppercase bg-amber-50 border border-amber-200 px-2 py-0.5 rounded shadow-sm transition-colors cursor-pointer">
-                                Reset Dismissed
-                            </button>
-                            <span id="auditor-prop-indicator" class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Paste Extranet List Below</span>
-                        </div>
+                        <span id="auditor-prop-indicator" class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Paste Extranet List Below</span>
                     </div>
                     <div class="p-2 sm:p-3 flex flex-col gap-2">
-                        <textarea id="audit-text" class="w-full h-16 sm:h-20 bg-slate-50 border border-slate-300 rounded p-2 outline-none focus:ring-2 focus:ring-indigo-500 whitespace-pre text-xs text-slate-700 font-mono resize-none transition-all placeholder:text-slate-400" placeholder="Paste Booking.com, Hostelworld, or Airbnb list data here..." oninput="window.checkMissing()"></textarea>
+                        <textarea id="audit-text" class="w-full h-16 sm:h-20 bg-white border border-slate-300 rounded p-2 outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre text-xs text-slate-700 font-mono resize-none transition-all placeholder:text-slate-400" placeholder="Paste Booking.com, Hostelworld, or Airbnb list data here..." oninput="window.checkMissing()"></textarea>
                         <div id="audit-result" class="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto no-scrollbar"></div>
                     </div>
                 </div>
 
                 <!-- 2. LIVE AVAILABILITY MATRIX -->
-                <div class="w-full flex-1 flex flex-col border border-slate-300 rounded-lg min-h-0 relative overflow-hidden shadow-sm bg-white">
+                <div class="w-full flex-1 flex flex-col border border-slate-300 rounded-lg min-h-[280px] relative overflow-hidden shadow-sm bg-white">
                     <div class="bg-slate-200 p-2 px-3 font-black text-slate-700 uppercase flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-slate-300">
                         <span class="text-xs sm:text-sm flex items-center gap-1.5">
                             <i data-lucide="table" size="14" class="text-indigo-600"></i> 2. Live Availability Matrix
                         </span>
                         <div class="flex items-center gap-2">
-                            <select id="grid-filter" class="bg-white border border-slate-300 rounded py-1 px-2 text-xs font-bold outline-none shadow-sm cursor-pointer" onchange="window.renderManualGrid()">
+                            <select id="grid-filter" class="bg-white border border-slate-300 rounded px-2.5 py-1 text-xs font-bold text-slate-700 outline-none shadow-sm cursor-pointer" onchange="if(window.renderManualGrid) window.renderManualGrid(); else if(window.renderGrid) window.renderGrid();">
                                 <option value="changes">Show Changes Only</option>
                                 <option value="urgent">Show Urgent Only (0-2 left)</option>
                                 <option value="all">Show All Dates</option>
                             </select>
-                            <button onclick="window.markSynced()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-1 px-3 text-xs rounded shadow flex items-center gap-1 cursor-pointer">
+                            <button onclick="window.markSynced()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-black text-xs uppercase shadow-sm flex items-center gap-1 cursor-pointer transition-colors">
                                 <i data-lucide="check-check" size="14"></i> Mark Synced
                             </button>
                         </div>
                     </div>
                     
                     <div class="flex-1 overflow-auto bg-slate-50 relative p-0 overscroll-none" id="matrix-container">
-                        <table id="sync-table" class="sync-table">
+                        <table id="sync-table" class="sync-table w-full text-left border-collapse text-xs">
                             <thead id="sync-head"></thead>
                             <tbody id="sync-body"></tbody>
                         </table>
@@ -535,6 +807,44 @@
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- MODAL: KEYWORD RULES & INSTRUCTIONS FOR CLASSIFIER -->
+    <div id="classifier-help-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg border-2 border-slate-800 flex flex-col overflow-hidden">
+            <div class="bg-amber-600 p-3 text-white font-bold uppercase flex justify-between items-center text-sm">
+                <div class="flex items-center gap-2"><i data-lucide="book-open" class="w-4 h-4"></i> Keyword Rules & Aliases</div>
+                <button onclick="window.closeModal('classifier-help-modal')" class="text-amber-100 hover:text-white cursor-pointer"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="p-4 space-y-3 text-xs max-h-[75vh] overflow-y-auto">
+                <p class="text-slate-600 leading-relaxed">
+                    The Auto-Classifier scans your Channex rate plan titles for keywords. You can customize the comma-separated keywords below:
+                </p>
+
+                <div class="space-y-2 border-t border-slate-200 pt-2">
+                    <span class="font-black text-slate-800 uppercase text-[10px]">1. Channel Keywords</span>
+                    <div><label class="label-base">Booking.com</label><input type="text" id="alias-channel-bdc" class="input-base"></div>
+                    <div><label class="label-base">Hostelworld</label><input type="text" id="alias-channel-hw" class="input-base"></div>
+                    <div><label class="label-base">Agoda</label><input type="text" id="alias-channel-agoda" class="input-base"></div>
+                    <div><label class="label-base">Direct Website</label><input type="text" id="alias-channel-direct" class="input-base"></div>
+                </div>
+
+                <div class="space-y-2 border-t border-slate-200 pt-2">
+                    <span class="font-black text-slate-800 uppercase text-[10px]">2. Product Keywords</span>
+                    <div><label class="label-base">Event Package (EVT)</label><input type="text" id="alias-product-evt" class="input-base"></div>
+                </div>
+
+                <div class="space-y-2 border-t border-slate-200 pt-2">
+                    <span class="font-black text-slate-800 uppercase text-[10px]">3. Policy Keywords</span>
+                    <div><label class="label-base">Refundable (Ref)</label><input type="text" id="alias-policy-ref" class="input-base"></div>
+                    <div><label class="label-base">Non-Refundable (Non-Ref)</label><input type="text" id="alias-policy-nonref" class="input-base"></div>
+                </div>
+            </div>
+            <div class="p-3 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button onclick="window.closeModal('classifier-help-modal')" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300 !py-1.5">Cancel</button>
+                <button onclick="window.saveClassifierAliases()" class="btn-modal bg-amber-600 hover:bg-amber-700 text-white !py-1.5 shadow">Save Keyword Rules</button>
+            </div>
         </div>
     </div>
 
@@ -616,8 +926,83 @@
         </div>
     </div>
 
-    <script type="module">
-        window.initCmCore();
+    <!-- Inline Safety Fallbacks & Initializers -->
+    <script>
+        (function() {
+            // 1. Pre-fill today's date into tape input so renderGrid never aborts
+            var tape = document.getElementById('tape-start');
+            if (tape && !tape.value) {
+                var today = new Date();
+                var y = today.getFullYear();
+                var m = String(today.getMonth() + 1).padStart(2, '0');
+                var d = String(today.getDate()).padStart(2, '0');
+                tape.value = y + '-' + m + '-' + d;
+            }
+
+            // 2. Safe Fallback for setAutofillPreset
+            window.setAutofillPreset = window.setAutofillPreset || function(days) {
+                var sEl = document.getElementById('w-start-date');
+                var eEl = document.getElementById('w-end-date');
+                if (!sEl || !eEl) return;
+                var start = sEl.value ? new Date(sEl.value + 'T12:00:00Z') : new Date();
+                var end = new Date(start);
+                end.setUTCDate(end.getUTCDate() + (days - 1));
+                eEl.value = window.getLocalYMD ? window.getLocalYMD(end) : end.toISOString().split('T')[0];
+            };
+
+            // 3. Safe Fallback for clearOverrides
+            window.clearOverrides = window.clearOverrides || function() {
+                var s = document.getElementById('w-start-date')?.value;
+                var e = document.getElementById('w-end-date')?.value;
+                if (!s || !e) {
+                    if (window.customAlert) window.customAlert("Please select Start Date and End Date to clear overrides.");
+                    return;
+                }
+                var executeClear = function() {
+                    var sU = window.parseYMD ? window.parseYMD(s) : new Date(s).getTime();
+                    var eU = window.parseYMD ? window.parseYMD(e) : new Date(e).getTime();
+                    for (var d = sU; d <= eU; d += 86400000) {
+                        var dStr = window.getLocalYMD ? window.getLocalYMD(new Date(d)) : new Date(d).toISOString().split('T')[0];
+                        if (window.masterPricing && window.masterPricing.timeline && window.masterPricing.timeline[dStr]) {
+                            (window.roomTypes || []).forEach(function(r) {
+                                if (window.unlockCellOverride) window.unlockCellOverride(dStr, r);
+                            });
+                        }
+                    }
+                    if (window.renderGrid) window.renderGrid();
+                    if (window.markUnsavedChanges) window.markUnsavedChanges();
+                };
+                if (window.customAlert) {
+                    window.customAlert("Clear all pricing overrides between " + s + " and " + e + "?", true, executeClear);
+                } else {
+                    executeClear();
+                }
+            };
+
+            // 4. Safe Fallback for closeModal
+            window.closeModal = window.closeModal || function(id) {
+                var el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('active');
+                    el.style.display = 'none';
+                }
+            };
+
+            // 5. Emergency Failsafe: Hide loader if hanging for more than 4 seconds
+            setTimeout(function() {
+                var loader = document.getElementById('loader');
+                if (loader && loader.style.display !== 'none' && !loader.classList.contains('active-manual')) {
+                    loader.style.display = 'none';
+                }
+            }, 4000);
+
+            // 6. Initialize Lucide icons on load
+            window.addEventListener('DOMContentLoaded', function() {
+                if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                    window.lucide.createIcons();
+                }
+            });
+        })();
     </script>
 </body>
 </html>
