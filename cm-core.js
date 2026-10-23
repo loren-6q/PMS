@@ -611,33 +611,17 @@ window.loadPropertyConfig = async () => {
                         window.channexConfig = d.channex;
                     }
                 }
-            } catch (err) {
-                console.warn("Pricing doc fetch notice:", err);
-            }
+            } catch(e) {}
         }
 
-        window.masterPricing = {
-            relationships: loadedRelationships || [],
-            timeline: loadedTimeline || {}
-        };
-
-        if (loadedBaselines && window.populateAutofillBaselines) {
-            window.populateAutofillBaselines(loadedBaselines);
-        }
-        if (window.updateAnchorDropdowns) {
-            window.updateAnchorDropdowns();
-        }
-        if (window.renderRelationships) {
-            window.renderRelationships();
-        }
-        if (window.renderDynamicOtaRules) {
-            window.renderDynamicOtaRules();
-        }
-        if (window.renderPromoRulesTable) {
-            window.renderPromoRulesTable();
-        }
+        if (loadedTimeline) window.masterPricing.timeline = loadedTimeline;
+        if (loadedRelationships) window.masterPricing.relationships = loadedRelationships;
+        if (loadedBaselines && window.populateAutofillBaselines) window.populateAutofillBaselines(loadedBaselines);
+        
+        if (window.renderRelationships) window.renderRelationships();
+        if (window.updateAnchorDropdowns) window.updateAnchorDropdowns();
     } catch (err) {
-        console.error("loadPropertyConfig error:", err);
+        console.error("Error loading property config:", err);
     }
 };
 
