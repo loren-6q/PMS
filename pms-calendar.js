@@ -99,6 +99,13 @@
         const stList = getStaff();
         const term = window.searchTerm;
         const curProp = getPropId();
+
+        // Two-way sync with Database tab's search box
+        const dbNameInput = $('db-filter-name');
+        if (dbNameInput && dbNameInput.value !== v) {
+            dbNameInput.value = v;
+        }
+
         const m = stList.filter(s => {
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
             if (sProp !== curProp) return false;
@@ -117,6 +124,8 @@
     window.clearSearch = () => {
         const input = $('guest-search');
         if (input) input.value = "";
+        const dbNameInput = $('db-filter-name');
+        if (dbNameInput) dbNameInput.value = "";
         window.handleSearch("");
     };
 
@@ -128,6 +137,47 @@
             setTimeout(() => $('guest-search')?.focus(), 50);
         } else {
             c.classList.replace('flex', 'hidden');
+        }
+    };
+
+    window.clearSearchAndClose = () => {
+        window.clearSearch();
+        if (window.innerWidth < 640) $('search-container')?.classList.replace('flex', 'hidden');
+    };
+
+    window.jumpToSearchMatch = () => {
+        const stList = getStaff();
+        const term = window.searchTerm;
+        const curProp = getPropId();
+        const m = stList.filter(s => {
+            const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+            if (sProp !== curProp) return false;
+            return ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(term) || (s.bookId || '').toUpperCase().includes(term);
+        }).sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+
+        if (m.length > 0) {
+            const idx = (window.searchMatchIndex || 0) % m.length;
+            const targetBooking = m[idx];
+            if (targetBooking.checkIn) {
+                const d = new Date(targetBooking.checkIn + "T12:00:00");
+                d.setDate(d.getDate() - 3);
+                window.viewStart = d;
+            }
+            window.searchMatchIndex = idx + 1;
+            const mc = $('match-counter');
+            if (mc) mc.innerText = `Match ${idx + 1} of ${m.length}`;
+            window.render();
+
+            // Auto-expand unassigned tray if the match is inside it
+            setTimeout(() => {
+                const rList = getRooms(targetBooking);
+                const isUnassigned = rList.length === 0 || rList[0] === "" || targetBooking.status === 'unconfirmed' || targetBooking.status === 'charged';
+                if (isUnassigned) {
+                    $$('.group-unassigned-unconfirmed').forEach(r => r.style.display = 'grid');
+                    const icon = $('icon-unassigned-unconfirmed');
+                    if (icon) icon.style.transform = 'rotate(0deg)';
+                }
+            }, 80);
         }
     };
 
@@ -306,9 +356,15 @@
         const actStaff = getStaff().filter(s => {
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
             if (sProp !== curProp) return false;
-            const rList = getRooms(s);
-            const isUnassigned = rList.length === 0 || rList[0] === "";
-            return window.isOccupyingBooking ? window.isOccupyingBooking(s.status, isUnassigned) : (s.status !== 'cancelled' && s.status !== 'noshow');
+            // Always show active bookings (including unconfirmed, charged, and unassigned)
+            if (s.status === 'cancelled' || s.status === 'noshow') {
+                // If user is actively searching for this guest by name or ID, show them even if cancelled
+                if (searchTerm && (((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) || (s.bookId || '').toUpperCase().includes(searchTerm))) {
+                    return true;
+                }
+                return false;
+            }
+            return true;
         });
 
         const vsUTC = parseYMD(getYmd(vS));
@@ -395,8 +451,14 @@
                 hRow.className = `timeline-grid ${rD.isUnconfirmedZone ? 'mt-4' : ''} cursor-pointer transition-colors unselectable group-header`;
                 hRow.dataset.group = cGrp;
 
+                const hasSearchMatchInUnassigned = isDCol && searchTerm && uConf.some(s =>
+                    ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) ||
+                    (s.bookId || '').toUpperCase().includes(searchTerm)
+                );
+
                 if (rD.isUnconfirmedZone) {
-                    hRow.innerHTML = `<div class="unassigned-header bg-amber-200 hover:bg-amber-300 text-slate-800 p-0.5 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-md" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span>${rD.label}</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}" style="${isDCol ? 'transform: rotate(180deg);' : ''}"></i></div>`;
+                    const rotStyle = hasSearchMatchInUnassigned ? 'transform: rotate(0deg);' : (isDCol ? 'transform: rotate(180deg);' : '');
+                    hRow.innerHTML = `<div class="unassigned-header bg-amber-200 hover:bg-amber-300 text-slate-800 p-0.5 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-md" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span>${rD.label}</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}" style="${rotStyle}"></i></div>`;
                     body.appendChild(hRow);
                     return;
                 } else {
@@ -455,7 +517,13 @@
 
             const row = document.createElement('div');
             row.className = `timeline-grid bed-row group-${cGrp}`;
-            if (cGrp === 'unassigned-unconfirmed') row.style.display = 'none';
+            if (cGrp === 'unassigned-unconfirmed') {
+                const hasMatch = searchTerm && rD.bookings && rD.bookings.some(s =>
+                    ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) ||
+                    (s.bookId || '').toUpperCase().includes(searchTerm)
+                );
+                row.style.display = hasMatch ? 'grid' : 'none';
+            }
 
             let hHtml = '';
             if (rD.isUnassigned) {
