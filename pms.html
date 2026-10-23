@@ -818,6 +818,16 @@
                 if (t === 'calendar') { ctxCal.style.display = 'flex'; setTimeout(() => ctxCal.style.opacity = '1', 50); }
                 else { ctxCal.style.opacity = '0'; setTimeout(() => ctxCal.style.display = 'none', 200); }
             }
+
+            // Sync navbar search term into database search box when switching tabs
+            if (t === 'database') {
+                const navSearchVal = $('guest-search')?.value.trim() || window.searchTerm || '';
+                const dbNameInput = $('db-filter-name');
+                if (dbNameInput && navSearchVal) {
+                    dbNameInput.value = navSearchVal;
+                }
+            }
+
             if (t === 'calendar' && window.render) window.render();
             if (t === 'database' && window.renderDatabase) window.renderDatabase();
             if (t === 'dashboard') window.renderDashboard();
@@ -830,6 +840,9 @@
                     const rList = getRooms(s).map(dbToUiRoom);
                     s.room = rList[0] || "";
                     s.rooms = rList;
+
+                    if (window.healHostelworldDeposit) window.healHostelworldDeposit(s, db, appId);
+
                     return s;
                 });
                 window.staff = staff;
