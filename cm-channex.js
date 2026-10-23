@@ -136,11 +136,10 @@ window.fetchChannexData = async () => {
         const roomData = await window.fetchAllChannex('room_types', apiKey, propId);
         const rawRateData = await window.fetchAllChannex('rate_plans', apiKey, propId);
 
+        // DO NOT FILTER OUT HOSTELWORLD OR CHILD RATE PLANS:
+        // Every sellable rate plan in Channex must be available for mapping and price updates!
         const rateData = rawRateData.filter(rate => {
-            if (rate.attributes?.parent_rate_plan_id) return false;
-            if (rate.relationships?.parent_rate_plan?.data?.id) return false;
-            const title = rate.attributes?.title || '';
-            if (/ - (BookingCom|Hostelworld|Agoda|Expedia|Airbnb|Hotelbeds|Ctrip|TripCom)\b/i.test(title)) return false;
+            if (!rate || !rate.attributes) return false;
             return true;
         });
 
@@ -152,7 +151,10 @@ window.fetchChannexData = async () => {
         rateData.forEach(rate => {
             const parentRoomId = rate.relationships?.room_type?.data?.id;
             if (parentRoomId && roomNameMap[parentRoomId]) {
-                rate.attributes.title = `${rate.attributes.title} [${roomNameMap[parentRoomId]}]`;
+                const currentTitle = rate.attributes.title || '';
+                if (!currentTitle.includes(`[${roomNameMap[parentRoomId]}]`)) {
+                    rate.attributes.title = `${currentTitle} [${roomNameMap[parentRoomId]}]`;
+                }
             }
         });
 
@@ -160,7 +162,7 @@ window.fetchChannexData = async () => {
         window.renderChannexRateMapping(rateData);
         if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
         window.hideLoader();
-        window.customAlert(`Fetched ${roomData.length} Room Types and ${rateData.length} Master Rate Plans from Channex!`);
+        window.customAlert(`Fetched ${roomData.length} Room Types and ${rateData.length} Rate Plans from Channex! All channels (including Hostelworld) are now ready to map.`);
     } catch (err) {
         console.error("Fetch Channex Data error:", err);
         window.hideLoader();
@@ -415,9 +417,9 @@ window.renderChannexRateMapping = (channexRates = null) => {
         }
 
         const activeFilter = window.mappingChannelFilter || 'ALL';
+        // DO NOT FILTER OUT HOSTELWORLD OR OTA CHANNELS:
         const cleanRateMap = window.channexRateMap.filter(rate => {
             const title = rate.ratePlanTitle || '';
-            if (/ - (BookingCom|Hostelworld|Agoda|Expedia|Airbnb|Hotelbeds|Ctrip|TripCom)\b/i.test(title)) return false;
 
             if (activeFilter !== 'ALL') {
                 const rChan = rate.channel || window.fuzzyClassifyTitle(title).channel;
@@ -503,21 +505,13 @@ window.renderChannexRateMapping = (channexRates = null) => {
             rateCard.classList.remove('hidden');
         }
 
-        const cleanRates = channexRates.filter(rate => {
-            if (rate.attributes?.parent_rate_plan_id) return false;
-            if (rate.relationships?.parent_rate_plan?.data?.id) return false;
-            const title = rate.attributes?.title || '';
-            if (/ - (BookingCom|Hostelworld|Agoda|Expedia|Airbnb|Hotelbeds|Ctrip|TripCom)\b/i.test(title)) return false;
-            return true;
-        });
-
-        // Initialize mapping list from fetched rates
-        window.channexRateMap = cleanRates.map(rate => {
+        // Initialize mapping list from fetched rates without discarding Hostelworld or child rate plans
+        window.channexRateMap = channexRates.map(rate => {
             const existing = (window.channexRateMap || []).find(m => m.ratePlanId === rate.id);
-            const classified = window.fuzzyClassifyTitle(rate.attributes.title);
+            const classified = window.fuzzyClassifyTitle(rate.attributes?.title || '');
             return {
                 ratePlanId: rate.id,
-                ratePlanTitle: rate.attributes.title,
+                ratePlanTitle: rate.attributes?.title || '',
                 pmsCategory: existing ? existing.pmsCategory : '',
                 channel: existing?.channel || classified.channel,
                 product: existing?.product || classified.product,
@@ -753,10 +747,18 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
             const ratePlanId = rule.ratePlanId;
-            const rType = rule.ruleType || "=";
-            const rVal = rule.ruleVal !== undefined ? rule.ruleVal : 0;
             const rateSource = rule.rateSource || "std";
             const isEvtRate = (rateSource === 'evt') || /evt|fmp|event|pkg/i.test(rule.ratePlanTitle || '');
+
+            // Ensure channel, product, and policy are populated on the rule
+            const classified = window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rule.ratePlanTitle) : {};
+            const effectiveRule = {
+                ...rule,
+                channel: rule.channel || classified.channel || 'Direct Website',
+                product: rule.product || (isEvtRate ? 'evt' : 'std'),
+                policy: rule.policy || classified.policy || 'non-ref',
+                rateSource: isEvtRate ? 'evt' : 'std'
+            };
 
             let rangeStart = null;
             let currentItem = null;
@@ -772,46 +774,19 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
                 if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
                     calculatedPrice = window.roundCurrency(otaPriceOverride);
+                } else if (typeof window.computeDynamicPlanRate === 'function') {
+                    // PRIMARY ENGINE: Computes rate based on master price, channel multiplier, policy ratio, and promos
+                    calculatedPrice = window.computeDynamicPlanRate(dStr, pmsCat, effectiveRule);
                 } else {
-                    let activeBasePrice = "";
-                    if (isEvtRate && (window.eventDates || []).length > 0) {
-                        if (rule.policy === 'ref' && roomObj.fmp_ref !== undefined && roomObj.fmp_ref !== "") {
-                            activeBasePrice = roomObj.fmp_ref;
-                        } else if (roomObj.fmp !== undefined && roomObj.fmp !== "") {
-                            activeBasePrice = roomObj.fmp;
-                        }
-                    } else {
-                        if (rule.policy === 'ref' && roomObj.std_ref !== undefined && roomObj.std_ref !== "") {
-                            activeBasePrice = roomObj.std_ref;
-                        } else if (roomObj.std !== undefined && roomObj.std !== "") {
-                            activeBasePrice = roomObj.std;
-                        }
-                    }
-
+                    // Safe fallback
+                    let activeBasePrice = isEvtRate && (window.eventDates || []).length > 0 && roomObj.fmp
+                        ? roomObj.fmp
+                        : roomObj.std;
                     if (activeBasePrice === "" || activeBasePrice === undefined) {
                         activeBasePrice = window.masterPricing?.baseRates?.[pmsCat] || window.categoryBaseRates?.[pmsCat];
                     }
-
-                    let promoMultiplier = 1.0;
-                    (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
-                        const isChannelMatch = window.isRatePlanMatchingChannel 
-                            ? window.isRatePlanMatchingChannel(rule.ratePlanTitle, pr.channel)
-                            : (pr.channel === 'ALL' || rule.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase()));
-                        const isScopeMatch = pr.scope === 'ALL' || pr.scope === pmsCat;
-                        const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dStr >= pr.startDate && dStr <= pr.endDate);
-
-                        if (isChannelMatch && isScopeMatch && isDateMatch) {
-                            const disc = pr.discountPct / 100;
-                            if (disc > 0 && disc < 1) {
-                                promoMultiplier *= (1 / (1 - disc));
-                            }
-                        }
-                    });
-
                     if (activeBasePrice !== undefined && activeBasePrice !== "") {
-                        let modPrice = window.applyMath(activeBasePrice, rType, rVal);
-                        modPrice *= promoMultiplier;
-                        calculatedPrice = window.roundCurrency(modPrice);
+                        calculatedPrice = window.roundCurrency(activeBasePrice);
                     }
                 }
 
