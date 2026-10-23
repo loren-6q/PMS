@@ -372,19 +372,15 @@ window.syncAnchorRooms = (type, val) => {
     if (type === 'private') {
         window.savedAutofillBaselines.anchor_p = val;
         window.pricingRules.anchorPrivate = val;
-        const p1 = document.getElementById('rule-anchor-private');
         const p2 = document.getElementById('w-anchor-private');
         const disp = document.getElementById('display-anchor-private');
-        if (p1 && p1.value !== val) p1.value = val;
         if (p2 && p2.value !== val) p2.value = val;
         if (disp) disp.innerText = val || '--';
     } else if (type === 'dorm') {
         window.savedAutofillBaselines.anchor_d = val;
         window.pricingRules.anchorDorm = val;
-        const d1 = document.getElementById('rule-anchor-dorm');
         const d2 = document.getElementById('w-anchor-dorm');
         const disp = document.getElementById('display-anchor-dorm');
-        if (d1 && d1.value !== val) d1.value = val;
         if (d2 && d2.value !== val) d2.value = val;
         if (disp) disp.innerText = val || '--';
     }
@@ -396,15 +392,13 @@ window.syncAnchorRooms = (type, val) => {
 };
 
 window.updateAnchorDropdowns = () => {
-    const ruleP = document.getElementById('rule-anchor-private');
-    const ruleD = document.getElementById('rule-anchor-dorm');
     const selP = document.getElementById('w-anchor-private');
     const selD = document.getElementById('w-anchor-dorm');
     const dispP = document.getElementById('display-anchor-private');
     const dispD = document.getElementById('display-anchor-dorm');
 
-    const curP = ruleP?.value || selP?.value || window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || '';
-    const curD = ruleD?.value || selD?.value || window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || '';
+    const curP = selP?.value || window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || '';
+    const curD = selD?.value || window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || '';
 
     const privates = (window.roomTypes || []).filter(t => !t.toLowerCase().includes('dorm'));
     const pList = privates.length ? privates : (window.roomTypes || []);
@@ -413,9 +407,6 @@ window.updateAnchorDropdowns = () => {
 
     const pOptions = pList.map(t => `<option value="${t}" ${t === curP ? 'selected' : ''}>${t}</option>`).join('');
     const dOptions = dList.map(t => `<option value="${t}" ${t === curD ? 'selected' : ''}>${t}</option>`).join('');
-
-    if (ruleP) { ruleP.innerHTML = pOptions; if (curP && pList.includes(curP)) ruleP.value = curP; }
-    if (ruleD) { ruleD.innerHTML = dOptions; if (curD && dList.includes(curD)) ruleD.value = curD; }
 
     if (selP) {
         if (selP.tagName === 'SELECT') {
@@ -434,8 +425,8 @@ window.updateAnchorDropdowns = () => {
         }
     }
 
-    if (dispP) dispP.innerText = curP || '--';
-    if (dispD) dispD.innerText = curD || '--';
+    if (dispP) dispP.innerText = selP?.value || curP || '--';
+    if (dispD) dispD.innerText = selD?.value || curD || '--';
 };
 
 window.setPreset = (preset) => {
@@ -524,6 +515,9 @@ window.loadPropertyConfig = async () => {
             window.currentCurrency = propToLoad.currency || 'THB';
             window.hotelRooms = Array.isArray(propToLoad.rooms) ? [...propToLoad.rooms] : [];
             window.eventDates = Array.isArray(propToLoad.events) ? [...propToLoad.events] : [];
+            window.enableEventRates = propToLoad.enableEventRates !== undefined 
+                ? !!propToLoad.enableEventRates 
+                : (window.eventDates.length > 0);
             window.channexConfig = propToLoad.channex || {};
             window.channexMap = Array.isArray(propToLoad.channexMap) ? [...propToLoad.channexMap] : [];
             window.channexRateMap = Array.isArray(propToLoad.channexRateMap) ? [...propToLoad.channexRateMap] : [];
@@ -532,11 +526,14 @@ window.loadPropertyConfig = async () => {
             window.currentCurrency = 'THB';
             window.hotelRooms = []; 
             window.eventDates = []; 
+            window.enableEventRates = false;
             window.channexConfig = {}; 
             window.channexMap = []; 
             window.channexRateMap = []; 
             window.promoRules = [];
         }
+
+        window.updateEventPricingToggleUI();
 
         let apiKey = window.channexConfig?.apiKey || '';
         let chanPropId = window.channexConfig?.propId || '';
@@ -612,49 +609,49 @@ window.loadPropertyConfig = async () => {
                     if (d.pricingRules) window.pricingRules = d.pricingRules;
                     if ((!window.channexConfig?.apiKey || !window.channexConfig?.propId) && d.channex?.apiKey && d.channex?.propId) {
                         window.channexConfig = d.channex;
-                        if (keyInput && !keyInput.value) keyInput.value = d.channex.apiKey;
-                        if (propInput && !propInput.value) propInput.value = d.channex.propId;
-                    }
-                }
-            } catch (pErr) {
-                console.warn("Pricing load check:", docId, pErr);
-            }
-        }
+// Event Pricing Toggle Helpers
+window.isEventPricingEnabled = () => {
+    return window.enableEventRates !== undefined ? !!window.enableEventRates : ((window.eventDates || []).length > 0);
+};
 
-        if (loadedTimeline) window.masterPricing.timeline = loadedTimeline;
-        if (loadedRelationships) window.masterPricing.relationships = loadedRelationships;
-        if (loadedBaselines && window.populateAutofillBaselines) window.populateAutofillBaselines(loadedBaselines);
+window.togglePropertyEventRates = async () => {
+    const nextState = !window.isEventPricingEnabled();
+    window.enableEventRates = nextState;
+    window.updateEventPricingToggleUI();
 
-        if (window.pricingRules) {
-            const rPriv = window.pricingRules.anchorPrivate || window.savedAutofillBaselines?.anchor_p;
-            const rDorm = window.pricingRules.anchorDorm || window.savedAutofillBaselines?.anchor_d;
-            if (rPriv) {
-                const elP = document.getElementById('rule-anchor-private');
-                if (elP) elP.value = rPriv;
-            }
-            if (rDorm) {
-                const elD = document.getElementById('rule-anchor-dorm');
-                if (elD) elD.value = rDorm;
-            }
-        }
-
-        if (Array.isArray(window.masterPricing.relationships) && window.masterPricing.relationships.length > 0) {
-            window.masterPricing.relationships = window.masterPricing.relationships.map(rel => ({
-                ...rel,
-                anchor: rel.anchor === 'unlinked' ? 'unlinked' : (window.categoryResolver(rel.anchor) || rel.anchor),
-                target: window.categoryResolver(rel.target) || rel.target
-            }));
-        }
-
-        if (window.updateAnchorDropdowns) window.updateAnchorDropdowns();
-        if (window.populatePromoScopeDropdown) window.populatePromoScopeDropdown();
-        if (window.renderPromoRulesTable) window.renderPromoRulesTable();
-        if (window.renderRelationships) window.renderRelationships();
-        if (window.renderChannexMapping) window.renderChannexMapping();
-        if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
-    } catch (err) {
-        console.error("Config load error:", err);
+    try {
+        const { doc, updateDoc } = window.cmFs;
+        await updateDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId), {
+            enableEventRates: nextState
+        });
+    } catch(e) {
+        console.warn("Could not persist event pricing toggle:", e);
     }
+
+    if (window.toggleAutofillEventMode) window.toggleAutofillEventMode(nextState);
+    if (window.renderGrid) window.renderGrid();
+    window.customAlert(nextState 
+        ? "Event Pricing Activated for this property.\n\nEVT rates and cascading restriction curves are now visible."
+        : "Event Pricing Deactivated for this property.\n\nAll EVT rates and event restrictions are now hidden.");
+};
+
+window.updateEventPricingToggleUI = () => {
+    const btn = document.getElementById('prop-event-pricing-btn');
+    const isEn = window.isEventPricingEnabled();
+    if (btn) {
+        if (isEn) {
+            btn.className = "px-2.5 py-1.5 rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer bg-pink-100 text-pink-800 border border-pink-300 hover:bg-pink-200";
+            btn.innerHTML = `<i data-lucide="calendar-heart" size="14" class="text-pink-600"></i> <span>EVENTS: ON</span>`;
+        } else {
+            btn.className = "px-2.5 py-1.5 rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200";
+            btn.innerHTML = `<i data-lucide="calendar-off" size="14" class="text-slate-400"></i> <span>EVENTS: OFF</span>`;
+        }
+    }
+    const depthEvtBtn = document.getElementById('depth-event');
+    if (depthEvtBtn) {
+        depthEvtBtn.style.display = isEn ? 'inline-block' : 'none';
+    }
+    if (window.lucide) window.lucide.createIcons();
 };
 
 window.handlePropertySwitch = async (propId) => {
