@@ -49,7 +49,7 @@
         return nid;
     };
 
-    // 4. Booking Status Rules & Occupancy Evaluator
+    // 4. Booking Status Rules & Inventory Occupancy Evaluator (STRICTLY for bed capacity & inventory)
     window.PMS_STATUS = {
         ACTIVE_OCCUPYING: ['here', 'future', 'new', 'vol', 'extended', 'special'],
         NON_OCCUPYING: ['cancelled', 'noshow', 'unconfirmed', 'charged']
