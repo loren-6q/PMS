@@ -609,6 +609,38 @@ window.loadPropertyConfig = async () => {
                     if (d.pricingRules) window.pricingRules = d.pricingRules;
                     if ((!window.channexConfig?.apiKey || !window.channexConfig?.propId) && d.channex?.apiKey && d.channex?.propId) {
                         window.channexConfig = d.channex;
+                    }
+                }
+            } catch (err) {
+                console.warn("Pricing doc fetch notice:", err);
+            }
+        }
+
+        window.masterPricing = {
+            relationships: loadedRelationships || [],
+            timeline: loadedTimeline || {}
+        };
+
+        if (loadedBaselines && window.populateAutofillBaselines) {
+            window.populateAutofillBaselines(loadedBaselines);
+        }
+        if (window.updateAnchorDropdowns) {
+            window.updateAnchorDropdowns();
+        }
+        if (window.renderRelationships) {
+            window.renderRelationships();
+        }
+        if (window.renderDynamicOtaRules) {
+            window.renderDynamicOtaRules();
+        }
+        if (window.renderPromoRulesTable) {
+            window.renderPromoRulesTable();
+        }
+    } catch (err) {
+        console.error("loadPropertyConfig error:", err);
+    }
+};
+
 // Event Pricing Toggle Helpers
 window.isEventPricingEnabled = () => {
     return window.enableEventRates !== undefined ? !!window.enableEventRates : ((window.eventDates || []).length > 0);
