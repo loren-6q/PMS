@@ -327,11 +327,26 @@ window.renderGrid = () => {
     body.innerHTML = '';
 
     let dObj = new Date(startStr + "T12:00:00Z");
-    const hasEvents = (window.eventDates || []).length > 0;
-    const drill = window.drillLevel || 'room';
+    
+    // Property Event Pricing Switch: If disabled or property has no events, hide event rows & highlight
+    const isEventsActive = window.isEventPricingEnabled ? window.isEventPricingEnabled() : ((window.eventDates || []).length > 0);
+    const hasEvents = isEventsActive && (window.eventDates || []).length > 0;
+    
+    // Auto-adjust drill level if events are disabled
+    let drill = window.drillLevel || 'room';
+    if (!isEventsActive && drill === 'event') {
+        drill = 'room';
+        window.drillLevel = 'room';
+    }
+
+    const depthEvtBtn = document.getElementById('depth-event');
+    if (depthEvtBtn) {
+        depthEvtBtn.style.display = isEventsActive ? 'inline-block' : 'none';
+    }
+
     const density = window.viewDensity || 'full';
 
-    // 1. HEADER ROW (Single compact 140px Room/Rate header, 44px metric column eliminated)
+    // 1. HEADER ROW (Single compact 140px Room/Rate header)
     let trHead = `<tr class="sticky-header">
         <th class="frozen-col-header z-30 border-r-2 border-slate-600 px-2 text-left" style="width: 140px; min-width: 140px; left: 0;">
             <span class="text-[10px] font-black uppercase tracking-wider text-slate-300">Room / Rate</span>
@@ -342,7 +357,7 @@ window.renderGrid = () => {
         cur.setUTCDate(cur.getUTCDate() + i);
         const dateStr = window.getLocalYMD(cur);
         const dMs = window.parseYMD(dateStr);
-        let minDiff = window.getNearestEvent(dMs);
+        let minDiff = window.getNearestEvent ? window.getNearestEvent(dMs) : 999;
 
         let highlight = 'bg-slate-900 border-slate-700 text-white';
         if (hasEvents) {
@@ -350,7 +365,7 @@ window.renderGrid = () => {
             else if (Math.abs(minDiff) <= 2) highlight = 'bg-amber-400 text-amber-900 border-amber-500';
         }
 
-        const isGlobStop = !!(window.masterPricing.timeline?.[dateStr]?.GLOBAL?.stop || window.masterPricing.timeline?.[dateStr]?.GLOBAL?.stopSell);
+        const isGlobStop = !!(window.masterPricing?.timeline?.[dateStr]?.GLOBAL?.stop || window.masterPricing?.timeline?.[dateStr]?.GLOBAL?.stopSell);
 
         trHead += `<th class="px-0 py-0.5 border-b ${highlight} relative group cursor-pointer" style="width: 31px; min-width: 31px; max-width: 31px;" onclick="window.handleHeaderStopToggle('${dateStr}')" title="Click to Stop-Sell entire property on ${dateStr}">
             <span class="block text-[8px] font-bold uppercase leading-none">${window.mNames[cur.getUTCMonth()]}</span>
@@ -423,7 +438,7 @@ window.renderGrid = () => {
             cur.setUTCDate(cur.getUTCDate() + i);
             const dateStr = window.getLocalYMD(cur);
             const live = window.liveInventory[dateStr]?.[room] !== undefined ? window.liveInventory[dateStr][room] : 0;
-            const otaAvail = window.masterPricing.timeline[dateStr]?.otaOverrides?.[`${room}_avail`];
+            const otaAvail = window.masterPricing?.timeline?.[dateStr]?.otaOverrides?.[`${room}_avail`];
             const displayVal = otaAvail !== undefined ? otaAvail : live;
             const availColor = displayVal === 0 ? 'text-rose-600 font-black' : (displayVal <= 2 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold');
             const overrideBg = otaAvail !== undefined ? '!bg-amber-100' : 'bg-slate-50/80';
@@ -497,8 +512,8 @@ window.renderGrid = () => {
         trRate += `</tr>`;
         allRowsHtml += trRate;
 
-        // C. DUAL EVENT RATES (EVT Non-Ref & EVT Ref) WITH MULTI-ZONE CONTROLS
-        if ((drill === 'event' || hasEvents) && density !== 'avail') {
+        // C. DUAL EVENT RATES: Render ONLY if property has event pricing enabled!
+        if (isEventsActive && hasEvents && density !== 'avail') {
             // Row C1: EVT Non-Ref (Base Gated Package Rate)
             let trEvtNonRef = `<tr class="${groupClass} border-b border-pink-200 bg-pink-50/40">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 bg-pink-50/80">
@@ -513,7 +528,7 @@ window.renderGrid = () => {
                 cur.setUTCDate(cur.getUTCDate() + i);
                 const dateStr = window.getLocalYMD(cur);
                 const data = window.getCellData(dateStr, room);
-                const dayObj = window.masterPricing.timeline[dateStr] || {};
+                const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
                 const roomObj = dayObj[room] || {};
                 const evtRestr = dayObj.evtRestrictions || {};
 
@@ -536,7 +551,7 @@ window.renderGrid = () => {
                 else if (evtCta) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none">A</span>';
                 else if (evtCtd) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">D</span>';
 
-                let minDiff = window.getNearestEvent(window.parseYMD(dateStr));
+                let minDiff = window.getNearestEvent ? window.getNearestEvent(window.parseYMD(dateStr)) : 999;
                 let peakBg = minDiff === 0 ? 'bg-amber-100/70' : (Math.abs(minDiff) <= 2 ? 'bg-pink-100/50' : '');
 
                 let cellClass = `rate-cell-container p-0 border-r border-pink-200 text-center relative ${peakBg} `;
@@ -584,7 +599,7 @@ window.renderGrid = () => {
                 const cur = new Date(dObj);
                 cur.setUTCDate(cur.getUTCDate() + i);
                 const dateStr = window.getLocalYMD(cur);
-                const dayObj = window.masterPricing.timeline[dateStr] || {};
+                const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
                 const roomObj = dayObj[room] || {};
 
                 const eType = window.pricingRules?.evtRefType || '+%';
@@ -601,7 +616,7 @@ window.renderGrid = () => {
                     ? window.formatDisplay(calculatedEvtRef * mult)
                     : "";
 
-                let minDiff = window.getNearestEvent(window.parseYMD(dateStr));
+                let minDiff = window.getNearestEvent ? window.getNearestEvent(window.parseYMD(dateStr)) : 999;
                 let peakBg = minDiff === 0 ? 'bg-amber-100/80' : (Math.abs(minDiff) <= 2 ? 'bg-pink-100/60' : '');
 
                 let cellClass = `rate-cell-container p-0 border-r border-pink-200 text-center relative ${peakBg} `;
@@ -622,14 +637,19 @@ window.renderGrid = () => {
             mappedRates.forEach((rate) => {
                 const rateSource = rate.rateSource || 'std';
                 const isEvtRate = (rateSource === 'evt') || /evt|fmp|event|pkg/i.test(rate.ratePlanTitle || '');
-                const displayTitle = window.formatRatePlanTitle ? window.formatRatePlanTitle(rate.ratePlanTitle) : rate.ratePlanTitle;
+                const cleanTitle = window.formatCleanRateTitle ? window.formatCleanRateTitle(rate.ratePlanTitle, room) : rate.ratePlanTitle;
+                const rChan = rate.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.ratePlanTitle).channel : 'Direct Website');
+                const badge = window.getChannelBadgeHtml ? window.getChannelBadgeHtml(rChan) : '';
 
                 let trOta = `<tr class="bg-indigo-50/40 border-b border-indigo-100">
                     <td class="frozen-col !p-0 z-20 border-r-2 border-slate-400 bg-indigo-50/70">
-                        <div class="w-[140px] flex items-center justify-between px-2 h-full text-left" title="${rate.ratePlanTitle}">
-                            <div class="flex flex-col min-w-0 pr-1">
-                                <span class="text-[9px] font-bold text-indigo-900 truncate">${displayTitle}</span>
-                                <span class="text-[7px] uppercase tracking-widest ${isEvtRate ? 'text-pink-600 font-black' : 'text-indigo-500 font-bold'}">${isEvtRate ? 'EVT PKG' : 'RATE PLAN'}</span>
+                        <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left" title="${rate.ratePlanTitle}">
+                            <div class="flex items-center gap-1.5 min-w-0 pr-1">
+                                ${badge}
+                                <div class="flex flex-col min-w-0">
+                                    <span class="text-[9px] font-bold text-indigo-900 truncate leading-tight">${cleanTitle}</span>
+                                    <span class="text-[6.5px] uppercase tracking-widest ${isEvtRate ? 'text-pink-600 font-black' : 'text-indigo-500 font-bold'}">${isEvtRate ? 'EVT PKG' : (rate.policy === 'ref' ? 'REF' : 'NON-REF')}</span>
+                                </div>
                             </div>
                             <span class="text-[7px] font-black uppercase text-indigo-600 bg-indigo-100 px-1 py-0.2 rounded shrink-0">OTA</span>
                         </div>
@@ -639,7 +659,7 @@ window.renderGrid = () => {
                     const cur = new Date(dObj);
                     cur.setUTCDate(cur.getUTCDate() + i);
                     const dateStr = window.getLocalYMD(cur);
-                    const dayObj = window.masterPricing.timeline[dateStr] || {};
+                    const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
                     const otaOverride = dayObj.otaOverrides?.[rate.ratePlanId];
                     const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
 
@@ -649,7 +669,7 @@ window.renderGrid = () => {
                             calculatedRate = window.computeDynamicPlanRate(dateStr, room, rate);
                         } else {
                             const roomData = dayObj[room] || {};
-                            let basePrice = (isEvtRate && roomData.fmp && (window.eventDates || []).length > 0) ? roomData.fmp : roomData.std;
+                            let basePrice = (isEvtRate && roomData.fmp && hasEvents) ? roomData.fmp : roomData.std;
                             if (basePrice !== undefined && basePrice !== "") {
                                 calculatedRate = window.applyMath(basePrice, rate.ruleType || "=", rate.ruleVal || 0);
                             }
@@ -714,7 +734,7 @@ window.renderGrid = () => {
             const cur = new Date(dObj);
             cur.setUTCDate(cur.getUTCDate() + i);
             const dateStr = window.getLocalYMD(cur);
-            const gData = window.masterPricing.timeline?.[dateStr]?.GLOBAL || {};
+            const gData = window.masterPricing?.timeline?.[dateStr]?.GLOBAL || {};
 
             globalTr += `<td class="p-0 border-r border-slate-700 text-center" style="width: 31px; min-width: 31px; max-width: 31px;">
                 <div class="flex items-center w-full h-[18px] px-0.5 leading-none overflow-hidden" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; width: 100% !important;">
