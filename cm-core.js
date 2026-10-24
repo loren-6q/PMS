@@ -179,7 +179,21 @@ window.cleanPayload = (obj) => {
     return obj;
 };
 
-window.getLocalYMD = (d) => { return d.toISOString().split('T')[0]; };
+// Safe local calendar date formatter (never yesterday in local timezone)
+window.getLocalYMD = (d) => {
+    if (!d) d = new Date();
+    if (typeof d === 'string') {
+        const trimmed = d.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+        d = new Date(trimmed.includes('T') ? trimmed : trimmed + 'T12:00:00');
+    } else if (typeof d === 'number') d = new Date(d);
+    if (!(d instanceof Date) || isNaN(d.getTime())) d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 window.parseYMD = (str) => { 
     if(!str) return 0; 
     const p = str.split('-'); 
@@ -712,43 +726,28 @@ window.savePricingToCloud = async (silent = false) => {
     try {
         if (window.readRelationshipsFromDOM) window.readRelationshipsFromDOM();
         const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
-        const propToLoad = window.windowPropertiesList.find(p => p.id === canonId && Array.isArray(p.rooms) && p.rooms.length > 0)
-            || window.windowPropertiesList.find(p => (window.toCanonicalPropId ? window.toCanonicalPropId(p.id) : p.id) === canonId)
-            || window.windowPropertiesList.find(p => p.id.toLowerCase() === window.currentPropertyId.toLowerCase())
-            || window.windowPropertiesList[0];
+        const { doc, setDoc } = window.cmFs;
 
-        if (propToLoad) {
-            window.currentCurrency = propToLoad.currency || 'THB';
-            window.hotelRooms = Array.isArray(propToLoad.rooms) ? [...propToLoad.rooms] : [];
-            
-            // SAMUI & NON-EVENT PROPERTIES NEVER USE EVENT PRICING
-            if (canonId === 'loud_samui' || canonId === 'big_c') {
-                window.eventDates = [];
-                window.enableEventRates = false;
-            } else {
-                window.eventDates = Array.isArray(propToLoad.events) ? [...propToLoad.events] : [];
-                window.enableEventRates = propToLoad.enableEventRates !== undefined 
-                    ? !!propToLoad.enableEventRates 
-                    : (window.eventDates.length > 0);
-            }
+        const payload = {
+            timeline: window.masterPricing.timeline || {},
+            relationships: window.masterPricing.relationships || [],
+            updatedAt: new Date().toISOString()
+        };
 
-            window.channexConfig = propToLoad.channex || {};
-            window.channexMap = Array.isArray(propToLoad.channexMap) ? [...propToLoad.channexMap] : [];
-            window.channexRateMap = Array.isArray(propToLoad.channexRateMap) ? [...propToLoad.channexRateMap] : [];
-            window.promoRules = Array.isArray(propToLoad.promoRules) ? [...propToLoad.promoRules] : [];
-        } else {
-            window.currentCurrency = 'THB';
-            window.hotelRooms = []; 
-            window.eventDates = []; 
-            window.enableEventRates = false;
-            window.channexConfig = {}; 
-            window.channexMap = []; 
-            window.channexRateMap = []; 
-            window.promoRules = [];
-        }
+        await setDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'pricing', `master_${canonId}`), payload, { merge: true });
 
-        window.updateEventPricingToggleUI();
-// Event Pricing Toggle Helpers
+        window.hasUnsavedChanges = false;
+        window.updateSaveIndicator();
+        if (!silent) window.customAlert("Pricing matrix saved to cloud!");
+    } catch (err) {
+        console.error("Save pricing error:", err);
+        if (!silent) window.customAlert("Save Error: " + err.message);
+    } finally {
+        if (!silent) window.hideLoader();
+    }
+};
+
+// --- 9. EVENT PRICING TOGGLE HELPERS ---
 window.isEventPricingEnabled = () => {
     const canon = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
     if (canon === 'loud_samui' || canon === 'big_c') return false; // Samui properties strictly never use event rates
