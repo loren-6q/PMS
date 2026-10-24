@@ -151,6 +151,7 @@ window.fetchChannexData = async () => {
         rateData.forEach(rate => {
             const parentRoomId = rate.relationships?.room_type?.data?.id;
             if (parentRoomId && roomNameMap[parentRoomId]) {
+                rate.roomTypeName = roomNameMap[parentRoomId];
                 const currentTitle = rate.attributes.title || '';
                 if (!currentTitle.includes(`[${roomNameMap[parentRoomId]}]`)) {
                     rate.attributes.title = `${currentTitle} [${roomNameMap[parentRoomId]}]`;
@@ -183,34 +184,36 @@ window.getPmsCategoryOptionsHtml = () => {
 window.getChannelBadgeHtml = (channel) => {
     const ch = (channel || '').toLowerCase();
     if (ch.includes('booking') || ch.includes('bdc')) {
-        return `<span class="bg-[#003580] text-white w-5 h-5 text-[11px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Booking.com">B</span>`;
+        return `<span class="bg-[#003580] text-white px-1.5 h-5 text-[10px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Booking.com">BDC</span>`;
     }
     if (ch.includes('hostelworld') || ch.includes('hw')) {
-        return `<span class="bg-[#F15A24] text-white w-5 h-5 text-[11px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Hostelworld">H</span>`;
+        return `<span class="bg-[#F15A24] text-white px-1.5 h-5 text-[10px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Hostelworld">HW</span>`;
     }
     if (ch.includes('agoda')) {
-        return `<span class="bg-[#87B2D6] text-white w-5 h-5 text-[11px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Agoda">A</span>`;
+        return `<span class="bg-[#87B2D6] text-white px-1.5 h-5 text-[10px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Agoda">AG</span>`;
     }
     if (ch.includes('airbnb') || ch.includes('abnb')) {
-        return `<span class="bg-[#FF5A5F] text-white w-5 h-5 text-[11px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Airbnb">A</span>`;
+        return `<span class="bg-[#FF5A5F] text-white px-1.5 h-5 text-[10px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Airbnb">ABnB</span>`;
     }
     if (ch.includes('expedia') || ch.includes('exp')) {
-        return `<span class="bg-[#facc15] text-[#003580] w-5 h-5 text-[11px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Expedia">E</span>`;
+        return `<span class="bg-[#facc15] text-[#003580] px-1.5 h-5 text-[10px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Expedia">EXP</span>`;
     }
-    if (ch.includes('direct') || ch.includes('website')) {
-        return `<span class="bg-emerald-600 text-white w-5 h-5 text-[11px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Direct Website">D</span>`;
+    if (ch.includes('direct') || ch.includes('website') || ch.includes('default')) {
+        return `<span class="bg-emerald-600 text-white px-1.5 h-5 text-[9px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Default Rate Plan (Direct / HW / All OTAs)">DEFAULT</span>`;
     }
-    return `<span class="bg-slate-700 text-white w-5 h-5 text-[11px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="${channel || 'Other'}">?</span>`;
+    return `<span class="bg-slate-700 text-white px-1.5 h-5 text-[10px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="${channel || 'Other'}">OTA</span>`;
 };
 
-// Clean rate plan title: strips property names, OTA strings, and redundant parent room tags
+// Clean rate plan title: identifies room type, channel specificity (BDC vs Default), and policy
 window.formatCleanRateTitle = (rawTitle, pmsCat = '') => {
-    if (!rawTitle) return "Standard";
+    if (!rawTitle) return { planLabel: "Standard", roomTag: pmsCat || "", fullDisplay: "Standard", channel: "Direct Website" };
 
-    let clean = String(rawTitle);
+    let title = String(rawTitle).trim();
 
-    // 1. Strip redundant bracketed room names e.g. [Deluxe Private King Room]
-    clean = clean.replace(/\[.*?\]/g, '');
+    // 1. Extract bracketed parent room name [Room Name]
+    let roomMatch = title.match(/\[(.*?)\]/);
+    let extractedRoom = roomMatch ? roomMatch[1].trim() : (pmsCat || '');
+    let clean = title.replace(/\[.*?\]/g, '').trim();
 
     // 2. Strip property names and known brand keywords
     const propNames = [
@@ -222,29 +225,50 @@ window.formatCleanRateTitle = (rawTitle, pmsCat = '') => {
         clean = clean.replace(new RegExp(pn, 'gi'), '');
     });
 
-    // 3. Strip channel keywords from the label
-    clean = clean.replace(/\s*-\s*(Booking\.?com|Hostelworld|Expedia|Agoda|Airbnb|Direct|Hotelbeds|Ctrip|TripCom)\b/gi, '');
-    clean = clean.replace(/\b(Booking\.?com|Hostelworld|Expedia|Agoda|Airbnb)\b/gi, '');
-
-    // 4. Clean formatting and parentheticals
+    // 3. Clean formatting and parentheticals
     clean = clean.replace(/\(Per Room.*?\)/gi, '');
     clean = clean.replace(/\(.*?Persons.*?\)/gi, '');
     clean = clean.replace(/^[\s\-–—]+|[\s\-–—]+$/g, '');
     clean = clean.replace(/\s+/g, ' ').trim();
 
-    // 5. Normalize policy name
-    const lower = clean.toLowerCase();
-    if (lower.includes('non-ref') || lower.includes('non ref') || lower.includes('nonref') || lower.includes('nonrefundable')) {
-        return lower.includes('evt') || lower.includes('event') ? 'EVT Non-Ref' : 'Non-Ref';
-    }
-    if (lower.includes('ref') || lower.includes('flexible') || lower.includes('flex')) {
-        return lower.includes('evt') || lower.includes('event') ? 'EVT Ref' : 'Ref';
-    }
-    if (lower.includes('standard') || lower.includes('base')) {
-        return 'Standard';
+    // 4. Identify Channel Specificity
+    const isBdc = /bdc|booking/i.test(clean);
+    const isHw = /hostelworld|hw\b/i.test(clean);
+    const isExp = /expedia|exp\b/i.test(clean);
+    const isAgo = /agoda/i.test(clean);
+
+    // 5. Identify Policy
+    const isNonRef = /non-?ref/i.test(clean);
+    const isRef = /ref|flexible|flex/i.test(clean) && !isNonRef;
+
+    let planLabel = '';
+    let detectedChannel = 'Direct Website';
+
+    if (isBdc) {
+        planLabel = isNonRef ? 'BDC Non-Ref' : (isRef ? 'BDC Ref' : 'BDC Standard');
+        detectedChannel = 'Booking.com';
+    } else if (isHw) {
+        planLabel = isNonRef ? 'HW Non-Ref' : (isRef ? 'HW Ref' : 'HW Standard');
+        detectedChannel = 'Hostelworld';
+    } else if (isExp) {
+        planLabel = isNonRef ? 'Expedia Non-Ref' : (isRef ? 'Expedia Ref' : 'Expedia Standard');
+        detectedChannel = 'Expedia';
+    } else if (isAgo) {
+        planLabel = isNonRef ? 'Agoda Non-Ref' : (isRef ? 'Agoda Ref' : 'Agoda Standard');
+        detectedChannel = 'Agoda';
+    } else {
+        // DEFAULT / REGULAR RATE PLAN (Direct, HW, and standard OTAs)
+        planLabel = isNonRef ? 'Default Non-Ref (HW/OTAs)' : (isRef ? 'Default Ref' : 'Default Standard');
+        detectedChannel = 'Direct Website';
     }
 
-    return clean || 'Standard';
+    return {
+        planLabel: planLabel,
+        roomTag: extractedRoom,
+        fullDisplay: extractedRoom ? `[${extractedRoom}] ${planLabel}` : planLabel,
+        channel: detectedChannel,
+        policy: isRef ? 'ref' : 'non-ref'
+    };
 };
 
 window.renderChannexMapping = (channexRooms = null) => {
@@ -456,11 +480,14 @@ window.setMappingChannelFilter = (channel) => {
 window.autoClassifyAllChannexRates = () => {
     if (!window.channexRateMap || window.channexRateMap.length === 0) return;
 
+    const isEvents = window.isEventPricingEnabled ? window.isEventPricingEnabled() : false;
+
     window.channexRateMap.forEach(map => {
         const classified = window.fuzzyClassifyTitle(map.ratePlanTitle);
-        map.channel = map.channel || classified.channel;
-        map.product = map.product || classified.product;
-        map.policy = map.policy || classified.policy;
+        const info = window.formatCleanRateTitle ? window.formatCleanRateTitle(map.ratePlanTitle, map.pmsCategory) : {};
+        map.channel = map.channel || info.channel || classified.channel;
+        map.product = isEvents ? (map.product || classified.product) : 'std';
+        map.policy = map.policy || info.policy || classified.policy;
         map.rateSource = map.product === 'evt' ? 'evt' : 'std';
     });
 
@@ -485,12 +512,11 @@ window.renderChannexRateMapping = (channexRates = null) => {
         }
 
         const activeFilter = window.mappingChannelFilter || 'ALL';
-        // DO NOT FILTER OUT HOSTELWORLD OR OTA CHANNELS:
         const cleanRateMap = window.channexRateMap.filter(rate => {
             const title = rate.ratePlanTitle || '';
 
             if (activeFilter !== 'ALL') {
-                const rChan = rate.channel || window.fuzzyClassifyTitle(title).channel;
+                const rChan = rate.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(title).channel : 'Direct Website');
                 if (activeFilter === 'OTHER') {
                     return !['Booking.com', 'Hostelworld', 'Agoda', 'Direct Website'].includes(rChan);
                 }
@@ -517,12 +543,14 @@ window.renderChannexRateMapping = (channexRates = null) => {
                 catOptions = catOptions.replace(`value="${map.pmsCategory}"`, `value="${map.pmsCategory}" selected`);
             }
 
-            const classified = window.fuzzyClassifyTitle(map.ratePlanTitle);
-            const currentChannel = map.channel || classified.channel;
+            const info = window.formatCleanRateTitle ? window.formatCleanRateTitle(map.ratePlanTitle, map.pmsCategory) : {};
+            const classified = window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(map.ratePlanTitle) : {};
+            
+            const currentChannel = map.channel || info.channel || classified.channel;
             const currentProduct = map.product || (map.rateSource === 'evt' ? 'evt' : classified.product);
-            const currentPolicy = map.policy || classified.policy;
+            const currentPolicy = map.policy || info.policy || classified.policy;
 
-            const cleanTitle = window.formatCleanRateTitle ? window.formatCleanRateTitle(map.ratePlanTitle, map.pmsCategory) : map.ratePlanTitle;
+            const roomLabel = info.roomTag || map.pmsCategory || 'Unassigned Room';
             const channelBadge = window.getChannelBadgeHtml ? window.getChannelBadgeHtml(currentChannel) : '';
 
             rHtml += `
@@ -532,13 +560,17 @@ window.renderChannexRateMapping = (channexRates = null) => {
                         ${channelBadge}
                     </div>
 
-                    <!-- Clean Condensed Title & ID -->
+                    <!-- Room Category Tag & Clear Plan Title -->
                     <div class="flex-1 flex flex-col min-w-0 pl-1">
-                        <div class="flex items-center gap-1.5 truncate">
-                            <span class="font-black text-slate-800 text-[11px] truncate" title="${map.ratePlanTitle}">${cleanTitle}${warningTag}</span>
-                            <span class="text-[9px] font-bold text-slate-400 truncate opacity-75">(${currentChannel})</span>
+                        <div class="flex items-center gap-1.5 truncate flex-wrap">
+                            <span class="text-[10px] font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs truncate max-w-[200px]" title="${roomLabel}">
+                                ${roomLabel}
+                            </span>
+                            <span class="font-black text-slate-800 text-[11px] truncate" title="${map.ratePlanTitle}">
+                                ${info.planLabel || map.ratePlanTitle}${warningTag}
+                            </span>
                         </div>
-                        <span class="text-[7.5px] font-mono text-slate-400 uppercase tracking-tight truncate">ID: ...${map.ratePlanId.slice(-8)}</span>
+                        <span class="text-[7.5px] font-mono text-slate-400 uppercase tracking-tight truncate mt-0.5">Raw: ${map.ratePlanTitle} • ID: ...${map.ratePlanId.slice(-8)}</span>
                     </div>
 
                     <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
@@ -550,10 +582,10 @@ window.renderChannexRateMapping = (channexRates = null) => {
 
                     <!-- Channel Classification Pill -->
                     <select class="input-base !py-1 !text-[10px] !w-32 cursor-pointer chan-rate-channel bg-indigo-50 border-indigo-200 text-indigo-800 font-black" onchange="window.updateRateMapEntry('${map.ratePlanId}', 'channel', this.value)" title="Assigned OTA Channel">
-                        <option value="Booking.com" ${currentChannel === 'Booking.com' ? 'selected' : ''}>BDC</option>
-                        <option value="Hostelworld" ${currentChannel === 'Hostelworld' ? 'selected' : ''}>HW</option>
+                        <option value="Direct Website" ${currentChannel === 'Direct Website' ? 'selected' : ''}>Default (HW/OTAs)</option>
+                        <option value="Booking.com" ${currentChannel === 'Booking.com' ? 'selected' : ''}>Booking.com (BDC)</option>
+                        <option value="Hostelworld" ${currentChannel === 'Hostelworld' ? 'selected' : ''}>Hostelworld (Custom)</option>
                         <option value="Agoda" ${currentChannel === 'Agoda' ? 'selected' : ''}>Agoda</option>
-                        <option value="Direct Website" ${currentChannel === 'Direct Website' ? 'selected' : ''}>Direct</option>
                         <option value="Expedia" ${currentChannel === 'Expedia' ? 'selected' : ''}>Expedia</option>
                         <option value="Airbnb" ${currentChannel === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
                     </select>
@@ -585,14 +617,15 @@ window.renderChannexRateMapping = (channexRates = null) => {
 
         window.channexRateMap = channexRates.map(rate => {
             const existing = (window.channexRateMap || []).find(m => m.ratePlanId === rate.id);
-            const classified = window.fuzzyClassifyTitle(rate.attributes?.title || '');
+            const info = window.formatCleanRateTitle ? window.formatCleanRateTitle(rate.attributes?.title || '') : {};
+            const classified = window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.attributes?.title || '') : {};
             return {
                 ratePlanId: rate.id,
                 ratePlanTitle: rate.attributes?.title || '',
                 pmsCategory: existing ? existing.pmsCategory : '',
-                channel: existing?.channel || classified.channel,
-                product: existing?.product || classified.product,
-                policy: existing?.policy || classified.policy,
+                channel: existing?.channel || info.channel || classified.channel,
+                product: existing?.product || (window.isEventPricingEnabled && !window.isEventPricingEnabled() ? 'std' : classified.product),
+                policy: existing?.policy || info.policy || classified.policy,
                 rateSource: (existing?.product || classified.product) === 'evt' ? 'evt' : 'std'
             };
         });
