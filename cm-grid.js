@@ -424,12 +424,12 @@ window.renderGrid = () => {
                 <div class="w-[140px] flex items-center justify-between px-1.5 h-full font-black text-slate-800 text-[11px] leading-tight">
                     <span class="truncate" title="${room}">${displayName}</span>
                     <div class="flex items-center gap-1">
-                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter bg-slate-200 px-1 py-0.2 rounded">AVAIL</span>
-                        ${drill !== 'master' && mappedRates.length > 0 && density !== 'avail' ? `
-                        <button onclick="window.toggleRoomExpand('${room}')" class="px-1 py-0.5 rounded bg-slate-200 hover:bg-indigo-100 text-[9px] text-slate-700 font-bold transition-colors cursor-pointer" title="Toggle sub-rates">
-                            ${isExpanded ? '▼' : '▶'} ${mappedRates.length}
-                        </button>` : ''}
-                    </div>
+        // B. BASE (STANDARD) RATE ROW: Represents the Default Rate Plan (used by HW, Direct, and standard OTAs)
+        let trRate = `<tr class="${groupClass} border-b border-slate-300">
+            <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
+                    <span class="text-[10px] font-black text-slate-800 truncate" title="Default rate used by Hostelworld, Direct Website, and all standard OTAs">Base (Default/HW)</span>
+                    <span class="text-[7px] font-black uppercase text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded border border-emerald-300">DEFAULT</span>
                 </div>
             </td>`;
 
@@ -637,8 +637,8 @@ window.renderGrid = () => {
             mappedRates.forEach((rate) => {
                 const rateSource = rate.rateSource || 'std';
                 const isEvtRate = (rateSource === 'evt') || /evt|fmp|event|pkg/i.test(rate.ratePlanTitle || '');
-                const cleanTitle = window.formatCleanRateTitle ? window.formatCleanRateTitle(rate.ratePlanTitle, room) : rate.ratePlanTitle;
-                const rChan = rate.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.ratePlanTitle).channel : 'Direct Website');
+                const info = window.formatCleanRateTitle ? window.formatCleanRateTitle(rate.ratePlanTitle, room) : { planLabel: rate.ratePlanTitle };
+                const rChan = rate.channel || info.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.ratePlanTitle).channel : 'Direct Website');
                 const badge = window.getChannelBadgeHtml ? window.getChannelBadgeHtml(rChan) : '';
 
                 let trOta = `<tr class="bg-indigo-50/40 border-b border-indigo-100">
@@ -647,8 +647,8 @@ window.renderGrid = () => {
                             <div class="flex items-center gap-1.5 min-w-0 pr-1">
                                 ${badge}
                                 <div class="flex flex-col min-w-0">
-                                    <span class="text-[9px] font-bold text-indigo-900 truncate leading-tight">${cleanTitle}</span>
-                                    <span class="text-[6.5px] uppercase tracking-widest ${isEvtRate ? 'text-pink-600 font-black' : 'text-indigo-500 font-bold'}">${isEvtRate ? 'EVT PKG' : (rate.policy === 'ref' ? 'REF' : 'NON-REF')}</span>
+                                    <span class="text-[9px] font-black text-indigo-950 truncate leading-tight">${info.planLabel}</span>
+                                    <span class="text-[6.5px] uppercase tracking-widest ${isEvtRate ? 'text-pink-600 font-black' : (rate.policy === 'ref' ? 'text-emerald-700 font-bold' : 'text-slate-500 font-bold')}">${isEvtRate ? 'EVT PKG' : (rate.policy === 'ref' ? 'REF (+%)' : 'NON-REF')}</span>
                                 </div>
                             </div>
                             <span class="text-[7px] font-black uppercase text-indigo-600 bg-indigo-100 px-1 py-0.2 rounded shrink-0">OTA</span>
