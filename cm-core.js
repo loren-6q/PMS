@@ -639,51 +639,6 @@ window.loadPropertyConfig = async () => {
     }
 };
 
-// Event Pricing Toggle Helpers
-window.isEventPricingEnabled = () => {
-    return window.enableEventRates !== undefined ? !!window.enableEventRates : ((window.eventDates || []).length > 0);
-};
-
-window.togglePropertyEventRates = async () => {
-    const nextState = !window.isEventPricingEnabled();
-    window.enableEventRates = nextState;
-    window.updateEventPricingToggleUI();
-
-    try {
-        const { doc, updateDoc } = window.cmFs;
-        await updateDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId), {
-            enableEventRates: nextState
-        });
-    } catch(e) {
-        console.warn("Could not persist event pricing toggle:", e);
-    }
-
-    if (window.toggleAutofillEventMode) window.toggleAutofillEventMode(nextState);
-    if (window.renderGrid) window.renderGrid();
-    window.customAlert(nextState 
-        ? "Event Pricing Activated for this property.\n\nEVT rates and cascading restriction curves are now visible."
-        : "Event Pricing Deactivated for this property.\n\nAll EVT rates and event restrictions are now hidden.");
-};
-
-window.updateEventPricingToggleUI = () => {
-    const btn = document.getElementById('prop-event-pricing-btn');
-    const isEn = window.isEventPricingEnabled();
-    if (btn) {
-        if (isEn) {
-            btn.className = "px-2.5 py-1.5 rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer bg-pink-100 text-pink-800 border border-pink-300 hover:bg-pink-200";
-            btn.innerHTML = `<i data-lucide="calendar-heart" size="14" class="text-pink-600"></i> <span>EVENTS: ON</span>`;
-        } else {
-            btn.className = "px-2.5 py-1.5 rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200";
-            btn.innerHTML = `<i data-lucide="calendar-off" size="14" class="text-slate-400"></i> <span>EVENTS: OFF</span>`;
-        }
-    }
-    const depthEvtBtn = document.getElementById('depth-event');
-    if (depthEvtBtn) {
-        depthEvtBtn.style.display = isEn ? 'inline-block' : 'none';
-    }
-    if (window.lucide) window.lucide.createIcons();
-};
-
 window.handlePropertySwitch = async (propId) => {
     if (propId === window.currentPropertyId) return;
     window.showLoader('SWITCHING PROPERTY...');
@@ -779,6 +734,25 @@ window.togglePropertyEventRates = async () => {
     window.customAlert(nextState 
         ? "Event Pricing Activated for this property.\n\nEVT rates and cascading restriction curves are now visible."
         : "Event Pricing Deactivated for this property.\n\nAll EVT rates and event restrictions are now hidden.");
+};
+
+window.updateEventPricingToggleUI = () => {
+    const btn = document.getElementById('prop-event-pricing-btn');
+    const isEn = window.isEventPricingEnabled();
+    if (btn) {
+        if (isEn) {
+            btn.className = "px-2.5 py-1.5 rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer bg-pink-100 text-pink-800 border border-pink-300 hover:bg-pink-200";
+            btn.innerHTML = `<i data-lucide="calendar-heart" size="14" class="text-pink-600"></i> <span>EVENTS: ON</span>`;
+        } else {
+            btn.className = "px-2.5 py-1.5 rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200";
+            btn.innerHTML = `<i data-lucide="calendar-off" size="14" class="text-slate-400"></i> <span>EVENTS: OFF</span>`;
+        }
+    }
+    const depthEvtBtn = document.getElementById('depth-event');
+    if (depthEvtBtn) {
+        depthEvtBtn.style.display = isEn ? 'inline-block' : 'none';
+    }
+    if (window.lucide) window.lucide.createIcons();
 };
 
 // --- 10. AUTH & BOOTSTRAP INITIALIZATION ---
