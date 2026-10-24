@@ -712,72 +712,74 @@ window.savePricingToCloud = async (silent = false) => {
     try {
         if (window.readRelationshipsFromDOM) window.readRelationshipsFromDOM();
         const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
+        const propToLoad = window.windowPropertiesList.find(p => p.id === canonId && Array.isArray(p.rooms) && p.rooms.length > 0)
+            || window.windowPropertiesList.find(p => (window.toCanonicalPropId ? window.toCanonicalPropId(p.id) : p.id) === canonId)
+            || window.windowPropertiesList.find(p => p.id.toLowerCase() === window.currentPropertyId.toLowerCase())
+            || window.windowPropertiesList[0];
 
-        const payload = {
-            relationships: window.cleanPayload(window.masterPricing.relationships || []),
-            timeline: JSON.stringify(window.cleanPayload(window.masterPricing.timeline || {})),
-            updatedAt: new Date().toISOString()
-        };
+        if (propToLoad) {
+            window.currentCurrency = propToLoad.currency || 'THB';
+            window.hotelRooms = Array.isArray(propToLoad.rooms) ? [...propToLoad.rooms] : [];
+            
+            // SAMUI & NON-EVENT PROPERTIES NEVER USE EVENT PRICING
+            if (canonId === 'loud_samui' || canonId === 'big_c') {
+                window.eventDates = [];
+                window.enableEventRates = false;
+            } else {
+                window.eventDates = Array.isArray(propToLoad.events) ? [...propToLoad.events] : [];
+                window.enableEventRates = propToLoad.enableEventRates !== undefined 
+                    ? !!propToLoad.enableEventRates 
+                    : (window.eventDates.length > 0);
+            }
 
-        if (window.savedAutofillBaselines) {
-            payload.autofillBaselines = window.cleanPayload(window.savedAutofillBaselines);
-        }
-        if (window.pricingRules) {
-            payload.pricingRules = window.cleanPayload(window.pricingRules);
+            window.channexConfig = propToLoad.channex || {};
+            window.channexMap = Array.isArray(propToLoad.channexMap) ? [...propToLoad.channexMap] : [];
+            window.channexRateMap = Array.isArray(propToLoad.channexRateMap) ? [...propToLoad.channexRateMap] : [];
+            window.promoRules = Array.isArray(propToLoad.promoRules) ? [...propToLoad.promoRules] : [];
+        } else {
+            window.currentCurrency = 'THB';
+            window.hotelRooms = []; 
+            window.eventDates = []; 
+            window.enableEventRates = false;
+            window.channexConfig = {}; 
+            window.channexMap = []; 
+            window.channexRateMap = []; 
+            window.promoRules = [];
         }
 
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`), payload, { merge: true });
-        
-        window.hasUnsavedChanges = false;
-        window.updateSaveIndicator();
-
-        if (!silent) { 
-            window.hideLoader(); 
-            window.customAlert("Success!\n\nYour Master Pricing Matrix and Rule Links have been saved to the database."); 
-        }
-        return true;
-    } catch (err) {
-        console.error("Firestore Save Error:", err);
-        if (!silent) { 
-            window.hideLoader(); 
-            window.customAlert("Save Error:\n\nCould not write to Firebase: " + err.message); 
-        }
-        return false;
-    }
+        window.updateEventPricingToggleUI();
+// Event Pricing Toggle Helpers
+window.isEventPricingEnabled = () => {
+    const canon = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
+    if (canon === 'loud_samui' || canon === 'big_c') return false; // Samui properties strictly never use event rates
+    return window.enableEventRates !== undefined ? !!window.enableEventRates : ((window.eventDates || []).length > 0);
 };
 
-// --- 9. COMBINED "SAVE & SYNC" ENGINE ---
-window.saveAndSync = async (btn) => {
-    const origHtml = btn ? btn.innerHTML : '';
-    if (btn) {
-        btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin inline" size="14"></i> SAVING & SYNCING...';
-        btn.disabled = true;
+window.togglePropertyEventRates = async () => {
+    const canon = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
+    if (canon === 'loud_samui') {
+        window.customAlert("Event Pricing (EVT) is not used for LOUD Hostels Samui.");
+        return;
     }
+
+    const nextState = !window.isEventPricingEnabled();
+    window.enableEventRates = nextState;
+    window.updateEventPricingToggleUI();
 
     try {
-        const saveOk = await window.savePricingToCloud(true);
-        if (!saveOk) throw new Error("Could not commit pricing to Firestore.");
-
-        const hasChannex = window.channexConfig?.apiKey && window.channexConfig?.propId;
-        if (hasChannex && window.pushToChannexAPI) {
-            if (window.dirtyDates.size > 0) {
-                await window.pushToChannexAPI(btn, 'delta');
-            } else {
-                window.customAlert("✅ Pricing saved to cloud!\n\nNo pending modified cells to push to Channex.");
-            }
-        } else {
-            window.customAlert("✅ Pricing saved to cloud successfully!\n\n(Channex OTA credentials not mapped for this property).");
-        }
-    } catch (e) {
-        console.error("Save & Sync Error:", e);
-        window.customAlert("Save & Sync Failed:\n\n" + e.message);
-    } finally {
-        if (btn) {
-            btn.innerHTML = origHtml;
-            btn.disabled = false;
-        }
-        if (window.lucide) window.lucide.createIcons();
+        const { doc, updateDoc } = window.cmFs;
+        await updateDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'properties', window.currentPropertyId), {
+            enableEventRates: nextState
+        });
+    } catch(e) {
+        console.warn("Could not persist event pricing toggle:", e);
     }
+
+    if (window.toggleAutofillEventMode) window.toggleAutofillEventMode(nextState);
+    if (window.renderGrid) window.renderGrid();
+    window.customAlert(nextState 
+        ? "Event Pricing Activated for this property.\n\nEVT rates and cascading restriction curves are now visible."
+        : "Event Pricing Deactivated for this property.\n\nAll EVT rates and event restrictions are now hidden.");
 };
 
 // --- 10. AUTH & BOOTSTRAP INITIALIZATION ---
