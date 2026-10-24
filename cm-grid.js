@@ -4,6 +4,8 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-grid.js
 // ==========================================================================
 
+window.daysToRender = window.daysToRender || 35;
+
 // --- 0. HELPER FORMATTERS & INVENTORY CALCULATOR ---
 window.formatMinStayInput = (val) => {
     if (!val) return "";
@@ -424,12 +426,12 @@ window.renderGrid = () => {
                 <div class="w-[140px] flex items-center justify-between px-1.5 h-full font-black text-slate-800 text-[11px] leading-tight">
                     <span class="truncate" title="${room}">${displayName}</span>
                     <div class="flex items-center gap-1">
-        // B. BASE (STANDARD) RATE ROW: Represents the Default Rate Plan (used by HW, Direct, and standard OTAs)
-        let trRate = `<tr class="${groupClass} border-b border-slate-300">
-            <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                    <span class="text-[10px] font-black text-slate-800 truncate" title="Default rate used by Hostelworld, Direct Website, and all standard OTAs">Base (Default/HW)</span>
-                    <span class="text-[7px] font-black uppercase text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded border border-emerald-300">DEFAULT</span>
+                        ${allMappedRates.length > 0 && drill !== 'rates' && drill !== 'master' ? `
+                        <button onclick="window.toggleRoomExpand('${room}')" class="text-slate-400 hover:text-indigo-600 transition-colors p-0.5 cursor-pointer" title="Expand/Collapse Rates">
+                            <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" size="12"></i>
+                        </button>` : ''}
+                        <span class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">AVL</span>
+                    </div>
                 </div>
             </td>`;
 
@@ -452,12 +454,12 @@ window.renderGrid = () => {
 
         if (density === 'avail') return;
 
-        // B. BASE (STANDARD) RATE ROW
+        // B. BASE (STANDARD) RATE ROW: Represents the Default Rate Plan (used by HW, Direct, and standard OTAs)
         let trRate = `<tr class="${groupClass} border-b border-slate-300">
             <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
                 <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                    <span class="text-[10px] font-black text-slate-700 truncate">${drill === 'event' ? 'Base STD' : 'Base'}</span>
-                    <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200">MASTER</span>
+                    <span class="text-[10px] font-black text-slate-800 truncate" title="Default rate used by Hostelworld, Direct Website, and all standard OTAs">Base (Default/HW)</span>
+                    <span class="text-[7px] font-black uppercase text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded border border-emerald-300">DEFAULT</span>
                 </div>
             </td>`;
 
@@ -549,7 +551,7 @@ window.renderGrid = () => {
                 let evtCtaBadge = '';
                 if (evtCta && evtCtd) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 leading-none">B</span>';
                 else if (evtCta) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none">A</span>';
-                else if (evtCtd) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">D</span>';
+                else if (evtCta) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">D</span>';
 
                 let minDiff = window.getNearestEvent ? window.getNearestEvent(window.parseYMD(dateStr)) : 999;
                 let peakBg = minDiff === 0 ? 'bg-amber-100/70' : (Math.abs(minDiff) <= 2 ? 'bg-pink-100/50' : '');
@@ -1184,7 +1186,11 @@ document.addEventListener('keydown', (e) => {
 
         if (targetSelector) {
             e.preventDefault();
-            const inputs = Array.from(document.querySelectorAll(targetSelector)).filter(i => !i.disabled && i.offsetParent !== null);
+            window.isUserTyping = true;
+            clearTimeout(window.typingTimeout);
+            window.typingTimeout = setTimeout(() => { window.isUserTyping = false; }, 800);
+
+            const inputs = Array.from(document.querySelectorAll(targetSelector)).filter(i => !i.disabled && (i.offsetParent !== null || i.getClientRects().length > 0));
             const idx = inputs.indexOf(target);
             if (idx !== -1) {
                 const nextIdx = e.shiftKey ? (idx - 1 + inputs.length) % inputs.length : (idx + 1) % inputs.length;
