@@ -136,12 +136,8 @@ window.fetchChannexData = async () => {
         const roomData = await window.fetchAllChannex('room_types', apiKey, propId);
         const rawRateData = await window.fetchAllChannex('rate_plans', apiKey, propId);
 
-        // DO NOT FILTER OUT HOSTELWORLD OR CHILD RATE PLANS:
-        // Every sellable rate plan in Channex must be available for mapping and price updates!
-        const rateData = rawRateData.filter(rate => {
-            if (!rate || !rate.attributes) return false;
-            return true;
-        });
+        // DO NOT FILTER OUT ANY RATE PLAN: Every rate plan in Channex must be available
+        const rateData = rawRateData.filter(rate => rate && rate.attributes);
 
         const roomNameMap = {};
         roomData.forEach(r => {
@@ -159,11 +155,42 @@ window.fetchChannexData = async () => {
             }
         });
 
+        // AUTO-PAIR PMS CATEGORIES: Never leave freshly discovered plans unmapped
+        const existingMap = window.channexRateMap || [];
+        window.channexRateMap = rateData.map(rate => {
+            const existing = existingMap.find(m => m.ratePlanId === rate.id);
+            const parentRoomName = rate.roomTypeName || '';
+
+            // Match Channex parent room title directly to a PMS category
+            let assignedCategory = existing?.pmsCategory || '';
+            if (!assignedCategory && parentRoomName) {
+                assignedCategory = (window.roomTypes || []).find(rt => {
+                    const cleanRt = rt.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    const cleanCh = parentRoomName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    return cleanRt === cleanCh || cleanCh.includes(cleanRt) || cleanRt.includes(cleanCh);
+                }) || '';
+            }
+
+            const info = window.formatCleanRateTitle ? window.formatCleanRateTitle(rate.attributes?.title || '', assignedCategory || parentRoomName) : {};
+            const classified = window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.attributes?.title || '') : {};
+
+            return {
+                ratePlanId: rate.id,
+                ratePlanTitle: rate.attributes?.title || '',
+                channexRoomTitle: parentRoomName,
+                pmsCategory: assignedCategory,
+                channel: existing?.channel || info.channel || classified.channel,
+                product: existing?.product || (window.isEventPricingEnabled && !window.isEventPricingEnabled() ? 'std' : classified.product),
+                policy: existing?.policy || info.policy || classified.policy,
+                rateSource: (existing?.product || classified.product) === 'evt' ? 'evt' : 'std'
+            };
+        });
+
         window.renderChannexMapping(roomData);
         window.renderChannexRateMapping(rateData);
         if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
         window.hideLoader();
-        window.customAlert(`Fetched ${roomData.length} Room Types and ${rateData.length} Rate Plans from Channex! All channels (including Hostelworld) are now ready to map.`);
+        window.customAlert(`Fetched ${roomData.length} Room Types and ${rateData.length} Rate Plans from Channex!\n\nAll rate plans (BDC, HW, and Default) have been paired to their rooms.`);
     } catch (err) {
         console.error("Fetch Channex Data error:", err);
         window.hideLoader();
@@ -204,68 +231,49 @@ window.getChannelBadgeHtml = (channel) => {
     return `<span class="bg-slate-700 text-white px-1.5 h-5 text-[10px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="${channel || 'Other'}">OTA</span>`;
 };
 
-// Clean rate plan title: identifies room type, channel specificity (BDC vs Default), and policy
-window.formatCleanRateTitle = (rawTitle, pmsCat = '') => {
-    if (!rawTitle) return { planLabel: "Standard", roomTag: pmsCat || "", fullDisplay: "Standard", channel: "Direct Website" };
+// Strips out property noise while preserving distinct room and rate plan names
+window.formatCleanRateTitle = (rawTitle, parentRoomName = '') => {
+    if (!rawTitle) return { planLabel: "Standard", roomTag: parentRoomName || "", fullDisplay: "Standard", channel: "Direct Website", policy: "non-ref" };
 
-    let title = String(rawTitle).trim();
+    let clean = String(rawTitle).trim();
 
-    // 1. Extract bracketed parent room name [Room Name]
-    let roomMatch = title.match(/\[(.*?)\]/);
-    let extractedRoom = roomMatch ? roomMatch[1].trim() : (pmsCat || '');
-    let clean = title.replace(/\[.*?\]/g, '').trim();
-
-    // 2. Strip property names and known brand keywords
-    const propNames = [
-        'Samui Beach Hostel', 'Beach Hostel', 'LOUD Hostels Samui', 'LOUD Hostel', 'LOUD',
-        'SWIMS Beach Resort', 'SWIMS Resort', 'SWIMS', 'WET Pool Party Hostel', 'WET Pool', 'WET',
-        'Big C Property', 'Big C'
+    // 1. Remove property names and repetitive extranet boilerplate
+    const noisePatterns = [
+        /-\s*BookingCom\s*BDC\s*-\s*LOUD!?\s*a\s*Boutique\s*Party\s*Hostel/gi,
+        /-\s*BookingCom\s*BookingCom\s*-\s*LOUD!?\s*a\s*Boutique\s*Party\s*Hostel/gi,
+        /-\s*BookingCom\s*Samui\s*Beach\s*Hostel\s*-\s*Legacy/gi,
+        /-\s*LOUD!?\s*a\s*Boutique\s*Party\s*Hostel/gi,
+        /-\s*Samui\s*Beach\s*Hostel\s*-\s*Legacy/gi,
+        /-\s*Samui\s*Beach\s*Hostel/gi,
+        /-\s*SWIMS\s*Beach\s*Resort/gi,
+        /-\s*WET\s*Pool\s*Party\s*Hostel/gi,
+        /\(Per Room.*?\)/gi,
+        /\(.*?Persons.*?\)/gi
     ];
-    propNames.forEach(pn => {
-        clean = clean.replace(new RegExp(pn, 'gi'), '');
+    noisePatterns.forEach(pattern => {
+        clean = clean.replace(pattern, '');
     });
+    clean = clean.replace(/^[\s\-–—]+|[\s\-–—]+$/g, '').replace(/\s+/g, ' ').trim();
 
-    // 3. Clean formatting and parentheticals
-    clean = clean.replace(/\(Per Room.*?\)/gi, '');
-    clean = clean.replace(/\(.*?Persons.*?\)/gi, '');
-    clean = clean.replace(/^[\s\-–—]+|[\s\-–—]+$/g, '');
-    clean = clean.replace(/\s+/g, ' ').trim();
-
-    // 4. Identify Channel Specificity
+    // 2. Identify Channel Specificity
     const isBdc = /bdc|booking/i.test(clean);
     const isHw = /hostelworld|hw\b/i.test(clean);
     const isExp = /expedia|exp\b/i.test(clean);
     const isAgo = /agoda/i.test(clean);
 
-    // 5. Identify Policy
+    let detectedChannel = 'Direct Website';
+    if (isBdc) detectedChannel = 'Booking.com';
+    else if (isHw) detectedChannel = 'Hostelworld';
+    else if (isExp) detectedChannel = 'Expedia';
+    else if (isAgo) detectedChannel = 'Agoda';
+
+    // 3. Identify Policy
     const isNonRef = /non-?ref/i.test(clean);
     const isRef = /ref|flexible|flex/i.test(clean) && !isNonRef;
 
-    let planLabel = '';
-    let detectedChannel = 'Direct Website';
-
-    if (isBdc) {
-        planLabel = isNonRef ? 'BDC Non-Ref' : (isRef ? 'BDC Ref' : 'BDC Standard');
-        detectedChannel = 'Booking.com';
-    } else if (isHw) {
-        planLabel = isNonRef ? 'HW Non-Ref' : (isRef ? 'HW Ref' : 'HW Standard');
-        detectedChannel = 'Hostelworld';
-    } else if (isExp) {
-        planLabel = isNonRef ? 'Expedia Non-Ref' : (isRef ? 'Expedia Ref' : 'Expedia Standard');
-        detectedChannel = 'Expedia';
-    } else if (isAgo) {
-        planLabel = isNonRef ? 'Agoda Non-Ref' : (isRef ? 'Agoda Ref' : 'Agoda Standard');
-        detectedChannel = 'Agoda';
-    } else {
-        // DEFAULT / REGULAR RATE PLAN (Direct, HW, and standard OTAs)
-        planLabel = isNonRef ? 'Default Non-Ref (HW/OTAs)' : (isRef ? 'Default Ref' : 'Default Standard');
-        detectedChannel = 'Direct Website';
-    }
-
     return {
-        planLabel: planLabel,
-        roomTag: extractedRoom,
-        fullDisplay: extractedRoom ? `[${extractedRoom}] ${planLabel}` : planLabel,
+        planLabel: clean || rawTitle,
+        roomTag: parentRoomName || "",
         channel: detectedChannel,
         policy: isRef ? 'ref' : 'non-ref'
     };
@@ -539,18 +547,18 @@ window.renderChannexRateMapping = (channexRates = null) => {
             if (map.pmsCategory && !(window.roomTypes || []).includes(map.pmsCategory)) {
                 catOptions = `<option value="${map.pmsCategory}" selected class="text-red-600 font-black">⚠️ ${map.pmsCategory} (NOT IN SETTINGS)</option>` + pmsOptions;
                 warningTag = ` <span class="text-red-500 font-black text-[9px]">(RENAMED)</span>`;
-            } else {
+            } else if (map.pmsCategory) {
                 catOptions = catOptions.replace(`value="${map.pmsCategory}"`, `value="${map.pmsCategory}" selected`);
             }
 
-            const info = window.formatCleanRateTitle ? window.formatCleanRateTitle(map.ratePlanTitle, map.pmsCategory) : {};
+            const info = window.formatCleanRateTitle ? window.formatCleanRateTitle(map.ratePlanTitle, map.channexRoomTitle || map.pmsCategory) : {};
             const classified = window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(map.ratePlanTitle) : {};
             
             const currentChannel = map.channel || info.channel || classified.channel;
             const currentProduct = map.product || (map.rateSource === 'evt' ? 'evt' : classified.product);
             const currentPolicy = map.policy || info.policy || classified.policy;
 
-            const roomLabel = info.roomTag || map.pmsCategory || 'Unassigned Room';
+            const roomBadge = map.channexRoomTitle || info.roomTag || map.pmsCategory || 'Unassigned Room';
             const channelBadge = window.getChannelBadgeHtml ? window.getChannelBadgeHtml(currentChannel) : '';
 
             rHtml += `
@@ -563,8 +571,8 @@ window.renderChannexRateMapping = (channexRates = null) => {
                     <!-- Room Category Tag & Clear Plan Title -->
                     <div class="flex-1 flex flex-col min-w-0 pl-1">
                         <div class="flex items-center gap-1.5 truncate flex-wrap">
-                            <span class="text-[10px] font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs truncate max-w-[200px]" title="${roomLabel}">
-                                ${roomLabel}
+                            <span class="text-[10px] font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs truncate max-w-[240px]" title="${roomBadge}">
+                                ${roomBadge}
                             </span>
                             <span class="font-black text-slate-800 text-[11px] truncate" title="${map.ratePlanTitle}">
                                 ${info.planLabel || map.ratePlanTitle}${warningTag}
@@ -576,7 +584,7 @@ window.renderChannexRateMapping = (channexRates = null) => {
                     <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
 
                     <!-- Category Selector -->
-                    <select class="input-base !py-1 !text-xs !w-44 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-900 font-bold" onchange="window.updateRateMapEntry('${map.ratePlanId}', 'pmsCategory', this.value)">
+                    <select class="input-base !py-1 !text-xs !w-48 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-900 font-bold" onchange="window.updateRateMapEntry('${map.ratePlanId}', 'pmsCategory', this.value)">
                         ${catOptions}
                     </select>
 
@@ -702,6 +710,10 @@ window.saveMappingToDB = async (notify = false) => {
 };
 
 // --- 5. COMPRESS CONTIGUOUS RANGES & DISPATCH TO CHANNEX ---
+// Adheres strictly to Channex Certified Decoupled Structure:
+// 1. Availability -> /api/v1/availability
+// 2. Price Updates -> /api/v1/restrictions (ONLY rate)
+// 3. Restriction Updates -> /api/v1/restrictions (ONLY modified restrictions: min=1 clears, stop=false opens)
 window.pushToChannexAPI = async (btn, mode = 'delta') => {
     const apiKey = window.channexConfig?.apiKey 
         || window.MASTER_CHANNEX_API_KEY 
@@ -723,18 +735,18 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
     }
 
     try {
+        // Safe local calendar date (never yesterday in local timezone)
         const todayYmd = window.getLocalYMD(new Date());
         let datesToProcess = [];
 
         if (mode === 'delta') {
-            // CLAMP PAST DATES: Channex rejects updates with date_from in the past!
             datesToProcess = Array.from(window.dirtyDates).filter(d => d >= todayYmd).sort();
             if (datesToProcess.length === 0) {
                 if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
                 return window.customAlert("All clear! No pending changes to push.");
             }
         } else {
-            // Full sync starts strictly from today onwards (Channex rejects past dates)
+            // Full sync starts strictly from today forward
             const sU = window.parseYMD(todayYmd);
             for (let i = 0; i < 365; i++) {
                 datesToProcess.push(window.getLocalYMD(new Date(sU + (i * 86400000))));
@@ -743,8 +755,9 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
         const availPayload = [];
         const restrPayload = [];
+        const syncAuditList = [];
 
-        // Helper: Detect Peak Capacity from liveInventory or category name
+        // Helper: Detect Peak Category Capacity
         const getPeakCategoryCapacity = (pmsCat) => {
             let maxSeen = 0;
             if (window.liveInventory) {
@@ -755,19 +768,16 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 });
             }
             if (maxSeen > 0) return maxSeen;
-
             const match = pmsCat.match(/(\d+)\s*(-|\s*)(bed|bunk|dorm)/i);
             if (match && match[1]) return parseInt(match[1], 10);
-
             return 1;
         };
 
-        // Helper: Calculate true net availability
+        // Helper: Calculate net availability
         const getNetAvailabilityForDate = (pmsCat, dStr, peakCap) => {
             if (window.liveInventory && window.liveInventory[dStr] && typeof window.liveInventory[dStr][pmsCat] === 'number') {
                 return window.liveInventory[dStr][pmsCat];
             }
-
             const staffList = (window.staff && window.staff.length > 0)
                 ? window.staff
                 : (window.bookings || window.reservations || window.masterPricing?.bookings || []);
@@ -779,7 +789,6 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 for (let i = 0; i < staffList.length; i++) {
                     const s = staffList[i];
                     if (!s) continue;
-                    
                     const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
                     if (sProp && curProp && sProp !== curProp) continue;
 
@@ -807,11 +816,10 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     }
                 }
             }
-
             return Math.max(0, peakCap - occupied);
         };
 
-        // 1. AVAILABILITY: Group by Channex Room Type across all dates
+        // 1. AVAILABILITY PAYLOAD: Pushed to /api/v1/availability
         window.channexMap.forEach(rule => {
             if (!rule.channexId || !rule.pmsCategory) return;
             const pmsCat = rule.pmsCategory;
@@ -823,7 +831,6 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
             for (let i = 0; i < datesToProcess.length; i++) {
                 const dStr = datesToProcess[i];
-
                 let otaAvail = window.masterPricing?.timeline?.[dStr]?.otaOverrides?.[`${pmsCat}_avail`];
                 let live = getNetAvailabilityForDate(pmsCat, dStr, peakCapacity);
                 let availToday = otaAvail !== undefined ? otaAvail : live;
@@ -861,12 +868,12 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // 2. RATES & RESTRICTIONS: Group by Channex Rate Plan across all dates
+        // 2. RATES & RESTRICTIONS: Decoupled payloads adhering to Channex certification
         const rateMultiplier = (window.channexConfig?.rateMultiplier !== undefined && window.channexConfig?.rateMultiplier !== null)
             ? Number(window.channexConfig.rateMultiplier)
             : 100;
 
-        const isEventsActive = window.isEventPricingEnabled ? window.isEventPricingEnabled() : ((window.eventDates || []).length > 0);
+        const isEventsActive = window.isEventPricingEnabled ? window.isEventPricingEnabled() : false;
 
         (window.channexRateMap || []).forEach(rule => {
             if (!rule.ratePlanId || !rule.pmsCategory) return;
@@ -884,6 +891,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 rateSource: isEvtRate ? 'evt' : 'std'
             };
 
+            // Range compression trackers
             let rangeStart = null;
             let currentItem = null;
 
@@ -893,43 +901,73 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 const roomObj = dayObj[pmsCat] || {};
                 const globObj = dayObj['GLOBAL'] || {};
 
-                let calculatedPrice = null;
-                const otaPriceOverride = dayObj.otaOverrides?.[ratePlanId];
+                // Determine what is dirty if running in delta mode
+                const dirtySet = (mode === 'delta' && window.dirtyFields?.[dStr]?.[ratePlanId])
+                    ? window.dirtyFields[dStr][ratePlanId]
+                    : null;
 
-                if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
-                    calculatedPrice = window.roundCurrency(otaPriceOverride);
-                } else if (typeof window.computeDynamicPlanRate === 'function') {
-                    calculatedPrice = window.computeDynamicPlanRate(dStr, pmsCat, effectiveRule);
-                }
+                const sendRate = mode === 'full' || !dirtySet || dirtySet.has('rate');
+                const sendMin = mode === 'full' || (dirtySet && (dirtySet.has('min') || dirtySet.has('min_arr')));
+                const sendMax = mode === 'full' || (dirtySet && dirtySet.has('max'));
+                const sendCta = mode === 'full' || (dirtySet && dirtySet.has('cta'));
+                const sendCtd = mode === 'full' || (dirtySet && dirtySet.has('ctd'));
+                const sendStop = mode === 'full' || (dirtySet && dirtySet.has('stop'));
 
-                // Baseline fallback if cell was empty in calendar
-                if (calculatedPrice === null || isNaN(calculatedPrice)) {
-                    let activeBasePrice = isEvtRate && isEventsActive && roomObj.fmp
-                        ? roomObj.fmp
-                        : roomObj.std;
+                const changeItem = {};
 
-                    if (!activeBasePrice) {
-                        const isDorm = pmsCat.toLowerCase().includes('dorm');
-                        activeBasePrice = isDorm 
-                            ? (window.savedAutofillBaselines?.d_base || 200)
-                            : (window.savedAutofillBaselines?.p_base || 1000);
+                // A. RATE CALCULATION & INCLUSION
+                if (sendRate) {
+                    let calculatedPrice = null;
+                    const otaPriceOverride = dayObj.otaOverrides?.[ratePlanId];
+
+                    if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
+                        calculatedPrice = window.roundCurrency(otaPriceOverride);
+                    } else if (typeof window.computeDynamicPlanRate === 'function') {
+                        calculatedPrice = window.computeDynamicPlanRate(dStr, pmsCat, effectiveRule);
                     }
 
-                    if (activeBasePrice) {
-                        const channelName = effectiveRule.channel || 'Direct Website';
-                        const chRule = window.pricingRules?.channels?.[channelName] || { type: '=', val: 0 };
-                        let p = window.applyMath(parseFloat(activeBasePrice), chRule.type || '=', chRule.val || 0);
+                    if (calculatedPrice === null || isNaN(calculatedPrice)) {
+                        let activeBasePrice = isEvtRate && isEventsActive && roomObj.fmp
+                            ? roomObj.fmp
+                            : roomObj.std;
 
-                        if (effectiveRule.policy === 'ref') {
-                            const pType = isEvtRate ? (window.pricingRules?.evtRefType || '+%') : (window.pricingRules?.stdRefType || '+%');
-                            const pVal = isEvtRate ? (window.pricingRules?.evtRefVal || 15) : (window.pricingRules?.stdRefVal || 10);
-                            p = window.applyMath(p, pType, pVal);
+                        if (!activeBasePrice) {
+                            const isDorm = pmsCat.toLowerCase().includes('dorm');
+                            activeBasePrice = isDorm 
+                                ? (window.savedAutofillBaselines?.d_base || 200)
+                                : (window.savedAutofillBaselines?.p_base || 1000);
                         }
-                        calculatedPrice = window.roundCurrency(p);
+
+                        if (activeBasePrice) {
+                            const channelName = effectiveRule.channel || 'Direct Website';
+                            const chRule = window.pricingRules?.channels?.[channelName] || { type: '=', val: 0 };
+                            let p = window.applyMath(parseFloat(activeBasePrice), chRule.type || '=', chRule.val || 0);
+
+                            if (effectiveRule.policy === 'ref') {
+                                const pType = isEvtRate ? (window.pricingRules?.evtRefType || '+%') : (window.pricingRules?.stdRefType || '+%');
+                                const pVal = isEvtRate ? (window.pricingRules?.evtRefVal || 15) : (window.pricingRules?.stdRefVal || 10);
+                                p = window.applyMath(p, pType, pVal);
+                            }
+                            calculatedPrice = window.roundCurrency(p);
+                        }
+                    }
+
+                    if (calculatedPrice !== null && !isNaN(calculatedPrice) && calculatedPrice > 0) {
+                        changeItem.rate = Math.round(calculatedPrice * rateMultiplier);
+                    }
+
+                    if (dStr.endsWith('12-31') || i === 0) {
+                        syncAuditList.push({
+                            date: dStr,
+                            room: pmsCat,
+                            plan: rule.ratePlanTitle,
+                            channel: effectiveRule.channel,
+                            price: calculatedPrice
+                        });
                     }
                 }
 
-                // DUAL-CURVE RESTRICTION RESOLUTION (Global -> Room -> Event -> Rate Plan):
+                // B. RESTRICTION RESOLUTION (With explicit Channex clearing semantics)
                 const getRestr = (f) => {
                     const otaVal = dayObj.otaOverrides?.[`${ratePlanId}_${f}`];
                     if (otaVal !== undefined && otaVal !== "") return otaVal;
@@ -946,33 +984,64 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                     return null;
                 };
 
-                const todayRestrictions = {};
-                if (calculatedPrice !== null && !isNaN(calculatedPrice) && calculatedPrice > 0) {
-                    todayRestrictions.rate = Math.round(calculatedPrice * rateMultiplier);
+                // Min Stay: Value >= 1 sets it; 0 or clearing transmits 1 to reset Channex
+                if (sendMin) {
+                    const minS = getRestr('min');
+                    const minArr = getRestr('min_arr');
+
+                    if (minArr !== null && minArr !== "") {
+                        const parsed = parseInt(String(minArr).replace(/[^\d]/g, ''), 10);
+                        changeItem.min_stay_arrival = (!isNaN(parsed) && parsed >= 1) ? parsed : 1;
+                    } else if (minS !== null && minS !== "") {
+                        const parsed = parseInt(String(minS).replace(/[^\d]/g, ''), 10);
+                        changeItem.min_stay_through = (!isNaN(parsed) && parsed >= 1) ? parsed : 1;
+                    } else if (mode === 'delta') {
+                        // User cleared min stay: transmit 1 to reset Channex
+                        changeItem.min_stay_through = 1;
+                    }
                 }
 
-                // Accurate Channex field mapping: min_stay_through vs min_stay_arrival
-                const minS = getRestr('min');
-                if (minS !== null && minS !== "") todayRestrictions.min_stay_through = parseInt(minS, 10);
+                // Max Stay: Value >= 1 sets it; 0 or clearing transmits 0 to reset Channex
+                if (sendMax) {
+                    const maxS = getRestr('max');
+                    if (maxS !== null && maxS !== "") {
+                        const parsed = parseInt(String(maxS).replace(/[^\d]/g, ''), 10);
+                        changeItem.max_stay = !isNaN(parsed) ? Math.max(0, parsed) : 0;
+                    } else if (mode === 'delta') {
+                        changeItem.max_stay = 0;
+                    }
+                }
 
-                const minArr = getRestr('min_arr');
-                if (minArr !== null && minArr !== "") todayRestrictions.min_stay_arrival = parseInt(minArr, 10);
+                // CTA (Closed to Arrival)
+                if (sendCta) {
+                    const cta = getRestr('cta');
+                    if (cta === true) changeItem.closed_to_arrival = true;
+                    else if (cta === false && (mode === 'delta' || dayObj[pmsCat]?.isOverride?.cta)) {
+                        changeItem.closed_to_arrival = false;
+                    }
+                }
 
-                const maxS = getRestr('max');
-                if (maxS !== null && maxS !== "") todayRestrictions.max_stay = parseInt(maxS, 10);
+                // CTD (Closed to Departure)
+                if (sendCtd) {
+                    const ctd = getRestr('ctd');
+                    if (ctd === true) changeItem.closed_to_departure = true;
+                    else if (ctd === false && (mode === 'delta' || dayObj[pmsCat]?.isOverride?.ctd)) {
+                        changeItem.closed_to_departure = false;
+                    }
+                }
 
-                const cta = getRestr('cta');
-                if (cta !== null && cta !== "") todayRestrictions.closed_to_arrival = !!cta;
+                // Stop Sell
+                if (sendStop) {
+                    let stop = getRestr('stop');
+                    if (stop === null || stop === "") stop = getRestr('stopSell');
+                    if (stop === true) changeItem.stop_sell = true;
+                    else if (stop === false && (mode === 'delta' || dayObj[pmsCat]?.isOverride?.stop || dayObj[pmsCat]?.isOverride?.stopSell)) {
+                        changeItem.stop_sell = false;
+                    }
+                }
 
-                const ctd = getRestr('ctd');
-                if (ctd !== null && ctd !== "") todayRestrictions.closed_to_departure = !!ctd;
-
-                let stop = getRestr('stop');
-                if (stop === null || stop === "") stop = getRestr('stopSell');
-                if (stop !== null && stop !== "") todayRestrictions.stop_sell = !!stop;
-
-                const itemJson = JSON.stringify(todayRestrictions);
-
+                // Compress contiguous identical dates
+                const itemJson = JSON.stringify(changeItem);
                 let isAdjacent = false;
                 if (i > 0) {
                     const prevMs = window.parseYMD(datesToProcess[i - 1]);
@@ -991,7 +1060,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                         });
                     }
                     rangeStart = dStr;
-                    currentItem = todayRestrictions;
+                    currentItem = changeItem;
                 }
 
                 if (i === datesToProcess.length - 1 && rangeStart !== null && currentItem !== null && Object.keys(currentItem).length > 0) {
@@ -1006,7 +1075,12 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             }
         });
 
-        // 3. DISPATCH PAYLOADS IN BATCHES OF 50 WITH WARNING AUDITING
+        if (syncAuditList.length > 0 && console.table) {
+            console.log("📊 [CHANNEX SYNC AUDIT] Active price transmissions:");
+            console.table(syncAuditList);
+        }
+
+        // 3. DISPATCH IN BATCHES OF 50 WITH FULL WARNING REPORTING
         let availSuccess = true;
         let restrSuccess = true;
         let allWarnings = [];
@@ -1023,12 +1097,11 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 });
 
                 const json = await res.json().catch(() => ({}));
-
                 if (!res.ok) {
                     console.error(`❌ Channex ${endpoint} HTTP failure on batch ${i}:`, json);
                     allOk = false;
                 } else if (json.meta?.warnings?.length > 0) {
-                    console.warn(`⚠️ Channex ${endpoint} validation warnings:`, json.meta.warnings);
+                    console.warn(`⚠️ Channex ${endpoint} warnings on batch ${i}:`, json.meta.warnings);
                     allWarnings = allWarnings.concat(json.meta.warnings);
                 }
             }
@@ -1055,10 +1128,22 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
             let warningMsg = '';
             if (allWarnings.length > 0) {
-                warningMsg = `\n\n⚠️ Note: Channex reported ${allWarnings.length} validation warnings (check browser DevTools console for details).`;
+                const formattedWarnings = allWarnings.slice(0, 10).map(w => {
+                    const plan = (window.channexRateMap || []).find(r => r.ratePlanId === w.rate_plan_id);
+                    const planTitle = plan ? (plan.ratePlanTitle || w.rate_plan_id) : (w.rate_plan_id || 'Unknown');
+                    let detailStr = '';
+                    if (w.warning) {
+                        detailStr = Object.entries(w.warning).map(([f, msgs]) => `${f}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`).join('; ');
+                    } else {
+                        detailStr = JSON.stringify(w);
+                    }
+                    return `• [${planTitle}] ${w.date_from || w.date || ''}: ${detailStr}`;
+                }).join('\n');
+
+                warningMsg = `\n\n⚠️ Channex Warnings (${allWarnings.length}):\n${formattedWarnings}`;
             }
 
-            window.customAlert(`Sync Successful!\n\nPushed ${availPayload.length} availability ranges and ${restrPayload.length} rate/restriction ranges to Channex.${warningMsg}`);
+            window.customAlert(`Sync Successful!\n\nPushed ${availPayload.length} availability ranges and ${restrPayload.length} rate/restriction ranges to Channex across ${(window.channexRateMap || []).length} rate plans.${warningMsg}`);
         } else {
             throw new Error("One or more Channex endpoints rejected the payload. Check DevTools console for details.");
         }
