@@ -41,7 +41,7 @@ window.computeDynamicPlanRate = (dateStr, room, ratePlan) => {
     let computed = parseFloat(basePrice);
 
     // 2. Channel Multiplier (from Tab 2 Pricing Rules)
-    const channelName = ratePlan.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(ratePlan.ratePlanTitle).channel : 'Direct Website');
+    const channelName = ratePlan.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(ratePlan.ratePlanTitle).channel : 'Default');
     const channelRule = window.pricingRules?.channels?.[channelName] || { type: '=', val: 0 };
     computed = window.applyMath(computed, channelRule.type || '=', channelRule.val || 0);
 
@@ -637,7 +637,7 @@ window.resetChannelsToParity = () => {
     window.pricingRules = window.pricingRules || {};
     window.pricingRules.channels = {};
     (window.channexRateMap || []).forEach(m => {
-        if (m.channel && m.channel !== 'ALL' && !m.channel.toLowerCase().includes('default')) {
+        if (m.channel && m.channel !== 'ALL' && m.channel !== 'Default' && !m.channel.toLowerCase().includes('default')) {
             window.pricingRules.channels[m.channel] = { type: '=', val: 0 };
         }
     });
@@ -657,7 +657,7 @@ window.renderDynamicOtaRules = () => {
     const activeChannels = new Set();
     (window.channexRateMap || []).forEach(r => {
         const ch = r.channel || '';
-        if (ch && ch !== 'ALL' && !ch.toLowerCase().includes('default')) {
+        if (ch && ch !== 'ALL' && ch !== 'Default' && !ch.toLowerCase().includes('default')) {
             activeChannels.add(ch);
         } else if (/bdc|booking/i.test(r.ratePlanTitle || '')) {
             activeChannels.add('Booking.com');
@@ -668,7 +668,7 @@ window.renderDynamicOtaRules = () => {
         container.innerHTML = `
             <div class="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-lg text-center text-xs font-bold text-slate-500">
                 All connected channels are currently selling directly from your Base Rate Anchor.<br>
-                <span class="text-[10px] text-slate-400 font-normal">When you add OTA-specific rate plans in Channex (e.g. Booking.com or Agoda), their channel adjustment cards will appear here automatically.</span>
+                <span class="text-[10px] text-slate-400 font-normal">When you add OTA-specific rate plans in Channex (e.g. Booking.com), their channel adjustment cards will appear here automatically.</span>
             </div>`;
         return;
     }
