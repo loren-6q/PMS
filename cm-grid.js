@@ -4,8 +4,6 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-grid.js
 // ==========================================================================
 
-window.daysToRender = window.daysToRender || 35;
-
 // --- 0. HELPER FORMATTERS & INVENTORY CALCULATOR ---
 window.formatMinStayInput = (val) => {
     if (!val) return "";
@@ -235,8 +233,8 @@ window.handleOtaEdit = (dateStr, ratePlanId, room, ruleType, ruleVal, field, val
     if (window.renderGrid) window.renderGrid();
 };
 
-window.drillLevel = window.drillLevel || 'room'; // 'master' | 'room' | 'event' | 'rates'
-window.viewDensity = window.viewDensity || 'full'; // 'avail' | 'compact' | 'minmax' | 'full'
+window.drillLevel = window.drillLevel || 'room';
+window.viewDensity = window.viewDensity || 'full';
 window.channelPreviewFilter = window.channelPreviewFilter || 'ALL';
 window.expandedRooms = window.expandedRooms || new Set();
 
@@ -312,6 +310,112 @@ window.unlockCellOverride = (dateStr, room, ratePlanId = null) => {
     if (window.renderGrid) window.renderGrid();
 };
 
+window.handleCellPriceChange = (e, dateStr, room, isOverride = false) => {
+    const val = e.target.value.trim();
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+    dObj[room] = dObj[room] || { isOverride: {} };
+    const rData = dObj[room];
+    rData.isOverride = rData.isOverride || {};
+
+    if (val === "" || isNaN(parseFloat(val))) {
+        delete rData.std;
+        delete rData.isOverride.std;
+        if (window.healDay) window.healDay(dateStr);
+    } else {
+        const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
+        rData.std = window.roundCurrency(parseFloat(val) / mult);
+        rData.isOverride.std = true;
+
+        const isRipple = window.isRippleEnabled && !isOverride;
+        if (isRipple && window.rippleDay) {
+            window.rippleDay(dateStr, room);
+        }
+    }
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+};
+
+window.handleCellStopToggle = (dateStr, room, ratePlanId = null, isEvt = false) => {
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+
+    if (ratePlanId) {
+        dObj.otaOverrides = dObj.otaOverrides || {};
+        const cur = !!(dObj.otaOverrides[`${ratePlanId}_stop`] || dObj.otaOverrides[`${ratePlanId}_stopSell`]);
+        dObj.otaOverrides[`${ratePlanId}_stop`] = !cur;
+    } else {
+        dObj[room] = dObj[room] || { isOverride: {} };
+        const prefix = isEvt ? 'evt_' : '';
+        const cur = !!(dObj[room][`${prefix}stop`] || dObj[room][`${prefix}stopSell`]);
+        dObj[room][`${prefix}stop`] = !cur;
+        dObj[room][`${prefix}stopSell`] = !cur;
+        dObj[room].isOverride = dObj[room].isOverride || {};
+        dObj[room].isOverride[`${prefix}stop`] = true;
+    }
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+};
+
+window.handleCellCtaCtdCycle = (dateStr, room, ratePlanId = null, isEvt = false) => {
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+
+    if (ratePlanId) {
+        dObj.otaOverrides = dObj.otaOverrides || {};
+        const cta = !!dObj.otaOverrides[`${ratePlanId}_cta`];
+        const ctd = !!dObj.otaOverrides[`${ratePlanId}_ctd`];
+
+        if (!cta && !ctd) { dObj.otaOverrides[`${ratePlanId}_cta`] = true; dObj.otaOverrides[`${ratePlanId}_ctd`] = false; }
+        else if (cta && !ctd) { dObj.otaOverrides[`${ratePlanId}_cta`] = false; dObj.otaOverrides[`${ratePlanId}_ctd`] = true; }
+        else if (!cta && ctd) { dObj.otaOverrides[`${ratePlanId}_cta`] = true; dObj.otaOverrides[`${ratePlanId}_ctd`] = true; }
+        else { dObj.otaOverrides[`${ratePlanId}_cta`] = false; dObj.otaOverrides[`${ratePlanId}_ctd`] = false; }
+    } else {
+        dObj[room] = dObj[room] || { isOverride: {} };
+        const rData = dObj[room];
+        rData.isOverride = rData.isOverride || {};
+        const prefix = isEvt ? 'evt_' : '';
+
+        const cta = !!rData[`${prefix}cta`];
+        const ctd = !!rData[`${prefix}ctd`];
+
+        if (!cta && !ctd) { rData[`${prefix}cta`] = true; rData[`${prefix}ctd`] = false; }
+        else if (cta && !ctd) { rData[`${prefix}cta`] = false; rData[`${prefix}ctd`] = true; }
+        else if (!cta && ctd) { rData[`${prefix}cta`] = true; rData[`${prefix}ctd`] = true; }
+        else { rData[`${prefix}cta`] = false; rData[`${prefix}ctd`] = false; }
+
+        rData.isOverride[`${prefix}cta`] = true;
+        rData.isOverride[`${prefix}ctd`] = true;
+    }
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+};
+
+window.handleHeaderStopToggle = (dateStr) => {
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+    dObj.GLOBAL = dObj.GLOBAL || { isOverride: {} };
+    const cur = !!(dObj.GLOBAL.stop || dObj.GLOBAL.stopSell);
+    dObj.GLOBAL.stop = !cur;
+    dObj.GLOBAL.stopSell = !cur;
+    dObj.GLOBAL.isOverride = dObj.GLOBAL.isOverride || {};
+    dObj.GLOBAL.isOverride.stop = true;
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+};
+
 window.renderGrid = () => {
     const tapeInput = document.getElementById('tape-start');
     if (tapeInput && !tapeInput.value) {
@@ -330,11 +434,9 @@ window.renderGrid = () => {
 
     let dObj = new Date(startStr + "T12:00:00Z");
     
-    // Property Event Pricing Switch: If disabled or property has no events, hide event rows & highlight
     const isEventsActive = window.isEventPricingEnabled ? window.isEventPricingEnabled() : ((window.eventDates || []).length > 0);
     const hasEvents = isEventsActive && (window.eventDates || []).length > 0;
     
-    // Auto-adjust drill level if events are disabled
     let drill = window.drillLevel || 'room';
     if (!isEventsActive && drill === 'event') {
         drill = 'room';
@@ -348,7 +450,7 @@ window.renderGrid = () => {
 
     const density = window.viewDensity || 'full';
 
-    // 1. HEADER ROW (Single compact 140px Room/Rate header)
+    // 1. HEADER ROW
     let trHead = `<tr class="sticky-header">
         <th class="frozen-col-header z-30 border-r-2 border-slate-600 px-2 text-left" style="width: 140px; min-width: 140px; left: 0;">
             <span class="text-[10px] font-black uppercase tracking-wider text-slate-300">Room / Rate</span>
@@ -400,13 +502,11 @@ window.renderGrid = () => {
         const displayName = window.displayAbbrev[room] || room;
         const allMappedRates = window.channexRateMap ? window.channexRateMap.filter(m => window.categoryResolver(m.pmsCategory) === room) : [];
 
-        // Apply Depth: Event Filters
         let mappedRates = allMappedRates;
         if (drill === 'event') {
             mappedRates = allMappedRates.filter(r => (r.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(r.ratePlanTitle || ''));
         }
 
-        // Apply Channel Preview Filter
         const filterChannel = window.channelPreviewFilter || 'ALL';
         mappedRates = mappedRates.filter(rate => {
             if (filterChannel === 'ALL') return true;
@@ -454,12 +554,12 @@ window.renderGrid = () => {
 
         if (density === 'avail') return;
 
-        // B. BASE (STANDARD) RATE ROW: Represents the Default Rate Plan (used by HW, Direct, and standard OTAs)
+        // B. BASE (STANDARD) RATE ROW
         let trRate = `<tr class="${groupClass} border-b border-slate-300">
             <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
                 <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                    <span class="text-[10px] font-black text-slate-800 truncate" title="Default rate used by Hostelworld, Direct Website, and all standard OTAs">Base (Default/HW)</span>
-                    <span class="text-[7px] font-black uppercase text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded border border-emerald-300">DEFAULT</span>
+                    <span class="text-[10px] font-black text-slate-700 truncate">${drill === 'event' ? 'Base STD' : 'Base'}</span>
+                    <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200">MASTER</span>
                 </div>
             </td>`;
 
@@ -514,7 +614,7 @@ window.renderGrid = () => {
         trRate += `</tr>`;
         allRowsHtml += trRate;
 
-        // C. DUAL EVENT RATES: Render ONLY if property has event pricing enabled!
+        // C. DUAL EVENT RATES: Render ONLY if property has event pricing enabled
         if (isEventsActive && hasEvents && density !== 'avail') {
             // Row C1: EVT Non-Ref (Base Gated Package Rate)
             let trEvtNonRef = `<tr class="${groupClass} border-b border-pink-200 bg-pink-50/40">
@@ -551,7 +651,7 @@ window.renderGrid = () => {
                 let evtCtaBadge = '';
                 if (evtCta && evtCtd) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 leading-none">B</span>';
                 else if (evtCta) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none">A</span>';
-                else if (evtCta) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">D</span>';
+                else if (evtCtd) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">D</span>';
 
                 let minDiff = window.getNearestEvent ? window.getNearestEvent(window.parseYMD(dateStr)) : 999;
                 let peakBg = minDiff === 0 ? 'bg-amber-100/70' : (Math.abs(minDiff) <= 2 ? 'bg-pink-100/50' : '');
@@ -777,132 +877,6 @@ window.setDrillLevel = (level) => {
     if (window.renderGrid) window.renderGrid();
 };
 
-window.applyBulkGrid = (isClear = false) => {
-    const s = document.getElementById('qb-start')?.value;
-    const e = document.getElementById('qb-end')?.value;
-    if (!s || !e) return window.customAlert("Please select Start and End dates.");
-    const sU = window.parseYMD(s), eU = window.parseYMD(e);
-
-    const rules = [];
-    document.querySelectorAll('#qb-grid-body tr').forEach(tr => {
-        const type = tr.dataset.type;
-        const id = tr.dataset.id;
-        const parent = tr.dataset.parent;
-        const rType = tr.dataset.ruletype || "=";
-        const rVal = parseFloat(tr.dataset.ruleval) || 0;
-        const rSource = tr.dataset.ratesource || 'std';
-
-        const getVal = (cls, isBool = false) => {
-            const el = tr.querySelector('.' + cls);
-            if (!el || el.disabled) return undefined;
-            if (isClear) return "";
-            if (el.value.trim() === "") return undefined;
-            if (isBool) return ['true', '1', 'y', 'yes', 'on', 't'].includes(el.value.toLowerCase().trim());
-            return parseFloat(el.value);
-        };
-
-        const rule = {
-            type, id, parent, rType, rVal, rSource,
-            rate: getVal('qb-val-rate'),
-            min: getVal('qb-val-min'),
-            max: getVal('qb-val-max'),
-            min_arr: getVal('qb-val-min-arr'),
-            cta: getVal('qb-val-cta', true),
-            ctd: getVal('qb-val-ctd', true),
-            stopSell: getVal('qb-val-stop', true)
-        };
-
-        Object.keys(rule).forEach(k => rule[k] === undefined && delete rule[k]);
-        if (Object.keys(rule).length > 5) rules.push(rule);
-    });
-
-    if (rules.length === 0 && !isClear) return window.customAlert("Enter at least one value to apply in the grid.");
-
-    for (let d = sU; d <= eU; d += 86400000) {
-        let dateStr = window.getLocalYMD(new Date(d));
-        window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-
-        window.dirtyDates.add(dateStr);
-        window.syncedDates.delete(dateStr);
-        window.dirtyFields = window.dirtyFields || {};
-        window.dirtyFields[dateStr] = window.dirtyFields[dateStr] || {};
-
-        rules.forEach(r => {
-            if (r.type === 'global') {
-                window.masterPricing.timeline[dateStr]['GLOBAL'] = window.masterPricing.timeline[dateStr]['GLOBAL'] || { isOverride: {} };
-                ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(f => {
-                    if (r[f] !== undefined) {
-                        if (r[f] === "") {
-                            window.masterPricing.timeline[dateStr]['GLOBAL'][f] = ['cta', 'ctd', 'stopSell'].includes(f) ? false : "";
-                            delete window.masterPricing.timeline[dateStr]['GLOBAL'].isOverride[f];
-                        } else {
-                            window.masterPricing.timeline[dateStr]['GLOBAL'][f] = r[f];
-                            window.masterPricing.timeline[dateStr]['GLOBAL'].isOverride[f] = true;
-                        }
-
-                        (window.channexRateMap || []).forEach(rate => {
-                            window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
-                            let fMap = f === 'min_arr' ? 'min' : f;
-                            window.dirtyFields[dateStr][rate.ratePlanId].add(fMap);
-                        });
-                    }
-                });
-            } else if (r.type === 'room') {
-                window.masterPricing.timeline[dateStr][r.id] = window.masterPricing.timeline[dateStr][r.id] || { isOverride: {} };
-                if (r.rate !== undefined) {
-                    if (r.rate === "") {
-                        window.masterPricing.timeline[dateStr][r.id].std = "";
-                        window.masterPricing.timeline[dateStr][r.id].fmp = "";
-                        delete window.masterPricing.timeline[dateStr][r.id].isOverride.std;
-                        delete window.masterPricing.timeline[dateStr][r.id].isOverride.fmp;
-                        if (window.healDay) window.healDay(dateStr);
-                    } else {
-                        const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
-                        window.masterPricing.timeline[dateStr][r.id].std = window.roundCurrency(parseFloat(r.rate) / mult);
-                        window.masterPricing.timeline[dateStr][r.id].isOverride.std = true;
-                        if (window.rippleDay) window.rippleDay(dateStr, r.id);
-                    }
-
-                    (window.channexRateMap || []).filter(m => window.categoryResolver(m.pmsCategory) === r.id).forEach(rate => {
-                        window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
-                        window.dirtyFields[dateStr][rate.ratePlanId].add('rate');
-                    });
-                }
-
-                ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(f => {
-                    if (r[f] !== undefined) {
-                        if (r[f] === "") {
-                            window.masterPricing.timeline[dateStr][r.id][f] = ['cta', 'ctd', 'stopSell'].includes(f) ? false : "";
-                            delete window.masterPricing.timeline[dateStr][r.id].isOverride[f];
-                        } else {
-                            window.masterPricing.timeline[dateStr][r.id][f] = r[f];
-                            window.masterPricing.timeline[dateStr][r.id].isOverride[f] = true;
-                        }
-
-                        (window.channexRateMap || []).filter(m => window.categoryResolver(m.pmsCategory) === r.id).forEach(rate => {
-                            window.dirtyFields[dateStr][rate.ratePlanId] = window.dirtyFields[dateStr][rate.ratePlanId] || new Set();
-                            let fMap = f === 'min_arr' ? 'min' : f;
-                            window.dirtyFields[dateStr][rate.ratePlanId].add(fMap);
-                        });
-                    }
-                });
-            } else if (r.type === 'rate') {
-                if (r.rate !== undefined) window.handleOtaEdit(dateStr, r.id, r.parent, r.rType, r.rVal, 'rate', r.rate, r.rSource);
-                ['min', 'max', 'min_arr', 'cta', 'ctd', 'stopSell'].forEach(f => {
-                    if (r[f] !== undefined) window.handleOtaEdit(dateStr, r.id, r.parent, r.rType, r.rVal, f, r[f], r.rSource);
-                });
-            }
-        });
-    }
-
-    window.renderGrid();
-    window.markUnsavedChanges();
-
-    if (!isClear) {
-        document.querySelectorAll('#qb-grid-body input:not([type="date"]):not([disabled])').forEach(i => i.value = "");
-    }
-};
-
 window.shiftTape = (days) => {
     const current = new Date(document.getElementById('tape-start').value + "T12:00:00Z");
     current.setUTCDate(current.getUTCDate() + days);
@@ -956,7 +930,6 @@ window.cycleBulkClosedPill = () => {
         ctd: 'CLOSED: CTD (DEPARTURE)',
         both: 'CLOSED: BOTH (ARR & DEP)'
     };
-
     const classes = {
         unchanged: 'bg-slate-700 text-slate-400 border-slate-600',
         open: 'bg-emerald-800 text-emerald-200 border-emerald-600',
@@ -982,7 +955,6 @@ window.cycleBulkStopPill = () => {
         open: 'STOP: OPEN (SELL)',
         stop: 'STOP: STOP-SELL'
     };
-
     const classes = {
         unchanged: 'bg-slate-700 text-slate-400 border-slate-600',
         open: 'bg-emerald-800 text-emerald-200 border-emerald-600',
@@ -1188,9 +1160,9 @@ document.addEventListener('keydown', (e) => {
             e.preventDefault();
             window.isUserTyping = true;
             clearTimeout(window.typingTimeout);
-            window.typingTimeout = setTimeout(() => { window.isUserTyping = false; }, 800);
+            window.typingTimeout = setTimeout(() => { window.isUserTyping = false; }, 1000);
 
-            const inputs = Array.from(document.querySelectorAll(targetSelector)).filter(i => !i.disabled && (i.offsetParent !== null || i.getClientRects().length > 0));
+            const inputs = Array.from(document.querySelectorAll(targetSelector)).filter(i => !i.disabled && i.offsetParent !== null);
             const idx = inputs.indexOf(target);
             if (idx !== -1) {
                 const nextIdx = e.shiftKey ? (idx - 1 + inputs.length) % inputs.length : (idx + 1) % inputs.length;
