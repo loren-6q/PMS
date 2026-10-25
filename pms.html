@@ -133,8 +133,20 @@
                 <div id="timeline-body" class="relative pb-2"></div>
             </div>
 
-            <!-- EXACT PMS TAPE CHART LEGEND (SELECTABLE TEXT ENABLED) -->
-            <footer id="calendar-legend" class="mt-1 bg-white p-1.5 sm:p-2 sm:rounded-lg border border-slate-200 flex flex-col gap-y-1.5 shrink-0 text-[10px] md:text-[11px] select-text cursor-default shadow-xs">
+            <!-- PULL-TAB (TUCKS KEY AWAY TO MAXIMIZE CALENDAR SCREEN SPACE) -->
+            <div id="legend-toggle-bar" onclick="window.toggleLegendDrawer()" class="bg-slate-900 text-white px-3 py-1.5 flex items-center justify-between cursor-pointer border-t border-slate-700 text-[10px] font-black uppercase tracking-wider shrink-0 select-none shadow-md z-40 hover:bg-slate-800 transition-colors">
+                <div class="flex items-center gap-1.5">
+                    <i data-lucide="info" size="13" class="text-blue-400"></i>
+                    <span>PMS Legend & Key</span>
+                </div>
+                <div class="flex items-center gap-1 text-[9px] text-slate-300 font-bold">
+                    <span id="legend-toggle-label">Show Key</span>
+                    <i data-lucide="chevron-up" id="legend-toggle-chevron" size="14" class="transition-transform duration-200"></i>
+                </div>
+            </div>
+
+            <!-- EXACT PMS TAPE CHART LEGEND (COLLAPSIBLE DRAWER) -->
+            <footer id="calendar-legend" class="mt-0 bg-white p-1.5 sm:p-2 sm:rounded-b-lg border-x border-b border-slate-200 flex flex-col gap-y-1.5 shrink-0 text-[10px] md:text-[11px] select-text cursor-default shadow-lg max-h-[50vh] overflow-y-auto" style="display: none;">
                 
                 <!-- ROW 1: 11 Status Cycles -->
                 <div class="flex items-center gap-1.5 flex-wrap justify-center select-text">
@@ -235,7 +247,6 @@
 
                 <!-- ROW 4: Stay Details, Upgrades, Feedback, and Mail Lifecycle -->
                 <div class="flex items-center gap-x-3 gap-y-1.5 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-600 select-text">
-                    
                     <div class="flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 cursor-help" title="Italics = Refundable ; Not Italics = Non-Refundable">
                         <span class="italic font-black text-slate-800 text-[10px]">Refundable ital.</span>
                     </div>
@@ -318,6 +329,27 @@
                             });
                             return true;
                         };
+
+                        window.toggleLegendDrawer = () => {
+                            const leg = document.getElementById('calendar-legend');
+                            const chevron = document.getElementById('legend-toggle-chevron');
+                            const label = document.getElementById('legend-toggle-label');
+                            if (!leg) return;
+                            const isHidden = (leg.style.display === 'none' || leg.classList.contains('hidden'));
+                            if (isHidden) {
+                                leg.style.display = 'flex';
+                                leg.classList.remove('hidden');
+                                if (chevron) chevron.style.transform = 'rotate(180deg)';
+                                if (label) label.innerText = 'Hide Key';
+                            } else {
+                                leg.style.display = 'none';
+                                leg.classList.add('hidden');
+                                if (chevron) chevron.style.transform = 'rotate(0deg)';
+                                if (label) label.innerText = 'Show Key';
+                            }
+                            if (window.lucide) window.lucide.createIcons();
+                        };
+                        window.toggleMobileLegend = window.toggleLegendDrawer;
 
                         const legEl = document.getElementById('calendar-legend');
                         if (legEl) {
@@ -444,7 +476,13 @@
 
                 <div class="flex flex-col gap-1.5">
                     <div><label class="field-label">Booked Type</label><input type="text" id="booked-type" class="input-base" placeholder="--"></div>
-                    <div><div class="flex justify-between items-end mb-1"><label class="field-label text-blue-600 mb-0">Assigned Rooms</label><button type="button" onclick="window.addRoomSelect()" class="text-[9px] font-black uppercase text-blue-600 bg-blue-100 px-1 py-0.5 rounded hover:bg-blue-200 border border-blue-200 shadow-sm transition-colors cursor-pointer">+ ADD</button></div><div id="assigned-rooms-container" class="max-h-[110px] overflow-y-auto no-scrollbar border border-slate-200 rounded p-1 bg-slate-50 flex flex-col gap-1 w-full shadow-inner"></div></div>
+                    <div>
+                        <div class="flex justify-between items-end mb-1">
+                            <label class="field-label text-blue-600 mb-0">Assigned Rooms</label>
+                            <button type="button" onclick="window.addRoomSelect()" class="text-[9px] font-black uppercase text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded hover:bg-blue-200 border border-blue-200 shadow-sm transition-colors cursor-pointer">+ ADD</button>
+                        </div>
+                        <div id="assigned-rooms-container" class="max-h-[110px] overflow-y-auto no-scrollbar border border-slate-200 rounded p-1 bg-slate-50 flex flex-col gap-1 w-full shadow-inner"></div>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-1 pb-1 unselectable">
@@ -627,6 +665,162 @@
         window.getStaff = () => staff;
         window.getPaid = s => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
         window.getDue = s => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
+
+        // --- NATIVE AUTO-REVERT: When deleting the only room, auto-revert to UNASSIGNED without extra buttons ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = $('assigned-rooms-container');
+            if (container) {
+                container.addEventListener('click', e => {
+                    const btn = e.target.closest('button');
+                    if (!btn) return;
+                    setTimeout(() => {
+                        const selects = container.querySelectorAll('.assigned-room-select');
+                        if (selects.length === 0 && window.addRoomSelect) {
+                            window.addRoomSelect("");
+                        }
+                    }, 50);
+                });
+            }
+        });
+
+        // --- CONSOLE COMMAND: AUDIT ALL FUTURE BOOKINGS (BOOKED VS ASSIGNED) ---
+        window.auditFutureBookings = () => {
+            const todayStr = getLocalYMD(new Date());
+            const curProp = currentPropertyId;
+            const curStaff = staff.filter(s => {
+                const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+                if (sProp !== curProp) return false;
+                if (s.status === 'cancelled') return false;
+                return (s.checkOut || '') >= todayStr;
+            });
+
+            const issues = [];
+            curStaff.forEach(s => {
+                const bookedType = (s.bookedType || s.category || '').toLowerCase();
+                const isDorm = bookedType.includes('dorm') || bookedType.includes('bed') || bookedType.includes('bunk');
+                const pax = parseInt(s.pax, 10) || 1;
+
+                let expectedRooms = 1;
+                if (isDorm) {
+                    expectedRooms = Math.max(1, pax);
+                } else {
+                    const commaParts = (s.bookedType || '').split(',').map(x => x.trim()).filter(Boolean);
+                    const matchQty = (s.bookedType || '').match(/(\d+)\s*(?:x|\*|rooms?|units?|beds?)/i);
+                    const matchNotes = (s.notes || '').match(/(\d+)\s*(?:rooms?|units?)/i);
+                    
+                    if (commaParts.length > 1) {
+                        expectedRooms = commaParts.length;
+                    } else if (matchQty) {
+                        expectedRooms = parseInt(matchQty[1], 10);
+                    } else if (matchNotes) {
+                        expectedRooms = parseInt(matchNotes[1], 10);
+                    } else {
+                        expectedRooms = 1;
+                    }
+                }
+
+                const rList = getRooms(s).map(dbToUiRoom).filter(Boolean);
+                const assignedCount = rList.length;
+                const missingCount = Math.max(0, expectedRooms - assignedCount);
+
+                if (assignedCount === 0 || missingCount > 0) {
+                    issues.push({
+                        "Guest Name": `${s.firstName || ''} ${s.lastName || ''}`.trim(),
+                        "Book ID": s.bookId || s.id,
+                        "Check In": s.checkIn,
+                        "Check Out": s.checkOut,
+                        "Booked Cat": s.bookedType || 'Standard',
+                        "PAX": s.pax,
+                        "Needed": expectedRooms,
+                        "Assigned": assignedCount,
+                        "Assigned Rooms": rList.join(', ') || 'NONE',
+                        "Missing": missingCount,
+                        "Status": assignedCount === 0 ? "UNASSIGNED" : `SHORT ${missingCount} ROOM/BED(S)`,
+                        "id": s.id
+                    });
+                }
+            });
+
+            if (issues.length === 0) {
+                console.log("%c✅ ALL CLEAR: All future bookings have all required rooms/beds assigned!", "color: #10b981; font-weight: bold; font-size: 14px;");
+            } else {
+                console.warn(`%c⚠️ FOUND ${issues.length} BOOKINGS WITH MISSING/UNASSIGNED ROOMS:`, "color: #ef4444; font-weight: bold; font-size: 14px;");
+                console.table(issues);
+                console.log("%c💡 To open a booking modal: window.editStaff('BOOKING_ID')", "color: #3b82f6; font-weight: bold;");
+                console.log("%c💡 To auto-assign beds for all under-assigned: window.autoAssignAllUnderBookings()", "color: #8b5cf6; font-weight: bold;");
+            }
+            return issues;
+        };
+
+        // --- CONSOLE COMMAND: AUTO-ASSIGN ALL UNDER-ASSIGNED BOOKINGS ---
+        window.autoAssignAllUnderBookings = async () => {
+            const issues = window.auditFutureBookings();
+            const underList = issues.filter(i => i.Missing > 0);
+            if (underList.length === 0) {
+                console.log("No under-assigned bookings to fill.");
+                return;
+            }
+
+            console.log(`Auto-assigning rooms/beds for ${underList.length} bookings...`);
+            for (const item of underList) {
+                const b = staff.find(x => x.id === item.id);
+                if (!b) continue;
+
+                const targetCount = item.Needed;
+                const curAssigned = getRooms(b).map(dbToUiRoom).filter(Boolean);
+                const needed = targetCount - curAssigned.length;
+                if (needed <= 0) continue;
+
+                const bookedCat = (b.bookedType || b.category || '').toLowerCase();
+                const bookedCatList = (b.bookedType || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+
+                const activeBookings = staff.filter(s => {
+                    if (s.id === b.id) return false;
+                    if (['cancelled', 'noshow'].includes(s.status)) return false;
+                    return s.checkIn < b.checkOut && s.checkOut > b.checkIn;
+                });
+
+                const occupied = new Set();
+                activeBookings.forEach(s => getRooms(s).forEach(rid => { if (rid) occupied.add(rid); }));
+                curAssigned.forEach(r => occupied.add(r));
+
+                const newRooms = [...curAssigned];
+                for (let i = 0; i < needed; i++) {
+                    const targetSubCat = bookedCatList[newRooms.length] || bookedCat;
+                    const candidateRoom = hotelRooms.find(hr => {
+                        const hrType = (hr.type || '').toLowerCase();
+                        const matches = hrType.includes(targetSubCat) || targetSubCat.includes(hrType);
+                        return matches && !occupied.has(hr.id);
+                    }) || hotelRooms.find(hr => {
+                        const hrType = (hr.type || '').toLowerCase();
+                        return (hrType.includes(bookedCat) || bookedCat.includes(hrType)) && !occupied.has(hr.id);
+                    });
+
+                    if (candidateRoom) {
+                        newRooms.push(candidateRoom.id);
+                        occupied.add(candidateRoom.id);
+                    }
+                }
+
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', b.id), {
+                        room: newRooms[0] || "",
+                        rooms: newRooms,
+                        lastEditedAt: new Date().toISOString(),
+                        lastEditedBy: "CONSOLE_AUDITOR"
+                    }, { merge: true });
+                    b.room = newRooms[0] || "";
+                    b.rooms = newRooms;
+                    console.log(`✅ Assigned ${newRooms.length}/${targetCount} rooms/beds for ${item["Guest Name"]}`);
+                } catch(e) {
+                    console.error(`Failed to assign for ${item["Guest Name"]}:`, e.message);
+                }
+            }
+            if (window.render) window.render();
+            console.log("Auto-assignment complete. Running re-scan...");
+            window.auditFutureBookings();
+        };
+
         window.generateAuditDiff = (oldRec, newRec) => {
             if (!oldRec) return "Created new booking.";
             let changes = [];
@@ -892,6 +1086,9 @@
                 if ($('calendar-view')?.style.display !== 'none' && window.render) window.render();
                 if ($('dashboard-view')?.style.display === 'flex') window.renderDashboard();
                 if ($('database-view')?.style.display === 'flex' && window.renderDatabase) window.renderDatabase();
+
+                // Run discrepancy audit in background on every snapshot
+                setTimeout(() => { if (window.runDiscrepancyAudit) window.runDiscrepancyAudit(); }, 200);
 
                 const editId = new URLSearchParams(window.location.search).get('edit');
                 if (editId) { window.editStaff(editId); try { window.history.replaceState({}, document.title, window.location.pathname); } catch (e) {} }
