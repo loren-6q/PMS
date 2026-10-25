@@ -16,16 +16,17 @@ window.roomTypes = window.roomTypes || [];
 
 // --- 1. CORE PRICING MATH & EVENT PROXIMITY ---
 window.editMode = window.editMode || 'ripple'; // 'ripple' | 'pin'
-window.drillLevel = window.drillLevel || 'room';  // 'master' | 'room' | 'rates'
 
-// DYNAMIC 4-QUADRANT RATE COMPUTATION (Master Driver -> Product STD/EVT -> Channel Multiplier -> Policy Ratio -> Promo)
+// DYNAMIC RATE COMPUTATION (Master Driver -> Product STD/EVT -> Channel Multiplier -> Policy Ratio -> Promo)
 window.computeDynamicPlanRate = (dateStr, room, ratePlan) => {
+    if (!ratePlan) return null;
     const dayObj = (window.masterPricing && window.masterPricing.timeline) ? (window.masterPricing.timeline[dateStr] || {}) : {};
     const roomObj = dayObj[room] || {};
-    const hasEvents = (window.eventDates || []).length > 0;
+    const isEvents = window.isEventPricingEnabled ? window.isEventPricingEnabled() : ((window.eventDates || []).length > 0);
+    const hasEvents = isEvents && (window.eventDates || []).length > 0;
 
     const isEvtProduct = (ratePlan.product === 'evt') || (ratePlan.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(ratePlan.ratePlanTitle || '');
-    const isRefPolicy = (ratePlan.policy === 'ref') || /ref|refundable/i.test(ratePlan.ratePlanTitle || '') && !/non-?ref/i.test(ratePlan.ratePlanTitle || '');
+    const isRefPolicy = (ratePlan.policy === 'ref') || (/ref|refundable/i.test(ratePlan.ratePlanTitle || '') && !/non-?ref/i.test(ratePlan.ratePlanTitle || ''));
 
     // 1. Base Product Rate (Standard vs Event)
     let basePrice = (isEvtProduct && hasEvents && roomObj.fmp !== undefined && roomObj.fmp !== "")
@@ -46,13 +47,13 @@ window.computeDynamicPlanRate = (dateStr, room, ratePlan) => {
 
     // 3. Policy Ratio (Refundable vs Non-Ref)
     if (isRefPolicy) {
-        if (isEvtProduct) {
+        if (isEvtProduct && hasEvents) {
             const eType = window.pricingRules?.evtRefType || '+%';
-            const eVal = window.pricingRules?.evtRefVal !== undefined ? window.pricingRules.evtRefVal : 15;
+            const eVal = window.pricingRules?.evtRefVal !== undefined ? window.pricingRules.evtRefVal : 25;
             computed = window.applyMath(computed, eType, eVal);
         } else {
             const sType = window.pricingRules?.stdRefType || '+%';
-            const sVal = window.pricingRules?.stdRefVal !== undefined ? window.pricingRules.stdRefVal : 10;
+            const sVal = window.pricingRules?.stdRefVal !== undefined ? window.pricingRules.stdRefVal : 25;
             computed = window.applyMath(computed, sType, sVal);
         }
     }
@@ -83,17 +84,17 @@ window.applyMath = (baseVal, type, modifier, isReverse = false) => {
     if (isNaN(mod)) mod = 0; 
     
     let res = val;
-    if (type === '=') res = val;
+    if (type === '=' || type === 'sync') res = val;
     else if (!isReverse) {
-        if (type === '+') res = Math.max(0, val + mod);
-        if (type === '-') res = Math.max(0, val - mod);
-        if (type === '+%') res = val * (1 + (mod / 100));
-        if (type === '-%') res = Math.max(0, val * (1 - (mod / 100)));
+        if (type === '+' || type === 'add') res = Math.max(0, val + mod);
+        if (type === '-' || type === 'sub') res = Math.max(0, val - mod);
+        if (type === '+%' || type === 'add_pct') res = val * (1 + (mod / 100));
+        if (type === '-%' || type === 'sub_pct') res = Math.max(0, val * (1 - (mod / 100)));
     } else {
-        if (type === '+') res = Math.max(0, val - mod);
-        if (type === '-') res = Math.max(0, val + mod);
-        if (type === '+%') res = val / (1 + (mod / 100));
-        if (type === '-%') res = Math.max(0, val * (1 - (mod / 100)));
+        if (type === '+' || type === 'add') res = Math.max(0, val - mod);
+        if (type === '-' || type === 'sub') res = Math.max(0, val + mod);
+        if (type === '+%' || type === 'add_pct') res = val / (1 + (mod / 100));
+        if (type === '-%' || type === 'sub_pct') res = Math.max(0, val * (1 - (mod / 100)));
     }
     return window.roundCurrency(res);
 };
@@ -128,21 +129,6 @@ window.toggleEditMode = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.setDrillLevel = (level) => {
-    window.drillLevel = level;
-    ['master', 'room', 'event', 'rates'].forEach(l => {
-        const btn = document.getElementById(`depth-${l}`);
-        if (btn) {
-            if (l === level) {
-                btn.className = "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-xs font-black";
-            } else {
-                btn.className = "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
-            }
-        }
-    });
-    if (window.renderGrid) window.renderGrid();
-};
-
 window.showCmTooltip = (e, text) => {
     const tt = document.getElementById('cm-tooltip');
     if (!tt || !text) return;
@@ -163,227 +149,6 @@ window.showCmTooltip = (e, text) => {
 window.hideCmTooltip = () => {
     const tt = document.getElementById('cm-tooltip');
     if (tt) tt.classList.add('hidden');
-};
-
-window.handleCellStopToggle = (dateStr, roomType, ratePlanId = null, isEvt = false) => {
-    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-    const dObj = window.masterPricing.timeline[dateStr];
-
-    if (ratePlanId) {
-        dObj.otaOverrides = dObj.otaOverrides || {};
-        const cur = !!dObj.otaOverrides[`${ratePlanId}_stop`];
-        dObj.otaOverrides[`${ratePlanId}_stop`] = !cur;
-    } else if (isEvt) {
-        dObj[roomType] = dObj[roomType] || { isOverride: {} };
-        const cur = !!(dObj[roomType].evt_stop || dObj[roomType].evt_stopSell);
-        dObj[roomType].evt_stop = !cur;
-        dObj[roomType].evt_stopSell = !cur;
-        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
-        dObj[roomType].isOverride.evt_stop = true;
-    } else {
-        dObj[roomType] = dObj[roomType] || { isOverride: {} };
-        const cur = !!(dObj[roomType].stop || dObj[roomType].stopSell);
-        dObj[roomType].stop = !cur;
-        dObj[roomType].stopSell = !cur;
-        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
-        dObj[roomType].isOverride.stop = true;
-    }
-
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
-    window.markUnsavedChanges();
-    if (window.renderGrid) window.renderGrid();
-};
-
-window.handleHeaderStopToggle = (dateStr) => {
-    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-    const dObj = window.masterPricing.timeline[dateStr];
-    dObj['GLOBAL'] = dObj['GLOBAL'] || { isOverride: {} };
-    const curGlobalStop = !!(dObj['GLOBAL'].stop || dObj['GLOBAL'].stopSell);
-    const newStop = !curGlobalStop;
-
-    dObj['GLOBAL'].stop = newStop;
-    dObj['GLOBAL'].stopSell = newStop;
-    dObj['GLOBAL'].isOverride = dObj['GLOBAL'].isOverride || {};
-    dObj['GLOBAL'].isOverride.stop = true;
-
-    (window.roomTypes || []).forEach(rt => {
-        dObj[rt] = dObj[rt] || { isOverride: {} };
-        dObj[rt].stop = newStop;
-        dObj[rt].stopSell = newStop;
-    });
-
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
-    window.markUnsavedChanges();
-    if (window.renderGrid) window.renderGrid();
-};
-
-window.handleCellCtaCtdCycle = (dateStr, roomType, ratePlanId = null, isEvt = false) => {
-    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-    const dObj = window.masterPricing.timeline[dateStr];
-
-    let curCta = false;
-    let curCtd = false;
-
-    if (ratePlanId) {
-        dObj.otaOverrides = dObj.otaOverrides || {};
-        curCta = !!dObj.otaOverrides[`${ratePlanId}_cta`];
-        curCtd = !!dObj.otaOverrides[`${ratePlanId}_ctd`];
-    } else if (isEvt) {
-        dObj[roomType] = dObj[roomType] || { isOverride: {} };
-        const evtRestr = dObj.evtRestrictions || {};
-        curCta = dObj[roomType].evt_cta !== undefined ? !!dObj[roomType].evt_cta : !!evtRestr.cta;
-        curCtd = dObj[roomType].evt_ctd !== undefined ? !!dObj[roomType].evt_ctd : !!evtRestr.ctd;
-    } else {
-        dObj[roomType] = dObj[roomType] || { isOverride: {} };
-        curCta = !!dObj[roomType].cta;
-        curCtd = !!dObj[roomType].ctd;
-    }
-
-    let nextCta = false;
-    let nextCtd = false;
-
-    if (!curCta && !curCtd) {
-        nextCta = true;
-    } else if (curCta && !curCtd) {
-        nextCta = false;
-        nextCtd = true;
-    } else if (!curCta && curCtd) {
-        nextCta = true;
-        nextCtd = true;
-    } else {
-        nextCta = false;
-        nextCtd = false;
-    }
-
-    if (ratePlanId) {
-        dObj.otaOverrides[`${ratePlanId}_cta`] = nextCta;
-        dObj.otaOverrides[`${ratePlanId}_ctd`] = nextCtd;
-    } else if (isEvt) {
-        dObj[roomType].evt_cta = nextCta;
-        dObj[roomType].evt_ctd = nextCtd;
-        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
-        dObj[roomType].isOverride.evt_cta = true;
-        dObj[roomType].isOverride.evt_ctd = true;
-    } else {
-        dObj[roomType].cta = nextCta;
-        dObj[roomType].ctd = nextCtd;
-        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
-        dObj[roomType].isOverride.cta = true;
-        dObj[roomType].isOverride.ctd = true;
-    }
-
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
-    window.markUnsavedChanges();
-    if (window.renderGrid) window.renderGrid();
-};
-
-window.unlockCellOverride = (dateStr, roomType, ratePlanId = null, isEvt = false) => {
-    if (ratePlanId) {
-        if (window.masterPricing.timeline[dateStr]?.otaOverrides) {
-            delete window.masterPricing.timeline[dateStr].otaOverrides[ratePlanId];
-            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_rate`];
-            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_min`];
-            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_cta`];
-            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_ctd`];
-            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_stop`];
-        }
-    } else if (isEvt) {
-        const rData = window.masterPricing.timeline[dateStr]?.[roomType];
-        if (rData) {
-            delete rData.fmp;
-            delete rData.fmp_ref;
-            delete rData.evt_min;
-            delete rData.evt_min_arr;
-            delete rData.evt_max;
-            delete rData.evt_cta;
-            delete rData.evt_ctd;
-            delete rData.evt_stop;
-            if (rData.isOverride) {
-                delete rData.isOverride.fmp;
-                delete rData.isOverride.fmp_ref;
-                delete rData.isOverride.evt_min;
-                delete rData.isOverride.evt_min_arr;
-                delete rData.isOverride.evt_max;
-                delete rData.isOverride.evt_cta;
-                delete rData.isOverride.evt_ctd;
-                delete rData.isOverride.evt_stop;
-            }
-            if (window.healDay) window.healDay(dateStr);
-        }
-    } else {
-        const rData = window.masterPricing.timeline[dateStr]?.[roomType];
-        if (rData) {
-            if (rData.isOverride) {
-                delete rData.isOverride.std;
-                delete rData.isOverride.fmp;
-                delete rData.isOverride.min;
-                delete rData.isOverride.min_arr;
-                delete rData.isOverride.max;
-                delete rData.isOverride.stop;
-                delete rData.isOverride.cta;
-                delete rData.isOverride.ctd;
-            }
-
-            // SMART RESTORATION: Re-ripple from anchor or restore pre-override baseline
-            const rel = (window.masterPricing.relationships || []).find(r => r.target === roomType && r.anchor !== 'unlinked');
-            if (rel) {
-                delete rData.std;
-                delete rData.fmp;
-                window.rippleDay(dateStr, rel.anchor);
-            } else if (rData._baseStd !== undefined && rData._baseStd !== "") {
-                rData.std = rData._baseStd;
-                window.rippleDay(dateStr, roomType);
-            } else {
-                if (window.healDay) window.healDay(dateStr);
-            }
-        }
-    }
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
-    window.markUnsavedChanges();
-    if (window.renderGrid) window.renderGrid();
-};
-
-window.handleCellPriceChange = (e, dateStr, roomType, isAltPin = false) => {
-    const rawVal = e.target.value.trim();
-    if (rawVal === "" || isNaN(parseFloat(rawVal))) {
-        // Clearing price automatically unlocks the override and restores ripple!
-        if (window.unlockCellOverride) {
-            window.unlockCellOverride(dateStr, roomType);
-        }
-        return;
-    }
-    const newPrice = parseFloat(rawVal);
-
-    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-    const dObj = window.masterPricing.timeline[dateStr];
-    dObj[roomType] = dObj[roomType] || { isOverride: {} };
-
-    const shouldPin = isAltPin || (window.editMode === 'pin');
-
-    if (shouldPin) {
-        // Cache the pre-override baseline rate so unlocking restores the exact prior rate
-        if (dObj[roomType]._baseStd === undefined && dObj[roomType].std !== undefined && dObj[roomType].std !== "") {
-            dObj[roomType]._baseStd = dObj[roomType].std;
-        }
-        dObj[roomType].std = newPrice;
-        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
-        dObj[roomType].isOverride.std = true;
-    } else {
-        dObj[roomType].std = newPrice;
-        dObj[roomType]._baseStd = newPrice;
-        dObj[roomType].isOverride = dObj[roomType].isOverride || {};
-        dObj[roomType].isOverride.std = false;
-        window.rippleDay(dateStr, roomType);
-    }
-
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
-    window.markUnsavedChanges();
-    if (window.renderGrid) window.renderGrid();
 };
 
 // --- 2. RELATIONAL LINKING & RIPPLE ENGINE ---
@@ -449,25 +214,27 @@ window.rippleDay = (dateStr, startRoom) => {
 };
 
 window.healDay = (dateStr) => {
-    const anchorP = document.getElementById('w-anchor-private')?.value;
-    const anchorD = document.getElementById('w-anchor-dorm')?.value;
-    const hasEvents = (window.eventDates || []).length > 0;
+    const anchorP = document.getElementById('w-anchor-private')?.value || window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p;
+    const anchorD = document.getElementById('w-anchor-dorm')?.value || window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d;
+    const isEvents = window.isEventPricingEnabled ? window.isEventPricingEnabled() : ((window.eventDates || []).length > 0);
+    const hasEvents = isEvents && (window.eventDates || []).length > 0;
 
-    const p_base = parseFloat(document.getElementById('w-p-base')?.value) || 0;
-    const p_pkg = parseFloat(document.getElementById('w-p-pkg')?.value) || 0;
-    const p_m2 = parseFloat(document.getElementById('w-p-m2')?.value) || p_base;
-    const p_m1 = parseFloat(document.getElementById('w-p-m1')?.value) || p_base;
-    const p_0 = parseFloat(document.getElementById('w-p-0')?.value) || p_base;
-    const p_p1 = parseFloat(document.getElementById('w-p-p1')?.value) || p_base;
-    const p_p2 = parseFloat(document.getElementById('w-p-p2')?.value) || p_base;
+    const b = window.savedAutofillBaselines || {};
+    const p_base = parseFloat(document.getElementById('w-p-base')?.value) || parseFloat(document.getElementById('w-p-base-single')?.value) || b.p_base || 0;
+    const p_pkg = parseFloat(document.getElementById('w-p-pkg')?.value) || b.p_pkg || 0;
+    const p_m2 = parseFloat(document.getElementById('w-p-m2')?.value) || b.p_m2 || p_base;
+    const p_m1 = parseFloat(document.getElementById('w-p-m1')?.value) || b.p_m1 || p_base;
+    const p_0 = parseFloat(document.getElementById('w-p-0')?.value) || b.p_0 || p_base;
+    const p_p1 = parseFloat(document.getElementById('w-p-p1')?.value) || b.p_p1 || p_base;
+    const p_p2 = parseFloat(document.getElementById('w-p-p2')?.value) || b.p_p2 || p_base;
 
-    const d_base = parseFloat(document.getElementById('w-d-base')?.value) || 0;
-    const d_pkg = parseFloat(document.getElementById('w-d-pkg')?.value) || 0;
-    const d_m2 = parseFloat(document.getElementById('w-d-m2')?.value) || d_base;
-    const d_m1 = parseFloat(document.getElementById('w-d-m1')?.value) || d_base;
-    const d_0 = parseFloat(document.getElementById('w-d-0')?.value) || d_base;
-    const d_p1 = parseFloat(document.getElementById('w-d-p1')?.value) || d_base;
-    const d_p2 = parseFloat(document.getElementById('w-d-p2')?.value) || d_base;
+    const d_base = parseFloat(document.getElementById('w-d-base')?.value) || parseFloat(document.getElementById('w-d-base-single')?.value) || b.d_base || 0;
+    const d_pkg = parseFloat(document.getElementById('w-d-pkg')?.value) || b.d_pkg || 0;
+    const d_m2 = parseFloat(document.getElementById('w-d-m2')?.value) || b.d_m2 || d_base;
+    const d_m1 = parseFloat(document.getElementById('w-d-m1')?.value) || b.d_m1 || d_base;
+    const d_0 = parseFloat(document.getElementById('w-d-0')?.value) || b.d_0 || d_base;
+    const d_p1 = parseFloat(document.getElementById('w-d-p1')?.value) || b.d_p1 || d_base;
+    const d_p2 = parseFloat(document.getElementById('w-d-p2')?.value) || b.d_p2 || d_base;
 
     let stdP = p_base, fmpP = ""; 
     let stdD = d_base, fmpD = "";
@@ -486,7 +253,6 @@ window.healDay = (dateStr) => {
 
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     
-    // SAFE FALLBACK: Never overwrite an existing day rate with static tab 4 baselines
     if (anchorP) {
         window.masterPricing.timeline[dateStr][anchorP] = window.masterPricing.timeline[dateStr][anchorP] || { isOverride: {} };
         const curStd = window.masterPricing.timeline[dateStr][anchorP].std;
@@ -510,9 +276,6 @@ window.healDay = (dateStr) => {
     
     const anchors = new Set((window.masterPricing.relationships || []).map(r => r.anchor));
     anchors.forEach(a => { if (a !== 'unlinked') window.rippleDay(dateStr, a); });
-    
-    (window.roomTypes || []).forEach(r => { if (window.updateDOMCell) window.updateDOMCell(dateStr, r); });
-    if (window.updateDOMCell) window.updateDOMCell(dateStr, 'GLOBAL');
 };
 
 // --- 3. RELATIONAL LINKING UI & PERSISTENCE ---
@@ -667,21 +430,63 @@ window.addRelationshipRow = () => {
 window.updateAnchorDropdowns = () => {
     const selP = document.getElementById('w-anchor-private'); 
     const selD = document.getElementById('w-anchor-dorm');
-    const curP = selP?.value || window.savedAutofillBaselines?.anchor_p || '';
-    const curD = selD?.value || window.savedAutofillBaselines?.anchor_d || '';
+    const dispP = document.getElementById('display-anchor-private');
+    const dispD = document.getElementById('display-anchor-dorm');
+
+    const curP = selP?.value || window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || '';
+    const curD = selD?.value || window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || '';
+
+    const privates = (window.roomTypes || []).filter(t => !t.toLowerCase().includes('dorm'));
+    const pList = privates.length ? privates : (window.roomTypes || []);
+    const dorms = (window.roomTypes || []).filter(t => t.toLowerCase().includes('dorm'));
+    const dList = dorms.length ? dorms : (window.roomTypes || []);
 
     if (selP) {
-        const privates = (window.roomTypes || []).filter(t => !t.toLowerCase().includes('dorm'));
-        const list = privates.length ? privates : (window.roomTypes || []);
-        selP.innerHTML = list.map(t => `<option value="${t}" ${t === curP ? 'selected' : ''}>${t}</option>`).join('');
-        if (curP && list.includes(curP)) selP.value = curP;
+        selP.innerHTML = pList.map(t => `<option value="${t}" ${t === curP ? 'selected' : ''}>${t}</option>`).join('');
+        if (curP && pList.includes(curP)) selP.value = curP;
     }
     if (selD) {
-        const dorms = (window.roomTypes || []).filter(t => t.toLowerCase().includes('dorm'));
-        const list = dorms.length ? dorms : (window.roomTypes || []);
-        selD.innerHTML = list.map(t => `<option value="${t}" ${t === curD ? 'selected' : ''}>${t}</option>`).join('');
-        if (curD && list.includes(curD)) selD.value = curD;
+        selD.innerHTML = dList.map(t => `<option value="${t}" ${t === curD ? 'selected' : ''}>${t}</option>`).join('');
+        if (curD && dList.includes(curD)) selD.value = curD;
     }
+
+    if (dispP) dispP.innerText = selP?.value || curP || (pList[0] || '--');
+    if (dispD) dispD.innerText = selD?.value || curD || (dList[0] || '--');
+};
+
+window.setAutofillPreset = (days) => {
+    const sEl = document.getElementById('w-start-date');
+    const eEl = document.getElementById('w-end-date');
+    if (!sEl || !eEl) return;
+    const start = sEl.value ? new Date(sEl.value + 'T12:00:00Z') : new Date();
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + (days - 1));
+    eEl.value = window.getLocalYMD ? window.getLocalYMD(end) : end.toISOString().split('T')[0];
+};
+
+window.clearOverrides = () => {
+    const s = document.getElementById('w-start-date')?.value;
+    const e = document.getElementById('w-end-date')?.value;
+    if (!s || !e) {
+        if (window.customAlert) window.customAlert("Please select Start Date and End Date to clear overrides.");
+        return;
+    }
+    const execute = () => {
+        const sU = window.parseYMD ? window.parseYMD(s) : new Date(s).getTime();
+        const eU = window.parseYMD ? window.parseYMD(e) : new Date(e).getTime();
+        for (let d = sU; d <= eU; d += 86400000) {
+            const dStr = window.getLocalYMD ? window.getLocalYMD(new Date(d)) : new Date(d).toISOString().split('T')[0];
+            if (window.masterPricing?.timeline?.[dStr]) {
+                (window.roomTypes || []).forEach(r => {
+                    if (window.unlockCellOverride) window.unlockCellOverride(dStr, r);
+                });
+            }
+        }
+        if (window.renderGrid) window.renderGrid();
+        window.markUnsavedChanges();
+        window.customAlert("Overrides cleared across selected range!");
+    };
+    window.customAlert(`Clear all pricing overrides between ${s} and ${e}?`, true, execute);
 };
 
 window.toggleAutofillEventMode = (enabled) => {
@@ -785,8 +590,8 @@ window.saveAutofillBaselines = async (notify = false) => {
     };
 
     const baselines = {
-        anchor_p: document.getElementById('w-anchor-private')?.value || '',
-        anchor_d: document.getElementById('w-anchor-dorm')?.value || '',
+        anchor_p: document.getElementById('w-anchor-private')?.value || window.pricingRules?.anchorPrivate || '',
+        anchor_d: document.getElementById('w-anchor-dorm')?.value || window.pricingRules?.anchorDorm || '',
         p_base: getVal('w-p-base') || getVal('w-p-base-single'),
         p_pkg: getVal('w-p-pkg'),
         p_m2: getVal('w-p-m2'),
@@ -804,7 +609,6 @@ window.saveAutofillBaselines = async (notify = false) => {
         enable_evt_restr: getBool('w-enable-evt-restr')
     };
 
-    // Save all offsets independently without symmetric coupling
     for (let off = -7; off <= 7; off++) {
         const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
         baselines[`r_min_${tag}`] = getRaw(`w-r-min-${tag}`);
@@ -829,44 +633,58 @@ window.saveAutofillBaselines = async (notify = false) => {
 };
 
 // --- 5. DYNAMIC ACTIVE OTA CHANNEL PIPELINE ---
+window.resetChannelsToParity = () => {
+    window.pricingRules = window.pricingRules || {};
+    window.pricingRules.channels = {};
+    (window.channexRateMap || []).forEach(m => {
+        if (m.channel && m.channel !== 'ALL' && !m.channel.toLowerCase().includes('default')) {
+            window.pricingRules.channels[m.channel] = { type: '=', val: 0 };
+        }
+    });
+    window.pricingRules.channels['Booking.com'] = { type: '=', val: 0 };
+
+    window.markUnsavedChanges();
+    window.savePricingRulesToCloud(false);
+    if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
+    if (window.renderGrid) window.renderGrid();
+    if (window.customAlert) window.customAlert("All channels reset to SYNC (= 0) for 100% WYSIWYG parity!");
+};
+
 window.renderDynamicOtaRules = () => {
     const container = document.getElementById('dynamic-ota-rules-container');
     if (!container) return;
 
+    // Detect unique channels actually mapped in Channex (excluding Default plans which are already the base rate)
     const activeChannels = new Set();
     (window.channexRateMap || []).forEach(r => {
-        const title = r.ratePlanTitle || '';
-        if (/bdc|booking/i.test(title)) activeChannels.add('Booking.com');
-        else if (/hw|hostelworld/i.test(title)) activeChannels.add('Hostelworld');
-        else if (/agoda/i.test(title)) activeChannels.add('Agoda');
-        else if (/expedia/i.test(title)) activeChannels.add('Expedia');
-        else if (/airbnb/i.test(title)) activeChannels.add('Airbnb');
-        else activeChannels.add('Direct Website');
+        const ch = r.channel || '';
+        if (ch && ch !== 'ALL' && !ch.toLowerCase().includes('default')) {
+            activeChannels.add(ch);
+        } else if (/bdc|booking/i.test(r.ratePlanTitle || '')) {
+            activeChannels.add('Booking.com');
+        }
     });
 
     if (activeChannels.size === 0) {
         activeChannels.add('Booking.com');
-        activeChannels.add('Hostelworld');
-        activeChannels.add('Direct Website');
     }
 
     window.pricingRules = window.pricingRules || {};
-    window.pricingRules.channels = window.pricingRules.channels || {
-        'Booking.com': { type: '=', val: 0 },
-        'Hostelworld': { type: '+%', val: 25 },
-        'Direct Website': { type: '-%', val: 10 }
-    };
+    window.pricingRules.channels = window.pricingRules.channels || {};
 
     let html = '';
     activeChannels.forEach(ch => {
         const conf = window.pricingRules.channels[ch] || { type: '=', val: 0 };
+        const isBdc = ch === 'Booking.com';
+        const badgeColor = isBdc ? 'bg-[#003580] text-white' : 'bg-purple-600 text-white';
+
         html += `
-        <div class="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
-            <span class="font-black text-xs text-slate-800 uppercase flex items-center gap-2">
-                <i data-lucide="radio" size="14" class="text-indigo-600"></i> ${ch}
-            </span>
-            <div class="flex items-center gap-2">
-                <span class="text-xs font-bold text-slate-500">Master Driver</span>
+        <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
+            <div class="flex items-center gap-2 min-w-0">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${badgeColor} shrink-0">${ch}</span>
+                <span class="text-xs font-bold text-slate-700 truncate">${ch} Channel Multiplier</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
                 <select class="input-base !w-24 !py-1 font-black text-center" onchange="window.updateChannelRule('${ch}', 'type', this.value)">
                     <option value="=" ${conf.type === '=' ? 'selected' : ''}>SYNC (=)</option>
                     <option value="+%" ${conf.type === '+%' ? 'selected' : ''}>+ %</option>
@@ -874,7 +692,7 @@ window.renderDynamicOtaRules = () => {
                     <option value="+" ${conf.type === '+' ? 'selected' : ''}>+ ฿</option>
                     <option value="-" ${conf.type === '-' ? 'selected' : ''}>- ฿</option>
                 </select>
-                <input type="number" value="${conf.val || 0}" class="input-base !w-20 !py-1 font-black text-center" oninput="window.updateChannelRule('${ch}', 'val', this.value)">
+                <input type="number" step="any" value="${conf.val || 0}" class="input-base !w-20 !py-1 font-black text-center" oninput="window.updateChannelRule('${ch}', 'val', this.value)">
             </div>
         </div>`;
     });
@@ -896,14 +714,22 @@ window.markRulesUnsaved = () => {
 };
 
 window.savePricingRulesToCloud = async (notify = false) => {
+    const stdInput = document.getElementById('rule-std-ref-val');
+    const evtInput = document.getElementById('rule-evt-ref-val');
+    const stdTypeEl = document.getElementById('rule-std-ref-type');
+    const evtTypeEl = document.getElementById('rule-evt-ref-type');
+    const masterDriverEl = document.getElementById('rule-master-driver');
+    const anchorPEl = document.getElementById('rule-anchor-private') || document.getElementById('w-anchor-private');
+    const anchorDEl = document.getElementById('rule-anchor-dorm') || document.getElementById('w-anchor-dorm');
+
     const rules = {
-        masterDriver: document.getElementById('rule-master-driver')?.value || 'bdc_non_ref',
-        anchorPrivate: document.getElementById('rule-anchor-private')?.value || '',
-        anchorDorm: document.getElementById('rule-anchor-dorm')?.value || '',
-        stdRefType: document.getElementById('rule-std-ref-type')?.value || '+%',
-        stdRefVal: parseFloat(document.getElementById('rule-std-ref-val')?.value) || 10,
-        evtRefType: document.getElementById('rule-evt-ref-type')?.value || '+%',
-        evtRefVal: parseFloat(document.getElementById('rule-evt-ref-val')?.value) || 15,
+        masterDriver: masterDriverEl?.value || window.pricingRules?.masterDriver || 'bdc_non_ref',
+        anchorPrivate: anchorPEl?.value || window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || '',
+        anchorDorm: anchorDEl?.value || window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || '',
+        stdRefType: stdTypeEl?.value || window.pricingRules?.stdRefType || '+%',
+        stdRefVal: (stdInput && stdInput.value !== "") ? (parseFloat(stdInput.value) || 0) : (window.pricingRules?.stdRefVal !== undefined ? window.pricingRules.stdRefVal : 25),
+        evtRefType: evtTypeEl?.value || window.pricingRules?.evtRefType || '+%',
+        evtRefVal: (evtInput && evtInput.value !== "") ? (parseFloat(evtInput.value) || 0) : (window.pricingRules?.evtRefVal !== undefined ? window.pricingRules.evtRefVal : 25),
         channels: window.pricingRules?.channels || {}
     };
 
@@ -969,7 +795,7 @@ window.renderEvtRestrTable = () => {
 
     let tbHtml = '';
 
-    // Row 1: Min Stay (Nts) - Independent without forced mirror
+    // Row 1: Min Stay (Nts)
     tbHtml += `<tr class="bg-pink-50/40">
         <td class="text-xs font-bold text-pink-900 text-left pl-2 rounded-l-lg border border-pink-100 border-r-0 py-1">Min Stay (Nts)</td>`;
     offsets.forEach(off => {
@@ -981,7 +807,7 @@ window.renderEvtRestrTable = () => {
     });
     tbHtml += `</tr>`;
 
-    // Row 2: Min on Arrival (min_arr) - Independent
+    // Row 2: Min on Arrival (min_arr)
     tbHtml += `<tr class="bg-slate-50">
         <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Min on Arrival</td>`;
     offsets.forEach(off => {
@@ -993,7 +819,7 @@ window.renderEvtRestrTable = () => {
     });
     tbHtml += `</tr>`;
 
-    // Row 3: Close to Arrival (CTA) - Independent
+    // Row 3: Close to Arrival (CTA)
     tbHtml += `<tr class="bg-slate-50">
         <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Close to Arrival (CTA)</td>`;
     offsets.forEach(off => {
@@ -1005,7 +831,7 @@ window.renderEvtRestrTable = () => {
     });
     tbHtml += `</tr>`;
 
-    // Row 4: Close to Departure (CTD) - Independent
+    // Row 4: Close to Departure (CTD)
     tbHtml += `<tr class="bg-slate-50">
         <td class="text-xs font-bold text-slate-700 text-left pl-2 rounded-l-lg border border-slate-200 border-r-0 py-1">Close to Departure (CTD)</td>`;
     offsets.forEach(off => {
@@ -1020,23 +846,13 @@ window.renderEvtRestrTable = () => {
     tbody.innerHTML = tbHtml;
 };
 
-window.handleEvtRestrMirror = (rule, offset, val, isBool = false) => {
-    if (offset === 0) return;
-    const oppOffset = -offset;
-    const oppTag = oppOffset < 0 ? 'm' + Math.abs(oppOffset) : 'p' + oppOffset;
-    const oppEl = document.getElementById(`w-r-${rule}-${oppTag}`);
-    if (oppEl) {
-        if (isBool) oppEl.checked = !!val;
-        else oppEl.value = val;
-    }
-};
-
 window.runAutomator = () => {
     const anchorP = document.getElementById('w-anchor-private')?.value || window.pricingRules?.anchorPrivate;
     const anchorD = document.getElementById('w-anchor-dorm')?.value || window.pricingRules?.anchorDorm;
     const sDate = document.getElementById('w-start-date')?.value;
     const eDate = document.getElementById('w-end-date')?.value;
-    const hasEvents = (window.eventDates || []).length > 0;
+    const isEvents = window.isEventPricingEnabled ? window.isEventPricingEnabled() : ((window.eventDates || []).length > 0);
+    const hasEvents = isEvents && (window.eventDates || []).length > 0;
     
     const p_base = parseFloat(document.getElementById('w-p-base')?.value) || parseFloat(document.getElementById('w-p-base-single')?.value) || 0;
     const p_pkg = parseFloat(document.getElementById('w-p-pkg')?.value) || 0;
@@ -1057,7 +873,6 @@ window.runAutomator = () => {
     const restrCheckEl = document.getElementById('w-enable-evt-restr');
     const enableRestr = restrCheckEl ? restrCheckEl.checked : true;
 
-    // Build comprehensive ±7 day restriction map
     const getRestr = (off) => {
         const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
         const minEl = document.getElementById(`w-r-min-${tag}`);
@@ -1180,7 +995,7 @@ window.nukeDatabase = () => {
     });
 };
 
-// --- 7. PROMOTIONS & DEALS ENGINE ---
+// --- 6. PROMOTIONS & DEALS ENGINE ---
 window.populatePromoScopeDropdown = () => {
     const scopeEl = document.getElementById('promo-room-scope');
     if (scopeEl) {
