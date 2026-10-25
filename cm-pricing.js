@@ -647,7 +647,7 @@ window.resetChannelsToParity = () => {
     window.savePricingRulesToCloud(false);
     if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
     if (window.renderGrid) window.renderGrid();
-    if (window.customAlert) window.customAlert("All channels reset to SYNC (= 0) for 100% WYSIWYG parity!");
+    if (window.customAlert) window.customAlert("All channel adjustments reset to 0 (matching Base Rate Anchor)!");
 };
 
 window.renderDynamicOtaRules = () => {
@@ -682,7 +682,7 @@ window.renderDynamicOtaRules = () => {
         <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
             <div class="flex items-center gap-2 min-w-0">
                 <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${badgeColor} shrink-0">${ch}</span>
-                <span class="text-xs font-bold text-slate-700 truncate">${ch} Channel Multiplier</span>
+                <span class="text-xs font-bold text-slate-700 truncate">${ch} Channel Adjustment</span>
             </div>
             <div class="flex items-center gap-2 shrink-0">
                 <select class="input-base !w-24 !py-1 font-black text-center" onchange="window.updateChannelRule('${ch}', 'type', this.value)">
