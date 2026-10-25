@@ -677,6 +677,16 @@ window.extractBookingData = (raw) => {
         s.pax = s.units;
     }
 
+    // Format Booked Type: Uppercase, strip leading numbers, repeat with " + " for multiple rooms
+    if (s.bookedType) {
+        let cleanType = s.bookedType.replace(/^\d+\s*(?:x|\*|\s)\s*/i, '').trim().toUpperCase();
+        if (s.units > 1 && !s.bookedType.includes(' + ')) {
+            s.bookedType = Array(s.units).fill(cleanType).join(' + ');
+        } else if (!s.bookedType.includes(' + ')) {
+            s.bookedType = cleanType;
+        }
+    }
+
     // Refundability Check (Applies to all)
     let isNonRef = rawLower.includes('non-refundable') || rawLower.includes('non refundable') || rawLower.includes('charged the total price of the reservation if they cancel at any time');
     if (isNonRef) s.refundability = 'non-ref';
@@ -825,20 +835,33 @@ window.parseEmail = () => {
         }
 
         const assignedRooms = [];
-        const normBookedType = s.bookedType.toUpperCase().trim();
+        const roomTypeParts = s.bookedType.split(' + ').map(p => p.trim().toUpperCase()).filter(Boolean);
 
         for (let i = 0; i < targetCount; i++) {
+            const currentSubTarget = roomTypeParts[i] || roomTypeParts[0] || s.bookedType.toUpperCase().trim();
+
             // Find a vacant room/bed in hotelRooms of matching category
             let freeRoom = hotelRooms.find(hr => {
                 const hrType = (hr.type || "").toUpperCase().trim();
                 const hrId = (hr.id || "").toUpperCase().trim();
-                const matches = hrType === normBookedType || hrType.includes(normBookedType) || normBookedType.includes(hrType);
+                const matches = hrType === currentSubTarget || hrType.includes(currentSubTarget) || currentSubTarget.includes(hrType);
                 return matches && !occupied.has(hrId) && !assignedRooms.includes(hr.id);
             });
 
+            // Fallback to broader match if specific sub-type not available
+            if (!freeRoom) {
+                const normBookedType = s.bookedType.toUpperCase().trim();
+                freeRoom = hotelRooms.find(hr => {
+                    const hrType = (hr.type || "").toUpperCase().trim();
+                    const hrId = (hr.id || "").toUpperCase().trim();
+                    const matches = hrType === normBookedType || hrType.includes(normBookedType) || normBookedType.includes(hrType);
+                    return matches && !occupied.has(hrId) && !assignedRooms.includes(hr.id);
+                });
+            }
+
             // If not found in strict loop, try PMS helper if available
             if (!freeRoom && window.suggestAvailableRoom) {
-                const candidateId = window.suggestAvailableRoom(s.bookedType);
+                const candidateId = window.suggestAvailableRoom(currentSubTarget);
                 if (candidateId && !assignedRooms.includes(candidateId) && !occupied.has(candidateId.toUpperCase().trim())) {
                     freeRoom = { id: candidateId };
                 }
