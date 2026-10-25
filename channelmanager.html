@@ -334,7 +334,7 @@
                             <span class="text-[9px] font-black text-slate-400 uppercase mr-1">PREVIEW:</span>
                             <select id="channel-preview-select" onchange="window.channelPreviewFilter = this.value; window.renderGrid();" class="bg-transparent font-black text-xs text-indigo-700 outline-none cursor-pointer">
                                 <option value="ALL">All Rates</option>
-                                <option value="DIRECT">Default / Base</option>
+                                <option value="DEFAULT">Default</option>
                                 <option value="BDC">Booking.com</option>
                             </select>
                         </div>
@@ -342,7 +342,7 @@
                     </div>
                 </div>
 
-                <!-- COMPACT BULK UPDATE PANEL (CALENDAR-MATCHED ROW ARCHITECTURE) -->
+                <!-- COMPACT BULK UPDATE PANEL -->
                 <div id="quick-bulk-panel" class="hidden bg-slate-900 border-b border-slate-800 p-2 shrink-0 shadow-xl flex-col gap-2 z-30 relative text-slate-200">
                     <div class="flex items-center justify-between gap-2 w-full flex-wrap">
                         <div class="flex items-center gap-2 flex-wrap">
@@ -473,9 +473,9 @@
                             <label class="label-base text-indigo-700">Anchor Rate Plan</label>
                             <select id="rule-master-driver" class="input-base !text-xs font-black cursor-pointer bg-white w-full" onchange="window.markRulesUnsaved()">
                                 <option value="bdc_non_ref" selected>Booking.com Non-Refundable</option>
-                                <option value="direct_non_ref">Default / Direct Non-Refundable</option>
-                                <option value="direct_ref">Default / Direct Refundable</option>
-                                <option value="bdc_ref">Booking.com Standard Refundable</option>
+                                <option value="default_non_ref">Default Non-Refundable</option>
+                                <option value="default_ref">Default Refundable</option>
+                                <option value="bdc_ref">Booking.com Refundable</option>
                             </select>
                         </div>
                     </div>
