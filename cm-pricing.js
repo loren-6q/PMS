@@ -641,7 +641,6 @@ window.resetChannelsToParity = () => {
             window.pricingRules.channels[m.channel] = { type: '=', val: 0 };
         }
     });
-    window.pricingRules.channels['Booking.com'] = { type: '=', val: 0 };
 
     window.markUnsavedChanges();
     window.savePricingRulesToCloud(false);
@@ -654,7 +653,7 @@ window.renderDynamicOtaRules = () => {
     const container = document.getElementById('dynamic-ota-rules-container');
     if (!container) return;
 
-    // Detect unique channels actually mapped in Channex (excluding Default plans which are already the base rate)
+    // Detect unique channels actually mapped in Channex (excluding Default plans which are already the base rate anchor)
     const activeChannels = new Set();
     (window.channexRateMap || []).forEach(r => {
         const ch = r.channel || '';
@@ -666,17 +665,29 @@ window.renderDynamicOtaRules = () => {
     });
 
     if (activeChannels.size === 0) {
-        activeChannels.add('Booking.com');
+        container.innerHTML = `
+            <div class="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-lg text-center text-xs font-bold text-slate-500">
+                All connected channels are currently selling directly from your Base Rate Anchor.<br>
+                <span class="text-[10px] text-slate-400 font-normal">When you add OTA-specific rate plans in Channex (e.g. Booking.com or Agoda), their channel adjustment cards will appear here automatically.</span>
+            </div>`;
+        return;
     }
 
     window.pricingRules = window.pricingRules || {};
     window.pricingRules.channels = window.pricingRules.channels || {};
 
+    const channelColors = {
+        'Booking.com': 'bg-[#003580] text-white',
+        'Agoda': 'bg-[#87B2D6] text-white',
+        'Expedia': 'bg-[#facc15] text-[#003580]',
+        'Hostelworld': 'bg-[#F15A24] text-white',
+        'Airbnb': 'bg-[#FF5A5F] text-white'
+    };
+
     let html = '';
     activeChannels.forEach(ch => {
         const conf = window.pricingRules.channels[ch] || { type: '=', val: 0 };
-        const isBdc = ch === 'Booking.com';
-        const badgeColor = isBdc ? 'bg-[#003580] text-white' : 'bg-purple-600 text-white';
+        const badgeColor = channelColors[ch] || 'bg-purple-600 text-white';
 
         html += `
         <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
