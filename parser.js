@@ -162,6 +162,12 @@ window.extractBookingData = (raw) => {
             }
         }
 
+        let hwBedMatch = normalized.match(/(?:No\.?\s*of\s*Beds?|Beds?|Persons?)\s*:?\s*(\d+)/i);
+        if (hwBedMatch) {
+            let bNum = parseInt(hwBedMatch[1], 10);
+            if (bNum > 0) s.units = bNum;
+        }
+
         let nightMatch = normalized.match(/(\d+)\s*Nights?/i);
         if (nightMatch && s.checkIn) {
             let nights = parseInt(nightMatch[1]) || 1;
@@ -270,6 +276,12 @@ window.extractBookingData = (raw) => {
         if (unitsIdx > -1 && lines.length > unitsIdx + 1) {
              let uMatch = lines[unitsIdx + 1].match(/(\d+)/);
              if (uMatch) s.units = parseInt(uMatch[1]);
+        }
+
+        let multiMatch = normalized.match(/(\d+)\s*(?:x|\*)\s*([^\n\r]+)/i);
+        if (multiMatch) {
+            let count = parseInt(multiMatch[1], 10);
+            if (count > 0) s.units = Math.max(s.units || 1, count);
         }
 
         let paxIdx = lines.findIndex(l => l === 'Total guests:');
@@ -385,6 +397,9 @@ window.extractBookingData = (raw) => {
             s.pax = parseInt(pStr.length > 1 ? pStr.slice(-1) : pStr) || 1;
         }
 
+        let agodaRooms = normalized.match(/(?:No\.\s*of\s*Rooms|Number\s*of\s*Rooms|Rooms?)\s*:?\s*(\d+)/i);
+        if (agodaRooms) s.units = parseInt(agodaRooms[1], 10) || 1;
+
         let rtMatch = normalized.match(/No\.\s*of\s*Extra\s*Bed\s*([\s\S]+?)(?:\(null\))?\s*\d*\s*\d+\s*Adult/i)
                    || normalized.match(/Room\s*Type\s*:?\s*([\s\S]+?)(?:\(null\))?\s*(?:No\.\s*of\s*Rooms|Occupancy|\d+\s*Adult)/i);
         if (rtMatch) {
@@ -474,6 +489,9 @@ window.extractBookingData = (raw) => {
         if (rtMatch) {
             s.bookedType = rtMatch[1].replace(/\r?\n/g, ' ').trim();
         }
+
+        let expRooms = normalized.match(/(?:Number\s*of\s*Rooms|Rooms?)\s*:?\s*(\d+)/i);
+        if (expRooms) s.units = parseInt(expRooms[1], 10) || 1;
 
         const mPattern = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
         const dateSectionRegex = new RegExp(`Check-In[\\s\\S]{0,120}?Check-Out[\\s\\S]{0,120}?(${mPattern}\\s+\\d{1,2},?\\s+\\d{4})\\s*(${mPattern}\\s+\\d{1,2},?\\s+\\d{4})(\\d{1,3})?`, 'i');
@@ -650,6 +668,15 @@ window.extractBookingData = (raw) => {
         if (depMatch) s.checkOut = parseAnyDateToYMD(depMatch[1]);
     }
 
+    // Dorm & Multi-Room Unit Auto-Correction
+    const isDorm = /dorm|bed|bunk/i.test(s.bookedType || '');
+    if (isDorm && (s.pax > 1) && (!s.units || s.units <= 1)) {
+        s.units = s.pax;
+    }
+    if (isDorm && (s.units > (s.pax || 1))) {
+        s.pax = s.units;
+    }
+
     // Refundability Check (Applies to all)
     let isNonRef = rawLower.includes('non-refundable') || rawLower.includes('non refundable') || rawLower.includes('charged the total price of the reservation if they cancel at any time');
     if (isNonRef) s.refundability = 'non-ref';
@@ -771,17 +798,64 @@ window.parseEmail = () => {
         window.populateStaffForm(s);
     }
 
-    // 6. AUTO-ASSIGN ROOM MATCHING BOOKED TYPE IF UNASSIGNED
-    if (window.suggestAvailableRoom && s.bookedType) {
-        const currentAssigned = Array.from(document.querySelectorAll('.assigned-room-select')).map(sel => sel.value).filter(Boolean);
-        if (currentAssigned.length === 0) {
-            const suggested = window.suggestAvailableRoom(s.bookedType);
-            if (suggested) {
-                const roomContainer = document.getElementById('assigned-rooms-container');
-                if (roomContainer) roomContainer.innerHTML = '';
-                if (window.addRoomSelect) window.addRoomSelect(suggested);
+    // 6. AUTO-ASSIGN ROOM(S) / BED(S) MATCHING BOOKED TYPE & QUANTITY
+    if (s.bookedType) {
+        const isDorm = /dorm|bed|bunk/i.test(s.bookedType || '');
+        const targetCount = isDorm ? Math.max(s.units || 1, s.pax || 1) : Math.max(1, s.units || 1);
+
+        const roomContainer = document.getElementById('assigned-rooms-container');
+        if (roomContainer) roomContainer.innerHTML = '';
+
+        const hotelRooms = window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
+        const staff = window.staff || (window.getStaff ? window.getStaff() : []);
+        const curProp = window.getCurrentPropertyId ? window.getCurrentPropertyId() : (window.currentPropertyId || 'swims_resort');
+
+        // Check occupied rooms for overlapping dates to avoid double-booking
+        const occupied = new Set();
+        if (s.checkIn && s.checkOut) {
+            staff.forEach(b => {
+                const bProp = window.toCanonicalPropId ? window.toCanonicalPropId(b.property) : b.property;
+                if (bProp && curProp && bProp !== curProp) return;
+                if (['cancelled', 'noshow'].includes(b.status)) return;
+                if (b.checkIn < s.checkOut && b.checkOut > s.checkIn) {
+                    const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
+                    rList.forEach(rid => { if (rid) occupied.add(String(rid).trim().toUpperCase()); });
+                }
+            });
+        }
+
+        const assignedRooms = [];
+        const normBookedType = s.bookedType.toUpperCase().trim();
+
+        for (let i = 0; i < targetCount; i++) {
+            // Find a vacant room/bed in hotelRooms of matching category
+            let freeRoom = hotelRooms.find(hr => {
+                const hrType = (hr.type || "").toUpperCase().trim();
+                const hrId = (hr.id || "").toUpperCase().trim();
+                const matches = hrType === normBookedType || hrType.includes(normBookedType) || normBookedType.includes(hrType);
+                return matches && !occupied.has(hrId) && !assignedRooms.includes(hr.id);
+            });
+
+            // If not found in strict loop, try PMS helper if available
+            if (!freeRoom && window.suggestAvailableRoom) {
+                const candidateId = window.suggestAvailableRoom(s.bookedType);
+                if (candidateId && !assignedRooms.includes(candidateId) && !occupied.has(candidateId.toUpperCase().trim())) {
+                    freeRoom = { id: candidateId };
+                }
+            }
+
+            if (freeRoom) {
+                assignedRooms.push(freeRoom.id);
+                occupied.add(String(freeRoom.id).toUpperCase().trim());
+                if (window.addRoomSelect) window.addRoomSelect(freeRoom.id);
+            } else {
+                // If hotel is full or out of beds, add unassigned dropdown slot for staff to see
+                if (window.addRoomSelect) window.addRoomSelect("");
             }
         }
+
+        s.rooms = assignedRooms;
+        s.room = assignedRooms[0] || "";
     }
 
     // 7. JUMP CALENDAR TAPE TO EXTRACTED CHECK-IN DATE
