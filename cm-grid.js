@@ -4,6 +4,9 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-grid.js
 // ==========================================================================
 
+window.daysToRender = window.daysToRender || 35;
+window.bulkScopeMode = window.bulkScopeMode || 'anchors'; // 'anchors' | 'all'
+
 // --- 0. HELPER FORMATTERS & INVENTORY CALCULATOR ---
 window.formatMinStayInput = (val) => {
     if (!val) return "";
@@ -310,26 +313,89 @@ window.unlockCellOverride = (dateStr, room, ratePlanId = null) => {
     if (window.renderGrid) window.renderGrid();
 };
 
-window.handleCellPriceChange = (e, dateStr, room, isOverride = false) => {
-    const val = e.target.value.trim();
+// UNIFIED 5-STATE RESTRICTION HELPER: OPEN -> CTA -> CTD -> BOTH -> STOP -> OPEN
+window.cycleUnifiedRestriction = (dateStr, room, ratePlanId = null, isEvt = false) => {
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     const dObj = window.masterPricing.timeline[dateStr];
-    dObj[room] = dObj[room] || { isOverride: {} };
-    const rData = dObj[room];
-    rData.isOverride = rData.isOverride || {};
 
-    if (val === "" || isNaN(parseFloat(val))) {
-        delete rData.std;
-        delete rData.isOverride.std;
-        if (window.healDay) window.healDay(dateStr);
+    if (ratePlanId) {
+        dObj.otaOverrides = dObj.otaOverrides || {};
+        const cta = !!dObj.otaOverrides[`${ratePlanId}_cta`];
+        const ctd = !!dObj.otaOverrides[`${ratePlanId}_ctd`];
+        const stop = !!dObj.otaOverrides[`${ratePlanId}_stop`];
+
+        if (!cta && !ctd && !stop) { // OPEN -> CTA
+            dObj.otaOverrides[`${ratePlanId}_cta`] = true;
+            dObj.otaOverrides[`${ratePlanId}_ctd`] = false;
+            dObj.otaOverrides[`${ratePlanId}_stop`] = false;
+        } else if (cta && !ctd && !stop) { // CTA -> CTD
+            dObj.otaOverrides[`${ratePlanId}_cta`] = false;
+            dObj.otaOverrides[`${ratePlanId}_ctd`] = true;
+            dObj.otaOverrides[`${ratePlanId}_stop`] = false;
+        } else if (!cta && ctd && !stop) { // CTD -> BOTH
+            dObj.otaOverrides[`${ratePlanId}_cta`] = true;
+            dObj.otaOverrides[`${ratePlanId}_ctd`] = true;
+            dObj.otaOverrides[`${ratePlanId}_stop`] = false;
+        } else if (cta && ctd && !stop) { // BOTH -> STOP
+            dObj.otaOverrides[`${ratePlanId}_cta`] = false;
+            dObj.otaOverrides[`${ratePlanId}_ctd`] = false;
+            dObj.otaOverrides[`${ratePlanId}_stop`] = true;
+        } else { // STOP -> OPEN
+            dObj.otaOverrides[`${ratePlanId}_cta`] = false;
+            dObj.otaOverrides[`${ratePlanId}_ctd`] = false;
+            dObj.otaOverrides[`${ratePlanId}_stop`] = false;
+        }
     } else {
-        const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
-        rData.std = window.roundCurrency(parseFloat(val) / mult);
-        rData.isOverride.std = true;
+        dObj[room] = dObj[room] || { isOverride: {} };
+        const rData = dObj[room];
+        rData.isOverride = rData.isOverride || {};
 
-        const isRipple = window.isRippleEnabled && !isOverride;
-        if (isRipple && window.rippleDay) {
-            window.rippleDay(dateStr, room);
+        const cta = isEvt ? (rData.evt_cta !== undefined ? !!rData.evt_cta : !!dObj.evtRestrictions?.cta) : !!rData.cta;
+        const ctd = isEvt ? (rData.evt_ctd !== undefined ? !!rData.evt_ctd : !!dObj.evtRestrictions?.ctd) : !!rData.ctd;
+        const stop = isEvt ? !!(rData.evt_stop || rData.evt_stopSell) : !!(rData.stop || rData.stopSell);
+
+        const pfx = isEvt ? 'evt_' : '';
+
+        if (!cta && !ctd && !stop) { // OPEN -> CTA
+            rData[`${pfx}cta`] = true;
+            rData[`${pfx}ctd`] = false;
+            rData[`${pfx}stop`] = false;
+            rData[`${pfx}stopSell`] = false;
+            rData.isOverride[`${pfx}cta`] = true;
+            rData.isOverride[`${pfx}ctd`] = false;
+            rData.isOverride[`${pfx}stop`] = false;
+        } else if (cta && !ctd && !stop) { // CTA -> CTD
+            rData[`${pfx}cta`] = false;
+            rData[`${pfx}ctd`] = true;
+            rData[`${pfx}stop`] = false;
+            rData[`${pfx}stopSell`] = false;
+            rData.isOverride[`${pfx}cta`] = false;
+            rData.isOverride[`${pfx}ctd`] = true;
+            rData.isOverride[`${pfx}stop`] = false;
+        } else if (!cta && ctd && !stop) { // CTD -> BOTH
+            rData[`${pfx}cta`] = true;
+            rData[`${pfx}ctd`] = true;
+            rData[`${pfx}stop`] = false;
+            rData[`${pfx}stopSell`] = false;
+            rData.isOverride[`${pfx}cta`] = true;
+            rData.isOverride[`${pfx}ctd`] = true;
+            rData.isOverride[`${pfx}stop`] = false;
+        } else if (cta && ctd && !stop) { // BOTH -> STOP
+            rData[`${pfx}cta`] = false;
+            rData[`${pfx}ctd`] = false;
+            rData[`${pfx}stop`] = true;
+            rData[`${pfx}stopSell`] = true;
+            rData.isOverride[`${pfx}cta`] = false;
+            rData.isOverride[`${pfx}ctd`] = false;
+            rData.isOverride[`${pfx}stop`] = true;
+        } else { // STOP -> OPEN
+            rData[`${pfx}cta`] = false;
+            rData[`${pfx}ctd`] = false;
+            rData[`${pfx}stop`] = false;
+            rData[`${pfx}stopSell`] = false;
+            rData.isOverride[`${pfx}cta`] = false;
+            rData.isOverride[`${pfx}ctd`] = false;
+            rData.isOverride[`${pfx}stop`] = false;
         }
     }
 
@@ -339,81 +405,20 @@ window.handleCellPriceChange = (e, dateStr, room, isOverride = false) => {
     if (window.renderGrid) window.renderGrid();
 };
 
-window.handleCellStopToggle = (dateStr, room, ratePlanId = null, isEvt = false) => {
-    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-    const dObj = window.masterPricing.timeline[dateStr];
-
-    if (ratePlanId) {
-        dObj.otaOverrides = dObj.otaOverrides || {};
-        const cur = !!(dObj.otaOverrides[`${ratePlanId}_stop`] || dObj.otaOverrides[`${ratePlanId}_stopSell`]);
-        dObj.otaOverrides[`${ratePlanId}_stop`] = !cur;
-    } else {
-        dObj[room] = dObj[room] || { isOverride: {} };
-        const prefix = isEvt ? 'evt_' : '';
-        const cur = !!(dObj[room][`${prefix}stop`] || dObj[room][`${prefix}stopSell`]);
-        dObj[room][`${prefix}stop`] = !cur;
-        dObj[room][`${prefix}stopSell`] = !cur;
-        dObj[room].isOverride = dObj[room].isOverride || {};
-        dObj[room].isOverride[`${prefix}stop`] = true;
+window.getUnifiedRestrictionBadgeHtml = (cta, ctd, stop) => {
+    if (stop) {
+        return '<span class="w-full text-center py-0.2 rounded text-[7px] font-black bg-rose-600 text-white leading-none">STOP</span>';
     }
-
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
-    window.markUnsavedChanges();
-    if (window.renderGrid) window.renderGrid();
-};
-
-window.handleCellCtaCtdCycle = (dateStr, room, ratePlanId = null, isEvt = false) => {
-    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-    const dObj = window.masterPricing.timeline[dateStr];
-
-    if (ratePlanId) {
-        dObj.otaOverrides = dObj.otaOverrides || {};
-        const cta = !!dObj.otaOverrides[`${ratePlanId}_cta`];
-        const ctd = !!dObj.otaOverrides[`${ratePlanId}_ctd`];
-
-        if (!cta && !ctd) { dObj.otaOverrides[`${ratePlanId}_cta`] = true; dObj.otaOverrides[`${ratePlanId}_ctd`] = false; }
-        else if (cta && !ctd) { dObj.otaOverrides[`${ratePlanId}_cta`] = false; dObj.otaOverrides[`${ratePlanId}_ctd`] = true; }
-        else if (!cta && ctd) { dObj.otaOverrides[`${ratePlanId}_cta`] = true; dObj.otaOverrides[`${ratePlanId}_ctd`] = true; }
-        else { dObj.otaOverrides[`${ratePlanId}_cta`] = false; dObj.otaOverrides[`${ratePlanId}_ctd`] = false; }
-    } else {
-        dObj[room] = dObj[room] || { isOverride: {} };
-        const rData = dObj[room];
-        rData.isOverride = rData.isOverride || {};
-        const prefix = isEvt ? 'evt_' : '';
-
-        const cta = !!rData[`${prefix}cta`];
-        const ctd = !!rData[`${prefix}ctd`];
-
-        if (!cta && !ctd) { rData[`${prefix}cta`] = true; rData[`${prefix}ctd`] = false; }
-        else if (cta && !ctd) { rData[`${prefix}cta`] = false; rData[`${prefix}ctd`] = true; }
-        else if (!cta && ctd) { rData[`${prefix}cta`] = true; rData[`${prefix}ctd`] = true; }
-        else { rData[`${prefix}cta`] = false; rData[`${prefix}ctd`] = false; }
-
-        rData.isOverride[`${prefix}cta`] = true;
-        rData.isOverride[`${prefix}ctd`] = true;
+    if (cta && ctd) {
+        return '<span class="w-full text-center py-0.2 rounded text-[7px] font-black bg-purple-200 text-purple-900 leading-none">BOTH</span>';
     }
-
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
-    window.markUnsavedChanges();
-    if (window.renderGrid) window.renderGrid();
-};
-
-window.handleHeaderStopToggle = (dateStr) => {
-    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-    const dObj = window.masterPricing.timeline[dateStr];
-    dObj.GLOBAL = dObj.GLOBAL || { isOverride: {} };
-    const cur = !!(dObj.GLOBAL.stop || dObj.GLOBAL.stopSell);
-    dObj.GLOBAL.stop = !cur;
-    dObj.GLOBAL.stopSell = !cur;
-    dObj.GLOBAL.isOverride = dObj.GLOBAL.isOverride || {};
-    dObj.GLOBAL.isOverride.stop = true;
-
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
-    window.markUnsavedChanges();
-    if (window.renderGrid) window.renderGrid();
+    if (cta) {
+        return '<span class="w-full text-center py-0.2 rounded text-[7px] font-black bg-amber-200 text-amber-900 leading-none">CTA</span>';
+    }
+    if (ctd) {
+        return '<span class="w-full text-center py-0.2 rounded text-[7px] font-black bg-sky-200 text-sky-900 leading-none">CTD</span>';
+    }
+    return '<span class="w-2 h-2 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>';
 };
 
 window.renderGrid = () => {
@@ -471,7 +476,7 @@ window.renderGrid = () => {
 
         const isGlobStop = !!(window.masterPricing?.timeline?.[dateStr]?.GLOBAL?.stop || window.masterPricing?.timeline?.[dateStr]?.GLOBAL?.stopSell);
 
-        trHead += `<th class="px-0 py-0.5 border-b ${highlight} relative group cursor-pointer" style="width: 31px; min-width: 31px; max-width: 31px;" onclick="window.handleHeaderStopToggle('${dateStr}')" title="Click to Stop-Sell entire property on ${dateStr}">
+        trHead += `<th class="px-0 py-0.5 border-b ${highlight} relative group cursor-pointer" style="width: 31px; min-width: 31px; max-width: 31px;" onclick="window.cycleUnifiedRestriction('${dateStr}', 'GLOBAL')" title="Click to cycle restrictions for entire property on ${dateStr}">
             <span class="block text-[8px] font-bold uppercase leading-none">${window.mNames[cur.getUTCMonth()]}</span>
             <span class="block text-[11px] font-black leading-tight mt-0.5">${cur.getUTCDate()}</span>
             <div class="h-1.5 w-full flex items-center justify-center mt-0.5">
@@ -512,8 +517,6 @@ window.renderGrid = () => {
             if (filterChannel === 'ALL') return true;
             const rChan = rate.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.ratePlanTitle).channel : '');
             if (filterChannel === 'BDC') return rChan === 'Booking.com' || /bdc|booking/i.test(rate.ratePlanTitle);
-            if (filterChannel === 'HW') return rChan === 'Hostelworld' || /hw|hostelworld/i.test(rate.ratePlanTitle);
-            if (filterChannel === 'AGODA') return rChan === 'Agoda' || /agoda/i.test(rate.ratePlanTitle);
             if (filterChannel === 'DIRECT') return rChan === 'Direct Website' || /direct/i.test(rate.ratePlanTitle);
             return true;
         });
@@ -554,7 +557,7 @@ window.renderGrid = () => {
 
         if (density === 'avail') return;
 
-        // B. BASE (STANDARD) RATE ROW
+        // B. BASE RATE ROW
         let trRate = `<tr class="${groupClass} border-b border-slate-300">
             <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
                 <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
@@ -573,11 +576,6 @@ window.renderGrid = () => {
             const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
             const displayPrice = data.std !== "" && !isNaN(data.std) ? window.formatDisplay(data.std * mult) : "";
 
-            let ctaBadge = '';
-            if (data.cta && data.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 leading-none" title="Closed to Both (BTH)">B</span>';
-            else if (data.cta) ctaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none" title="Closed to Arrival (CTA)">A</span>';
-            else if (data.ctd) ctaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none" title="Closed to Departure (CTD)">D</span>';
-
             const isMinArr = !!data.min_arr;
             const minVal = data.min !== "" ? data.min : (data.min_arr ? `${data.min_arr}▸` : "");
             const maxVal = data.max !== "" ? data.max : "";
@@ -588,6 +586,7 @@ window.renderGrid = () => {
 
             const showTop = density === 'minmax' || density === 'full';
             const showBottom = density === 'full';
+            const unifiedPillHtml = window.getUnifiedRestrictionBadgeHtml(data.cta, data.ctd, data.stopSell);
 
             trRate += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice || '--'}${isPinned ? ' (Custom Override - Double-click to unlock)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
                 ${showTop ? `
@@ -601,12 +600,9 @@ window.renderGrid = () => {
                 </div>
 
                 ${showBottom ? `
-                <div class="flex items-center justify-between px-0.5 text-[7px] leading-none h-[11px] pb-0.5">
-                    <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}')" class="cursor-pointer" title="Closed Cycle: Arrival (A), Departure (D), Both (B)">
-                        ${ctaBadge || '<span class="w-2 h-2 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>'}
-                    </button>
-                    <button onclick="window.handleCellStopToggle('${dateStr}', '${room}')" class="cursor-pointer" title="Toggle Stop-Sell">
-                        ${isStopped ? '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-2 h-2 rounded-full bg-transparent hover:bg-rose-400/60 inline-block"></span>'}
+                <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[11px] pb-0.5">
+                    <button onclick="window.cycleUnifiedRestriction('${dateStr}', '${room}')" class="cursor-pointer w-full flex items-center justify-center" title="Cycle Restriction: Open -> CTA -> CTD -> Both -> Stop">
+                        ${unifiedPillHtml}
                     </button>
                 </div>` : ''}
             </td>`;
@@ -616,7 +612,6 @@ window.renderGrid = () => {
 
         // C. DUAL EVENT RATES: Render ONLY if property has event pricing enabled
         if (isEventsActive && hasEvents && density !== 'avail') {
-            // Row C1: EVT Non-Ref (Base Gated Package Rate)
             let trEvtNonRef = `<tr class="${groupClass} border-b border-pink-200 bg-pink-50/40">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 bg-pink-50/80">
                     <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
@@ -648,11 +643,6 @@ window.renderGrid = () => {
                 const evtCtd = roomObj.evt_ctd !== undefined ? !!roomObj.evt_ctd : !!evtRestr.ctd;
                 const isEvtStop = !!(roomObj.evt_stop || roomObj.evt_stopSell);
 
-                let evtCtaBadge = '';
-                if (evtCta && evtCtd) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 leading-none">B</span>';
-                else if (evtCta) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none">A</span>';
-                else if (evtCtd) evtCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">D</span>';
-
                 let minDiff = window.getNearestEvent ? window.getNearestEvent(window.parseYMD(dateStr)) : 999;
                 let peakBg = minDiff === 0 ? 'bg-amber-100/70' : (Math.abs(minDiff) <= 2 ? 'bg-pink-100/50' : '');
 
@@ -662,6 +652,7 @@ window.renderGrid = () => {
 
                 const showTop = density === 'minmax' || density === 'full';
                 const showBottom = density === 'full';
+                const evtPillHtml = window.getUnifiedRestrictionBadgeHtml(evtCta, evtCtd, isEvtStop);
 
                 trEvtNonRef += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}', null, true)" onmouseenter="window.showCmTooltip(event, '${displayName} | EVT Non-Ref\\nPrice: ฿${displayFmp || '--'}\\nMin: ${displayEvtMin || '--'}, Max: ${evtMax || '--'}')" onmouseleave="window.hideCmTooltip()">
                     ${showTop ? `
@@ -675,12 +666,9 @@ window.renderGrid = () => {
                     </div>
 
                     ${showBottom ? `
-                    <div class="flex items-center justify-between px-0.5 text-[7px] leading-none h-[11px] pb-0.5">
-                        <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}', null, true)" class="cursor-pointer" title="Closed Cycle: Arrival (A), Departure (D), Both (B)">
-                            ${evtCtaBadge || '<span class="w-2 h-2 rounded-full bg-pink-300 hover:bg-pink-400 inline-block transition-colors"></span>'}
-                        </button>
-                        <button onclick="window.handleCellStopToggle('${dateStr}', '${room}', null, true)" class="cursor-pointer" title="Toggle Stop-Sell">
-                            ${isEvtStop ? '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-2 h-2 rounded-full bg-transparent hover:bg-rose-400/60 inline-block"></span>'}
+                    <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[11px] pb-0.5">
+                        <button onclick="window.cycleUnifiedRestriction('${dateStr}', '${room}', null, true)" class="cursor-pointer w-full flex items-center justify-center" title="Cycle Event Restriction">
+                            ${evtPillHtml}
                         </button>
                     </div>` : ''}
                 </td>`;
@@ -688,7 +676,7 @@ window.renderGrid = () => {
             trEvtNonRef += `</tr>`;
             allRowsHtml += trEvtNonRef;
 
-            // Row C2: EVT Refundable (Event Refundable Risk Premium Rate)
+            // Row C2: EVT Refundable
             let trEvtRef = `<tr class="${groupClass} border-b-2 border-slate-400 bg-pink-100/30">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 bg-pink-100/70">
                     <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
@@ -705,7 +693,7 @@ window.renderGrid = () => {
                 const roomObj = dayObj[room] || {};
 
                 const eType = window.pricingRules?.evtRefType || '+%';
-                const eVal = window.pricingRules?.evtRefVal !== undefined ? window.pricingRules.evtRefVal : 15;
+                const eVal = window.pricingRules?.evtRefVal !== undefined ? window.pricingRules.evtRefVal : 25;
 
                 let calculatedEvtRef = roomObj.fmp_ref;
                 if (calculatedEvtRef === undefined && roomObj.fmp !== undefined && roomObj.fmp !== "") {
@@ -734,7 +722,7 @@ window.renderGrid = () => {
             allRowsHtml += trEvtRef;
         }
 
-        // D. MAPPED RATE PLANS (IF EXPANDED IN ROOM, EVENT, OR ALL-RATES MODE)
+        // D. MAPPED RATE PLANS
         if (isExpanded && mappedRates.length > 0 && drill !== 'master' && density !== 'avail') {
             mappedRates.forEach((rate) => {
                 const rateSource = rate.rateSource || 'std';
@@ -784,17 +772,13 @@ window.renderGrid = () => {
                     const otaCta = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_cta`];
                     const otaCtd = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_ctd`];
 
-                    let otaCtaBadge = '';
-                    if (otaCta && otaCtd) otaCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 leading-none">B</span>';
-                    else if (otaCta) otaCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none">A</span>';
-                    else if (otaCtd) otaCtaBadge = '<span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">D</span>';
-
                     let cellOtaClass = "rate-cell-container p-0 border-r border-indigo-100 text-center relative ";
                     if (otaStop) cellOtaClass += "rate-cell-stopped ";
                     else if (otaOverride !== undefined) cellOtaClass += "rate-cell-pinned ";
 
                     const showTop = density === 'minmax' || density === 'full';
                     const showBottom = density === 'full';
+                    const otaPillHtml = window.getUnifiedRestrictionBadgeHtml(otaCta, otaCtd, otaStop);
 
                     trOta += `<td class="${cellOtaClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}', '${rate.ratePlanId}')">
                         ${showTop ? `
@@ -808,12 +792,9 @@ window.renderGrid = () => {
                         </div>
 
                         ${showBottom ? `
-                        <div class="flex items-center justify-between px-0.5 text-[7px] leading-none h-[10px] pb-0.5">
-                            <button onclick="window.handleCellCtaCtdCycle('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer" title="Closed Cycle: Arrival (A), Departure (D), Both (B)">
-                                ${otaCtaBadge || '<span class="w-2 h-2 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>'}
-                            </button>
-                            <button onclick="window.handleCellStopToggle('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer" title="Toggle Stop-Sell">
-                                ${otaStop ? '<span class="px-0.5 py-0.2 rounded text-[7px] font-black bg-rose-600 text-white">STOP</span>' : '<span class="w-2 h-2 rounded-full bg-transparent hover:bg-rose-400/60 inline-block"></span>'}
+                        <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[10px] pb-0.5">
+                            <button onclick="window.cycleUnifiedRestriction('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer w-full flex items-center justify-center" title="Cycle OTA Restriction">
+                                ${otaPillHtml}
                             </button>
                         </div>` : ''}
                     </td>`;
@@ -884,105 +865,205 @@ window.shiftTape = (days) => {
     window.renderGrid();
 };
 
+// --- COMPACT BULK UPDATE ENGINE ---
+window.setBulkScopeMode = (mode) => {
+    window.bulkScopeMode = mode;
+    const btnAnchors = document.getElementById('qb-scope-anchors');
+    const btnAll = document.getElementById('qb-scope-all');
+    if (btnAnchors && btnAll) {
+        if (mode === 'anchors') {
+            btnAnchors.className = "px-2 py-0.5 rounded cursor-pointer transition-colors bg-indigo-600 text-white shadow-xs font-black";
+            btnAll.className = "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-400 hover:text-white";
+        } else {
+            btnAnchors.className = "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-400 hover:text-white";
+            btnAll.className = "px-2 py-0.5 rounded cursor-pointer transition-colors bg-indigo-600 text-white shadow-xs font-black";
+        }
+    }
+    window.renderBulkGrid();
+};
+
 window.toggleQuickBulk = (forceClose = false) => {
     const panel = document.getElementById('quick-bulk-panel');
     if (!panel) return;
     if (!forceClose && panel.classList.contains('hidden')) {
         panel.classList.remove('hidden');
         panel.classList.add('flex');
-        if (window.populateQuickBulkScopes) window.populateQuickBulkScopes();
+        
+        const today = new Date();
+        const qbStart = document.getElementById('qb-start');
+        const qbEnd = document.getElementById('qb-end');
+        if (qbStart && !qbStart.value) qbStart.value = window.getLocalYMD(today);
+        if (qbEnd && !qbEnd.value) {
+            const next30 = new Date(today);
+            next30.setDate(today.getDate() + 30);
+            qbEnd.value = window.getLocalYMD(next30);
+        }
+
+        window.renderBulkGrid();
     } else {
         panel.classList.add('hidden');
         panel.classList.remove('flex');
     }
 };
 
-window.populateQuickBulkScopes = () => {
-    const sel = document.getElementById('qb-target-scope');
-    if (!sel) return;
-    let opts = '<option value="GLOBAL">🌍 All Rooms & Rates (Global)</option>';
-    opts += '<option value="PRIVATES">🚪 All Private Rooms</option>';
-    opts += '<option value="DORMS">🛏️ All Dorms</option>';
-
-    (window.roomTypes || []).forEach(r => {
-        opts += `<option value="ROOM_${r}">Door: ${window.displayAbbrev[r] || r}</option>`;
-    });
-
-    (window.channexRateMap || []).forEach(m => {
-        opts += `<option value="RATE_${m.ratePlanId}">📡 ${m.ratePlanTitle}</option>`;
-    });
-
-    sel.innerHTML = opts;
-};
-
-window.cycleBulkClosedPill = () => {
-    const btn = document.getElementById('qb-closed-pill');
+window.cycleBulkRowPill = (btn) => {
     if (!btn) return;
-    const states = ['unchanged', 'open', 'cta', 'ctd', 'both'];
-    const cur = btn.dataset.state || 'unchanged';
+    const states = ['open', 'cta', 'ctd', 'both', 'stop'];
+    const cur = btn.dataset.state || 'open';
     const next = states[(states.indexOf(cur) + 1) % states.length];
     btn.dataset.state = next;
 
     const labels = {
-        unchanged: 'CLOSED: UNCHANGED',
-        open: 'CLOSED: OPEN (CLEAR)',
-        cta: 'CLOSED: CTA (ARRIVAL)',
-        ctd: 'CLOSED: CTD (DEPARTURE)',
-        both: 'CLOSED: BOTH (ARR & DEP)'
-    };
-    const classes = {
-        unchanged: 'bg-slate-700 text-slate-400 border-slate-600',
-        open: 'bg-emerald-800 text-emerald-200 border-emerald-600',
-        cta: 'bg-amber-800 text-amber-200 border-amber-600',
-        ctd: 'bg-sky-800 text-sky-200 border-sky-600',
-        both: 'bg-purple-800 text-purple-200 border-purple-600'
+        open: 'OPEN',
+        cta: 'CTA (Arr)',
+        ctd: 'CTD (Dep)',
+        both: 'BOTH (A+D)',
+        stop: 'STOP-SELL'
     };
 
-    btn.className = `px-2.5 py-1 rounded text-[10px] font-black uppercase transition-colors shadow-xs cursor-pointer flex items-center gap-1 border ${classes[next]}`;
-    btn.innerHTML = `<span>${labels[next]}</span>`;
+    const classes = {
+        open: 'bg-slate-800 text-slate-400 border-slate-700',
+        cta: 'bg-amber-400/20 text-amber-300 border-amber-500',
+        ctd: 'bg-sky-400/20 text-sky-300 border-sky-500',
+        both: 'bg-purple-400/20 text-purple-300 border-purple-500',
+        stop: 'bg-rose-600 text-white border-rose-500'
+    };
+
+    btn.className = `qb-val-pill w-28 py-0.5 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs ${classes[next]}`;
+    btn.innerText = labels[next];
 };
 
-window.cycleBulkStopPill = () => {
-    const btn = document.getElementById('qb-stop-pill');
-    if (!btn) return;
-    const states = ['unchanged', 'open', 'stop'];
-    const cur = btn.dataset.state || 'unchanged';
-    const next = states[(states.indexOf(cur) + 1) % states.length];
-    btn.dataset.state = next;
+window.renderBulkGrid = () => {
+    const qbBody = document.getElementById('qb-grid-body');
+    if (!qbBody) return;
 
-    const labels = {
-        unchanged: 'STOP: UNCHANGED',
-        open: 'STOP: OPEN (SELL)',
-        stop: 'STOP: STOP-SELL'
-    };
-    const classes = {
-        unchanged: 'bg-slate-700 text-slate-400 border-slate-600',
-        open: 'bg-emerald-800 text-emerald-200 border-emerald-600',
-        stop: 'bg-rose-800 text-rose-200 border-rose-600'
-    };
+    const inptCls = "input-base !py-1 !px-1.5 text-center text-xs w-full font-black bg-slate-900 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800 focus:border-indigo-500";
+    const pillBtn = `<button type="button" data-state="open" onclick="window.cycleBulkRowPill(this)" class="qb-val-pill w-28 py-0.5 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs bg-slate-800 text-slate-400 border-slate-700">OPEN</button>`;
 
-    btn.className = `px-2.5 py-1 rounded text-[10px] font-black uppercase transition-colors shadow-xs cursor-pointer flex items-center gap-1 border ${classes[next]}`;
-    btn.innerHTML = `<span>${labels[next]}</span>`;
+    let html = '';
+
+    // 1. GLOBAL Row (Restrictions only, rate disabled)
+    html += `
+    <tr class="bg-slate-950/80 font-black text-slate-200" data-type="global" data-id="GLOBAL">
+        <td class="p-2 border-r border-slate-800 font-black uppercase text-amber-400">
+            🌍 GLOBAL (All Rooms - Restrictions)
+        </td>
+        <td class="p-1 border-r border-slate-800 text-center">
+            <input type="text" disabled placeholder="--" class="${inptCls} !bg-slate-950 !text-slate-600 cursor-not-allowed">
+        </td>
+        <td class="p-1 border-r border-slate-800 text-center">
+            <input type="text" class="${inptCls} qb-val-min text-amber-400" placeholder="e.g. 3 or 3▸" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);">
+        </td>
+        <td class="p-1 border-r border-slate-800 text-center">
+            <input type="number" min="1" class="${inptCls} qb-val-max text-slate-300" placeholder="--">
+        </td>
+        <td class="p-1 text-center">
+            ${pillBtn}
+        </td>
+    </tr>`;
+
+    // 2. Room Rows (Anchors Only vs All Rooms)
+    let roomsToRender = [...(window.roomTypes || [])];
+    const anchorP = window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || '';
+    const anchorD = window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || '';
+
+    if (window.bulkScopeMode === 'anchors') {
+        roomsToRender = [anchorP, anchorD].filter(Boolean);
+        if (roomsToRender.length === 0 && (window.roomTypes || []).length > 0) {
+            roomsToRender = [window.roomTypes[0]];
+        }
+        roomsToRender = [...new Set(roomsToRender)];
+    }
+
+    roomsToRender.forEach(r => {
+        const displayName = window.displayAbbrev[r] || r;
+        const isAnchor = (r === anchorP || r === anchorD);
+        html += `
+        <tr class="bg-slate-900/40 hover:bg-slate-800/80 text-white transition-colors" data-type="room" data-id="${r}">
+            <td class="p-2 border-r border-slate-800 font-bold text-slate-200 truncate" title="${r}">
+                ${displayName} ${isAnchor ? '<span class="text-[8px] font-black uppercase bg-indigo-900/70 border border-indigo-700 text-indigo-300 px-1 py-0.2 rounded ml-1">ANCHOR</span>' : ''}
+            </td>
+            <td class="p-1 border-r border-slate-800 text-center">
+                <input type="number" step="any" class="${inptCls} qb-val-rate !text-emerald-400" placeholder="--">
+            </td>
+            <td class="p-1 border-r border-slate-800 text-center">
+                <input type="text" class="${inptCls} qb-val-min text-amber-400" placeholder="e.g. 3 or 3▸" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);">
+            </td>
+            <td class="p-1 border-r border-slate-800 text-center">
+                <input type="number" min="1" class="${inptCls} qb-val-max text-slate-300" placeholder="--">
+            </td>
+            <td class="p-1 text-center">
+                ${pillBtn}
+            </td>
+        </tr>`;
+    });
+
+    qbBody.innerHTML = html;
 };
 
-window.applyBulkUpdates = (isClear = false) => {
+window.applyBulkGrid = (isClear = false) => {
     const s = document.getElementById('qb-start')?.value;
     const e = document.getElementById('qb-end')?.value;
     if (!s || !e) return window.customAlert("Please select Start and End dates.");
     if (s > e) return window.customAlert("End date must be on or after Start date.");
 
     const sU = window.parseYMD(s), eU = window.parseYMD(e);
-    const scope = document.getElementById('qb-target-scope')?.value || 'GLOBAL';
+    const rows = document.querySelectorAll('#qb-grid-body tr');
 
-    const rateVal = document.getElementById('qb-rate')?.value.trim();
-    const minValRaw = document.getElementById('qb-min')?.value.trim();
-    const maxVal = document.getElementById('qb-max')?.value.trim();
-    const closedState = document.getElementById('qb-closed-pill')?.dataset.state || 'unchanged';
-    const stopState = document.getElementById('qb-stop-pill')?.dataset.state || 'unchanged';
+    const roomUpdates = [];
+    let globalRule = null;
 
-    const minFormatted = window.formatMinStayInput ? window.formatMinStayInput(minValRaw) : minValRaw;
-    const isMinArr = minFormatted.includes('▸');
-    const minStayNum = minFormatted.replace(/[^\d]/g, '');
+    rows.forEach(tr => {
+        const type = tr.dataset.type;
+        const id = tr.dataset.id;
+
+        const rateInput = tr.querySelector('.qb-val-rate');
+        const minInput = tr.querySelector('.qb-val-min');
+        const maxInput = tr.querySelector('.qb-val-max');
+        const pill = tr.querySelector('.qb-val-pill');
+
+        const rate = (rateInput && rateInput.value.trim() !== "") ? parseFloat(rateInput.value) : undefined;
+        
+        let min = undefined;
+        let min_arr = undefined;
+        if (minInput && minInput.value.trim() !== "") {
+            const rawMin = minInput.value.trim();
+            if (/(\d+)\s*(a|>|▸)/i.test(rawMin)) {
+                const match = rawMin.match(/(\d+)/);
+                min_arr = match ? parseInt(match[1], 10) : undefined;
+            } else {
+                const match = rawMin.match(/(\d+)/);
+                min = match ? parseInt(match[1], 10) : undefined;
+            }
+        }
+
+        const max = (maxInput && maxInput.value.trim() !== "") ? parseInt(maxInput.value, 10) : undefined;
+        const pillState = pill?.dataset.state || 'open';
+
+        let cta = undefined;
+        let ctd = undefined;
+        let stop = undefined;
+
+        if (pillState === 'cta') { cta = true; ctd = false; stop = false; }
+        else if (pillState === 'ctd') { cta = false; ctd = true; stop = false; }
+        else if (pillState === 'both') { cta = true; ctd = true; stop = false; }
+        else if (pillState === 'stop') { cta = false; ctd = false; stop = true; }
+
+        const rule = { id, rate, min, min_arr, max, cta, ctd, stop, pillState };
+
+        if (type === 'global') {
+            globalRule = rule;
+        } else if (type === 'room') {
+            roomUpdates.push(rule);
+        }
+    });
+
+    const hasAnyInput = isClear || (globalRule && (globalRule.min !== undefined || globalRule.max !== undefined || globalRule.min_arr !== undefined || globalRule.pillState !== 'open'))
+        || roomUpdates.some(r => r.rate !== undefined || r.min !== undefined || r.max !== undefined || r.min_arr !== undefined || r.pillState !== 'open');
+
+    if (!hasAnyInput) {
+        return window.customAlert("Enter at least one value or select a restriction pill state to apply across the dates.");
+    }
 
     for (let d = sU; d <= eU; d += 86400000) {
         let dateStr = window.getLocalYMD(new Date(d));
@@ -992,156 +1073,103 @@ window.applyBulkUpdates = (isClear = false) => {
         window.dirtyDates.add(dateStr);
         window.syncedDates.delete(dateStr);
 
-        let targetRooms = [];
-        if (scope === 'GLOBAL') {
-            targetRooms = [...(window.roomTypes || [])];
+        // 1. Apply Global Restrictions
+        if (globalRule) {
             dObj['GLOBAL'] = dObj['GLOBAL'] || { isOverride: {} };
             if (isClear) {
                 delete dObj['GLOBAL'].min;
                 delete dObj['GLOBAL'].max;
+                delete dObj['GLOBAL'].min_arr;
                 delete dObj['GLOBAL'].cta;
                 delete dObj['GLOBAL'].ctd;
                 delete dObj['GLOBAL'].stop;
                 delete dObj['GLOBAL'].stopSell;
+                dObj['GLOBAL'].isOverride = {};
             } else {
-                if (minStayNum !== "") dObj['GLOBAL'].min = parseInt(minStayNum, 10);
-                if (maxVal !== "") dObj['GLOBAL'].max = parseInt(maxVal, 10);
-                if (closedState === 'open') { dObj['GLOBAL'].cta = false; dObj['GLOBAL'].ctd = false; }
-                else if (closedState === 'cta') { dObj['GLOBAL'].cta = true; dObj['GLOBAL'].ctd = false; }
-                else if (closedState === 'ctd') { dObj['GLOBAL'].cta = false; dObj['GLOBAL'].ctd = true; }
-                else if (closedState === 'both') { dObj['GLOBAL'].cta = true; dObj['GLOBAL'].ctd = true; }
-
-                if (stopState === 'open') { dObj['GLOBAL'].stop = false; dObj['GLOBAL'].stopSell = false; }
-                else if (stopState === 'stop') { dObj['GLOBAL'].stop = true; dObj['GLOBAL'].stopSell = true; }
-            }
-        } else if (scope === 'PRIVATES') {
-            targetRooms = (window.roomTypes || []).filter(rt => !rt.toLowerCase().includes('dorm'));
-        } else if (scope === 'DORMS') {
-            targetRooms = (window.roomTypes || []).filter(rt => rt.toLowerCase().includes('dorm'));
-        } else if (scope.startsWith('ROOM_')) {
-            targetRooms = [scope.replace('ROOM_', '')];
-        } else if (scope.startsWith('RATE_')) {
-            const planId = scope.replace('RATE_', '');
-            dObj.otaOverrides = dObj.otaOverrides || {};
-            if (isClear) {
-                delete dObj.otaOverrides[planId];
-                delete dObj.otaOverrides[`${planId}_rate`];
-                delete dObj.otaOverrides[`${planId}_min`];
-                delete dObj.otaOverrides[`${planId}_max`];
-                delete dObj.otaOverrides[`${planId}_cta`];
-                delete dObj.otaOverrides[`${planId}_ctd`];
-                delete dObj.otaOverrides[`${planId}_stop`];
-            } else {
-                if (rateVal !== "") dObj.otaOverrides[planId] = window.roundCurrency(parseFloat(rateVal));
-                if (minStayNum !== "") dObj.otaOverrides[`${planId}_min`] = parseInt(minStayNum, 10);
-                if (maxVal !== "") dObj.otaOverrides[`${planId}_max`] = parseInt(maxVal, 10);
-                if (closedState === 'open') { dObj.otaOverrides[`${planId}_cta`] = false; dObj.otaOverrides[`${planId}_ctd`] = false; }
-                else if (closedState === 'cta') { dObj.otaOverrides[`${planId}_cta`] = true; dObj.otaOverrides[`${planId}_ctd`] = false; }
-                else if (closedState === 'ctd') { dObj.otaOverrides[`${planId}_cta`] = false; dObj.otaOverrides[`${planId}_ctd`] = true; }
-                else if (closedState === 'both') { dObj.otaOverrides[`${planId}_cta`] = true; dObj.otaOverrides[`${planId}_ctd`] = true; }
-
-                if (stopState === 'open') { dObj.otaOverrides[`${planId}_stop`] = false; }
-                else if (stopState === 'stop') { dObj.otaOverrides[`${planId}_stop`] = true; }
+                if (globalRule.min !== undefined) { dObj['GLOBAL'].min = globalRule.min; dObj['GLOBAL'].isOverride.min = true; delete dObj['GLOBAL'].min_arr; }
+                if (globalRule.min_arr !== undefined) { dObj['GLOBAL'].min_arr = globalRule.min_arr; dObj['GLOBAL'].isOverride.min_arr = true; delete dObj['GLOBAL'].min; }
+                if (globalRule.max !== undefined) { dObj['GLOBAL'].max = globalRule.max; dObj['GLOBAL'].isOverride.max = true; }
+                
+                if (globalRule.pillState !== 'open') {
+                    dObj['GLOBAL'].cta = globalRule.cta;
+                    dObj['GLOBAL'].ctd = globalRule.ctd;
+                    dObj['GLOBAL'].stop = globalRule.stop;
+                    dObj['GLOBAL'].stopSell = globalRule.stop;
+                    dObj['GLOBAL'].isOverride.cta = true;
+                    dObj['GLOBAL'].isOverride.ctd = true;
+                    dObj['GLOBAL'].isOverride.stop = true;
+                }
             }
         }
 
-        targetRooms.forEach(rt => {
+        // 2. Apply Room-specific lines
+        roomUpdates.forEach(r => {
+            const rt = r.id;
             dObj[rt] = dObj[rt] || { isOverride: {} };
             const rData = dObj[rt];
             rData.isOverride = rData.isOverride || {};
 
             if (isClear) {
                 delete rData.std;
-                delete rData.fmp;
-                delete rData.fmp_ref;
                 delete rData.min;
-                delete rData.min_arr;
                 delete rData.max;
+                delete rData.min_arr;
                 delete rData.cta;
                 delete rData.ctd;
                 delete rData.stop;
                 delete rData.stopSell;
                 rData.isOverride = {};
             } else {
-                if (rateVal !== "") {
-                    rData.std = window.roundCurrency(parseFloat(rateVal));
+                if (r.rate !== undefined) {
+                    const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
+                    rData.std = window.roundCurrency(r.rate / mult);
                     rData.isOverride.std = true;
+                    if (window.rippleDay) window.rippleDay(dateStr, rt);
                 }
-                if (minStayNum !== "") {
-                    if (isMinArr) {
-                        rData.min_arr = parseInt(minStayNum, 10);
-                        delete rData.min;
-                        rData.isOverride.min_arr = true;
-                    } else {
-                        rData.min = parseInt(minStayNum, 10);
-                        delete rData.min_arr;
-                        rData.isOverride.min = true;
-                    }
+                if (r.min !== undefined) {
+                    rData.min = r.min;
+                    delete rData.min_arr;
+                    rData.isOverride.min = true;
+                    delete rData.isOverride.min_arr;
                 }
-                if (maxVal !== "") {
-                    rData.max = parseInt(maxVal, 10);
+                if (r.min_arr !== undefined) {
+                    rData.min_arr = r.min_arr;
+                    delete rData.min;
+                    rData.isOverride.min_arr = true;
+                    delete rData.isOverride.min;
+                }
+                if (r.max !== undefined) {
+                    rData.max = r.max;
                     rData.isOverride.max = true;
                 }
-                if (closedState === 'open') { rData.cta = false; rData.ctd = false; }
-                else if (closedState === 'cta') { rData.cta = true; rData.ctd = false; }
-                else if (closedState === 'ctd') { rData.cta = false; rData.ctd = true; }
-                else if (closedState === 'both') { rData.cta = true; rData.ctd = true; }
-
-                if (stopState === 'open') { rData.stop = false; rData.stopSell = false; }
-                else if (stopState === 'stop') { rData.stop = true; rData.stopSell = true; }
+                if (r.pillState !== 'open') {
+                    rData.cta = r.cta;
+                    rData.ctd = r.ctd;
+                    rData.stop = r.stop;
+                    rData.stopSell = r.stop;
+                    rData.isOverride.cta = true;
+                    rData.isOverride.ctd = true;
+                    rData.isOverride.stop = true;
+                }
             }
         });
     }
 
     window.markUnsavedChanges();
     if (window.renderGrid) window.renderGrid();
-    window.customAlert(isClear ? "Overrides cleared across selected dates!" : "Bulk updates successfully applied!");
-};
 
-window.renderBulkGrid = () => {
-    let html = '';
-    const inptCls = "input-base !py-0.5 !px-1 text-center text-[10px] w-14 font-black transition-colors focus:bg-indigo-50 border border-transparent focus:border-indigo-300 hover:bg-slate-50 placeholder-slate-400";
-
-    html += `<tr class="bg-slate-200 border-b border-slate-300" data-type="global" data-id="GLOBAL">
-        <td class="p-1.5 font-black text-[10px] uppercase text-slate-800 border-r border-slate-300">🌍 GLOBAL (ALL ROOMS)</td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="text" class="${inptCls} bg-slate-100/50 cursor-not-allowed" disabled></td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="number" step="any" class="${inptCls} qb-val-min" placeholder="MIN"></td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="number" step="any" class="${inptCls} qb-val-max" placeholder="MAX"></td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="number" step="any" class="${inptCls} qb-val-min-arr" placeholder="MIN-A"></td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="text" class="${inptCls} qb-val-cta" placeholder="CTA"></td>
-        <td class="p-1 text-center border-r border-slate-300"><input type="text" class="${inptCls} qb-val-ctd" placeholder="CTD"></td>
-        <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
-    </tr>`;
-
-    (window.roomTypes || []).forEach(r => {
-        html += `<tr class="bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors" data-type="room" data-id="${r}">
-            <td class="p-1.5 font-bold text-[10px] text-slate-600 pl-4 border-r border-slate-200">🚪 ${window.displayAbbrev[r] || r} <span class="text-[8px] text-slate-400 font-black uppercase ml-1">(Base)</span></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-rate !placeholder-indigo-400" placeholder="RATE"></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-min" placeholder="MIN"></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-max" placeholder="MAX"></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="number" step="any" class="${inptCls} qb-val-min-arr" placeholder="MIN-A"></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="text" class="${inptCls} qb-val-cta" placeholder="CTA"></td>
-            <td class="p-1 text-center border-r border-slate-200"><input type="text" class="${inptCls} qb-val-ctd" placeholder="CTD"></td>
-            <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
-        </tr>`;
-
-        const mappedRates = (window.channexRateMap || []).filter(m => window.categoryResolver(m.pmsCategory) === r);
-        mappedRates.forEach(m => {
-            html += `<tr class="bg-indigo-50/20 border-b border-indigo-50 hover:bg-indigo-50/50 transition-colors" data-type="rate" data-id="${m.ratePlanId}" data-parent="${r}" data-ruletype="${m.ruleType || "="}" data-ruleval="${m.ruleVal !== undefined ? m.ruleVal : 0}" data-ratesource="${m.rateSource || 'std'}">
-                <td class="p-1.5 font-bold text-[9px] text-indigo-700 pl-8 border-r border-indigo-100">↳ 📡 ${m.ratePlanTitle}</td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-rate !placeholder-indigo-400" placeholder="RATE"></td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-min" placeholder="MIN"></td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-max" placeholder="MAX"></td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="number" step="any" class="${inptCls} qb-val-min-arr" placeholder="MIN-A"></td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="text" class="${inptCls} qb-val-cta" placeholder="CTA"></td>
-                <td class="p-1 text-center border-r border-indigo-100"><input type="text" class="${inptCls} qb-val-ctd" placeholder="CTD"></td>
-                <td class="p-1 text-center"><input type="text" class="${inptCls} qb-val-stop !placeholder-rose-400" placeholder="STOP"></td>
-            </tr>`;
+    if (!isClear) {
+        document.querySelectorAll('#qb-grid-body input[type="number"], #qb-grid-body input[type="text"]').forEach(i => { i.value = ''; });
+        document.querySelectorAll('.qb-val-pill').forEach(btn => {
+            btn.dataset.state = 'open';
+            btn.className = "qb-val-pill w-28 py-0.5 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs bg-slate-800 text-slate-400 border-slate-700";
+            btn.innerText = "OPEN";
         });
-    });
+    }
 
-    const qbBody = document.getElementById('qb-grid-body');
-    if (qbBody) qbBody.innerHTML = html;
+    window.customAlert(isClear 
+        ? "Overrides cleared across the selected date range!" 
+        : `Bulk updates applied successfully across ${s} → ${e}!\n\nClick "SAVE & SYNC" to push changes to Channex.`);
 };
 
 // SMART RELEVANT-FIELD TAB NAVIGATION
@@ -1160,9 +1188,9 @@ document.addEventListener('keydown', (e) => {
             e.preventDefault();
             window.isUserTyping = true;
             clearTimeout(window.typingTimeout);
-            window.typingTimeout = setTimeout(() => { window.isUserTyping = false; }, 1000);
+            window.typingTimeout = setTimeout(() => { window.isUserTyping = false; }, 800);
 
-            const inputs = Array.from(document.querySelectorAll(targetSelector)).filter(i => !i.disabled && i.offsetParent !== null);
+            const inputs = Array.from(document.querySelectorAll(targetSelector)).filter(i => !i.disabled && (i.offsetParent !== null || i.getClientRects().length > 0));
             const idx = inputs.indexOf(target);
             if (idx !== -1) {
                 const nextIdx = e.shiftKey ? (idx - 1 + inputs.length) % inputs.length : (idx + 1) % inputs.length;
