@@ -152,14 +152,28 @@ window.handleCellEdit = (dateStr, room, field, val, isEvt = false) => {
             rData.isOverride[`${prefix}min`] = true;
             delete rData.isOverride[`${prefix}min_arr`];
         }
-    } else if (field === 'max') {
+    } else if (field === 'max' || field === 'max_hybrid') {
+        const clean = String(val).trim();
         const prefix = isEvt ? 'evt_' : '';
-        if (!val || val === "-" || val === "0") {
+        if (!clean || clean === "-" || clean === "0") {
             delete rData[`${prefix}max`];
+            delete rData[`${prefix}max_arr`];
+            delete rData.isOverride[`${prefix}max`];
+            delete rData.isOverride[`${prefix}max_arr`];
+        } else if (/(\d+)\s*(a|>|▸)/i.test(clean)) {
+            const match = clean.match(/(\d+)/);
+            const num = match ? parseInt(match[1], 10) : "";
+            rData[`${prefix}max_arr`] = num;
+            delete rData[`${prefix}max`];
+            rData.isOverride[`${prefix}max_arr`] = true;
             delete rData.isOverride[`${prefix}max`];
         } else {
-            rData[`${prefix}max`] = parseInt(val, 10);
+            const match = clean.match(/(\d+)/);
+            const num = match ? parseInt(match[1], 10) : "";
+            rData[`${prefix}max`] = num;
+            delete rData[`${prefix}max_arr`];
             rData.isOverride[`${prefix}max`] = true;
+            delete rData.isOverride[`${prefix}max_arr`];
         }
     } else if (field === 'min') {
         if (!val || val === "-") {
@@ -407,18 +421,18 @@ window.cycleUnifiedRestriction = (dateStr, room, ratePlanId = null, isEvt = fals
 
 window.getUnifiedRestrictionBadgeHtml = (cta, ctd, stop) => {
     if (stop) {
-        return '<span class="w-full text-center py-0.2 rounded text-[7px] font-black bg-rose-600 text-white leading-none">STOP</span>';
+        return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-rose-600 text-white leading-none tracking-tight">STOP</span>';
     }
     if (cta && ctd) {
-        return '<span class="w-full text-center py-0.2 rounded text-[7px] font-black bg-purple-200 text-purple-900 leading-none">BOTH</span>';
+        return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 leading-none tracking-tight">CTB</span>';
     }
     if (cta) {
-        return '<span class="w-full text-center py-0.2 rounded text-[7px] font-black bg-amber-200 text-amber-900 leading-none">CTA</span>';
+        return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none tracking-tight">CTA</span>';
     }
     if (ctd) {
-        return '<span class="w-full text-center py-0.2 rounded text-[7px] font-black bg-sky-200 text-sky-900 leading-none">CTD</span>';
+        return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none tracking-tight">CTD</span>';
     }
-    return '<span class="w-2 h-2 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>';
+    return '<span class="w-1.5 h-1.5 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>';
 };
 
 window.renderGrid = () => {
@@ -914,11 +928,11 @@ window.cycleBulkRowPill = (btn) => {
     btn.dataset.state = next;
 
     const labels = {
-        open: 'OPEN',
-        cta: 'CTA (Arr)',
-        ctd: 'CTD (Dep)',
-        both: 'BOTH (A+D)',
-        stop: 'STOP-SELL'
+        open: '<span class="hidden sm:inline">Open</span><span class="sm:hidden">Open</span>',
+        cta: '<span class="hidden sm:inline">Closed to Arrival</span><span class="sm:hidden">CTA</span>',
+        ctd: '<span class="hidden sm:inline">Closed to Departure</span><span class="sm:hidden">CTD</span>',
+        both: '<span class="hidden sm:inline">Closed to Both</span><span class="sm:hidden">CTB</span>',
+        stop: '<span class="hidden sm:inline">Stop Sell</span><span class="sm:hidden">Stop</span>'
     };
 
     const classes = {
@@ -929,8 +943,8 @@ window.cycleBulkRowPill = (btn) => {
         stop: 'bg-rose-600 text-white border-rose-500'
     };
 
-    btn.className = `qb-val-pill w-28 py-0.5 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs ${classes[next]}`;
-    btn.innerText = labels[next];
+    btn.className = `qb-val-pill w-full sm:w-36 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs ${classes[next]}`;
+    btn.innerHTML = labels[next];
 };
 
 window.renderBulkGrid = () => {
@@ -938,7 +952,7 @@ window.renderBulkGrid = () => {
     if (!qbBody) return;
 
     const inptCls = "input-base !py-1 !px-1.5 text-center text-xs w-full font-black bg-slate-900 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800 focus:border-indigo-500";
-    const pillBtn = `<button type="button" data-state="open" onclick="window.cycleBulkRowPill(this)" class="qb-val-pill w-28 py-0.5 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs bg-slate-800 text-slate-400 border-slate-700">OPEN</button>`;
+    const pillBtn = `<button type="button" data-state="open" onclick="window.cycleBulkRowPill(this)" class="qb-val-pill w-full sm:w-36 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs bg-slate-800 text-slate-400 border-slate-700">Open</button>`;
 
     let html = '';
 
@@ -955,7 +969,7 @@ window.renderBulkGrid = () => {
             <input type="text" class="${inptCls} qb-val-min text-amber-400" placeholder="e.g. 3 or 3▸" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);">
         </td>
         <td class="p-1 border-r border-slate-800 text-center">
-            <input type="number" min="1" class="${inptCls} qb-val-max text-slate-300" placeholder="--">
+            <input type="text" class="${inptCls} qb-val-max text-slate-300" placeholder="e.g. 14 or 14▸" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);">
         </td>
         <td class="p-1 text-center">
             ${pillBtn}
@@ -990,7 +1004,7 @@ window.renderBulkGrid = () => {
                 <input type="text" class="${inptCls} qb-val-min text-amber-400" placeholder="e.g. 3 or 3▸" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);">
             </td>
             <td class="p-1 border-r border-slate-800 text-center">
-                <input type="number" min="1" class="${inptCls} qb-val-max text-slate-300" placeholder="--">
+                <input type="text" class="${inptCls} qb-val-max text-slate-300" placeholder="e.g. 14 or 14▸" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);">
             </td>
             <td class="p-1 text-center">
                 ${pillBtn}
@@ -1037,7 +1051,19 @@ window.applyBulkGrid = (isClear = false) => {
             }
         }
 
-        const max = (maxInput && maxInput.value.trim() !== "") ? parseInt(maxInput.value, 10) : undefined;
+        let max = undefined;
+        let max_arr = undefined;
+        if (maxInput && maxInput.value.trim() !== "") {
+            const rawMax = maxInput.value.trim();
+            if (/(\d+)\s*(a|>|▸)/i.test(rawMax)) {
+                const match = rawMax.match(/(\d+)/);
+                max_arr = match ? parseInt(match[1], 10) : undefined;
+            } else {
+                const match = rawMax.match(/(\d+)/);
+                max = match ? parseInt(match[1], 10) : undefined;
+            }
+        }
+
         const pillState = pill?.dataset.state || 'open';
 
         let cta = undefined;
@@ -1049,7 +1075,7 @@ window.applyBulkGrid = (isClear = false) => {
         else if (pillState === 'both') { cta = true; ctd = true; stop = false; }
         else if (pillState === 'stop') { cta = false; ctd = false; stop = true; }
 
-        const rule = { id, rate, min, min_arr, max, cta, ctd, stop, pillState };
+        const rule = { id, rate, min, min_arr, max, max_arr, cta, ctd, stop, pillState };
 
         if (type === 'global') {
             globalRule = rule;
@@ -1058,8 +1084,9 @@ window.applyBulkGrid = (isClear = false) => {
         }
     });
 
-    const hasAnyInput = isClear || (globalRule && (globalRule.min !== undefined || globalRule.max !== undefined || globalRule.min_arr !== undefined || globalRule.pillState !== 'open'))
-        || roomUpdates.some(r => r.rate !== undefined || r.min !== undefined || r.max !== undefined || r.min_arr !== undefined || r.pillState !== 'open');
+    const hasAnyInput = isClear 
+        || (globalRule && (globalRule.min !== undefined || globalRule.max !== undefined || globalRule.min_arr !== undefined || globalRule.max_arr !== undefined || globalRule.pillState !== 'open'))
+        || roomUpdates.some(r => r.rate !== undefined || r.min !== undefined || r.max !== undefined || r.min_arr !== undefined || r.max_arr !== undefined || r.pillState !== 'open');
 
     if (!hasAnyInput) {
         return window.customAlert("Enter at least one value or select a restriction pill state to apply across the dates.");
@@ -1080,6 +1107,7 @@ window.applyBulkGrid = (isClear = false) => {
                 delete dObj['GLOBAL'].min;
                 delete dObj['GLOBAL'].max;
                 delete dObj['GLOBAL'].min_arr;
+                delete dObj['GLOBAL'].max_arr;
                 delete dObj['GLOBAL'].cta;
                 delete dObj['GLOBAL'].ctd;
                 delete dObj['GLOBAL'].stop;
@@ -1088,7 +1116,8 @@ window.applyBulkGrid = (isClear = false) => {
             } else {
                 if (globalRule.min !== undefined) { dObj['GLOBAL'].min = globalRule.min; dObj['GLOBAL'].isOverride.min = true; delete dObj['GLOBAL'].min_arr; }
                 if (globalRule.min_arr !== undefined) { dObj['GLOBAL'].min_arr = globalRule.min_arr; dObj['GLOBAL'].isOverride.min_arr = true; delete dObj['GLOBAL'].min; }
-                if (globalRule.max !== undefined) { dObj['GLOBAL'].max = globalRule.max; dObj['GLOBAL'].isOverride.max = true; }
+                if (globalRule.max !== undefined) { dObj['GLOBAL'].max = globalRule.max; dObj['GLOBAL'].isOverride.max = true; delete dObj['GLOBAL'].max_arr; }
+                if (globalRule.max_arr !== undefined) { dObj['GLOBAL'].max_arr = globalRule.max_arr; dObj['GLOBAL'].isOverride.max_arr = true; delete dObj['GLOBAL'].max; }
                 
                 if (globalRule.pillState !== 'open') {
                     dObj['GLOBAL'].cta = globalRule.cta;
@@ -1114,6 +1143,7 @@ window.applyBulkGrid = (isClear = false) => {
                 delete rData.min;
                 delete rData.max;
                 delete rData.min_arr;
+                delete rData.max_arr;
                 delete rData.cta;
                 delete rData.ctd;
                 delete rData.stop;
@@ -1140,7 +1170,15 @@ window.applyBulkGrid = (isClear = false) => {
                 }
                 if (r.max !== undefined) {
                     rData.max = r.max;
+                    delete rData.max_arr;
                     rData.isOverride.max = true;
+                    delete rData.isOverride.max_arr;
+                }
+                if (r.max_arr !== undefined) {
+                    rData.max_arr = r.max_arr;
+                    delete rData.max;
+                    rData.isOverride.max_arr = true;
+                    delete rData.isOverride.max;
                 }
                 if (r.pillState !== 'open') {
                     rData.cta = r.cta;
@@ -1162,8 +1200,8 @@ window.applyBulkGrid = (isClear = false) => {
         document.querySelectorAll('#qb-grid-body input[type="number"], #qb-grid-body input[type="text"]').forEach(i => { i.value = ''; });
         document.querySelectorAll('.qb-val-pill').forEach(btn => {
             btn.dataset.state = 'open';
-            btn.className = "qb-val-pill w-28 py-0.5 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs bg-slate-800 text-slate-400 border-slate-700";
-            btn.innerText = "OPEN";
+            btn.className = "qb-val-pill w-full sm:w-36 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs bg-slate-800 text-slate-400 border-slate-700";
+            btn.innerHTML = "Open";
         });
     }
 
