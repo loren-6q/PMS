@@ -356,14 +356,14 @@
         const actStaff = getStaff().filter(s => {
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
             if (sProp !== curProp) return false;
-            // Always show active bookings (including unconfirmed, charged, and unassigned)
-            if (s.status === 'cancelled' || s.status === 'noshow') {
-                // If user is actively searching for this guest by name or ID, show them even if cancelled
+            // Cancelled bookings are hidden from calendar unless actively searched
+            if (s.status === 'cancelled') {
                 if (searchTerm && (((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) || (s.bookId || '').toUpperCase().includes(searchTerm))) {
                     return true;
                 }
                 return false;
             }
+            // All other bookings (including noshow, unconfirmed, charged, and unassigned) remain visible
             return true;
         });
 
@@ -375,7 +375,8 @@
         actStaff.forEach(s => {
             if (parseYMD(s.checkIn) > veUTC || parseYMD(s.checkOut) < vsUTC) return;
             const rL = getRooms(s).length ? getRooms(s) : [""];
-            if (s.status === 'unconfirmed' || s.status === 'charged') {
+            // No-shows, unconfirmed, and charged bookings do not occupy a room and go to the top tray
+            if (s.status === 'unconfirmed' || s.status === 'charged' || s.status === 'noshow') {
                 for (let i = 0; i < Math.max(1, rL.length); i++) uConf.push(s);
             } else {
                 const uCount = rL.filter(rid => {
@@ -425,7 +426,8 @@
                     bookings: actStaff.filter(s => {
                         const rList = getRooms(s).map(rm => window.normalizeRoomId ? window.normalizeRoomId(rm, curProp) : rm);
                         const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
-                        return (rList.includes(r.id) || rList.includes(normR)) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+                        // No-shows, unconfirmed, and charged bookings never block a physical bed
+                        return (rList.includes(r.id) || rList.includes(normR)) && s.status !== 'unconfirmed' && s.status !== 'charged' && s.status !== 'noshow' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
                     })
                 });
             } else {
@@ -434,7 +436,8 @@
                     bookings: actStaff.filter(s => {
                         const rList = getRooms(s).map(rm => window.normalizeRoomId ? window.normalizeRoomId(rm, curProp) : rm);
                         const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
-                        return (rList.includes(r.id) || rList.includes(normR)) && s.status !== 'unconfirmed' && s.status !== 'charged' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+                        // No-shows, unconfirmed, and charged bookings never block a physical bed
+                        return (rList.includes(r.id) || rList.includes(normR)) && s.status !== 'unconfirmed' && s.status !== 'charged' && s.status !== 'noshow' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
                     })
                 });
             }
@@ -522,7 +525,8 @@
                     ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) ||
                     (s.bookId || '').toUpperCase().includes(searchTerm)
                 );
-                row.style.display = hasMatch ? 'grid' : 'none';
+                const isTrayOpen = window.isUnassignedTrayOpen;
+                row.style.display = (hasMatch || isTrayOpen) ? 'grid' : 'none';
             }
 
             let hHtml = '';
