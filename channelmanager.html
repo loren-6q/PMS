@@ -453,101 +453,80 @@
             <div id="view-rules" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-5xl mx-auto space-y-4">
                     
-                    <!-- 1. MASTER DRIVER & ANCHOR SETTINGS -->
+                    <!-- 1. BASE RATE ANCHOR -->
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
                         <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
                             <div>
                                 <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2">
-                                    <i data-lucide="compass" class="text-indigo-600"></i> Master Driver & Currency Anchor
+                                    <i data-lucide="anchor" class="text-indigo-600"></i> Base Rate Anchor
                                 </h2>
-                                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">
-                                    Select the primary baseline rate you input on the calendar. All other channels, policies, and promos ripple from this origin.
+                                <p class="text-[11px] font-bold text-slate-500 mt-1 leading-normal max-w-2xl">
+                                    This matches exactly what you type on the calendar to this anchor. All other rates will calculate from this anchor. (i.e. Do you want the rate you type to be exactly what's on your direct booking site? Or what's on Booking.com? Or...?)
                                 </p>
                             </div>
-                            <button onclick="window.savePricingRulesToCloud(true)" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
-                                <i data-lucide="save" size="14"></i> Save All Rules
+                            <button onclick="window.savePricingRulesToCloud(true)" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
+                                <i data-lucide="save" size="14"></i> SAVE
                             </button>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                            <div>
-                                <label class="label-base text-indigo-700">Master Origin Driver</label>
-                                <select id="rule-master-driver" class="input-base !text-xs font-black cursor-pointer bg-white" onchange="window.markRulesUnsaved()">
-                                    <option value="bdc_non_ref" selected>Booking.com Non-Refundable (Recommended)</option>
-                                    <option value="direct_non_ref">Default / Direct Non-Refundable</option>
-                                    <option value="direct_ref">Default / Direct Refundable</option>
-                                    <option value="bdc_ref">Booking.com Standard Refundable</option>
-                                </select>
-                                <span class="text-[9px] font-bold text-slate-400 mt-1 block">Rates typed on your calendar map directly to this plan.</span>
-                            </div>
-
-                            <div class="bg-indigo-50/60 p-2.5 rounded-lg border border-indigo-200 flex flex-col justify-between">
-                                <div>
-                                    <span class="text-[9px] font-black uppercase tracking-wider text-indigo-700 block">Private Anchor Room</span>
-                                    <span id="display-anchor-private" class="text-xs font-black text-slate-800 truncate block mt-0.5">--</span>
-                                </div>
-                                <span class="text-[9px] font-bold text-slate-400 mt-1">Configured in Autofiller tab</span>
-                            </div>
-
-                            <div class="bg-amber-50/60 p-2.5 rounded-lg border border-amber-200 flex flex-col justify-between">
-                                <div>
-                                    <span class="text-[9px] font-black uppercase tracking-wider text-amber-700 block">Dorm Anchor Room</span>
-                                    <span id="display-anchor-dorm" class="text-xs font-black text-slate-800 truncate block mt-0.5">--</span>
-                                </div>
-                                <span class="text-[9px] font-bold text-slate-400 mt-1">Configured in Autofiller tab</span>
-                            </div>
+                        <div class="max-w-md bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            <label class="label-base text-indigo-700">Anchor Rate Plan</label>
+                            <select id="rule-master-driver" class="input-base !text-xs font-black cursor-pointer bg-white w-full" onchange="window.markRulesUnsaved()">
+                                <option value="bdc_non_ref" selected>Booking.com Non-Refundable</option>
+                                <option value="direct_non_ref">Default / Direct Non-Refundable</option>
+                                <option value="direct_ref">Default / Direct Refundable</option>
+                                <option value="bdc_ref">Booking.com Standard Refundable</option>
+                            </select>
                         </div>
                     </div>
 
-                    <!-- 2. POLICY RATIOS (REFUNDABLE VS NON-REFUNDABLE) -->
+                    <!-- 2. REFUNDABLE MARK-UP -->
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
                         <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
-                            <i data-lucide="shield-check" class="text-blue-600"></i> Policy Ratios (Refundable vs Non-Refundable)
+                            <i data-lucide="shield-check" class="text-blue-600"></i> Mark-up on Non-Refundable rates for Refundable rates
                         </h2>
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex flex-col gap-2">
-                                <span class="text-xs font-black uppercase text-slate-700">Standard Dates Policy</span>
+                                <span class="text-xs font-black uppercase tracking-wider text-slate-700">STANDARD</span>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-xs font-bold text-slate-600">Refundable = Non-Ref</span>
+                                    <span class="text-xs font-bold text-slate-600 whitespace-nowrap">Refundable = Non-Refundable</span>
                                     <select id="rule-std-ref-type" class="input-base !w-20 !py-1 font-black text-center" onchange="window.markRulesUnsaved()">
                                         <option value="+%">+ %</option>
                                         <option value="+">+ ฿</option>
                                     </select>
                                     <input type="number" id="rule-std-ref-val" value="25" class="input-base !w-24 !py-1 font-black text-center" oninput="window.markRulesUnsaved()">
                                 </div>
-                                <span class="text-[9px] font-bold text-slate-400">Refundable rate plans automatically apply this markup over non-refundable.</span>
                             </div>
 
                             <div class="bg-pink-50/50 p-3 rounded-lg border border-pink-200 flex flex-col gap-2 evt-column" style="display: none;">
-                                <span class="text-xs font-black uppercase text-pink-800">Event / Peak Dates Policy</span>
+                                <span class="text-xs font-black uppercase tracking-wider text-pink-800">EVENT / PEAK</span>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-xs font-bold text-pink-900">Event Ref = Event Non-Ref</span>
+                                    <span class="text-xs font-bold text-pink-900 whitespace-nowrap">Refundable = Non-Refundable</span>
                                     <select id="rule-evt-ref-type" class="input-base !w-20 !py-1 font-black text-center" onchange="window.markRulesUnsaved()">
                                         <option value="+%">+ %</option>
                                         <option value="+">+ ฿</option>
                                     </select>
                                     <input type="number" id="rule-evt-ref-val" value="25" class="input-base !w-24 !py-1 font-black text-center" oninput="window.markRulesUnsaved()">
                                 </div>
-                                <span class="text-[9px] font-bold text-pink-700">Event dates enforce this refundable risk premium.</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 3. DYNAMIC ACTIVE OTA CHANNEL PIPELINE -->
+                    <!-- 3. CHANNEL ADJUSTMENTS -->
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
                         <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
                             <div>
                                 <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2">
-                                    <i data-lucide="network" class="text-purple-600"></i> Active Channel Multipliers & Parity
+                                    <i data-lucide="sliders" class="text-purple-600"></i> Channel Adjustments
                                 </h2>
-                                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">
-                                    Define price offsets relative to your Master Driver. Default is SYNC (=) for 100% WYSIWYG parity.
+                                <p class="text-[11px] font-bold text-slate-500 mt-1">
+                                    Add adjustments to pricing for each channel (e.g. mark up Hostelworld +25%, discount Direct -10%).
                                 </p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <button onclick="window.resetChannelsToParity()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-black uppercase flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs" title="Reset all channels to SYNC (= 0) for 100% WYSIWYG Parity">
-                                    <i data-lucide="scale" size="14"></i> Reset to Parity (WYSIWYG)
+                                <button onclick="window.resetChannelsToParity()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-black uppercase flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs" title="Reset all adjustments to 0 so every channel matches your Base Rate Anchor">
+                                    <i data-lucide="rotate-ccw" size="14"></i> Reset Adjustments to 0
                                 </button>
                             </div>
                         </div>
@@ -559,17 +538,17 @@
                 </div>
             </div>
 
-            <!-- TAB 3: PROMOTIONS & DEALS ENGINE -->
+            <!-- TAB 3: PROMOTIONS & DEALS -->
             <div id="view-promos" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-5xl mx-auto space-y-4">
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
                         <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
                             <div>
                                 <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2">
-                                    <i data-lucide="tags" class="text-pink-600"></i> OTA Promotions & Deals Engine
+                                    <i data-lucide="tags" class="text-pink-600"></i> OTA Promotions & Deals
                                 </h2>
-                                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">
-                                    Automatically applies exact inverse markups to offset OTA discounts & preserve net room revenue.
+                                <p class="text-[11px] font-bold text-slate-500 mt-1">
+                                    Input OTA promos here to automatically apply markup to preserve your original rates.
                                 </p>
                             </div>
                             <button onclick="window.openAddPromoModal()" class="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-black text-xs uppercase shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
@@ -610,7 +589,7 @@
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
                         <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
                             <h2 class="text-lg font-black uppercase text-slate-800 flex items-center gap-2">
-                                <i data-lucide="paintbrush" class="text-indigo-500"></i> Timeline Autofiller
+                                <i data-lucide="calendar" class="text-indigo-500"></i> Calendar Autofiller
                             </h2>
                             <div class="flex items-center gap-2">
                                 <label class="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-300 cursor-pointer text-xs font-black uppercase text-pink-700">
@@ -620,8 +599,8 @@
                                 <button onclick="window.nukeDatabase()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded font-black text-xs uppercase tracking-widest shadow-md cursor-pointer flex items-center gap-1"><i data-lucide="skull" size="14"></i> WIPE ALL PRICING</button>
                             </div>
                         </div>
-                        <p class="text-[11px] font-bold text-slate-500 mb-4 leading-snug">
-                            Paint baseline market rates onto selected rooms. Non-anchor rooms calculate automatically using the rules in the <strong>Linking</strong> tab without overwriting custom overrides.
+                        <p class="text-[11px] font-bold text-slate-600 mb-4 leading-normal">
+                            Bulk edit rates by setting anchor rates here (all other rates ripple from the Linking tab settings). If you use Event pricing, you can set a pricing curve and restrictions here that will update based on the Events tab in Settings.
                         </p>
                         
                         <div class="flex flex-wrap items-center gap-4 mb-6 p-3 bg-slate-100 rounded-lg border border-slate-200">
@@ -753,8 +732,8 @@
                         </div>
 
                         <div class="flex flex-col sm:flex-row gap-3">
-                            <button onclick="window.runAutomator()" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"><i data-lucide="paint-roller" size="18"></i> Paint Timeline</button>
-                            <button onclick="window.clearOverrides()" class="sm:w-auto px-6 py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-rose-200 transition-colors cursor-pointer"><i data-lucide="eraser" size="16"></i> Nuke Range Overrides</button>
+                            <button onclick="window.runAutomator()" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"><i data-lucide="check" size="18"></i> Bulk Update</button>
+                            <button onclick="window.clearOverrides()" class="sm:w-auto px-6 py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-rose-200 transition-colors cursor-pointer"><i data-lucide="rotate-ccw" size="16"></i> Clear Overrides in Range</button>
                         </div>
                     </div>
                 </div>
