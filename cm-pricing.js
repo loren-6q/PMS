@@ -41,9 +41,9 @@ window.computeDynamicPlanRate = (dateStr, room, ratePlan) => {
     let computed = parseFloat(basePrice);
 
     // 2. Channel Multiplier (from Tab 2 Pricing Rules)
-    // CRITICAL: 'Default' is the calendar anchor rate itself and must ALWAYS be 1:1 (SYNC = 0).
+    // CRITICAL: 'Default' is the calendar base rate itself and must ALWAYS be 1:1 (SYNC = 0).
     const channelName = ratePlan.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(ratePlan.ratePlanTitle).channel : 'Default');
-    const isDefaultChannel = !channelName || channelName === 'Default' || channelName.toLowerCase().includes('default') || channelName === 'Direct Website';
+    const isDefaultChannel = !channelName || channelName === 'Default' || channelName.toLowerCase().includes('default');
 
     if (!isDefaultChannel) {
         const channelRule = window.pricingRules?.channels?.[channelName] || { type: '=', val: 0 };
@@ -191,8 +191,7 @@ window.rippleDay = (dateStr, startRoom, forceRipple = false) => {
                 window.masterPricing.timeline[dateStr][edge.to] = window.masterPricing.timeline[dateStr][edge.to] || { isOverride: {} };
                 let nextVals = window.masterPricing.timeline[dateStr][edge.to];
                 
-                // When forceRipple is true (user changed anchor room in Ripple Mode),
-                // it recalculates the linked room regardless of previous stale locks.
+                // In Ripple Mode, propagate to linked targets so relationships stay synchronized
                 if (!forceRipple && nextVals.isOverride?.std) return;
 
                 if (isPeak) {
@@ -434,33 +433,6 @@ window.addRelationshipRow = () => {
 };
 
 // --- 4. AUTOFILLER BASELINES & EVENT VISIBILITY ---
-window.updateAnchorDropdowns = () => {
-    const selP = document.getElementById('w-anchor-private'); 
-    const selD = document.getElementById('w-anchor-dorm');
-    const dispP = document.getElementById('display-anchor-private');
-    const dispD = document.getElementById('display-anchor-dorm');
-
-    const curP = selP?.value || window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || '';
-    const curD = selD?.value || window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || '';
-
-    const privates = (window.roomTypes || []).filter(t => !t.toLowerCase().includes('dorm'));
-    const pList = privates.length ? privates : (window.roomTypes || []);
-    const dorms = (window.roomTypes || []).filter(t => t.toLowerCase().includes('dorm'));
-    const dList = dorms.length ? dorms : (window.roomTypes || []);
-
-    if (selP) {
-        selP.innerHTML = pList.map(t => `<option value="${t}" ${t === curP ? 'selected' : ''}>${t}</option>`).join('');
-        if (curP && pList.includes(curP)) selP.value = curP;
-    }
-    if (selD) {
-        selD.innerHTML = dList.map(t => `<option value="${t}" ${t === curD ? 'selected' : ''}>${t}</option>`).join('');
-        if (curD && dList.includes(curD)) selD.value = curD;
-    }
-
-    if (dispP) dispP.innerText = selP?.value || curP || (pList[0] || '--');
-    if (dispD) dispD.innerText = selD?.value || curD || (dList[0] || '--');
-};
-
 window.setAutofillPreset = (days) => {
     const sEl = document.getElementById('w-start-date');
     const eEl = document.getElementById('w-end-date');
@@ -556,7 +528,6 @@ window.populateAutofillBaselines = (b) => {
     setCheck('w-enable-evt-restr', b.enable_evt_restr);
     window.toggleEvtRestrInputs(!!b.enable_evt_restr);
 
-    // Populate all offsets from -7 to +7 independently
     for (let off = -7; off <= 7; off++) {
         const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
         if (b[`r_min_${tag}`] !== undefined) setVal(`w-r-min-${tag}`, b[`r_min_${tag}`]);
@@ -737,8 +708,8 @@ window.savePricingRulesToCloud = async (notify = false) => {
     const stdTypeEl = document.getElementById('rule-std-ref-type');
     const evtTypeEl = document.getElementById('rule-evt-ref-type');
     const masterDriverEl = document.getElementById('rule-master-driver');
-    const anchorPEl = document.getElementById('rule-anchor-private') || document.getElementById('w-anchor-private');
-    const anchorDEl = document.getElementById('rule-anchor-dorm') || document.getElementById('w-anchor-dorm');
+    const anchorPEl = document.getElementById('w-anchor-private');
+    const anchorDEl = document.getElementById('w-anchor-dorm');
 
     const rules = {
         masterDriver: masterDriverEl?.value || window.pricingRules?.masterDriver || 'bdc_non_ref',
