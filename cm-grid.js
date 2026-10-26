@@ -122,6 +122,46 @@ window.handleAvailEdit = (dateStr, room, val) => {
     if (window.renderGrid) window.renderGrid();
 };
 
+window.handleCellPriceChange = (e, dateStr, room, isPinnedToggle = false) => {
+    const input = e ? (e.target || e) : null;
+    if (!input) return;
+    const val = String(input.value || '').trim();
+
+    window.masterPricing = window.masterPricing || { relationships: [], timeline: {} };
+    window.masterPricing.timeline = window.masterPricing.timeline || {};
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+    dObj[room] = dObj[room] || { isOverride: {} };
+    const rData = dObj[room];
+    rData.isOverride = rData.isOverride || {};
+
+    if (val === "" || isNaN(parseFloat(val))) {
+        delete rData.std;
+        delete rData.isOverride.std;
+        if (window.healDay) window.healDay(dateStr);
+    } else {
+        const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
+        const price = window.roundCurrency(parseFloat(val) / mult);
+        rData.std = price;
+
+        // Custom override: Pin the cell yellow with corner tag
+        rData.isOverride.std = true;
+
+        // In Ripple Mode, propagate to linked rooms (forcing update through to target rooms)
+        if (window.editMode === 'ripple' && window.rippleDay) {
+            window.rippleDay(dateStr, room, true);
+        }
+    }
+
+    // Mark dirty so Save & Sync sends this date to Channex
+    window.dirtyDates = window.dirtyDates || new Set();
+    window.syncedDates = window.syncedDates || new Set();
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+};
+
 window.handleCellEdit = (dateStr, room, field, val, isEvt = false) => {
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     const dObj = window.masterPricing.timeline[dateStr];
@@ -596,7 +636,7 @@ window.renderGrid = () => {
 
             let cellClass = "rate-cell-container p-0 border-r border-slate-200 text-center relative ";
             if (isStopped) cellClass += "rate-cell-stopped ";
-            else if (isPinned) cellClass += "rate-cell-pinned ";
+            else if (isPinned) cellClass += "rate-cell-pinned !bg-amber-100 ";
 
             const showTop = density === 'minmax' || density === 'full';
             const showBottom = density === 'full';
@@ -610,7 +650,7 @@ window.renderGrid = () => {
                 </div>` : ''}
 
                 <div class="${density === 'compact' ? 'h-[24px]' : 'h-[17px]'} flex items-center justify-center">
-                    <input type="number" step="any" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-slate-800 px-0" value="${displayPrice}" onfocus="this.select()" onkeydown="if(event.key==='Enter' && event.altKey){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', true); } else if(event.key==='Enter'){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', false); }" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}', false)">
+                    <input type="number" step="any" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] ${isPinned ? '!text-amber-900 font-black' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" onkeydown="if(event.key==='Enter' && event.altKey){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', true); } else if(event.key==='Enter'){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', false); }" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}', false)">
                 </div>
 
                 ${showBottom ? `
