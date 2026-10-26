@@ -179,8 +179,12 @@
             transition: background-color 0.15s, border-color 0.15s;
         }
         .rate-cell-pinned {
-            background-color: #fffbeb !important;
+            background-color: #fef3c7 !important;
             border-color: #f59e0b !important;
+        }
+        .rate-cell-pinned input.cell-price-text {
+            color: #92400e !important;
+            font-weight: 900 !important;
         }
         .rate-cell-pinned::after {
             content: '';
@@ -189,8 +193,9 @@
             right: 0;
             width: 0;
             height: 0;
-            border-top: 6px solid #f59e0b;
-            border-left: 6px solid transparent;
+            border-top: 7px solid #d97706;
+            border-left: 7px solid transparent;
+            z-index: 10;
         }
         .rate-cell-stopped {
             background-color: #fef2f2 !important;
