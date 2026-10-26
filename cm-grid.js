@@ -4,7 +4,7 @@
 // Hosted at: https://loren-6q.github.io/PMS/cm-grid.js
 // ==========================================================================
 
-window.daysToRender = window.daysToRender || 35;
+window.daysToRender = window.daysToRender || 42;
 window.bulkScopeMode = window.bulkScopeMode || 'anchors'; // 'anchors' | 'all'
 
 // --- 0. HELPER FORMATTERS & INVENTORY CALCULATOR ---
@@ -122,6 +122,7 @@ window.handleAvailEdit = (dateStr, room, val) => {
     if (window.renderGrid) window.renderGrid();
 };
 
+// --- PRICE EDIT HANDLER: REVERTS TO LAST SYNCED PRICE ON CLEAR ---
 window.handleCellPriceChange = (e, dateStr, room, isPinnedToggle = false) => {
     const input = e ? (e.target || e) : null;
     if (!input) return;
@@ -135,19 +136,36 @@ window.handleCellPriceChange = (e, dateStr, room, isPinnedToggle = false) => {
     const rData = dObj[room];
     rData.isOverride = rData.isOverride || {};
 
+    // Ensure initial synced baseline is captured from the loaded date before user edits
+    if (rData._syncedStd === undefined && rData.std !== undefined && rData.std !== "") {
+        rData._syncedStd = rData.std;
+    }
+
     if (val === "" || isNaN(parseFloat(val))) {
-        delete rData.std;
+        // USER CLEARED THE CELL: Remove the override flag and amber highlight
         delete rData.isOverride.std;
-        if (window.healDay) window.healDay(dateStr);
+
+        // Revert to the last synced rate for this exact date (whether high or low season)
+        if (rData._syncedStd !== undefined && rData._syncedStd !== "" && !isNaN(rData._syncedStd)) {
+            rData.std = rData._syncedStd;
+        } else {
+            delete rData.std;
+            if (window.healDay) window.healDay(dateStr);
+        }
+
+        // In ripple mode, propagate to linked rooms to restore their baselines
+        if (window.editMode === 'ripple' && window.rippleDay) {
+            const anchors = new Set((window.masterPricing.relationships || []).map(r => r.anchor));
+            anchors.forEach(a => { if (a && a !== 'unlinked') window.rippleDay(dateStr, a, true); });
+        }
     } else {
         const mult = window.getViewMultiplier ? window.getViewMultiplier() : 1.0;
         const price = window.roundCurrency(parseFloat(val) / mult);
-        rData.std = price;
 
-        // Custom override: Pin the cell yellow with corner tag
+        rData.std = price;
         rData.isOverride.std = true;
 
-        // In Ripple Mode, propagate to linked rooms (forcing update through to target rooms)
+        // In Ripple Mode, propagate to linked rooms
         if (window.editMode === 'ripple' && window.rippleDay) {
             window.rippleDay(dateStr, room, true);
         }
@@ -330,6 +348,7 @@ window.getCellData = (dateStr, room) => {
     };
 };
 
+// Double-click cell to unlock override -> Reverts to last synced price
 window.unlockCellOverride = (dateStr, room, ratePlanId = null) => {
     if (ratePlanId) {
         if (window.masterPricing.timeline[dateStr]?.otaOverrides) {
@@ -354,11 +373,17 @@ window.unlockCellOverride = (dateStr, room, ratePlanId = null) => {
                 delete rData.isOverride.cta;
                 delete rData.isOverride.ctd;
             }
-            if (rData._baseStd !== undefined && rData._baseStd !== "") {
-                rData.std = rData._baseStd;
+            // Revert back to the last synced price for this date
+            if (rData._syncedStd !== undefined && rData._syncedStd !== "" && !isNaN(rData._syncedStd)) {
+                rData.std = rData._syncedStd;
+            } else {
+                delete rData.std;
+                if (window.healDay) window.healDay(dateStr);
             }
-            if (window.healDay) window.healDay(dateStr);
-            else if (window.rippleDay) window.rippleDay(dateStr, room);
+            if (window.rippleDay) {
+                const anchors = new Set((window.masterPricing.relationships || []).map(r => r.anchor));
+                anchors.forEach(a => { if (a && a !== 'unlinked') window.rippleDay(dateStr, a, true); });
+            }
         }
     }
     window.dirtyDates.add(dateStr);
@@ -543,8 +568,8 @@ window.renderGrid = () => {
 
     // 2. TARGET ROOM SELECTION
     let targetRooms = [...(window.roomTypes || [])];
-    const anchorPrivate = window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || document.getElementById('rule-anchor-private')?.value;
-    const anchorD = window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || document.getElementById('rule-anchor-dorm')?.value;
+    const anchorPrivate = window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || document.getElementById('w-anchor-private')?.value;
+    const anchorD = window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || document.getElementById('w-anchor-dorm')?.value;
 
     if (drill === 'master') {
         targetRooms = [anchorPrivate, anchorD].filter(Boolean);
@@ -569,9 +594,9 @@ window.renderGrid = () => {
         const filterChannel = window.channelPreviewFilter || 'ALL';
         mappedRates = mappedRates.filter(rate => {
             if (filterChannel === 'ALL') return true;
-            const rChan = rate.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.ratePlanTitle).channel : '');
+            const rChan = rate.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.ratePlanTitle).channel : 'Default');
             if (filterChannel === 'BDC') return rChan === 'Booking.com' || /bdc|booking/i.test(rate.ratePlanTitle);
-            if (filterChannel === 'DIRECT') return rChan === 'Direct Website' || /direct/i.test(rate.ratePlanTitle);
+            if (filterChannel === 'DEFAULT') return rChan === 'Default';
             return true;
         });
 
@@ -634,6 +659,13 @@ window.renderGrid = () => {
             const minVal = data.min !== "" ? data.min : (data.min_arr ? `${data.min_arr}▸` : "");
             const maxVal = data.max !== "" ? data.max : "";
 
+            // Automatically record the initial synced database baseline for this date if not yet recorded
+            const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
+            const roomObj = dayObj[room];
+            if (roomObj && roomObj.std !== undefined && roomObj.std !== "" && roomObj._syncedStd === undefined) {
+                roomObj._syncedStd = roomObj.std;
+            }
+
             let cellClass = "rate-cell-container p-0 border-r border-slate-200 text-center relative ";
             if (isStopped) cellClass += "rate-cell-stopped ";
             else if (isPinned) cellClass += "rate-cell-pinned !bg-amber-100 ";
@@ -642,7 +674,7 @@ window.renderGrid = () => {
             const showBottom = density === 'full';
             const unifiedPillHtml = window.getUnifiedRestrictionBadgeHtml(data.cta, data.ctd, data.stopSell);
 
-            trRate += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice || '--'}${isPinned ? ' (Custom Override - Double-click to unlock)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
+            trRate += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice || '--'}${isPinned ? ' (Custom Override - Double-click to revert to last sync)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
                 ${showTop ? `
                 <div class="flex items-center w-full h-[14px] border-b border-slate-200/70 overflow-hidden leading-none" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; width: 100% !important;">
                     <input type="text" size="1" style="flex: 1 1 0px !important; width: 0 !important; min-width: 0 !important; max-width: 50% !important; height: 100% !important; padding: 0 !important; margin: 0 !important; box-sizing: border-box !important;" class="cell-min-input text-center bg-transparent border-none text-[8px] font-black ${isMinArr ? 'text-amber-600' : 'text-slate-600'} outline-none" value="${minVal}" placeholder="-" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)" title="Min Stay (${isMinArr ? 'On Arrival' : 'Through'})">
@@ -782,7 +814,7 @@ window.renderGrid = () => {
                 const rateSource = rate.rateSource || 'std';
                 const isEvtRate = (rateSource === 'evt') || /evt|fmp|event|pkg/i.test(rate.ratePlanTitle || '');
                 const info = window.formatCleanRateTitle ? window.formatCleanRateTitle(rate.ratePlanTitle, room) : { planLabel: rate.ratePlanTitle };
-                const rChan = rate.channel || info.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.ratePlanTitle).channel : 'Direct Website');
+                const rChan = rate.channel || info.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.ratePlanTitle).channel : 'Default');
                 const badge = window.getChannelBadgeHtml ? window.getChannelBadgeHtml(rChan) : '';
 
                 let trOta = `<tr class="bg-indigo-50/40 border-b border-indigo-100">
@@ -1250,7 +1282,7 @@ window.applyBulkGrid = (isClear = false) => {
         : `Bulk updates applied successfully across ${s} → ${e}!\n\nClick "SAVE & SYNC" to push changes to Channex.`);
 };
 
-// SMART RELEVANT-FIELD TAB NAVIGATION
+// --- SMART RELEVANT-FIELD TAB NAVIGATION (ROW-SCOPED HORIZONTAL JUMP) ---
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Tab') {
         const target = e.target;
@@ -1264,23 +1296,49 @@ document.addEventListener('keydown', (e) => {
 
         if (targetSelector) {
             e.preventDefault();
+            e.stopPropagation();
             window.isUserTyping = true;
             clearTimeout(window.typingTimeout);
             window.typingTimeout = setTimeout(() => { window.isUserTyping = false; }, 800);
 
-            const inputs = Array.from(document.querySelectorAll(targetSelector)).filter(i => !i.disabled && (i.offsetParent !== null || i.getClientRects().length > 0));
-            const idx = inputs.indexOf(target);
-            if (idx !== -1) {
-                const nextIdx = e.shiftKey ? (idx - 1 + inputs.length) % inputs.length : (idx + 1) % inputs.length;
-                const nextInput = inputs[nextIdx];
-                if (nextInput) {
-                    nextInput.focus();
-                    if (typeof nextInput.select === 'function') nextInput.select();
+            // Scope jump strictly to current row across days
+            const currentRow = target.closest('tr');
+            if (currentRow) {
+                const rowInputs = Array.from(currentRow.querySelectorAll(targetSelector)).filter(i => 
+                    !i.disabled && (i.offsetParent !== null || i.getClientRects().length > 0)
+                );
+                const rowIdx = rowInputs.indexOf(target);
+                if (rowIdx !== -1) {
+                    if (!e.shiftKey && rowIdx + 1 < rowInputs.length) {
+                        const nextInput = rowInputs[rowIdx + 1];
+                        nextInput.focus({ preventScroll: false });
+                        if (typeof nextInput.select === 'function') nextInput.select();
+                        return;
+                    } else if (e.shiftKey && rowIdx - 1 >= 0) {
+                        const prevInput = rowInputs[rowIdx - 1];
+                        prevInput.focus({ preventScroll: false });
+                        if (typeof prevInput.select === 'function') prevInput.select();
+                        return;
+                    }
+                }
+            }
+
+            // Wrap across rows if edge of date window is reached
+            const allInputs = Array.from(document.querySelectorAll(targetSelector)).filter(i => 
+                !i.disabled && (i.offsetParent !== null || i.getClientRects().length > 0)
+            );
+            const globalIdx = allInputs.indexOf(target);
+            if (globalIdx !== -1) {
+                const nextIdx = e.shiftKey ? (globalIdx - 1 + allInputs.length) % allInputs.length : (globalIdx + 1) % allInputs.length;
+                const targetInput = allInputs[nextIdx];
+                if (targetInput) {
+                    targetInput.focus({ preventScroll: false });
+                    if (typeof targetInput.select === 'function') targetInput.select();
                 }
             }
         }
     }
-});
+}, true); // useCapture: true intercepts before browser vertical element-order tabbing
 
 let _resizeDebounce = null;
 window.addEventListener('resize', () => {
