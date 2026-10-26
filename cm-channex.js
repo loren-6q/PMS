@@ -108,7 +108,7 @@ window.saveCredentialsAndFetch = async () => {
             channex: window.channexConfig
         });
 
-        window.customAlert(`Success!\n\nConnected to Channex: "${propTitle}". Fetching room inventory and rate plans...`);
+        window.customAlert(`Success!\n\nConnected to Channex: "${propTitle}". Fetching primary rate plans...`);
         await window.fetchChannexData();
 
     } catch (err) {
@@ -133,7 +133,7 @@ window.fetchChannexData = async () => {
     window.showLoader('FETCHING CHANNEX INVENTORY...');
 
     try {
-        // Fetch active room types
+        // 1. Fetch active room types
         const roomData = await window.fetchAllChannex('room_types', apiKey, propId);
 
         const roomNameMap = {};
@@ -143,120 +143,64 @@ window.fetchChannexData = async () => {
             activeRoomIds.add(r.id);
         });
 
-        // 1. First attempt: Query Channex's dedicated PMS selector endpoint (/rate_plans/options)
-        // This endpoint explicitly strips out the 39 internal channel-adapter sub-plans
-        let rateData = [];
-        try {
-            const optRes = await window.fetchWithRetry(`https://app.channex.io/api/v1/rate_plans/options?filter[property_id]=${propId}`, {
-                headers: {
-                    "user-api-key": apiKey,
-                    "Content-Type": "application/json"
-                }
-            });
-            if (optRes.ok) {
-                const optJson = await optRes.json();
-                if (Array.isArray(optJson.data) && optJson.data.length > 0) {
-                    rateData = optJson.data.map(item => ({
-                        id: item.id,
-                        attributes: {
-                            title: item.attributes?.title || '',
-                            room_type_id: item.attributes?.room_type_id || '',
-                            ui_read_only: item.attributes?.ui_read_only || false
-                        },
-                        relationships: {
-                            room_type: {
-                                data: {
-                                    id: item.attributes?.room_type_id || ''
-                                }
-                            }
-                        }
-                    }));
-                }
-            }
-        } catch (optErr) {
-            console.warn("Could not query /rate_plans/options, falling back to /rate_plans:", optErr);
-        }
-
-        // 2. Fallback to /rate_plans if /options was not supported
-        if (rateData.length === 0) {
-            const rawRateData = await window.fetchAllChannex('rate_plans', apiKey, propId);
-            rateData = rawRateData.filter(rate => rate && rate.attributes);
-        }
-
-        // 3. STRICT FILTER: Strip out read-only channel mappings and unmapped rooms
-        const cleanRateData = rateData.filter(rate => {
-            if (!rate || !rate.attributes) return false;
-
-            // Drop if Channex flags it as read-only (internal channel-created mapping)
-            if (rate.attributes.ui_read_only === true) return false;
-
-            // Must belong to one of your active room types
-            const parentRoomId = rate.relationships?.room_type?.data?.id || rate.attributes?.room_type_id;
-            if (!parentRoomId || !activeRoomIds.has(parentRoomId)) return false;
-
-            // Drop legacy listings
-            const title = (rate.attributes.title || '').toLowerCase();
-            if (title.includes('samui beach hostel') || title.includes('legacy')) return false;
-
-            return true;
-        });
-
-        console.log(`📊 [CHANNEX AUDIT] Raw records: ${rateData.length} | Active writable plans: ${cleanRateData.length}`);
-        if (console.table) {
-            console.table(cleanRateData.map(r => ({
-                id: r.id,
-                title: r.attributes?.title,
-                room: roomNameMap[r.relationships?.room_type?.data?.id || r.attributes?.room_type_id]
-            })));
-        }
-
-        cleanRateData.forEach(rate => {
-            const parentRoomId = rate.relationships?.room_type?.data?.id || rate.attributes?.room_type_id;
-            if (parentRoomId && roomNameMap[parentRoomId]) {
-                rate.roomTypeName = roomNameMap[parentRoomId];
-                const currentTitle = rate.attributes.title || '';
-                if (!currentTitle.includes(`[${roomNameMap[parentRoomId]}]`)) {
-                    rate.attributes.title = `${currentTitle} [${roomNameMap[parentRoomId]}]`;
-                }
+        // 2. Channex Dedicated PMS Endpoint: /rate_plans/options
+        // Excludes all internal channel-adapter mappings (Expedia, Hostelworld, etc.)
+        const optRes = await window.fetchWithRetry(`https://app.channex.io/api/v1/rate_plans/options?filter[property_id]=${propId}`, {
+            headers: {
+                "user-api-key": apiKey,
+                "Content-Type": "application/json"
             }
         });
 
-        // AUTO-PAIR PMS CATEGORIES: Never leave freshly discovered plans unmapped
-        const existingMap = window.channexRateMap || [];
-        window.channexRateMap = cleanRateData.map(rate => {
-            const existing = existingMap.find(m => m.ratePlanId === rate.id);
-            const parentRoomName = rate.roomTypeName || '';
+        if (!optRes.ok) {
+            throw new Error(`Failed to fetch rate plans from Channex: ${optRes.statusText}`);
+        }
 
-            // Match Channex parent room title directly to a PMS category
-            let assignedCategory = existing?.pmsCategory || '';
-            if (!assignedCategory && parentRoomName) {
-                assignedCategory = (window.roomTypes || []).find(rt => {
-                    const cleanRt = rt.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    const cleanCh = parentRoomName.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    return cleanRt === cleanCh || cleanCh.includes(cleanRt) || cleanRt.includes(cleanCh);
-                }) || '';
-            }
+        const optJson = await optRes.json();
+        const rawOptions = optJson.data || [];
 
-            const info = window.formatCleanRateTitle ? window.formatCleanRateTitle(rate.attributes?.title || '', assignedCategory || parentRoomName) : {};
-            const classified = window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(rate.attributes?.title || '') : {};
+        // 3. Map ONLY active primary rate plans belonging to active rooms
+        const cleanRatePlans = rawOptions.filter(item => {
+            const roomId = item.attributes?.room_type_id || item.relationships?.room_type?.data?.id;
+            return roomId && activeRoomIds.has(roomId);
+        });
+
+        console.log(`📊 [CHANNEX] Successfully fetched ${cleanRatePlans.length} active primary rate plans across ${roomData.length} room types.`);
+
+        // 4. Build fresh channexRateMap directly from Channex source of truth
+        window.channexRateMap = cleanRatePlans.map(item => {
+            const rId = item.id;
+            const rTitle = item.attributes?.title || '';
+            const parentRoomId = item.attributes?.room_type_id || item.relationships?.room_type?.data?.id;
+            const parentRoomName = roomNameMap[parentRoomId] || '';
+
+            // Match Channex parent room title directly to PMS category
+            const assignedCategory = (window.roomTypes || []).find(rt => {
+                const cleanRt = rt.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const cleanCh = parentRoomName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                return cleanRt === cleanCh || cleanCh.includes(cleanRt) || cleanRt.includes(cleanCh);
+            }) || parentRoomName;
+
+            const isBdc = /bdc|booking/i.test(rTitle);
+            const isRef = /ref|refundable|flexible/i.test(rTitle) && !/non-?ref/i.test(rTitle);
 
             return {
-                ratePlanId: rate.id,
-                ratePlanTitle: rate.attributes?.title || '',
+                ratePlanId: rId,
+                ratePlanTitle: rTitle,
                 channexRoomTitle: parentRoomName,
                 pmsCategory: assignedCategory,
-                channel: existing?.channel || info.channel || classified.channel || 'Default',
-                product: existing?.product || (window.isEventPricingEnabled && !window.isEventPricingEnabled() ? 'std' : classified.product),
-                policy: existing?.policy || info.policy || classified.policy,
-                rateSource: (existing?.product || classified.product) === 'evt' ? 'evt' : 'std'
+                channel: isBdc ? 'Booking.com' : 'Default',
+                product: 'std',
+                policy: isRef ? 'ref' : 'non-ref',
+                rateSource: 'std'
             };
         });
 
         window.renderChannexMapping(roomData);
-        window.renderChannexRateMapping(cleanRateData);
+        window.renderChannexRateMapping(cleanRatePlans);
         if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
         window.hideLoader();
-        window.customAlert(`Fetched ${roomData.length} Room Types and ${cleanRateData.length} Rate Plans from Channex!\n\nAll rate plans (BDC and Default) have been paired to their rooms.`);
+        window.customAlert(`Fetched ${roomData.length} Room Types and ${cleanRatePlans.length} Primary Rate Plans from Channex!\n\nClick 'Save Classifications' to save this clean mapping to the database.`);
     } catch (err) {
         console.error("Fetch Channex Data error:", err);
         window.hideLoader();
@@ -294,13 +238,11 @@ window.getChannelBadgeHtml = (channel) => {
     return `<span class="bg-emerald-600 text-white px-1.5 h-5 text-[9px] font-black flex items-center justify-center rounded shrink-0 shadow-xs" title="Default Rate Plan">DEFAULT</span>`;
 };
 
-// Strips out property noise while preserving distinct room and rate plan names
 window.formatCleanRateTitle = (rawTitle, parentRoomName = '') => {
     if (!rawTitle) return { planLabel: "Standard", roomTag: parentRoomName || "", fullDisplay: "Standard", channel: "Default", policy: "non-ref" };
 
     let clean = String(rawTitle).trim();
 
-    // 1. Remove property names and repetitive extranet boilerplate
     const noisePatterns = [
         /-\s*BookingCom\s*BDC\s*-\s*LOUD!?\s*a\s*Boutique\s*Party\s*Hostel/gi,
         /-\s*BookingCom\s*BookingCom\s*-\s*LOUD!?\s*a\s*Boutique\s*Party\s*Hostel/gi,
@@ -318,7 +260,6 @@ window.formatCleanRateTitle = (rawTitle, parentRoomName = '') => {
     });
     clean = clean.replace(/^[\s\-–—]+|[\s\-–—]+$/g, '').replace(/\s+/g, ' ').trim();
 
-    // 2. Identify Channel Specificity
     const isBdc = /bdc|booking/i.test(clean);
     const isHw = /hostelworld|hw\b/i.test(clean);
     const isExp = /expedia|exp\b/i.test(clean);
@@ -330,7 +271,6 @@ window.formatCleanRateTitle = (rawTitle, parentRoomName = '') => {
     else if (isExp) detectedChannel = 'Expedia';
     else if (isAgo) detectedChannel = 'Agoda';
 
-    // 3. Identify Policy
     const isNonRef = /non-?ref/i.test(clean);
     const isRef = /ref|flexible|flex/i.test(clean) && !isNonRef;
 
@@ -416,7 +356,6 @@ window.renderChannexMapping = (channexRooms = null) => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-// --- SMART CLASSIFIER FUZZY MATCHER & ALIAS RULES ---
 window.mappingChannelFilter = 'ALL';
 
 window.getClassifierAliases = () => {
@@ -446,59 +385,6 @@ window.getClassifierAliases = () => {
     return defaultAliases;
 };
 
-window.toggleClassifierHelpModal = () => {
-    const modal = document.getElementById('classifier-help-modal');
-    if (!modal) return;
-    const aliases = window.getClassifierAliases();
-
-    const setVal = (id, arr) => {
-        const el = document.getElementById(id);
-        if (el && arr) el.value = arr.join(', ');
-    };
-
-    setVal('alias-channel-bdc', aliases.channels['Booking.com']);
-    setVal('alias-channel-hw', aliases.channels['Hostelworld']);
-    setVal('alias-channel-agoda', aliases.channels['Agoda']);
-    setVal('alias-channel-direct', aliases.channels['Default']);
-    setVal('alias-product-evt', aliases.products['evt']);
-    setVal('alias-policy-ref', aliases.policies['ref']);
-    setVal('alias-policy-nonref', aliases.policies['non-ref']);
-
-    modal.classList.add('active');
-    modal.style.display = 'flex';
-};
-
-window.saveClassifierAliases = () => {
-    const parseAliases = id => {
-        const val = document.getElementById(id)?.value || '';
-        return val.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    };
-
-    const updated = {
-        channels: {
-            'Booking.com': parseAliases('alias-channel-bdc'),
-            'Hostelworld': parseAliases('alias-channel-hw'),
-            'Agoda': parseAliases('alias-channel-agoda'),
-            'Default': parseAliases('alias-channel-direct'),
-            'Expedia': ['expedia', 'exp', 'epc'],
-            'Airbnb': ['airbnb', 'abnb']
-        },
-        products: {
-            'evt': parseAliases('alias-product-evt'),
-            'std': ['std', 'standard', 'base']
-        },
-        policies: {
-            'ref': parseAliases('alias-policy-ref'),
-            'non-ref': parseAliases('alias-policy-nonref')
-        }
-    };
-
-    localStorage.setItem(`cm_classifier_aliases_${window.currentPropertyId}`, JSON.stringify(updated));
-    window.closeModal('classifier-help-modal');
-    window.autoClassifyAllChannexRates();
-    window.customAlert("Keyword rules saved! Auto-reclassifying rate plans...");
-};
-
 window.fuzzyClassifyTitle = (title) => {
     if (!title || typeof title !== 'string') {
         return { channel: 'Default', product: 'std', policy: 'non-ref' };
@@ -506,7 +392,6 @@ window.fuzzyClassifyTitle = (title) => {
     const aliases = window.getClassifierAliases();
     const clean = title.toLowerCase();
 
-    // 1. Channel
     let detectedChannel = 'Default';
     for (const [ch, keywords] of Object.entries(aliases.channels)) {
         if (keywords.some(k => clean.includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(clean))) {
@@ -515,13 +400,11 @@ window.fuzzyClassifyTitle = (title) => {
         }
     }
 
-    // 2. Product
     let detectedProduct = 'std';
     if (aliases.products.evt.some(k => clean.includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(clean))) {
         detectedProduct = 'evt';
     }
 
-    // 3. Policy
     let detectedPolicy = 'non-ref';
     if (aliases.policies['non-ref'].some(k => clean.includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(clean))) {
         detectedPolicy = 'non-ref';
@@ -546,24 +429,6 @@ window.setMappingChannelFilter = (channel) => {
         }
     });
     if (window.renderChannexRateMapping) window.renderChannexRateMapping();
-};
-
-window.autoClassifyAllChannexRates = () => {
-    if (!window.channexRateMap || window.channexRateMap.length === 0) return;
-
-    const isEvents = window.isEventPricingEnabled ? window.isEventPricingEnabled() : false;
-
-    window.channexRateMap.forEach(map => {
-        const classified = window.fuzzyClassifyTitle(map.ratePlanTitle);
-        const info = window.formatCleanRateTitle ? window.formatCleanRateTitle(map.ratePlanTitle, map.pmsCategory) : {};
-        map.channel = map.channel || info.channel || classified.channel || 'Default';
-        map.product = isEvents ? (map.product || classified.product) : 'std';
-        map.policy = map.policy || info.policy || classified.policy;
-        map.rateSource = map.product === 'evt' ? 'evt' : 'std';
-    });
-
-    window.renderChannexRateMapping();
-    window.markUnsavedChanges();
 };
 
 window.renderChannexRateMapping = (channexRates = null) => {
@@ -626,12 +491,10 @@ window.renderChannexRateMapping = (channexRates = null) => {
 
             rHtml += `
                 <div class="flex items-center gap-2 bg-white p-2 rounded-lg border border-amber-200 shadow-sm chan-rate-map-row hover:border-amber-400 transition-colors" data-rate-id="${map.ratePlanId}" data-rate-title="${map.ratePlanTitle}">
-                    <!-- Channel Badge Icon -->
                     <div class="shrink-0 flex items-center justify-center">
                         ${channelBadge}
                     </div>
 
-                    <!-- Room Category Tag & Clear Plan Title -->
                     <div class="flex-1 flex flex-col min-w-0 pl-1">
                         <div class="flex items-center gap-1.5 truncate flex-wrap">
                             <span class="text-[10px] font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs truncate max-w-[240px]" title="${roomBadge}">
@@ -646,12 +509,10 @@ window.renderChannexRateMapping = (channexRates = null) => {
 
                     <i data-lucide="arrow-right" size="12" class="text-amber-500 shrink-0"></i>
 
-                    <!-- Category Selector -->
                     <select class="input-base !py-1 !text-xs !w-48 cursor-pointer chan-rate-pms-sel bg-slate-50 border-amber-300 text-amber-900 font-bold" onchange="window.updateRateMapEntry('${map.ratePlanId}', 'pmsCategory', this.value)">
                         ${catOptions}
                     </select>
 
-                    <!-- Channel Classification Pill -->
                     <select class="input-base !py-1 !text-[10px] !w-32 cursor-pointer chan-rate-channel bg-indigo-50 border-indigo-200 text-indigo-800 font-black" onchange="window.updateRateMapEntry('${map.ratePlanId}', 'channel', this.value)" title="Assigned Channel">
                         <option value="Default" ${currentChannel === 'Default' ? 'selected' : ''}>Default</option>
                         <option value="Booking.com" ${currentChannel === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
@@ -661,13 +522,11 @@ window.renderChannexRateMapping = (channexRates = null) => {
                         <option value="Airbnb" ${currentChannel === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
                     </select>
 
-                    <!-- Product Type Pill (STD vs EVT) -->
                     <select class="input-base !py-1 !text-[10px] !w-24 cursor-pointer chan-rate-product font-black text-center ${currentProduct === 'evt' ? 'bg-pink-100 text-pink-800 border-pink-300' : 'bg-slate-100 text-slate-700 border-slate-300'}" onchange="window.updateRateMapEntry('${map.ratePlanId}', 'product', this.value)" title="Product Type">
                         <option value="std" ${currentProduct === 'std' ? 'selected' : ''}>STD</option>
                         <option value="evt" ${currentProduct === 'evt' ? 'selected' : ''}>EVT PKG</option>
                     </select>
 
-                    <!-- Policy Ratio Pill (Non-Ref vs Ref) -->
                     <select class="input-base !py-1 !text-[10px] !w-28 cursor-pointer chan-rate-policy font-black text-center ${currentPolicy === 'ref' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-800 border-amber-300'}" onchange="window.updateRateMapEntry('${map.ratePlanId}', 'policy', this.value)" title="Policy">
                         <option value="non-ref" ${currentPolicy === 'non-ref' ? 'selected' : ''}>Non-Ref</option>
                         <option value="ref" ${currentPolicy === 'ref' ? 'selected' : ''}>Ref (+%)</option>
@@ -759,7 +618,7 @@ window.saveMappingToDB = async (notify = false) => {
         window.channexMap = newMap;
         window.channexRateMap = activeRateMap;
 
-        if (notify) window.customAlert(`Classifications & room mappings successfully saved!\n\n${activeRateMap.length} rate plans mapped across all channels.`);
+        if (notify) window.customAlert(`Classifications & room mappings successfully saved!\n\n${activeRateMap.length} primary rate plans mapped.`);
         if (window.renderGrid) window.renderGrid();
         if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
     } catch (err) {
@@ -926,8 +785,9 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
         const isEventsActive = window.isEventPricingEnabled ? window.isEventPricingEnabled() : false;
 
-        (window.channexRateMap || []).forEach(rule => {
-            if (!rule.ratePlanId || !rule.pmsCategory) return;
+        const validRatePlans = (window.channexRateMap || []).filter(rule => rule.ratePlanId && rule.pmsCategory);
+
+        validRatePlans.forEach(rule => {
             const pmsCat = rule.pmsCategory;
             const ratePlanId = rule.ratePlanId;
             const rateSource = rule.rateSource || "std";
@@ -989,7 +849,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
                         if (activeBasePrice) {
                             const channelName = effectiveRule.channel || 'Default';
-                            const isDefaultChannel = !channelName || channelName === 'Default' || channelName.toLowerCase().includes('default') || channelName === 'Direct Website';
+                            const isDefaultChannel = !channelName || channelName === 'Default' || channelName.toLowerCase().includes('default');
                             
                             let p = parseFloat(activeBasePrice);
                             if (!isDefaultChannel) {
@@ -1190,7 +1050,7 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
                 warningMsg = `\n\n⚠️ Channex Warnings (${allWarnings.length}):\n${formattedWarnings}`;
             }
 
-            window.customAlert(`Sync Successful!\n\nPushed ${availPayload.length} availability ranges and ${restrPayload.length} rate/restriction ranges to Channex across ${(window.channexRateMap || []).length} rate plans.${warningMsg}`);
+            window.customAlert(`Sync Successful!\n\nPushed ${availPayload.length} availability ranges and ${restrPayload.length} rate/restriction ranges to Channex across ${validRatePlans.length} rate plans.${warningMsg}`);
         } else {
             throw new Error("One or more Channex endpoints rejected the payload. Check DevTools console for details.");
         }
@@ -1214,6 +1074,18 @@ window.saveAndSync = async (btn, mode = 'delta') => {
         // 1. Silently save pricing matrix to Firestore in the background
         if (window.savePricingToCloud) {
             await window.savePricingToCloud(true);
+            // Update _syncedStd on every date so future edits know their last synced baseline
+            if (window.masterPricing?.timeline) {
+                Object.values(window.masterPricing.timeline).forEach(dayObj => {
+                    if (dayObj && typeof dayObj === 'object') {
+                        Object.values(dayObj).forEach(rData => {
+                            if (rData && typeof rData === 'object' && rData.std !== undefined && rData.std !== "") {
+                                rData._syncedStd = rData.std;
+                            }
+                        });
+                    }
+                });
+            }
         }
         // 2. Transmit dirty date ranges to Channex and display the full sync confirmation
         if (window.pushToChannexAPI) {
