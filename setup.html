@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Setup Wizard - Wild & Wandering</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .step-pill.active { background-color: #4f46e5; color: #ffffff; border-color: #4338ca; }
+        .step-pill.completed { background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+        .step-pill { background-color: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+        .input-base {
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            outline: none;
+            font-size: 0.875rem;
+            font-weight: 600;
+            background-color: #ffffff;
+            transition: all 0.15s;
+            width: 100%;
+        }
+        .input-base:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+        .label-base {
+            display: block;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+            margin-bottom: 0.35rem;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- TOP GLOBAL APP HEADER -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs px-4 py-2.5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <a href="index.html" class="flex items-center gap-2 hover:opacity-90 transition-opacity">
+                <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="W&W" class="h-8 object-contain">
+                <span class="font-black text-sm tracking-tight text-slate-900 hidden sm:inline">WILD & WANDERING</span>
+            </a>
+            <div class="h-4 w-px bg-slate-300 mx-1"></div>
+            <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-black uppercase text-slate-400">Setup Wizard:</span>
+                <select id="property-select" onchange="window.switchSetupProperty(this.value)" class="bg-slate-100 text-indigo-700 font-black text-xs px-2.5 py-1 rounded-md border border-slate-300 outline-none cursor-pointer">
+                    <option value="loud_samui">LOUD Hostels Samui (LOUD)</option>
+                    <option value="swims_resort">SWIMS Beach Resort (SWIMS)</option>
+                    <option value="wet_pool">WET Pool Party Hostel (WET)</option>
+                    <option value="NEW">+ Create New Property...</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- FAST APP SWITCHER -->
+        <div class="flex items-center gap-2">
+            <a id="btn-goto-pms" href="pms.html" class="text-xs font-bold text-slate-600 hover:text-indigo-600 px-2.5 py-1 rounded hover:bg-slate-100 transition-colors flex items-center gap-1">
+                <i data-lucide="layout-grid" size="14"></i> <span class="hidden md:inline">Front Desk PMS</span>
+            </a>
+            <a id="btn-goto-cm" href="cm.html" class="text-xs font-bold text-slate-600 hover:text-indigo-600 px-2.5 py-1 rounded hover:bg-slate-100 transition-colors flex items-center gap-1">
+                <i data-lucide="calendar" size="14"></i> <span class="hidden md:inline">Rate Matrix</span>
+            </a>
+            <button onclick="window.saveCurrentProperty(true)" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
+                <i data-lucide="save" size="14"></i> Save Setup
+            </button>
+        </div>
+    </header>
+
+    <!-- WIZARD STEPPER -->
+    <div class="bg-white border-b border-slate-200 py-3 px-4 shadow-2xs">
+        <div class="max-w-5xl mx-auto flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+            <button onclick="window.jumpStep(1)" id="pill-step-1" class="step-pill active px-3.5 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 cursor-pointer transition-all">
+                <span class="w-5 h-5 rounded-full bg-white text-indigo-600 flex items-center justify-center text-[11px] font-black">1</span>
+                <span>General & Add-ons</span>
+            </button>
+            <i data-lucide="chevron-right" size="14" class="text-slate-300 shrink-0"></i>
+            <button onclick="window.jumpStep(2)" id="pill-step-2" class="step-pill px-3.5 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 cursor-pointer transition-all">
+                <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[11px] font-black">2</span>
+                <span>Smart Room Generator</span>
+            </button>
+            <i data-lucide="chevron-right" size="14" class="text-slate-300 shrink-0"></i>
+            <button onclick="window.jumpStep(3)" id="pill-step-3" class="step-pill px-3.5 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 cursor-pointer transition-all">
+                <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[11px] font-black">3</span>
+                <span>Channex Auto-Hub</span>
+            </button>
+            <i data-lucide="chevron-right" size="14" class="text-slate-300 shrink-0"></i>
+            <button onclick="window.jumpStep(4)" id="pill-step-4" class="step-pill px-3.5 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 cursor-pointer transition-all">
+                <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[11px] font-black">4</span>
+                <span>Pricing Rules & Anchors</span>
+            </button>
+            <i data-lucide="chevron-right" size="14" class="text-slate-300 shrink-0"></i>
+            <button onclick="window.jumpStep(5)" id="pill-step-5" class="step-pill px-3.5 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 cursor-pointer transition-all">
+                <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[11px] font-black">5</span>
+                <span>Review & Launch</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN STEP CONTAINER -->
+    <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 min-h-0">
+
+        <!-- ============================================================ -->
+        <!-- STEP 1: GENERAL & ADD-ONS -->
+        <!-- ============================================================ -->
+        <section id="step-pane-1" class="space-y-6">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-5">
+                <div class="border-b border-slate-200 pb-3">
+                    <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
+                        <i data-lucide="building-2" class="text-indigo-600"></i> Property Identity
+                    </h2>
+                    <p class="text-xs text-slate-500 font-medium mt-0.5">Basic identity used in guest folios, emails, and channel manager feeds.</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label class="label-base">Property Name</label>
+                        <input type="text" id="prop-name" placeholder="e.g. LOUD Hostels Samui" class="input-base">
+                    </div>
+                    <div>
+                        <label class="label-base">Short Code (3-5 Letters)</label>
+                        <input type="text" id="prop-code" placeholder="e.g. LOUD" class="input-base uppercase font-mono">
+                    </div>
+                    <div>
+                        <label class="label-base">Base Currency</label>
+                        <select id="prop-currency" class="input-base">
+                            <option value="THB" selected>Thai Baht (THB ฿)</option>
+                            <option value="USD">US Dollar (USD $)</option>
+                            <option value="EUR">Euro (EUR €)</option>
+                            <option value="GBP">British Pound (GBP £)</option>
+                            <option value="AUD">Australian Dollar (AUD $)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Folio Add-ons Card -->
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                    <div>
+                        <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
+                            <i data-lucide="shopping-bag" class="text-emerald-600"></i> Folio Add-on Items & Services
+                        </h2>
+                        <p class="text-xs text-slate-500 font-medium mt-0.5">Quick presets staff can tap on front desk check-in to add extra charges to guest bills.</p>
+                    </div>
+                    <button onclick="window.addAddonRow()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase rounded-lg border border-slate-300 transition-colors cursor-pointer flex items-center gap-1">
+                        <i data-lucide="plus" size="14"></i> Add Preset
+                    </button>
+                </div>
+
+                <div id="addon-list-container" class="space-y-2">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button onclick="window.nextStep(1)" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center gap-2 transition-all cursor-pointer">
+                    <span>Continue to Room Generator</span> <i data-lucide="arrow-right" size="14"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- STEP 2: SMART ROOM GENERATOR (DORMS & PRIVATES) -->
+        <!-- ============================================================ -->
+        <section id="step-pane-2" class="space-y-6 hidden">
+            <!-- Smart Dorm Generator Card -->
+            <div class="bg-white p-6 rounded-xl border border-indigo-200 shadow-sm space-y-4 bg-indigo-50/20">
+                <div class="border-b border-indigo-100 pb-3">
+                    <h2 class="text-lg font-black uppercase tracking-wide text-indigo-950 flex items-center gap-2">
+                        <i data-lucide="sparkles" class="text-indigo-600"></i> Smart Dorm Bed Generator
+                    </h2>
+                    <p class="text-xs text-slate-600 font-medium mt-0.5">Auto-generates all physical beds with top/bottom bunk rules in one click.</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-lg border border-indigo-100 shadow-2xs">
+                    <div>
+                        <label class="label-base text-indigo-700">Dorm Category Title</label>
+                        <input type="text" id="dorm-cat-name" placeholder="e.g. 18-Bed Mixed Dorm" class="input-base">
+                    </div>
+                    <div>
+                        <label class="label-base text-indigo-700">Room Letter / Prefix</label>
+                        <input type="text" id="dorm-room-code" placeholder="e.g. A" class="input-base uppercase font-black text-center">
+                    </div>
+                    <div>
+                        <label class="label-base text-indigo-700">Total Beds</label>
+                        <input type="number" id="dorm-bed-count" value="18" min="1" max="60" class="input-base text-center font-black">
+                    </div>
+                    <div>
+                        <label class="label-base text-indigo-700">Bunk Stacking Rule</label>
+                        <select id="dorm-bunk-rule" class="input-base text-xs">
+                            <option value="odd_top">Odd = Top, Even = Bottom</option>
+                            <option value="even_top">Even = Top, Odd = Bottom</option>
+                            <option value="none">Single Beds (No bunks)</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-4 flex justify-end">
+                        <button onclick="window.generateDormBeds()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
+                            <i data-lucide="layers" size="14"></i> Generate Dorm Beds
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Smart Private Room Generator Card -->
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div class="border-b border-slate-200 pb-3">
+                    <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
+                        <i data-lucide="door-open" class="text-amber-600"></i> Smart Private Room Generator
+                    </h2>
+                    <p class="text-xs text-slate-500 font-medium mt-0.5">Batch generate bungalows or private suites in sequential numbering.</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <div>
+                        <label class="label-base">Category Name</label>
+                        <input type="text" id="priv-cat-name" placeholder="e.g. Deluxe Sea View Bungalow" class="input-base">
+                    </div>
+                    <div>
+                        <label class="label-base">Room Prefix / Building</label>
+                        <input type="text" id="priv-prefix" placeholder="e.g. B or VILLA-" class="input-base uppercase text-center font-black">
+                    </div>
+                    <div>
+                        <label class="label-base">Start #</label>
+                        <input type="number" id="priv-start-num" value="1" min="1" class="input-base text-center font-black">
+                    </div>
+                    <div>
+                        <label class="label-base">End #</label>
+                        <input type="number" id="priv-end-num" value="6" min="1" class="input-base text-center font-black">
+                    </div>
+                    <div class="sm:col-span-4 flex justify-end">
+                        <button onclick="window.generatePrivateRooms()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-black text-xs uppercase rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
+                            <i data-lucide="plus-circle" size="14"></i> Generate Private Rooms
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Physical Inventory Table -->
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                    <div>
+                        <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2">
+                            <i data-lucide="list" class="text-slate-600"></i> Active Physical Inventory (<span id="total-room-count">0</span> Units)
+                        </h2>
+                        <p class="text-xs text-slate-400 font-medium">Physical rooms and dorm beds active on the tape chart.</p>
+                    </div>
+                    <button onclick="window.clearAllInventory()" class="text-rose-600 hover:text-rose-700 font-black text-xs uppercase cursor-pointer">
+                        Clear All Rooms
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto max-h-[350px] border border-slate-200 rounded-lg">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead class="bg-slate-800 text-white font-black uppercase text-[10px] sticky top-0 z-10">
+                            <tr>
+                                <th class="p-2.5 border-r border-slate-700 w-28">Physical ID</th>
+                                <th class="p-2.5 border-r border-slate-700">Room Category</th>
+                                <th class="p-2.5 border-r border-slate-700 w-32">Bunk Position</th>
+                                <th class="p-2.5 text-center w-20">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-table-body" class="divide-y divide-slate-200 font-bold text-slate-700 bg-white">
+                            <!-- Injected dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="flex justify-between pt-2">
+                <button onclick="window.jumpStep(1)" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs uppercase rounded-lg flex items-center gap-2 transition-all cursor-pointer">
+                    <i data-lucide="arrow-left" size="14"></i> Back
+                </button>
+                <button onclick="window.nextStep(2)" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center gap-2 transition-all cursor-pointer">
+                    <span>Continue to Channex Hub</span> <i data-lucide="arrow-right" size="14"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- STEP 3: CHANNEX AUTO-HUB -->
+        <!-- ============================================================ -->
+        <section id="step-pane-3" class="space-y-6 hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div class="border-b border-slate-200 pb-3 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
+                            <i data-lucide="network" class="text-indigo-600"></i> Channex Credentials
+                        </h2>
+                        <p class="text-xs text-slate-500 font-medium mt-0.5">Enables two-way synchronization of rates, inventory, and OTA bookings.</p>
+                    </div>
+                    <span class="px-2.5 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 font-black text-[10px] uppercase">REST API V1</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="label-base">Channex API Key</label>
+                        <input type="password" id="chan-api-key" placeholder="Enter API Key from Channex..." class="input-base font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="label-base">Channex Property UUID</label>
+                        <input type="text" id="chan-prop-id" placeholder="e.g. 7a2cb14f-..." class="input-base font-mono text-xs">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Choice: Pull Existing vs Auto-Provision Fresh -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Option A: Pull Existing -->
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
+                    <div>
+                        <span class="text-[10px] font-black uppercase px-2 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-300 inline-block mb-1">Option A (Existing Hotel)</span>
+                        <h3 class="text-base font-black text-slate-800">Pull & Pair Channex Rooms</h3>
+                        <p class="text-xs text-slate-500 font-medium mt-1">If your property already has rooms set up in Channex, pull them and pair directly to your PMS categories by ID.</p>
+                    </div>
+                    <button onclick="window.fetchAndPairChannex()" class="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-black text-xs uppercase rounded-lg shadow-sm flex items-center justify-center gap-1.5 cursor-pointer">
+                        <i data-lucide="download" size="14"></i> Fetch & Pair by ID
+                    </button>
+                </div>
+
+                <!-- Option B: Auto-Provision Fresh -->
+                <div class="bg-indigo-50/50 p-5 rounded-xl border border-indigo-200 shadow-sm flex flex-col justify-between space-y-3">
+                    <div>
+                        <span class="text-[10px] font-black uppercase px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded border border-indigo-300 inline-block mb-1">Option B (Fresh Hotel)</span>
+                        <h3 class="text-base font-black text-indigo-950">Push Inventory to Channex</h3>
+                        <p class="text-xs text-indigo-900/70 font-medium mt-1">Automatically create all room types and standard rate plans directly in Channex with zero manual clicking in the extranet.</p>
+                    </div>
+                    <button onclick="window.provisionChannexRooms()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                        <i data-lucide="cloud-upload" size="14"></i> Auto-Provision in Channex
+                    </button>
+                </div>
+            </div>
+
+            <!-- Active Mappings Display -->
+            <div id="mapping-results-card" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h3 class="text-sm font-black uppercase text-slate-800 flex items-center gap-2">
+                        <i data-lucide="check-check" class="text-emerald-600"></i> Verified ID Mappings
+                    </h3>
+                    <span id="mapping-count-badge" class="text-xs font-bold text-slate-500">0 Rooms Mapped</span>
+                </div>
+                <div id="mapping-pairs-list" class="space-y-1.5 text-xs">
+                    <div class="text-center py-4 text-slate-400 font-bold italic">No Channex mappings configured yet. Click Option A or B above.</div>
+                </div>
+            </div>
+
+            <div class="flex justify-between pt-2">
+                <button onclick="window.jumpStep(2)" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs uppercase rounded-lg flex items-center gap-2 transition-all cursor-pointer">
+                    <i data-lucide="arrow-left" size="14"></i> Back
+                </button>
+                <button onclick="window.nextStep(3)" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center gap-2 transition-all cursor-pointer">
+                    <span>Continue to Pricing Rules</span> <i data-lucide="arrow-right" size="14"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- STEP 4: PRICING RULES & ANCHORS -->
+        <!-- ============================================================ -->
+        <section id="step-pane-4" class="space-y-6 hidden">
+            <!-- Anchor Selection Card -->
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div class="border-b border-slate-200 pb-3">
+                    <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
+                        <i data-lucide="anchor" class="text-indigo-600"></i> Primary Price Anchors
+                    </h2>
+                    <p class="text-xs text-slate-500 font-medium mt-0.5">Select the 2 driving rooms. All other category rates ripple automatically from these anchors.</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-indigo-50/50 p-4 rounded-lg border border-indigo-200">
+                        <label class="label-base text-indigo-700">Private Room Anchor</label>
+                        <select id="anchor-private" class="input-base font-black text-indigo-900 bg-white"></select>
+                    </div>
+                    <div class="bg-amber-50/50 p-4 rounded-lg border border-amber-200">
+                        <label class="label-base text-amber-700">Dorm Bed Anchor</label>
+                        <select id="anchor-dorm" class="input-base font-black text-amber-900 bg-white"></select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Event Curves & Policies Card -->
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                    <div>
+                        <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
+                            <i data-lucide="sliders" class="text-purple-600"></i> Policies & Peak Curves
+                        </h2>
+                        <p class="text-xs text-slate-500 font-medium mt-0.5">Configure event curve behavior and standard refundable markups.</p>
+                    </div>
+                    <!-- EVENT PRICING TOGGLE -->
+                    <label class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-300 cursor-pointer text-xs font-black uppercase text-pink-700">
+                        <input type="checkbox" id="toggle-event-rates" class="w-4 h-4 accent-pink-600 cursor-pointer">
+                        <span>Event Pricing (SWIMS FMP)</span>
+                    </label>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <label class="label-base">Standard Refundable Markup</label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-slate-600">Refundable = Base</span>
+                            <span class="font-black text-slate-800 text-sm">+25%</span>
+                        </div>
+                    </div>
+                    <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <label class="label-base">Hostelworld Channel Adjustment</label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-slate-600">Deposit Commission Offset</span>
+                            <span class="font-black text-amber-700 text-sm">+15%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-between pt-2">
+                <button onclick="window.jumpStep(3)" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs uppercase rounded-lg flex items-center gap-2 transition-all cursor-pointer">
+                    <i data-lucide="arrow-left" size="14"></i> Back
+                </button>
+                <button onclick="window.nextStep(4)" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center gap-2 transition-all cursor-pointer">
+                    <span>Review & Launch</span> <i data-lucide="check-circle" size="14"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- STEP 5: REVIEW & LAUNCH -->
+        <!-- ============================================================ -->
+        <section id="step-pane-5" class="space-y-6 hidden">
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center space-y-4 py-8">
+                <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
+                    <i data-lucide="check" size="32"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900 uppercase">Setup Complete & Verified!</h2>
+                    <p class="text-sm font-medium text-slate-500 max-w-md mx-auto mt-1">Your property profile, physical room inventory, and channel rates are configured and synchronized.</p>
+                </div>
+
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+                    <a id="launch-pms-btn" href="pms.html" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center justify-center gap-2 transition-all">
+                        <i data-lucide="layout-grid" size="16"></i> Open Front Desk PMS
+                    </a>
+                    <a id="launch-cm-btn" href="cm.html" class="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center justify-center gap-2 transition-all">
+                        <i data-lucide="calendar" size="16"></i> Open Rate Matrix & Bulk Tool
+                    </a>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- CUSTOM NOTIFICATION MODAL -->
+    <div id="modal-alert" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full text-center border border-slate-300">
+            <p id="modal-alert-msg" class="font-bold text-slate-700 mb-5 leading-tight whitespace-pre-wrap text-sm"></p>
+            <button onclick="document.getElementById('modal-alert').classList.add('hidden')" class="w-full px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-black uppercase text-xs transition-colors">
+                Okay
+            </button>
+        </div>
+    </div>
+
+    <!-- FIREBASE INITIALIZATION & WIZARD CONTROLLER -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = { 
+            apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", 
+            authDomain: "swimspms.firebaseapp.com", 
+            projectId: "swimspms", 
+            storageBucket: "swimspms.firebasestorage.app", 
+            messagingSenderId: "989960113115", 
+            appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" 
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'hotel-pms-v1';
+
+        window.db = db;
+        window.appId = appId;
+        window.currentPropId = 'loud_samui';
+        window.propertyData = {
+            name: '',
+            code: '',
+            currency: 'THB',
+            rooms: [],
+            addons: [],
+            channex: {},
+            channexMap: [],
+            enableEventRates: false
+        };
+
+        window.customAlert = (msg) => {
+            document.getElementById('modal-alert-msg').innerText = msg;
+            document.getElementById('modal-alert').classList.remove('hidden');
+        };
+
+        // STEPPER NAVIGATION
+        window.jumpStep = (step) => {
+            for (let i = 1; i <= 5; i++) {
+                const pane = document.getElementById(`step-pane-${i}`);
+                const pill = document.getElementById(`pill-step-${i}`);
+                if (pane) pane.classList.toggle('hidden', i !== step);
+                if (pill) {
+                    pill.classList.remove('active', 'completed');
+                    if (i === step) pill.classList.add('active');
+                    else if (i < step) pill.classList.add('completed');
+                }
+            }
+        };
+
+        window.nextStep = (current) => {
+            window.jumpStep(current + 1);
+        };
+
+        // ADD-ON MANAGEMENT
+        window.addAddonRow = (name = '', price = 0) => {
+            const container = document.getElementById('addon-list-container');
+            const row = document.createElement('div');
+            row.className = "flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 addon-row";
+            row.innerHTML = `
+                <input type="text" placeholder="Add-on Name (e.g. Scooter Rental)" value="${name}" class="input-base addon-name text-xs !py-1">
+                <div class="flex items-center gap-1 w-32 shrink-0">
+                    <span class="text-xs font-black text-slate-400">฿</span>
+                    <input type="number" placeholder="Price" value="${price}" class="input-base addon-price text-xs !py-1 text-right font-black">
+                </div>
+                <button onclick="this.closest('.addon-row').remove()" class="text-slate-400 hover:text-rose-600 p-1 cursor-pointer">
+                    <i data-lucide="trash-2" size="14"></i>
+                </button>
+            `;
+            container.appendChild(row);
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        // SMART INVENTORY GENERATORS
+        window.generateDormBeds = () => {
+            const cat = document.getElementById('dorm-cat-name').value.trim();
+            const code = document.getElementById('dorm-room-code').value.trim().toUpperCase();
+            const count = parseInt(document.getElementById('dorm-bed-count').value, 10);
+            const rule = document.getElementById('dorm-bunk-rule').value;
+
+            if (!cat || !code || isNaN(count) || count < 1) {
+                return window.customAlert("Please enter a category title, room letter, and valid bed count.");
+            }
+
+            for (let i = 1; i <= count; i++) {
+                const numStr = String(i).padStart(2, '0');
+                const id = `${code}-${numStr}`;
+                
+                let bunkPos = 'Single';
+                if (rule === 'odd_top') bunkPos = (i % 2 !== 0) ? 'Top Bunk' : 'Bottom Bunk';
+                else if (rule === 'even_top') bunkPos = (i % 2 === 0) ? 'Top Bunk' : 'Bottom Bunk';
+
+                // Prevent duplicate IDs
+                if (!window.propertyData.rooms.some(r => r.id === id)) {
+                    window.propertyData.rooms.push({
+                        id,
+                        type: cat,
+                        bunk: bunkPos
+                    });
+                }
+            }
+
+            window.renderInventoryTable();
+            window.updateAnchorSelectors();
+            window.customAlert(`Generated ${count} beds for Room ${code}!`);
+        };
+
+        window.generatePrivateRooms = () => {
+            const cat = document.getElementById('priv-cat-name').value.trim();
+            const prefix = document.getElementById('priv-prefix').value.trim().toUpperCase();
+            const s = parseInt(document.getElementById('priv-start-num').value, 10);
+            const e = parseInt(document.getElementById('priv-end-num').value, 10);
+
+            if (!cat || !prefix || isNaN(s) || isNaN(e) || s > e) {
+                return window.customAlert("Please provide category, prefix, and valid start/end room numbers.");
+            }
+
+            let created = 0;
+            for (let i = s; i <= e; i++) {
+                const numStr = String(i).padStart(2, '0');
+                const id = `${prefix}${numStr}`;
+                if (!window.propertyData.rooms.some(r => r.id === id)) {
+                    window.propertyData.rooms.push({
+                        id,
+                        type: cat,
+                        bunk: 'Private'
+                    });
+                    created++;
+                }
+            }
+
+            window.renderInventoryTable();
+            window.updateAnchorSelectors();
+            window.customAlert(`Generated ${created} private rooms!`);
+        };
+
+        window.renderInventoryTable = () => {
+            const tbody = document.getElementById('inventory-table-body');
+            const countEl = document.getElementById('total-room-count');
+            if (!tbody) return;
+
+            const rooms = window.propertyData.rooms || [];
+            if (countEl) countEl.innerText = rooms.length;
+
+            if (rooms.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400 italic">No rooms generated yet. Use the generators above.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = rooms.map((r, idx) => `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-2.5 border-r border-slate-200 font-black text-slate-900">${r.id}</td>
+                    <td class="p-2.5 border-r border-slate-200">${r.type}</td>
+                    <td class="p-2.5 border-r border-slate-200 text-slate-500">${r.bunk || 'Standard'}</td>
+                    <td class="p-2.5 text-center">
+                        <button onclick="window.removeInventoryItem(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer">
+                            <i data-lucide="trash-2" size="14"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.removeInventoryItem = (idx) => {
+            window.propertyData.rooms.splice(idx, 1);
+            window.renderInventoryTable();
+            window.updateAnchorSelectors();
+        };
+
+        window.clearAllInventory = () => {
+            if (confirm("Clear all generated physical rooms?")) {
+                window.propertyData.rooms = [];
+                window.renderInventoryTable();
+                window.updateAnchorSelectors();
+            }
+        };
+
+        window.updateAnchorSelectors = () => {
+            const selP = document.getElementById('anchor-private');
+            const selD = document.getElementById('anchor-dorm');
+            if (!selP || !selD) return;
+
+            const uniqueTypes = [...new Set((window.propertyData.rooms || []).map(r => r.type))];
+            const pTypes = uniqueTypes.filter(t => !t.toLowerCase().includes('dorm'));
+            const dTypes = uniqueTypes.filter(t => t.toLowerCase().includes('dorm'));
+
+            selP.innerHTML = (pTypes.length ? pTypes : uniqueTypes).map(t => `<option value="${t}">${t}</option>`).join('');
+            selD.innerHTML = (dTypes.length ? dTypes : uniqueTypes).map(t => `<option value="${t}">${t}</option>`).join('');
+        };
+
+        // CHANNEX API OPERATIONS
+        window.fetchAndPairChannex = async () => {
+            const apiKey = document.getElementById('chan-api-key').value.trim();
+            const propId = document.getElementById('chan-prop-id').value.trim();
+            if (!apiKey || !propId) return window.customAlert("Enter API Key and Property ID first.");
+
+            try {
+                const res = await fetch(`https://app.channex.io/api/v1/room_types?filter[property_id]=${propId}`, {
+                    headers: { "user-api-key": apiKey, "Content-Type": "application/json" }
+                });
+                if (!res.ok) throw new Error("Channex connection rejected. Check API key and Property ID.");
+                const json = await res.json();
+                const chanRooms = json.data || [];
+
+                const pmsCategories = [...new Set((window.propertyData.rooms || []).map(r => r.type))];
+
+                window.propertyData.channexMap = chanRooms.map(cr => {
+                    const matchedCat = pmsCategories.find(c => c.toLowerCase().includes(cr.attributes.title.toLowerCase()) || cr.attributes.title.toLowerCase().includes(c.toLowerCase())) || (pmsCategories[0] || 'Standard');
+                    return {
+                        channexId: cr.id,
+                        channexTitle: cr.attributes.title,
+                        pmsCategory: matchedCat
+                    };
+                });
+
+                window.renderMappingPairs();
+                window.customAlert(`Fetched ${chanRooms.length} room types from Channex! Paired strictly by ID.`);
+            } catch (err) {
+                window.customAlert("Channex Error: " + err.message);
+            }
+        };
+
+        window.provisionChannexRooms = async () => {
+            const apiKey = document.getElementById('chan-api-key').value.trim();
+            const propId = document.getElementById('chan-prop-id').value.trim();
+            if (!apiKey || !propId) return window.customAlert("Enter API Key and Property ID first.");
+
+            const categories = [...new Set((window.propertyData.rooms || []).map(r => r.type))];
+            if (categories.length === 0) return window.customAlert("Create your room inventory in Step 2 first.");
+
+            try {
+                const createdMappings = [];
+                for (const cat of categories) {
+                    const isDorm = cat.toLowerCase().includes('dorm');
+                    const dormCount = window.propertyData.rooms.filter(r => r.type === cat).length;
+
+                    // 1. POST Room Type to Channex
+                    const roomRes = await fetch(`https://app.channex.io/api/v1/room_types`, {
+                        method: "POST",
+                        headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            room_type: {
+                                property_id: propId,
+                                title: cat,
+                                count_of_rooms: isDorm ? dormCount : 1,
+                                occ_adults: isDorm ? 1 : 2,
+                                occ_children: 0,
+                                occ_infants: 0
+                            }
+                        })
+                    });
+                    const roomJson = await roomRes.json();
+                    const newRoomId = roomJson.data?.id;
+
+                    if (newRoomId) {
+                        createdMappings.push({
+                            channexId: newRoomId,
+                            channexTitle: cat,
+                            pmsCategory: cat
+                        });
+
+                        // 2. Auto-Provision Standard Rate Plans for this room
+                        const plans = [
+                            { title: `${cat} - Default Non-Ref`, isRef: false },
+                            { title: `${cat} - Default Ref`, isRef: true },
+                            { title: `${cat} - BDC Non-Ref`, isRef: false },
+                            { title: `${cat} - BDC Ref`, isRef: true }
+                        ];
+
+                        for (const p of plans) {
+                            await fetch(`https://app.channex.io/api/v1/rate_plans`, {
+                                method: "POST",
+                                headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    rate_plan: {
+                                        property_id: propId,
+                                        room_type_id: newRoomId,
+                                        title: p.title,
+                                        options: [{ occupancy: 1, rate: 0 }]
+                                    }
+                                })
+                            });
+                        }
+                    }
+                }
+
+                window.propertyData.channexMap = createdMappings;
+                window.renderMappingPairs();
+                window.customAlert(`Successfully auto-provisioned ${createdMappings.length} rooms and their rate plans in Channex!`);
+            } catch (err) {
+                window.customAlert("Provisioning Error: " + err.message);
+            }
+        };
+
+        window.renderMappingPairs = () => {
+            const list = document.getElementById('mapping-pairs-list');
+            const badge = document.getElementById('mapping-count-badge');
+            const map = window.propertyData.channexMap || [];
+            if (badge) badge.innerText = `${map.length} Rooms Mapped`;
+
+            if (map.length === 0) {
+                list.innerHTML = `<div class="text-center py-4 text-slate-400 font-bold italic">No Channex mappings configured yet.</div>`;
+                return;
+            }
+
+            list.innerHTML = map.map(m => `
+                <div class="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-slate-50 font-bold">
+                    <span class="text-slate-800">${m.channexTitle} <span class="text-[9px] font-mono text-slate-400">(${m.channexId.slice(-8)})</span></span>
+                    <i data-lucide="arrow-right" size="14" class="text-indigo-500"></i>
+                    <span class="text-indigo-700 font-black">${m.pmsCategory}</span>
+                </div>
+            `).join('');
+
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        // SAVE PROPERTY DATA TO FIRESTORE
+        window.saveCurrentProperty = async (notify = false) => {
+            const propId = window.currentPropId;
+            const name = document.getElementById('prop-name').value.trim();
+            const code = document.getElementById('prop-code').value.trim().toUpperCase();
+            const currency = document.getElementById('prop-currency').value;
+            const apiKey = document.getElementById('chan-api-key').value.trim();
+            const chanPropId = document.getElementById('chan-prop-id').value.trim();
+            const enableEventRates = document.getElementById('toggle-event-rates').checked;
+
+            // Gather Add-ons
+            const addons = [];
+            document.querySelectorAll('.addon-row').forEach(row => {
+                const n = row.querySelector('.addon-name')?.value.trim();
+                const p = parseFloat(row.querySelector('.addon-price')?.value) || 0;
+                if (n) addons.push({ name: n, price: p });
+            });
+
+            const docData = {
+                name,
+                code,
+                currency,
+                rooms: window.propertyData.rooms,
+                addons,
+                enableEventRates,
+                channex: { apiKey, propId: chanPropId },
+                channexMap: window.propertyData.channexMap,
+                updatedAt: new Date().toISOString()
+            };
+
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), docData, { merge: true });
+                if (notify) window.customAlert("Property configuration successfully saved!");
+            } catch (err) {
+                window.customAlert("Save Error: " + err.message);
+            }
+        };
+
+        // LOAD SELECTED PROPERTY
+        window.switchSetupProperty = async (propId) => {
+            if (propId === 'NEW') {
+                const newCode = prompt("Enter 4-letter property short code (e.g. WET):");
+                if (!newCode) return;
+                const newId = newCode.toLowerCase() + "_hotel";
+                window.currentPropId = newId;
+                window.propertyData = { name: newCode.toUpperCase(), code: newCode.toUpperCase(), currency: 'THB', rooms: [], addons: [], channex: {}, channexMap: [], enableEventRates: false };
+                window.hydrateForm();
+                return;
+            }
+
+            window.currentPropId = propId;
+            try {
+                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
+                if (snap.exists()) {
+                    window.propertyData = snap.data();
+                    window.hydrateForm();
+                }
+            } catch (err) {
+                console.error("Load property error:", err);
+            }
+        };
+
+        window.hydrateForm = () => {
+            const p = window.propertyData;
+            document.getElementById('prop-name').value = p.name || '';
+            document.getElementById('prop-code').value = p.code || '';
+            document.getElementById('prop-currency').value = p.currency || 'THB';
+            document.getElementById('chan-api-key').value = p.channex?.apiKey || '';
+            document.getElementById('chan-prop-id').value = p.channex?.propId || '';
+            document.getElementById('toggle-event-rates').checked = !!p.enableEventRates;
+
+            // Hydrate Add-ons
+            const addonContainer = document.getElementById('addon-list-container');
+            addonContainer.innerHTML = '';
+            (p.addons || [
+                { name: 'Ferry Ticket', price: 400 },
+                { name: 'Scooter Rental', price: 250 },
+                { name: 'Laundry', price: 100 },
+                { name: 'Late Checkout', price: 300 }
+            ]).forEach(a => window.addAddonRow(a.name, a.price));
+
+            window.renderInventoryTable();
+            window.updateAnchorSelectors();
+            window.renderMappingPairs();
+
+            // Sync navigation links with property code
+            const shortCode = p.code || 'LOUD';
+            document.getElementById('btn-goto-pms').href = `pms.html?p=${shortCode}`;
+            document.getElementById('btn-goto-cm').href = `cm.html?p=${shortCode}`;
+            document.getElementById('launch-pms-btn').href = `pms.html?p=${shortCode}`;
+            document.getElementById('launch-cm-btn').href = `cm.html?p=${shortCode}`;
+        };
+
+        // BOOTSTRAP
+        (async function init() {
+            try {
+                if (typeof window.__initial_auth_token !== 'undefined') {
+                    try { await signInWithCustomToken(auth, window.__initial_auth_token); }
+                    catch (e) { await signInAnonymously(auth); }
+                } else {
+                    await signInAnonymously(auth);
+                }
+                const pParam = new URLSearchParams(window.location.search).get('p');
+                const targetProp = pParam ? (pParam.toLowerCase() + '_samui') : 'loud_samui';
+                window.switchSetupProperty(targetProp);
+            } catch (err) {
+                console.error("Auth init error:", err);
+            }
+        })();
+    </script>
+</body>
+</html>
