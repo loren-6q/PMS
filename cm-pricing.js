@@ -41,9 +41,14 @@ window.computeDynamicPlanRate = (dateStr, room, ratePlan) => {
     let computed = parseFloat(basePrice);
 
     // 2. Channel Multiplier (from Tab 2 Pricing Rules)
+    // CRITICAL: 'Default' is the calendar anchor rate itself and must ALWAYS be 1:1 (SYNC = 0).
     const channelName = ratePlan.channel || (window.fuzzyClassifyTitle ? window.fuzzyClassifyTitle(ratePlan.ratePlanTitle).channel : 'Default');
-    const channelRule = window.pricingRules?.channels?.[channelName] || { type: '=', val: 0 };
-    computed = window.applyMath(computed, channelRule.type || '=', channelRule.val || 0);
+    const isDefaultChannel = !channelName || channelName === 'Default' || channelName.toLowerCase().includes('default') || channelName === 'Direct Website';
+
+    if (!isDefaultChannel) {
+        const channelRule = window.pricingRules?.channels?.[channelName] || { type: '=', val: 0 };
+        computed = window.applyMath(computed, channelRule.type || '=', channelRule.val || 0);
+    }
 
     // 3. Policy Ratio (Refundable vs Non-Ref)
     if (isRefPolicy) {
