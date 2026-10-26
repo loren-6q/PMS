@@ -157,7 +157,7 @@ window.hideCmTooltip = () => {
 };
 
 // --- 2. RELATIONAL LINKING & RIPPLE ENGINE ---
-window.rippleDay = (dateStr, startRoom) => {
+window.rippleDay = (dateStr, startRoom, forceRipple = false) => {
     if (!window.isRippleEnabled) return;
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     let minDiff = window.getNearestEvent(window.parseYMD(dateStr));
@@ -191,7 +191,9 @@ window.rippleDay = (dateStr, startRoom) => {
                 window.masterPricing.timeline[dateStr][edge.to] = window.masterPricing.timeline[dateStr][edge.to] || { isOverride: {} };
                 let nextVals = window.masterPricing.timeline[dateStr][edge.to];
                 
-                if (nextVals.isOverride?.std) return;
+                // When forceRipple is true (user changed anchor room in Ripple Mode),
+                // it recalculates the linked room regardless of previous stale locks.
+                if (!forceRipple && nextVals.isOverride?.std) return;
 
                 if (isPeak) {
                     let ruleType = edge.typeFmp || edge.type;
