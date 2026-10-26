@@ -133,18 +133,85 @@ window.fetchChannexData = async () => {
     window.showLoader('FETCHING CHANNEX INVENTORY...');
 
     try {
+        // Fetch active room types
         const roomData = await window.fetchAllChannex('room_types', apiKey, propId);
-        const rawRateData = await window.fetchAllChannex('rate_plans', apiKey, propId);
-
-        const rateData = rawRateData.filter(rate => rate && rate.attributes);
 
         const roomNameMap = {};
+        const activeRoomIds = new Set();
         roomData.forEach(r => {
             roomNameMap[r.id] = r.attributes.title;
+            activeRoomIds.add(r.id);
         });
 
-        rateData.forEach(rate => {
-            const parentRoomId = rate.relationships?.room_type?.data?.id;
+        // 1. First attempt: Query Channex's dedicated PMS selector endpoint (/rate_plans/options)
+        // This endpoint explicitly strips out the 39 internal channel-adapter sub-plans
+        let rateData = [];
+        try {
+            const optRes = await window.fetchWithRetry(`https://app.channex.io/api/v1/rate_plans/options?filter[property_id]=${propId}`, {
+                headers: {
+                    "user-api-key": apiKey,
+                    "Content-Type": "application/json"
+                }
+            });
+            if (optRes.ok) {
+                const optJson = await optRes.json();
+                if (Array.isArray(optJson.data) && optJson.data.length > 0) {
+                    rateData = optJson.data.map(item => ({
+                        id: item.id,
+                        attributes: {
+                            title: item.attributes?.title || '',
+                            room_type_id: item.attributes?.room_type_id || '',
+                            ui_read_only: item.attributes?.ui_read_only || false
+                        },
+                        relationships: {
+                            room_type: {
+                                data: {
+                                    id: item.attributes?.room_type_id || ''
+                                }
+                            }
+                        }
+                    }));
+                }
+            }
+        } catch (optErr) {
+            console.warn("Could not query /rate_plans/options, falling back to /rate_plans:", optErr);
+        }
+
+        // 2. Fallback to /rate_plans if /options was not supported
+        if (rateData.length === 0) {
+            const rawRateData = await window.fetchAllChannex('rate_plans', apiKey, propId);
+            rateData = rawRateData.filter(rate => rate && rate.attributes);
+        }
+
+        // 3. STRICT FILTER: Strip out read-only channel mappings and unmapped rooms
+        const cleanRateData = rateData.filter(rate => {
+            if (!rate || !rate.attributes) return false;
+
+            // Drop if Channex flags it as read-only (internal channel-created mapping)
+            if (rate.attributes.ui_read_only === true) return false;
+
+            // Must belong to one of your active room types
+            const parentRoomId = rate.relationships?.room_type?.data?.id || rate.attributes?.room_type_id;
+            if (!parentRoomId || !activeRoomIds.has(parentRoomId)) return false;
+
+            // Drop legacy listings
+            const title = (rate.attributes.title || '').toLowerCase();
+            if (title.includes('samui beach hostel') || title.includes('legacy')) return false;
+
+            return true;
+        });
+
+        console.log(`📊 [CHANNEX AUDIT] Raw records: ${rateData.length} | Active writable plans: ${cleanRateData.length}`);
+        if (console.table) {
+            console.table(cleanRateData.map(r => ({
+                id: r.id,
+                title: r.attributes?.title,
+                room: roomNameMap[r.relationships?.room_type?.data?.id || r.attributes?.room_type_id]
+            })));
+        }
+
+        cleanRateData.forEach(rate => {
+            const parentRoomId = rate.relationships?.room_type?.data?.id || rate.attributes?.room_type_id;
             if (parentRoomId && roomNameMap[parentRoomId]) {
                 rate.roomTypeName = roomNameMap[parentRoomId];
                 const currentTitle = rate.attributes.title || '';
@@ -156,7 +223,7 @@ window.fetchChannexData = async () => {
 
         // AUTO-PAIR PMS CATEGORIES: Never leave freshly discovered plans unmapped
         const existingMap = window.channexRateMap || [];
-        window.channexRateMap = rateData.map(rate => {
+        window.channexRateMap = cleanRateData.map(rate => {
             const existing = existingMap.find(m => m.ratePlanId === rate.id);
             const parentRoomName = rate.roomTypeName || '';
 
@@ -186,10 +253,10 @@ window.fetchChannexData = async () => {
         });
 
         window.renderChannexMapping(roomData);
-        window.renderChannexRateMapping(rateData);
+        window.renderChannexRateMapping(cleanRateData);
         if (window.renderDynamicOtaRules) window.renderDynamicOtaRules();
         window.hideLoader();
-        window.customAlert(`Fetched ${roomData.length} Room Types and ${rateData.length} Rate Plans from Channex!\n\nAll rate plans have been paired to their rooms.`);
+        window.customAlert(`Fetched ${roomData.length} Room Types and ${cleanRateData.length} Rate Plans from Channex!\n\nAll rate plans (BDC and Default) have been paired to their rooms.`);
     } catch (err) {
         console.error("Fetch Channex Data error:", err);
         window.hideLoader();
