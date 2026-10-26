@@ -276,10 +276,10 @@
                 </button>
                 
                 <!-- Unified Single-Click Save & Sync Button -->
-                <button id="btn-save-sync" onclick="window.savePricingToCloud(false); window.pushToChannexAPI(this, 'delta');" class="px-3 sm:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-1.5 transition-colors cursor-pointer" title="Save pricing matrix to cloud & sync pending changes with Channex">
+                <button id="btn-save-sync" onclick="window.saveAndSync(this, 'delta');" class="px-3 sm:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-1.5 transition-colors cursor-pointer" title="Save pricing matrix to cloud & sync pending changes with Channex">
                     <i data-lucide="zap" size="14"></i> SAVE & SYNC
                 </button>
-                <button onclick="window.pushToChannexAPI(this, 'full')" class="px-3 sm:px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer" title="Push full matrix to Channex">
+                <button onclick="window.saveAndSync(this, 'full')" class="px-3 sm:px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-md flex items-center gap-2 transition-colors cursor-pointer" title="Push full matrix to Channex">
                     <i data-lucide="cloud-upload" size="14"></i> FULL SYNC
                 </button>
                 <a id="nav-pms-btn" href="index.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase transition-colors hidden sm:block ml-2 shrink-0">← Back</a>
