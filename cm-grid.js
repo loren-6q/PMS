@@ -500,6 +500,41 @@ window.getUnifiedRestrictionBadgeHtml = (cta, ctd, stop) => {
     return '<span class="w-1.5 h-1.5 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>';
 };
 
+// FOCUS PRESERVATION HELPER: Restores focus to the intended input after renderGrid rebuilds DOM
+window.restoreGridFocus = (focusReq) => {
+    if (!focusReq) return;
+    const body = document.getElementById('grid-body');
+    if (!body) return;
+
+    let elToFocus = null;
+
+    // 1. Try exact ID first (e.g. inp_2026-10-27_DeluxeKing_std)
+    if (focusReq.id) {
+        elToFocus = document.getElementById(focusReq.id);
+    }
+
+    // 2. Try row and column coordinates in current table
+    if (!elToFocus && focusReq.rowIdx !== undefined && focusReq.colIdx !== undefined) {
+        const tr = body.children[focusReq.rowIdx];
+        if (tr) {
+            const td = tr.children[focusReq.colIdx];
+            if (td && focusReq.selector) {
+                elToFocus = td.querySelector(focusReq.selector);
+            }
+            if (!elToFocus && td) {
+                elToFocus = td.querySelector('input:not([disabled])');
+            }
+        }
+    }
+
+    if (elToFocus) {
+        elToFocus.focus({ preventScroll: true });
+        if (typeof elToFocus.select === 'function') {
+            elToFocus.select();
+        }
+    }
+};
+
 window.renderGrid = () => {
     const tapeInput = document.getElementById('tape-start');
     if (tapeInput && !tapeInput.value) {
@@ -918,6 +953,13 @@ window.renderGrid = () => {
 
     body.innerHTML = allRowsHtml;
     if (window.lucide) window.lucide.createIcons();
+
+    // RESTORE ACTIVE FOCUS (Fixes Tab loss when user edits rates)
+    if (window._pendingGridFocus) {
+        const req = window._pendingGridFocus;
+        window._pendingGridFocus = null;
+        window.restoreGridFocus(req);
+    }
 };
 
 window.setViewDensity = (density) => {
@@ -1301,40 +1343,62 @@ document.addEventListener('keydown', (e) => {
             clearTimeout(window.typingTimeout);
             window.typingTimeout = setTimeout(() => { window.isUserTyping = false; }, 800);
 
-            // Scope jump strictly to current row across days
+            const tbody = document.getElementById('grid-body');
             const currentRow = target.closest('tr');
-            if (currentRow) {
-                const rowInputs = Array.from(currentRow.querySelectorAll(targetSelector)).filter(i => 
-                    !i.disabled && (i.offsetParent !== null || i.getClientRects().length > 0)
-                );
-                const rowIdx = rowInputs.indexOf(target);
-                if (rowIdx !== -1) {
-                    if (!e.shiftKey && rowIdx + 1 < rowInputs.length) {
-                        const nextInput = rowInputs[rowIdx + 1];
-                        nextInput.focus({ preventScroll: false });
-                        if (typeof nextInput.select === 'function') nextInput.select();
-                        return;
-                    } else if (e.shiftKey && rowIdx - 1 >= 0) {
-                        const prevInput = rowInputs[rowIdx - 1];
-                        prevInput.focus({ preventScroll: false });
-                        if (typeof prevInput.select === 'function') prevInput.select();
-                        return;
-                    }
+            if (!tbody || !currentRow) return;
+
+            const rowInputs = Array.from(currentRow.querySelectorAll(targetSelector)).filter(i => 
+                !i.disabled && (i.offsetParent !== null || i.getClientRects().length > 0)
+            );
+            const curRowIdx = Array.from(tbody.children).indexOf(currentRow);
+            const idxInRow = rowInputs.indexOf(target);
+
+            let nextTargetEl = null;
+
+            if (idxInRow !== -1) {
+                if (!e.shiftKey && idxInRow + 1 < rowInputs.length) {
+                    nextTargetEl = rowInputs[idxInRow + 1];
+                } else if (e.shiftKey && idxInRow - 1 >= 0) {
+                    nextTargetEl = rowInputs[idxInRow - 1];
                 }
             }
 
             // Wrap across rows if edge of date window is reached
-            const allInputs = Array.from(document.querySelectorAll(targetSelector)).filter(i => 
-                !i.disabled && (i.offsetParent !== null || i.getClientRects().length > 0)
-            );
-            const globalIdx = allInputs.indexOf(target);
-            if (globalIdx !== -1) {
-                const nextIdx = e.shiftKey ? (globalIdx - 1 + allInputs.length) % allInputs.length : (globalIdx + 1) % allInputs.length;
-                const targetInput = allInputs[nextIdx];
-                if (targetInput) {
-                    targetInput.focus({ preventScroll: false });
-                    if (typeof targetInput.select === 'function') targetInput.select();
+            if (!nextTargetEl) {
+                const allInputs = Array.from(tbody.querySelectorAll(targetSelector)).filter(i => 
+                    !i.disabled && (i.offsetParent !== null || i.getClientRects().length > 0)
+                );
+                const globalIdx = allInputs.indexOf(target);
+                if (globalIdx !== -1) {
+                    const nextIdx = e.shiftKey ? (globalIdx - 1 + allInputs.length) % allInputs.length : (globalIdx + 1) % allInputs.length;
+                    nextTargetEl = allInputs[nextIdx];
                 }
+            }
+
+            if (!nextTargetEl) return;
+
+            const nextTr = nextTargetEl.closest('tr');
+            const nextTd = nextTargetEl.closest('td');
+            const nextRowIdx = Array.from(tbody.children).indexOf(nextTr);
+            const nextColIdx = Array.from(nextTr.children).indexOf(nextTd);
+
+            // Register destination so renderGrid re-focuses it immediately after rebuild
+            window._pendingGridFocus = {
+                id: nextTargetEl.id || null,
+                selector: targetSelector,
+                rowIdx: nextRowIdx,
+                colIdx: nextColIdx
+            };
+
+            // Trigger blur on current cell to commit any pending rate change
+            target.blur();
+
+            // If target.onchange did NOT trigger renderGrid (e.g. navigating without typing),
+            // fulfill the focus shift directly
+            if (window._pendingGridFocus) {
+                const req = window._pendingGridFocus;
+                window._pendingGridFocus = null;
+                window.restoreGridFocus(req);
             }
         }
     }
