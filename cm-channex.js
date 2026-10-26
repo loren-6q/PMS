@@ -989,8 +989,13 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
 
                         if (activeBasePrice) {
                             const channelName = effectiveRule.channel || 'Default';
-                            const chRule = window.pricingRules?.channels?.[channelName] || { type: '=', val: 0 };
-                            let p = window.applyMath(parseFloat(activeBasePrice), chRule.type || '=', chRule.val || 0);
+                            const isDefaultChannel = !channelName || channelName === 'Default' || channelName.toLowerCase().includes('default') || channelName === 'Direct Website';
+                            
+                            let p = parseFloat(activeBasePrice);
+                            if (!isDefaultChannel) {
+                                const chRule = window.pricingRules?.channels?.[channelName] || { type: '=', val: 0 };
+                                p = window.applyMath(p, chRule.type || '=', chRule.val || 0);
+                            }
 
                             if (effectiveRule.policy === 'ref') {
                                 const pType = isEvtRate ? (window.pricingRules?.evtRefType || '+%') : (window.pricingRules?.stdRefType || '+%');
@@ -1199,5 +1204,25 @@ window.pushToChannexAPI = async (btn, mode = 'delta') => {
             btn.disabled = false;
         }
         if (window.lucide) window.lucide.createIcons();
+    }
+};
+
+// --- 6. UNIFIED SAVE & SYNC (SEQUENTIAL EXECUTION) ---
+window.saveAndSync = async (btn, mode = 'delta') => {
+    if (btn) btn.disabled = true;
+    try {
+        // 1. Silently save pricing matrix to Firestore in the background
+        if (window.savePricingToCloud) {
+            await window.savePricingToCloud(true);
+        }
+        // 2. Transmit dirty date ranges to Channex and display the full sync confirmation
+        if (window.pushToChannexAPI) {
+            await window.pushToChannexAPI(btn, mode);
+        }
+    } catch (err) {
+        console.error("Save & Sync sequence failure:", err);
+        window.customAlert("Save & Sync Error:\n\n" + err.message);
+    } finally {
+        if (btn) btn.disabled = false;
     }
 };
