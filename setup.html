@@ -3,478 +3,628 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Property Setup Wizard - Wild & Wandering</title>
+    <title>Property Setup Wizard</title>
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
     <style>
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; }
         .step-pill.active { background-color: #4f46e5; color: #ffffff; border-color: #4338ca; }
         .step-pill.completed { background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; }
-        .step-pill { background-color: #f8fafc; color: #64748b; border-color: #e2e8f0; }
-        .input-base {
+        .step-pill { background-color: #ffffff; color: #64748b; border-color: #e2e8f0; }
+        .table-input {
             border: 1px solid #cbd5e1;
-            border-radius: 0.5rem;
-            padding: 0.5rem 0.75rem;
+            border-radius: 0.25rem;
+            padding: 0.3rem 0.5rem;
             outline: none;
-            font-size: 0.875rem;
-            font-weight: 600;
+            font-size: 0.8rem;
+            font-weight: 700;
             background-color: #ffffff;
-            transition: all 0.15s;
+            transition: border-color 0.15s, box-shadow 0.15s;
             width: 100%;
         }
-        .input-base:focus {
+        .table-input:focus {
             border-color: #6366f1;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
+            background-color: #fff;
         }
         .label-base {
             display: block;
-            font-size: 10px;
+            font-size: 9.5px;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            color: #64748b;
-            margin-bottom: 0.35rem;
+            color: #475569;
+            margin-bottom: 0.2rem;
         }
+        /* Custom scrollbar for dense tables */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col antialiased overflow-hidden">
 
-    <!-- TOP GLOBAL APP HEADER -->
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs px-4 py-2.5 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <a href="index.html" class="flex items-center gap-2 hover:opacity-90 transition-opacity">
-                <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="W&W" class="h-8 object-contain">
-                <span class="font-black text-sm tracking-tight text-slate-900 hidden sm:inline">WILD & WANDERING</span>
+    <!-- GLOBAL APP HEADER WITH OFFICIAL W&W LOGO -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-40 px-3 py-1.5 flex items-center justify-between shadow-xs shrink-0">
+        <div class="flex items-center gap-2">
+            <a href="index.html" class="flex items-center hover:opacity-90 transition-opacity">
+                <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-7 sm:h-8 object-contain mr-1">
             </a>
-            <div class="h-4 w-px bg-slate-300 mx-1"></div>
-            <div class="flex items-center gap-1.5">
-                <span class="text-[10px] font-black uppercase text-slate-400">Setup Wizard:</span>
-                <select id="property-select" onchange="window.switchSetupProperty(this.value)" class="bg-slate-100 text-indigo-700 font-black text-xs px-2.5 py-1 rounded-md border border-slate-300 outline-none cursor-pointer">
-                    <option value="loud_samui">LOUD Hostels Samui (LOUD)</option>
-                    <option value="swims_resort">SWIMS Beach Resort (SWIMS)</option>
-                    <option value="wet_pool">WET Pool Party Hostel (WET)</option>
-                    <option value="NEW">+ Create New Property...</option>
+            <div>
+                <h1 class="text-xs font-black text-slate-900 leading-tight">Property Setup Wizard</h1>
+                <p class="text-[9px] text-slate-500 font-semibold" id="header-status-text">Loading...</p>
+            </div>
+
+            <div class="h-4 w-px bg-slate-200 mx-1"></div>
+
+            <!-- Property Switcher -->
+            <div class="flex items-center gap-1 bg-slate-100 rounded p-0.5 border border-slate-200">
+                <i data-lucide="building-2" size="13" class="text-slate-500 ml-1"></i>
+                <select id="property-select" onchange="window.switchSetupProperty(this.value)" class="bg-transparent text-[11px] font-bold text-slate-800 pr-1 py-0 cursor-pointer outline-none">
+                    <option value="loud_samui">LOUD! Samui</option>
+                    <option value="swims_resort">SWIMS Beach Resort</option>
+                    <option value="wet_pool">WET Pool Party Hostel</option>
                 </select>
             </div>
         </div>
 
-        <!-- FAST APP SWITCHER -->
-        <div class="flex items-center gap-2">
-            <a id="btn-goto-pms" href="pms.html" class="text-xs font-bold text-slate-600 hover:text-indigo-600 px-2.5 py-1 rounded hover:bg-slate-100 transition-colors flex items-center gap-1">
-                <i data-lucide="layout-grid" size="14"></i> <span class="hidden md:inline">Front Desk PMS</span>
+        <div class="flex items-center gap-1.5">
+            <a id="btn-goto-pms" href="pms.html" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-bold transition-colors">
+                <i data-lucide="layout-grid" size="13" class="text-indigo-600"></i>
+                <span class="hidden sm:inline">Front Desk PMS</span>
             </a>
-            <a id="btn-goto-cm" href="cm.html" class="text-xs font-bold text-slate-600 hover:text-indigo-600 px-2.5 py-1 rounded hover:bg-slate-100 transition-colors flex items-center gap-1">
-                <i data-lucide="calendar" size="14"></i> <span class="hidden md:inline">Rate Matrix</span>
+            <a id="btn-goto-cm" href="cm.html" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-bold transition-colors">
+                <i data-lucide="calendar" size="13" class="text-indigo-600"></i>
+                <span class="hidden sm:inline">Channel Manager</span>
             </a>
-            <button onclick="window.saveCurrentProperty(true)" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
-                <i data-lucide="save" size="14"></i> Save Setup
+            <!-- SAVE button with concise branding -->
+            <button onclick="window.savePropertyToDatabase(true)" id="btn-save-header" class="flex items-center gap-1 px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase shadow-xs transition-colors cursor-pointer">
+                <i data-lucide="save" size="13"></i>
+                <span>SAVE</span>
             </button>
         </div>
     </header>
 
-    <!-- WIZARD STEPPER -->
-    <div class="bg-white border-b border-slate-200 py-3 px-4 shadow-2xs">
-        <div class="max-w-5xl mx-auto flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
-            <button onclick="window.jumpStep(1)" id="pill-step-1" class="step-pill active px-3.5 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 cursor-pointer transition-all">
-                <span class="w-5 h-5 rounded-full bg-white text-indigo-600 flex items-center justify-center text-[11px] font-black">1</span>
-                <span>General & Add-ons</span>
+    <!-- 5-STEP NAVIGATION BAR -->
+    <nav class="bg-white border-b border-slate-200 px-3 py-1.5 shrink-0">
+        <div class="max-w-7xl mx-auto grid grid-cols-5 gap-1.5">
+            <button onclick="window.jumpStep(1)" id="pill-step-1" class="step-pill active py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
+                <span id="badge-step-1" class="w-5 h-5 rounded bg-white text-indigo-700 font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs">1</span>
+                <span class="text-[11px] font-extrabold truncate">General & Add-ons</span>
             </button>
-            <i data-lucide="chevron-right" size="14" class="text-slate-300 shrink-0"></i>
-            <button onclick="window.jumpStep(2)" id="pill-step-2" class="step-pill px-3.5 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 cursor-pointer transition-all">
-                <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[11px] font-black">2</span>
-                <span>Smart Room Generator</span>
+            <button onclick="window.jumpStep(2)" id="pill-step-2" class="step-pill py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
+                <span id="badge-step-2" class="w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200">2</span>
+                <span class="text-[11px] font-extrabold truncate">Room Inventory</span>
             </button>
-            <i data-lucide="chevron-right" size="14" class="text-slate-300 shrink-0"></i>
-            <button onclick="window.jumpStep(3)" id="pill-step-3" class="step-pill px-3.5 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 cursor-pointer transition-all">
-                <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[11px] font-black">3</span>
-                <span>Channex Auto-Hub</span>
+            <button onclick="window.jumpStep(3)" id="pill-step-3" class="step-pill py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
+                <span id="badge-step-3" class="w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200">3</span>
+                <span class="text-[11px] font-extrabold truncate">Channel Manager</span>
             </button>
-            <i data-lucide="chevron-right" size="14" class="text-slate-300 shrink-0"></i>
-            <button onclick="window.jumpStep(4)" id="pill-step-4" class="step-pill px-3.5 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 cursor-pointer transition-all">
-                <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[11px] font-black">4</span>
-                <span>Pricing Rules & Anchors</span>
+            <button onclick="window.jumpStep(4)" id="pill-step-4" class="step-pill py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
+                <span id="badge-step-4" class="w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200">4</span>
+                <span class="text-[11px] font-extrabold truncate">Pricing & Curves</span>
             </button>
-            <i data-lucide="chevron-right" size="14" class="text-slate-300 shrink-0"></i>
-            <button onclick="window.jumpStep(5)" id="pill-step-5" class="step-pill px-3.5 py-1.5 rounded-lg border text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 cursor-pointer transition-all">
-                <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[11px] font-black">5</span>
-                <span>Review & Launch</span>
+            <button onclick="window.jumpStep(5)" id="pill-step-5" class="step-pill py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
+                <span id="badge-step-5" class="w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200">5</span>
+                <span class="text-[11px] font-extrabold truncate">Review & Launch</span>
             </button>
         </div>
-    </div>
+    </nav>
 
-    <!-- MAIN STEP CONTAINER -->
-    <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 min-h-0">
+    <!-- MAIN BODY CONTAINER -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
 
-        <!-- ============================================================ -->
-        <!-- STEP 1: GENERAL & ADD-ONS -->
-        <!-- ============================================================ -->
-        <section id="step-pane-1" class="space-y-6">
-            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-5">
-                <div class="border-b border-slate-200 pb-3">
-                    <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
-                        <i data-lucide="building-2" class="text-indigo-600"></i> Property Identity
+        <!-- =================================================================== -->
+        <!-- STEP 1: GENERAL PROPERTY PROFILE & FOLIO ADD-ONS                    -->
+        <!-- =================================================================== -->
+        <section id="step-content-1" class="space-y-2.5 flex-1 overflow-y-auto">
+            <!-- Property Profile Card (Collapsible) -->
+            <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
+                <div class="border-b border-slate-200 pb-2 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-profile', 'chev-prop-profile')">
+                    <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
+                        <i data-lucide="building" class="text-indigo-600" size="15"></i> Property Profile
                     </h2>
-                    <p class="text-xs text-slate-500 font-medium mt-0.5">Basic identity used in guest folios, emails, and channel manager feeds.</p>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">Step 1 of 5</span>
+                        <i data-lucide="chevron-down" id="chev-prop-profile" size="14" class="text-slate-400 transition-transform"></i>
+                    </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div id="sec-prop-profile" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                     <div>
                         <label class="label-base">Property Name</label>
-                        <input type="text" id="prop-name" placeholder="e.g. LOUD Hostels Samui" class="input-base">
+                        <input type="text" id="prop-name" class="table-input font-bold" value="LOUD! Samui">
                     </div>
                     <div>
-                        <label class="label-base">Short Code (3-5 Letters)</label>
-                        <input type="text" id="prop-code" placeholder="e.g. LOUD" class="input-base uppercase font-mono">
+                        <label class="label-base">Short Code</label>
+                        <input type="text" id="prop-short" class="table-input uppercase font-mono font-black" value="LOUD">
                     </div>
                     <div>
                         <label class="label-base">Base Currency</label>
-                        <select id="prop-currency" class="input-base">
-                            <option value="THB" selected>Thai Baht (THB ฿)</option>
-                            <option value="USD">US Dollar (USD $)</option>
-                            <option value="EUR">Euro (EUR €)</option>
-                            <option value="GBP">British Pound (GBP £)</option>
-                            <option value="AUD">Australian Dollar (AUD $)</option>
+                        <select id="prop-currency" class="table-input font-bold">
+                            <option value="THB" selected>THB (฿) - Thai Baht</option>
+                            <option value="USD">USD ($) - US Dollar</option>
+                            <option value="EUR">EUR (€) - Euro</option>
+                            <option value="GBP">GBP (£) - British Pound</option>
+                            <option value="VND">VND (₫) - Vietnamese Dong</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label-base">Timezone</label>
+                        <select id="prop-timezone" class="table-input font-medium">
+                            <option value="Asia/Bangkok" selected>Asia/Bangkok (UTC+7)</option>
+                            <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
+                            <option value="Europe/London">Europe/London (UTC+0)</option>
+                            <option value="America/New_York">America/New York (UTC-5)</option>
                         </select>
                     </div>
                 </div>
             </div>
 
-            <!-- Folio Add-ons Card -->
-            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+            <!-- Folio Add-ons Card (Collapsible, Emerald Accent) -->
+            <div class="bg-emerald-50/70 border border-emerald-300 rounded-lg p-3 shadow-xs">
+                <div class="border-b border-emerald-200 pb-2 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-addons', 'chev-prop-addons')">
                     <div>
-                        <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
-                            <i data-lucide="shopping-bag" class="text-emerald-600"></i> Folio Add-on Items & Services
+                        <h2 class="text-xs font-black uppercase text-emerald-950 flex items-center gap-1.5">
+                            <i data-lucide="plus-circle" class="text-emerald-600" size="15"></i> Folio Add-ons & Charges
                         </h2>
-                        <p class="text-xs text-slate-500 font-medium mt-0.5">Quick presets staff can tap on front desk check-in to add extra charges to guest bills.</p>
+                        <p class="text-[10px] text-slate-500 font-semibold">Standard service catalogue for guest folios.</p>
                     </div>
-                    <button onclick="window.addAddonRow()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase rounded-lg border border-slate-300 transition-colors cursor-pointer flex items-center gap-1">
-                        <i data-lucide="plus" size="14"></i> Add Preset
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="event.stopPropagation(); window.addBlankAddonRow()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase px-2.5 py-1 rounded shadow-xs flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="plus" size="12"></i> Add Item
+                        </button>
+                        <i data-lucide="chevron-down" id="chev-prop-addons" size="14" class="text-emerald-600 transition-transform"></i>
+                    </div>
                 </div>
 
-                <div id="addon-list-container" class="space-y-2">
-                    <!-- Populated dynamically via JS -->
+                <div id="sec-prop-addons" class="overflow-x-auto border border-emerald-200 rounded bg-white">
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-emerald-100/70 text-[9px] font-black uppercase text-emerald-900 border-b border-emerald-200">
+                            <tr>
+                                <th class="p-1.5 w-14 text-center">Order</th>
+                                <th class="p-1.5 w-2/5">Item / Service Name</th>
+                                <th class="p-1.5 w-1/5">Category</th>
+                                <th class="p-1.5 w-1/5">Unit Price (฿)</th>
+                                <th class="p-1.5 w-1/5">Billing Type</th>
+                                <th class="p-1.5 text-center w-10">Del</th>
+                            </tr>
+                        </thead>
+                        <tbody id="addon-list-body" class="divide-y divide-slate-100 font-semibold">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
                 </div>
-            </div>
-
-            <div class="flex justify-end pt-2">
-                <button onclick="window.nextStep(1)" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center gap-2 transition-all cursor-pointer">
-                    <span>Continue to Room Generator</span> <i data-lucide="arrow-right" size="14"></i>
-                </button>
             </div>
         </section>
 
-        <!-- ============================================================ -->
-        <!-- STEP 2: SMART ROOM GENERATOR (DORMS & PRIVATES) -->
-        <!-- ============================================================ -->
-        <section id="step-pane-2" class="space-y-6 hidden">
-            <!-- Smart Dorm Generator Card -->
-            <div class="bg-white p-6 rounded-xl border border-indigo-200 shadow-sm space-y-4 bg-indigo-50/20">
-                <div class="border-b border-indigo-100 pb-3">
-                    <h2 class="text-lg font-black uppercase tracking-wide text-indigo-950 flex items-center gap-2">
-                        <i data-lucide="sparkles" class="text-indigo-600"></i> Smart Dorm Bed Generator
-                    </h2>
-                    <p class="text-xs text-slate-600 font-medium mt-0.5">Auto-generates all physical beds with top/bottom bunk rules in one click.</p>
-                </div>
+        <!-- =================================================================== -->
+        <!-- STEP 2: ROOM INVENTORY                                              -->
+        <!-- =================================================================== -->
+        <section id="step-content-2" class="flex-1 flex flex-col min-h-0 hidden">
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs flex-1 flex flex-col min-h-0">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-200 pb-2 mb-2 shrink-0">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-xs font-black uppercase text-slate-800">Room Setup</h3>
+                        <span id="room-count-badge" class="px-2 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-black text-[10px]">0 Rooms</span>
+                        <span id="unit-count-badge" class="px-2 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 font-bold text-[10px]">0 Beds/Units Total</span>
+                    </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-white p-4 rounded-lg border border-indigo-100 shadow-2xs">
-                    <div>
-                        <label class="label-base text-indigo-700">Dorm Category Title</label>
-                        <input type="text" id="dorm-cat-name" placeholder="e.g. 18-Bed Mixed Dorm" class="input-base">
-                    </div>
-                    <div>
-                        <label class="label-base text-indigo-700">Room Letter / Prefix</label>
-                        <input type="text" id="dorm-room-code" placeholder="e.g. A" class="input-base uppercase font-black text-center">
-                    </div>
-                    <div>
-                        <label class="label-base text-indigo-700">Total Beds</label>
-                        <input type="number" id="dorm-bed-count" value="18" min="1" max="60" class="input-base text-center font-black">
-                    </div>
-                    <div>
-                        <label class="label-base text-indigo-700">Bunk Stacking Rule</label>
-                        <select id="dorm-bunk-rule" class="input-base text-xs">
-                            <option value="odd_top">Odd = Top, Even = Bottom</option>
-                            <option value="even_top">Even = Top, Odd = Bottom</option>
-                            <option value="none">Single Beds (No bunks)</option>
-                        </select>
-                    </div>
-                    <div class="sm:col-span-4 flex justify-end">
-                        <button onclick="window.generateDormBeds()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
-                            <i data-lucide="layers" size="14"></i> Generate Dorm Beds
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <button onclick="window.addBlankRoomDef()" class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
+                            <i data-lucide="plus" size="12"></i> Add Room
+                        </button>
+                        <button onclick="window.toggleBedPreviewDrawer()" id="btn-toggle-bed-preview" class="px-2.5 py-1 rounded border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="eye" size="12"></i> ALL BEDS
+                        </button>
+                        <button onclick="window.clearAllRoomDefs()" class="px-2 py-1 rounded border border-rose-200 text-rose-600 hover:bg-rose-50 text-[10px] font-black uppercase transition-colors cursor-pointer">
+                            Clear
                         </button>
                     </div>
                 </div>
-            </div>
 
-            <!-- Smart Private Room Generator Card -->
-            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <div class="border-b border-slate-200 pb-3">
-                    <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
-                        <i data-lucide="door-open" class="text-amber-600"></i> Smart Private Room Generator
-                    </h2>
-                    <p class="text-xs text-slate-500 font-medium mt-0.5">Batch generate bungalows or private suites in sequential numbering.</p>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                    <div>
-                        <label class="label-base">Category Name</label>
-                        <input type="text" id="priv-cat-name" placeholder="e.g. Deluxe Sea View Bungalow" class="input-base">
-                    </div>
-                    <div>
-                        <label class="label-base">Room Prefix / Building</label>
-                        <input type="text" id="priv-prefix" placeholder="e.g. B or VILLA-" class="input-base uppercase text-center font-black">
-                    </div>
-                    <div>
-                        <label class="label-base">Start #</label>
-                        <input type="number" id="priv-start-num" value="1" min="1" class="input-base text-center font-black">
-                    </div>
-                    <div>
-                        <label class="label-base">End #</label>
-                        <input type="number" id="priv-end-num" value="6" min="1" class="input-base text-center font-black">
-                    </div>
-                    <div class="sm:col-span-4 flex justify-end">
-                        <button onclick="window.generatePrivateRooms()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-black text-xs uppercase rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer">
-                            <i data-lucide="plus-circle" size="14"></i> Generate Private Rooms
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Current Physical Inventory Table -->
-            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-                    <div>
-                        <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2">
-                            <i data-lucide="list" class="text-slate-600"></i> Active Physical Inventory (<span id="total-room-count">0</span> Units)
-                        </h2>
-                        <p class="text-xs text-slate-400 font-medium">Physical rooms and dorm beds active on the tape chart.</p>
-                    </div>
-                    <button onclick="window.clearAllInventory()" class="text-rose-600 hover:text-rose-700 font-black text-xs uppercase cursor-pointer">
-                        Clear All Rooms
-                    </button>
-                </div>
-
-                <div class="overflow-x-auto max-h-[350px] border border-slate-200 rounded-lg">
-                    <table class="w-full text-left border-collapse text-xs">
-                        <thead class="bg-slate-800 text-white font-black uppercase text-[10px] sticky top-0 z-10">
+                <!-- Room Setup Table -->
+                <div class="border border-slate-200 rounded flex-1 min-h-0 overflow-y-auto">
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-slate-100 text-[9px] font-black uppercase text-slate-700 border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
                             <tr>
-                                <th class="p-2.5 border-r border-slate-700 w-28">Physical ID</th>
-                                <th class="p-2.5 border-r border-slate-700">Room Category</th>
-                                <th class="p-2.5 border-r border-slate-700 w-32">Bunk Position</th>
-                                <th class="p-2.5 text-center w-20">Actions</th>
+                                <th class="p-1.5 w-40">Room Name</th>
+                                <th class="p-1.5">Category</th>
+                                <th class="p-1.5 w-24 text-center">Beds / Units</th>
+                                <th class="p-1.5 w-28">Floor / Level</th>
+                                <th class="p-1.5 w-48">Room Type / Setup</th>
+                                <th class="p-1.5 text-center w-12">Del</th>
                             </tr>
                         </thead>
-                        <tbody id="inventory-table-body" class="divide-y divide-slate-200 font-bold text-slate-700 bg-white">
-                            <!-- Injected dynamically -->
+                        <tbody id="room-def-list-body" class="divide-y divide-slate-100 font-semibold">
+                            <!-- Populated with compact single-line dividers and clean inputs -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Bunk Beds Drawer (Stacked Vertical Pairs) -->
+                <div id="bed-preview-drawer" class="hidden mt-2 p-2.5 bg-slate-100 border border-slate-300 rounded max-h-60 overflow-y-auto shrink-0 text-xs">
+                    <div class="flex items-center justify-between pb-1 mb-2 border-b border-slate-200">
+                        <span class="font-black text-slate-800 text-[10px] uppercase">ALL BEDS</span>
+                    </div>
+                    <div id="bed-preview-groups" class="space-y-2">
+                        <!-- Populated dynamically with room cards and stacked bunk pairs -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- STEP 3: CHANNEL MANAGER INTEGRATION & ROOM MAPPING & RATE PLANS     -->
+        <!-- =================================================================== -->
+        <section id="step-content-3" class="space-y-2.5 flex-1 overflow-y-auto hidden">
+            <!-- Credentials Header (Collapsible) -->
+            <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
+                <div class="border-b border-slate-200 pb-2 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-chan-creds', 'chev-chan-creds')">
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
+                            <i data-lucide="key-round" class="text-indigo-600" size="15"></i> Channel Manager Connection
+                        </h2>
+                        <div id="channex-conn-badge" class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200">
+                            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Checking...
+                        </div>
+                    </div>
+                    <i data-lucide="chevron-down" id="chev-chan-creds" size="14" class="text-slate-400 transition-transform"></i>
+                </div>
+
+                <div id="sec-chan-creds" class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                    <div>
+                        <label class="label-base">Channex API Key</label>
+                        <input type="password" id="chan-api-key" placeholder="Enter API key..." class="table-input font-mono">
+                    </div>
+                    <div>
+                        <label class="label-base">Channex Property ID</label>
+                        <input type="text" id="chan-prop-id" placeholder="UUID e.g. be74cdc9-..." class="table-input font-mono">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="window.fetchChannexData()" class="w-full py-1.5 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase rounded transition-colors shadow-xs cursor-pointer">
+                            Fetch Channex Data
+                        </button>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="window.provisionRoomsAndRatesToChannex()" class="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase rounded transition-colors shadow-xs cursor-pointer">
+                            Push & Create in Channex
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION A: CHANNEX ROOM TYPE TO PMS CATEGORY MAPPING (Collapsible, Blue Tint) -->
+            <div class="bg-blue-50/70 border border-blue-300 rounded-lg p-3 shadow-xs">
+                <div class="border-b border-blue-200 pb-2 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-room-mapping', 'chev-room-mapping')">
+                    <div>
+                        <h3 class="text-xs font-black uppercase text-blue-950 flex items-center gap-1.5">
+                            <i data-lucide="git-merge" size="14" class="text-blue-600"></i> Room Type Mapping
+                        </h3>
+                        <p class="text-[10px] font-semibold text-slate-500">Channex Room Types ↔ PMS Categories</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span id="room-map-count-badge" class="px-2 py-0.2 rounded bg-blue-100 text-blue-800 font-black text-[10px]">0 Rooms Mapped</span>
+                        <i data-lucide="chevron-down" id="chev-room-mapping" size="14" class="text-blue-600 transition-transform"></i>
+                    </div>
+                </div>
+
+                <div id="sec-room-mapping">
+                    <div id="room-mapping-container" class="space-y-1.5 max-h-56 overflow-y-auto">
+                        <!-- Populated dynamically with mapping rows -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION B: GROUPED RATE PLANS BY ROOM CATEGORY (Collapsible, Amber Tint) -->
+            <div class="bg-amber-50/70 border border-amber-300 rounded-lg p-3 shadow-xs flex flex-col">
+                <div class="border-b border-amber-200 pb-2 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-rate-plans', 'chev-rate-plans')">
+                    <div>
+                        <h3 class="text-xs font-black uppercase text-amber-950 flex items-center gap-1.5">
+                            <i data-lucide="tags" size="14" class="text-amber-600"></i> Rate Plan Classifications
+                        </h3>
+                        <p class="text-[10px] font-semibold text-slate-500">Rate plans classified by room category.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span id="rate-count-badge" class="px-2 py-0.2 rounded bg-amber-100 text-amber-800 font-black text-[10px]">0 Plans</span>
+                        <i data-lucide="chevron-down" id="chev-rate-plans" size="14" class="text-amber-600 transition-transform"></i>
+                    </div>
+                </div>
+
+                <div id="sec-rate-plans">
+                    <div id="grouped-rate-mapping-container" class="space-y-3">
+                        <!-- Populated dynamically with room cards and child rate plan tables -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- STEP 4: PRICING RULES & RELATIONAL ENGINE & DUAL EVENT CURVES       -->
+        <!-- =================================================================== -->
+        <section id="step-content-4" class="space-y-2.5 flex-1 overflow-y-auto hidden">
+            <!-- Driving Anchors (Collapsible, Indigo Tint) -->
+            <div class="bg-indigo-50/70 border border-indigo-300 rounded-lg p-3 shadow-xs">
+                <div class="border-b border-indigo-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-anchors', 'chev-price-anchors')">
+                    <div>
+                        <h2 class="text-xs font-black uppercase text-indigo-950 flex items-center gap-1.5">
+                            <i data-lucide="anchor" size="14" class="text-indigo-600"></i> Base Rate Anchors
+                        </h2>
+                    </div>
+                    <i data-lucide="chevron-down" id="chev-price-anchors" size="14" class="text-indigo-600 transition-transform"></i>
+                </div>
+
+                <div id="sec-price-anchors" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div class="bg-white p-2.5 rounded border border-indigo-200 shadow-2xs">
+                        <label class="label-base text-indigo-700">Dorm Master Anchor Room</label>
+                        <select id="anchor-dorm-select" class="table-input font-bold text-slate-800">
+                            <!-- Populated from categories -->
+                        </select>
+                    </div>
+
+                    <div class="bg-white p-2.5 rounded border border-indigo-200 shadow-2xs">
+                        <label class="label-base text-indigo-700">Private Master Anchor Room</label>
+                        <select id="anchor-private-select" class="table-input font-bold text-slate-800">
+                            <!-- Populated from categories -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Relational Linking Matrix (Collapsible, Slate Tint) -->
+            <div class="bg-slate-50/90 border border-slate-300 rounded-lg p-3 shadow-xs">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2 cursor-pointer" onclick="window.toggleCardSection('sec-price-links', 'chev-price-links')">
+                    <div>
+                        <h3 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
+                            <i data-lucide="link" size="14" class="text-indigo-600"></i> Bidirectional Pricing Links
+                        </h3>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="event.stopPropagation(); window.addRelationshipRow()" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase transition-colors cursor-pointer shadow-xs">
+                            + Add Link Rule
+                        </button>
+                        <i data-lucide="chevron-down" id="chev-price-links" size="14" class="text-slate-500 transition-transform"></i>
+                    </div>
+                </div>
+
+                <div id="sec-price-links" class="overflow-x-auto border border-slate-200 rounded bg-white">
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-slate-100 text-[9px] font-black uppercase text-slate-600 border-b border-slate-200">
+                            <tr>
+                                <th class="p-1.5 w-1/4">Anchor (Base Category)</th>
+                                <th class="p-1.5 w-1/4">Target (Connected Room)</th>
+                                <th class="p-1.5 w-1/4">Standard Offset Rule</th>
+                                <th class="p-1.5 w-1/4 evt-col-header text-pink-700">EVT Offset Rule</th>
+                                <th class="p-1.5 text-center w-10">Del</th>
+                            </tr>
+                        </thead>
+                        <tbody id="relationships-table-body" class="divide-y divide-slate-100 font-semibold">
+                            <!-- Populated dynamically -->
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <div class="flex justify-between pt-2">
-                <button onclick="window.jumpStep(1)" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs uppercase rounded-lg flex items-center gap-2 transition-all cursor-pointer">
-                    <i data-lucide="arrow-left" size="14"></i> Back
-                </button>
-                <button onclick="window.nextStep(2)" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center gap-2 transition-all cursor-pointer">
-                    <span>Continue to Channex Hub</span> <i data-lucide="arrow-right" size="14"></i>
-                </button>
-            </div>
-        </section>
-
-        <!-- ============================================================ -->
-        <!-- STEP 3: CHANNEX AUTO-HUB -->
-        <!-- ============================================================ -->
-        <section id="step-pane-3" class="space-y-6 hidden">
-            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <div class="border-b border-slate-200 pb-3 flex items-center justify-between">
-                    <div>
-                        <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
-                            <i data-lucide="network" class="text-indigo-600"></i> Channex Credentials
-                        </h2>
-                        <p class="text-xs text-slate-500 font-medium mt-0.5">Enables two-way synchronization of rates, inventory, and OTA bookings.</p>
+            <!-- Refundable Markups & Universal OTA Adjustments -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <!-- Refundable Markup (Collapsible, Emerald Tint) -->
+                <div class="bg-emerald-50/70 border border-emerald-300 rounded-lg p-3 shadow-xs">
+                    <div class="border-b border-emerald-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-markup', 'chev-price-markup')">
+                        <h3 class="text-xs font-black uppercase text-emerald-950">Refundable Rate Markups</h3>
+                        <i data-lucide="chevron-down" id="chev-price-markup" size="14" class="text-emerald-700 transition-transform"></i>
                     </div>
-                    <span class="px-2.5 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 font-black text-[10px] uppercase">REST API V1</span>
-                </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="label-base">Channex API Key</label>
-                        <input type="password" id="chan-api-key" placeholder="Enter API Key from Channex..." class="input-base font-mono text-xs">
-                    </div>
-                    <div>
-                        <label class="label-base">Channex Property UUID</label>
-                        <input type="text" id="chan-prop-id" placeholder="e.g. 7a2cb14f-..." class="input-base font-mono text-xs">
+                    <div id="sec-price-markup" class="flex flex-wrap items-center gap-4 text-xs pt-1">
+                        <div class="flex-1 min-w-[140px]">
+                            <label class="label-base">Standard Dates</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="rule-std-ref" value="25" min="0" max="100" class="table-input !w-16 font-black text-center">
+                                <span class="font-bold text-slate-600 text-[11px]">% above Non-Ref</span>
+                            </div>
+                        </div>
+
+                        <div id="evt-ref-row" class="flex-1 min-w-[140px]">
+                            <label class="label-base text-pink-800">Event / Peak</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="rule-evt-ref" value="25" min="0" max="100" class="table-input !w-16 font-black text-center text-pink-800 border-pink-300 bg-pink-50">
+                                <span class="font-bold text-pink-900 text-[11px]">% above EVT Non-Ref</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Action Choice: Pull Existing vs Auto-Provision Fresh -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Option A: Pull Existing -->
-                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
-                    <div>
-                        <span class="text-[10px] font-black uppercase px-2 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-300 inline-block mb-1">Option A (Existing Hotel)</span>
-                        <h3 class="text-base font-black text-slate-800">Pull & Pair Channex Rooms</h3>
-                        <p class="text-xs text-slate-500 font-medium mt-1">If your property already has rooms set up in Channex, pull them and pair directly to your PMS categories by ID.</p>
+                <!-- OTA Channel Adjustments (Collapsible, Amber Tint) -->
+                <div class="bg-amber-50/70 border border-amber-300 rounded-lg p-3 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-amber-200 pb-1.5 mb-2 cursor-pointer" onclick="window.toggleCardSection('sec-price-channels', 'chev-price-channels')">
+                        <h3 class="text-xs font-black uppercase text-amber-950">OTA Channel Adjustments</h3>
+                        <div class="flex items-center gap-2">
+                            <button onclick="event.stopPropagation(); window.addVerifiedChannelRule()" class="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-black uppercase transition-colors cursor-pointer border border-amber-300">
+                                + Add Channel
+                            </button>
+                            <i data-lucide="chevron-down" id="chev-price-channels" size="14" class="text-amber-700 transition-transform"></i>
+                        </div>
                     </div>
-                    <button onclick="window.fetchAndPairChannex()" class="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-black text-xs uppercase rounded-lg shadow-sm flex items-center justify-center gap-1.5 cursor-pointer">
-                        <i data-lucide="download" size="14"></i> Fetch & Pair by ID
-                    </button>
-                </div>
 
-                <!-- Option B: Auto-Provision Fresh -->
-                <div class="bg-indigo-50/50 p-5 rounded-xl border border-indigo-200 shadow-sm flex flex-col justify-between space-y-3">
-                    <div>
-                        <span class="text-[10px] font-black uppercase px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded border border-indigo-300 inline-block mb-1">Option B (Fresh Hotel)</span>
-                        <h3 class="text-base font-black text-indigo-950">Push Inventory to Channex</h3>
-                        <p class="text-xs text-indigo-900/70 font-medium mt-1">Automatically create all room types and standard rate plans directly in Channex with zero manual clicking in the extranet.</p>
-                    </div>
-                    <button onclick="window.provisionChannexRooms()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
-                        <i data-lucide="cloud-upload" size="14"></i> Auto-Provision in Channex
-                    </button>
-                </div>
-            </div>
-
-            <!-- Active Mappings Display -->
-            <div id="mapping-results-card" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-                    <h3 class="text-sm font-black uppercase text-slate-800 flex items-center gap-2">
-                        <i data-lucide="check-check" class="text-emerald-600"></i> Verified ID Mappings
-                    </h3>
-                    <span id="mapping-count-badge" class="text-xs font-bold text-slate-500">0 Rooms Mapped</span>
-                </div>
-                <div id="mapping-pairs-list" class="space-y-1.5 text-xs">
-                    <div class="text-center py-4 text-slate-400 font-bold italic">No Channex mappings configured yet. Click Option A or B above.</div>
-                </div>
-            </div>
-
-            <div class="flex justify-between pt-2">
-                <button onclick="window.jumpStep(2)" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs uppercase rounded-lg flex items-center gap-2 transition-all cursor-pointer">
-                    <i data-lucide="arrow-left" size="14"></i> Back
-                </button>
-                <button onclick="window.nextStep(3)" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center gap-2 transition-all cursor-pointer">
-                    <span>Continue to Pricing Rules</span> <i data-lucide="arrow-right" size="14"></i>
-                </button>
-            </div>
-        </section>
-
-        <!-- ============================================================ -->
-        <!-- STEP 4: PRICING RULES & ANCHORS -->
-        <!-- ============================================================ -->
-        <section id="step-pane-4" class="space-y-6 hidden">
-            <!-- Anchor Selection Card -->
-            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <div class="border-b border-slate-200 pb-3">
-                    <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
-                        <i data-lucide="anchor" class="text-indigo-600"></i> Primary Price Anchors
-                    </h2>
-                    <p class="text-xs text-slate-500 font-medium mt-0.5">Select the 2 driving rooms. All other category rates ripple automatically from these anchors.</p>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="bg-indigo-50/50 p-4 rounded-lg border border-indigo-200">
-                        <label class="label-base text-indigo-700">Private Room Anchor</label>
-                        <select id="anchor-private" class="input-base font-black text-indigo-900 bg-white"></select>
-                    </div>
-                    <div class="bg-amber-50/50 p-4 rounded-lg border border-amber-200">
-                        <label class="label-base text-amber-700">Dorm Bed Anchor</label>
-                        <select id="anchor-dorm" class="input-base font-black text-amber-900 bg-white"></select>
+                    <div id="sec-price-channels" class="space-y-1.5 text-xs">
+                        <div id="channel-rules-container" class="space-y-1.5">
+                            <!-- Populated dynamically with Direct / Website and OTAs -->
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Event Curves & Policies Card -->
-            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-                    <div>
-                        <h2 class="text-lg font-black uppercase tracking-wide text-slate-800 flex items-center gap-2">
-                            <i data-lucide="sliders" class="text-purple-600"></i> Policies & Peak Curves
-                        </h2>
-                        <p class="text-xs text-slate-500 font-medium mt-0.5">Configure event curve behavior and standard refundable markups.</p>
+            <!-- Dynamic Event Curve & Restrictions Matrix (Collapsible, Pink Tint) -->
+            <div class="bg-pink-50/70 border border-pink-300 rounded-lg p-3 shadow-xs">
+                <div class="flex items-center justify-between border-b border-pink-200 pb-2 mb-2">
+                    <div class="cursor-pointer flex items-center gap-1.5" onclick="window.toggleCardSection('event-curve-panel', 'chev-price-events')">
+                        <h3 class="text-xs font-black uppercase text-pink-950 flex items-center gap-1.5">
+                            <i data-lucide="sparkles" size="14" class="text-pink-600"></i> Seasonal / Event Pricing
+                        </h3>
+                        <i data-lucide="chevron-down" id="chev-price-events" size="14" class="text-pink-700 transition-transform"></i>
                     </div>
-                    <!-- EVENT PRICING TOGGLE -->
-                    <label class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-300 cursor-pointer text-xs font-black uppercase text-pink-700">
-                        <input type="checkbox" id="toggle-event-rates" class="w-4 h-4 accent-pink-600 cursor-pointer">
-                        <span>Event Pricing (SWIMS FMP)</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-events" onchange="window.toggleEventSettings(this.checked)" class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
                     </label>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                        <label class="label-base">Standard Refundable Markup</label>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-bold text-slate-600">Refundable = Base</span>
-                            <span class="font-black text-slate-800 text-sm">+25%</span>
+                <!-- Event Curve Matrix Container -->
+                <div id="event-curve-panel" class="hidden space-y-3">
+                    
+                    <!-- 1. Price Curve Table -->
+                    <div class="border border-pink-200 rounded bg-white p-2.5 shadow-2xs">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2 pb-1.5 border-b border-pink-100">
+                            <span class="text-[10px] font-black text-pink-800 uppercase tracking-wider">Default Peak Pricing Curve</span>
+                            <div class="flex items-center gap-1 bg-pink-50 p-0.5 rounded border border-pink-200 text-[10px]">
+                                <span class="text-[9px] font-black uppercase text-pink-900 px-1">Rates Span:</span>
+                                <button onclick="window.cycleRatesSpan()" id="rates-span-pill" class="px-2 py-0.5 rounded font-black text-white bg-pink-600 border border-pink-700 shadow-2xs cursor-pointer hover:bg-pink-700 transition-colors">
+                                    ±2 Days
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                        <label class="label-base">Hostelworld Channel Adjustment</label>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-bold text-slate-600">Deposit Commission Offset</span>
-                            <span class="font-black text-amber-700 text-sm">+15%</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <div class="flex justify-between pt-2">
-                <button onclick="window.jumpStep(3)" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs uppercase rounded-lg flex items-center gap-2 transition-all cursor-pointer">
-                    <i data-lucide="arrow-left" size="14"></i> Back
-                </button>
-                <button onclick="window.nextStep(4)" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center gap-2 transition-all cursor-pointer">
-                    <span>Review & Launch</span> <i data-lucide="check-circle" size="14"></i>
-                </button>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-center border-collapse text-[11px]" id="event-price-table">
+                                <thead id="event-price-thead">
+                                    <!-- Populated dynamically based on rates span -->
+                                </thead>
+                                <tbody id="event-price-tbody" class="divide-y divide-pink-100">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 2. Stay Restrictions Curve Table -->
+                    <div class="border border-pink-200 rounded bg-white p-2.5 shadow-2xs">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2 pb-1.5 border-b border-pink-100">
+                            <span class="text-[10px] font-black text-pink-800 uppercase tracking-wider">Default Peak Stay Restrictions Curve</span>
+                            <div class="flex items-center gap-1 bg-pink-50 p-0.5 rounded border border-pink-200 text-[10px]">
+                                <span class="text-[9px] font-black uppercase text-pink-900 px-1">Restr Span:</span>
+                                <button onclick="window.cycleRestrSpan()" id="restr-span-pill" class="px-2 py-0.5 rounded font-black text-white bg-indigo-600 border border-indigo-700 shadow-2xs cursor-pointer hover:bg-indigo-700 transition-colors">
+                                    ±6 Days
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-center border-collapse text-[11px]" id="event-restr-table">
+                                <thead id="event-restr-thead">
+                                    <!-- Populated dynamically based on restr span -->
+                                </thead>
+                                <tbody id="event-restr-tbody" class="divide-y divide-pink-100">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </section>
 
-        <!-- ============================================================ -->
-        <!-- STEP 5: REVIEW & LAUNCH -->
-        <!-- ============================================================ -->
-        <section id="step-pane-5" class="space-y-6 hidden">
-            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center space-y-4 py-8">
-                <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
-                    <i data-lucide="check" size="32"></i>
-                </div>
-                <div>
-                    <h2 class="text-2xl font-black text-slate-900 uppercase">Setup Complete & Verified!</h2>
-                    <p class="text-sm font-medium text-slate-500 max-w-md mx-auto mt-1">Your property profile, physical room inventory, and channel rates are configured and synchronized.</p>
+        <!-- =================================================================== -->
+        <!-- STEP 5: REVIEW & LAUNCH                                             -->
+        <!-- =================================================================== -->
+        <section id="step-content-5" class="space-y-2.5 flex-1 overflow-y-auto hidden">
+            <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
+                <div class="border-b border-slate-200 pb-1.5 mb-3">
+                    <h2 class="text-xs font-black uppercase text-slate-800">Setup Verification</h2>
                 </div>
 
-                <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
-                    <a id="launch-pms-btn" href="pms.html" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center justify-center gap-2 transition-all">
-                        <i data-lucide="layout-grid" size="16"></i> Open Front Desk PMS
-                    </a>
-                    <a id="launch-cm-btn" href="cm.html" class="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase rounded-lg shadow-md flex items-center justify-center gap-2 transition-all">
-                        <i data-lucide="calendar" size="16"></i> Open Rate Matrix & Bulk Tool
-                    </a>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-4">
+                    <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                        <div class="text-[9px] font-black uppercase text-slate-400">Property</div>
+                        <div id="rev-prop-name" class="text-xs font-black text-slate-800 mt-0.5">--</div>
+                        <div id="rev-prop-code" class="text-[10px] font-mono font-bold text-slate-500">--</div>
+                    </div>
+                    <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                        <div class="text-[9px] font-black uppercase text-slate-400">Room Inventory</div>
+                        <div id="rev-inv-count" class="text-xs font-black text-indigo-700 mt-0.5">0 Units</div>
+                        <div id="rev-cat-count" class="text-[10px] font-bold text-slate-500">0 Categories</div>
+                    </div>
+                    <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                        <div class="text-[9px] font-black uppercase text-slate-400">Channel Manager</div>
+                        <div id="rev-chan-status" class="text-xs font-black text-slate-800 mt-0.5">--</div>
+                        <div id="rev-chan-plans" class="text-[10px] font-bold text-slate-500">0 Rate Plans</div>
+                    </div>
+                    <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                        <div class="text-[9px] font-black uppercase text-slate-400">Pricing Logic</div>
+                        <div id="rev-rules-status" class="text-xs font-black text-emerald-700 mt-0.5">Ready</div>
+                        <div id="rev-events-status" class="text-[10px] font-bold text-slate-500">Events: Off</div>
+                    </div>
+                </div>
+
+                <!-- Launch Buttons -->
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-2 pt-3 border-t border-slate-200">
+                    <button onclick="window.launchApp('cm')" class="w-full sm:w-auto px-5 py-2 rounded bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] uppercase flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer">
+                        <i data-lucide="calendar" size="14"></i> Open Channel Manager (cm.html)
+                    </button>
+                    <button onclick="window.launchApp('pms')" class="w-full sm:w-auto px-5 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[11px] uppercase flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer">
+                        <i data-lucide="layout-grid" size="14"></i> Open Front Desk PMS (pms.html)
+                    </button>
                 </div>
             </div>
         </section>
+
+        <!-- STEPPER FOOTER CONTROLS WITH PROMINENT "SAVE" BUTTON -->
+        <footer class="pt-2 pb-1 flex items-center justify-between border-t border-slate-200 shrink-0 bg-white px-2 mt-auto rounded-b">
+            <button id="btn-prev-step" onclick="window.prevStep()" class="flex items-center gap-1 px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 text-[11px] font-black uppercase transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                <i data-lucide="arrow-left" size="13"></i> Previous
+            </button>
+
+            <span id="wizard-step-indicator" class="text-[11px] font-black uppercase text-slate-400">Step 1 of 5</span>
+
+            <div class="flex items-center gap-2">
+                <!-- SAVE placed conveniently right next to Continue -->
+                <button onclick="window.savePropertyToDatabase(true)" id="btn-save-footer" class="flex items-center gap-1 px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase transition-colors shadow-xs cursor-pointer">
+                    <i data-lucide="save" size="13"></i>
+                    <span>SAVE</span>
+                </button>
+                <button id="btn-next-step" onclick="window.nextStep()" class="flex items-center gap-1 px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase transition-colors shadow-xs cursor-pointer">
+                    <span>Continue</span> <i data-lucide="arrow-right" size="13"></i>
+                </button>
+            </div>
+        </footer>
 
     </main>
 
-    <!-- CUSTOM NOTIFICATION MODAL -->
-    <div id="modal-alert" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4">
-        <div class="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full text-center border border-slate-300">
-            <p id="modal-alert-msg" class="font-bold text-slate-700 mb-5 leading-tight whitespace-pre-wrap text-sm"></p>
-            <button onclick="document.getElementById('modal-alert').classList.add('hidden')" class="w-full px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-black uppercase text-xs transition-colors">
-                Okay
-            </button>
+    <!-- IN-APP MODAL: GENERIC ALERT / CONFIRM -->
+    <div id="custom-app-modal" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-4 border border-slate-200">
+            <div id="modal-icon-container" class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mb-2">
+                <i data-lucide="info" size="16"></i>
+            </div>
+            <h4 id="modal-title" class="text-xs font-black uppercase text-slate-900">Notification</h4>
+            <p id="modal-body" class="text-[11px] font-semibold text-slate-600 mt-1 mb-3 leading-relaxed whitespace-pre-wrap">Message...</p>
+            <div class="flex items-center justify-end gap-1.5">
+                <button id="modal-cancel-btn" onclick="window.closeCustomModal(false)" class="px-3 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[10px] font-black uppercase cursor-pointer hidden">
+                    Cancel
+                </button>
+                <button id="modal-confirm-btn" onclick="window.closeCustomModal(true)" class="px-3.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase shadow-xs cursor-pointer">
+                    OK
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- FIREBASE INITIALIZATION & WIZARD CONTROLLER -->
+    <!-- FIREBASE INITIALIZATION & REAL-TIME CONTROLLER -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = { 
             apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", 
@@ -492,400 +642,277 @@
 
         window.db = db;
         window.appId = appId;
-        window.currentPropId = 'loud_samui';
-        window.propertyData = {
-            name: '',
-            code: '',
-            currency: 'THB',
-            rooms: [],
-            addons: [],
-            channex: {},
-            channexMap: [],
-            enableEventRates: false
+        window.currentStep = 1;
+        window.activePropertyId = 'loud_samui';
+        window.currentPropertyData = null;
+
+        // In-memory Room Definitions (Room-Level Architecture)
+        window.roomDefinitions = [];
+        window.compiledRooms = []; // Expanded individual beds compiled for PMS/CM tape charts
+        window.addons = [];
+        window.channelRules = [];
+        window.channexMap = [];
+        window.channexRateMap = [];
+        window.relationships = [];
+        
+        // Independent Spans for Event Rates vs. Event Restrictions!
+        window.ratesSpan = 2; // Default rates span: ±2 Days
+        window.restrSpan = 6; // Default restriction span: ±6 Days
+
+        // Collapsible Section Helper
+        window.toggleCardSection = (contentId, chevronId) => {
+            const content = document.getElementById(contentId);
+            const chev = document.getElementById(chevronId);
+            if (!content) return;
+            const isHidden = content.classList.contains('hidden');
+            content.classList.toggle('hidden', !isHidden);
+            if (chev) {
+                chev.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+            }
         };
 
-        window.customAlert = (msg) => {
-            document.getElementById('modal-alert-msg').innerText = msg;
-            document.getElementById('modal-alert').classList.remove('hidden');
+        // Unified Hybrid Stay Formatter (matches cm-grid.js)
+        window.formatHybridStayInput = (val) => {
+            if (!val) return "";
+            const clean = String(val).trim();
+            if (!clean || clean === "-") return "";
+            if (/(\d+)\s*(a|>|▸)/i.test(clean)) {
+                const match = clean.match(/(\d+)/);
+                return match ? `${match[1]}▸` : clean;
+            }
+            const match = clean.match(/(\d+)/);
+            return match ? match[1] : clean;
         };
 
-        // STEPPER NAVIGATION
+        window.parseHybridStay = (val) => {
+            if (!val) return { through: null, arrival: null };
+            const clean = String(val).trim();
+            if (!clean || clean === "-") return { through: null, arrival: null };
+            if (/(\d+)\s*(a|>|▸)/i.test(clean)) {
+                const match = clean.match(/(\d+)/);
+                return { through: null, arrival: match ? parseInt(match[1], 10) : null };
+            }
+            const match = clean.match(/(\d+)/);
+            return { through: match ? parseInt(match[1], 10) : null, arrival: null };
+        };
+
+        window.toHybridDisplay = (throughVal, arrivalVal) => {
+            if (arrivalVal !== null && arrivalVal !== undefined && arrivalVal !== "") {
+                return `${arrivalVal}▸`;
+            }
+            if (throughVal !== null && throughVal !== undefined && throughVal !== "") {
+                return String(throughVal);
+            }
+            return "";
+        };
+
+        // In-App Modal Dialog helper (Zero native alert/confirm)
+        window._modalResolve = null;
+        window.customAlert = (title, msg, isConfirm = false) => {
+            return new Promise((resolve) => {
+                window._modalResolve = resolve;
+                document.getElementById('modal-title').textContent = title;
+                document.getElementById('modal-body').textContent = msg;
+                document.getElementById('modal-cancel-btn').classList.toggle('hidden', !isConfirm);
+                document.getElementById('custom-app-modal').classList.remove('hidden');
+                if (window.lucide) window.lucide.createIcons();
+            });
+        };
+        window.closeCustomModal = (res) => {
+            document.getElementById('custom-app-modal').classList.add('hidden');
+            if (window._modalResolve) {
+                window._modalResolve(res);
+                window._modalResolve = null;
+            }
+        };
+
+        // Navigation Controller
         window.jumpStep = (step) => {
+            if (step < 1 || step > 5) return;
+            window.currentStep = step;
+
             for (let i = 1; i <= 5; i++) {
-                const pane = document.getElementById(`step-pane-${i}`);
+                const section = document.getElementById(`step-content-${i}`);
                 const pill = document.getElementById(`pill-step-${i}`);
-                if (pane) pane.classList.toggle('hidden', i !== step);
-                if (pill) {
+                const badge = document.getElementById(`badge-step-${i}`);
+
+                if (section) section.classList.toggle('hidden', i !== step);
+
+                if (pill && badge) {
                     pill.classList.remove('active', 'completed');
-                    if (i === step) pill.classList.add('active');
-                    else if (i < step) pill.classList.add('completed');
-                }
-            }
-        };
+                    badge.classList.remove('bg-white', 'text-indigo-700', 'bg-emerald-600', 'text-white', 'bg-slate-100', 'text-slate-600');
 
-        window.nextStep = (current) => {
-            window.jumpStep(current + 1);
-        };
-
-        // ADD-ON MANAGEMENT
-        window.addAddonRow = (name = '', price = 0) => {
-            const container = document.getElementById('addon-list-container');
-            const row = document.createElement('div');
-            row.className = "flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 addon-row";
-            row.innerHTML = `
-                <input type="text" placeholder="Add-on Name (e.g. Scooter Rental)" value="${name}" class="input-base addon-name text-xs !py-1">
-                <div class="flex items-center gap-1 w-32 shrink-0">
-                    <span class="text-xs font-black text-slate-400">฿</span>
-                    <input type="number" placeholder="Price" value="${price}" class="input-base addon-price text-xs !py-1 text-right font-black">
-                </div>
-                <button onclick="this.closest('.addon-row').remove()" class="text-slate-400 hover:text-rose-600 p-1 cursor-pointer">
-                    <i data-lucide="trash-2" size="14"></i>
-                </button>
-            `;
-            container.appendChild(row);
-            if (window.lucide) window.lucide.createIcons();
-        };
-
-        // SMART INVENTORY GENERATORS
-        window.generateDormBeds = () => {
-            const cat = document.getElementById('dorm-cat-name').value.trim();
-            const code = document.getElementById('dorm-room-code').value.trim().toUpperCase();
-            const count = parseInt(document.getElementById('dorm-bed-count').value, 10);
-            const rule = document.getElementById('dorm-bunk-rule').value;
-
-            if (!cat || !code || isNaN(count) || count < 1) {
-                return window.customAlert("Please enter a category title, room letter, and valid bed count.");
-            }
-
-            for (let i = 1; i <= count; i++) {
-                const numStr = String(i).padStart(2, '0');
-                const id = `${code}-${numStr}`;
-                
-                let bunkPos = 'Single';
-                if (rule === 'odd_top') bunkPos = (i % 2 !== 0) ? 'Top Bunk' : 'Bottom Bunk';
-                else if (rule === 'even_top') bunkPos = (i % 2 === 0) ? 'Top Bunk' : 'Bottom Bunk';
-
-                // Prevent duplicate IDs
-                if (!window.propertyData.rooms.some(r => r.id === id)) {
-                    window.propertyData.rooms.push({
-                        id,
-                        type: cat,
-                        bunk: bunkPos
-                    });
-                }
-            }
-
-            window.renderInventoryTable();
-            window.updateAnchorSelectors();
-            window.customAlert(`Generated ${count} beds for Room ${code}!`);
-        };
-
-        window.generatePrivateRooms = () => {
-            const cat = document.getElementById('priv-cat-name').value.trim();
-            const prefix = document.getElementById('priv-prefix').value.trim().toUpperCase();
-            const s = parseInt(document.getElementById('priv-start-num').value, 10);
-            const e = parseInt(document.getElementById('priv-end-num').value, 10);
-
-            if (!cat || !prefix || isNaN(s) || isNaN(e) || s > e) {
-                return window.customAlert("Please provide category, prefix, and valid start/end room numbers.");
-            }
-
-            let created = 0;
-            for (let i = s; i <= e; i++) {
-                const numStr = String(i).padStart(2, '0');
-                const id = `${prefix}${numStr}`;
-                if (!window.propertyData.rooms.some(r => r.id === id)) {
-                    window.propertyData.rooms.push({
-                        id,
-                        type: cat,
-                        bunk: 'Private'
-                    });
-                    created++;
-                }
-            }
-
-            window.renderInventoryTable();
-            window.updateAnchorSelectors();
-            window.customAlert(`Generated ${created} private rooms!`);
-        };
-
-        window.renderInventoryTable = () => {
-            const tbody = document.getElementById('inventory-table-body');
-            const countEl = document.getElementById('total-room-count');
-            if (!tbody) return;
-
-            const rooms = window.propertyData.rooms || [];
-            if (countEl) countEl.innerText = rooms.length;
-
-            if (rooms.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400 italic">No rooms generated yet. Use the generators above.</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = rooms.map((r, idx) => `
-                <tr class="hover:bg-slate-50 transition-colors">
-                    <td class="p-2.5 border-r border-slate-200 font-black text-slate-900">${r.id}</td>
-                    <td class="p-2.5 border-r border-slate-200">${r.type}</td>
-                    <td class="p-2.5 border-r border-slate-200 text-slate-500">${r.bunk || 'Standard'}</td>
-                    <td class="p-2.5 text-center">
-                        <button onclick="window.removeInventoryItem(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer">
-                            <i data-lucide="trash-2" size="14"></i>
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
-
-            if (window.lucide) window.lucide.createIcons();
-        };
-
-        window.removeInventoryItem = (idx) => {
-            window.propertyData.rooms.splice(idx, 1);
-            window.renderInventoryTable();
-            window.updateAnchorSelectors();
-        };
-
-        window.clearAllInventory = () => {
-            if (confirm("Clear all generated physical rooms?")) {
-                window.propertyData.rooms = [];
-                window.renderInventoryTable();
-                window.updateAnchorSelectors();
-            }
-        };
-
-        window.updateAnchorSelectors = () => {
-            const selP = document.getElementById('anchor-private');
-            const selD = document.getElementById('anchor-dorm');
-            if (!selP || !selD) return;
-
-            const uniqueTypes = [...new Set((window.propertyData.rooms || []).map(r => r.type))];
-            const pTypes = uniqueTypes.filter(t => !t.toLowerCase().includes('dorm'));
-            const dTypes = uniqueTypes.filter(t => t.toLowerCase().includes('dorm'));
-
-            selP.innerHTML = (pTypes.length ? pTypes : uniqueTypes).map(t => `<option value="${t}">${t}</option>`).join('');
-            selD.innerHTML = (dTypes.length ? dTypes : uniqueTypes).map(t => `<option value="${t}">${t}</option>`).join('');
-        };
-
-        // CHANNEX API OPERATIONS
-        window.fetchAndPairChannex = async () => {
-            const apiKey = document.getElementById('chan-api-key').value.trim();
-            const propId = document.getElementById('chan-prop-id').value.trim();
-            if (!apiKey || !propId) return window.customAlert("Enter API Key and Property ID first.");
-
-            try {
-                const res = await fetch(`https://app.channex.io/api/v1/room_types?filter[property_id]=${propId}`, {
-                    headers: { "user-api-key": apiKey, "Content-Type": "application/json" }
-                });
-                if (!res.ok) throw new Error("Channex connection rejected. Check API key and Property ID.");
-                const json = await res.json();
-                const chanRooms = json.data || [];
-
-                const pmsCategories = [...new Set((window.propertyData.rooms || []).map(r => r.type))];
-
-                window.propertyData.channexMap = chanRooms.map(cr => {
-                    const matchedCat = pmsCategories.find(c => c.toLowerCase().includes(cr.attributes.title.toLowerCase()) || cr.attributes.title.toLowerCase().includes(c.toLowerCase())) || (pmsCategories[0] || 'Standard');
-                    return {
-                        channexId: cr.id,
-                        channexTitle: cr.attributes.title,
-                        pmsCategory: matchedCat
-                    };
-                });
-
-                window.renderMappingPairs();
-                window.customAlert(`Fetched ${chanRooms.length} room types from Channex! Paired strictly by ID.`);
-            } catch (err) {
-                window.customAlert("Channex Error: " + err.message);
-            }
-        };
-
-        window.provisionChannexRooms = async () => {
-            const apiKey = document.getElementById('chan-api-key').value.trim();
-            const propId = document.getElementById('chan-prop-id').value.trim();
-            if (!apiKey || !propId) return window.customAlert("Enter API Key and Property ID first.");
-
-            const categories = [...new Set((window.propertyData.rooms || []).map(r => r.type))];
-            if (categories.length === 0) return window.customAlert("Create your room inventory in Step 2 first.");
-
-            try {
-                const createdMappings = [];
-                for (const cat of categories) {
-                    const isDorm = cat.toLowerCase().includes('dorm');
-                    const dormCount = window.propertyData.rooms.filter(r => r.type === cat).length;
-
-                    // 1. POST Room Type to Channex
-                    const roomRes = await fetch(`https://app.channex.io/api/v1/room_types`, {
-                        method: "POST",
-                        headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            room_type: {
-                                property_id: propId,
-                                title: cat,
-                                count_of_rooms: isDorm ? dormCount : 1,
-                                occ_adults: isDorm ? 1 : 2,
-                                occ_children: 0,
-                                occ_infants: 0
-                            }
-                        })
-                    });
-                    const roomJson = await roomRes.json();
-                    const newRoomId = roomJson.data?.id;
-
-                    if (newRoomId) {
-                        createdMappings.push({
-                            channexId: newRoomId,
-                            channexTitle: cat,
-                            pmsCategory: cat
-                        });
-
-                        // 2. Auto-Provision Standard Rate Plans for this room
-                        const plans = [
-                            { title: `${cat} - Default Non-Ref`, isRef: false },
-                            { title: `${cat} - Default Ref`, isRef: true },
-                            { title: `${cat} - BDC Non-Ref`, isRef: false },
-                            { title: `${cat} - BDC Ref`, isRef: true }
-                        ];
-
-                        for (const p of plans) {
-                            await fetch(`https://app.channex.io/api/v1/rate_plans`, {
-                                method: "POST",
-                                headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    rate_plan: {
-                                        property_id: propId,
-                                        room_type_id: newRoomId,
-                                        title: p.title,
-                                        options: [{ occupancy: 1, rate: 0 }]
-                                    }
-                                })
-                            });
-                        }
+                    if (i === step) {
+                        pill.classList.add('active');
+                        badge.classList.add('bg-white', 'text-indigo-700');
+                    } else if (i < step) {
+                        pill.classList.add('completed');
+                        badge.classList.add('bg-emerald-600', 'text-white');
+                    } else {
+                        badge.classList.add('bg-slate-100', 'text-slate-600');
                     }
                 }
-
-                window.propertyData.channexMap = createdMappings;
-                window.renderMappingPairs();
-                window.customAlert(`Successfully auto-provisioned ${createdMappings.length} rooms and their rate plans in Channex!`);
-            } catch (err) {
-                window.customAlert("Provisioning Error: " + err.message);
-            }
-        };
-
-        window.renderMappingPairs = () => {
-            const list = document.getElementById('mapping-pairs-list');
-            const badge = document.getElementById('mapping-count-badge');
-            const map = window.propertyData.channexMap || [];
-            if (badge) badge.innerText = `${map.length} Rooms Mapped`;
-
-            if (map.length === 0) {
-                list.innerHTML = `<div class="text-center py-4 text-slate-400 font-bold italic">No Channex mappings configured yet.</div>`;
-                return;
             }
 
-            list.innerHTML = map.map(m => `
-                <div class="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-slate-50 font-bold">
-                    <span class="text-slate-800">${m.channexTitle} <span class="text-[9px] font-mono text-slate-400">(${m.channexId.slice(-8)})</span></span>
-                    <i data-lucide="arrow-right" size="14" class="text-indigo-500"></i>
-                    <span class="text-indigo-700 font-black">${m.pmsCategory}</span>
-                </div>
-            `).join('');
+            document.getElementById('btn-prev-step').disabled = step === 1;
+            const nextBtn = document.getElementById('btn-next-step');
+            if (step === 5) {
+                nextBtn.innerHTML = '<span>Finish Setup</span> <i data-lucide="check" size="13"></i>';
+            } else {
+                nextBtn.innerHTML = '<span>Continue</span> <i data-lucide="arrow-right" size="13"></i>';
+            }
 
+            document.getElementById('wizard-step-indicator').textContent = `Step ${step} of 5`;
+
+            if (step === 3) {
+                window.renderRoomMappingTable();
+                window.renderGroupedRatePlans();
+            }
+            if (step === 4) {
+                window.populateAnchorDropdowns();
+                window.renderRelationships();
+                window.renderEventCurveTables();
+            }
+            if (step === 5) window.populateReviewSummary();
             if (window.lucide) window.lucide.createIcons();
         };
 
-        // SAVE PROPERTY DATA TO FIRESTORE
-        window.saveCurrentProperty = async (notify = false) => {
-            const propId = window.currentPropId;
-            const name = document.getElementById('prop-name').value.trim();
-            const code = document.getElementById('prop-code').value.trim().toUpperCase();
-            const currency = document.getElementById('prop-currency').value;
-            const apiKey = document.getElementById('chan-api-key').value.trim();
-            const chanPropId = document.getElementById('chan-prop-id').value.trim();
-            const enableEventRates = document.getElementById('toggle-event-rates').checked;
-
-            // Gather Add-ons
-            const addons = [];
-            document.querySelectorAll('.addon-row').forEach(row => {
-                const n = row.querySelector('.addon-name')?.value.trim();
-                const p = parseFloat(row.querySelector('.addon-price')?.value) || 0;
-                if (n) addons.push({ name: n, price: p });
-            });
-
-            const docData = {
-                name,
-                code,
-                currency,
-                rooms: window.propertyData.rooms,
-                addons,
-                enableEventRates,
-                channex: { apiKey, propId: chanPropId },
-                channexMap: window.propertyData.channexMap,
-                updatedAt: new Date().toISOString()
-            };
-
-            try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), docData, { merge: true });
-                if (notify) window.customAlert("Property configuration successfully saved!");
-            } catch (err) {
-                window.customAlert("Save Error: " + err.message);
-            }
-        };
-
-        // LOAD SELECTED PROPERTY
-        window.switchSetupProperty = async (propId) => {
-            if (propId === 'NEW') {
-                const newCode = prompt("Enter 4-letter property short code (e.g. WET):");
-                if (!newCode) return;
-                const newId = newCode.toLowerCase() + "_hotel";
-                window.currentPropId = newId;
-                window.propertyData = { name: newCode.toUpperCase(), code: newCode.toUpperCase(), currency: 'THB', rooms: [], addons: [], channex: {}, channexMap: [], enableEventRates: false };
-                window.hydrateForm();
+        window.nextStep = () => {
+            if (window.currentStep === 5) {
+                window.savePropertyToDatabase(false).then(() => {
+                    window.customAlert("Setup Complete", "Configuration saved to database. Launching Channel Manager...").then(() => {
+                        window.launchApp('cm');
+                    });
+                });
                 return;
             }
+            window.jumpStep(window.currentStep + 1);
+        };
 
-            window.currentPropId = propId;
-            try {
-                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
-                if (snap.exists()) {
-                    window.propertyData = snap.data();
-                    window.hydrateForm();
+        window.prevStep = () => {
+            window.jumpStep(window.currentStep - 1);
+        };
+
+        // Standard Default Add-ons (Upgrades & Extended listed first)
+        function loadDefaultAddons() {
+            return [
+                { id: 'add_upg', name: 'Paid Room Upgrade', category: 'Room', price: 300, unit: 'flat' },
+                { id: 'add_late', name: 'Late Check-out (Until 2 PM)', category: 'Room', price: 300, unit: 'flat' },
+                { id: 'add_early', name: 'Early Check-in', category: 'Room', price: 200, unit: 'flat' },
+                { id: 'add_ferry', name: 'Ferry Transfer', category: 'Transport', price: 400, unit: 'per trip' },
+                { id: 'add_scooter', name: 'Scooter Rental (24h)', category: 'Rental', price: 250, unit: 'per day' },
+                { id: 'add_laundry', name: 'Laundry Service', category: 'Service', price: 80, unit: 'per kg' },
+                { id: 'add_deposit', name: 'Key / Towel Deposit', category: 'Service', price: 200, unit: 'deposit' }
+            ];
+        }
+
+        // Extrapolate compiled individual beds from room definitions
+        window.compileBedsFromDefinitions = () => {
+            const compiled = [];
+            window.roomDefinitions.forEach(def => {
+                const roomName = (def.roomName || '').trim();
+                const category = (def.category || '').trim();
+                const floor = (def.floor || 'Floor 1').trim();
+                const count = parseInt(def.units, 10) || 1;
+                const rule = def.bunkRule || 'odd-top';
+                const isDorm = (def.type === 'dorm') || category.toLowerCase().includes('dorm') || rule !== 'private';
+
+                if (!isDorm || count === 1) {
+                    compiled.push({
+                        id: roomName,
+                        name: roomName,
+                        type: category,
+                        floor: floor,
+                        bunk: 'Private Unit',
+                        parentRoom: roomName,
+                        bedIndex: 1
+                    });
+                } else {
+                    for (let i = 1; i <= count; i++) {
+                        const bedNum = String(i).padStart(2, '0');
+                        let bedId = `${roomName}${bedNum}`;
+                        if (roomName.includes('-')) bedId = `${roomName.replace(/-+$/, '')}-${bedNum}`;
+                        else if (roomName.endsWith(' ')) bedId = `${roomName.trim()} - ${bedNum}`;
+                        else bedId = `${roomName}${bedNum}`;
+
+                        let bunkPos = 'Single Bed';
+                        if (rule === 'odd-top') bunkPos = (i % 2 !== 0) ? 'Top Bunk' : 'Bottom Bunk';
+                        else if (rule === 'even-top') bunkPos = (i % 2 === 0) ? 'Top Bunk' : 'Bottom Bunk';
+
+                        compiled.push({
+                            id: bedId,
+                            name: bedId,
+                            type: category,
+                            floor: floor,
+                            bunk: bunkPos,
+                            parentRoom: roomName,
+                            bedIndex: i
+                        });
+                    }
                 }
-            } catch (err) {
-                console.error("Load property error:", err);
-            }
+            });
+            window.compiledRooms = compiled;
+            return compiled;
         };
 
-        window.hydrateForm = () => {
-            const p = window.propertyData;
-            document.getElementById('prop-name').value = p.name || '';
-            document.getElementById('prop-code').value = p.code || '';
-            document.getElementById('prop-currency').value = p.currency || 'THB';
-            document.getElementById('chan-api-key').value = p.channex?.apiKey || '';
-            document.getElementById('chan-prop-id').value = p.channex?.propId || '';
-            document.getElementById('toggle-event-rates').checked = !!p.enableEventRates;
+        // Group individual beds into clean Room Definitions if not already defined
+        function extrapolateRoomDefinitions(rawRooms) {
+            if (!Array.isArray(rawRooms) || rawRooms.length === 0) return [];
 
-            // Hydrate Add-ons
-            const addonContainer = document.getElementById('addon-list-container');
-            addonContainer.innerHTML = '';
-            (p.addons || [
-                { name: 'Ferry Ticket', price: 400 },
-                { name: 'Scooter Rental', price: 250 },
-                { name: 'Laundry', price: 100 },
-                { name: 'Late Checkout', price: 300 }
-            ]).forEach(a => window.addAddonRow(a.name, a.price));
+            const groups = {};
+            rawRooms.forEach(r => {
+                const id = (r.id || r.name || '').trim();
+                const cat = (r.type || 'Standard Room').trim();
+                const floor = r.floor || '1';
+                const bunk = r.bunk || 'Single Bed';
+                const isDorm = cat.toLowerCase().includes('dorm') || cat.toLowerCase().includes('bed');
 
-            window.renderInventoryTable();
-            window.updateAnchorSelectors();
-            window.renderMappingPairs();
+                // Extract room prefix/name
+                let roomPrefix = id;
+                if (isDorm) {
+                    const match = id.match(/^([A-Za-z0-9]+)\s*[-_]?\s*(\d+)$/);
+                    if (match) roomPrefix = match[1];
+                }
 
-            // Sync navigation links with property code
-            const shortCode = p.code || 'LOUD';
-            document.getElementById('btn-goto-pms').href = `pms.html?p=${shortCode}`;
-            document.getElementById('btn-goto-cm').href = `cm.html?p=${shortCode}`;
-            document.getElementById('launch-pms-btn').href = `pms.html?p=${shortCode}`;
-            document.getElementById('launch-cm-btn').href = `cm.html?p=${shortCode}`;
-        };
+                const groupKey = `${roomPrefix}__${cat}__${floor}`;
+                if (!groups[groupKey]) {
+                    groups[groupKey] = {
+                        roomName: roomPrefix,
+                        category: cat,
+                        type: isDorm ? 'dorm' : 'private',
+                        floor: floor,
+                        bunks: [],
+                        count: 0
+                    };
+                }
+                groups[groupKey].count++;
+                groups[groupKey].bunks.push(bunk);
+            });
 
-        // BOOTSTRAP
-        (async function init() {
+            return Object.values(groups).map(g => {
+                let rule = 'private';
+                if (g.type === 'dorm') {
+                    const hasTop = g.bunks.some(b => b.toLowerCase().includes('top'));
+                    const hasBottom = g.bunks.some(b => b.toLowerCase().includes('bottom'));
+                    if (hasTop && hasBottom) rule = 'odd-top';
+                    else rule = 'single';
+                }
+                return {
+                    roomName: g.roomName,
+                    category: g.category,
+                    type: g.type,
+                    units: g.count,
+                    floor: g.floor,
+                    bunkRule: rule
+                };
+            });
+        }
+
+        // Auth & Property Loader
+        async function initAuthAndLoad() {
+            window.addons = loadDefaultAddons();
+            window.renderAddonsTable();
+
             try {
                 if (typeof window.__initial_auth_token !== 'undefined') {
                     try { await signInWithCustomToken(auth, window.__initial_auth_token); }
@@ -893,13 +920,1310 @@
                 } else {
                     await signInAnonymously(auth);
                 }
-                const pParam = new URLSearchParams(window.location.search).get('p');
-                const targetProp = pParam ? (pParam.toLowerCase() + '_samui') : 'loud_samui';
-                window.switchSetupProperty(targetProp);
             } catch (err) {
-                console.error("Auth init error:", err);
+                console.warn("Auth initialization notice:", err);
             }
-        })();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const pParam = (urlParams.get('p') || '').toUpperCase();
+            
+            let targetId = 'loud_samui';
+            if (pParam === 'SWIMS' || pParam === 'SWIMS_RESORT') targetId = 'swims_resort';
+            else if (pParam === 'WET' || pParam === 'WET_POOL') targetId = 'wet_pool';
+
+            const sel = document.getElementById('property-select');
+            if (sel) sel.value = targetId;
+            window.activePropertyId = targetId;
+
+            await window.loadPropertyFromDatabase(targetId);
+        }
+
+        window.loadPropertyFromDatabase = async (propId) => {
+            const statusEl = document.getElementById('header-status-text');
+            if (statusEl) statusEl.textContent = "Loading configuration from database...";
+
+            try {
+                const docSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
+                if (!docSnap.exists()) {
+                    if (statusEl) statusEl.textContent = "Property loaded in local memory.";
+                    return;
+                }
+
+                const prop = docSnap.data();
+                window.currentPropertyData = prop;
+
+                // 1. Property Profile
+                document.getElementById('prop-name').value = prop.name || prop.title || propId;
+                document.getElementById('prop-short').value = propId.includes('loud') ? 'LOUD' : (propId.includes('swims') ? 'SWIMS' : 'WET');
+                document.getElementById('prop-currency').value = prop.currency || 'THB';
+                document.getElementById('prop-timezone').value = prop.timezone || 'Asia/Bangkok';
+
+                // 2. Channex Credentials
+                const apiKey = prop.channex?.apiKey || '';
+                const chanPropId = prop.channex?.propId || '';
+                document.getElementById('chan-api-key').value = apiKey;
+                document.getElementById('chan-prop-id').value = chanPropId;
+
+                const connBadge = document.getElementById('channex-conn-badge');
+                if (apiKey && chanPropId) {
+                    connBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Connected';
+                    connBadge.className = 'flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200';
+                } else {
+                    connBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Not Connected';
+                    connBadge.className = 'flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200';
+                }
+
+                // 3. Room Inventory (Room-Level Definitions)
+                if (Array.isArray(prop.roomDefinitions) && prop.roomDefinitions.length > 0) {
+                    window.roomDefinitions = prop.roomDefinitions;
+                } else if (Array.isArray(prop.rooms) && prop.rooms.length > 0) {
+                    window.roomDefinitions = extrapolateRoomDefinitions(prop.rooms);
+                } else {
+                    window.roomDefinitions = [
+                        { roomName: 'F', category: 'STANDARD DOUBLE 6-BED DORM', type: 'dorm', units: 6, floor: '2', bunkRule: 'odd-top' },
+                        { roomName: 'H', category: 'FEMALE 6-10 BED DORM', type: 'dorm', units: 6, floor: '1', bunkRule: 'odd-top' },
+                        { roomName: 'E', category: 'STANDARD 10-BED MIXED DORM', type: 'dorm', units: 10, floor: '2', bunkRule: 'odd-top' },
+                        { roomName: 'ROOM J', category: 'Deluxe PRIVATE KING Room', type: 'private', units: 1, floor: '1', bunkRule: 'private' },
+                        { roomName: 'ROOM K', category: 'Deluxe PRIVATE KING Room', type: 'private', units: 1, floor: '1', bunkRule: 'private' }
+                    ];
+                }
+                window.compileBedsFromDefinitions();
+
+                // 4. Rate Plans & Mappings
+                window.channexMap = Array.isArray(prop.channexMap) ? prop.channexMap : [];
+                window.channexRateMap = Array.isArray(prop.channexRateMap) ? prop.channexRateMap : [];
+
+                // 5. Folio Addons
+                if (Array.isArray(prop.addons) && prop.addons.length > 0) {
+                    window.addons = prop.addons;
+                } else {
+                    window.addons = loadDefaultAddons();
+                }
+
+                // 6. Pricing Rules & Master Records
+                const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`));
+                const pricingData = pricingSnap.exists() ? pricingSnap.data() : {};
+                const rules = pricingData.pricingRules || {};
+
+                document.getElementById('rule-std-ref').value = rules.stdRefVal !== undefined ? rules.stdRefVal : 25;
+                document.getElementById('rule-evt-ref').value = rules.evtRefVal !== undefined ? rules.evtRefVal : 25;
+
+                const hasEvents = prop.enableEventRates !== undefined ? !!prop.enableEventRates : (propId === 'swims_resort');
+                document.getElementById('toggle-events').checked = hasEvents;
+                window.toggleEventSettings(hasEvents);
+
+                // Relational Pricing Rules
+                if (Array.isArray(pricingData.relationships) && pricingData.relationships.length > 0) {
+                    window.relationships = pricingData.relationships;
+                }
+
+                // Universal Channels (Direct / Website strictly 1:1 parity baseline)
+                const storedChannels = rules.channels || {};
+                const defaultChannels = [
+                    { channel: 'Direct / Website', type: '=', val: 0 },
+                    { channel: 'Booking.com', type: '=', val: 0 },
+                    { channel: 'Hostelworld', type: '+%', val: 15 },
+                    { channel: 'Agoda', type: '=', val: 0 },
+                    { channel: 'Expedia', type: '=', val: 0 }
+                ];
+
+                window.channelRules = defaultChannels.map(dc => {
+                    const chName = dc.channel;
+                    const st = storedChannels['Default'] || storedChannels[chName];
+                    return {
+                        id: `cr_${chName.replace(/\s+/g, '')}`,
+                        channel: chName,
+                        type: st?.type || dc.type,
+                        val: st?.val !== undefined ? st.val : dc.val
+                    };
+                });
+
+                // Add any additional stored channels
+                Object.keys(storedChannels).forEach(chKey => {
+                    const displayName = (chKey === 'Default' || chKey === 'Direct Website') ? 'Direct / Website' : chKey;
+                    if (!window.channelRules.some(r => r.channel === displayName)) {
+                        window.channelRules.push({
+                            id: `cr_${displayName.replace(/\s+/g, '')}`,
+                            channel: displayName,
+                            type: storedChannels[chKey]?.type || '=',
+                            val: storedChannels[chKey]?.val || 0
+                        });
+                    }
+                });
+
+                // Spans from Baselines
+                const autoBase = pricingData.autofillBaselines || {};
+                if (autoBase.ratesSpan) window.ratesSpan = autoBase.ratesSpan;
+                if (autoBase.restrSpan) window.restrSpan = autoBase.restrSpan;
+
+                // Render UI
+                window.renderAddonsTable();
+                window.renderRoomDefTable();
+                window.renderRoomMappingTable();
+                window.renderGroupedRatePlans();
+                window.renderChannelRules();
+                window.populateAnchorDropdowns();
+                window.renderRelationships();
+                window.renderEventCurveTables(autoBase);
+                window.populateReviewSummary();
+
+                if (statusEl) statusEl.textContent = `Loaded ${window.compiledRooms.length} beds across ${window.roomDefinitions.length} rooms from ${prop.name || propId}`;
+                document.getElementById('btn-goto-pms').href = `pms.html?p=${propId.includes('loud') ? 'LOUD' : 'SWIMS'}`;
+                document.getElementById('btn-goto-cm').href = `cm.html?p=${propId.includes('loud') ? 'LOUD' : 'SWIMS'}`;
+
+            } catch (err) {
+                console.error("Load property error:", err);
+                if (statusEl) statusEl.textContent = "Error loading property: " + err.message;
+            }
+        };
+
+        window.switchSetupProperty = (propId) => {
+            window.activePropertyId = propId;
+            const shortCode = propId.includes('loud') ? 'LOUD' : (propId.includes('swims') ? 'SWIMS' : 'WET');
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('p', shortCode);
+            window.history.replaceState({}, '', `${window.location.pathname}?${urlParams.toString()}`);
+            window.loadPropertyFromDatabase(propId);
+        };
+
+        // STEP 1: REORDERABLE ADDONS TABLE WITH CONFIRMED DELETE
+        window.renderAddonsTable = () => {
+            const body = document.getElementById('addon-list-body');
+            if (!body) return;
+
+            if (window.addons.length === 0) {
+                body.innerHTML = `<tr><td colspan="6" class="p-3 text-center text-slate-400 font-semibold italic">No add-ons created. Click "+ Add Item".</td></tr>`;
+                return;
+            }
+
+            body.innerHTML = window.addons.map((item, idx) => `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-1 text-center">
+                        <div class="flex items-center justify-center gap-0.5">
+                            <button onclick="window.moveAddon(${idx}, -1)" ${idx === 0 ? 'disabled class="opacity-20"' : 'class="cursor-pointer hover:text-indigo-600"'} title="Move Up">
+                                <i data-lucide="chevron-up" size="13"></i>
+                            </button>
+                            <button onclick="window.moveAddon(${idx}, 1)" ${idx === window.addons.length - 1 ? 'disabled class="opacity-20"' : 'class="cursor-pointer hover:text-indigo-600"'} title="Move Down">
+                                <i data-lucide="chevron-down" size="13"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td class="p-1">
+                        <input type="text" value="${item.name || ''}" onchange="window.addons[${idx}].name = this.value" class="table-input font-bold text-slate-800" placeholder="Product name...">
+                    </td>
+                    <td class="p-1">
+                        <select onchange="window.addons[${idx}].category = this.value" class="table-input font-medium">
+                            <option value="Room" ${item.category === 'Room' ? 'selected' : ''}>Room</option>
+                            <option value="Transport" ${item.category === 'Transport' ? 'selected' : ''}>Transport</option>
+                            <option value="Rental" ${item.category === 'Rental' ? 'selected' : ''}>Rental</option>
+                            <option value="Service" ${item.category === 'Service' ? 'selected' : ''}>Service</option>
+                            <option value="Tour" ${item.category === 'Tour' ? 'selected' : ''}>Tour</option>
+                            <option value="F&B" ${item.category === 'F&B' ? 'selected' : ''}>F&B</option>
+                        </select>
+                    </td>
+                    <td class="p-1">
+                        <input type="number" value="${item.price !== undefined ? item.price : 0}" onchange="window.addons[${idx}].price = parseFloat(this.value) || 0" class="table-input font-mono font-bold text-slate-900 text-center">
+                    </td>
+                    <td class="p-1">
+                        <select onchange="window.addons[${idx}].unit = this.value" class="table-input font-medium">
+                            <option value="flat" ${item.unit === 'flat' ? 'selected' : ''}>flat</option>
+                            <option value="per trip" ${item.unit === 'per trip' ? 'selected' : ''}>per trip</option>
+                            <option value="per day" ${item.unit === 'per day' ? 'selected' : ''}>per day</option>
+                            <option value="per kg" ${item.unit === 'per kg' ? 'selected' : ''}>per kg</option>
+                            <option value="deposit" ${item.unit === 'deposit' ? 'selected' : ''}>deposit</option>
+                        </select>
+                    </td>
+                    <td class="p-1 text-center">
+                        <button onclick="window.confirmRemoveAddon(${idx})" class="text-slate-400 hover:text-red-600 transition-colors cursor-pointer p-0.5" title="Delete">
+                            <i data-lucide="trash-2" size="13"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.moveAddon = (idx, direction) => {
+            const targetIdx = idx + direction;
+            if (targetIdx < 0 || targetIdx >= window.addons.length) return;
+            const item = window.addons.splice(idx, 1)[0];
+            window.addons.splice(targetIdx, 0, item);
+            window.renderAddonsTable();
+        };
+
+        window.addBlankAddonRow = () => {
+            window.addons.push({
+                id: `add_${Date.now()}`,
+                name: 'New Folio Item',
+                category: 'Service',
+                price: 100,
+                unit: 'flat'
+            });
+            window.renderAddonsTable();
+        };
+
+        window.confirmRemoveAddon = async (idx) => {
+            const item = window.addons[idx];
+            const confirmed = await window.customAlert("Delete Add-on", `Are you sure you want to remove "${item?.name || 'this item'}"?`, true);
+            if (confirmed) {
+                window.addons.splice(idx, 1);
+                window.renderAddonsTable();
+            }
+        };
+
+        // STEP 2: ROOM INVENTORY CONTROLLER & ROOM-LEVEL MATRIX
+        window.addBlankRoomDef = () => {
+            const cats = Array.from(new Set(window.roomDefinitions.map(r => r.category))).filter(Boolean);
+            const defaultCat = cats[0] || 'Standard Category';
+            const newRoom = {
+                roomName: `ROOM ${window.roomDefinitions.length + 1}`,
+                category: defaultCat,
+                units: 1,
+                floor: '1',
+                bunkRule: 'private',
+                isNew: true
+            };
+            window.roomDefinitions.unshift(newRoom);
+            window.renderRoomDefTable();
+            window.populateAnchorDropdowns();
+            window.renderRoomMappingTable();
+            window.renderGroupedRatePlans();
+        };
+
+        window.clearAllRoomDefs = async () => {
+            const confirmed = await window.customAlert("Clear Room Inventory", "Are you sure you want to remove all rooms from this property setup?", true);
+            if (confirmed) {
+                window.roomDefinitions = [];
+                window.renderRoomDefTable();
+                window.populateAnchorDropdowns();
+                window.renderRoomMappingTable();
+                window.renderGroupedRatePlans();
+            }
+        };
+
+        window.updateRoomDef = (idx, field, value) => {
+            if (!window.roomDefinitions[idx]) return;
+            if (field === 'units') {
+                window.roomDefinitions[idx].units = Math.max(1, parseInt(value, 10) || 1);
+            } else {
+                window.roomDefinitions[idx][field] = value;
+            }
+            window.compileBedsFromDefinitions();
+            const rBadge = document.getElementById('room-count-badge');
+            const uBadge = document.getElementById('unit-count-badge');
+            if (rBadge) rBadge.textContent = `${window.roomDefinitions.length} Rooms`;
+            if (uBadge) uBadge.textContent = `${window.compiledRooms.length} Beds/Units Total`;
+            window.renderBedPreviewDrawer();
+            if (field === 'category') {
+                window.populateAnchorDropdowns();
+                window.renderRoomMappingTable();
+                window.renderGroupedRatePlans();
+            }
+        };
+
+        window.confirmRemoveRoomDef = async (idx) => {
+            const room = window.roomDefinitions[idx];
+            const name = room ? (room.roomName || 'this room') : 'this room';
+            const confirmed = await window.customAlert("Delete Room", `Are you sure you want to remove "${name}" from inventory?`, true);
+            if (confirmed) {
+                window.roomDefinitions.splice(idx, 1);
+                window.renderRoomDefTable();
+                window.populateAnchorDropdowns();
+                window.renderRoomMappingTable();
+                window.renderGroupedRatePlans();
+            }
+        };
+
+        window.toggleBedPreviewDrawer = () => {
+            const drawer = document.getElementById('bed-preview-drawer');
+            const btn = document.getElementById('btn-toggle-bed-preview');
+            if (!drawer) return;
+            const isHidden = drawer.classList.contains('hidden');
+            drawer.classList.toggle('hidden', !isHidden);
+            if (btn) {
+                btn.classList.toggle('bg-indigo-600', isHidden);
+                btn.classList.toggle('text-white', isHidden);
+                btn.classList.toggle('bg-indigo-50', !isHidden);
+                btn.classList.toggle('text-indigo-800', !isHidden);
+            }
+            if (isHidden) {
+                window.renderBedPreviewDrawer();
+            }
+        };
+
+        // STEP 2: ROOM INVENTORY (COMPACT SINGLE-LINE DIVIDER & EDITABLE LABEL)
+        window.renderRoomDefTable = () => {
+            const body = document.getElementById('room-def-list-body');
+            window.compileBedsFromDefinitions();
+
+            const rBadge = document.getElementById('room-count-badge');
+            const uBadge = document.getElementById('unit-count-badge');
+            if (rBadge) rBadge.textContent = `${window.roomDefinitions.length} Rooms`;
+            if (uBadge) uBadge.textContent = `${window.compiledRooms.length} Beds/Units Total`;
+            if (!body) return;
+
+            if (window.roomDefinitions.length === 0) {
+                body.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400 font-semibold italic">No rooms created. Click "+ Add Room".</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            let lastCat = null;
+
+            window.roomDefinitions.forEach((item, idx) => {
+                const curCat = (item.category || 'Standard Category').trim();
+
+                // Compact single-line stripe divider
+                if (curCat !== lastCat) {
+                    const catCount = window.roomDefinitions.filter(r => (r.category || '').trim() === curCat).length;
+                    const catUnits = window.roomDefinitions.filter(r => (r.category || '').trim() === curCat).reduce((sum, r) => sum + (parseInt(r.units, 10) || 1), 0);
+                    
+                    html += `
+                    <tr class="bg-slate-200 text-slate-800 border-y border-slate-300">
+                        <td colspan="6" class="py-0.5 px-2 text-[10px] uppercase font-bold tracking-wider">
+                            <div class="flex items-center justify-between">
+                                <span class="flex items-center gap-1.5">
+                                    <i data-lucide="folder" size="11" class="text-slate-600"></i>
+                                    <input type="text" value="${curCat}" onchange="window.renameCategoryGroup('${curCat.replace(/'/g, "\\'")}', this.value)" class="bg-transparent font-black text-slate-800 text-[10px] uppercase border-none outline-none focus:bg-white focus:px-1 rounded cursor-pointer" title="Click to rename category across all rooms">
+                                </span>
+                                <span class="text-[9px] font-bold text-slate-600">${catCount} Rooms • ${catUnits} Units</span>
+                            </div>
+                        </td>
+                    </tr>`;
+                    lastCat = curCat;
+                }
+
+                const isNewHighlight = item.isNew ? 'bg-amber-50/80 border-l-4 border-l-amber-500' : 'hover:bg-slate-50';
+
+                html += `
+                <tr class="${isNewHighlight} transition-colors">
+                    <td class="p-1.5">
+                        <div class="flex items-center gap-1">
+                            <input type="text" value="${item.roomName || ''}" onchange="window.updateRoomDef(${idx}, 'roomName', this.value)" class="table-input font-black text-slate-900" placeholder="Room Name">
+                            ${item.isNew ? '<span class="px-1 py-0.2 rounded text-[8px] font-black uppercase bg-amber-200 text-amber-900 shadow-2xs">NEW</span>' : ''}
+                        </div>
+                    </td>
+                    <td class="p-1.5">
+                        <input type="text" value="${item.category || ''}" onchange="window.updateRoomDef(${idx}, 'category', this.value)" class="table-input font-bold text-slate-800" placeholder="Category">
+                    </td>
+                    <td class="p-1.5 text-center">
+                        <input type="number" min="1" max="60" value="${item.units || 1}" onchange="window.updateRoomDef(${idx}, 'units', this.value)" class="table-input font-black text-center !w-16">
+                    </td>
+                    <td class="p-1.5">
+                        <input type="text" value="${item.floor || '1'}" onchange="window.updateRoomDef(${idx}, 'floor', this.value)" class="table-input font-bold text-slate-600" placeholder="Floor">
+                    </td>
+                    <td class="p-1.5">
+                        <select onchange="window.updateRoomDef(${idx}, 'bunkRule', this.value)" class="table-input font-bold text-slate-800">
+                            <option value="odd-top" ${item.bunkRule === 'odd-top' ? 'selected' : ''}>DORM (Top # Odd)</option>
+                            <option value="even-top" ${item.bunkRule === 'even-top' ? 'selected' : ''}>DORM (Top # Even)</option>
+                            <option value="single" ${item.bunkRule === 'single' ? 'selected' : ''}>DORM (Single Beds)</option>
+                            <option value="private" ${item.bunkRule === 'private' ? 'selected' : ''}>Private Room</option>
+                        </select>
+                    </td>
+                    <td class="p-1.5 text-center">
+                        <button onclick="window.confirmRemoveRoomDef(${idx})" class="text-slate-400 hover:text-red-600 transition-colors cursor-pointer p-0.5" title="Delete Room">
+                            <i data-lucide="trash-2" size="13"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            });
+
+            body.innerHTML = html;
+            window.renderBedPreviewDrawer();
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.renameCategoryGroup = (oldCat, newCat) => {
+            const clean = (newCat || '').trim();
+            if (!clean || clean === oldCat) return;
+            window.roomDefinitions.forEach(r => {
+                if ((r.category || '').trim() === oldCat) {
+                    r.category = clean;
+                }
+            });
+            window.renderRoomDefTable();
+            window.populateAnchorDropdowns();
+            window.renderRoomMappingTable();
+            window.renderGroupedRatePlans();
+        };
+
+        // ALL BEDS: STACKED VERTICAL PAIRS (Bunk bed representation, horizontally wrapping)
+        window.renderBedPreviewDrawer = () => {
+            const container = document.getElementById('bed-preview-groups');
+            if (!container) return;
+
+            const roomGroups = {};
+            window.roomDefinitions.forEach(def => {
+                roomGroups[def.roomName] = {
+                    roomName: def.roomName,
+                    category: def.category,
+                    floor: def.floor,
+                    bunkRule: def.bunkRule || 'odd-top',
+                    beds: []
+                };
+            });
+
+            window.compiledRooms.forEach(bed => {
+                const parentKey = bed.parentRoom || window.roomDefinitions[0]?.roomName || 'General';
+                if (!roomGroups[parentKey]) {
+                    roomGroups[parentKey] = { roomName: parentKey, category: bed.type, floor: bed.floor, bunkRule: 'odd-top', beds: [] };
+                }
+                roomGroups[parentKey].beds.push(bed);
+            });
+
+            container.innerHTML = Object.values(roomGroups).map(g => {
+                const isDorm = g.bunkRule !== 'private';
+                let pairsHtml = '';
+
+                if (!isDorm) {
+                    pairsHtml = g.beds.map(b => `
+                        <div class="flex flex-col border border-slate-300 rounded bg-white p-1 w-24 text-center shadow-2xs">
+                            <span class="text-[9px] font-mono font-black text-slate-800 py-1 bg-indigo-50 border border-indigo-200 rounded">${b.name}</span>
+                            <span class="text-[8px] font-black uppercase text-slate-500 mt-1">Private Unit</span>
+                        </div>
+                    `).join('');
+                } else if (g.bunkRule === 'single') {
+                    pairsHtml = g.beds.map(b => `
+                        <div class="flex flex-col border border-slate-300 rounded bg-white p-1 w-20 text-center shadow-2xs">
+                            <span class="text-[9px] font-mono font-black text-slate-800 py-1 bg-emerald-50 border border-emerald-200 rounded">${b.name}</span>
+                            <span class="text-[8px] font-black uppercase text-emerald-700 mt-1">Single Bed</span>
+                        </div>
+                    `).join('');
+                } else {
+                    // Vertical pairs: Odd Top & Even Bottom (or reversed)
+                    const pairs = [];
+                    for (let i = 0; i < g.beds.length; i += 2) {
+                        pairs.push({
+                            top: g.beds[i],
+                            btm: g.beds[i + 1] || null
+                        });
+                    }
+
+                    pairsHtml = pairs.map((pair, pIdx) => `
+                        <div class="flex flex-col border border-slate-300 rounded bg-white p-1 w-24 text-center shadow-2xs">
+                            <span class="text-[8px] font-black uppercase text-slate-400 mb-0.5">Bunk ${pIdx + 1}</span>
+                            ${pair.top ? `<span class="text-[9px] font-mono font-black bg-amber-100 text-amber-900 border border-amber-300 rounded py-0.5 px-1">${pair.top.name} <span class="text-[7.5px] font-sans font-bold">TOP</span></span>` : ''}
+                            ${pair.btm ? `<span class="text-[9px] font-mono font-black bg-emerald-100 text-emerald-900 border border-emerald-300 rounded py-0.5 px-1 mt-1">${pair.btm.name} <span class="text-[7.5px] font-sans font-bold">BTM</span></span>` : '<span class="text-[8px] text-slate-300 italic mt-1">--</span>'}
+                        </div>
+                    `).join('');
+                }
+
+                return `
+                <div class="bg-white p-2 rounded border border-slate-200 shadow-2xs">
+                    <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-slate-100">
+                        <span class="font-black text-slate-800 text-[10px] uppercase flex items-center gap-1.5">
+                            <i data-lucide="door-open" size="12" class="text-indigo-600"></i> ${g.roomName} 
+                            <span class="text-slate-400 font-bold">(${g.category} • Floor ${g.floor})</span>
+                        </span>
+                        <span class="text-[9px] font-black text-slate-500">${g.beds.length} Bed(s)</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        ${pairsHtml}
+                    </div>
+                </div>`;
+            }).join('');
+
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        // STEP 3A: ROOM TYPE MAPPING TABLE
+        window.renderRoomMappingTable = () => {
+            const container = document.getElementById('room-mapping-container');
+            const countBadge = document.getElementById('room-map-count-badge');
+            if (!container) return;
+
+            const pmsCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category))).filter(Boolean);
+
+            if (window.channexMap.length === 0) {
+                container.innerHTML = `<div class="p-3 text-center text-slate-400 font-semibold italic text-[10px]">No Channex room types loaded. Enter credentials and click "Fetch Channex Data" above.</div>`;
+                if (countBadge) countBadge.textContent = "0 Rooms Mapped";
+                return;
+            }
+
+            if (countBadge) countBadge.textContent = `${window.channexMap.length} Rooms Mapped`;
+
+            container.innerHTML = `
+                <table class="w-full text-left text-[11px] border-collapse border border-blue-200 rounded bg-white">
+                    <thead class="bg-blue-50 text-[9px] font-black uppercase text-blue-900 border-b border-blue-200">
+                        <tr>
+                            <th class="p-1.5 w-1/2">Channex Room Type Title</th>
+                            <th class="p-1.5 w-1/2">Connected PMS Room Category</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 font-semibold">
+                        ${window.channexMap.map((mapItem, idx) => {
+                            const pmsOptions = pmsCategories.map(cat => 
+                                `<option value="${cat}" ${cat.toUpperCase() === (mapItem.pmsCategory || '').toUpperCase() ? 'selected' : ''}>${cat}</option>`
+                            ).join('');
+
+                            return `
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="p-1.5">
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-slate-800">${mapItem.channexTitle || 'Room Type'}</span>
+                                        <span class="text-[9px] font-mono text-slate-400">ID: ...${(mapItem.channexId || '').slice(-8)}</span>
+                                    </div>
+                                </td>
+                                <td class="p-1.5">
+                                    <select onchange="window.updateRoomMappingCategory(${idx}, this.value)" class="table-input font-bold text-indigo-900 bg-indigo-50/50">
+                                        <option value="">-- Select PMS Category --</option>
+                                        ${pmsOptions}
+                                    </select>
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.updateRoomMappingCategory = (mapIdx, selectedPmsCat) => {
+            if (window.channexMap[mapIdx]) {
+                const targetChannexId = window.channexMap[mapIdx].channexId;
+                window.channexMap[mapIdx].pmsCategory = selectedPmsCat;
+
+                // Sync child rate plans belonging to this Channex room
+                (window.channexRateMap || []).forEach(rp => {
+                    if (rp.roomTypeId === targetChannexId) {
+                        rp.pmsCategory = selectedPmsCat;
+                    }
+                });
+
+                window.renderGroupedRatePlans();
+            }
+        };
+
+        // STEP 3B: GROUPED RATE PLANS (STRICTLY BY ROOM CATEGORY, CLEAN CHANNELS)
+        window.renderGroupedRatePlans = () => {
+            const container = document.getElementById('grouped-rate-mapping-container');
+            const rateBadge = document.getElementById('rate-count-badge');
+            if (!container) return;
+
+            const pmsCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category))).filter(Boolean);
+            const isEventsEnabled = document.getElementById('toggle-events')?.checked;
+
+            if (rateBadge) rateBadge.textContent = `${window.channexRateMap.length} Plans`;
+
+            if (pmsCategories.length === 0) {
+                container.innerHTML = `<div class="p-6 text-center text-slate-400 font-semibold italic">No room categories exist. Add rooms in Step 2 first.</div>`;
+                return;
+            }
+
+            let html = pmsCategories.map(cat => {
+                const roomMapping = (window.channexMap || []).find(m => (m.pmsCategory || '').toUpperCase() === cat.toUpperCase());
+                const channexRoomId = roomMapping?.channexId || '';
+
+                const childPlans = (window.channexRateMap || []).filter(r => 
+                    (channexRoomId && r.roomTypeId === channexRoomId) || 
+                    ((r.pmsCategory || '').toUpperCase() === cat.toUpperCase() && (!r.roomTypeId || r.roomTypeId === channexRoomId))
+                );
+
+                const planRowsHtml = childPlans.length === 0 
+                    ? `<tr><td colspan="3" class="p-2 text-center text-slate-400 italic text-[10px]">No active rate plans linked. Click "Fetch Channex Data" above or pair room types in Section 1.</td></tr>`
+                    : childPlans.map(r => {
+                        const globalIdx = window.channexRateMap.findIndex(x => x.ratePlanId === r.ratePlanId);
+                        const isEvt = r.product === 'evt';
+                        const curChan = (r.channel === 'Default' || !r.channel) ? 'Direct / Website' : r.channel;
+
+                        return `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-1.5">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-bold text-slate-900 text-[11px]">${r.ratePlanTitle}</span>
+                                    ${isEventsEnabled ? `
+                                    <button onclick="window.toggleRatePlanProduct(${globalIdx})" class="px-1.5 py-0.2 rounded text-[8px] font-black uppercase cursor-pointer border ${isEvt ? 'bg-pink-100 text-pink-800 border-pink-300' : 'bg-slate-100 text-slate-600 border-slate-200'}" title="Toggle between Standard and Event Package">
+                                        ${isEvt ? '⚡ Event PKG' : 'STD Rate'}
+                                    </button>` : ''}
+                                </div>
+                                <span class="text-[9px] font-mono text-slate-400">ID: ...${(r.ratePlanId || '').slice(-8)}</span>
+                            </td>
+
+                            <td class="p-1.5 w-48">
+                                <select onchange="window.updateRateMapPlan(${globalIdx}, 'channel', this.value)" class="table-input font-bold text-slate-800">
+                                    <option value="Direct / Website" ${curChan === 'Direct / Website' ? 'selected' : ''}>Direct / Website</option>
+                                    <option value="Booking.com" ${curChan === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
+                                    <option value="Hostelworld" ${curChan === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
+                                    <option value="Agoda" ${curChan === 'Agoda' ? 'selected' : ''}>Agoda</option>
+                                    <option value="Expedia" ${curChan === 'Expedia' ? 'selected' : ''}>Expedia</option>
+                                    <option value="Airbnb" ${curChan === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
+                                </select>
+                            </td>
+
+                            <td class="p-1.5 w-44">
+                                <select onchange="window.updateRateMapPlan(${globalIdx}, 'policy', this.value)" class="table-input font-bold ${r.policy === 'ref' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'text-slate-800'}">
+                                    <option value="non-ref" ${r.policy === 'non-ref' ? 'selected' : ''}>Non-Refundable</option>
+                                    <option value="ref" ${r.policy === 'ref' ? 'selected' : ''}>Refundable (+%)</option>
+                                </select>
+                            </td>
+                        </tr>`;
+                    }).join('');
+
+                return `
+                <div class="border border-amber-200 rounded-lg p-2.5 bg-white shadow-2xs">
+                    <div class="flex items-center justify-between border-b border-amber-100 pb-1.5 mb-2">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-5 h-5 rounded bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-[10px]">
+                                <i data-lucide="door-open" size="12"></i>
+                            </span>
+                            <span class="font-black text-slate-800 text-xs">${cat}</span>
+                            <span class="text-[9px] font-mono text-slate-400">(${channexRoomId ? 'Channex ID: ...' + channexRoomId.slice(-8) : 'Not linked to Channex room'})</span>
+                        </div>
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${childPlans.length > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                            ${childPlans.length} Plans
+                        </span>
+                    </div>
+
+                    <div class="overflow-x-auto border border-slate-200 rounded">
+                        <table class="w-full text-left text-[11px] border-collapse">
+                            <thead class="bg-slate-100 text-[9px] font-black uppercase text-slate-600 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-1.5">Rate Plan Name</th>
+                                    <th class="p-1.5 w-48">Sales Channel</th>
+                                    <th class="p-1.5 w-44">Cancellation Policy</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                ${planRowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+            }).join('');
+
+            container.innerHTML = html;
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.updateRateMapPlan = (globalIdx, field, value) => {
+            if (window.channexRateMap[globalIdx]) {
+                window.channexRateMap[globalIdx][field] = value;
+                if (field === 'channel' && value === 'Direct / Website') {
+                    window.channexRateMap[globalIdx].channel = 'Default';
+                }
+            }
+        };
+
+        window.toggleRatePlanProduct = (globalIdx) => {
+            if (window.channexRateMap[globalIdx]) {
+                const cur = window.channexRateMap[globalIdx].product;
+                const next = cur === 'evt' ? 'std' : 'evt';
+                window.channexRateMap[globalIdx].product = next;
+                window.channexRateMap[globalIdx].rateSource = next;
+                window.renderGroupedRatePlans();
+            }
+        };
+
+        // Live Channex API Query
+        window.fetchChannexData = async () => {
+            const apiKey = document.getElementById('chan-api-key').value.trim();
+            const propId = document.getElementById('chan-prop-id').value.trim();
+            if (!apiKey || !propId) {
+                return window.customAlert("Missing Credentials", "Please enter both Channex API Key and Property ID.");
+            }
+
+            window.customAlert("Connecting", "Querying Channex API for active rooms and rate plans...");
+            try {
+                // 1. Fetch Room Types
+                const roomRes = await fetch(`https://app.channex.io/api/v1/room_types?filter[property_id]=${propId}`, {
+                    headers: { "user-api-key": apiKey, "Content-Type": "application/json" }
+                });
+                if (!roomRes.ok) throw new Error("Channex room fetch failed: " + roomRes.statusText);
+                const roomJson = await roomRes.json();
+                const chRooms = roomJson.data || [];
+
+                // 2. Fetch Rate Plans Options Endpoint
+                const rateRes = await fetch(`https://app.channex.io/api/v1/rate_plans/options?filter[property_id]=${propId}`, {
+                    headers: { "user-api-key": apiKey, "Content-Type": "application/json" }
+                });
+                if (!rateRes.ok) throw new Error("Channex rate plan fetch failed: " + rateRes.statusText);
+                const rateJson = await rateRes.json();
+                const chPlans = rateJson.data || [];
+
+                // 3. Map Channex rooms directly to PMS categories
+                const categories = Array.from(new Set(window.roomDefinitions.map(r => r.category))).filter(Boolean);
+                window.channexMap = chRooms.map(cr => {
+                    const title = cr.attributes?.title || '';
+                    const cleanCh = title.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    
+                    let matchedPms = categories.find(cat => {
+                        const cleanPms = cat.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        return cleanPms === cleanCh || cleanPms.includes(cleanCh) || cleanCh.includes(cleanPms);
+                    }) || '';
+
+                    return {
+                        channexId: cr.id,
+                        channexTitle: title,
+                        pmsCategory: matchedPms
+                    };
+                });
+
+                // 4. Map Rate Plans cleanly to their Parent Room Category via parentRoomId
+                const roomNameMap = {};
+                chRooms.forEach(r => { roomNameMap[r.id] = r.attributes?.title || ''; });
+
+                window.channexRateMap = chPlans.map(p => {
+                    const title = p.attributes?.title || '';
+                    const parentRoomId = p.attributes?.room_type_id || p.relationships?.room_type?.data?.id || '';
+                    const parentRoomName = roomNameMap[parentRoomId] || '';
+                    const mappedRule = window.channexMap.find(m => m.channexId === parentRoomId);
+                    
+                    const isBdc = /bdc|booking/i.test(title);
+                    const isRef = /ref|refundable|flexible/i.test(title) && !/non-?ref/i.test(title);
+                    const isEvt = /evt|fmp|party|pkg/i.test(title);
+
+                    return {
+                        ratePlanId: p.id,
+                        ratePlanTitle: title,
+                        roomTypeId: parentRoomId,
+                        channexRoomTitle: parentRoomName,
+                        pmsCategory: mappedRule ? mappedRule.pmsCategory : '',
+                        channel: isBdc ? 'Booking.com' : 'Default',
+                        policy: isRef ? 'ref' : 'non-ref',
+                        product: isEvt ? 'evt' : 'std',
+                        rateSource: isEvt ? 'evt' : 'std'
+                    };
+                });
+
+                const connBadge = document.getElementById('channex-conn-badge');
+                connBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Connected';
+                connBadge.className = 'flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200';
+
+                window.renderRoomMappingTable();
+                window.renderGroupedRatePlans();
+                window.customAlert("Success", `Connected! Retrieved ${chRooms.length} room types and ${chPlans.length} primary rate plans from Channex.`);
+            } catch (err) {
+                window.customAlert("Connection Error", err.message);
+            }
+        };
+
+        // Channex Programmatic Provisioner
+        window.provisionRoomsAndRatesToChannex = async () => {
+            const apiKey = document.getElementById('chan-api-key').value.trim();
+            const propId = document.getElementById('chan-prop-id').value.trim();
+            if (!apiKey || !propId) {
+                return window.customAlert("Missing Credentials", "Enter Channex API Key and Property ID before provisioning.");
+            }
+
+            const categories = Array.from(new Set(window.roomDefinitions.map(r => r.category))).filter(Boolean);
+            if (categories.length === 0) {
+                return window.customAlert("Inventory Empty", "Add rooms in Step 2 first.");
+            }
+
+            const confirmProvision = await window.customAlert(
+                "Provision to Channex", 
+                `This will call Channex API and automatically create ${categories.length} Room Types and 4 standard rate plans per room in your Channex account.\n\nProceed?`, 
+                true
+            );
+            if (!confirmProvision) return;
+
+            window.customAlert("Provisioning", "Creating room types and standard rate plans in Channex...");
+            try {
+                const newChannexMap = [];
+                const newChannexRateMap = [];
+
+                for (const cat of categories) {
+                    const isDorm = cat.toLowerCase().includes('dorm');
+                    const spaces = isDorm ? 10 : 2;
+
+                    const rtRes = await fetch("https://app.channex.io/api/v1/room_types", {
+                        method: "POST",
+                        headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            room_type: {
+                                property_id: propId,
+                                title: cat,
+                                adult_spaces: spaces,
+                                child_spaces: 0
+                            }
+                        })
+                    });
+                    if (!rtRes.ok) throw new Error(`Failed to create room ${cat}: ${rtRes.statusText}`);
+                    const rtJson = await rtRes.json();
+                    const newRoomId = rtJson.data?.id;
+
+                    newChannexMap.push({
+                        channexId: newRoomId,
+                        channexTitle: cat,
+                        pmsCategory: cat
+                    });
+
+                    const plansToCreate = [
+                        { title: `Non-Refundable Rate`, channel: 'Default', policy: 'non-ref' },
+                        { title: `Refundable Rate`, channel: 'Default', policy: 'ref' },
+                        { title: `BDC Non-Refundable Rate`, channel: 'Booking.com', policy: 'non-ref' },
+                        { title: `BDC Refundable Rate`, channel: 'Booking.com', policy: 'ref' }
+                    ];
+
+                    for (const planConf of plansToCreate) {
+                        const rpRes = await fetch("https://app.channex.io/api/v1/rate_plans", {
+                            method: "POST",
+                            headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                rate_plan: {
+                                    property_id: propId,
+                                    room_type_id: newRoomId,
+                                    title: planConf.title,
+                                    options: [{ occupancy: 1, rate: 100 }]
+                                }
+                            })
+                        });
+                        if (rpRes.ok) {
+                            const rpJson = await rpRes.json();
+                            newChannexRateMap.push({
+                                ratePlanId: rpJson.data?.id,
+                                ratePlanTitle: planConf.title,
+                                roomTypeId: newRoomId,
+                                channexRoomTitle: cat,
+                                pmsCategory: cat,
+                                channel: planConf.channel,
+                                policy: planConf.policy,
+                                product: 'std',
+                                rateSource: 'std'
+                            });
+                        }
+                    }
+                }
+
+                window.channexMap = newChannexMap;
+                window.channexRateMap = newChannexRateMap;
+                window.renderRoomMappingTable();
+                window.renderGroupedRatePlans();
+                window.customAlert("Provisioning Complete", `Successfully created ${categories.length} rooms and ${newChannexRateMap.length} rate plans directly in Channex!`);
+            } catch (err) {
+                console.error("Provisioning error:", err);
+                window.customAlert("Provisioning Error", err.message);
+            }
+        };
+
+        // STEP 4: PRICING RULES & RELATIONAL ENGINE
+        window.populateAnchorDropdowns = () => {
+            const categories = Array.from(new Set(window.roomDefinitions.map(i => i.category))).filter(Boolean);
+            const dormCats = Array.from(new Set(window.roomDefinitions.filter(i => (i.category || '').toLowerCase().includes('dorm')).map(i => i.category)));
+            const privCats = Array.from(new Set(window.roomDefinitions.filter(i => !(i.category || '').toLowerCase().includes('dorm')).map(i => i.category)));
+
+            const dormSel = document.getElementById('anchor-dorm-select');
+            const privSel = document.getElementById('anchor-private-select');
+
+            const dormPool = dormCats.length > 0 ? dormCats : categories;
+            const privPool = privCats.length > 0 ? privCats : categories;
+
+            if (dormSel) dormSel.innerHTML = dormPool.map(c => `<option value="${c}">${c}</option>`).join('');
+            if (privSel) privSel.innerHTML = privPool.map(c => `<option value="${c}">${c}</option>`).join('');
+        };
+
+        // Relational Linking: Includes BOTH STD Rule and EVT Rule!
+        window.renderRelationships = () => {
+            const tbody = document.getElementById('relationships-table-body');
+            if (!tbody) return;
+
+            const categories = Array.from(new Set(window.roomDefinitions.map(i => i.category))).filter(Boolean);
+            const isEvtOn = document.getElementById('toggle-events')?.checked;
+
+            document.querySelectorAll('.evt-col-header').forEach(el => {
+                el.style.display = isEvtOn ? 'table-cell' : 'none';
+            });
+
+            if (window.relationships.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-slate-400 font-semibold italic">No room offset links configured. Click "+ Add Pricing Link Rule".</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = window.relationships.map((rel, idx) => {
+                const anchorOpts = categories.map(c => `<option value="${c}" ${c === rel.anchor ? 'selected' : ''}>${c}</option>`).join('');
+                const targetOpts = categories.map(c => `<option value="${c}" ${c === rel.target ? 'selected' : ''}>${c}</option>`).join('');
+
+                return `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-1">
+                        <select onchange="window.relationships[${idx}].anchor = this.value" class="table-input font-bold text-slate-800">
+                            ${anchorOpts}
+                        </select>
+                    </td>
+                    <td class="p-1">
+                        <select onchange="window.relationships[${idx}].target = this.value" class="table-input font-bold text-indigo-900 bg-indigo-50/50">
+                            ${targetOpts}
+                        </select>
+                    </td>
+                    <!-- Standard Rule -->
+                    <td class="p-1">
+                        <div class="flex items-center gap-1">
+                            <select onchange="window.relationships[${idx}].type = this.value" class="table-input !w-20 font-bold text-center">
+                                <option value="=" ${rel.type === '=' ? 'selected' : ''}>SYNC (=)</option>
+                                <option value="+%" ${rel.type === '+%' ? 'selected' : ''}>+ %</option>
+                                <option value="-%" ${rel.type === '-%' ? 'selected' : ''}>- %</option>
+                                <option value="+" ${rel.type === '+' ? 'selected' : ''}>+ ฿</option>
+                                <option value="-" ${rel.type === '-' ? 'selected' : ''}>- ฿</option>
+                            </select>
+                            <input type="number" value="${rel.val !== undefined ? rel.val : 0}" onchange="window.relationships[${idx}].val = parseFloat(this.value) || 0" class="table-input font-black text-center !w-16">
+                        </div>
+                    </td>
+                    <!-- Event Rule (Shown when Event Pricing is active) -->
+                    <td class="p-1 ${isEvtOn ? '' : 'hidden'} evt-rule-cell">
+                        <div class="flex items-center gap-1 bg-pink-50 p-0.5 rounded border border-pink-200">
+                            <select onchange="window.relationships[${idx}].typeFmp = this.value" class="table-input !w-20 font-black text-pink-700 text-center">
+                                <option value="=" ${rel.typeFmp === '=' ? 'selected' : ''}>SYNC (=)</option>
+                                <option value="+%" ${rel.typeFmp === '+%' ? 'selected' : ''}>+ %</option>
+                                <option value="-%" ${rel.typeFmp === '-%' ? 'selected' : ''}>- %</option>
+                                <option value="+" ${rel.typeFmp === '+' ? 'selected' : ''}>+ ฿</option>
+                                <option value="-" ${rel.typeFmp === '-' ? 'selected' : ''}>- ฿</option>
+                            </select>
+                            <input type="number" value="${rel.valFmp !== undefined ? rel.valFmp : 0}" onchange="window.relationships[${idx}].valFmp = parseFloat(this.value) || 0" class="table-input font-black text-center !w-16 text-pink-800">
+                        </div>
+                    </td>
+                    <td class="p-1 text-center">
+                        <button onclick="window.confirmRemoveRelationship(${idx})" class="text-slate-400 hover:text-red-600 transition-colors cursor-pointer p-0.5" title="Delete">
+                            <i data-lucide="trash-2" size="13"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.addRelationshipRow = () => {
+            const categories = Array.from(new Set(window.roomDefinitions.map(i => i.category))).filter(Boolean);
+            window.relationships.push({
+                anchor: categories[0] || 'Anchor Room',
+                target: categories[1] || categories[0] || '',
+                type: '=',
+                val: 0,
+                typeFmp: '=',
+                valFmp: 0
+            });
+            window.renderRelationships();
+        };
+
+        window.confirmRemoveRelationship = async (idx) => {
+            const confirmed = await window.customAlert("Delete Pricing Link", "Remove this room pricing link rule?", true);
+            if (confirmed) {
+                window.relationships.splice(idx, 1);
+                window.renderRelationships();
+            }
+        };
+
+        // Universal Channels with Standardized "Direct / Website" and Confirmed Delete
+        window.renderChannelRules = () => {
+            const container = document.getElementById('channel-rules-container');
+            if (!container) return;
+
+            container.innerHTML = window.channelRules.map((rule, idx) => {
+                const isDirect = rule.channel === 'Direct / Website';
+                return `
+                <div class="flex items-center justify-between p-1.5 rounded border border-slate-200 bg-white">
+                    <span class="font-bold text-slate-800 text-xs">${rule.channel}</span>
+                    <div class="flex items-center gap-1">
+                        <select onchange="window.channelRules[${idx}].type = this.value" class="table-input !w-20 font-bold text-center !py-0.5">
+                            <option value="=" ${rule.type === '=' ? 'selected' : ''}>SYNC (=)</option>
+                            <option value="+%" ${rule.type === '+%' ? 'selected' : ''}>+ %</option>
+                            <option value="-%" ${rule.type === '-%' ? 'selected' : ''}>- %</option>
+                            <option value="+" ${rule.type === '+' ? 'selected' : ''}>+ ฿</option>
+                            <option value="-" ${rule.type === '-' ? 'selected' : ''}>- ฿</option>
+                        </select>
+                        <input type="number" value="${rule.val || 0}" onchange="window.channelRules[${idx}].val = parseFloat(this.value) || 0" class="table-input !w-16 !py-0.5 text-center font-black">
+                        ${!isDirect ? `
+                        <button onclick="window.confirmRemoveChannelRule(${idx})" class="text-slate-400 hover:text-red-600 cursor-pointer p-0.5 ml-1" title="Delete">
+                            <i data-lucide="trash-2" size="13"></i>
+                        </button>` : '<span class="w-4"></span>'}
+                    </div>
+                </div>`;
+            }).join('');
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.addVerifiedChannelRule = () => {
+            const used = window.channelRules.map(r => r.channel);
+            const verified = ['Booking.com', 'Hostelworld', 'Agoda', 'Expedia', 'Airbnb', 'Trip.com'];
+            const available = verified.find(ch => !used.includes(ch)) || 'Trip.com';
+            window.channelRules.push({ id: `cr_${Date.now()}`, channel: available, type: '+%', val: 10 });
+            window.renderChannelRules();
+        };
+
+        window.confirmRemoveChannelRule = async (idx) => {
+            const rule = window.channelRules[idx];
+            const confirmed = await window.customAlert("Delete Channel Rule", `Remove rule adjustment for "${rule.channel}"?`, true);
+            if (confirmed) {
+                window.channelRules.splice(idx, 1);
+                window.renderChannelRules();
+            }
+        };
+
+        window.toggleEventSettings = (enabled) => {
+            document.getElementById('evt-ref-row').style.display = enabled ? 'block' : 'none';
+            document.getElementById('event-curve-panel').classList.toggle('hidden', !enabled);
+            window.renderRelationships();
+        };
+
+        // DYNAMIC EVENT CURVES (INDEPENDENT MULTI-STATE SPAN PILLS FOR RATES VS RESTRICTIONS!)
+        const SPAN_CYCLE = [2, 4, 6, 7];
+
+        window.cycleRatesSpan = () => {
+            const curIdx = SPAN_CYCLE.indexOf(window.ratesSpan);
+            window.ratesSpan = SPAN_CYCLE[(curIdx + 1) % SPAN_CYCLE.length];
+            const pill = document.getElementById('rates-span-pill');
+            if (pill) pill.textContent = `±${window.ratesSpan} Days`;
+            window.renderEventPriceTable();
+        };
+
+        window.cycleRestrSpan = () => {
+            const curIdx = SPAN_CYCLE.indexOf(window.restrSpan);
+            window.restrSpan = SPAN_CYCLE[(curIdx + 1) % SPAN_CYCLE.length];
+            const pill = document.getElementById('restr-span-pill');
+            if (pill) pill.textContent = `±${window.restrSpan} Days`;
+            window.renderEventRestrTable();
+        };
+
+        window.renderEventCurveTables = (customBaselines = null) => {
+            if (customBaselines) window.savedEventBaselines = customBaselines;
+            window.renderEventPriceTable();
+            window.renderEventRestrTable();
+        };
+
+        // 1. Separate Price Table Renderer
+        window.renderEventPriceTable = () => {
+            const b = window.savedEventBaselines || {};
+            const pThead = document.getElementById('event-price-thead');
+            const pTbody = document.getElementById('event-price-tbody');
+            const spanPill = document.getElementById('rates-span-pill');
+            if (spanPill) spanPill.textContent = `±${window.ratesSpan} Days`;
+            if (!pThead || !pTbody) return;
+
+            const span = window.ratesSpan || 2;
+            const offsets = [];
+            for (let i = -span; i <= span; i++) offsets.push(i);
+
+            pThead.innerHTML = `
+                <tr class="text-[9px] font-black uppercase text-slate-500 border-b border-pink-200">
+                    <th class="p-1 text-left w-24">Segment</th>
+                    <th class="p-1">Std Base</th>
+                    <th class="p-1 text-pink-700">EVT Pkg</th>
+                    ${offsets.map(off => off === 0 
+                        ? `<th class="p-1 text-amber-700 font-black">Peak (0)</th>` 
+                        : `<th class="p-1">EVT ${off > 0 ? '+' + off : off}</th>`).join('')}
+                </tr>
+            `;
+
+            const getPPrice = (off, pfx) => {
+                const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+                const defVal = off === 0 ? (pfx === 'p' ? 5999 : 2499) : (pfx === 'p' ? 1099 : 299);
+                return b[`${pfx}_${tag}`] !== undefined ? b[`${pfx}_${tag}`] : defVal;
+            };
+
+            pTbody.innerHTML = `
+                <tr>
+                    <td class="p-1 font-bold text-indigo-900 text-left">Privates</td>
+                    <td class="p-1"><input type="number" id="base-p-std" class="table-input !py-0.5 text-center !w-14" value="${b.p_base || 899}"></td>
+                    <td class="p-1"><input type="number" id="base-p-pkg" class="table-input !py-0.5 text-center !w-14 text-pink-700" value="${b.p_pkg || 1000}"></td>
+                    ${offsets.map(off => `<td class="p-1"><input type="number" id="base-p-${off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off)}" class="table-input !py-0.5 text-center !w-14 ${off === 0 ? 'font-black text-amber-800 bg-amber-50 border-amber-300' : ''}" value="${getPPrice(off, 'p')}"></td>`).join('')}
+                </tr>
+                <tr>
+                    <td class="p-1 font-bold text-orange-900 text-left">Dorms</td>
+                    <td class="p-1"><input type="number" id="base-d-std" class="table-input !py-0.5 text-center !w-14" value="${b.d_base || 199}"></td>
+                    <td class="p-1"><input type="number" id="base-d-pkg" class="table-input !py-0.5 text-center !w-14 text-pink-700" value="${b.d_pkg || 200}"></td>
+                    ${offsets.map(off => `<td class="p-1"><input type="number" id="base-d-${off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off)}" class="table-input !py-0.5 text-center !w-14 ${off === 0 ? 'font-black text-amber-800 bg-amber-50 border-amber-300' : ''}" value="${getPPrice(off, 'd')}"></td>`).join('')}
+                </tr>
+            `;
+        };
+
+        // 2. Separate Restrictions Table Renderer
+        window.renderEventRestrTable = () => {
+            const b = window.savedEventBaselines || {};
+            const rThead = document.getElementById('event-restr-thead');
+            const rTbody = document.getElementById('event-restr-tbody');
+            const spanPill = document.getElementById('restr-span-pill');
+            if (spanPill) spanPill.textContent = `±${window.restrSpan} Days`;
+            if (!rThead || !rTbody) return;
+
+            const span = window.restrSpan || 6;
+            const offsets = [];
+            for (let i = -span; i <= span; i++) offsets.push(i);
+
+            rThead.innerHTML = `
+                <tr class="text-[9px] font-black uppercase text-slate-500 border-b border-pink-200">
+                    <th class="p-1 text-left w-36">Restriction Rule</th>
+                    ${offsets.map(off => off === 0 
+                        ? `<th class="p-1 text-amber-700 font-black">Peak (0)</th>` 
+                        : `<th class="p-1">EVT ${off > 0 ? '+' + off : off}</th>`).join('')}
+                </tr>
+            `;
+
+            const getHybridVal = (prefix, off, defVal = "") => {
+                const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+                const through = b[`${prefix}_${tag}`];
+                const arr = b[`${prefix}arr_${tag}`];
+                const formatted = window.toHybridDisplay(through, arr);
+                return formatted || defVal;
+            };
+
+            const getBoolVal = (prefix, off) => {
+                const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+                return !!b[`${prefix}_${tag}`];
+            };
+
+            rTbody.innerHTML = `
+                <tr>
+                    <td class="p-1 text-left font-bold text-slate-700">Min Stay / Arrival</td>
+                    ${offsets.map(off => {
+                        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+                        const defVal = off === 0 ? '3▸' : (Math.abs(off) <= 1 ? '2' : '');
+                        return `<td class="p-1"><input type="text" id="restr-min-${tag}" onblur="this.value = window.formatHybridStayInput(this.value)" class="table-input !py-0.5 text-center !w-14 font-black ${off === 0 ? 'text-amber-800 bg-amber-50' : ''}" value="${getHybridVal('r_min', off, defVal)}"></td>`;
+                    }).join('')}
+                </tr>
+                <tr>
+                    <td class="p-1 text-left font-bold text-slate-700">Max Stay / Arrival</td>
+                    ${offsets.map(off => {
+                        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+                        return `<td class="p-1"><input type="text" id="restr-max-${tag}" onblur="this.value = window.formatHybridStayInput(this.value)" class="table-input !py-0.5 text-center !w-14 font-bold text-slate-500" placeholder="-" value="${getHybridVal('r_max', off, '')}"></td>`;
+                    }).join('')}
+                </tr>
+                <tr>
+                    <td class="p-1 text-left font-bold text-slate-700">Closed to Arrival (CTA)</td>
+                    ${offsets.map(off => {
+                        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+                        return `<td class="p-1"><input type="checkbox" id="restr-cta-${tag}" ${getBoolVal('r_cta', off) ? 'checked' : ''} class="accent-indigo-600 cursor-pointer"></td>`;
+                    }).join('')}
+                </tr>
+                <tr>
+                    <td class="p-1 text-left font-bold text-slate-700">Closed to Departure (CTD)</td>
+                    ${offsets.map(off => {
+                        const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+                        return `<td class="p-1"><input type="checkbox" id="restr-ctd-${tag}" ${getBoolVal('r_ctd', off) ? 'checked' : ''} class="accent-indigo-600 cursor-pointer"></td>`;
+                    }).join('')}
+                </tr>
+            `;
+        };
+
+        // STEP 5: REVIEW & SUMMARY
+        window.populateReviewSummary = () => {
+            window.compileBedsFromDefinitions();
+            document.getElementById('rev-prop-name').textContent = document.getElementById('prop-name').value;
+            document.getElementById('rev-prop-code').textContent = `Code: ${document.getElementById('prop-short').value}`;
+            document.getElementById('rev-inv-count').textContent = `${window.compiledRooms.length} Beds/Units (${window.roomDefinitions.length} Rooms)`;
+
+            const cats = Array.from(new Set(window.roomDefinitions.map(i => i.category))).filter(Boolean);
+            document.getElementById('rev-cat-count').textContent = `${cats.length} Categories`;
+
+            const apiKey = document.getElementById('chan-api-key').value.trim();
+            document.getElementById('rev-chan-status').textContent = apiKey ? 'Connected' : 'Not Connected';
+            document.getElementById('rev-chan-plans').textContent = `${window.channexRateMap.length} Rate Plans`;
+
+            const eventsOn = document.getElementById('toggle-events').checked;
+            document.getElementById('rev-events-status').textContent = `Events: ${eventsOn ? 'Active' : 'Off'}`;
+        };
+
+        // SAVE ALL TO DATABASE
+        window.savePropertyToDatabase = async (notify = true) => {
+            const propId = window.activePropertyId;
+            const btnHeader = document.getElementById('btn-save-header');
+            const btnFooter = document.getElementById('btn-save-footer');
+            if (btnHeader) btnHeader.disabled = true;
+            if (btnFooter) btnFooter.disabled = true;
+
+            try {
+                // Compile individual beds array from room definitions
+                window.compileBedsFromDefinitions();
+
+                // Clear isNew flags before saving
+                window.roomDefinitions.forEach(d => delete d.isNew);
+
+                const chRulesObj = {};
+                window.channelRules.forEach(r => {
+                    const normName = r.channel === 'Direct / Website' ? 'Default' : r.channel;
+                    chRulesObj[normName] = { type: r.type || '=', val: r.val || 0 };
+                });
+
+                // Update property document in Firestore
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), {
+                    name: document.getElementById('prop-name').value,
+                    currency: document.getElementById('prop-currency').value,
+                    timezone: document.getElementById('prop-timezone').value,
+                    enableEventRates: document.getElementById('toggle-events').checked,
+                    roomDefinitions: window.roomDefinitions, // Clean room definitions
+                    rooms: window.compiledRooms, // Compiled beds array for pms & cm tape charts
+                    addons: window.addons,
+                    channex: {
+                        apiKey: document.getElementById('chan-api-key').value.trim(),
+                        propId: document.getElementById('chan-prop-id').value.trim()
+                    },
+                    channexMap: window.channexMap,
+                    channexRateMap: window.channexRateMap
+                }, { merge: true });
+
+                // Update pricing master record in Firestore (feeder for cm.html Autofiller!)
+                const maxSpan = Math.max(window.ratesSpan || 2, window.restrSpan || 6);
+                const offsets = [];
+                for (let i = -maxSpan; i <= maxSpan; i++) offsets.push(i);
+
+                const baselines = {
+                    p_base: parseFloat(document.getElementById('base-p-std')?.value) || 899,
+                    p_pkg: parseFloat(document.getElementById('base-p-pkg')?.value) || 1000,
+                    d_base: parseFloat(document.getElementById('base-d-std')?.value) || 199,
+                    d_pkg: parseFloat(document.getElementById('base-d-pkg')?.value) || 200,
+                    ratesSpan: window.ratesSpan || 2,
+                    restrSpan: window.restrSpan || 6
+                };
+
+                offsets.forEach(off => {
+                    const tag = off < 0 ? 'm' + Math.abs(off) : (off === 0 ? '0' : 'p' + off);
+                    const pPrice = parseFloat(document.getElementById(`base-p-${tag}`)?.value);
+                    const dPrice = parseFloat(document.getElementById(`base-d-${tag}`)?.value);
+                    if (!isNaN(pPrice)) baselines[`p_${tag}`] = pPrice;
+                    if (!isNaN(dPrice)) baselines[`d_${tag}`] = dPrice;
+
+                    const minObj = window.parseHybridStay(document.getElementById(`restr-min-${tag}`)?.value);
+                    const maxObj = window.parseHybridStay(document.getElementById(`restr-max-${tag}`)?.value);
+
+                    baselines[`r_min_${tag}`] = minObj.through;
+                    baselines[`r_minarr_${tag}`] = minObj.arrival;
+                    baselines[`r_max_${tag}`] = maxObj.through;
+                    baselines[`r_maxarr_${tag}`] = maxObj.arrival;
+
+                    baselines[`r_cta_${tag}`] = !!document.getElementById(`restr-cta-${tag}`)?.checked;
+                    baselines[`r_ctd_${tag}`] = !!document.getElementById(`restr-ctd-${tag}`)?.checked;
+                });
+
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`), {
+                    pricingRules: {
+                        anchorPrivate: document.getElementById('anchor-private-select')?.value || '',
+                        anchorDorm: document.getElementById('anchor-dorm-select')?.value || '',
+                        stdRefVal: parseFloat(document.getElementById('rule-std-ref').value) || 25,
+                        evtRefVal: parseFloat(document.getElementById('rule-evt-ref').value) || 25,
+                        channels: chRulesObj
+                    },
+                    autofillBaselines: baselines,
+                    relationships: window.relationships,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+
+                // Refresh table to clear new highlights
+                window.renderRoomDefTable();
+
+                if (notify) {
+                    window.customAlert("Saved", `All setup parameters, room definitions (${window.roomDefinitions.length} rooms / ${window.compiledRooms.length} beds), and pricing rules saved to database!`);
+                }
+            } catch (err) {
+                console.error("Save error:", err);
+                if (notify) window.customAlert("Save Error", err.message);
+            } finally {
+                if (btnHeader) btnHeader.disabled = false;
+                if (btnFooter) btnFooter.disabled = false;
+            }
+        };
+
+        window.launchApp = (appKey) => {
+            const shortCode = window.activePropertyId.includes('loud') ? 'LOUD' : 'SWIMS';
+            if (appKey === 'cm') {
+                window.location.href = `cm.html?p=${shortCode}`;
+            } else if (appKey === 'pms') {
+                window.location.href = `pms.html?p=${shortCode}`;
+            }
+        };
+
+        // Boot
+        document.addEventListener('DOMContentLoaded', () => {
+            initAuthAndLoad();
+            window.jumpStep(1);
+        });
     </script>
 </body>
 </html>
