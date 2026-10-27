@@ -1,5 +1,5 @@
 // ==========================================================================
-// PMS CALENDAR TIMELINE & GRID ENGINE (pms-calendar.js)
+// pms-calendar.js - PMS Calendar Timeline & Grid Engine
 // Wild & Wandering Property Management System
 // ==========================================================================
 
@@ -9,6 +9,10 @@
 
     const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
+    // --------------------------------------------------------------------------
+    // SECTION 1: SVG Icons & Visual Badge Registry
+    // Vector assets rendered on booking bars (upgrades, extensions, email lifecycle, feedback)
+    // --------------------------------------------------------------------------
     window.SVGS = window.SVGS || {
         upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
         upPaid: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#4ade80" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -23,6 +27,10 @@
         fbBad: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg>`
     };
 
+    // --------------------------------------------------------------------------
+    // SECTION 2: Master Booking Status Cycle
+    // Definitions for 11 distinct reservation lifecycle states and color schemes
+    // --------------------------------------------------------------------------
     window.STATUS_CYCLE = window.STATUS_CYCLE || [
         { val: 'new', bg: '#ec4899', txt: '#fff' },
         { val: 'future', bg: '#7fc6f5', txt: '#1e293b' },
@@ -39,6 +47,10 @@
 
     window.masterState = 0;
 
+    // --------------------------------------------------------------------------
+    // SECTION 3: Global Data Getters & Date Calculations
+    // Safely retrieves active property state, staff bookings, and timeline day indices
+    // --------------------------------------------------------------------------
     const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
     const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
     const getPropId = () => {
@@ -55,6 +67,10 @@
         return t ? Math.round((t - Date.UTC(vS.getFullYear(), vS.getMonth(), vS.getDate())) / 86400000) : -1;
     };
 
+    // --------------------------------------------------------------------------
+    // SECTION 4: Timeline Navigation & Period Controls
+    // Shifts calendar window forward/backward by 7 days, jumps to today or selected month
+    // --------------------------------------------------------------------------
     window.prevPeriod = () => {
         if (!window.viewStart) window.viewStart = new Date();
         window.viewStart.setDate(window.viewStart.getDate() - 7);
@@ -92,6 +108,10 @@
         }
     };
 
+    // --------------------------------------------------------------------------
+    // SECTION 5: Guest Search & Jump Navigation
+    // Filters active property guests and shifts timeline view to cycle between matches
+    // --------------------------------------------------------------------------
     window.handleSearch = v => {
         window.searchTerm = v.trim().toUpperCase();
         window.searchMatchIndex = 0;
@@ -181,6 +201,10 @@
         }
     };
 
+    // --------------------------------------------------------------------------
+    // SECTION 6: Room Group & Accordion Controllers
+    // Handles 4-state cycling (ALL -> OCCUPIED -> EMPTY -> HIDDEN) for room categories
+    // --------------------------------------------------------------------------
     window.toggleAllGroups = () => {
         window.masterState = ((window.masterState || 0) + 1) % 4;
         const g = new Set();
@@ -227,6 +251,10 @@
         });
     };
 
+    // --------------------------------------------------------------------------
+    // SECTION 7: Visual Room Metadata Helpers
+    // SVG icons indicating upstairs/downstairs levels and top/bottom bunk positions
+    // --------------------------------------------------------------------------
     const getFloorIcon = f => {
         if (!f) return '';
         const fStr = String(f).toLowerCase().trim();
@@ -254,7 +282,10 @@
         return '';
     };
 
-    // Universal dorm classifier: works with F01, F-01, or parentRoom metadata
+    // --------------------------------------------------------------------------
+    // SECTION 8: Universal Room & Dorm Classifier
+    // Categorizes inventory into dorms vs. privates, supporting dash-free & legacy IDs
+    // --------------------------------------------------------------------------
     const classifyRoomForCalendar = r => {
         const cat = (r.category || r.type || '').toLowerCase();
         const bunk = (r.bunk || r.bed || '').toLowerCase();
@@ -286,6 +317,10 @@
         return { isDorm, baseRoom };
     };
 
+    // --------------------------------------------------------------------------
+    // SECTION 9: Primary Calendar Timeline Rendering Engine
+    // Assembles months/days headers, room rows, availability counters, and booking bars
+    // --------------------------------------------------------------------------
     window.render = () => {
         if (!window.viewStart) {
             window.viewStart = new Date();
@@ -376,6 +411,10 @@
         const tRows = [];
         const uConf = [];
 
+        // ----------------------------------------------------------------------
+        // SECTION 10: Unassigned Tray & Booking Layout Construction
+        // Identifies unassigned or charged reservations and builds category grids
+        // ----------------------------------------------------------------------
         actStaff.forEach(s => {
             if (parseYMD(s.checkIn) > veUTC || parseYMD(s.checkOut) < vsUTC) return;
             const rL = getRooms(s).length ? getRooms(s) : [""];
@@ -463,6 +502,10 @@
         const tt = $('custom-tooltip');
         let cGrp = '';
 
+        // ----------------------------------------------------------------------
+        // SECTION 11: Timeline Grid Assembly & Booking Bar Overlays
+        // Creates DOM rows, attaches date columns, calculates bar spans, and binds tooltips
+        // ----------------------------------------------------------------------
         tRows.forEach(rD => {
             if (rD.isDivider) {
                 cGrp = (rD.label || 'UNKNOWN').replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
@@ -692,6 +735,10 @@
             body.appendChild(row);
         });
 
+        // ----------------------------------------------------------------------
+        // SECTION 12: Group State Restoration & Lucide Initialization
+        // Restores master collapse/expand state and creates Lucide vector icons
+        // ----------------------------------------------------------------------
         if (window.masterState && window.masterState !== 0) {
             const g = new Set();
             $$('.group-header').forEach(el => { if (el.dataset.group) g.add(el.dataset.group); });
