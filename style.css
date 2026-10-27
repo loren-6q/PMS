@@ -91,6 +91,7 @@ background-color: inherit;
 .btn-action {
 display: inline-flex;
 align-items: center;
+justify-content: center;
 gap: 0.25rem;
 padding: 0.25rem 0.5rem;
 color: #ffffff;
@@ -254,25 +255,33 @@ align-items: center;
 justify-content: space-between;
 }
 
+/* Global / PMS Top Tab Buttons */
 .tab-btn {
-padding: 8px;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+gap: 0.375rem;
+padding: 8px 12px;
 font-weight: 900;
 font-size: 0.85rem;
 border-radius: 6px;
-transition: all 0.2s;
+transition: all 0.2s ease-in-out;
 border: 2px solid transparent;
 color: #64748b;
 cursor: pointer;
-display: flex;
-align-items: center;
-justify-content: center;
 background: transparent;
+}
+
+.tab-btn:hover {
+color: #1e293b;
+background-color: rgba(255, 255, 255, 0.6);
 }
 
 .tab-btn.active {
 background: #2563eb;
 color: #ffffff;
 border-color: #2563eb;
+box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
 /* ==========================================================================
@@ -710,7 +719,11 @@ background: #cbd5e1;
 border-radius: 3px;
 }
 
-/ ==========================================================================
+::-webkit-scrollbar-thumb:hover {
+background: #94a3b8;
+}
+
+/* ==========================================================================
 8. NON-PMS & SETTINGS SHARED STYLES
 ========================================================================== */
 
@@ -807,61 +820,17 @@ border-right: 2px solid #94a3b8;
 padding: 4px 6px;
 }
 
-
 /* ==========================================================================
-10. TM30 & PASSPORT QUEUE SHARED STYLES
+10. TM30 & PASSPORT QUEUE SHARED STYLES (SCOPED)
 ========================================================================== */
 
-.btn-action {
-display: inline-flex;
-align-items: center;
-justify-content: center;
-gap: 0.25rem;
-padding: 0.25rem 0.5rem;
-color: #ffffff;
-border-radius: 0.25rem;
-font-size: 0.75rem;
-font-weight: 900;
-text-transform: uppercase;
-box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-transition: all 0.15s ease-in-out;
-cursor: pointer;
-border: none;
-}
-
-.btn-action:hover {
-filter: brightness(1.1);
-}
-
-.btn-action:active {
-transform: scale(0.96);
-}
-
-.input-base {
-width: 100%;
-background-color: #f8fafc;
-border: 1px solid #cbd5e1;
-font-weight: 700;
-font-size: 0.75rem;
+/* Scoped specifically for TM30 & Passport entry forms so global inputs remain compact */
+.tm30-form .input-base,
+.tm30-container .input-base,
+.passport-queue .input-base,
+.input-base-md {
 padding: 0.375rem 0.5rem;
 border-radius: 0.375rem;
-outline: none;
-transition: box-shadow 0.15s ease-in-out;
-}
-
-.input-base:focus {
-border-color: #3b82f6;
-box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
-}
-
-.label-base {
-display: block;
-font-size: 10px;
-font-weight: 900;
-color: #64748b;
-margin-bottom: 0.25rem;
-text-transform: uppercase;
-letter-spacing: 0.1em;
 }
 
 .row-checkbox {
@@ -871,12 +840,14 @@ width: 14px;
 height: 14px;
 }
 
-
 /* ==========================================================================
-11. CHANNEL MANAGER & PROMO ENGINE STYLES
+11. CHANNEL MANAGER & PROMO ENGINE STYLES (SCOPED)
 ========================================================================== */
 
-.tab-btn {
+/* Scoped for Channel Manager / Settings folder tab bars sitting on slate headers */
+.cm-tabs .tab-btn,
+.bg-slate-200 .tab-btn,
+.tab-btn-folder {
 padding: 0.375rem 0.75rem;
 font-weight: 900;
 font-size: 0.75rem;
@@ -891,7 +862,9 @@ align-items: center;
 gap: 0.375rem;
 }
 
-.tab-btn.active {
+.cm-tabs .tab-btn.active,
+.bg-slate-200 .tab-btn.active,
+.tab-btn-folder.active {
 color: #4338ca;
 background-color: #ffffff;
 border-color: #e2e8f0;
@@ -961,30 +934,35 @@ box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 .rate-grid-table {
 border-spacing: 0;
 width: max-content;
+border-collapse: collapse;
+font-family: 'Roboto Condensed', system-ui, -apple-system, sans-serif;
 }
 
 .rate-grid-table th, .rate-grid-table td {
 border-right: 1px solid #cbd5e1;
 border-bottom: 1px solid #cbd5e1;
-padding: 2px 0px;
+padding: 0px 1px !important;
 text-align: center;
-height: 26px;
+height: 20px !important;
+line-height: 1 !important;
 box-sizing: border-box;
 }
 
 .rate-grid-table td input[type="number"], .rate-grid-table td input[type="text"] {
 width: 36px;
-height: 24px;
+height: 18px !important;
 text-align: center;
-font-size: 14px;
-font-stretch: condensed;
-padding: 0;
+font-family: 'Roboto Condensed', system-ui, -apple-system, sans-serif !important;
+letter-spacing: -0.02em !important;
+font-variant-numeric: tabular-nums;
+font-weight: 500 !important;
+font-size: 11px !important;
+padding: 0px 1px !important;
 border: 1px solid transparent;
 border-radius: 0px;
 outline: none;
 transition: all 0.2s;
 -moz-appearance: textfield;
-font-weight: 900;
 background: transparent;
 }
 
@@ -1085,12 +1063,6 @@ font-weight: 900;
 line-height: 1;
 }
 
-
-/* --------------------------------------------------------------------------
-ADDITIONAL CHANNEL MANAGER STYLES (Sync Table, Boundaries & Matrix Tuning)
-Append these to Section 11 of style.css
--------------------------------------------------------------------------- */
-
 /* 1. Manual Sync & Auditor Table (Tab 6) */
 .sync-table {
 width: 100%;
@@ -1125,39 +1097,50 @@ background: #1e293b;
 color: #fff;
 }
 
-/* 2. Ultra-Compact Typography & Row Heights for 42-Day Rate Grid */
-.rate-grid-table {
-border-collapse: collapse;
-font-family: 'Roboto Condensed', system-ui, -apple-system, sans-serif;
-}
-.rate-grid-table td,
-.rate-grid-table th {
-padding: 0px 1px !important;
-height: 20px !important;
-line-height: 1 !important;
-}
-.rate-grid-table input {
-font-family: 'Roboto Condensed', system-ui, -apple-system, sans-serif !important;
-letter-spacing: -0.02em !important;
-font-variant-numeric: tabular-nums;
-font-weight: 500 !important;
-font-size: 11px !important;
-height: 18px !important;
-padding: 0px 1px !important;
-}
-
-/* 3. Number Spinners Removal (Firefox & WebKit) */
-.rate-grid-table input[type="number"]::-webkit-outer-spin-button,
-.rate-grid-table input[type="number"]::-webkit-inner-spin-button {
--webkit-appearance: none;
-margin: 0;
-}
-.rate-grid-table input[type="number"] {
--moz-appearance: textfield;
-}
-
-/* 4. Solid 4px Black Divider Between Room Categories */
+/* Solid 4px Black Divider Between Room Categories */
 tr.room-boundary-bottom > td,
 tr.room-boundary-bottom > th {
 border-bottom: 4px solid #0f172a !important;
+}
+
+/* ==========================================================================
+12. PROPERTY SETUP WIZARD & ONBOARDING SHARED STYLES
+========================================================================== */
+
+.step-pill {
+background-color: #ffffff;
+color: #64748b;
+border: 1px solid #e2e8f0;
+}
+
+.step-pill.active {
+background-color: #4f46e5;
+color: #ffffff;
+border-color: #4338ca;
+}
+
+.step-pill.completed {
+background-color: #ecfdf5;
+color: #047857;
+border-color: #a7f3d0;
+}
+
+.table-input {
+border: 1px solid #cbd5e1;
+border-radius: 0.25rem;
+padding: 0.25rem 0.5rem;
+outline: none;
+font-size: 0.75rem;
+font-weight: 700;
+font-family: 'Roboto Condensed', sans-serif;
+background-color: #ffffff;
+transition: border-color 0.15s, box-shadow 0.15s;
+width: 100%;
+box-sizing: border-box;
+}
+
+.table-input:focus {
+border-color: #6366f1;
+box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
+background-color: #fff;
 }
