@@ -548,7 +548,7 @@
                     <button type="button" id="dup-btn" title="Duplicate" onclick="window.requestDuplicate()" class="btn-tool bg-blue-100 text-blue-700 hover:bg-blue-200"><i data-lucide="copy" size="14" class="shrink-0"></i></button>
                     <button type="button" id="hist-btn" title="History" onclick="window.showAuditHistory()" class="btn-tool bg-slate-200 text-slate-700 hover:bg-slate-300"><i data-lucide="clock" size="14" class="shrink-0"></i></button>
                     <!-- Quick Invoice PDF Download Button -->
-                    <button type="button" id="invoice-btn" title="Download / Print Guest Invoice PDF" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 flex items-center gap-1 px-2.5 shadow-xs transition-colors cursor-pointer"><i data-lucide="receipt" size="14" class="shrink-0"></i> <span class="text-[10px] font-black uppercase tracking-tight">Invoice</span></button>
+                    <button type="button" id="invoice-btn" title="Invoice" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-100 text-emerald-700 hover:bg-emerald-200"><i data-lucide="receipt" size="14" class="shrink-0"></i></button>
                 </div>
                 <div class="flex gap-1 shrink-0 ml-auto">
                     <button type="button" onclick="window.closeGuestModal()" class="px-3 py-1.5 bg-slate-200 rounded font-bold text-xs uppercase hover:bg-slate-300 transition-colors cursor-pointer shrink-0">Cancel</button>
@@ -698,23 +698,25 @@
                 };
             }
 
-            const propId = currentPropertyId || 'loud_samui';
+            const curPropConfig = window.currentPropertyConfig || {};
+            const propId = currentPropertyId || 'swims_resort';
             const isLoud = propId.includes('loud');
             const isSwims = propId.includes('swims');
 
-            const propertyInfo = {
-                name: isLoud ? "LOUD! Samui" : (isSwims ? "SWIMS Beach Resort" : "WET Pool Party Hostel"),
-                subtitle: isLoud ? "Wild & Wandering Boutique Party Hostel" : "Wild & Wandering Beach Resort",
-                address: isLoud 
-                    ? "166/47 Moo 2, Chaweng Beach Road, Chaweng, Koh Samui, Surat Thani 84320, Thailand"
-                    : "138/1 Moo 6, Haad Rin Nai, Koh Phangan, Surat Thani 84280, Thailand",
-                contact: isLoud ? "stay@loudsamui.com" : "stay@swimsresort.com",
-                taxId: "TAX ID: 0845564001234",
-                currency: "THB (฿)"
-            };
+            const propertyName = curPropConfig.name || (isLoud ? "LOUD! Samui" : (isSwims ? "SWIMS Beach Resort" : "WET Pool Party Hostel"));
+            const propertySubtitle = "Wild & Wandering Group";
+            const propertyAddress = curPropConfig.address || (isLoud 
+                ? "166/47 Moo 2, Chaweng Beach Road, Chaweng, Koh Samui, Surat Thani 84320, Thailand" 
+                : "138/1 Moo 6, Haad Rin Nai, Koh Phangan, Surat Thani 84280, Thailand");
+
+            const contactParts = [];
+            if (curPropConfig.email) contactParts.push(curPropConfig.email);
+            else contactParts.push(isLoud ? "stay@loudsamui.com" : "stay@swimsresort.com");
+            if (curPropConfig.phone) contactParts.push(curPropConfig.phone);
+            if (curPropConfig.website) contactParts.push(curPropConfig.website);
+            const propertyContact = contactParts.join(' • ');
 
             // Adaptive Multi-Asset Chain for LOUD Logos:
-            // Tries loudlogo.png -> loudheader.png -> loudbanner.png -> WWicon.png
             const logoUrl = isLoud 
                 ? "https://loren-6q.github.io/PMS/gfx/loudlogo.png" 
                 : "https://loren-6q.github.io/PMS/gfx/WWicon.png";
@@ -728,17 +730,78 @@
                 ? booking.rooms.filter(Boolean).join(', ') 
                 : (booking.room || 'Room / Bed Assigned');
 
+            // Resolve clean PMS category name (replaces noisy OTA descriptions)
+            const rList = (booking.rooms && booking.rooms.length > 0) ? booking.rooms : [booking.room].filter(Boolean);
+            const resolvedTypes = [];
+            rList.forEach(rid => {
+                const hr = hotelRooms.find(r => r.id === rid || r.id === uiToDbRoom(rid) || r.id === dbToUiRoom(rid));
+                if (hr && hr.type && !resolvedTypes.includes(hr.type)) {
+                    resolvedTypes.push(hr.type);
+                }
+            });
+            let cleanCategory = resolvedTypes.join(', ');
+            if (!cleanCategory) {
+                cleanCategory = booking.bookedType || 'Standard';
+                if (cleanCategory.includes('(')) {
+                    cleanCategory = cleanCategory.split('(')[0].trim();
+                }
+            }
+
             // Folio Financials
-            const payments = Array.isArray(booking.payments) ? booking.payments : [];
+            const rawPayments = Array.isArray(booking.payments) ? booking.payments : [];
             const extraCharges = Array.isArray(booking.extraCharges) ? booking.extraCharges : [];
             const totalExtra = extraCharges.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
             const accommodationTotal = Math.max(0, (parseFloat(booking.totalPrice) || 0) - totalExtra);
             const grandTotal = parseFloat(booking.totalPrice) || 0;
-            const totalPaid = payments.reduce((sum, p) => sum + (parseFloat(p.amt) || 0), 0);
+            const totalPaid = rawPayments.reduce((sum, p) => sum + (parseFloat(p.amt) || 0), 0);
             const balanceDue = Number((grandTotal - totalPaid).toFixed(2));
 
             const invoiceNumber = `INV-${(booking.bookId || booking.id || '0000').replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
             const issueDate = getLocalYMD(new Date());
+
+            // Consolidate payments for guest presentation:
+            // Combines internal -pay and -kp entries into unified guest-facing line items
+            const cleanPayments = [];
+            const groupedOta = {};
+
+            rawPayments.forEach(p => {
+                const rawM = (p.method || 'payment').toLowerCase().trim();
+                const amt = parseFloat(p.amt) || 0;
+                const date = p.date || issueDate;
+
+                if (rawM.includes('bdc') || rawM.includes('booking')) {
+                    if (!groupedOta['Booking.com']) groupedOta['Booking.com'] = { date, method: 'Booking.com (Prepaid Online)', amt: 0 };
+                    groupedOta['Booking.com'].amt += amt;
+                } else if (rawM.includes('agoda')) {
+                    if (!groupedOta['Agoda']) groupedOta['Agoda'] = { date, method: 'Agoda (Prepaid Online)', amt: 0 };
+                    groupedOta['Agoda'].amt += amt;
+                } else if (rawM.includes('hw') || rawM.includes('hostelworld')) {
+                    if (!groupedOta['Hostelworld']) groupedOta['Hostelworld'] = { date, method: 'Hostelworld Deposit (Online)', amt: 0 };
+                    groupedOta['Hostelworld'].amt += amt;
+                } else if (rawM.includes('expedia')) {
+                    if (!groupedOta['Expedia']) groupedOta['Expedia'] = { date, method: 'Expedia (Prepaid Online)', amt: 0 };
+                    groupedOta['Expedia'].amt += amt;
+                } else if (rawM.includes('airbnb')) {
+                    if (!groupedOta['Airbnb']) groupedOta['Airbnb'] = { date, method: 'Airbnb (Prepaid Online)', amt: 0 };
+                    groupedOta['Airbnb'].amt += amt;
+                } else {
+                    let friendlyMethod = 'Payment';
+                    if (rawM.includes('cash')) friendlyMethod = 'Cash';
+                    else if (rawM.includes('card') || rawM.includes('cc')) friendlyMethod = 'Credit / Debit Card';
+                    else if (rawM.includes('transfer') || rawM.includes('bank') || rawM.includes('promptpay') || rawM.includes('qr')) friendlyMethod = 'Bank Transfer / PromptPay';
+                    else friendlyMethod = p.method ? p.method.toUpperCase() : 'Settlement';
+
+                    cleanPayments.push({ date, method: friendlyMethod, amt });
+                }
+            });
+
+            Object.values(groupedOta).forEach(item => {
+                cleanPayments.unshift({
+                    date: item.date,
+                    method: item.method,
+                    amt: Number(item.amt.toFixed(2))
+                });
+            });
 
             const printHtml = `
             <!DOCTYPE html>
@@ -803,13 +866,13 @@
                                  onerror="if (this.src.indexOf('loudlogo') !== -1) { this.src='https://loren-6q.github.io/PMS/gfx/loudheader.png'; } else if (this.src.indexOf('loudheader') !== -1) { this.src='https://loren-6q.github.io/PMS/gfx/loudbanner.png'; } else { this.src='https://loren-6q.github.io/PMS/gfx/WWicon.png'; }" 
                                  alt="Logo" class="logo">
                             <div>
-                                <h1 class="prop-name">${propertyInfo.name}</h1>
-                                <p class="prop-sub">${propertyInfo.subtitle}</p>
-                                <p class="prop-addr">${propertyInfo.address}<br>${propertyInfo.contact} • ${propertyInfo.taxId}</p>
+                                <h1 class="prop-name">${propertyName}</h1>
+                                <p class="prop-sub">${propertySubtitle}</p>
+                                <p class="prop-addr">${propertyAddress}<br>${propertyContact}</p>
                             </div>
                         </div>
                         <div class="inv-title-wrap">
-                            <h2 class="inv-title">TAX INVOICE</h2>
+                            <h2 class="inv-title">INVOICE</h2>
                             <p style="font-size: 11px; font-weight: 800; color: #475569; margin-top: 4px;"># ${invoiceNumber}</p>
                             <p style="font-size: 11px; color: #94a3b8;">Issued: ${issueDate}</p>
                             <span class="inv-badge ${balanceDue <= 0 ? 'badge-paid' : 'badge-due'}">
@@ -831,7 +894,7 @@
                             <h4>Stay & Booking Details</h4>
                             <p>Dates: ${booking.checkIn} &rarr; ${booking.checkOut} (${nights} Night${nights > 1 ? 's' : ''})</p>
                             <span>Unit(s): ${roomListStr}</span>
-                            <span>Category: ${booking.bookedType || 'Standard'}</span>
+                            <span>Category: ${cleanCategory}</span>
                             <span>Booking Reference: ${booking.bookId || booking.id || 'Direct'} (${(booking.source || 'Direct').toUpperCase()})</span>
                         </div>
                     </div>
@@ -850,7 +913,7 @@
                             <tr>
                                 <td>
                                     <div class="item-name">Accommodation Charges</div>
-                                    <div class="item-desc">${booking.bookedType || 'Room'} • ${roomListStr} (${nights} night${nights > 1 ? 's' : ''})</div>
+                                    <div class="item-desc">${cleanCategory} • ${roomListStr} (${nights} night${nights > 1 ? 's' : ''})</div>
                                 </td>
                                 <td class="text-center font-bold">${nights}</td>
                                 <td class="text-right font-mono">฿${(accommodationTotal / nights).toFixed(2)}</td>
@@ -877,10 +940,6 @@
                                 <td style="color: #64748b;">Subtotal:</td>
                                 <td class="text-right font-mono font-bold">฿${grandTotal.toFixed(2)}</td>
                             </tr>
-                            <tr>
-                                <td style="color: #64748b;">Taxes & Service (VAT 7% Incl.):</td>
-                                <td class="text-right font-mono font-bold">฿0.00</td>
-                            </tr>
                             <tr class="grand-total">
                                 <td>Total Amount:</td>
                                 <td class="text-right font-mono">฿${grandTotal.toFixed(2)}</td>
@@ -897,7 +956,7 @@
                     </div>
 
                     <!-- PAYMENTS RECORDED -->
-                    ${payments.length > 0 ? `
+                    ${cleanPayments.length > 0 ? `
                     <div class="payments-section">
                         <div class="section-title">Payments & Settlements</div>
                         <table>
@@ -910,10 +969,10 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${payments.map(p => `
+                                ${cleanPayments.map(p => `
                                 <tr>
                                     <td class="font-mono">${p.date || issueDate}</td>
-                                    <td style="font-weight: 700; text-transform: uppercase;">${p.method || 'Cash / Card'}</td>
+                                    <td style="font-weight: 700;">${p.method}</td>
                                     <td><span style="color: #15803d; font-weight: 800; font-size: 10px; background: #dcfce7; padding: 2px 6px; border-radius: 4px;">SUCCESS</span></td>
                                     <td class="text-right font-mono font-black" style="color: #15803d;">฿${Number(p.amt || 0).toFixed(2)}</td>
                                 </tr>
@@ -925,8 +984,8 @@
 
                     <!-- FOOTER -->
                     <div class="footer">
-                        <p style="font-weight: 700; color: #475569; margin-bottom: 4px;">Thank you for staying with us at ${propertyInfo.name}!</p>
-                        <p>For inquiries, please contact ${propertyInfo.contact}</p>
+                        <p style="font-weight: 700; color: #475569; margin-bottom: 4px;">Thank you for staying with us at ${propertyName}!</p>
+                        <p>${propertyContact}</p>
                     </div>
                 </div>
 
@@ -1187,6 +1246,7 @@
                 window.syncPropertyUrl(currentPropertyId);
                 const propToLoad = propsList.find(p => p.id === currentPropertyId);
                 if (propToLoad) {
+                    window.currentPropertyConfig = propToLoad;
                     hotelRooms = propToLoad.rooms || [];
                     fmpDates = propToLoad.events || [];
                     window.hotelRooms = hotelRooms;
