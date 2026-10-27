@@ -764,6 +764,30 @@
                 el.innerHTML = window.SVGS[k];
             }
         });
+
+        // Interactive toast tooltip: clicking any legend item with a title pops up a center toast
+        const legEl = document.getElementById('calendar-legend');
+        if (legEl && !legEl.dataset.listenerAttached) {
+            legEl.dataset.listenerAttached = 'true';
+            legEl.addEventListener('click', e => {
+                const target = e.target.closest('[title]');
+                if (!target) return;
+                const titleTxt = target.getAttribute('title');
+                const tt = document.getElementById('custom-tooltip');
+                if (tt && titleTxt) {
+                    tt.innerText = titleTxt;
+                    tt.style.display = 'block';
+                    tt.style.position = 'fixed';
+                    tt.style.bottom = '48px';
+                    tt.style.left = '50%';
+                    tt.style.transform = 'translateX(-50%)';
+                    tt.style.zIndex = '9999';
+                    tt.className = 'bg-slate-900 text-white font-bold text-xs px-3 py-1.5 rounded-lg shadow-xl border border-slate-700 pointer-events-none transition-opacity';
+                    clearTimeout(window._legTtTimer);
+                    window._legTtTimer = setTimeout(() => { if (tt) tt.style.display = 'none'; }, 2200);
+                }
+            });
+        }
         return true;
     };
 
