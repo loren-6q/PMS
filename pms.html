@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PMS Front Desk</title>
+    <title>Wild & Wandering PMS</title>
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
@@ -40,7 +40,7 @@
             
             <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
                 <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
-                    <img id="main-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Property Logo" class="h-8 sm:h-11 object-contain">
+                    <img id="main-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
                 </a>
                 
                 <div class="flex bg-slate-100 rounded sm:rounded-lg p-0.5 sm:p-1 items-center gap-0.5 shrink-0 border border-slate-200">
@@ -95,7 +95,6 @@
                                 <a href="accounting.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="dollar-sign" size="14" class="text-green-600"></i> Accounting</a>
                                 <a href="channelmanager.html" target="_blank" id="channex-sync-btn" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-blue-700 hidden"><i data-lucide="zap" size="14" class="text-blue-600"></i> Channel Manager</a>
                                 <div class="border-t border-slate-100 my-1"></div>
-                                <a href="setup.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-indigo-700"><i data-lucide="sliders" size="14" class="text-indigo-600"></i> Property Setup</a>
                                 <a href="settings.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-slate-600"><i data-lucide="settings" size="14" class="text-purple-600"></i> Settings</a>
                             </div>
                         </div>
@@ -122,7 +121,7 @@
                     <div class="dash-card bg-indigo-50 border-indigo-200">
                         <div class="dash-title flex justify-between text-indigo-700 border-indigo-200"><span><i data-lucide="tags" size="12" class="inline mb-0.5"></i> Today's Rates</span><button onclick="window.openPriceCheckModal()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer border border-indigo-700 flex items-center gap-1 transition-colors"><i data-lucide="calculator" size="10"></i> CHECK</button></div>
                         <div id="dash-rates-list" class="text-[11px] font-black space-y-0.5 text-indigo-900 mt-1 flex flex-col"></div>
-                        <div class="mt-2 pt-2 border-t border-indigo-100 flex flex-col gap-1 shrink-0"><textarea id="rates-textarea" rows="2" class="input-base font-mono text-[9px] whitespace-pre !p-1 bg-white border-indigo-200" placeholder="Paste search text here..."></textarea><button onclick="window.parseBdcPublicRates()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer w-full uppercase font-black transition-colors">UPDATE DAILY RATES</button></div>
+                        <div class="mt-2 pt-2 border-t border-indigo-100 flex flex-col gap-1 shrink-0"><textarea id="rates-textarea" rows="2" class="input-base font-mono text-[9px] whitespace-pre !p-1 bg-white border-indigo-200" placeholder="Paste BDC search text here to update..."></textarea><button onclick="window.parseBdcPublicRates()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer w-full uppercase font-black transition-colors">UPDATE DAILY RATES</button></div>
                     </div>
                     <div class="dash-card border-orange-200 bg-orange-50/30"><div class="dash-title flex justify-between text-orange-600 border-orange-200"><span><i data-lucide="alert-triangle" size="12" class="inline mb-0.5"></i> Action Items</span></div><div id="dash-act-list" class="space-y-1 text-xs max-h-[160px] overflow-y-auto no-scrollbar"></div></div>
                 </div>
@@ -593,7 +592,7 @@
                 const propToLoad = propsList.find(p => p.id === currentPropertyId);
                 if (propToLoad) {
                     window.currentPropertyConfig = propToLoad;
-                    document.title = `${propToLoad.name || 'PMS'} | Front Desk`;
+                    document.title = propToLoad.name || 'Wild & Wandering PMS';
 
                     const logoEl = $('main-brand-logo');
                     if (logoEl && propToLoad.logoUrl) logoEl.src = propToLoad.logoUrl;
@@ -750,11 +749,43 @@
                 });
                 window.staff = staff;
 
-                const cleanCountries = new Set();
+                const base = ["France", "Germany", "United Kingdom", "United States", "Australia", "Netherlands", "Israel", "Spain", "Italy", "Switzerland", "Canada", "Sweden", "Denmark", "Russia", "Thailand", "Belgium", "Austria", "Ireland", "Norway", "Finland", "Brazil", "Argentina", "South Korea", "Japan", "China", "India", "Mexico", "New Zealand", "South Africa", "Portugal", "Greece"];
+                const COUNTRY_CANONICAL = {
+                    'US': 'United States', 'USA': 'United States', 'UNITED STATES': 'United States',
+                    'UK': 'United Kingdom', 'GB': 'United Kingdom', 'UNITED KINGDOM': 'United Kingdom',
+                    'DE': 'Germany', 'GERMAN': 'Germany', 'GERMANY': 'Germany',
+                    'FR': 'France', 'FRENCH': 'France', 'FRANCE': 'France',
+                    'IL': 'Israel', 'ISRAEL': 'Israel',
+                    'AU': 'Australia', 'AUSTRALIA': 'Australia',
+                    'NL': 'Netherlands', 'NETHERLANDS': 'Netherlands',
+                    'ES': 'Spain', 'SPAIN': 'Spain',
+                    'IT': 'Italy', 'ITALY': 'Italy',
+                    'CH': 'Switzerland', 'SWITZERLAND': 'Switzerland',
+                    'CA': 'Canada', 'CANADA': 'Canada',
+                    'SE': 'Sweden', 'SWEDEN': 'Sweden',
+                    'DK': 'Denmark', 'DENMARK': 'Denmark',
+                    'RU': 'Russia', 'RUSSIA': 'Russia',
+                    'TH': 'Thailand', 'THAILAND': 'Thailand',
+                    'KR': 'South Korea', 'SOUTH KOREA': 'South Korea', 'SOUHT KOREA': 'South Korea',
+                    'ALGERIA': 'Algeria', 'ALGERIENNE': 'Algeria',
+                    'TR': 'Turkey', 'TURKEY': 'Turkey',
+                    'NZ': 'New Zealand', 'NEW ZEALAND': 'New Zealand',
+                    'HK': 'Hong Kong', 'HONG KONG': 'Hong Kong',
+                    'BY': 'Belarus', 'BELARUS': 'Belarus'
+                };
+
+                const cleanCountries = new Set(base);
                 staff.forEach(s => {
                     if (!s.country) return;
                     const raw = s.country.trim();
-                    if (raw.length >= 2 && !raw.toLowerCase().includes('folio')) cleanCountries.add(raw);
+                    if (!raw || raw.toLowerCase().includes('folio') || raw.toLowerCase().includes('invoice') || raw.length < 2) return;
+                    const lookup = raw.toUpperCase();
+                    if (COUNTRY_CANONICAL[lookup]) {
+                        cleanCountries.add(COUNTRY_CANONICAL[lookup]);
+                    } else if (raw.length > 2 && /^[A-Za-z\s\-]+$/.test(raw)) {
+                        const formatted = raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                        cleanCountries.add(formatted);
+                    }
                 });
 
                 const dl = $('country-list');
@@ -867,6 +898,7 @@
             });
             window.updateNavLinks();
             if (window.lucide) window.lucide.createIcons();
+            if (window.mountLegendSvgs) window.mountLegendSvgs();
         };
 
         init();
