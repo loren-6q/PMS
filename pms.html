@@ -1806,7 +1806,6 @@
                 roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
                 window.roomTypes = roomTypes;
 
-                // Re-map active staff bookings in memory against the newly resolved hotelRooms
                 if (staff && staff.length > 0) {
                     staff.forEach(s => {
                         const rList = getRooms(s).map(dbToUiRoom);
@@ -1922,7 +1921,6 @@
                 else { ctxCal.style.opacity = '0'; setTimeout(() => ctxCal.style.display = 'none', 200); }
             }
 
-            // Sync navbar search term into database search box when switching tabs
             if (t === 'database') {
                 const navSearchVal = $('guest-search')?.value.trim() || window.searchTerm || '';
                 const dbNameInput = $('db-filter-name');
@@ -1999,7 +1997,6 @@
                 if ($('dashboard-view')?.style.display === 'flex') window.renderDashboard();
                 if ($('database-view')?.style.display === 'flex' && window.renderDatabase) window.renderDatabase();
 
-                // Run discrepancy audit in background on every snapshot
                 setTimeout(() => { if (window.runDiscrepancyAudit) window.runDiscrepancyAudit(); }, 200);
 
                 const editId = new URLSearchParams(window.location.search).get('edit');
