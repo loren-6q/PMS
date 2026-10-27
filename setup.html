@@ -955,19 +955,20 @@
                     compiled.push({
                         id: roomName,
                         name: roomName,
+                        category: category,
                         type: category,
                         floor: floor,
                         bunk: 'Private Unit',
                         parentRoom: roomName,
-                        bedIndex: 1
+                        bedIndex: 1,
+                        status: 'clean'
                     });
                 } else {
+                    // Strictly clean room prefix: removes any trailing hyphens, underscores, or spaces
+                    const cleanPrefix = roomName.trim().replace(/[-_\s]+$/, '');
                     for (let i = 1; i <= count; i++) {
                         const bedNum = String(i).padStart(2, '0');
-                        let bedId = `${roomName}${bedNum}`;
-                        if (roomName.includes('-')) bedId = `${roomName.replace(/-+$/, '')}-${bedNum}`;
-                        else if (roomName.endsWith(' ')) bedId = `${roomName.trim()} - ${bedNum}`;
-                        else bedId = `${roomName}${bedNum}`;
+                        const bedId = `${cleanPrefix}${bedNum}`;
 
                         let bunkPos = 'Single Bed';
                         if (rule === 'odd-top') bunkPos = (i % 2 !== 0) ? 'Top Bunk' : 'Bottom Bunk';
@@ -976,11 +977,13 @@
                         compiled.push({
                             id: bedId,
                             name: bedId,
+                            category: category,
                             type: category,
                             floor: floor,
                             bunk: bunkPos,
                             parentRoom: roomName,
-                            bedIndex: i
+                            bedIndex: i,
+                            status: 'clean'
                         });
                     }
                 }
