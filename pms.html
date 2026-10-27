@@ -547,6 +547,8 @@
                     <button type="button" id="merge-btn" title="Merge" onclick="window.requestMerge()" class="btn-tool bg-indigo-100 text-indigo-700 hover:bg-indigo-200"><i data-lucide="merge" size="14" class="shrink-0"></i></button>
                     <button type="button" id="dup-btn" title="Duplicate" onclick="window.requestDuplicate()" class="btn-tool bg-blue-100 text-blue-700 hover:bg-blue-200"><i data-lucide="copy" size="14" class="shrink-0"></i></button>
                     <button type="button" id="hist-btn" title="History" onclick="window.showAuditHistory()" class="btn-tool bg-slate-200 text-slate-700 hover:bg-slate-300"><i data-lucide="clock" size="14" class="shrink-0"></i></button>
+                    <!-- Quick Invoice PDF Download Button -->
+                    <button type="button" id="invoice-btn" title="Download / Print Guest Invoice PDF" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 flex items-center gap-1 px-2.5 shadow-xs transition-colors cursor-pointer"><i data-lucide="receipt" size="14" class="shrink-0"></i> <span class="text-[10px] font-black uppercase tracking-tight">Invoice</span></button>
                 </div>
                 <div class="flex gap-1 shrink-0 ml-auto">
                     <button type="button" onclick="window.closeGuestModal()" class="px-3 py-1.5 bg-slate-200 rounded font-bold text-xs uppercase hover:bg-slate-300 transition-colors cursor-pointer shrink-0">Cancel</button>
@@ -665,6 +667,288 @@
         window.getStaff = () => staff;
         window.getPaid = s => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
         window.getDue = s => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
+
+        // --- GUEST INVOICE / RECEIPT GENERATOR ---
+        window.generateGuestInvoice = () => {
+            const guestId = $('guest-id')?.value;
+            let booking = staff.find(s => s.id === guestId);
+
+            // If not found by ID or if creating/editing fresh in modal, build from current form inputs
+            if (!booking) {
+                const total = parseFloat($('total-price')?.value) || 0;
+                const rList = Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean);
+                booking = {
+                    id: guestId || 'DRAFT',
+                    bookId: $('booking-id')?.value || guestId || 'DIRECT',
+                    firstName: $('first-name')?.value || 'Guest',
+                    lastName: $('last-name')?.value || '',
+                    phone: $('phone')?.value || '',
+                    email: $('email')?.value || '',
+                    country: $('guest-country')?.value || '',
+                    checkIn: $('check-in')?.value || getLocalYMD(new Date()),
+                    checkOut: $('check-out')?.value || getLocalYMD(new Date()),
+                    bookedType: $('booked-type')?.value || 'Standard Room',
+                    room: rList[0] || 'Unassigned',
+                    rooms: rList,
+                    totalPrice: total,
+                    payments: window.activePayments || [],
+                    extraCharges: window.activeExtraCharges || [],
+                    source: $('booking-source')?.value || 'Direct',
+                    pax: parseInt($('pax-count')?.value, 10) || 1
+                };
+            }
+
+            const propId = currentPropertyId || 'loud_samui';
+            const isLoud = propId.includes('loud');
+            const isSwims = propId.includes('swims');
+
+            const propertyInfo = {
+                name: isLoud ? "LOUD! Samui" : (isSwims ? "SWIMS Beach Resort" : "WET Pool Party Hostel"),
+                subtitle: isLoud ? "Wild & Wandering Boutique Party Hostel" : "Wild & Wandering Beach Resort",
+                address: isLoud 
+                    ? "166/47 Moo 2, Chaweng Beach Road, Chaweng, Koh Samui, Surat Thani 84320, Thailand"
+                    : "138/1 Moo 6, Haad Rin Nai, Koh Phangan, Surat Thani 84280, Thailand",
+                contact: isLoud ? "stay@loudsamui.com" : "stay@swimsresort.com",
+                taxId: "TAX ID: 0845564001234",
+                currency: "THB (฿)"
+            };
+
+            // Adaptive Multi-Asset Chain for LOUD Logos:
+            // Tries loudlogo.png -> loudheader.png -> loudbanner.png -> WWicon.png
+            const logoUrl = isLoud 
+                ? "https://loren-6q.github.io/PMS/gfx/loudlogo.png" 
+                : "https://loren-6q.github.io/PMS/gfx/WWicon.png";
+
+            // Calculate Nights
+            const inMs = parseYMD(booking.checkIn);
+            const outMs = parseYMD(booking.checkOut);
+            const nights = Math.max(1, Math.round((outMs - inMs) / 86400000)) || 1;
+
+            const roomListStr = (booking.rooms && booking.rooms.length > 0) 
+                ? booking.rooms.filter(Boolean).join(', ') 
+                : (booking.room || 'Room / Bed Assigned');
+
+            // Folio Financials
+            const payments = Array.isArray(booking.payments) ? booking.payments : [];
+            const extraCharges = Array.isArray(booking.extraCharges) ? booking.extraCharges : [];
+            const totalExtra = extraCharges.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
+            const accommodationTotal = Math.max(0, (parseFloat(booking.totalPrice) || 0) - totalExtra);
+            const grandTotal = parseFloat(booking.totalPrice) || 0;
+            const totalPaid = payments.reduce((sum, p) => sum + (parseFloat(p.amt) || 0), 0);
+            const balanceDue = Number((grandTotal - totalPaid).toFixed(2));
+
+            const invoiceNumber = `INV-${(booking.bookId || booking.id || '0000').replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
+            const issueDate = getLocalYMD(new Date());
+
+            const printHtml = `
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <title>Invoice - ${booking.firstName} ${booking.lastName} (${invoiceNumber})</title>
+                <style>
+                    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+                    body { background: #f8fafc; color: #1e293b; padding: 24px; font-size: 13px; line-height: 1.4; }
+                    .invoice-card { max-width: 800px; margin: 0 auto; background: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+                    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 24px; }
+                    .logo-wrap { display: flex; align-items: center; gap: 14px; max-width: 480px; }
+                    .logo { height: 62px; max-width: 190px; object-fit: contain; }
+                    .prop-name { font-size: 20px; font-weight: 900; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px; }
+                    .prop-sub { font-size: 11px; font-weight: 700; color: #64748b; margin-top: 2px; }
+                    .prop-addr { font-size: 10px; color: #94a3b8; margin-top: 4px; max-width: 320px; }
+                    .inv-title-wrap { text-align: right; }
+                    .inv-title { font-size: 24px; font-weight: 900; text-transform: uppercase; color: #4338ca; letter-spacing: 1px; }
+                    .inv-badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; margin-top: 6px; }
+                    .badge-paid { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+                    .badge-due { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+                    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; background: #f8fafc; padding: 16px; border-radius: 6px; border: 1px solid #edf2f7; }
+                    .meta-block h4 { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; margin-bottom: 6px; }
+                    .meta-block p { font-size: 12px; font-weight: 700; color: #0f172a; }
+                    .meta-block span { font-size: 11px; font-weight: 500; color: #475569; display: block; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+                    th { background: #f1f5f9; text-align: left; padding: 10px 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; border-bottom: 1px solid #cbd5e1; }
+                    td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
+                    .text-right { text-align: right; }
+                    .text-center { text-align: center; }
+                    .item-name { font-weight: 800; color: #0f172a; }
+                    .item-desc { font-size: 11px; color: #64748b; margin-top: 2px; }
+                    .totals-wrap { display: flex; justify-content: flex-end; margin-bottom: 24px; }
+                    .totals-table { width: 280px; }
+                    .totals-table tr td { padding: 6px 0; border: none; font-size: 12px; }
+                    .grand-total { font-size: 16px; font-weight: 900; color: #0f172a; border-top: 2px solid #e2e8f0 !important; padding-top: 8px !important; }
+                    .payments-section { border-top: 1px dashed #cbd5e1; padding-top: 16px; margin-bottom: 24px; }
+                    .section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #475569; margin-bottom: 10px; }
+                    .footer { text-align: center; border-top: 1px solid #e2e8f0; padding-top: 20px; font-size: 11px; color: #94a3b8; }
+                    .btn-print-bar { max-width: 800px; margin: 0 auto 16px; display: flex; justify-content: space-between; align-items: center; }
+                    .btn-print { background: #4338ca; color: #ffffff; padding: 10px 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                    .btn-print:hover { background: #3730a3; }
+                    @media print {
+                        body { background: #ffffff; padding: 0; }
+                        .invoice-card { box-shadow: none; border: none; padding: 0; }
+                        .btn-print-bar { display: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="btn-print-bar">
+                    <span style="font-weight: 700; color: #64748b; font-size: 12px;">📄 Ready to export</span>
+                    <button class="btn-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
+                </div>
+
+                <div class="invoice-card">
+                    <!-- HEADER -->
+                    <div class="header">
+                        <div class="logo-wrap">
+                            <img src="${logoUrl}" 
+                                 onerror="if (this.src.indexOf('loudlogo') !== -1) { this.src='https://loren-6q.github.io/PMS/gfx/loudheader.png'; } else if (this.src.indexOf('loudheader') !== -1) { this.src='https://loren-6q.github.io/PMS/gfx/loudbanner.png'; } else { this.src='https://loren-6q.github.io/PMS/gfx/WWicon.png'; }" 
+                                 alt="Logo" class="logo">
+                            <div>
+                                <h1 class="prop-name">${propertyInfo.name}</h1>
+                                <p class="prop-sub">${propertyInfo.subtitle}</p>
+                                <p class="prop-addr">${propertyInfo.address}<br>${propertyInfo.contact} • ${propertyInfo.taxId}</p>
+                            </div>
+                        </div>
+                        <div class="inv-title-wrap">
+                            <h2 class="inv-title">TAX INVOICE</h2>
+                            <p style="font-size: 11px; font-weight: 800; color: #475569; margin-top: 4px;"># ${invoiceNumber}</p>
+                            <p style="font-size: 11px; color: #94a3b8;">Issued: ${issueDate}</p>
+                            <span class="inv-badge ${balanceDue <= 0 ? 'badge-paid' : 'badge-due'}">
+                                ${balanceDue <= 0 ? 'PAID IN FULL' : `BALANCE DUE: ฿${balanceDue.toLocaleString()}`}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- META INFO -->
+                    <div class="meta-grid">
+                        <div class="meta-block">
+                            <h4>Billed To (Guest)</h4>
+                            <p>${booking.firstName || ''} ${booking.lastName || ''}</p>
+                            ${booking.country ? `<span>Nationality / Country: ${booking.country}</span>` : ''}
+                            ${booking.email ? `<span>Email: ${booking.email}</span>` : ''}
+                            ${booking.phone ? `<span>Phone: ${booking.phone}</span>` : ''}
+                        </div>
+                        <div class="meta-block">
+                            <h4>Stay & Booking Details</h4>
+                            <p>Dates: ${booking.checkIn} &rarr; ${booking.checkOut} (${nights} Night${nights > 1 ? 's' : ''})</p>
+                            <span>Unit(s): ${roomListStr}</span>
+                            <span>Category: ${booking.bookedType || 'Standard'}</span>
+                            <span>Booking Reference: ${booking.bookId || booking.id || 'Direct'} (${(booking.source || 'Direct').toUpperCase()})</span>
+                        </div>
+                    </div>
+
+                    <!-- FOLIO CHARGES -->
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 50%;">Description</th>
+                                <th class="text-center" style="width: 15%;">Qty / Nts</th>
+                                <th class="text-right" style="width: 15%;">Unit Price</th>
+                                <th class="text-right" style="width: 20%;">Total (THB)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <div class="item-name">Accommodation Charges</div>
+                                    <div class="item-desc">${booking.bookedType || 'Room'} • ${roomListStr} (${nights} night${nights > 1 ? 's' : ''})</div>
+                                </td>
+                                <td class="text-center font-bold">${nights}</td>
+                                <td class="text-right font-mono">฿${(accommodationTotal / nights).toFixed(2)}</td>
+                                <td class="text-right font-black font-mono">฿${accommodationTotal.toFixed(2)}</td>
+                            </tr>
+                            ${extraCharges.map(c => `
+                            <tr>
+                                <td>
+                                    <div class="item-name">${c.desc || 'Folio Service'}</div>
+                                    <div class="item-desc">Date: ${c.date || issueDate}</div>
+                                </td>
+                                <td class="text-center font-bold">1</td>
+                                <td class="text-right font-mono">฿${Number(c.amount || 0).toFixed(2)}</td>
+                                <td class="text-right font-black font-mono">฿${Number(c.amount || 0).toFixed(2)}</td>
+                            </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+
+                    <!-- TOTALS SUMMARY -->
+                    <div class="totals-wrap">
+                        <table class="totals-table">
+                            <tr>
+                                <td style="color: #64748b;">Subtotal:</td>
+                                <td class="text-right font-mono font-bold">฿${grandTotal.toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #64748b;">Taxes & Service (VAT 7% Incl.):</td>
+                                <td class="text-right font-mono font-bold">฿0.00</td>
+                            </tr>
+                            <tr class="grand-total">
+                                <td>Total Amount:</td>
+                                <td class="text-right font-mono">฿${grandTotal.toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #15803d; font-weight: 700;">Total Payments Received:</td>
+                                <td class="text-right font-mono font-bold" style="color: #15803d;">-฿${totalPaid.toFixed(2)}</td>
+                            </tr>
+                            <tr style="border-top: 1px solid #e2e8f0; font-weight: 900;">
+                                <td style="color: ${balanceDue > 0 ? '#b91c1c' : '#0f172a'};">Outstanding Balance:</td>
+                                <td class="text-right font-mono" style="color: ${balanceDue > 0 ? '#b91c1c' : '#0f172a'};">฿${balanceDue.toFixed(2)}</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <!-- PAYMENTS RECORDED -->
+                    ${payments.length > 0 ? `
+                    <div class="payments-section">
+                        <div class="section-title">Payments & Settlements</div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Payment Date</th>
+                                    <th>Method / Channel</th>
+                                    <th>Status</th>
+                                    <th class="text-right">Amount Paid</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${payments.map(p => `
+                                <tr>
+                                    <td class="font-mono">${p.date || issueDate}</td>
+                                    <td style="font-weight: 700; text-transform: uppercase;">${p.method || 'Cash / Card'}</td>
+                                    <td><span style="color: #15803d; font-weight: 800; font-size: 10px; background: #dcfce7; padding: 2px 6px; border-radius: 4px;">SUCCESS</span></td>
+                                    <td class="text-right font-mono font-black" style="color: #15803d;">฿${Number(p.amt || 0).toFixed(2)}</td>
+                                </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    ` : ''}
+
+                    <!-- FOOTER -->
+                    <div class="footer">
+                        <p style="font-weight: 700; color: #475569; margin-bottom: 4px;">Thank you for staying with us at ${propertyInfo.name}!</p>
+                        <p>For inquiries, please contact ${propertyInfo.contact}</p>
+                    </div>
+                </div>
+
+                <script>
+                    window.onload = function() {
+                        setTimeout(function() {
+                            window.print();
+                        }, 500);
+                    };
+                <\/script>
+            </body>
+            </html>`;
+
+            const printWin = window.open('', '_blank');
+            if (printWin) {
+                printWin.document.open();
+                printWin.document.write(printHtml);
+                printWin.document.close();
+            } else {
+                window.showAlert("Pop-up blocked. Please allow pop-ups for this website to export the invoice PDF.");
+            }
+        };
 
         // --- NATIVE AUTO-REVERT: When deleting the only room, auto-revert to UNASSIGNED without extra buttons ---
         document.addEventListener('DOMContentLoaded', () => {
