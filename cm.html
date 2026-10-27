@@ -54,13 +54,13 @@
 </head>
 <body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden bg-slate-100 font-sans">
 
-    <!-- Loading Overlay with self-dismissing timeout -->
+    <!-- Loading Overlay with self-dismissing safety timeout -->
     <div id="loader" class="loading-overlay" style="display: none;">
         <div class="spinner"></div>
         <div id="sync-status" class="mt-4 font-black text-indigo-800 uppercase tracking-widest text-center text-xs">INITIALIZING ENGINE...</div>
     </div>
     
-    <!-- Custom In-App Alert Dialog -->
+    <!-- Custom In-App Alert Dialog (Zero browser alert/confirm) -->
     <div id="custom-alert" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[9999] flex items-center justify-center p-4">
         <div class="bg-white p-5 rounded-xl shadow-xl max-w-sm w-full text-center border-2 border-slate-800">
             <div class="bg-indigo-100 text-indigo-600 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -108,8 +108,8 @@
                     <span id="mode-label">RIPPLE MODE</span>
                 </button>
 
-                <!-- SETUP WIZARD LINK -->
-                <a id="nav-setup-btn" href="setup.html" class="px-2 py-1 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer" title="Open Property Setup Wizard">
+                <!-- SETUP WIZARD LINK (Jumps straight to configuration) -->
+                <a id="nav-setup-btn" href="setup.html" class="px-2 py-1 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer" title="Configure room inventory, rate anchors, linking rules, and curves">
                     <i data-lucide="sliders-horizontal" size="13" class="text-indigo-600"></i>
                     <span class="hidden md:inline">Setup Wizard</span>
                 </a>
@@ -136,21 +136,23 @@
             </div>
         </header>
 
-        <!-- SECTION 2: MAIN CONTAINER WITH FOLDER TABS -->
+        <!-- SECTION 2: MAIN OPERATIONAL WORKSPACE -->
         <main class="flex-1 flex flex-col min-h-0 bg-slate-100 sm:rounded-lg overflow-hidden border-y sm:border border-slate-300 shadow-xs relative z-0">
             
-            <!-- FOLDER TABS BAR -->
+            <!-- OPERATIONAL TABS BAR (STRICTLY DAILY OPERATIONS) -->
             <div class="flex px-2 pt-1.5 bg-slate-200 border-b border-slate-300 shrink-0 gap-1 overflow-x-auto no-scrollbar shadow-inner unselectable">
-                <button onclick="window.switchTab('grid')" id="tab-grid" class="tab-btn active"><i data-lucide="calendar" size="14"></i> Calendar</button>
-                <button onclick="window.switchTab('rules')" id="tab-rules" class="tab-btn"><i data-lucide="sliders" size="14" class="text-indigo-600"></i> Rules & Channels</button>
-                <button onclick="window.switchTab('promos')" id="tab-promos" class="tab-btn"><i data-lucide="tags" size="14" class="text-pink-600"></i> Deals & Promos</button>
-                <button onclick="window.switchTab('smart')" id="tab-smart" class="tab-btn"><i data-lucide="wand-2" size="14" class="text-amber-500"></i> Autofiller</button>
-                <button onclick="window.switchTab('relational')" id="tab-relational" class="tab-btn"><i data-lucide="link" size="14" class="text-indigo-500"></i> Linking</button>
-                <button onclick="window.switchTab('mapping')" id="tab-mapping" class="tab-btn"><i data-lucide="network" size="14" class="text-purple-500"></i> OTA Mapping</button>
-                <button onclick="window.switchTab('manual')" id="tab-manual" class="tab-btn"><i data-lucide="refresh-cw" size="14" class="text-emerald-600"></i> Manual Sync</button>
+                <button onclick="window.switchTab('grid')" id="tab-grid" class="tab-btn active">
+                    <i data-lucide="calendar" size="14"></i> Calendar Matrix
+                </button>
+                <button onclick="window.switchTab('promos')" id="tab-promos" class="tab-btn">
+                    <i data-lucide="tags" size="14" class="text-pink-600"></i> Deals & Promos
+                </button>
+                <button onclick="window.switchTab('manual')" id="tab-manual" class="tab-btn">
+                    <i data-lucide="refresh-cw" size="14" class="text-emerald-600"></i> OTA Sync & Auditor
+                </button>
             </div>
 
-            <!-- TAB 1: CALENDAR GRID VIEW -->
+            <!-- TAB 1: CALENDAR GRID VIEW & FAST BULK DRAWER -->
             <div id="view-grid" class="flex-1 flex flex-col min-h-0 relative">
                 
                 <!-- GRID SUB-TOOLBAR -->
@@ -241,7 +243,7 @@
                         </div>
                     </div>
 
-                    <!-- Bulk Matrix -->
+                    <!-- Bulk Matrix Table -->
                     <div class="overflow-auto rounded border border-slate-700 bg-slate-800/90 shadow-inner max-h-[280px]">
                         <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
                             <thead class="bg-slate-950 text-white text-[9px] font-black uppercase tracking-wider sticky top-0 z-10 border-b border-slate-700">
@@ -308,96 +310,7 @@
                 </footer>
             </div>
 
-            <!-- TAB 2: RULES & CHANNELS -->
-            <div id="view-rules" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
-                <div class="max-w-5xl mx-auto space-y-4">
-                    
-                    <!-- 1. BASE RATE ANCHOR -->
-                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-xs">
-                        <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
-                            <div>
-                                <h2 class="text-sm sm:text-base font-black uppercase text-slate-800 flex items-center gap-2">
-                                    <i data-lucide="anchor" class="text-indigo-600"></i> Base Rate Anchor
-                                </h2>
-                                <p class="text-[11px] font-bold text-slate-500 mt-1 leading-normal max-w-2xl">
-                                    Determines which rate plan matches exactly what you type into the calendar. All other plans will calculate from this anchor.
-                                </p>
-                            </div>
-                            <button onclick="window.savePricingRulesToCloud(true)" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs uppercase shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer">
-                                <i data-lucide="save" size="14"></i> SAVE
-                            </button>
-                        </div>
-
-                        <div class="max-w-md bg-slate-50 p-3 rounded-lg border border-slate-200">
-                            <label class="label-base text-indigo-700">Anchor Rate Plan</label>
-                            <select id="rule-master-driver" class="input-base !text-xs font-black cursor-pointer bg-white w-full" onchange="window.markRulesUnsaved()">
-                                <option value="bdc_non_ref" selected>Booking.com Non-Refundable</option>
-                                <option value="default_non_ref">Default Non-Refundable</option>
-                                <option value="default_ref">Default Refundable</option>
-                                <option value="bdc_ref">Booking.com Refundable</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- 2. REFUNDABLE MARK-UP -->
-                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-xs">
-                        <h2 class="text-sm sm:text-base font-black uppercase text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
-                            <i data-lucide="shield-check" class="text-blue-600"></i> Refundable Rate Markups
-                        </h2>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex flex-col gap-2">
-                                <span class="text-xs font-black uppercase tracking-wider text-slate-700">STANDARD</span>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs font-bold text-slate-600 whitespace-nowrap">Refundable = Non-Refundable</span>
-                                    <select id="rule-std-ref-type" class="input-base !w-20 !py-1 font-black text-center" onchange="window.markRulesUnsaved()">
-                                        <option value="+%">+ %</option>
-                                        <option value="+">+ ฿</option>
-                                    </select>
-                                    <input type="number" id="rule-std-ref-val" value="25" class="input-base !w-24 !py-1 font-black text-center" oninput="window.markRulesUnsaved()">
-                                </div>
-                            </div>
-
-                            <div class="bg-pink-50/50 p-3 rounded-lg border border-pink-200 flex flex-col gap-2 evt-column" style="display: none;">
-                                <span class="text-xs font-black uppercase tracking-wider text-pink-800">EVENT / PEAK</span>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs font-bold text-pink-900 whitespace-nowrap">Refundable = Non-Refundable</span>
-                                    <select id="rule-evt-ref-type" class="input-base !w-20 !py-1 font-black text-center" onchange="window.markRulesUnsaved()">
-                                        <option value="+%">+ %</option>
-                                        <option value="+">+ ฿</option>
-                                    </select>
-                                    <input type="number" id="rule-evt-ref-val" value="25" class="input-base !w-24 !py-1 font-black text-center" oninput="window.markRulesUnsaved()">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 3. CHANNEL ADJUSTMENTS -->
-                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-xs">
-                        <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
-                            <div>
-                                <h2 class="text-sm sm:text-base font-black uppercase text-slate-800 flex items-center gap-2">
-                                    <i data-lucide="sliders" class="text-purple-600"></i> Channel Adjustments
-                                </h2>
-                                <p class="text-[11px] font-bold text-slate-500 mt-1">
-                                    Define pricing adjustments for each channel (e.g. mark up Hostelworld +15%, discount Direct -10%).
-                                </p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <button onclick="window.resetChannelsToParity()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-black uppercase flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs" title="Reset all adjustments to 0 so every channel matches your Base Rate Anchor">
-                                    <i data-lucide="rotate-ccw" size="14"></i> Reset to Parity (0)
-                                </button>
-                            </div>
-                        </div>
-
-                        <div id="dynamic-ota-rules-container" class="space-y-2">
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
-            <!-- TAB 3: PROMOTIONS & DEALS -->
+            <!-- TAB 2: PROMOTIONS & DEALS (OPERATIONAL CAMPAIGNS) -->
             <div id="view-promos" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
                 <div class="max-w-5xl mx-auto space-y-4">
                     <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-xs">
@@ -407,7 +320,7 @@
                                     <i data-lucide="tags" class="text-pink-600"></i> OTA Promotions & Deals
                                 </h2>
                                 <p class="text-[11px] font-bold text-slate-500 mt-1">
-                                    Input OTA promos here to automatically apply markup to preserve your profit margins.
+                                    Input OTA promos here to automatically apply margin markup to preserve your profit.
                                 </p>
                             </div>
                             <button onclick="window.openAddPromoModal()" class="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-black text-xs uppercase shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer">
@@ -442,264 +355,7 @@
                 </div>
             </div>
 
-            <!-- TAB 4: AUTOFILLER VIEW -->
-            <div id="view-smart" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
-                <div class="max-w-4xl mx-auto space-y-4">
-                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-xs">
-                        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
-                            <h2 class="text-base font-black uppercase text-slate-800 flex items-center gap-2">
-                                <i data-lucide="wand-2" class="text-indigo-500"></i> Calendar Autofiller
-                            </h2>
-                            <div class="flex items-center gap-2">
-                                <label class="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-300 cursor-pointer text-xs font-black uppercase text-pink-700">
-                                    <input type="checkbox" id="w-enable-events" onchange="window.toggleAutofillEventMode(this.checked)" class="row-checkbox"> Event Pricing (EVT)
-                                </label>
-                                <button onclick="window.saveAutofillBaselines(true)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase tracking-widest shadow-2xs cursor-pointer flex items-center gap-1"><i data-lucide="save" size="14"></i> SAVE BASE RATES</button>
-                                <button onclick="window.nukeDatabase()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded font-black text-xs uppercase tracking-widest shadow-xs cursor-pointer flex items-center gap-1"><i data-lucide="skull" size="14"></i> WIPE PRICING</button>
-                            </div>
-                        </div>
-                        <p class="text-[11px] font-bold text-slate-600 mb-4 leading-normal">
-                            Bulk update rates across a date range. All other rates ripple automatically according to rules in the Linking tab.
-                        </p>
-                        
-                        <div class="flex flex-wrap items-center gap-3 mb-6 p-3 bg-slate-100 rounded-lg border border-slate-200">
-                            <div class="flex-1 min-w-[140px]">
-                                <label class="label-base text-indigo-700">Private Anchor</label>
-                                <select id="w-anchor-private" class="input-base !text-xs font-black cursor-pointer bg-white" onchange="window.syncAnchorRooms('private', this.value)"></select>
-                            </div>
-
-                            <div class="flex-1 min-w-[140px]">
-                                <label class="label-base text-orange-700">Dorm Anchor</label>
-                                <select id="w-anchor-dorm" class="input-base !text-xs font-black cursor-pointer bg-white" onchange="window.syncAnchorRooms('dorm', this.value)"></select>
-                            </div>
-
-                            <div class="flex-1 min-w-[130px]">
-                                <label class="label-base text-slate-700">Start Date</label>
-                                <input type="date" id="w-start-date" class="input-base !text-sm !py-1 cursor-pointer text-slate-700 font-bold">
-                            </div>
-                            <div class="flex-1 min-w-[130px]">
-                                <label class="label-base text-slate-700">End Date</label>
-                                <input type="date" id="w-end-date" class="input-base !text-sm !py-1 cursor-pointer text-slate-700 font-bold">
-                            </div>
-                            <div class="flex flex-col justify-end">
-                                <label class="label-base text-slate-400">Quick Range</label>
-                                <div class="flex items-center gap-1">
-                                    <button type="button" onclick="window.setAutofillPreset(30)" class="px-2 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-[10px] font-black rounded cursor-pointer transition-colors shadow-2xs">30D</button>
-                                    <button type="button" onclick="window.setAutofillPreset(90)" class="px-2 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-[10px] font-black rounded cursor-pointer transition-colors shadow-2xs">90D</button>
-                                    <button type="button" onclick="window.setAutofillPreset(180)" class="px-2 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-[10px] font-black rounded cursor-pointer transition-colors shadow-2xs">180D</button>
-                                    <button type="button" onclick="window.setAutofillPreset(365)" class="px-2 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-[10px] font-black rounded cursor-pointer transition-colors shadow-2xs">1 YR</button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- DUAL-CURVE EVENT PANEL -->
-                        <div id="autofill-events-panel" class="mb-6 space-y-4 evt-column" style="display: none;">
-                            <div class="bg-white p-3 rounded-xl shadow-xs border border-slate-300 w-full overflow-x-auto">
-                                <span class="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3 text-center w-full block">Dual-Curve Event Pricing (±2 Days Peak Pricing Curve)</span>
-                                <table class="w-full text-center border-separate border-spacing-y-2">
-                                    <thead>
-                                        <tr>
-                                            <th class="text-[9px] font-black uppercase text-slate-400 text-left pl-2">Segment</th>
-                                            <th class="text-[9px] font-black uppercase text-slate-400">Std Base</th>
-                                            <th class="text-[9px] font-black uppercase text-pink-500">EVT Pkg Base</th>
-                                            <th class="text-[9px] font-black uppercase text-slate-400">EVT -2</th>
-                                            <th class="text-[9px] font-black uppercase text-slate-400">EVT -1</th>
-                                            <th class="text-[10px] font-black uppercase text-amber-500">Peak Day</th>
-                                            <th class="text-[9px] font-black uppercase text-slate-400">EVT +1</th>
-                                            <th class="text-[9px] font-black uppercase text-slate-400">EVT +2</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr class="bg-indigo-50/50">
-                                            <td class="text-xs font-bold text-indigo-700 text-left pl-2 rounded-l-lg border border-indigo-100 border-r-0">Privates</td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-base" class="input-base text-center !py-1 !px-1" value="899" onfocus="this.select()" oninput="document.getElementById('w-p-base-single').value = this.value; window.debounceSaveBaselines();"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-pkg" class="input-base text-center !py-1 !px-1 text-pink-700" value="1000" onfocus="this.select()" oninput="window.debounceSaveBaselines()"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-m2" class="input-base text-center !py-1 !px-1" value="1099" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-m1" class="input-base text-center !py-1 !px-1" value="1999" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="5999" onfocus="this.select()" oninput="window.debounceSaveBaselines()"></td>
-                                            <td class="border-y border-indigo-100"><input type="number" step="any" id="w-p-p1" class="input-base text-center !py-1 !px-1" value="1999" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
-                                            <td class="rounded-r-lg border border-indigo-100 border-l-0"><input type="number" step="any" id="w-p-p2" class="input-base text-center !py-1 !px-1" value="1099" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
-                                        </tr>
-                                        <tr class="bg-orange-50/50">
-                                            <td class="text-xs font-bold text-orange-700 text-left pl-2 rounded-l-lg border border-orange-100 border-r-0">Dorms</td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-base" class="input-base text-center !py-1 !px-1" value="199" onfocus="this.select()" oninput="document.getElementById('w-d-base-single').value = this.value; window.debounceSaveBaselines();"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-pkg" class="input-base text-center !py-1 !px-1 text-pink-700" value="200" onfocus="this.select()" oninput="window.debounceSaveBaselines()"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-m1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-0" class="input-base text-center !py-1.5 !px-1 font-black text-amber-700 border-amber-400 relative z-10 scale-110 shadow-md bg-amber-50" value="2499" onfocus="this.select()" oninput="window.debounceSaveBaselines()"></td>
-                                            <td class="border-y border-orange-100"><input type="number" step="any" id="w-d-p1" class="input-base text-center !py-1 !px-1" value="799" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
-                                            <td class="rounded-r-lg border border-orange-100 border-l-0"><input type="number" step="any" id="w-d-p2" class="input-base text-center !py-1 !px-1" value="299" onfocus="this.select()" oninput="window.debounceSaveBaselines();"></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            
-                            <!-- STAY RESTRICTIONS CURVE -->
-                            <div class="bg-white p-3 rounded-xl shadow-xs border border-slate-300 w-full overflow-x-auto">
-                                <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-3 flex-wrap gap-2">
-                                    <div class="flex items-center gap-2">
-                                        <i data-lucide="shield-alert" size="16" class="text-pink-600"></i>
-                                        <span class="text-[10px] font-black text-pink-700 uppercase tracking-widest">Event Stay Restrictions Curve (Exclusively EVT Rate Plans)</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <div class="flex items-center bg-slate-100 p-0.5 rounded border border-slate-200 text-[9px] font-black uppercase">
-                                            <span class="px-1.5 text-slate-500">SPAN:</span>
-                                            <button type="button" onclick="window.setEvtRestrWindow(2)" id="restr-span-2" class="px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer">±2D</button>
-                                            <button type="button" onclick="window.setEvtRestrWindow(4)" id="restr-span-4" class="px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer">±4D</button>
-                                            <button type="button" onclick="window.setEvtRestrWindow(7)" id="restr-span-7" class="px-2 py-0.5 rounded bg-white text-indigo-700 shadow-2xs font-black cursor-pointer">±7D</button>
-                                        </div>
-                                        <label class="flex items-center gap-1.5 bg-pink-50 px-2 py-0.5 rounded border border-pink-200 cursor-pointer text-[10px] font-black uppercase text-pink-700">
-                                            <input type="checkbox" id="w-enable-evt-restr" checked onchange="window.toggleEvtRestrInputs(this.checked); window.debounceSaveBaselines();" class="row-checkbox"> Enable Restrictions
-                                        </label>
-                                    </div>
-                                </div>
-                                <div id="evt-restr-table-wrap" class="overflow-x-auto">
-                                    <table class="w-full text-center border-separate border-spacing-y-1.5 min-w-[750px]">
-                                        <thead>
-                                            <tr id="evt-restr-thead-row">
-                                                <th class="text-[9px] font-black uppercase text-slate-400 text-left pl-2 w-28">Rule Type</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="evt-restr-tbody"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- STANDARD PANEL -->
-                        <div id="autofill-standard-panel" class="mb-6 relative no-evt-column">
-                            <div class="bg-white p-3 rounded-xl shadow-xs border border-slate-300 w-full">
-                                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">Standard Pricing (Standard Anchor Rates)</span>
-                                <table class="w-full text-center border-separate border-spacing-y-2">
-                                    <thead>
-                                        <tr>
-                                            <th class="text-[9px] font-black uppercase text-slate-400 text-left pl-2">Segment</th>
-                                            <th class="text-[9px] font-black uppercase text-slate-400">Standard Base Rate</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr class="bg-indigo-50/50">
-                                            <td class="text-xs font-bold text-indigo-700 text-left pl-2 rounded-l-lg border border-indigo-100 border-r-0 py-2">Privates</td>
-                                            <td class="rounded-r-lg border border-indigo-100 border-l-0 px-2 py-2"><input type="number" step="any" id="w-p-base-single" class="input-base text-center !py-1 !px-1 w-32 font-bold" value="899" onfocus="this.select()" oninput="document.getElementById('w-p-base').value = this.value; window.debounceSaveBaselines();"></td>
-                                        </tr>
-                                        <tr class="bg-orange-50/50">
-                                            <td class="text-xs font-bold text-orange-700 text-left pl-2 rounded-l-lg border border-orange-100 border-r-0 py-2">Dorms</td>
-                                            <td class="rounded-r-lg border border-orange-100 border-l-0 px-2 py-2"><input type="number" step="any" id="w-d-base-single" class="input-base text-center !py-1 !px-1 w-32 font-bold" value="199" onfocus="this.select()" oninput="document.getElementById('w-d-base').value = this.value; window.debounceSaveBaselines();"></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div class="flex flex-col sm:flex-row gap-2">
-                            <button onclick="window.runAutomator()" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"><i data-lucide="check" size="16"></i> Bulk Update</button>
-                            <button onclick="window.clearOverrides()" class="sm:w-auto px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded font-black text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 border border-rose-200 transition-colors cursor-pointer"><i data-lucide="rotate-ccw" size="14"></i> Clear Overrides</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 5: RELATIONAL LINKING VIEW -->
-            <div id="view-relational" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
-                <div class="max-w-4xl mx-auto space-y-4">
-                    <div class="bg-white border border-slate-300 rounded-lg shadow-xs overflow-hidden flex flex-col">
-                        <div class="p-3 bg-slate-100 border-b border-slate-300 flex justify-between items-center">
-                            <div class="flex flex-col">
-                                <span class="text-xs font-black uppercase tracking-widest text-slate-700">Bidirectional Pricing Links</span>
-                                <span class="text-[10px] font-bold text-slate-400">Rules persist automatically and ripple out as base rates update.</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <button onclick="window.saveRelationshipsToCloud(true)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[10px] uppercase transition-colors shadow-2xs cursor-pointer flex items-center gap-1">
-                                    <i data-lucide="save" size="13"></i> Save Rule Links
-                                </button>
-                                <button onclick="window.addRelationshipRow()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded font-black text-[10px] uppercase transition-colors shadow-2xs cursor-pointer flex items-center gap-1">
-                                    <i data-lucide="plus" size="13"></i> Add Rule
-                                </button>
-                            </div>
-                        </div>
-                        <div class="overflow-x-auto p-0">
-                            <table class="w-full text-left border-collapse min-w-[650px]">
-                                <thead class="bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest">
-                                    <tr>
-                                        <th class="p-2 w-10 text-center">Del</th>
-                                        <th class="p-2 text-center border-r border-slate-700 w-1/4">Anchor (Base)</th>
-                                        <th class="p-2 text-center border-r border-slate-700 w-1/4">Target Room</th>
-                                        <th class="p-2 text-center border-r border-slate-700">STD Rule</th>
-                                        <th class="p-2 text-center bg-pink-900 evt-column" style="display: none;">EVT Rule</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="relationships-body" class="text-xs">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 6: OTA MAPPING SUITE -->
-            <div id="view-mapping" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
-                <div class="max-w-4xl mx-auto space-y-4">
-                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-xs bg-indigo-50/50 border-indigo-200">
-                        <h2 class="text-xs font-black uppercase text-indigo-700 mb-2 border-b border-indigo-200 pb-2 flex items-center gap-2">
-                            <i data-lucide="key-round" size="14"></i> Channex Credentials (Production)
-                        </h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1 text-xs">
-                            <div>
-                                <label class="label-base text-indigo-600">Channex API Key</label>
-                                <input type="password" id="chan-api-key" class="input-base border-indigo-300 bg-white" placeholder="Enter API key...">
-                            </div>
-                            <div>
-                                <label class="label-base text-indigo-600">Channex Property ID</label>
-                                <input type="text" id="chan-prop-id" class="input-base border-indigo-300 bg-white" placeholder="UUID e.g. be74cdc9-...">
-                            </div>
-                        </div>
-                        <div class="mt-3 flex justify-end">
-                            <button onclick="window.saveCredentialsAndFetch()" class="px-5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"><i data-lucide="save" size="13"></i> Save & Fetch Channex Data</button>
-                        </div>
-                    </div>
-
-                    <!-- Room Mapping Card -->
-                    <div class="bg-white p-5 border border-slate-200 rounded-xl shadow-xs">
-                        <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-3">
-                            <div>
-                                <h2 class="text-xs sm:text-sm font-black uppercase text-slate-800 flex items-center gap-2">
-                                    <i data-lucide="door-open" class="text-indigo-600"></i> Room Type Mapping
-                                </h2>
-                                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">
-                                    Map Channex room types directly to your PMS categories.
-                                </p>
-                            </div>
-                            <button onclick="window.saveMappingToDB(true)" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs uppercase shadow-xs flex items-center gap-1 transition-colors cursor-pointer">
-                                <i data-lucide="save" size="13"></i> Save Mappings
-                            </button>
-                        </div>
-                        <div id="channex-mapping-container" class="space-y-1.5"></div>
-                    </div>
-
-                    <!-- Rate Plan Classification Audit Card -->
-                    <div id="channex-rate-mapping-card" class="bg-white p-5 border border-amber-200 rounded-xl shadow-xs hidden flex-col">
-                        <div class="flex items-center justify-between border-b border-amber-200 pb-3 mb-3 flex-wrap gap-2">
-                            <div>
-                                <h2 class="text-xs sm:text-sm font-black uppercase text-amber-900 flex items-center gap-2">
-                                    <i data-lucide="tags" class="text-amber-600"></i> Rate Plan Classifications
-                                </h2>
-                                <p class="text-[10px] font-bold text-amber-700/80 uppercase tracking-wide mt-0.5">
-                                    Verify detected Channel and Policy for each active plan.
-                                </p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <button onclick="window.saveMappingToDB(true)" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs uppercase shadow-xs flex items-center gap-1 transition-colors cursor-pointer">
-                                    <i data-lucide="save" size="13"></i> Save Classifications
-                                </button>
-                            </div>
-                        </div>
-
-                        <div id="channex-rate-mapping-container" class="space-y-1.5"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 7: MANUAL SYNC & AUDITOR -->
+            <!-- TAB 3: OTA AUDITOR & LIVE AVAILABILITY -->
             <div id="view-manual" class="hidden flex-1 flex flex-col p-2 sm:p-3 gap-2 bg-white min-h-0 overflow-y-auto">
                 <div class="flex items-center justify-between pb-1 shrink-0 border-b border-slate-200">
                     <h2 class="text-xs sm:text-sm font-black uppercase text-slate-800 flex items-center gap-1.5">
