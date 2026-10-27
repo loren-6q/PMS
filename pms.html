@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Wild & Wandering PMS</title>
+    <title>PMS Front Desk</title>
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
@@ -35,11 +35,12 @@
     <div id="boot-loader" class="loading-overlay"><div class="spinner"></div><div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4"><span id="sync-status">Authenticating...</span></div></div>
 
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+        <!-- TOP NAVBAR -->
         <div class="bg-white px-1 sm:px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50 unselectable w-full">
             
             <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
                 <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
-                    <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
+                    <img id="main-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Property Logo" class="h-8 sm:h-11 object-contain">
                 </a>
                 
                 <div class="flex bg-slate-100 rounded sm:rounded-lg p-0.5 sm:p-1 items-center gap-0.5 shrink-0 border border-slate-200">
@@ -94,6 +95,7 @@
                                 <a href="accounting.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="dollar-sign" size="14" class="text-green-600"></i> Accounting</a>
                                 <a href="channelmanager.html" target="_blank" id="channex-sync-btn" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-blue-700 hidden"><i data-lucide="zap" size="14" class="text-blue-600"></i> Channel Manager</a>
                                 <div class="border-t border-slate-100 my-1"></div>
+                                <a href="setup.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-indigo-700"><i data-lucide="sliders" size="14" class="text-indigo-600"></i> Property Setup</a>
                                 <a href="settings.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-slate-600"><i data-lucide="settings" size="14" class="text-purple-600"></i> Settings</a>
                             </div>
                         </div>
@@ -102,6 +104,7 @@
             </div>
         </div>
 
+        <!-- DASHBOARD VIEW -->
         <div id="dashboard-view" class="flex-1 flex flex-col min-h-0 bg-slate-100 overflow-y-auto hidden gap-2 p-0 sm:p-2">
             <div class="flex items-center justify-between bg-white p-2 rounded-lg shadow-sm border border-slate-200 shrink-0">
                 <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg flex items-center gap-2"><i data-lucide="layout-dashboard" class="text-blue-600"></i> Today's Snapshot <span id="dash-date-display" class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded ml-2">--</span></h2>
@@ -119,13 +122,14 @@
                     <div class="dash-card bg-indigo-50 border-indigo-200">
                         <div class="dash-title flex justify-between text-indigo-700 border-indigo-200"><span><i data-lucide="tags" size="12" class="inline mb-0.5"></i> Today's Rates</span><button onclick="window.openPriceCheckModal()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer border border-indigo-700 flex items-center gap-1 transition-colors"><i data-lucide="calculator" size="10"></i> CHECK</button></div>
                         <div id="dash-rates-list" class="text-[11px] font-black space-y-0.5 text-indigo-900 mt-1 flex flex-col"></div>
-                        <div class="mt-2 pt-2 border-t border-indigo-100 flex flex-col gap-1 shrink-0"><textarea id="rates-textarea" rows="2" class="input-base font-mono text-[9px] whitespace-pre !p-1 bg-white border-indigo-200" placeholder="Paste BDC search text here to update..."></textarea><button onclick="window.parseBdcPublicRates()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer w-full uppercase font-black transition-colors">UPDATE DAILY RATES</button></div>
+                        <div class="mt-2 pt-2 border-t border-indigo-100 flex flex-col gap-1 shrink-0"><textarea id="rates-textarea" rows="2" class="input-base font-mono text-[9px] whitespace-pre !p-1 bg-white border-indigo-200" placeholder="Paste search text here..."></textarea><button onclick="window.parseBdcPublicRates()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer w-full uppercase font-black transition-colors">UPDATE DAILY RATES</button></div>
                     </div>
                     <div class="dash-card border-orange-200 bg-orange-50/30"><div class="dash-title flex justify-between text-orange-600 border-orange-200"><span><i data-lucide="alert-triangle" size="12" class="inline mb-0.5"></i> Action Items</span></div><div id="dash-act-list" class="space-y-1 text-xs max-h-[160px] overflow-y-auto no-scrollbar"></div></div>
                 </div>
             </div>
         </div>
 
+        <!-- CALENDAR VIEW -->
         <div id="calendar-view" class="flex-1 flex flex-col min-h-0 unselectable">
             <div id="calendar-scroll-container" class="flex-1 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-auto relative overscroll-none">
                 <div id="calendar-header-months" class="timeline-grid sticky top-0 z-[60] bg-slate-800 shadow-sm border-b border-slate-700 h-[26px] box-border"></div>
@@ -133,7 +137,7 @@
                 <div id="timeline-body" class="relative pb-2"></div>
             </div>
 
-            <!-- PULL-TAB (TUCKS KEY AWAY TO MAXIMIZE CALENDAR SCREEN SPACE) -->
+            <!-- COLLAPSIBLE LEGEND DRAWER (MANAGED BY pms-calendar.js) -->
             <div id="legend-toggle-bar" onclick="window.toggleLegendDrawer()" class="bg-slate-900 text-white px-3 py-1.5 flex items-center justify-between cursor-pointer border-t border-slate-700 text-[10px] font-black uppercase tracking-wider shrink-0 select-none shadow-md z-40 hover:bg-slate-800 transition-colors">
                 <div class="flex items-center gap-1.5">
                     <i data-lucide="info" size="13" class="text-blue-400"></i>
@@ -145,9 +149,7 @@
                 </div>
             </div>
 
-            <!-- EXACT PMS TAPE CHART LEGEND (COLLAPSIBLE DRAWER) -->
             <footer id="calendar-legend" class="mt-0 bg-white p-1.5 sm:p-2 sm:rounded-b-lg border-x border-b border-slate-200 flex flex-col gap-y-1.5 shrink-0 text-[10px] md:text-[11px] select-text cursor-default shadow-lg max-h-[50vh] overflow-y-auto" style="display: none;">
-                
                 <!-- ROW 1: 11 Status Cycles -->
                 <div class="flex items-center gap-1.5 flex-wrap justify-center select-text">
                     <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-1">Status:</span>
@@ -167,227 +169,50 @@
                 <!-- ROW 2: Bar Border States & Keyframe Alerts -->
                 <div class="flex items-center gap-x-2.5 gap-y-1.5 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-700 select-text">
                     <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-0.5">Alerts:</span>
-                    
-                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-red-500 cursor-help" title="Owes Balance (solid red border)">
-                        OWES
-                    </div>
-
-                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-dashed border-red-500 cursor-help" title="Bad Credit Card (dashed red border)">
-                        BAD CC
-                    </div>
-
+                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-red-500 cursor-help" title="Owes Balance">OWES</div>
+                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-dashed border-red-500 cursor-help" title="Bad Credit Card">BAD CC</div>
                     <div class="h-3 w-[1px] bg-slate-200 hidden sm:block"></div>
-
-                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase checkin-today cursor-help" title="Check-in Today">
-                        Arrive Today
-                    </div>
-                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase late-checkin cursor-help" title="Should have checked in already">
-                        LATE
-                    </div>
-
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase checkin-today cursor-help">Arrive Today</div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase late-checkin cursor-help">LATE</div>
                     <div class="h-3 w-[1px] bg-slate-200 hidden sm:block"></div>
-
-                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-today cursor-help" title="Check-out Today">
-                        Depart Today
-                    </div>
-                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-past cursor-help" title="Overdue Departure (Guest still marked 'here' past checkout date)">
-                        Late Out
-                    </div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-today cursor-help">Depart Today</div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-past cursor-help">Late Out</div>
                 </div>
 
                 <!-- ROW 3: OTA Channels -->
                 <div class="flex items-center gap-x-3 gap-y-1 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-600 select-text">
                     <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-0.5">Channels:</span>
-                    
-                    <div class="flex items-center gap-1" title="Booking.com">
-                        <div class="bg-[#003580] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">B</div>
-                        <span class="text-slate-700">BDC</span>
-                    </div>
-
-                    <div class="flex items-center gap-1" title="Hostelworld">
-                        <div class="bg-[#F15A24] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">H</div>
-                        <span class="text-slate-700">HW</span>
-                    </div>
-
-                    <div class="flex items-center gap-1" title="Agoda">
-                        <div class="bg-[#87B2D6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div>
-                        <span class="text-slate-700">Agoda</span>
-                    </div>
-
-                    <div class="flex items-center gap-1" title="Airbnb">
-                        <div class="bg-[#FF5A5F] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div>
-                        <span class="text-slate-700">Airbnb</span>
-                    </div>
-
-                    <div class="flex items-center gap-1" title="Expedia">
-                        <div class="bg-[#facc15] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]"><span class="text-[#003580]">E</span></div>
-                        <span class="text-slate-700">Expedia</span>
-                    </div>
-
-                    <div class="flex items-center gap-1" title="Ctrip / Trip.com">
-                        <div class="bg-[#3b82f6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">T</div>
-                        <span class="text-slate-700">Ctrip</span>
-                    </div>
-
-                    <div class="flex items-center gap-1" title="Direct Booking">
-                        <div class="bg-emerald-500 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">D</div>
-                        <span class="text-slate-700">Direct</span>
-                    </div>
-
-                    <div class="flex items-center gap-1" title="Walk-in Guest">
-                        <div class="bg-slate-600 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">W</div>
-                        <span class="text-slate-700">Walk-in</span>
-                    </div>
-
-                    <div class="flex items-center gap-1" title="Other Source">
-                        <div class="bg-slate-700 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">?</div>
-                        <span class="text-slate-700">Other</span>
-                    </div>
+                    <div class="flex items-center gap-1"><div class="bg-[#003580] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">B</div><span>BDC</span></div>
+                    <div class="flex items-center gap-1"><div class="bg-[#F15A24] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">H</div><span>HW</span></div>
+                    <div class="flex items-center gap-1"><div class="bg-[#87B2D6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div><span>Agoda</span></div>
+                    <div class="flex items-center gap-1"><div class="bg-[#FF5A5F] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div><span>Airbnb</span></div>
+                    <div class="flex items-center gap-1"><div class="bg-[#facc15] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]"><span class="text-[#003580]">E</span></div><span>Expedia</span></div>
+                    <div class="flex items-center gap-1"><div class="bg-[#3b82f6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">T</div><span>Ctrip</span></div>
+                    <div class="flex items-center gap-1"><div class="bg-emerald-500 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">D</div><span>Direct</span></div>
+                    <div class="flex items-center gap-1"><div class="bg-slate-600 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">W</div><span>Walk-in</span></div>
                 </div>
 
-                <!-- ROW 4: Stay Details, Upgrades, Feedback, and Mail Lifecycle -->
+                <!-- ROW 4: Details & Badges -->
                 <div class="flex items-center gap-x-3 gap-y-1.5 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-600 select-text">
-                    <div class="flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 cursor-help" title="Italics = Refundable ; Not Italics = Non-Refundable">
-                        <span class="italic font-black text-slate-800 text-[10px]">Refundable ital.</span>
-                    </div>
-
-                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 cursor-help" title="Stay has been extended">
-                        <span id="leg-svg-ext" class="w-4 h-3.5 inline-block shrink-0"></span>
-                        <span class="text-slate-700">Extended</span>
-                    </div>
-
-                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 cursor-help" title="Linked booking - multiple rooms, room change, etc.">
-                        <span id="leg-svg-link" class="w-4 h-4 inline-block shrink-0"></span>
-                        <span class="text-slate-700">Linked</span>
-                    </div>
-
+                    <span class="italic font-black text-slate-800 text-[10px] bg-slate-50 px-2 py-0.5 rounded border border-slate-200">Refundable ital.</span>
+                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200"><span id="leg-svg-ext" class="w-4 h-3.5 inline-block shrink-0"></span><span>Extended</span></div>
+                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200"><span id="leg-svg-link" class="w-4 h-4 inline-block shrink-0"></span><span>Linked</span></div>
                     <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
                         <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Upgrade:</span>
-                        <div class="flex items-center gap-1" title="Free Upgrade">
-                            <span id="leg-svg-upFree" class="w-3.5 h-4 inline-block shrink-0"></span>
-                            <span class="text-slate-700">Free</span>
-                        </div>
+                        <span id="leg-svg-upFree" class="w-3.5 h-4 inline-block shrink-0"></span><span>Free</span>
                         <span class="text-slate-300">|</span>
-                        <div class="flex items-center gap-1" title="Paid Upgrade">
-                            <span id="leg-svg-upPaid" class="w-3.5 h-4 inline-block shrink-0"></span>
-                            <span class="text-slate-700">Paid</span>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
-                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Feedback:</span>
-                        <div class="flex items-center gap-1" title="Good Guest Feedback">
-                            <span id="leg-svg-fbGood" class="w-4 h-4 inline-block shrink-0"></span>
-                            <span class="text-slate-700">Good</span>
-                        </div>
-                        <span class="text-slate-300">|</span>
-                        <div class="flex items-center gap-1" title="Bad / Warning Feedback">
-                            <span id="leg-svg-fbBad" class="w-4 h-4 inline-block shrink-0"></span>
-                            <span class="text-slate-700">Bad</span>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
-                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Mail:</span>
-                        <div class="flex items-center gap-1" title="Booking confirmation sent">
-                            <span id="leg-svg-mailConf" class="w-4 h-3.5 inline-block shrink-0"></span>
-                            <span class="text-slate-700">SENT</span>
-                        </div>
-                        <span class="text-slate-300">|</span>
-                        <div class="flex items-center gap-1" title="Booking confirmation sent (Non-FMP / standard)">
-                            <span id="leg-svg-mailNotFmp" class="w-4 h-3.5 inline-block shrink-0"></span>
-                            <span class="text-slate-700">NOT FMP</span>
-                        </div>
-                        <span class="text-slate-300">|</span>
-                        <div class="flex items-center gap-1" title="FMP date check email sent (Arriving/departing near Full Moon Party)">
-                            <span id="leg-svg-mailPre" class="w-4 h-3.5 inline-block shrink-0"></span>
-                            <span class="text-slate-700">FMP?</span>
-                        </div>
-                        <span class="text-slate-300">|</span>
-                        <div class="flex items-center gap-1" title="Guest confirmed non-FMP attendance or updated dates">
-                            <span id="leg-svg-mailPreConf" class="w-4 h-3.5 inline-block shrink-0"></span>
-                            <span class="text-slate-700">CONF.</span>
-                        </div>
-                        <span class="text-slate-300">|</span>
-                        <div class="flex items-center gap-1" title="Special instructions email sent">
-                            <span id="leg-svg-mailSpec" class="w-4 h-3.5 inline-block shrink-0"></span>
-                            <span class="text-slate-700">SPECIAL</span>
-                        </div>
+                        <span id="leg-svg-upPaid" class="w-3.5 h-4 inline-block shrink-0"></span><span>Paid</span>
                     </div>
                 </div>
-
-                <script>
-                    (function initCalendarLegend() {
-                        const mountSvgs = () => {
-                            if (!window.SVGS) return false;
-                            const keys = ['upFree', 'upPaid', 'ext', 'link', 'mailConf', 'mailNotFmp', 'mailPre', 'mailPreConf', 'mailSpec', 'fbGood', 'fbBad'];
-                            keys.forEach(k => {
-                                const el = document.getElementById('leg-svg-' + k);
-                                if (el && window.SVGS[k]) {
-                                    el.innerHTML = window.SVGS[k];
-                                }
-                            });
-                            return true;
-                        };
-
-                        window.toggleLegendDrawer = () => {
-                            const leg = document.getElementById('calendar-legend');
-                            const chevron = document.getElementById('legend-toggle-chevron');
-                            const label = document.getElementById('legend-toggle-label');
-                            if (!leg) return;
-                            const isHidden = (leg.style.display === 'none' || leg.classList.contains('hidden'));
-                            if (isHidden) {
-                                leg.style.display = 'flex';
-                                leg.classList.remove('hidden');
-                                if (chevron) chevron.style.transform = 'rotate(180deg)';
-                                if (label) label.innerText = 'Hide Key';
-                            } else {
-                                leg.style.display = 'none';
-                                leg.classList.add('hidden');
-                                if (chevron) chevron.style.transform = 'rotate(0deg)';
-                                if (label) label.innerText = 'Show Key';
-                            }
-                            if (window.lucide) window.lucide.createIcons();
-                        };
-                        window.toggleMobileLegend = window.toggleLegendDrawer;
-
-                        const legEl = document.getElementById('calendar-legend');
-                        if (legEl) {
-                            legEl.addEventListener('click', e => {
-                                const target = e.target.closest('[title]');
-                                if (!target) return;
-                                const titleTxt = target.getAttribute('title');
-                                const tt = document.getElementById('custom-tooltip');
-                                if (tt && titleTxt) {
-                                    tt.innerText = titleTxt;
-                                    tt.style.display = 'block';
-                                    tt.style.position = 'fixed';
-                                    tt.style.bottom = '48px';
-                                    tt.style.left = '50%';
-                                    tt.style.transform = 'translateX(-50%)';
-                                    tt.style.zIndex = '9999';
-                                    tt.className = 'bg-slate-900 text-white font-bold text-xs px-3 py-1.5 rounded-lg shadow-xl border border-slate-700 pointer-events-none transition-opacity';
-                                    clearTimeout(window._legTtTimer);
-                                    window._legTtTimer = setTimeout(() => { if (tt) tt.style.display = 'none'; }, 2200);
-                                }
-                            });
-                        }
-
-                        if (!mountSvgs()) {
-                            window.addEventListener('DOMContentLoaded', mountSvgs);
-                            setTimeout(mountSvgs, 500);
-                            setTimeout(mountSvgs, 1500);
-                        }
-                    })();
-                </script>
             </footer>
         </div>
 
+        <!-- DATABASE VIEW -->
         <div id="database-view" class="flex-1 flex flex-col min-h-0 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-hidden hidden">
             <div class="p-2 bg-slate-100 border-b border-slate-300 flex flex-wrap gap-2 items-center text-xs unselectable shrink-0">
                 <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-room-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-36 cursor-pointer"><span id="db-room-label" class="truncate">ALL ROOMS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-room-dropdown" class="multi-select-dropdown absolute mt-1 w-48 bg-white border border-slate-300 rounded shadow-lg z-50 hidden"></div></div>
-                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-source-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-source-label" class="truncate">ALL SOURCES</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-source-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"><label><input type="checkbox" value="direct" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> DIRECT</label><label><input type="checkbox" value="booking.com" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> BOOKING.COM</label><label><input type="checkbox" value="agoda" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> AGODA</label><label><input type="checkbox" value="hostelworld" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> HOSTELWORLD</label><label><input type="checkbox" value="airbnb" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> AIRBNB</label><label><input type="checkbox" value="expedia" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> EXPEDIA</label><label><input type="checkbox" value="ctrip" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> CTRIP</label><label><input type="checkbox" value="walk-in" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-1.5"> WALK-IN</label></div></div>
-                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-status-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-status-label" class="truncate">ALL STATUS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-status-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"><label><input type="checkbox" value="new" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> NEW</label><label><input type="checkbox" value="future" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> FUTURE</label><label><input type="checkbox" value="here" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> HERE</label><label><input type="checkbox" value="left" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> LEFT</label><label><input type="checkbox" value="cancelled" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> CANCELLED</label><label><input type="checkbox" value="noshow" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> NO-SHOW</label><label><input type="checkbox" value="special" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> SPECIAL</label><label><input type="checkbox" value="blocked" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> BLOCKED</label><label><input type="checkbox" value="charged" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> CHARGED</label><label><input type="checkbox" value="vol" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> VOLUNTEER</label><label><input type="checkbox" value="unconfirmed" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-1.5"> UNCONFIRMED</label></div></div>
+                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-source-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-source-label" class="truncate">ALL SOURCES</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-source-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"></div></div>
+                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-status-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-status-label" class="truncate">ALL STATUS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-status-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"></div></div>
                 <div class="flex items-center gap-1"><select id="db-filter-preset" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none cursor-pointer text-slate-700" onchange="window.applyDbPreset(this.value)"><option value="custom">CUSTOM DATES</option><option value="today">TODAY</option><option value="tomorrow">TOMORROW</option><option value="this_week">THIS WEEK</option><option value="next_week">NEXT WEEK</option><option value="this_month">THIS MONTH</option><option value="next_month">NEXT MONTH</option></select><input type="date" id="db-filter-start" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none" onchange="window.renderDatabase(); $('db-filter-preset').value='custom';"><span class="font-bold text-slate-400">to</span><input type="date" id="db-filter-end" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none" onchange="window.renderDatabase(); $('db-filter-preset').value='custom';"></div>
                 <input type="text" id="db-filter-name" placeholder="GUEST / ID..." class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none focus:ring-2 focus:ring-blue-500 uppercase w-32" oninput="window.renderDatabase()">
                 <div class="flex items-center gap-1 border border-slate-300 bg-white rounded px-1"><span class="text-slate-400 font-black pl-1">฿</span><input type="number" id="db-filter-min" placeholder="MIN" class="w-16 py-1 font-bold outline-none text-center" oninput="window.renderDatabase()"><span class="text-slate-300">-</span><input type="number" id="db-filter-max" placeholder="MAX" class="w-16 py-1 font-bold outline-none text-center" oninput="window.renderDatabase()"></div>
@@ -399,6 +224,7 @@
         </div>
     </div>
 
+    <!-- GUEST MODAL -->
     <div id="guest-modal" class="modal-overlay">
         <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800">
             <div id="modal-header-btn" class="bg-slate-900 p-2 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable" onmousedown="window.startDrag(event)">
@@ -455,12 +281,12 @@
                     </div>
                     
                     <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200">
-                        <button type="button" id="tm30-sync-btn" onclick="window.syncTM30()" class="w-full h-[28px] bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300 rounded text-[9px] sm:text-[10px] font-black uppercase flex items-center justify-center gap-1 transition-colors cursor-pointer truncate px-1 shadow-sm" title="Scan & Sync Passports with TM30">
+                        <button type="button" id="tm30-sync-btn" onclick="window.syncTM30()" class="w-full h-[28px] bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300 rounded text-[9px] sm:text-[10px] font-black uppercase flex items-center justify-center gap-1 transition-colors cursor-pointer truncate px-1 shadow-sm" title="Scan Passports">
                             <i data-lucide="scan-face" size="13" class="shrink-0"></i>
                             <span class="truncate">TM30 SYNC</span>
                         </button>
 
-                        <div class="w-full h-[28px] bg-white border border-slate-300 rounded shadow-sm flex items-center justify-between px-0.5 text-[10px] font-black text-slate-600 select-none" title="Guest Count (PAX)">
+                        <div class="w-full h-[28px] bg-white border border-slate-300 rounded shadow-sm flex items-center justify-between px-0.5 text-[10px] font-black text-slate-600 select-none" title="PAX">
                             <button type="button" onclick="window.adjustPax(-1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer hover:bg-slate-100 rounded-l">◀</button>
                             <div class="flex items-center gap-0.5">
                                 <i data-lucide="users" size="11" class="text-slate-400 shrink-0"></i>
@@ -495,7 +321,7 @@
                 <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('ext-section', 'ext-chevron')"><span class="text-blue-700"><i data-lucide="calendar-plus" size="14" class="inline mb-0.5 mr-1"></i>Extend Stay</span><i data-lucide="chevron-down" id="ext-chevron" size="14" class="transition-transform duration-200" style="transform: rotate(-90deg);"></i></div>
                 <div id="ext-section" class="bg-blue-50/50 p-1.5 border-x border-b border-blue-200 rounded-b-md mt-0 hidden" style="display: none;">
                     <div class="flex gap-1.5 items-end"><div class="w-16"><label class="field-label">Days</label><input type="number" id="ext-days" value="1" min="1" class="input-base text-center" oninput="if(window.calcExtension) window.calcExtension()"></div><div class="w-24"><label class="field-label text-slate-400 text-[10px]">Avg Daily ฿</label><input type="text" id="ext-avg-rate" class="input-base text-slate-500" readonly></div><div class="flex-1"><label class="field-label text-blue-600">Ext. Price ฿</label><input type="number" id="ext-price" class="input-base text-blue-700"></div></div>
-                    <div class="flex gap-1.5 mt-1.5"><button type="button" id="btn-check-bdc" onclick="window.checkBdcPrice()" class="flex-1 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-black uppercase rounded border border-slate-300 flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"><i data-lucide="external-link" size="12"></i> Check BDC Rate</button><button type="button" onclick="window.confirmExtension()" class="flex-1 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded shadow-sm flex items-center justify-center gap-1 transition-colors cursor-pointer"><i data-lucide="plus-circle" size="12"></i> Add Extension</button></div>
+                    <div class="flex gap-1.5 mt-1.5"><button type="button" id="btn-check-bdc" onclick="window.checkBdcPrice()" class="flex-1 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-black uppercase rounded border border-slate-300 flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"><i data-lucide="external-link" size="12"></i> Check Rate</button><button type="button" onclick="window.confirmExtension()" class="flex-1 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded shadow-sm flex items-center justify-center gap-1 transition-colors cursor-pointer"><i data-lucide="plus-circle" size="12"></i> Add Extension</button></div>
                 </div>
 
                 <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('fin-section', 'fin-chevron')"><span>Payments</span><i data-lucide="chevron-down" id="fin-chevron" size="14" class="transition-transform duration-200"></i></div>
@@ -547,7 +373,7 @@
                     <button type="button" id="merge-btn" title="Merge" onclick="window.requestMerge()" class="btn-tool bg-indigo-100 text-indigo-700 hover:bg-indigo-200"><i data-lucide="merge" size="14" class="shrink-0"></i></button>
                     <button type="button" id="dup-btn" title="Duplicate" onclick="window.requestDuplicate()" class="btn-tool bg-blue-100 text-blue-700 hover:bg-blue-200"><i data-lucide="copy" size="14" class="shrink-0"></i></button>
                     <button type="button" id="hist-btn" title="History" onclick="window.showAuditHistory()" class="btn-tool bg-slate-200 text-slate-700 hover:bg-slate-300"><i data-lucide="clock" size="14" class="shrink-0"></i></button>
-                    <!-- Quick Invoice PDF Download Button -->
+                    <!-- Quick Invoice Button (Calls window.generateGuestInvoice in pms-folio.js) -->
                     <button type="button" id="invoice-btn" title="Invoice" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-100 text-emerald-700 hover:bg-emerald-200"><i data-lucide="receipt" size="14" class="shrink-0"></i></button>
                 </div>
                 <div class="flex gap-1 shrink-0 ml-auto">
@@ -559,15 +385,17 @@
         </div>
     </div>
 
-    <div id="charge-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span class="flex items-center gap-1.5"><i data-lucide="plus-circle" size="16" class="text-blue-400"></i> Add Itemized Charge</span><button type="button" onclick="window.closeModal('charge-modal')" class="p-1 hover:bg-slate-800 rounded cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><div><label class="field-label mb-1">Quick Presets</label><div class="flex flex-wrap gap-1"><span class="preset-pill" onclick="window.applyChargePreset('Ferry Ticket', 400)">Ferry ฿400</span><span class="preset-pill" onclick="window.applyChargePreset('Van Transfer', 300)">Transfer ฿300</span><span class="preset-pill" onclick="window.applyChargePreset('Drink Package', 350)">Drinks ฿350</span><span class="preset-pill" onclick="window.applyChargePreset('Tour Package', 1200)">Tour ฿1200</span><span class="preset-pill" onclick="window.applyChargePreset('Laundry', 100)">Laundry ฿100</span><span class="preset-pill" onclick="window.applyChargePreset('Late Checkout', 300)">Late Out ฿300</span><span class="preset-pill" onclick="window.applyChargePreset('Scooter Rental', 250)">Scooter ฿250</span></div></div><div><label class="field-label mb-0.5">Description</label><input type="text" id="charge-desc" placeholder="e.g. Airport Van, Towel Rental..." class="input-base !p-2 !text-xs uppercase font-black"></div><div class="grid grid-cols-2 gap-2"><div><label class="field-label mb-0.5">Amount (฿)</label><input type="number" id="charge-amount" step="any" placeholder="0" class="input-base !p-2 !text-sm font-black text-blue-700"></div><div><label class="field-label mb-0.5">Date</label><input type="date" id="charge-date" class="input-base !p-2 !text-xs font-black cursor-pointer"></div></div><div class="flex gap-2 justify-end mt-2"><button type="button" onclick="window.closeModal('charge-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button><button type="button" onclick="window.confirmAddCharge()" class="btn-modal bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 shadow-md"><i data-lucide="check" size="14"></i> Add to Folio</button></div></div></div></div>
+    <!-- UTILITY MODALS -->
+    <div id="charge-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span class="flex items-center gap-1.5"><i data-lucide="plus-circle" size="16" class="text-blue-400"></i> Add Itemized Charge</span><button type="button" onclick="window.closeModal('charge-modal')" class="p-1 hover:bg-slate-800 rounded cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><div><label class="field-label mb-1">Quick Presets</label><div class="flex flex-wrap gap-1"><span class="preset-pill" onclick="window.applyChargePreset('Ferry Ticket', 400)">Ferry ฿400</span><span class="preset-pill" onclick="window.applyChargePreset('Van Transfer', 300)">Transfer ฿300</span><span class="preset-pill" onclick="window.applyChargePreset('Drink Package', 350)">Drinks ฿350</span><span class="preset-pill" onclick="window.applyChargePreset('Tour Package', 1200)">Tour ฿1200</span><span class="preset-pill" onclick="window.applyChargePreset('Laundry', 100)">Laundry ฿100</span><span class="preset-pill" onclick="window.applyChargePreset('Late Checkout', 300)">Late Out ฿300</span><span class="preset-pill" onclick="window.applyChargePreset('Scooter Rental', 250)">Scooter ฿250</span></div></div><div><label class="field-label mb-0.5">Description</label><input type="text" id="charge-desc" placeholder="e.g. Airport Van, Towel..." class="input-base !p-2 !text-xs uppercase font-black"></div><div class="grid grid-cols-2 gap-2"><div><label class="field-label mb-0.5">Amount (฿)</label><input type="number" id="charge-amount" step="any" placeholder="0" class="input-base !p-2 !text-sm font-black text-blue-700"></div><div><label class="field-label mb-0.5">Date</label><input type="date" id="charge-date" class="input-base !p-2 !text-xs font-black cursor-pointer"></div></div><div class="flex gap-2 justify-end mt-2"><button type="button" onclick="window.closeModal('charge-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button><button type="button" onclick="window.confirmAddCharge()" class="btn-modal bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 shadow-md"><i data-lucide="check" size="14"></i> Add to Folio</button></div></div></div></div>
     <div id="email-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Data Import</span><button type="button" onclick="window.closeModal('email-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><p class="text-xs font-bold text-slate-500 leading-tight">Paste a confirmation email from Booking.com, Airbnb, or Hostelworld.</p><textarea id="email-textarea" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2" placeholder="Paste text here..."></textarea><div class="flex gap-2 justify-end mt-2"><button onclick="window.closeModal('email-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button><button onclick="window.parseEmail()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1">Extract</button></div></div></div></div>
-    <div id="price-check-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Quick Price Check</span><button type="button" onclick="window.closeModal('price-check-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><div class="grid grid-cols-2 gap-3"><div class="col-span-2"><label class="field-label">Check-In</label><input type="date" id="pc-checkin" class="input-base !p-2 !text-sm"></div><div><label class="field-label">Nights</label><input type="number" id="pc-nights" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div><div><label class="field-label">PAX</label><input type="number" id="pc-pax" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div></div><button onclick="window.runPriceCheck()" class="w-full mt-2 btn-modal bg-pink-600 hover:bg-pink-700 text-white flex justify-center items-center gap-2"><i data-lucide="external-link" size="16"></i> Check BDC</button></div></div></div>
+    <div id="price-check-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Quick Price Check</span><button type="button" onclick="window.closeModal('price-check-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><div class="grid grid-cols-2 gap-3"><div class="col-span-2"><label class="field-label">Check-In</label><input type="date" id="pc-checkin" class="input-base !p-2 !text-sm"></div><div><label class="field-label">Nights</label><input type="number" id="pc-nights" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div><div><label class="field-label">PAX</label><input type="number" id="pc-pax" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div></div><button onclick="window.runPriceCheck()" class="w-full mt-2 btn-modal bg-pink-600 hover:bg-pink-700 text-white flex justify-center items-center gap-2"><i data-lucide="external-link" size="16"></i> Check Rates</button></div></div></div>
     <div id="alert-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase flex items-center justify-between text-sm"><span id="alert-header-title">Attention</span><button type="button" onclick="window.closeAlert()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-6 text-center"><div id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></div><div id="alert-actions" class="mt-6 flex gap-2 justify-center"><button id="alert-cancel" onclick="window.closeAlert()" class="hidden btn-modal bg-slate-200 text-slate-700">Cancel</button><button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button></div></div></div></div>
     <div id="split-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Split Stay</div><div class="p-6 text-center"><p class="font-black text-slate-700 leading-tight text-md mb-4">Select date and room to split booking.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Creates a zero-balance linked segment to move guests mid-stay.</span></p><input type="date" id="split-date" class="input-base !text-lg !p-2 mb-4"><div id="split-room-dropdown-container" class="mb-6"></div><div class="flex gap-2 justify-center"><button onclick="window.closeModal('split-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button><button onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10">Split</button></div></div></div></div>
     <div id="merge-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Merge Bookings</div><div class="p-6 text-center"><p class="font-black text-slate-700 leading-tight text-md mb-4">Select a booking to absorb.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Absorbed booking will be deleted!</span></p><select id="merge-target" class="input-base !text-sm !p-2 mb-6 cursor-pointer"></select><div class="flex gap-2 justify-center"><button onclick="window.closeModal('merge-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button><button id="merge-confirm-btn" onclick="window.confirmMerge()" class="btn-modal bg-indigo-600 text-white px-10">Merge</button></div></div></div></div>
 
     <div id="custom-tooltip"></div>
 
+    <!-- MAIN APP CONTROLLER -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -577,12 +405,6 @@
         const $ = id => document.getElementById(id), $$ = s => document.querySelectorAll(s);
         const REQUIRE_LOGIN = false;
 
-        const USER_PERMISSIONS = {
-            'loren': { role: 'admin', properties: ['swims_resort', 'loud_samui', 'wet_pool'] },
-            'wetkpg': { role: 'admin', properties: ['swims_resort', 'loud_samui', 'wet_pool'] },
-            'admin': { role: 'admin', properties: ['swims_resort', 'loud_samui', 'wet_pool'] }
-        };
-
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
         const appId = 'hotel-pms-v1';
         const app = initializeApp(firebaseConfig);
@@ -590,16 +412,15 @@
         const db = getFirestore(app);
         const functions = getFunctions(app, 'asia-southeast1');
 
-        const PROP_MAP = { 'LOUD': 'loud_samui', 'WET': 'wet_pool', 'SWIMS': 'swims_resort' };
-        const PROP_REVERSE_MAP = { 'loud_samui': 'LOUD', 'wet_pool': 'WET', 'swims_resort': 'SWIMS' };
+        let PROP_MAP = {};
+        let PROP_REVERSE_MAP = {};
 
         let initialP = null;
         try { initialP = new URLSearchParams(window.location.search).get('p')?.toUpperCase(); } catch (e) {}
         let storedProp = null;
         try { storedProp = localStorage.getItem('last_prop'); } catch (e) {}
 
-        let currentPropertyId = PROP_MAP[initialP] || storedProp || 'swims_resort';
-        try { localStorage.setItem('last_prop', currentPropertyId); } catch (e) {}
+        let currentPropertyId = storedProp || 'swims_resort';
 
         let currentUserRole = null, currentUserEmail = 'unknown';
         let staff = [], dailyRates = {};
@@ -631,68 +452,21 @@
 
         const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
-        // Universal Room String Normalizer (strips spaces, dashes, underscores, and double spaces)
+        // Universal Canonical Room String Normalizer (Works for ANY property without hardcoded regexes)
         const normalizeRoomStr = str => (str || '').toUpperCase().replace(/[\s\-_]/g, '');
 
         const dbToUiRoom = rid => {
             if (!rid) return rid;
-            let nid = rid.toUpperCase().trim();
-            // 1. Direct exact match
+            const nid = rid.toUpperCase().trim();
             const exactMatch = hotelRooms.find(r => r.id === nid || r.id === rid);
             if (exactMatch) return exactMatch.id;
 
-            // 2. Swims Resort legacy rules (A1 -> A01, 101 -> C101)
-            if (currentPropertyId === 'swims_resort') {
-                if (/^[ABFD]\d$/.test(nid)) {
-                    const candidate = nid[0] + '0' + nid.substring(1);
-                    if (hotelRooms.some(r => r.id === candidate)) return candidate;
-                }
-                if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) {
-                    const candidate = 'C' + nid;
-                    if (hotelRooms.some(r => r.id === candidate)) return candidate;
-                }
-            }
-
-            // 3. Robust Canonical Match (handles "F - 01" vs "F01" vs "F-01", "ROOM  J" vs "ROOM J", etc.)
             const cleanTarget = normalizeRoomStr(rid);
             const canonicalMatch = hotelRooms.find(r => normalizeRoomStr(r.id) === cleanTarget);
-            if (canonicalMatch) return canonicalMatch.id;
-
-            // 4. Numeric boundary match (e.g. "F1" vs "F01", "F - 1" vs "F - 01")
-            const numMatch = rid.match(/^([A-Za-z\s]+?)\s*[-_]?\s*(\d+)$/);
-            if (numMatch) {
-                const prefix = normalizeRoomStr(numMatch[1]);
-                const num = parseInt(numMatch[2], 10);
-                const altMatch = hotelRooms.find(r => {
-                    const rNumMatch = (r.id || '').match(/^([A-Za-z\s]+?)\s*[-_]?\s*(\d+)$/);
-                    if (rNumMatch) {
-                        return normalizeRoomStr(rNumMatch[1]) === prefix && parseInt(rNumMatch[2], 10) === num;
-                    }
-                    return false;
-                });
-                if (altMatch) return altMatch.id;
-            }
-
-            return rid;
+            return canonicalMatch ? canonicalMatch.id : rid;
         };
 
-        const uiToDbRoom = rid => {
-            if (!rid) return rid;
-            let nid = rid.toUpperCase().trim();
-            const exactMatch = hotelRooms.find(r => r.id === nid || r.id === rid);
-            if (exactMatch) return exactMatch.id;
-
-            if (currentPropertyId === 'swims_resort') {
-                if (/^[ABFD]0\d$/.test(nid)) return nid[0] + nid.substring(2);
-                if (nid.startsWith('C') && /^(101|[23]\d{2}(?:-\d)?)$/.test(nid.substring(1))) return nid.substring(1);
-            }
-
-            const cleanTarget = normalizeRoomStr(rid);
-            const canonicalMatch = hotelRooms.find(r => normalizeRoomStr(r.id) === cleanTarget);
-            if (canonicalMatch) return canonicalMatch.id;
-
-            return rid;
-        };
+        const uiToDbRoom = rid => dbToUiRoom(rid);
 
         window.db = db;
         window.appId = appId;
@@ -703,355 +477,13 @@
         window.getRooms = getRooms;
         window.uiToDbRoom = uiToDbRoom;
         window.dbToUiRoom = dbToUiRoom;
-        window.PROP_MAP = PROP_MAP;
-        window.PROP_REVERSE_MAP = PROP_REVERSE_MAP;
         window.getCurrentPropertyId = () => currentPropertyId;
         window.getHotelRooms = () => hotelRooms;
         window.getStaff = () => staff;
         window.getPaid = s => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
         window.getDue = s => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
 
-        // --- GUEST INVOICE / RECEIPT GENERATOR ---
-        window.generateGuestInvoice = () => {
-            const guestId = $('guest-id')?.value;
-            let booking = staff.find(s => s.id === guestId);
-
-            // If not found by ID or if creating/editing fresh in modal, build from current form inputs
-            if (!booking) {
-                const total = parseFloat($('total-price')?.value) || 0;
-                const rList = Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean);
-                booking = {
-                    id: guestId || 'DRAFT',
-                    bookId: $('booking-id')?.value || guestId || 'DIRECT',
-                    firstName: $('first-name')?.value || 'Guest',
-                    lastName: $('last-name')?.value || '',
-                    phone: $('phone')?.value || '',
-                    email: $('email')?.value || '',
-                    country: $('guest-country')?.value || '',
-                    checkIn: $('check-in')?.value || getLocalYMD(new Date()),
-                    checkOut: $('check-out')?.value || getLocalYMD(new Date()),
-                    bookedType: $('booked-type')?.value || 'Standard Room',
-                    room: rList[0] || 'Unassigned',
-                    rooms: rList,
-                    totalPrice: total,
-                    payments: window.activePayments || [],
-                    extraCharges: window.activeExtraCharges || [],
-                    source: $('booking-source')?.value || 'Direct',
-                    pax: parseInt($('pax-count')?.value, 10) || 1
-                };
-            }
-
-            const curPropConfig = window.currentPropertyConfig || {};
-            const propId = currentPropertyId || 'swims_resort';
-            const isLoud = propId.includes('loud');
-            const isSwims = propId.includes('swims');
-
-            const propertyName = curPropConfig.name || (isLoud ? "LOUD! Samui" : (isSwims ? "SWIMS Beach Resort" : "WET Pool Party Hostel"));
-            const propertySubtitle = "Wild & Wandering Group";
-            const propertyAddress = curPropConfig.address || (isLoud 
-                ? "166/47 Moo 2, Chaweng Beach Road, Chaweng, Koh Samui, Surat Thani 84320, Thailand" 
-                : "138/1 Moo 6, Haad Rin Nai, Koh Phangan, Surat Thani 84280, Thailand");
-
-            const contactParts = [];
-            if (curPropConfig.email) contactParts.push(curPropConfig.email);
-            else contactParts.push(isLoud ? "stay@loudsamui.com" : "stay@swimsresort.com");
-            if (curPropConfig.phone) contactParts.push(curPropConfig.phone);
-            if (curPropConfig.website) contactParts.push(curPropConfig.website);
-            const propertyContact = contactParts.join(' • ');
-
-            // Adaptive Multi-Asset Chain for LOUD Logos:
-            const logoUrl = isLoud 
-                ? "https://loren-6q.github.io/PMS/gfx/loudlogo.png" 
-                : "https://loren-6q.github.io/PMS/gfx/WWicon.png";
-
-            // Calculate Nights
-            const inMs = parseYMD(booking.checkIn);
-            const outMs = parseYMD(booking.checkOut);
-            const nights = Math.max(1, Math.round((outMs - inMs) / 86400000)) || 1;
-
-            const roomListStr = (booking.rooms && booking.rooms.length > 0) 
-                ? booking.rooms.filter(Boolean).join(', ') 
-                : (booking.room || 'Room / Bed Assigned');
-
-            // Resolve clean PMS category name (replaces noisy OTA descriptions)
-            const rList = (booking.rooms && booking.rooms.length > 0) ? booking.rooms : [booking.room].filter(Boolean);
-            const resolvedTypes = [];
-            rList.forEach(rid => {
-                const hr = hotelRooms.find(r => r.id === rid || r.id === uiToDbRoom(rid) || r.id === dbToUiRoom(rid));
-                if (hr && hr.type && !resolvedTypes.includes(hr.type)) {
-                    resolvedTypes.push(hr.type);
-                }
-            });
-            let cleanCategory = resolvedTypes.join(', ');
-            if (!cleanCategory) {
-                cleanCategory = booking.bookedType || 'Standard';
-                if (cleanCategory.includes('(')) {
-                    cleanCategory = cleanCategory.split('(')[0].trim();
-                }
-            }
-
-            // Folio Financials
-            const rawPayments = Array.isArray(booking.payments) ? booking.payments : [];
-            const extraCharges = Array.isArray(booking.extraCharges) ? booking.extraCharges : [];
-            const totalExtra = extraCharges.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
-            const accommodationTotal = Math.max(0, (parseFloat(booking.totalPrice) || 0) - totalExtra);
-            const grandTotal = parseFloat(booking.totalPrice) || 0;
-            const totalPaid = rawPayments.reduce((sum, p) => sum + (parseFloat(p.amt) || 0), 0);
-            const balanceDue = Number((grandTotal - totalPaid).toFixed(2));
-
-            const invoiceNumber = `INV-${(booking.bookId || booking.id || '0000').replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
-            const issueDate = getLocalYMD(new Date());
-
-            // Consolidate payments for guest presentation:
-            const cleanPayments = [];
-            const groupedOta = {};
-
-            rawPayments.forEach(p => {
-                const rawM = (p.method || 'payment').toLowerCase().trim();
-                const amt = parseFloat(p.amt) || 0;
-                const date = p.date || issueDate;
-
-                if (rawM.includes('bdc') || rawM.includes('booking')) {
-                    if (!groupedOta['Booking.com']) groupedOta['Booking.com'] = { date, method: 'Booking.com (Prepaid Online)', amt: 0 };
-                    groupedOta['Booking.com'].amt += amt;
-                } else if (rawM.includes('agoda')) {
-                    if (!groupedOta['Agoda']) groupedOta['Agoda'] = { date, method: 'Agoda (Prepaid Online)', amt: 0 };
-                    groupedOta['Agoda'].amt += amt;
-                } else if (rawM.includes('hw') || rawM.includes('hostelworld')) {
-                    if (!groupedOta['Hostelworld']) groupedOta['Hostelworld'] = { date, method: 'Hostelworld Deposit (Online)', amt: 0 };
-                    groupedOta['Hostelworld'].amt += amt;
-                } else if (rawM.includes('expedia')) {
-                    if (!groupedOta['Expedia']) groupedOta['Expedia'] = { date, method: 'Expedia (Prepaid Online)', amt: 0 };
-                    groupedOta['Expedia'].amt += amt;
-                } else if (rawM.includes('airbnb')) {
-                    if (!groupedOta['Airbnb']) groupedOta['Airbnb'] = { date, method: 'Airbnb (Prepaid Online)', amt: 0 };
-                    groupedOta['Airbnb'].amt += amt;
-                } else {
-                    let friendlyMethod = 'Payment';
-                    if (rawM.includes('cash')) friendlyMethod = 'Cash';
-                    else if (rawM.includes('card') || rawM.includes('cc')) friendlyMethod = 'Credit / Debit Card';
-                    else if (rawM.includes('transfer') || rawM.includes('bank') || rawM.includes('promptpay') || rawM.includes('qr')) friendlyMethod = 'Bank Transfer / PromptPay';
-                    else friendlyMethod = p.method ? p.method.toUpperCase() : 'Settlement';
-
-                    cleanPayments.push({ date, method: friendlyMethod, amt });
-                }
-            });
-
-            Object.values(groupedOta).forEach(item => {
-                cleanPayments.unshift({
-                    date: item.date,
-                    method: item.method,
-                    amt: Number(item.amt.toFixed(2))
-                });
-            });
-
-            const printHtml = `
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <title>Invoice - ${booking.firstName} ${booking.lastName} (${invoiceNumber})</title>
-                <style>
-                    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-                    body { background: #f8fafc; color: #1e293b; padding: 24px; font-size: 13px; line-height: 1.4; }
-                    .invoice-card { max-width: 800px; margin: 0 auto; background: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
-                    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 24px; }
-                    .logo-wrap { display: flex; align-items: center; gap: 14px; max-width: 480px; }
-                    .logo { height: 62px; max-width: 190px; object-fit: contain; }
-                    .prop-name { font-size: 20px; font-weight: 900; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px; }
-                    .prop-sub { font-size: 11px; font-weight: 700; color: #64748b; margin-top: 2px; }
-                    .prop-addr { font-size: 10px; color: #94a3b8; margin-top: 4px; max-width: 320px; }
-                    .inv-title-wrap { text-align: right; }
-                    .inv-title { font-size: 24px; font-weight: 900; text-transform: uppercase; color: #4338ca; letter-spacing: 1px; }
-                    .inv-badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; margin-top: 6px; }
-                    .badge-paid { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
-                    .badge-due { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
-                    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; background: #f8fafc; padding: 16px; border-radius: 6px; border: 1px solid #edf2f7; }
-                    .meta-block h4 { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; margin-bottom: 6px; }
-                    .meta-block p { font-size: 12px; font-weight: 700; color: #0f172a; }
-                    .meta-block span { font-size: 11px; font-weight: 500; color: #475569; display: block; }
-                    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-                    th { background: #f1f5f9; text-align: left; padding: 10px 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; border-bottom: 1px solid #cbd5e1; }
-                    td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
-                    .text-right { text-align: right; }
-                    .text-center { text-align: center; }
-                    .item-name { font-weight: 800; color: #0f172a; }
-                    .item-desc { font-size: 11px; color: #64748b; margin-top: 2px; }
-                    .totals-wrap { display: flex; justify-content: flex-end; margin-bottom: 24px; }
-                    .totals-table { width: 280px; }
-                    .totals-table tr td { padding: 6px 0; border: none; font-size: 12px; }
-                    .grand-total { font-size: 16px; font-weight: 900; color: #0f172a; border-top: 2px solid #e2e8f0 !important; padding-top: 8px !important; }
-                    .payments-section { border-top: 1px dashed #cbd5e1; padding-top: 16px; margin-bottom: 24px; }
-                    .section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #475569; margin-bottom: 10px; }
-                    .footer { text-align: center; border-top: 1px solid #e2e8f0; padding-top: 20px; font-size: 11px; color: #94a3b8; }
-                    .btn-print-bar { max-width: 800px; margin: 0 auto 16px; display: flex; justify-content: space-between; align-items: center; }
-                    .btn-print { background: #4338ca; color: #ffffff; padding: 10px 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                    .btn-print:hover { background: #3730a3; }
-                    @media print {
-                        body { background: #ffffff; padding: 0; }
-                        .invoice-card { box-shadow: none; border: none; padding: 0; }
-                        .btn-print-bar { display: none; }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="btn-print-bar">
-                    <span style="font-weight: 700; color: #64748b; font-size: 12px;">📄 Ready to export</span>
-                    <button class="btn-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
-                </div>
-
-                <div class="invoice-card">
-                    <!-- HEADER -->
-                    <div class="header">
-                        <div class="logo-wrap">
-                            <img src="${logoUrl}" 
-                                 onerror="if (this.src.indexOf('loudlogo') !== -1) { this.src='https://loren-6q.github.io/PMS/gfx/loudheader.png'; } else if (this.src.indexOf('loudheader') !== -1) { this.src='https://loren-6q.github.io/PMS/gfx/loudbanner.png'; } else { this.src='https://loren-6q.github.io/PMS/gfx/WWicon.png'; }" 
-                                 alt="Logo" class="logo">
-                            <div>
-                                <h1 class="prop-name">${propertyName}</h1>
-                                <p class="prop-sub">${propertySubtitle}</p>
-                                <p class="prop-addr">${propertyAddress}<br>${propertyContact}</p>
-                            </div>
-                        </div>
-                        <div class="inv-title-wrap">
-                            <h2 class="inv-title">INVOICE</h2>
-                            <p style="font-size: 11px; font-weight: 800; color: #475569; margin-top: 4px;"># ${invoiceNumber}</p>
-                            <p style="font-size: 11px; color: #94a3b8;">Issued: ${issueDate}</p>
-                            <span class="inv-badge ${balanceDue <= 0 ? 'badge-paid' : 'badge-due'}">
-                                ${balanceDue <= 0 ? 'PAID IN FULL' : `BALANCE DUE: ฿${balanceDue.toLocaleString()}`}
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- META INFO -->
-                    <div class="meta-grid">
-                        <div class="meta-block">
-                            <h4>Billed To (Guest)</h4>
-                            <p>${booking.firstName || ''} ${booking.lastName || ''}</p>
-                            ${booking.country ? `<span>Nationality / Country: ${booking.country}</span>` : ''}
-                            ${booking.email ? `<span>Email: ${booking.email}</span>` : ''}
-                            ${booking.phone ? `<span>Phone: ${booking.phone}</span>` : ''}
-                        </div>
-                        <div class="meta-block">
-                            <h4>Stay & Booking Details</h4>
-                            <p>Dates: ${booking.checkIn} &rarr; ${booking.checkOut} (${nights} Night${nights > 1 ? 's' : ''})</p>
-                            <span>Unit(s): ${roomListStr}</span>
-                            <span>Category: ${cleanCategory}</span>
-                            <span>Booking Reference: ${booking.bookId || booking.id || 'Direct'} (${(booking.source || 'Direct').toUpperCase()})</span>
-                        </div>
-                    </div>
-
-                    <!-- FOLIO CHARGES -->
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style="width: 50%;">Description</th>
-                                <th class="text-center" style="width: 15%;">Qty / Nts</th>
-                                <th class="text-right" style="width: 15%;">Unit Price</th>
-                                <th class="text-right" style="width: 20%;">Total (THB)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>
-                                    <div class="item-name">Accommodation Charges</div>
-                                    <div class="item-desc">${cleanCategory} • ${roomListStr} (${nights} night${nights > 1 ? 's' : ''})</div>
-                                </td>
-                                <td class="text-center font-bold">${nights}</td>
-                                <td class="text-right font-mono">฿${(accommodationTotal / nights).toFixed(2)}</td>
-                                <td class="text-right font-black font-mono">฿${accommodationTotal.toFixed(2)}</td>
-                            </tr>
-                            ${extraCharges.map(c => `
-                            <tr>
-                                <td>
-                                    <div class="item-name">${c.desc || 'Folio Service'}</div>
-                                    <div class="item-desc">Date: ${c.date || issueDate}</div>
-                                </td>
-                                <td class="text-center font-bold">1</td>
-                                <td class="text-right font-mono">฿${Number(c.amount || 0).toFixed(2)}</td>
-                                <td class="text-right font-black font-mono">฿${Number(c.amount || 0).toFixed(2)}</td>
-                            </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-
-                    <!-- TOTALS SUMMARY -->
-                    <div class="totals-wrap">
-                        <table class="totals-table">
-                            <tr>
-                                <td style="color: #64748b;">Subtotal:</td>
-                                <td class="text-right font-mono font-bold">฿${grandTotal.toFixed(2)}</td>
-                            </tr>
-                            <tr class="grand-total">
-                                <td>Total Amount:</td>
-                                <td class="text-right font-mono">฿${grandTotal.toFixed(2)}</td>
-                            </tr>
-                            <tr>
-                                <td style="color: #15803d; font-weight: 700;">Total Payments Received:</td>
-                                <td class="text-right font-mono font-bold" style="color: #15803d;">-฿${totalPaid.toFixed(2)}</td>
-                            </tr>
-                            <tr style="border-top: 1px solid #e2e8f0; font-weight: 900;">
-                                <td style="color: ${balanceDue > 0 ? '#b91c1c' : '#0f172a'};">Outstanding Balance:</td>
-                                <td class="text-right font-mono" style="color: ${balanceDue > 0 ? '#b91c1c' : '#0f172a'};">฿${balanceDue.toFixed(2)}</td>
-                            </tr>
-                        </table>
-                    </div>
-
-                    <!-- PAYMENTS RECORDED -->
-                    ${cleanPayments.length > 0 ? `
-                    <div class="payments-section">
-                        <div class="section-title">Payments & Settlements</div>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Payment Date</th>
-                                    <th>Method / Channel</th>
-                                    <th>Status</th>
-                                    <th class="text-right">Amount Paid</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${cleanPayments.map(p => `
-                                <tr>
-                                    <td class="font-mono">${p.date || issueDate}</td>
-                                    <td style="font-weight: 700;">${p.method}</td>
-                                    <td><span style="color: #15803d; font-weight: 800; font-size: 10px; background: #dcfce7; padding: 2px 6px; border-radius: 4px;">SUCCESS</span></td>
-                                    <td class="text-right font-mono font-black" style="color: #15803d;">฿${Number(p.amt || 0).toFixed(2)}</td>
-                                </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                    ` : ''}
-
-                    <!-- FOOTER -->
-                    <div class="footer">
-                        <p style="font-weight: 700; color: #475569; margin-bottom: 4px;">Thank you for staying with us at ${propertyName}!</p>
-                        <p>${propertyContact}</p>
-                    </div>
-                </div>
-
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() {
-                            window.print();
-                        }, 500);
-                    };
-                <\/script>
-            </body>
-            </html>`;
-
-            const printWin = window.open('', '_blank');
-            if (printWin) {
-                printWin.document.open();
-                printWin.document.write(printHtml);
-                printWin.document.close();
-            } else {
-                window.showAlert("Pop-up blocked. Please allow pop-ups for this website to export the invoice PDF.");
-            }
-        };
-
-        // --- NATIVE AUTO-REVERT: When deleting the only room, auto-revert to UNASSIGNED without extra buttons ---
+        // Native Auto-Revert to Unassigned when clearing all room assignments
         document.addEventListener('DOMContentLoaded', () => {
             const container = $('assigned-rooms-container');
             if (container) {
@@ -1068,144 +500,6 @@
             }
         });
 
-        // --- CONSOLE COMMAND: AUDIT ALL FUTURE BOOKINGS (BOOKED VS ASSIGNED) ---
-        window.auditFutureBookings = () => {
-            const todayStr = getLocalYMD(new Date());
-            const curProp = currentPropertyId;
-            const curStaff = staff.filter(s => {
-                const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-                if (sProp !== curProp) return false;
-                if (s.status === 'cancelled') return false;
-                return (s.checkOut || '') >= todayStr;
-            });
-
-            const issues = [];
-            curStaff.forEach(s => {
-                const bookedType = (s.bookedType || s.category || '').toLowerCase();
-                const isDorm = bookedType.includes('dorm') || bookedType.includes('bed') || bookedType.includes('bunk');
-                const pax = parseInt(s.pax, 10) || 1;
-
-                let expectedRooms = 1;
-                if (isDorm) {
-                    expectedRooms = Math.max(1, pax);
-                } else {
-                    const commaParts = (s.bookedType || '').split(',').map(x => x.trim()).filter(Boolean);
-                    const matchQty = (s.bookedType || '').match(/(\d+)\s*(?:x|\*|rooms?|units?|beds?)/i);
-                    const matchNotes = (s.notes || '').match(/(\d+)\s*(?:rooms?|units?)/i);
-                    
-                    if (commaParts.length > 1) {
-                        expectedRooms = commaParts.length;
-                    } else if (matchQty) {
-                        expectedRooms = parseInt(matchQty[1], 10);
-                    } else if (matchNotes) {
-                        expectedRooms = parseInt(matchNotes[1], 10);
-                    } else {
-                        expectedRooms = 1;
-                    }
-                }
-
-                const rList = getRooms(s).map(dbToUiRoom).filter(Boolean);
-                const assignedCount = rList.length;
-                const missingCount = Math.max(0, expectedRooms - assignedCount);
-
-                if (assignedCount === 0 || missingCount > 0) {
-                    issues.push({
-                        "Guest Name": `${s.firstName || ''} ${s.lastName || ''}`.trim(),
-                        "Book ID": s.bookId || s.id,
-                        "Check In": s.checkIn,
-                        "Check Out": s.checkOut,
-                        "Booked Cat": s.bookedType || 'Standard',
-                        "PAX": s.pax,
-                        "Needed": expectedRooms,
-                        "Assigned": assignedCount,
-                        "Assigned Rooms": rList.join(', ') || 'NONE',
-                        "Missing": missingCount,
-                        "Status": assignedCount === 0 ? "UNASSIGNED" : `SHORT ${missingCount} ROOM/BED(S)`,
-                        "id": s.id
-                    });
-                }
-            });
-
-            if (issues.length === 0) {
-                console.log("%c✅ ALL CLEAR: All future bookings have all required rooms/beds assigned!", "color: #10b981; font-weight: bold; font-size: 14px;");
-            } else {
-                console.warn(`%c⚠️ FOUND ${issues.length} BOOKINGS WITH MISSING/UNASSIGNED ROOMS:`, "color: #ef4444; font-weight: bold; font-size: 14px;");
-                console.table(issues);
-                console.log("%c💡 To open a booking modal: window.editStaff('BOOKING_ID')", "color: #3b82f6; font-weight: bold;");
-                console.log("%c💡 To auto-assign beds for all under-assigned: window.autoAssignAllUnderBookings()", "color: #8b5cf6; font-weight: bold;");
-            }
-            return issues;
-        };
-
-        // --- CONSOLE COMMAND: AUTO-ASSIGN ALL UNDER-ASSIGNED BOOKINGS ---
-        window.autoAssignAllUnderBookings = async () => {
-            const issues = window.auditFutureBookings();
-            const underList = issues.filter(i => i.Missing > 0);
-            if (underList.length === 0) {
-                console.log("No under-assigned bookings to fill.");
-                return;
-            }
-
-            console.log(`Auto-assigning rooms/beds for ${underList.length} bookings...`);
-            for (const item of underList) {
-                const b = staff.find(x => x.id === item.id);
-                if (!b) continue;
-
-                const targetCount = item.Needed;
-                const curAssigned = getRooms(b).map(dbToUiRoom).filter(Boolean);
-                const needed = targetCount - curAssigned.length;
-                if (needed <= 0) continue;
-
-                const bookedCat = (b.bookedType || b.category || '').toLowerCase();
-                const bookedCatList = (b.bookedType || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
-
-                const activeBookings = staff.filter(s => {
-                    if (s.id === b.id) return false;
-                    if (['cancelled', 'noshow'].includes(s.status)) return false;
-                    return s.checkIn < b.checkOut && s.checkOut > b.checkIn;
-                });
-
-                const occupied = new Set();
-                activeBookings.forEach(s => getRooms(s).forEach(rid => { if (rid) occupied.add(rid); }));
-                curAssigned.forEach(r => occupied.add(r));
-
-                const newRooms = [...curAssigned];
-                for (let i = 0; i < needed; i++) {
-                    const targetSubCat = bookedCatList[newRooms.length] || bookedCat;
-                    const candidateRoom = hotelRooms.find(hr => {
-                        const hrType = (hr.type || '').toLowerCase();
-                        const matches = hrType.includes(targetSubCat) || targetSubCat.includes(hrType);
-                        return matches && !occupied.has(hr.id);
-                    }) || hotelRooms.find(hr => {
-                        const hrType = (hr.type || '').toLowerCase();
-                        return (hrType.includes(bookedCat) || bookedCat.includes(hrType)) && !occupied.has(hr.id);
-                    });
-
-                    if (candidateRoom) {
-                        newRooms.push(candidateRoom.id);
-                        occupied.add(candidateRoom.id);
-                    }
-                }
-
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', b.id), {
-                        room: newRooms[0] || "",
-                        rooms: newRooms,
-                        lastEditedAt: new Date().toISOString(),
-                        lastEditedBy: "CONSOLE_AUDITOR"
-                    }, { merge: true });
-                    b.room = newRooms[0] || "";
-                    b.rooms = newRooms;
-                    console.log(`✅ Assigned ${newRooms.length}/${targetCount} rooms/beds for ${item["Guest Name"]}`);
-                } catch(e) {
-                    console.error(`Failed to assign for ${item["Guest Name"]}:`, e.message);
-                }
-            }
-            if (window.render) window.render();
-            console.log("Auto-assignment complete. Running re-scan...");
-            window.auditFutureBookings();
-        };
-
         window.generateAuditDiff = (oldRec, newRec) => {
             if (!oldRec) return "Created new booking.";
             let changes = [];
@@ -1221,19 +515,19 @@
         };
 
         window.updateNavLinks = shortKey => {
-            const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
+            const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || '';
             document.querySelectorAll('a[href*=".html"]').forEach(a => {
                 const href = a.getAttribute('href');
                 if (!href) return;
                 const [base] = href.split('?');
-                a.setAttribute('href', `${base}?p=${key}`);
+                a.setAttribute('href', key ? `${base}?p=${key}` : base);
             });
         };
 
         window.syncPropertyUrl = propId => {
-            const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || 'SWIMS';
+            const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || '';
             try {
-                if (window.location.protocol !== 'blob:') {
+                if (window.location.protocol !== 'blob:' && shortKey) {
                     const url = new URL(window.location.href);
                     url.searchParams.set('p', shortKey);
                     window.history.replaceState({}, '', url.toString());
@@ -1272,15 +566,25 @@
                 const propsList = [];
                 propsSnap.forEach(docSnap => propsList.push({ id: docSnap.id, ...docSnap.data() }));
 
+                PROP_MAP = {};
+                PROP_REVERSE_MAP = {};
+                propsList.forEach(p => {
+                    const short = (p.short || p.shortCode || p.id).toUpperCase();
+                    PROP_MAP[short] = p.id;
+                    PROP_REVERSE_MAP[p.id] = short;
+                });
+                window.PROP_MAP = PROP_MAP;
+                window.PROP_REVERSE_MAP = PROP_REVERSE_MAP;
+
+                if (initialP && PROP_MAP[initialP]) {
+                    currentPropertyId = PROP_MAP[initialP];
+                }
+
                 const switcher = $('main-property-switcher');
                 if (switcher && propsList.length > 0) {
-                    let allowedProps = propsList;
-                    if (currentUserRole !== 'admin' && USER_PERMISSIONS[currentUserEmail]) {
-                        allowedProps = propsList.filter(p => USER_PERMISSIONS[currentUserEmail].properties.includes(p.id));
-                    }
-                    switcher.innerHTML = allowedProps.map(p => `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`).join('');
-                    if (!allowedProps.find(p => p.id === currentPropertyId) && allowedProps.length > 0) {
-                        currentPropertyId = allowedProps[0].id;
+                    switcher.innerHTML = propsList.map(p => `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`).join('');
+                    if (!propsList.find(p => p.id === currentPropertyId)) {
+                        currentPropertyId = propsList[0].id;
                     }
                     switcher.value = currentPropertyId;
                 }
@@ -1289,6 +593,11 @@
                 const propToLoad = propsList.find(p => p.id === currentPropertyId);
                 if (propToLoad) {
                     window.currentPropertyConfig = propToLoad;
+                    document.title = `${propToLoad.name || 'PMS'} | Front Desk`;
+
+                    const logoEl = $('main-brand-logo');
+                    if (logoEl && propToLoad.logoUrl) logoEl.src = propToLoad.logoUrl;
+
                     hotelRooms = (propToLoad.rooms || []).map(r => ({
                         ...r,
                         category: r.category || r.type || 'Standard',
@@ -1299,6 +608,7 @@
                     window.fmpDates = fmpDates;
                     window.propertyOtaMap = propToLoad.otaMap || [];
                     window.channexConfig = propToLoad.channex || {};
+
                     const cxBtn = $('channex-sync-btn');
                     if (cxBtn) {
                         if (window.channexConfig.apiKey && window.channexConfig.propId) cxBtn.classList.remove('hidden');
@@ -1309,7 +619,6 @@
                 roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
                 window.roomTypes = roomTypes;
 
-                // Re-map active staff bookings in memory against the newly resolved hotelRooms
                 if (staff && staff.length > 0) {
                     staff.forEach(s => {
                         const rList = getRooms(s).map(dbToUiRoom);
@@ -1392,7 +701,7 @@
 
             let rHtml = '';
             roomTypes.forEach(t => { if (dailyRates[t]) rHtml += `<div class="flex justify-between py-1 border-b border-indigo-100 last:border-0"><span class="truncate pr-2">${t}</span><span>฿${dailyRates[t]}</span></div>`; });
-            $('dash-rates-list').innerHTML = rHtml || '<span class="text-slate-400 italic text-center mt-4">No rates loaded for today. Update below.</span>';
+            $('dash-rates-list').innerHTML = rHtml || '<span class="text-slate-400 italic text-center mt-4">No rates loaded for today.</span>';
             if (window.lucide) window.lucide.createIcons();
         };
 
@@ -1419,13 +728,10 @@
                 else { ctxCal.style.opacity = '0'; setTimeout(() => ctxCal.style.display = 'none', 200); }
             }
 
-            // Sync navbar search term into database search box when switching tabs
             if (t === 'database') {
                 const navSearchVal = $('guest-search')?.value.trim() || window.searchTerm || '';
                 const dbNameInput = $('db-filter-name');
-                if (dbNameInput && navSearchVal) {
-                    dbNameInput.value = navSearchVal;
-                }
+                if (dbNameInput && navSearchVal) dbNameInput.value = navSearchVal;
             }
 
             if (t === 'calendar' && window.render) window.render();
@@ -1436,54 +742,19 @@
         const init = async () => {
             const processSnapshot = snap => {
                 staff = snap.docs.map(d => ({ id: d.id, ...d.data() })).map(s => {
-                    if (!s.property) s.property = 'swims_resort';
                     const rList = getRooms(s).map(dbToUiRoom);
                     s.room = rList[0] || "";
                     s.rooms = rList;
-
                     if (window.healHostelworldDeposit) window.healHostelworldDeposit(s, db, appId);
-
                     return s;
                 });
                 window.staff = staff;
 
-                const base = ["France", "Germany", "United Kingdom", "United States", "Australia", "Netherlands", "Israel", "Spain", "Italy", "Switzerland", "Canada", "Sweden", "Denmark", "Russia", "Thailand", "Belgium", "Austria", "Ireland", "Norway", "Finland", "Brazil", "Argentina", "South Korea", "Japan", "China", "India", "Mexico", "New Zealand", "South Africa", "Portugal", "Greece"];
-                const COUNTRY_CANONICAL = {
-                    'US': 'United States', 'USA': 'United States', 'UNITED STATES': 'United States',
-                    'UK': 'United Kingdom', 'GB': 'United Kingdom', 'UNITED KINGDOM': 'United Kingdom',
-                    'DE': 'Germany', 'GERMAN': 'Germany', 'GERMANY': 'Germany',
-                    'FR': 'France', 'FRENCH': 'France', 'FRANCE': 'France',
-                    'IL': 'Israel', 'ISRAEL': 'Israel',
-                    'AU': 'Australia', 'AUSTRALIA': 'Australia',
-                    'NL': 'Netherlands', 'NETHERLANDS': 'Netherlands',
-                    'ES': 'Spain', 'SPAIN': 'Spain',
-                    'IT': 'Italy', 'ITALY': 'Italy',
-                    'CH': 'Switzerland', 'SWITZERLAND': 'Switzerland',
-                    'CA': 'Canada', 'CANADA': 'Canada',
-                    'SE': 'Sweden', 'SWEDEN': 'Sweden',
-                    'DK': 'Denmark', 'DENMARK': 'Denmark',
-                    'RU': 'Russia', 'RUSSIA': 'Russia',
-                    'TH': 'Thailand', 'THAILAND': 'Thailand',
-                    'KR': 'South Korea', 'SOUTH KOREA': 'South Korea', 'SOUHT KOREA': 'South Korea',
-                    'ALGERIA': 'Algeria', 'ALGERIENNE': 'Algeria',
-                    'TR': 'Turkey', 'TURKEY': 'Turkey',
-                    'NZ': 'New Zealand', 'NEW ZEALAND': 'New Zealand',
-                    'HK': 'Hong Kong', 'HONG KONG': 'Hong Kong',
-                    'BY': 'Belarus', 'BELARUS': 'Belarus'
-                };
-
-                const cleanCountries = new Set(base);
+                const cleanCountries = new Set();
                 staff.forEach(s => {
                     if (!s.country) return;
                     const raw = s.country.trim();
-                    if (!raw || raw.toLowerCase().includes('folio') || raw.toLowerCase().includes('invoice') || raw.length < 2) return;
-                    const lookup = raw.toUpperCase();
-                    if (COUNTRY_CANONICAL[lookup]) {
-                        cleanCountries.add(COUNTRY_CANONICAL[lookup]);
-                    } else if (raw.length > 2 && /^[A-Za-z\s\-]+$/.test(raw)) {
-                        const formatted = raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-                        cleanCountries.add(formatted);
-                    }
+                    if (raw.length >= 2 && !raw.toLowerCase().includes('folio')) cleanCountries.add(raw);
                 });
 
                 const dl = $('country-list');
@@ -1493,7 +764,6 @@
                 if ($('dashboard-view')?.style.display === 'flex') window.renderDashboard();
                 if ($('database-view')?.style.display === 'flex' && window.renderDatabase) window.renderDatabase();
 
-                // Run discrepancy audit in background on every snapshot
                 setTimeout(() => { if (window.runDiscrepancyAudit) window.runDiscrepancyAudit(); }, 200);
 
                 const editId = new URLSearchParams(window.location.search).get('edit');
@@ -1503,9 +773,7 @@
             const bypassLogin = async () => {
                 const safetyTimer = setTimeout(() => {
                     const bl = $('boot-loader');
-                    if (bl && bl.style.display !== 'none') {
-                        bl.style.display = 'none';
-                    }
+                    if (bl && bl.style.display !== 'none') bl.style.display = 'none';
                 }, 3500);
 
                 try {
@@ -1539,16 +807,11 @@
             } else {
                 onAuthStateChanged(auth, async user => {
                     if (user) {
-                        const email = (user.email || 'admin@test.local').toLowerCase();
-                        const userKey = email.split('@')[0];
-                        if (USER_PERMISSIONS[userKey]) currentUserRole = USER_PERMISSIONS[userKey].role;
-                        else return signOut(auth).then(() => { window.location.href = 'index.html'; });
-
-                        currentUserEmail = userKey;
+                        currentUserRole = 'admin';
+                        currentUserEmail = (user.email || 'admin@test.local').toLowerCase();
                         window.currentUserRole = currentUserRole;
                         window.currentUserEmail = currentUserEmail;
                         $('boot-loader').style.display = 'none';
-                        if (currentUserRole === 'admin') $$('.admin-only').forEach(el => el.classList.remove('hidden'));
                         await loadPropertyConfig();
                         onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
                             window.showAlert("Database Permission Denied.");
