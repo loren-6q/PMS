@@ -11,7 +11,6 @@
 
     // --------------------------------------------------------------------------
     // SECTION 1: SVG Icons & Visual Badge Registry
-    // Vector assets rendered on booking bars (upgrades, extensions, email lifecycle, feedback)
     // --------------------------------------------------------------------------
     window.SVGS = window.SVGS || {
         upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -29,7 +28,6 @@
 
     // --------------------------------------------------------------------------
     // SECTION 2: Master Booking Status Cycle
-    // Definitions for 11 distinct reservation lifecycle states and color schemes
     // --------------------------------------------------------------------------
     window.STATUS_CYCLE = window.STATUS_CYCLE || [
         { val: 'new', bg: '#ec4899', txt: '#fff' },
@@ -48,8 +46,7 @@
     window.masterState = 0;
 
     // --------------------------------------------------------------------------
-    // SECTION 3: Global Data Getters & Date Calculations
-    // Safely retrieves active property state, staff bookings, and timeline day indices
+    // SECTION 3: Global Data Getters & Helpers
     // --------------------------------------------------------------------------
     const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
     const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
@@ -68,8 +65,7 @@
     };
 
     // --------------------------------------------------------------------------
-    // SECTION 4: Timeline Navigation & Period Controls
-    // Shifts calendar window forward/backward by 7 days, jumps to today or selected month
+    // SECTION 4: Navigation & Timeline Controls
     // --------------------------------------------------------------------------
     window.prevPeriod = () => {
         if (!window.viewStart) window.viewStart = new Date();
@@ -109,8 +105,7 @@
     };
 
     // --------------------------------------------------------------------------
-    // SECTION 5: Guest Search & Jump Navigation
-    // Filters active property guests and shifts timeline view to cycle between matches
+    // SECTION 5: Search & Jump Controls
     // --------------------------------------------------------------------------
     window.handleSearch = v => {
         window.searchTerm = v.trim().toUpperCase();
@@ -120,11 +115,8 @@
         const term = window.searchTerm;
         const curProp = getPropId();
 
-        // Two-way sync with Database tab's search box
         const dbNameInput = $('db-filter-name');
-        if (dbNameInput && dbNameInput.value !== v) {
-            dbNameInput.value = v;
-        }
+        if (dbNameInput && dbNameInput.value !== v) dbNameInput.value = v;
 
         const m = stList.filter(s => {
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
@@ -188,7 +180,6 @@
             if (mc) mc.innerText = `Match ${idx + 1} of ${m.length}`;
             window.render();
 
-            // Auto-expand unassigned tray if the match is inside it
             setTimeout(() => {
                 const rList = getRooms(targetBooking);
                 const isUnassigned = rList.length === 0 || rList[0] === "" || targetBooking.status === 'unconfirmed' || targetBooking.status === 'charged';
@@ -202,8 +193,7 @@
     };
 
     // --------------------------------------------------------------------------
-    // SECTION 6: Room Group & Accordion Controllers
-    // Handles 4-state cycling (ALL -> OCCUPIED -> EMPTY -> HIDDEN) for room categories
+    // SECTION 6: Group Accordions
     // --------------------------------------------------------------------------
     window.toggleAllGroups = () => {
         window.masterState = ((window.masterState || 0) + 1) % 4;
@@ -252,8 +242,7 @@
     };
 
     // --------------------------------------------------------------------------
-    // SECTION 7: Visual Room Metadata Helpers
-    // SVG icons indicating upstairs/downstairs levels and top/bottom bunk positions
+    // SECTION 7: Floor & Bunk Helpers
     // --------------------------------------------------------------------------
     const getFloorIcon = f => {
         if (!f) return '';
@@ -284,7 +273,6 @@
 
     // --------------------------------------------------------------------------
     // SECTION 8: Universal Room & Dorm Classifier
-    // Categorizes inventory into dorms vs. privates, supporting dash-free & legacy IDs
     // --------------------------------------------------------------------------
     const classifyRoomForCalendar = r => {
         const cat = (r.category || r.type || '').toLowerCase();
@@ -318,8 +306,7 @@
     };
 
     // --------------------------------------------------------------------------
-    // SECTION 9: Primary Calendar Timeline Rendering Engine
-    // Assembles months/days headers, room rows, availability counters, and booking bars
+    // SECTION 9: Main Timeline Renderer
     // --------------------------------------------------------------------------
     window.render = () => {
         if (!window.viewStart) {
@@ -396,7 +383,6 @@
         const actStaff = getStaff().filter(s => {
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
             if (sProp !== curProp) return false;
-            // Cancelled bookings are hidden from calendar unless actively searched
             if (s.status === 'cancelled') {
                 if (searchTerm && (((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) || (s.bookId || '').toUpperCase().includes(searchTerm))) {
                     return true;
@@ -412,8 +398,7 @@
         const uConf = [];
 
         // ----------------------------------------------------------------------
-        // SECTION 10: Unassigned Tray & Booking Layout Construction
-        // Identifies unassigned or charged reservations and builds category grids
+        // SECTION 10: Unassigned Tray
         // ----------------------------------------------------------------------
         actStaff.forEach(s => {
             if (parseYMD(s.checkIn) > veUTC || parseYMD(s.checkOut) < vsUTC) return;
@@ -504,7 +489,6 @@
 
         // ----------------------------------------------------------------------
         // SECTION 11: Timeline Grid Assembly & Booking Bar Overlays
-        // Creates DOM rows, attaches date columns, calculates bar spans, and binds tooltips
         // ----------------------------------------------------------------------
         tRows.forEach(rD => {
             if (rD.isDivider) {
@@ -737,7 +721,6 @@
 
         // ----------------------------------------------------------------------
         // SECTION 12: Group State Restoration & Lucide Initialization
-        // Restores master collapse/expand state and creates Lucide vector icons
         // ----------------------------------------------------------------------
         if (window.masterState && window.masterState !== 0) {
             const g = new Set();
@@ -747,4 +730,47 @@
 
         if (window.lucide) window.lucide.createIcons();
     };
+
+    // --------------------------------------------------------------------------
+    // SECTION 13: Legend Drawer Controller & SVG Key Mounter
+    // --------------------------------------------------------------------------
+    window.toggleLegendDrawer = () => {
+        const leg = document.getElementById('calendar-legend');
+        const chevron = document.getElementById('legend-toggle-chevron');
+        const label = document.getElementById('legend-toggle-label');
+        if (!leg) return;
+        const isHidden = (leg.style.display === 'none' || leg.classList.contains('hidden'));
+        if (isHidden) {
+            leg.style.display = 'flex';
+            leg.classList.remove('hidden');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+            if (label) label.innerText = 'Hide Key';
+        } else {
+            leg.style.display = 'none';
+            leg.classList.add('hidden');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+            if (label) label.innerText = 'Show Key';
+        }
+        if (window.lucide) window.lucide.createIcons();
+    };
+    window.toggleMobileLegend = window.toggleLegendDrawer;
+
+    window.mountLegendSvgs = () => {
+        if (!window.SVGS) return false;
+        const keys = ['upFree', 'upPaid', 'ext', 'link', 'mailConf', 'mailNotFmp', 'mailPre', 'mailPreConf', 'mailSpec', 'fbGood', 'fbBad'];
+        keys.forEach(k => {
+            const el = document.getElementById('leg-svg-' + k);
+            if (el && window.SVGS[k]) {
+                el.innerHTML = window.SVGS[k];
+            }
+        });
+        return true;
+    };
+
+    // Auto-mount legend SVGs on load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => window.mountLegendSvgs());
+    } else {
+        window.mountLegendSvgs();
+    }
 })();
