@@ -181,33 +181,6 @@
         }
     };
 
-    window.clearSearchAndClose = () => {
-        window.clearSearch();
-        if (window.innerWidth < 640) $('search-container')?.classList.replace('flex', 'hidden');
-    };
-
-    window.jumpToSearchMatch = () => {
-        const stList = getStaff();
-        const term = window.searchTerm;
-        const curProp = getPropId();
-        const m = stList.filter(s => {
-            const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-            if (sProp !== curProp) return false;
-            return ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(term) || (s.bookId || '').toUpperCase().includes(term);
-        }).sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
-
-        if (m.length > 0) {
-            const idx = (window.searchMatchIndex || 0) % m.length;
-            const d = new Date(m[idx].checkIn + "T12:00:00");
-            d.setDate(d.getDate() - 3);
-            window.viewStart = d;
-            window.searchMatchIndex = idx + 1;
-            const mc = $('match-counter');
-            if (mc) mc.innerText = `Match ${idx + 1} of ${m.length}`;
-            window.render();
-        }
-    };
-
     window.toggleAllGroups = () => {
         window.masterState = ((window.masterState || 0) + 1) % 4;
         const g = new Set();
@@ -272,13 +245,45 @@
     const getBunkIcon = b => {
         if (!b) return '';
         const bStr = String(b).toLowerCase().trim();
-        if (bStr === 'bottom' || bStr === 'bot' || bStr === 'bunk-bottom') {
+        if (bStr === 'bottom' || bStr === 'bot' || bStr === 'bunk-bottom' || bStr.includes('btm') || bStr.includes('bottom')) {
             return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Bottom Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
         }
-        if (bStr === 'top' || bStr === 'bunk-top') {
+        if (bStr === 'top' || bStr === 'bunk-top' || bStr.includes('top')) {
             return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
         }
         return '';
+    };
+
+    // Universal dorm classifier: works with F01, F-01, or parentRoom metadata
+    const classifyRoomForCalendar = r => {
+        const cat = (r.category || r.type || '').toLowerCase();
+        const bunk = (r.bunk || r.bed || '').toLowerCase();
+        const isPrivateExplicit = bunk.includes('private') || cat.includes('private');
+
+        const isDorm = !isPrivateExplicit && (
+            (r.parentRoom && r.parentRoom !== r.id) ||
+            cat.includes('dorm') ||
+            cat.includes('bed') ||
+            cat.includes('bunk') ||
+            bunk.includes('top') ||
+            bunk.includes('btm') ||
+            bunk.includes('bottom') ||
+            bunk.includes('single') ||
+            /^[A-Za-z]+[-_]?\d+$/.test((r.id || '').trim())
+        );
+
+        let baseRoom = r.parentRoom || '';
+        if (!baseRoom) {
+            if ((r.id || '').includes('-')) {
+                baseRoom = r.id.split('-')[0].trim();
+            } else {
+                const m = (r.id || '').trim().match(/^([A-Za-z\s]+?)\s*[-_]?\s*(\d+)$/);
+                if (m && m[1]) baseRoom = m[1].trim();
+                else baseRoom = r.id || '';
+            }
+        }
+
+        return { isDorm, baseRoom };
     };
 
     window.render = () => {
@@ -363,7 +368,6 @@
                 }
                 return false;
             }
-            // All other bookings (including noshow, unconfirmed, charged, and unassigned) remain visible
             return true;
         });
 
@@ -375,7 +379,6 @@
         actStaff.forEach(s => {
             if (parseYMD(s.checkIn) > veUTC || parseYMD(s.checkOut) < vsUTC) return;
             const rL = getRooms(s).length ? getRooms(s) : [""];
-            // No-shows, unconfirmed, and charged bookings do not occupy a room and go to the top tray
             if (s.status === 'unconfirmed' || s.status === 'charged' || s.status === 'noshow') {
                 for (let i = 0; i < Math.max(1, rL.length); i++) uConf.push(s);
             } else {
@@ -410,33 +413,47 @@
                 tRows.push({ isDivider: true, label: r.type });
             }
 
-            const hasDash = r.id.includes('-');
-            if (hasDash) {
-                const parts = r.id.split('-');
-                const baseRoom = parts[0];
-                const prevRoom = idx > 0 ? arr[idx - 1] : null;
-                const prevBaseRoom = (prevRoom && prevRoom.type === r.type && prevRoom.id && prevRoom.id.includes('-')) ? prevRoom.id.split('-')[0] : null;
+            const { isDorm, baseRoom } = classifyRoomForCalendar(r);
 
-                if (baseRoom !== prevBaseRoom) {
+            if (isDorm) {
+                const prevRoom = idx > 0 ? arr[idx - 1] : null;
+                const prevClassification = prevRoom ? classifyRoomForCalendar(prevRoom) : null;
+                const prevBaseRoom = (prevClassification && prevClassification.isDorm && prevRoom.type === r.type) 
+                    ? prevClassification.baseRoom 
+                    : null;
+
+                if (baseRoom && baseRoom !== prevBaseRoom) {
                     tRows.push({ isSubHeader: true, label: baseRoom, floor: r.floor });
                 }
 
                 tRows.push({
-                    isRoom: true, isBed: true, id: r.id, displayId: r.id, type: r.type, bed: r.bed, floor: '', icon: r.icon,
+                    isRoom: true, 
+                    isBed: true, 
+                    id: r.id, 
+                    displayId: r.id, 
+                    type: r.type, 
+                    bed: r.bed || r.bunk || '', 
+                    floor: '', 
+                    icon: r.icon || r.bunk || '',
                     bookings: actStaff.filter(s => {
                         const rList = getRooms(s).map(rm => window.normalizeRoomId ? window.normalizeRoomId(rm, curProp) : rm);
                         const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
-                        // No-shows, unconfirmed, and charged bookings never block a physical bed
                         return (rList.includes(r.id) || rList.includes(normR)) && s.status !== 'unconfirmed' && s.status !== 'charged' && s.status !== 'noshow' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
                     })
                 });
             } else {
                 tRows.push({
-                    isRoom: true, isPrivate: true, id: r.id, displayId: r.id, type: r.type, bed: r.bed, floor: r.floor, icon: r.icon,
+                    isRoom: true, 
+                    isPrivate: true, 
+                    id: r.id, 
+                    displayId: r.id, 
+                    type: r.type, 
+                    bed: r.bed || r.bunk || '', 
+                    floor: r.floor, 
+                    icon: r.icon || r.bunk || '',
                     bookings: actStaff.filter(s => {
                         const rList = getRooms(s).map(rm => window.normalizeRoomId ? window.normalizeRoomId(rm, curProp) : rm);
                         const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
-                        // No-shows, unconfirmed, and charged bookings never block a physical bed
                         return (rList.includes(r.id) || rList.includes(normR)) && s.status !== 'unconfirmed' && s.status !== 'charged' && s.status !== 'noshow' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
                     })
                 });
