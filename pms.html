@@ -571,7 +571,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, query, where, getDocs, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 
         const $ = id => document.getElementById(id), $$ = s => document.querySelectorAll(s);
@@ -630,24 +630,67 @@
         };
 
         const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
+
+        // Universal Room String Normalizer (strips spaces, dashes, underscores, and double spaces)
+        const normalizeRoomStr = str => (str || '').toUpperCase().replace(/[\s\-_]/g, '');
+
         const dbToUiRoom = rid => {
             if (!rid) return rid;
-            let nid = rid.toUpperCase();
-            if (hotelRooms.some(r => r.id === nid || r.id === rid)) return rid;
+            let nid = rid.toUpperCase().trim();
+            // 1. Direct exact match
+            const exactMatch = hotelRooms.find(r => r.id === nid || r.id === rid);
+            if (exactMatch) return exactMatch.id;
+
+            // 2. Swims Resort legacy rules (A1 -> A01, 101 -> C101)
             if (currentPropertyId === 'swims_resort') {
-                if (/^[ABFD]\d$/.test(nid)) return nid[0] + '0' + nid.substring(1);
-                if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) return 'C' + nid;
+                if (/^[ABFD]\d$/.test(nid)) {
+                    const candidate = nid[0] + '0' + nid.substring(1);
+                    if (hotelRooms.some(r => r.id === candidate)) return candidate;
+                }
+                if (/^(101|[23]\d{2}(?:-\d)?)$/.test(nid)) {
+                    const candidate = 'C' + nid;
+                    if (hotelRooms.some(r => r.id === candidate)) return candidate;
+                }
             }
+
+            // 3. Robust Canonical Match (handles "F - 01" vs "F01" vs "F-01", "ROOM  J" vs "ROOM J", etc.)
+            const cleanTarget = normalizeRoomStr(rid);
+            const canonicalMatch = hotelRooms.find(r => normalizeRoomStr(r.id) === cleanTarget);
+            if (canonicalMatch) return canonicalMatch.id;
+
+            // 4. Numeric boundary match (e.g. "F1" vs "F01", "F - 1" vs "F - 01")
+            const numMatch = rid.match(/^([A-Za-z\s]+?)\s*[-_]?\s*(\d+)$/);
+            if (numMatch) {
+                const prefix = normalizeRoomStr(numMatch[1]);
+                const num = parseInt(numMatch[2], 10);
+                const altMatch = hotelRooms.find(r => {
+                    const rNumMatch = (r.id || '').match(/^([A-Za-z\s]+?)\s*[-_]?\s*(\d+)$/);
+                    if (rNumMatch) {
+                        return normalizeRoomStr(rNumMatch[1]) === prefix && parseInt(rNumMatch[2], 10) === num;
+                    }
+                    return false;
+                });
+                if (altMatch) return altMatch.id;
+            }
+
             return rid;
         };
+
         const uiToDbRoom = rid => {
             if (!rid) return rid;
-            let nid = rid.toUpperCase();
-            if (hotelRooms.some(r => r.id === nid || r.id === rid)) return rid;
+            let nid = rid.toUpperCase().trim();
+            const exactMatch = hotelRooms.find(r => r.id === nid || r.id === rid);
+            if (exactMatch) return exactMatch.id;
+
             if (currentPropertyId === 'swims_resort') {
                 if (/^[ABFD]0\d$/.test(nid)) return nid[0] + nid.substring(2);
                 if (nid.startsWith('C') && /^(101|[23]\d{2}(?:-\d)?)$/.test(nid.substring(1))) return nid.substring(1);
             }
+
+            const cleanTarget = normalizeRoomStr(rid);
+            const canonicalMatch = hotelRooms.find(r => normalizeRoomStr(r.id) === cleanTarget);
+            if (canonicalMatch) return canonicalMatch.id;
+
             return rid;
         };
 
@@ -667,6 +710,133 @@
         window.getStaff = () => staff;
         window.getPaid = s => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
         window.getDue = s => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
+
+        // --- ONE-TIME PERMANENT DATABASE CLEANER: STRIP DASHES & NORMALIZE FIRESTORE ROOMS ---
+        window.cleanDatabaseRoomIds = async () => {
+            const doMigrate = () => {
+                const loader = $('boot-loader');
+                if (loader) loader.style.display = 'flex';
+                $('sync-status').innerText = 'Stripping Dashes in Firestore...';
+
+                setTimeout(async () => {
+                    try {
+                        const curProp = currentPropertyId;
+                        const staffCol = collection(db, 'artifacts', appId, 'public', 'data', 'staff');
+                        const snap = await getDocs(staffCol);
+
+                        let batch = writeBatch(db);
+                        let batchOps = 0;
+                        let modifiedCount = 0;
+                        const auditLogList = [];
+
+                        snap.docs.forEach(docSnap => {
+                            const data = docSnap.data();
+                            const docProp = window.toCanonicalPropId ? window.toCanonicalPropId(data.property) : data.property;
+                            if (docProp && curProp && docProp !== curProp) return;
+
+                            let needsUpdate = false;
+                            const oldRoom = data.room || "";
+                            const oldRooms = Array.isArray(data.rooms) ? data.rooms : (data.room ? [data.room] : []);
+
+                            // Normalize room strings to match active clean hotelRooms
+                            const cleanRoom = dbToUiRoom(oldRoom);
+                            const cleanRooms = oldRooms.map(r => dbToUiRoom(r));
+
+                            if (cleanRoom !== oldRoom || cleanRooms.join(',') !== oldRooms.join(',')) {
+                                needsUpdate = true;
+                            } else if (oldRoom.includes('-') || oldRooms.some(r => (r || '').includes('-'))) {
+                                needsUpdate = true;
+                            }
+
+                            if (needsUpdate) {
+                                batch.update(docSnap.ref, {
+                                    room: cleanRoom,
+                                    rooms: cleanRooms,
+                                    lastEditedAt: new Date().toISOString(),
+                                    lastEditedBy: "ROOM_STRIP_DASHES_MIGRATOR"
+                                });
+                                batchOps++;
+                                modifiedCount++;
+                                auditLogList.push({
+                                    guest: `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+                                    before: oldRooms.join(', ') || oldRoom,
+                                    after: cleanRooms.join(', ') || cleanRoom
+                                });
+
+                                if (batchOps >= 400) {
+                                    batch.commit();
+                                    batch = writeBatch(db);
+                                    batchOps = 0;
+                                }
+                            }
+                        });
+
+                        if (batchOps > 0) {
+                            await batch.commit();
+                        }
+
+                        // Update in-memory staff records immediately
+                        staff.forEach(s => {
+                            const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
+                            if (!sProp || sProp === curProp) {
+                                s.room = dbToUiRoom(s.room);
+                                s.rooms = (s.rooms || []).map(r => dbToUiRoom(r));
+                            }
+                        });
+
+                        if (window.render) window.render();
+                        if (window.renderDatabase) window.renderDatabase();
+                        if (window.renderDashboard) window.renderDashboard();
+
+                        if (loader) loader.style.display = 'none';
+
+                        if (auditLogList.length > 0) {
+                            console.log(`%c✅ Cleaned and stripped dashes from ${modifiedCount} bookings in Firestore!`, "color: #10b981; font-weight: bold; font-size: 14px;");
+                            console.table(auditLogList);
+                        } else {
+                            console.log("%c✅ All room IDs in Firestore are already clean and dash-free!", "color: #3b82f6; font-weight: bold;");
+                        }
+
+                        if (window.showAlert) {
+                            window.showAlert(
+                                modifiedCount > 0
+                                    ? `Database Clean Complete!\n\nSuccessfully stripped dashes and normalized ${modifiedCount} bookings in Firestore.\nAll room assignments now strictly match your clean inventory.`
+                                    : "All Clear!\n\nAll bookings in Firestore are already clean and dash-free."
+                            );
+                        }
+                    } catch (err) {
+                        console.error("Migration Error:", err);
+                        if (loader) loader.style.display = 'none';
+                        if (window.showAlert) window.showAlert("Migration error: " + err.message);
+                    }
+                }, 100);
+            };
+
+            const alertModal = $('alert-modal');
+            const alertMsg = $('alert-message');
+            const alertTitle = $('alert-header-title');
+            const alertCancel = $('alert-cancel');
+            const alertConfirm = $('alert-confirm');
+
+            if (alertModal && alertMsg && alertCancel && alertConfirm) {
+                if (alertTitle) alertTitle.innerText = "Clean Database";
+                alertMsg.innerText = "Permanently strip all dashes and whitespace from room IDs in Firestore?\n\nThis updates your saved bookings (e.g. 'F - 01' -> 'F01', 'ROOM  J' -> 'ROOM J') so they strictly match your clean room inventory.";
+                alertCancel.classList.remove('hidden');
+                alertCancel.onclick = () => { alertModal.style.display = 'none'; };
+                alertConfirm.innerText = "Yes, Strip Dashes";
+                alertConfirm.className = "btn-modal bg-amber-600 text-white px-6 font-black uppercase shadow-md cursor-pointer";
+                alertConfirm.onclick = () => {
+                    alertModal.style.display = 'none';
+                    alertCancel.classList.add('hidden');
+                    alertConfirm.innerText = "Okay";
+                    alertConfirm.className = "btn-modal bg-blue-600 text-white px-10";
+                    doMigrate();
+                };
+                alertModal.style.display = 'flex';
+            } else {
+                doMigrate();
+            }
+        };
 
         // --- GUEST INVOICE / RECEIPT GENERATOR ---
         window.generateGuestInvoice = () => {
@@ -1263,6 +1433,15 @@
                 roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
                 window.roomTypes = roomTypes;
 
+                // Re-map active staff bookings in memory against the newly resolved hotelRooms
+                if (staff && staff.length > 0) {
+                    staff.forEach(s => {
+                        const rList = getRooms(s).map(dbToUiRoom);
+                        s.room = rList[0] || "";
+                        s.rooms = rList;
+                    });
+                }
+
                 const drop = $('db-room-dropdown');
                 if (drop) {
                     drop.innerHTML = '';
@@ -1280,6 +1459,13 @@
             try { localStorage.setItem('last_prop', propId); } catch (e) {}
             window.syncPropertyUrl(propId);
             await loadPropertyConfig();
+            if (staff && staff.length > 0) {
+                staff.forEach(s => {
+                    const rList = getRooms(s).map(dbToUiRoom);
+                    s.room = rList[0] || "";
+                    s.rooms = rList;
+                });
+            }
             if (window.render) window.render();
             if (window.renderDashboard) window.renderDashboard();
             if (window.renderDatabase) window.renderDatabase();
