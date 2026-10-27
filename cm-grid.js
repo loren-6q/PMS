@@ -667,7 +667,11 @@ window.renderGrid = () => {
             </td>`;
         }
         trAvail += `</tr>`;
-        allRowsHtml += trAvail;
+        
+        // Only append availability row if not in pure 'price' mode
+        if (density !== 'price') {
+            allRowsHtml += trAvail;
+        }
 
         if (density === 'avail') return;
 
@@ -716,7 +720,7 @@ window.renderGrid = () => {
                     <input type="text" size="1" style="flex: 1 1 0px !important; width: 0 !important; min-width: 0 !important; max-width: 50% !important; height: 100% !important; padding: 0 !important; margin: 0 !important; box-sizing: border-box !important; border-left: 1px solid rgba(226, 232, 240, 0.8) !important;" class="cell-max-input text-center bg-transparent border-none text-[8px] text-slate-400 outline-none" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)" title="Max Stay">
                 </div>` : ''}
 
-                <div class="${density === 'compact' ? 'h-[24px]' : 'h-[17px]'} flex items-center justify-center">
+                <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[17px]'} flex items-center justify-center">
                     <input type="number" step="any" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] ${isPinned ? '!text-amber-900 font-black' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" onkeydown="if(event.key==='Enter' && event.altKey){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', true); } else if(event.key==='Enter'){ event.preventDefault(); window.handleCellPriceChange(event, '${dateStr}', '${room}', false); }" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}', false)">
                 </div>
 
@@ -964,7 +968,7 @@ window.renderGrid = () => {
 
 window.setViewDensity = (density) => {
     window.viewDensity = density;
-    ['avail', 'compact', 'minmax', 'full'].forEach(d => {
+    ['avail', 'price', 'compact', 'minmax', 'full'].forEach(d => {
         const btn = document.getElementById(`density-${d}`);
         if (btn) {
             if (d === density) btn.className = "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-xs font-black";
