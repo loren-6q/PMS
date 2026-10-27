@@ -198,6 +198,9 @@
                                 <option value="BDC">Booking.com</option>
                             </select>
                         </div>
+                        <button id="btn-curve-tuner" onclick="window.toggleCurveTuner()" class="view-btn !bg-pink-50 text-pink-700 !border-pink-300 hover:bg-pink-100 cursor-pointer font-black text-xs px-2.5 py-1 rounded flex items-center gap-1" title="Tune peak pricing curve for upcoming events">
+                            <i data-lucide="sparkles" size="12"></i> CURVE
+                        </button>
                         <button onclick="window.toggleQuickBulk()" class="view-btn !bg-slate-100 cursor-pointer font-black text-xs px-2.5 py-1 rounded border border-slate-300 hover:bg-slate-200 flex items-center gap-1">
                             <i data-lucide="zap" size="12"></i> BULK
                         </button>
@@ -263,6 +266,67 @@
                                 </tr>
                             </thead>
                             <tbody id="qb-grid-body" class="divide-y divide-slate-700/50">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- QUICK EVENT CURVE TUNER DRAWER -->
+                <div id="quick-curve-panel" class="hidden bg-slate-900 border-b border-pink-900/60 p-2.5 shrink-0 shadow-xl flex-col gap-2.5 z-30 relative text-slate-200">
+                    <div class="flex items-center justify-between gap-2 w-full flex-wrap">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs font-black uppercase tracking-wider text-pink-400 flex items-center gap-1.5 mr-1">
+                                <i data-lucide="sparkles" size="14"></i> Event Curve Tuner
+                            </span>
+                            
+                            <div class="flex items-center gap-1">
+                                <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Target Event:</label>
+                                <select id="ct-event-select" onchange="window.handleCurveEventSelect(this.value)" class="input-base !py-0.5 !px-2 !text-xs font-bold bg-slate-800 text-pink-300 border-slate-700 cursor-pointer">
+                                    <!-- Populated dynamically with upcoming event dates -->
+                                </select>
+                            </div>
+
+                            <!-- Quick Delta Adjusters for Peak Rate -->
+                            <div class="flex items-center gap-1 bg-slate-800 p-0.5 rounded border border-slate-700 text-[10px] font-black ml-1">
+                                <span class="px-1 text-slate-400 uppercase text-[9px]">PEAK ADJUST:</span>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(-0.10, true)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-rose-300 cursor-pointer" title="Decrease Peak Rate by 10%">-10%</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(0.10, true)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-emerald-300 cursor-pointer" title="Increase Peak Rate by 10%">+10%</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(-500, false)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-rose-300 cursor-pointer" title="Decrease Peak Rate by 500 ฿">-500฿</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(500, false)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-emerald-300 cursor-pointer" title="Increase Peak Rate by 500 ฿">+500฿</button>
+                            </div>
+
+                            <button type="button" onclick="window.applyCurveTuner(false)" class="bg-pink-600 hover:bg-pink-500 text-white px-3 py-1 rounded shadow-md font-black text-xs uppercase tracking-wider transition-colors h-[26px] flex items-center gap-1 cursor-pointer ml-1">
+                                <i data-lucide="zap" size="13"></i> Apply To Event
+                            </button>
+                            <button type="button" onclick="window.saveCurveTunerAsDefault()" class="bg-indigo-700 hover:bg-indigo-600 text-indigo-100 border border-indigo-600 px-2.5 py-1 rounded shadow-md font-black text-xs uppercase tracking-wider transition-colors h-[26px] flex items-center gap-1 cursor-pointer" title="Save this curve as the default template for all upcoming events">
+                                <i data-lucide="save" size="12"></i> Save As Default
+                            </button>
+                        </div>
+
+                        <div class="flex items-center gap-2 ml-auto">
+                            <button onclick="window.toggleCurveTuner(true)" class="p-1 text-slate-400 hover:text-white rounded h-[26px] cursor-pointer">
+                                <i data-lucide="x" size="16"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Curve Matrix Table -->
+                    <div class="overflow-auto rounded border border-slate-700 bg-slate-800/95 shadow-inner max-h-[220px]">
+                        <table class="w-full text-center border-collapse text-xs whitespace-nowrap">
+                            <thead class="bg-slate-950 text-white text-[9px] font-black uppercase tracking-wider sticky top-0 z-10 border-b border-slate-700">
+                                <tr>
+                                    <th class="p-2 text-left border-r border-slate-800 w-44">Segment / Anchor</th>
+                                    <th class="p-2 border-r border-slate-800 w-24">Std Base</th>
+                                    <th class="p-2 border-r border-slate-800 w-24 text-pink-400">EVT Pkg</th>
+                                    <th class="p-2 border-r border-slate-800 w-24" id="ct-th-m2">EVT -2</th>
+                                    <th class="p-2 border-r border-slate-800 w-24" id="ct-th-m1">EVT -1</th>
+                                    <th class="p-2 border-r border-slate-800 w-28 text-amber-400 font-black bg-amber-950/40" id="ct-th-0">Peak (0)</th>
+                                    <th class="p-2 border-r border-slate-800 w-24" id="ct-th-p1">EVT +1</th>
+                                    <th class="p-2 w-24" id="ct-th-p2">EVT +2</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ct-grid-body" class="divide-y divide-slate-700/60 font-black">
+                                <!-- Dynamically populated with Private and Dorm anchor rows -->
                             </tbody>
                         </table>
                     </div>
