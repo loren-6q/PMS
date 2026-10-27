@@ -1289,7 +1289,11 @@
                 const propToLoad = propsList.find(p => p.id === currentPropertyId);
                 if (propToLoad) {
                     window.currentPropertyConfig = propToLoad;
-                    hotelRooms = propToLoad.rooms || [];
+                    hotelRooms = (propToLoad.rooms || []).map(r => ({
+                        ...r,
+                        category: r.category || r.type || 'Standard',
+                        type: r.type || r.category || 'Standard'
+                    }));
                     fmpDates = propToLoad.events || [];
                     window.hotelRooms = hotelRooms;
                     window.fmpDates = fmpDates;
