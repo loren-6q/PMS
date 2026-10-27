@@ -208,6 +208,108 @@ window.fetchChannexData = async () => {
     }
 };
 
+// --- 2B. PROGRAMMATIC CHANNEX PROVISIONER (ROOMS & RATE PLANS) ---
+window.provisionRoomsAndRatesToChannex = async (customApiKey = null, customPropId = null, targetCategories = null) => {
+    const apiKey = customApiKey 
+        || window.channexConfig?.apiKey 
+        || document.getElementById('chan-api-key')?.value.trim() 
+        || window.MASTER_CHANNEX_API_KEY 
+        || localStorage.getItem('cm_master_channex_api_key');
+
+    const propId = customPropId 
+        || window.channexConfig?.propId 
+        || document.getElementById('chan-prop-id')?.value.trim();
+
+    if (!apiKey || !propId) {
+        throw new Error("Missing Channex credentials. Enter your API Key and Property ID before provisioning.");
+    }
+
+    const categories = targetCategories 
+        || Array.from(new Set((window.roomDefinitions || []).map(r => r.category))).filter(Boolean);
+
+    if (!categories || categories.length === 0) {
+        throw new Error("No room categories found. Define rooms before provisioning to Channex.");
+    }
+
+    const newChannexMap = [];
+    const newChannexRateMap = [];
+
+    for (const cat of categories) {
+        const isDorm = cat.toLowerCase().includes('dorm') || cat.toLowerCase().includes('bed');
+        const spaces = isDorm ? 10 : 2;
+
+        // 1. Create Room Type in Channex
+        const rtRes = await window.fetchWithRetry("https://app.channex.io/api/v1/room_types", {
+            method: "POST",
+            headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                room_type: {
+                    property_id: propId,
+                    title: cat,
+                    adult_spaces: spaces,
+                    child_spaces: 0
+                }
+            })
+        });
+
+        if (!rtRes.ok) {
+            const err = await rtRes.json().catch(() => ({}));
+            throw new Error(`Failed to create room type "${cat}": ${err?.errors?.title || rtRes.statusText}`);
+        }
+
+        const rtJson = await rtRes.json();
+        const newRoomId = rtJson.data?.id;
+
+        newChannexMap.push({
+            channexId: newRoomId,
+            channexTitle: cat,
+            pmsCategory: cat
+        });
+
+        // 2. Create 4 Standard Rate Plans per room
+        const plansToCreate = [
+            { title: "Standard Non-Refundable", channel: "DEFAULT", policy: "non-ref" },
+            { title: "Standard Flexible (Refundable)", channel: "DEFAULT", policy: "ref" },
+            { title: "BDC Non-Refundable", channel: "Booking.com", policy: "non-ref" },
+            { title: "BDC Flexible", channel: "Booking.com", policy: "ref" }
+        ];
+
+        for (const planConf of plansToCreate) {
+            const rpRes = await window.fetchWithRetry("https://app.channex.io/api/v1/rate_plans", {
+                method: "POST",
+                headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    rate_plan: {
+                        property_id: propId,
+                        room_type_id: newRoomId,
+                        title: planConf.title,
+                        options: [{ occupancy: 1, rate: 100 }]
+                    }
+                })
+            });
+
+            if (rpRes.ok) {
+                const rpJson = await rpRes.json();
+                newChannexRateMap.push({
+                    ratePlanId: rpJson.data?.id,
+                    ratePlanTitle: planConf.title,
+                    roomTypeId: newRoomId,
+                    channexRoomTitle: cat,
+                    pmsCategory: cat,
+                    channel: planConf.channel,
+                    policy: planConf.policy,
+                    product: 'std',
+                    rateSource: 'std'
+                });
+            }
+        }
+    }
+
+    window.channexMap = newChannexMap;
+    window.channexRateMap = newChannexRateMap;
+    return { rooms: newChannexMap, ratePlans: newChannexRateMap };
+};
+
 // --- 3. MAPPING UI RENDERERS ---
 window.getPmsCategoryOptionsHtml = () => {
     let opts = '<option value="">-- UNMAPPED / IGNORED --</option>';
