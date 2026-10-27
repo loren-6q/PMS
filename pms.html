@@ -168,39 +168,98 @@
                 <!-- ROW 2: Bar Border States & Keyframe Alerts -->
                 <div class="flex items-center gap-x-2.5 gap-y-1.5 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-700 select-text">
                     <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-0.5">Alerts:</span>
-                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-red-500 cursor-help" title="Owes Balance">OWES</div>
-                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-dashed border-red-500 cursor-help" title="Bad Credit Card">BAD CC</div>
+                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-red-500 cursor-help" title="Owes Balance (solid red border)">OWES</div>
+                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-dashed border-red-500 cursor-help" title="Bad Credit Card (dashed red border)">BAD CC</div>
                     <div class="h-3 w-[1px] bg-slate-200 hidden sm:block"></div>
-                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase checkin-today cursor-help">Arrive Today</div>
-                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase late-checkin cursor-help">LATE</div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase checkin-today cursor-help" title="Check-in Today">Arrive Today</div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase late-checkin cursor-help" title="Should have checked in already">LATE</div>
                     <div class="h-3 w-[1px] bg-slate-200 hidden sm:block"></div>
-                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-today cursor-help">Depart Today</div>
-                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-past cursor-help">Late Out</div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-today cursor-help" title="Check-out Today">Depart Today</div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-past cursor-help" title="Overdue Departure (Guest still marked 'here' past checkout date)">Late Out</div>
                 </div>
 
                 <!-- ROW 3: OTA Channels -->
                 <div class="flex items-center gap-x-3 gap-y-1 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-600 select-text">
                     <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-0.5">Channels:</span>
-                    <div class="flex items-center gap-1"><div class="bg-[#003580] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">B</div><span>BDC</span></div>
-                    <div class="flex items-center gap-1"><div class="bg-[#F15A24] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">H</div><span>HW</span></div>
-                    <div class="flex items-center gap-1"><div class="bg-[#87B2D6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div><span>Agoda</span></div>
-                    <div class="flex items-center gap-1"><div class="bg-[#FF5A5F] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div><span>Airbnb</span></div>
-                    <div class="flex items-center gap-1"><div class="bg-[#facc15] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]"><span class="text-[#003580]">E</span></div><span>Expedia</span></div>
-                    <div class="flex items-center gap-1"><div class="bg-[#3b82f6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">T</div><span>Ctrip</span></div>
-                    <div class="flex items-center gap-1"><div class="bg-emerald-500 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">D</div><span>Direct</span></div>
-                    <div class="flex items-center gap-1"><div class="bg-slate-600 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">W</div><span>Walk-in</span></div>
+                    <div class="flex items-center gap-1" title="Booking.com"><div class="bg-[#003580] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">B</div><span class="text-slate-700">BDC</span></div>
+                    <div class="flex items-center gap-1" title="Hostelworld"><div class="bg-[#F15A24] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">H</div><span class="text-slate-700">HW</span></div>
+                    <div class="flex items-center gap-1" title="Agoda"><div class="bg-[#87B2D6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div><span class="text-slate-700">Agoda</span></div>
+                    <div class="flex items-center gap-1" title="Airbnb"><div class="bg-[#FF5A5F] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div><span class="text-slate-700">Airbnb</span></div>
+                    <div class="flex items-center gap-1" title="Expedia"><div class="bg-[#facc15] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]"><span class="text-[#003580]">E</span></div><span class="text-slate-700">Expedia</span></div>
+                    <div class="flex items-center gap-1" title="Ctrip / Trip.com"><div class="bg-[#3b82f6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">T</div><span class="text-slate-700">Ctrip</span></div>
+                    <div class="flex items-center gap-1" title="Direct Booking"><div class="bg-emerald-500 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">D</div><span class="text-slate-700">Direct</span></div>
+                    <div class="flex items-center gap-1" title="Walk-in Guest"><div class="bg-slate-600 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">W</div><span class="text-slate-700">Walk-in</span></div>
+                    <div class="flex items-center gap-1" title="Other Source"><div class="bg-slate-700 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">?</div><span class="text-slate-700">Other</span></div>
                 </div>
 
-                <!-- ROW 4: Details & Badges -->
+                <!-- ROW 4: Stay Details, Upgrades, Feedback, and Mail Lifecycle -->
                 <div class="flex items-center gap-x-3 gap-y-1.5 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-600 select-text">
-                    <span class="italic font-black text-slate-800 text-[10px] bg-slate-50 px-2 py-0.5 rounded border border-slate-200">Refundable ital.</span>
-                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200"><span id="leg-svg-ext" class="w-4 h-3.5 inline-block shrink-0"></span><span>Extended</span></div>
-                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200"><span id="leg-svg-link" class="w-4 h-4 inline-block shrink-0"></span><span>Linked</span></div>
+                    <div class="flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 cursor-help" title="Italics = Refundable ; Not Italics = Non-Refundable">
+                        <span class="italic font-black text-slate-800 text-[10px]">Refundable ital.</span>
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 cursor-help" title="Stay has been extended">
+                        <span id="leg-svg-ext" class="w-4 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Extended</span>
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 cursor-help" title="Linked booking - multiple rooms, room change, etc.">
+                        <span id="leg-svg-link" class="w-4 h-4 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Linked</span>
+                    </div>
+
                     <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
                         <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Upgrade:</span>
-                        <span id="leg-svg-upFree" class="w-3.5 h-4 inline-block shrink-0"></span><span>Free</span>
+                        <div class="flex items-center gap-1" title="Free Upgrade">
+                            <span id="leg-svg-upFree" class="w-3.5 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Free</span>
+                        </div>
                         <span class="text-slate-300">|</span>
-                        <span id="leg-svg-upPaid" class="w-3.5 h-4 inline-block shrink-0"></span><span>Paid</span>
+                        <div class="flex items-center gap-1" title="Paid Upgrade">
+                            <span id="leg-svg-upPaid" class="w-3.5 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Paid</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Feedback:</span>
+                        <div class="flex items-center gap-1" title="Good Guest Feedback">
+                            <span id="leg-svg-fbGood" class="w-4 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Good</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Bad / Warning Feedback">
+                            <span id="leg-svg-fbBad" class="w-4 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Bad</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Mail:</span>
+                        <div class="flex items-center gap-1" title="Booking confirmation sent">
+                            <span id="leg-svg-mailConf" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">SENT</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Booking confirmation sent (Non-FMP / standard)">
+                            <span id="leg-svg-mailNotFmp" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">NOT FMP</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="FMP date check email sent (Arriving/departing near Full Moon Party)">
+                            <span id="leg-svg-mailPre" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">FMP?</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Guest confirmed non-FMP attendance or updated dates">
+                            <span id="leg-svg-mailPreConf" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">CONF.</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Special instructions email sent">
+                            <span id="leg-svg-mailSpec" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">SPECIAL</span>
+                        </div>
                     </div>
                 </div>
             </footer>
