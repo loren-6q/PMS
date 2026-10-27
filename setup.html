@@ -15,23 +15,23 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Google Fonts: Inter -->
+    <!-- Google Fonts: Roboto Condensed (Standard Across ALL PMS & CM Pages) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
     <style>
-        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; }
+        body { font-family: 'Roboto Condensed', -apple-system, BlinkMacSystemFont, sans-serif; }
         .step-pill.active { background-color: #4f46e5; color: #ffffff; border-color: #4338ca; }
         .step-pill.completed { background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; }
         .step-pill { background-color: #ffffff; color: #64748b; border-color: #e2e8f0; }
         .table-input {
             border: 1px solid #cbd5e1;
             border-radius: 0.25rem;
-            padding: 0.3rem 0.5rem;
+            padding: 0.25rem 0.5rem;
             outline: none;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             font-weight: 700;
             background-color: #ffffff;
             transition: border-color 0.15s, box-shadow 0.15s;
@@ -44,14 +44,13 @@
         }
         .label-base {
             display: block;
-            font-size: 9.5px;
-            font-weight: 800;
+            font-size: 9px;
+            font-weight: 900;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: #475569;
             margin-bottom: 0.2rem;
         }
-        /* Custom scrollbar for dense tables */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -2809,7 +2808,6 @@
 
             window.customAlert("Connecting", "Querying Channex API for active rooms and rate plans...");
             try {
-                // 1. Fetch Room Types
                 const roomRes = await fetch(`https://app.channex.io/api/v1/room_types?filter[property_id]=${propId}`, {
                     headers: { "user-api-key": apiKey, "Content-Type": "application/json" }
                 });
@@ -2817,7 +2815,6 @@
                 const roomJson = await roomRes.json();
                 const chRooms = roomJson.data || [];
 
-                // 2. Fetch Rate Plans Options Endpoint
                 const rateRes = await fetch(`https://app.channex.io/api/v1/rate_plans/options?filter[property_id]=${propId}`, {
                     headers: { "user-api-key": apiKey, "Content-Type": "application/json" }
                 });
@@ -2825,7 +2822,6 @@
                 const rateJson = await rateRes.json();
                 const chPlans = rateJson.data || [];
 
-                // 3. Map Channex rooms directly to PMS categories
                 const categories = Array.from(new Set(window.roomDefinitions.map(r => r.category))).filter(Boolean);
                 window.channexMap = chRooms.map(cr => {
                     const title = cr.attributes?.title || '';
@@ -2843,7 +2839,6 @@
                     };
                 });
 
-                // 4. Map Rate Plans cleanly to their Parent Room Category via parentRoomId
                 const roomNameMap = {};
                 chRooms.forEach(r => { roomNameMap[r.id] = r.attributes?.title || ''; });
 
@@ -2980,9 +2975,7 @@
             }
         };
 
-        // --------------------------------------------------------------------------
-        // 6.6: Pricing Anchors, Relational Links & Channel Adjustments
-        // --------------------------------------------------------------------------
+        // --- STEP 4 & 5: PRICING RULES, ANCHORS, CURVES & REVIEWS ---
         window.populateAnchorDropdowns = () => {
             const categories = Array.from(new Set(window.roomDefinitions.map(i => i.category))).filter(Boolean);
             const dormCats = Array.from(new Set(window.roomDefinitions.filter(i => (i.category || '').toLowerCase().includes('dorm')).map(i => i.category)));
@@ -3010,7 +3003,7 @@
             });
 
             if (window.relationships.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-slate-400 font-semibold italic">No room offset links configured. Click "+ Add Pricing Link Rule".</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-slate-400 font-semibold italic">No room offset links configured. Click "+ Add Link Rule".</td></tr>`;
                 return;
             }
 
@@ -3139,9 +3132,6 @@
             window.renderRelationships();
         };
 
-        // --------------------------------------------------------------------------
-        // 6.7: Dual Event Curves (Independent Rate & Restriction Spans)
-        // --------------------------------------------------------------------------
         const SPAN_CYCLE = [2, 4, 6, 7];
 
         window.cycleRatesSpan = () => {
@@ -3278,9 +3268,6 @@
             `;
         };
 
-        // --------------------------------------------------------------------------
-        // 6.8: Setup Summary, Database Persistence & Multi-Property Sync
-        // --------------------------------------------------------------------------
         window.populateReviewSummary = () => {
             window.compileBedsFromDefinitions();
             document.getElementById('rev-prop-name').textContent = document.getElementById('prop-name').value;
@@ -3314,7 +3301,6 @@
                     chRulesObj[r.channel] = { type: r.type || '=', val: r.val || 0 };
                 });
 
-                // Update property document in Firestore
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), {
                     name: document.getElementById('prop-name').value,
                     short: document.getElementById('prop-short').value,
@@ -3336,7 +3322,6 @@
                     channexRateMap: window.channexRateMap
                 }, { merge: true });
 
-                // Update pricing master record in Firestore
                 const maxSpan = Math.max(window.ratesSpan || 2, window.restrSpan || 6);
                 const offsets = [];
                 for (let i = -maxSpan; i <= maxSpan; i++) offsets.push(i);
@@ -3405,265 +3390,6 @@
             }
         };
 
-        // --------------------------------------------------------------------------
-        // 6.9: Property Boot, Auth & Discovery
-        // --------------------------------------------------------------------------
-        async function initAuthAndLoad() {
-            window.addons = loadDefaultAddons();
-            window.renderAddonsTable();
-
-            try {
-                if (typeof window.__initial_auth_token !== 'undefined') {
-                    try { await signInWithCustomToken(auth, window.__initial_auth_token); }
-                    catch (e) { await signInAnonymously(auth); }
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (err) {
-                console.warn("Auth initialization notice:", err);
-            }
-
-            // Fetch all available properties from Firestore
-            await window.loadAllPropertiesList();
-
-            const urlParams = new URLSearchParams(window.location.search);
-            const pParam = (urlParams.get('p') || '').toUpperCase();
-            
-            let targetId = 'loud_samui';
-            if (pParam === 'SWIMS' || pParam === 'SWIMS_RESORT') targetId = 'swims_resort';
-            else if (pParam === 'WET' || pParam === 'WET_POOL') targetId = 'wet_pool';
-
-            const sel = document.getElementById('property-select');
-            if (sel) sel.value = targetId;
-            window.activePropertyId = targetId;
-
-            await window.loadPropertyFromDatabase(targetId);
-        }
-
-        window.loadAllPropertiesList = async () => {
-            try {
-                const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
-                const propsSnap = await getDocs(propsRef);
-                const list = [];
-                propsSnap.forEach(d => list.push({ id: d.id, ...d.data() }));
-                window.availableProperties = list;
-
-                const sel = document.getElementById('property-select');
-                if (sel && list.length > 0) {
-                    sel.innerHTML = list.map(p => `
-                        <option value="${p.id}">${p.name || p.title || p.id}</option>
-                    `).join('');
-                }
-            } catch(e) {
-                console.warn("Could not list properties:", e);
-            }
-        };
-
-        window.openNewPropertyModal = () => {
-            document.getElementById('new-prop-input-name').value = '';
-            document.getElementById('new-prop-input-short').value = '';
-            document.getElementById('new-prop-input-id').value = '';
-            document.getElementById('new-property-modal').classList.remove('hidden');
-        };
-
-        window.closeNewPropertyModal = () => {
-            document.getElementById('new-property-modal').classList.add('hidden');
-        };
-
-        window.confirmCreateNewProperty = async () => {
-            const name = document.getElementById('new-prop-input-name').value.trim();
-            const short = document.getElementById('new-prop-input-short').value.trim().toUpperCase();
-            let slug = document.getElementById('new-prop-input-id').value.trim().toLowerCase();
-
-            if (!name) return window.customAlert("Missing Field", "Please enter a Property Name.");
-            if (!slug) slug = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-
-            window.closeNewPropertyModal();
-
-            // Create blank property record in Firestore
-            try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', slug), {
-                    name: name,
-                    short: short || slug.toUpperCase(),
-                    currency: 'THB',
-                    timezone: 'Asia/Bangkok',
-                    enableEventRates: false,
-                    roomDefinitions: [],
-                    rooms: [],
-                    addons: loadDefaultAddons(),
-                    channex: { apiKey: '', propId: '' },
-                    channexMap: [],
-                    channexRateMap: []
-                }, { merge: true });
-
-                await window.loadAllPropertiesList();
-                const sel = document.getElementById('property-select');
-                if (sel) sel.value = slug;
-                await window.switchSetupProperty(slug);
-
-                window.customAlert("Property Created", `Successfully created ${name}! You can now configure its inventory and rate rules.`);
-            } catch(err) {
-                console.error("Create property error:", err);
-                window.customAlert("Error", "Could not create property: " + err.message);
-            }
-        };
-
-        window.loadPropertyFromDatabase = async (propId) => {
-            const statusEl = document.getElementById('header-status-text');
-            if (statusEl) statusEl.textContent = "Loading configuration from database...";
-
-            try {
-                const docSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
-                if (!docSnap.exists()) {
-                    if (statusEl) statusEl.textContent = "Property loaded in local memory.";
-                    return;
-                }
-
-                const prop = docSnap.data();
-                window.currentPropertyData = prop;
-
-                // 1. Property Profile
-                document.getElementById('prop-name').value = prop.name || prop.title || propId;
-                document.getElementById('prop-short').value = prop.short || (propId.includes('loud') ? 'LOUD' : (propId.includes('swims') ? 'SWIMS' : 'WET'));
-                document.getElementById('prop-currency').value = prop.currency || 'THB';
-                document.getElementById('prop-timezone').value = prop.timezone || 'Asia/Bangkok';
-                document.getElementById('prop-address').value = prop.address || '';
-                document.getElementById('prop-email').value = prop.email || '';
-                document.getElementById('prop-phone').value = prop.phone || '';
-                document.getElementById('prop-website').value = prop.website || '';
-
-                // 2. Channex Credentials
-                const apiKey = prop.channex?.apiKey || '';
-                const chanPropId = prop.channex?.propId || '';
-                document.getElementById('chan-api-key').value = apiKey;
-                document.getElementById('chan-prop-id').value = chanPropId;
-
-                const connBadge = document.getElementById('channex-conn-badge');
-                if (apiKey && chanPropId) {
-                    connBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Connected';
-                    connBadge.className = 'flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200';
-                } else {
-                    connBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Not Connected';
-                    connBadge.className = 'flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200';
-                }
-
-                // 3. Room Inventory (Room-Level Definitions)
-                if (Array.isArray(prop.roomDefinitions) && prop.roomDefinitions.length > 0) {
-                    window.roomDefinitions = prop.roomDefinitions;
-                } else if (Array.isArray(prop.rooms) && prop.rooms.length > 0) {
-                    window.roomDefinitions = extrapolateRoomDefinitions(prop.rooms);
-                } else {
-                    window.roomDefinitions = [
-                        { roomName: 'F', category: 'STANDARD DOUBLE 6-BED DORM', type: 'dorm', units: 6, floor: '2', bunkRule: 'odd-top' },
-                        { roomName: 'H', category: 'FEMALE 6-10 BED DORM', type: 'dorm', units: 6, floor: '1', bunkRule: 'odd-top' },
-                        { roomName: 'E', category: 'STANDARD 10-BED MIXED DORM', type: 'dorm', units: 10, floor: '2', bunkRule: 'odd-top' },
-                        { roomName: 'ROOM J', category: 'Deluxe PRIVATE KING Room', type: 'private', units: 1, floor: '1', bunkRule: 'private' },
-                        { roomName: 'ROOM K', category: 'Deluxe PRIVATE KING Room', type: 'private', units: 1, floor: '1', bunkRule: 'private' }
-                    ];
-                }
-                window.compileBedsFromDefinitions();
-
-                // 4. Rate Plans & Mappings
-                window.channexMap = Array.isArray(prop.channexMap) ? prop.channexMap : [];
-                window.channexRateMap = Array.isArray(prop.channexRateMap) ? prop.channexRateMap : [];
-
-                // 5. Folio Addons
-                if (Array.isArray(prop.addons) && prop.addons.length > 0) {
-                    window.addons = prop.addons;
-                } else {
-                    window.addons = loadDefaultAddons();
-                }
-
-                // 6. Pricing Rules & Master Records
-                const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`));
-                const pricingData = pricingSnap.exists() ? pricingSnap.data() : {};
-                const rules = pricingData.pricingRules || {};
-
-                document.getElementById('rule-std-ref').value = rules.stdRefVal !== undefined ? rules.stdRefVal : 25;
-                document.getElementById('rule-evt-ref').value = rules.evtRefVal !== undefined ? rules.evtRefVal : 25;
-
-                const hasEvents = prop.enableEventRates !== undefined ? !!prop.enableEventRates : (propId === 'swims_resort');
-                document.getElementById('toggle-events').checked = hasEvents;
-                window.toggleEventSettings(hasEvents);
-
-                // Relational Pricing Rules
-                if (Array.isArray(pricingData.relationships) && pricingData.relationships.length > 0) {
-                    window.relationships = pricingData.relationships;
-                }
-
-                // Channels: DEFAULT (Channex baseline), DIRECT (Direct sales), and OTAs
-                const storedChannels = rules.channels || {};
-                const defaultChannels = [
-                    { channel: 'DEFAULT', desc: 'Standard OTA Pipe', type: '=', val: 0 },
-                    { channel: 'DIRECT', desc: 'Direct Website Engine', type: '=', val: 0 },
-                    { channel: 'Booking.com', desc: 'BDC Channel', type: '=', val: 0 },
-                    { channel: 'Hostelworld', desc: 'HW Channel', type: '+%', val: 15 },
-                    { channel: 'Agoda', desc: 'Agoda Channel', type: '=', val: 0 }
-                ];
-
-                window.channelRules = defaultChannels.map(dc => {
-                    const chName = dc.channel;
-                    const st = storedChannels[chName];
-                    return {
-                        id: `cr_${chName.replace(/\s+/g, '')}`,
-                        channel: chName,
-                        desc: dc.desc,
-                        type: st?.type || dc.type,
-                        val: st?.val !== undefined ? st.val : dc.val
-                    };
-                });
-
-                // Add any additional custom stored channels
-                Object.keys(storedChannels).forEach(chKey => {
-                    if (!window.channelRules.some(r => r.channel === chKey)) {
-                        window.channelRules.push({
-                            id: `cr_${chKey.replace(/\s+/g, '')}`,
-                            channel: chKey,
-                            desc: 'Custom Channel',
-                            type: storedChannels[chKey]?.type || '=',
-                            val: storedChannels[chKey]?.val || 0
-                        });
-                    }
-                });
-
-                // Spans from Baselines
-                const autoBase = pricingData.autofillBaselines || {};
-                if (autoBase.ratesSpan) window.ratesSpan = autoBase.ratesSpan;
-                if (autoBase.restrSpan) window.restrSpan = autoBase.restrSpan;
-
-                // Render UI
-                window.renderAddonsTable();
-                window.renderRoomDefTable();
-                window.renderRoomMappingTable();
-                window.renderGroupedRatePlans();
-                window.renderChannelRules();
-                window.populateAnchorDropdowns();
-                window.renderRelationships();
-                window.renderEventCurveTables(autoBase);
-                window.populateReviewSummary();
-
-                if (statusEl) statusEl.textContent = `Loaded ${window.compiledRooms.length} beds across ${window.roomDefinitions.length} rooms from ${prop.name || propId}`;
-                document.getElementById('btn-goto-pms').href = `pms.html?p=${propId.includes('loud') ? 'LOUD' : 'SWIMS'}`;
-                document.getElementById('btn-goto-cm').href = `cm.html?p=${propId.includes('loud') ? 'LOUD' : 'SWIMS'}`;
-
-            } catch (err) {
-                console.error("Load property error:", err);
-                if (statusEl) statusEl.textContent = "Error loading property: " + err.message;
-            }
-        };
-
-        window.switchSetupProperty = (propId) => {
-            window.activePropertyId = propId;
-            const shortCode = propId.includes('loud') ? 'LOUD' : (propId.includes('swims') ? 'SWIMS' : 'WET');
-            const urlParams = new URLSearchParams(window.location.search);
-            urlParams.set('p', shortCode);
-            window.history.replaceState({}, '', `${window.location.pathname}?${urlParams.toString()}`);
-            window.loadPropertyFromDatabase(propId);
-        };
-
-        // --------------------------------------------------------------------------
-        // 6.10: Entry Point & Initialization
-        // --------------------------------------------------------------------------
         document.addEventListener('DOMContentLoaded', () => {
             initAuthAndLoad();
             window.jumpStep(1);
