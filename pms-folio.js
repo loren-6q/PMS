@@ -533,7 +533,9 @@
         d.setUTCDate(d.getUTCDate() + (parseInt($('ext-days')?.value) || 1));
         const roomCount = Array.from($$('.assigned-room-select')).filter(sel => sel.value !== "").length || 1;
         const pax = $('pax-count')?.value || 1;
-        window.open(`https://www.booking.com/hotel/th/swims-a-social-beach-resort.html?checkin=${cO}&checkout=${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}&group_adults=${pax}&group_children=0&no_rooms=${roomCount}`, '_blank');
+        const curProp = window.currentPropertyConfig || {};
+        const bdcUrl = curProp.bdcUrl || curProp.website || "https://www.booking.com";
+        window.open(`${bdcUrl}?checkin=${cO}&checkout=${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}&group_adults=${pax}&group_children=0&no_rooms=${roomCount}`, '_blank');
     };
 
     window.confirmExtension = async () => {
@@ -587,7 +589,332 @@
         const d = new Date(cI + "T12:00:00Z");
         d.setUTCDate(d.getUTCDate() + n);
         const cO = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-        window.open(`https://www.booking.com/hotel/th/swims-a-social-beach-resort.html?checkin=${cI}&checkout=${cO}&group_adults=${p}&group_children=0&no_rooms=1`, '_blank');
+        const curProp = window.currentPropertyConfig || {};
+        const bdcUrl = curProp.bdcUrl || curProp.website || "https://www.booking.com";
+        window.open(`${bdcUrl}?checkin=${cI}&checkout=${cO}&group_adults=${p}&group_children=0&no_rooms=1`, '_blank');
         window.closeModal('price-check-modal');
+    };
+
+    // ----------------------------------------------------------------------
+    // 6. GUEST FOLIO INVOICE & RECEIPT GENERATOR (DYNAMIC DATABASE DATA)
+    // ----------------------------------------------------------------------
+    window.generateGuestInvoice = () => {
+        const guestId = $('guest-id')?.value;
+        const staffList = window.staff || [];
+        let booking = staffList.find(s => s.id === guestId);
+
+        if (!booking) {
+            const total = parseFloat($('total-price')?.value) || 0;
+            const rList = Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean);
+            const getYmdFn = getLocalYMD();
+            booking = {
+                id: guestId || 'DRAFT',
+                bookId: $('booking-id')?.value || guestId || 'DIRECT',
+                firstName: $('first-name')?.value || 'Guest',
+                lastName: $('last-name')?.value || '',
+                phone: $('phone')?.value || '',
+                email: $('email')?.value || '',
+                country: $('guest-country')?.value || '',
+                checkIn: $('check-in')?.value || getYmdFn(new Date()),
+                checkOut: $('check-out')?.value || getYmdFn(new Date()),
+                bookedType: $('booked-type')?.value || 'Standard Room',
+                room: rList[0] || 'Unassigned',
+                rooms: rList,
+                totalPrice: total,
+                payments: window.activePayments || [],
+                extraCharges: window.activeExtraCharges || [],
+                source: $('booking-source')?.value || 'Direct',
+                pax: parseInt($('pax-count')?.value, 10) || 1
+            };
+        }
+
+        const curProp = window.currentPropertyConfig || {};
+        const curPropId = window.getCurrentPropertyId ? window.getCurrentPropertyId() : (window.currentPropertyId || 'property');
+        const propertyName = curProp.name || curProp.title || curPropId.toUpperCase();
+        const propertySubtitle = curProp.subtitle || curProp.tagline || "";
+        const propertyAddress = curProp.address || "";
+        const currencySym = curProp.currencySymbol || (curProp.currency === 'USD' ? '$' : (curProp.currency === 'EUR' ? '€' : (curProp.currency === 'GBP' ? '£' : '฿')));
+
+        const contactParts = [];
+        if (curProp.email) contactParts.push(curProp.email);
+        if (curProp.phone) contactParts.push(curProp.phone);
+        if (curProp.website) contactParts.push(curProp.website);
+        const propertyContact = contactParts.join(' • ');
+
+        const parseFn = getParseYMD();
+        const inMs = parseFn(booking.checkIn);
+        const outMs = parseFn(booking.checkOut);
+        const nights = Math.max(1, Math.round((outMs - inMs) / 86400000)) || 1;
+
+        const hotelRooms = window.hotelRooms || [];
+        const rList = (booking.rooms && booking.rooms.length > 0) ? booking.rooms : [booking.room].filter(Boolean);
+        const roomListStr = rList.length > 0 ? rList.join(', ') : (booking.room || 'Room / Bed Assigned');
+
+        const resolvedTypes = [];
+        rList.forEach(rid => {
+            const hr = hotelRooms.find(r => r.id === rid || (window.uiToDbRoom && r.id === window.uiToDbRoom(rid)) || (window.dbToUiRoom && r.id === window.dbToUiRoom(rid)));
+            const cat = hr ? (hr.type || hr.category) : null;
+            if (cat && !resolvedTypes.includes(cat)) resolvedTypes.push(cat);
+        });
+
+        let cleanCategory = resolvedTypes.join(', ');
+        if (!cleanCategory) {
+            cleanCategory = booking.bookedType || 'Standard Room';
+            if (cleanCategory.includes('(')) cleanCategory = cleanCategory.split('(')[0].trim();
+        }
+
+        const rawPayments = Array.isArray(booking.payments) ? booking.payments : [];
+        const extraCharges = Array.isArray(booking.extraCharges) ? booking.extraCharges : [];
+        const totalExtra = extraCharges.reduce((sum, c) => sum + (parseFloat(c.amt || c.amount) || 0), 0);
+        const accommodationTotal = Math.max(0, (parseFloat(booking.totalPrice) || 0) - totalExtra);
+        const grandTotal = parseFloat(booking.totalPrice) || 0;
+        const totalPaid = rawPayments.reduce((sum, p) => sum + (parseFloat(p.amt) || 0), 0);
+        const balanceDue = Number((grandTotal - totalPaid).toFixed(2));
+
+        const invoiceNumber = `INV-${(booking.bookId || booking.id || '0000').replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
+        const getYmdFn = getLocalYMD();
+        const issueDate = getYmdFn(new Date());
+
+        const cleanPayments = [];
+        const groupedOta = {};
+
+        rawPayments.forEach(p => {
+            const rawM = (p.method || 'payment').toLowerCase().trim();
+            const amt = parseFloat(p.amt) || 0;
+            const date = p.date || issueDate;
+
+            if (rawM.includes('bdc') || rawM.includes('booking')) {
+                if (!groupedOta['Booking.com']) groupedOta['Booking.com'] = { date, method: 'Booking.com (Prepaid Online)', amt: 0 };
+                groupedOta['Booking.com'].amt += amt;
+            } else if (rawM.includes('agoda')) {
+                if (!groupedOta['Agoda']) groupedOta['Agoda'] = { date, method: 'Agoda (Prepaid Online)', amt: 0 };
+                groupedOta['Agoda'].amt += amt;
+            } else if (rawM.includes('hw') || rawM.includes('hostelworld')) {
+                if (!groupedOta['Hostelworld']) groupedOta['Hostelworld'] = { date, method: 'Hostelworld Deposit (Online)', amt: 0 };
+                groupedOta['Hostelworld'].amt += amt;
+            } else if (rawM.includes('expedia')) {
+                if (!groupedOta['Expedia']) groupedOta['Expedia'] = { date, method: 'Expedia (Prepaid Online)', amt: 0 };
+                groupedOta['Expedia'].amt += amt;
+            } else if (rawM.includes('airbnb')) {
+                if (!groupedOta['Airbnb']) groupedOta['Airbnb'] = { date, method: 'Airbnb (Prepaid Online)', amt: 0 };
+                groupedOta['Airbnb'].amt += amt;
+            } else {
+                let friendlyMethod = 'Payment';
+                if (rawM.includes('cash')) friendlyMethod = 'Cash';
+                else if (rawM.includes('card') || rawM.includes('cc')) friendlyMethod = 'Credit / Debit Card';
+                else if (rawM.includes('transfer') || rawM.includes('bank') || rawM.includes('promptpay') || rawM.includes('qr') || rawM.includes('scan')) friendlyMethod = 'Bank Transfer / QR Scan';
+                else friendlyMethod = p.method ? p.method.toUpperCase() : 'Settlement';
+
+                cleanPayments.push({ date, method: friendlyMethod, amt });
+            }
+        });
+
+        Object.values(groupedOta).forEach(item => {
+            cleanPayments.unshift({
+                date: item.date,
+                method: item.method,
+                amt: Number(item.amt.toFixed(2))
+            });
+        });
+
+        const logoHtml = curProp.logoUrl 
+            ? `<img src="${curProp.logoUrl}" alt="${propertyName}" class="logo" onerror="this.style.display='none'">` 
+            : `<div class="logo-fallback">${propertyName.charAt(0)}</div>`;
+
+        const printHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice - ${booking.firstName} ${booking.lastName} (${invoiceNumber})</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background: #f8fafc; color: #1e293b; padding: 24px; font-size: 13px; line-height: 1.4; }
+        .invoice-card { max-width: 800px; margin: 0 auto; background: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 24px; }
+        .logo-wrap { display: flex; align-items: center; gap: 14px; max-width: 500px; }
+        .logo { height: 56px; max-width: 180px; object-fit: contain; }
+        .logo-fallback { width: 48px; height: 48px; border-radius: 8px; background: #4338ca; color: #fff; font-size: 24px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+        .prop-name { font-size: 20px; font-weight: 900; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px; }
+        .prop-sub { font-size: 11px; font-weight: 700; color: #64748b; margin-top: 2px; }
+        .prop-addr { font-size: 10px; color: #94a3b8; margin-top: 4px; max-width: 340px; }
+        .inv-title-wrap { text-align: right; }
+        .inv-title { font-size: 24px; font-weight: 900; text-transform: uppercase; color: #4338ca; letter-spacing: 1px; }
+        .inv-badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; margin-top: 6px; }
+        .badge-paid { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+        .badge-due { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+        .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; background: #f8fafc; padding: 16px; border-radius: 6px; border: 1px solid #edf2f7; }
+        .meta-block h4 { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .meta-block p { font-size: 12px; font-weight: 700; color: #0f172a; }
+        .meta-block span { font-size: 11px; font-weight: 500; color: #475569; display: block; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+        th { background: #f1f5f9; text-align: left; padding: 10px 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; border-bottom: 1px solid #cbd5e1; }
+        td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .item-name { font-weight: 800; color: #0f172a; }
+        .item-desc { font-size: 11px; color: #64748b; margin-top: 2px; }
+        .totals-wrap { display: flex; justify-content: flex-end; margin-bottom: 24px; }
+        .totals-table { width: 280px; }
+        .totals-table tr td { padding: 6px 0; border: none; font-size: 12px; }
+        .grand-total { font-size: 16px; font-weight: 900; color: #0f172a; border-top: 2px solid #e2e8f0 !important; padding-top: 8px !important; }
+        .payments-section { border-top: 1px dashed #cbd5e1; padding-top: 16px; margin-bottom: 24px; }
+        .section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #475569; margin-bottom: 10px; }
+        .footer { text-align: center; border-top: 1px solid #e2e8f0; padding-top: 20px; font-size: 11px; color: #94a3b8; }
+        .btn-print-bar { max-width: 800px; margin: 0 auto 16px; display: flex; justify-content: space-between; align-items: center; }
+        .btn-print { background: #4338ca; color: #ffffff; padding: 10px 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn-print:hover { background: #3730a3; }
+        @media print {
+            body { background: #ffffff; padding: 0; }
+            .invoice-card { box-shadow: none; border: none; padding: 0; }
+            .btn-print-bar { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="btn-print-bar">
+        <span style="font-weight: 700; color: #64748b; font-size: 12px;">Invoice Ready</span>
+        <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
+    </div>
+
+    <div class="invoice-card">
+        <div class="header">
+            <div class="logo-wrap">
+                ${logoHtml}
+                <div>
+                    <h1 class="prop-name">${propertyName}</h1>
+                    ${propertySubtitle ? `<p class="prop-sub">${propertySubtitle}</p>` : ''}
+                    ${propertyAddress ? `<p class="prop-addr">${propertyAddress}</p>` : ''}
+                    ${propertyContact ? `<p class="prop-addr">${propertyContact}</p>` : ''}
+                </div>
+            </div>
+            <div class="inv-title-wrap">
+                <h2 class="inv-title">INVOICE</h2>
+                <p style="font-size: 11px; font-weight: 800; color: #475569; margin-top: 4px;"># ${invoiceNumber}</p>
+                <p style="font-size: 11px; color: #94a3b8;">Issued: ${issueDate}</p>
+                <span class="inv-badge ${balanceDue <= 0 ? 'badge-paid' : 'badge-due'}">
+                    ${balanceDue <= 0 ? 'PAID IN FULL' : `BALANCE DUE: ${currencySym}${balanceDue.toLocaleString()}`}
+                </span>
+            </div>
+        </div>
+
+        <div class="meta-grid">
+            <div class="meta-block">
+                <h4>Billed To (Guest)</h4>
+                <p>${booking.firstName || ''} ${booking.lastName || ''}</p>
+                ${booking.country ? `<span>Country: ${booking.country}</span>` : ''}
+                ${booking.email ? `<span>Email: ${booking.email}</span>` : ''}
+                ${booking.phone ? `<span>Phone: ${booking.phone}</span>` : ''}
+            </div>
+            <div class="meta-block">
+                <h4>Stay & Booking Details</h4>
+                <p>Dates: ${booking.checkIn} &rarr; ${booking.checkOut} (${nights} Night${nights > 1 ? 's' : ''})</p>
+                <span>Unit(s): ${roomListStr}</span>
+                <span>Category: ${cleanCategory}</span>
+                <span>Ref: ${booking.bookId || booking.id || 'Direct'} (${(booking.source || 'Direct').toUpperCase()})</span>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 50%;">Description</th>
+                    <th class="text-center" style="width: 15%;">Qty / Nts</th>
+                    <th class="text-right" style="width: 15%;">Unit Price</th>
+                    <th class="text-right" style="width: 20%;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div class="item-name">Accommodation Charges</div>
+                        <div class="item-desc">${cleanCategory} • ${roomListStr} (${nights} night${nights > 1 ? 's' : ''})</div>
+                    </td>
+                    <td class="text-center font-bold">${nights}</td>
+                    <td class="text-right font-mono">${currencySym}${(accommodationTotal / nights).toFixed(2)}</td>
+                    <td class="text-right font-black font-mono">${currencySym}${accommodationTotal.toFixed(2)}</td>
+                </tr>
+                ${extraCharges.map(c => `
+                <tr>
+                    <td>
+                        <div class="item-name">${c.desc || 'Folio Service'}</div>
+                        <div class="item-desc">Date: ${c.date || issueDate}</div>
+                    </td>
+                    <td class="text-center font-bold">1</td>
+                    <td class="text-right font-mono">${currencySym}${Number(c.amt || c.amount || 0).toFixed(2)}</td>
+                    <td class="text-right font-black font-mono">${currencySym}${Number(c.amt || c.amount || 0).toFixed(2)}</td>
+                </tr>
+                `).join('')}
+            </tbody>
+        </table>
+
+        <div class="totals-wrap">
+            <table class="totals-table">
+                <tr>
+                    <td style="color: #64748b;">Subtotal:</td>
+                    <td class="text-right font-mono font-bold">${currencySym}${grandTotal.toFixed(2)}</td>
+                </tr>
+                <tr class="grand-total">
+                    <td>Total Amount:</td>
+                    <td class="text-right font-mono">${currencySym}${grandTotal.toFixed(2)}</td>
+                </tr>
+                <tr>
+                    <td style="color: #15803d; font-weight: 700;">Total Payments:</td>
+                    <td class="text-right font-mono font-bold" style="color: #15803d;">-${currencySym}${totalPaid.toFixed(2)}</td>
+                </tr>
+                <tr style="border-top: 1px solid #e2e8f0; font-weight: 900;">
+                    <td style="color: ${balanceDue > 0 ? '#b91c1c' : '#0f172a'};">Outstanding Due:</td>
+                    <td class="text-right font-mono" style="color: ${balanceDue > 0 ? '#b91c1c' : '#0f172a'};">${currencySym}${balanceDue.toFixed(2)}</td>
+                </tr>
+            </table>
+        </div>
+
+        ${cleanPayments.length > 0 ? `
+        <div class="payments-section">
+            <div class="section-title">Payments & Settlements</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Payment Date</th>
+                        <th>Method / Channel</th>
+                        <th>Status</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${cleanPayments.map(p => `
+                    <tr>
+                        <td class="font-mono">${p.date || issueDate}</td>
+                        <td style="font-weight: 700;">${p.method}</td>
+                        <td><span style="color: #15803d; font-weight: 800; font-size: 10px; background: #dcfce7; padding: 2px 6px; border-radius: 4px;">SUCCESS</span></td>
+                        <td class="text-right font-mono font-black" style="color: #15803d;">${currencySym}${Number(p.amt || 0).toFixed(2)}</td>
+                    </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        ` : ''}
+
+        <div class="footer">
+            <p style="font-weight: 700; color: #475569; margin-bottom: 4px;">Thank you for staying at ${propertyName}!</p>
+            ${propertyContact ? `<p>${propertyContact}</p>` : ''}
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            setTimeout(function() { window.print(); }, 500);
+        };
+    <\/script>
+</body>
+</html>`;
+
+        const printWin = window.open('', '_blank');
+        if (printWin) {
+            printWin.document.open();
+            printWin.document.write(printHtml);
+            printWin.document.close();
+        } else {
+            window.showAlert("Pop-up blocked. Please allow pop-ups for this website to print/export invoices.");
+        }
     };
 })();
