@@ -177,10 +177,11 @@
                         
                         <div class="h-4 w-px bg-slate-300 mx-0.5 hidden sm:block"></div>
                         
-                        <!-- 4 VIEW DENSITY MODES -->
+                        <!-- 5 VIEW DENSITY MODES -->
                         <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
                             <span class="px-1.5 text-slate-400">VIEW:</span>
                             <button onclick="window.setViewDensity('avail')" id="density-avail" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white" title="Availability rows only">Avail</button>
+                            <button onclick="window.setViewDensity('price')" id="density-price" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white" title="Price / Rate rows only (No availability row)">Price</button>
                             <button onclick="window.setViewDensity('compact')" id="density-compact" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white" title="Availability & Rate only">Compact</button>
                             <button onclick="window.setViewDensity('minmax')" id="density-minmax" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white" title="Avail, Rate, and Min/Max strip">Min/Max</button>
                             <button onclick="window.setViewDensity('full')" id="density-full" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black" title="Full Multi-Zone details">Full</button>
