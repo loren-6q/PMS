@@ -567,6 +567,11 @@ window.renderGrid = () => {
         depthEvtBtn.style.display = isEventsActive ? 'inline-block' : 'none';
     }
 
+    const btnCurve = document.getElementById('btn-curve-tuner');
+    if (btnCurve) {
+        btnCurve.style.display = isEventsActive ? 'inline-flex' : 'none';
+    }
+
     const density = window.viewDensity || 'full';
 
     // 1. HEADER ROW
@@ -583,14 +588,23 @@ window.renderGrid = () => {
         let minDiff = window.getNearestEvent ? window.getNearestEvent(dMs) : 999;
 
         let highlight = 'bg-slate-900 border-slate-700 text-white';
+        let isPeak = false;
         if (hasEvents) {
-            if (minDiff === 0) highlight = 'evt-peak !bg-amber-500 text-slate-900';
-            else if (Math.abs(minDiff) <= 2) highlight = 'bg-amber-400 text-amber-900 border-amber-500';
+            if (minDiff === 0) {
+                highlight = 'evt-peak !bg-amber-500 text-slate-900';
+                isPeak = true;
+            } else if (Math.abs(minDiff) <= 2) {
+                highlight = 'bg-amber-400 text-amber-900 border-amber-500';
+            }
         }
 
         const isGlobStop = !!(window.masterPricing?.timeline?.[dateStr]?.GLOBAL?.stop || window.masterPricing?.timeline?.[dateStr]?.GLOBAL?.stopSell);
 
-        trHead += `<th class="px-0 py-0.5 border-b ${highlight} relative group cursor-pointer" style="width: 31px; min-width: 31px; max-width: 31px;" onclick="window.cycleUnifiedRestriction('${dateStr}', 'GLOBAL')" title="Click to cycle restrictions for entire property on ${dateStr}">
+        const thTitle = isPeak 
+            ? `Peak Event Date (${dateStr})! Double-click to open Curve Tuner. Single click cycles global restrictions.` 
+            : `Click to cycle restrictions for entire property on ${dateStr}`;
+
+        trHead += `<th class="px-0 py-0.5 border-b ${highlight} relative group cursor-pointer" style="width: 31px; min-width: 31px; max-width: 31px;" onclick="window.cycleUnifiedRestriction('${dateStr}', 'GLOBAL')" ${isPeak ? `ondblclick="window.openCurveTunerForDate('${dateStr}')"` : ''} title="${thTitle}">
             <span class="block text-[8px] font-bold uppercase leading-none">${window.mNames[cur.getUTCMonth()]}</span>
             <span class="block text-[11px] font-black leading-tight mt-0.5">${cur.getUTCDate()}</span>
             <div class="h-1.5 w-full flex items-center justify-center mt-0.5">
@@ -1326,6 +1340,334 @@ window.applyBulkGrid = (isClear = false) => {
     window.customAlert(isClear 
         ? "Overrides cleared across the selected date range!" 
         : `Bulk updates applied successfully across ${s} → ${e}!\n\nClick "SAVE & SYNC" to push changes to Channex.`);
+};
+
+// --- QUICK EVENT CURVE TUNER ENGINE ---
+window.toggleCurveTuner = (forceClose = false, targetDateStr = null) => {
+    const panel = document.getElementById('quick-curve-panel');
+    if (!panel) return;
+
+    if (!forceClose && panel.classList.contains('hidden')) {
+        // Close bulk drawer if open to prevent layout clutter
+        const bulkPanel = document.getElementById('quick-bulk-panel');
+        if (bulkPanel) {
+            bulkPanel.classList.add('hidden');
+            bulkPanel.classList.remove('flex');
+        }
+
+        panel.classList.remove('hidden');
+        panel.classList.add('flex');
+        window.initCurveTuner(targetDateStr);
+    } else {
+        panel.classList.add('hidden');
+        panel.classList.remove('flex');
+    }
+};
+
+window.openCurveTunerForDate = (dateStr) => {
+    window.toggleCurveTuner(false, dateStr);
+};
+
+window.initCurveTuner = (targetDateStr = null) => {
+    const select = document.getElementById('ct-event-select');
+    if (!select) return;
+
+    const events = (window.eventDates || []).slice().sort();
+    if (events.length === 0) {
+        select.innerHTML = `<option value="">No event dates found</option>`;
+        return;
+    }
+
+    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+    let selectedDate = targetDateStr;
+
+    // If no target date passed, select the nearest event that is on or after today
+    if (!selectedDate) {
+        selectedDate = events.find(d => d >= todayStr) || events[0];
+    }
+
+    select.innerHTML = events.map(dStr => {
+        const dObj = new Date(dStr + "T12:00:00Z");
+        const monthName = window.mNames ? window.mNames[dObj.getUTCMonth()] : (dObj.getUTCMonth() + 1);
+        const dayNum = dObj.getUTCDate();
+        const year = dObj.getUTCFullYear();
+        const isPast = dStr < todayStr;
+        return `<option value="${dStr}" ${dStr === selectedDate ? 'selected' : ''}>${dayNum} ${monthName} ${year} (${dStr})${isPast ? ' [Past]' : ''}</option>`;
+    }).join('');
+
+    window.handleCurveEventSelect(selectedDate);
+};
+
+window.handleCurveEventSelect = (selectedDateStr) => {
+    if (!selectedDateStr) return;
+    const body = document.getElementById('ct-grid-body');
+    if (!body) return;
+
+    const peakMs = window.parseYMD ? window.parseYMD(selectedDateStr) : new Date(selectedDateStr).getTime();
+
+    // 1. Update header day labels with exact date names
+    const offsets = [-2, -1, 0, 1, 2];
+    const dateNames = {};
+    offsets.forEach(off => {
+        const curD = new Date(peakMs + (off * 86400000));
+        const m = window.mNames ? window.mNames[curD.getUTCMonth()] : (curD.getUTCMonth() + 1);
+        const day = curD.getUTCDate();
+        dateNames[off] = `${day} ${m}`;
+    });
+
+    const thM2 = document.getElementById('ct-th-m2');
+    const thM1 = document.getElementById('ct-th-m1');
+    const th0 = document.getElementById('ct-th-0');
+    const thP1 = document.getElementById('ct-th-p1');
+    const thP2 = document.getElementById('ct-th-p2');
+
+    if (thM2) thM2.textContent = `${dateNames[-2]} (-2)`;
+    if (thM1) thM1.textContent = `${dateNames[-1]} (-1)`;
+    if (th0) th0.textContent = `${dateNames[0]} (PEAK)`;
+    if (thP1) thP1.textContent = `${dateNames[1]} (+1)`;
+    if (thP2) thP2.textContent = `${dateNames[2]} (+2)`;
+
+    // 2. Identify Anchor categories
+    const anchorP = window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p || 'Private Room';
+    const anchorD = window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d || 'Dorm Bed';
+
+    // 3. Check for existing values on timeline for this exact event, otherwise fall back to baselines
+    const b = window.savedAutofillBaselines || {};
+    const timeline = window.masterPricing?.timeline || {};
+
+    const getTimelineVal = (off, room, field, baselineKey, defaultVal) => {
+        const dStr = window.getLocalYMD ? window.getLocalYMD(new Date(peakMs + (off * 86400000))) : new Date(peakMs + (off * 86400000)).toISOString().split('T')[0];
+        const dayData = timeline[dStr]?.[room];
+        if (dayData && dayData[field] !== undefined && dayData[field] !== "") {
+            return dayData[field];
+        }
+        return b[baselineKey] !== undefined ? b[baselineKey] : defaultVal;
+    };
+
+    const p_base = b.p_base || 899;
+    const p_pkg = getTimelineVal(-1, anchorP, 'fmp', 'p_pkg', 1000);
+    const p_m2 = getTimelineVal(-2, anchorP, 'std', 'p_m2', 1099);
+    const p_m1 = getTimelineVal(-1, anchorP, 'std', 'p_m1', 1999);
+    const p_0 = getTimelineVal(0, anchorP, 'std', 'p_0', 5999);
+    const p_p1 = getTimelineVal(1, anchorP, 'std', 'p_p1', 1999);
+    const p_p2 = getTimelineVal(2, anchorP, 'std', 'p_p2', 1099);
+
+    const d_base = b.d_base || 199;
+    const d_pkg = getTimelineVal(-1, anchorD, 'fmp', 'd_pkg', 200);
+    const d_m2 = getTimelineVal(-2, anchorD, 'std', 'd_m2', 299);
+    const d_m1 = getTimelineVal(-1, anchorD, 'std', 'd_m1', 799);
+    const d_0 = getTimelineVal(0, anchorD, 'std', 'd_0', 2499);
+    const d_p1 = getTimelineVal(1, anchorD, 'std', 'd_p1', 799);
+    const d_p2 = getTimelineVal(2, anchorD, 'std', 'd_p2', 299);
+
+    const inptCls = "input-base !py-1 !px-1 text-center text-xs w-full font-black bg-slate-900 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800 focus:border-indigo-500";
+    const peakInptCls = "input-base !py-1 !px-1 text-center text-xs w-full font-black bg-amber-950/60 border-amber-500 text-amber-300 placeholder-amber-600 focus:bg-amber-900 focus:border-amber-400";
+
+    body.innerHTML = `
+        <tr class="bg-indigo-950/20 hover:bg-indigo-900/30 transition-colors" data-segment="p" data-anchor="${anchorP}">
+            <td class="p-2 text-left border-r border-slate-800 text-indigo-300 truncate" title="${anchorP}">
+                <span>${window.displayAbbrev ? (window.displayAbbrev[anchorP] || anchorP) : anchorP}</span>
+                <span class="text-[8px] font-black uppercase text-indigo-400 bg-indigo-900/60 border border-indigo-700 px-1 py-0.2 rounded ml-1">PRIV</span>
+            </td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-p-base" class="${inptCls}" value="${p_base}" onchange="window.recalcCurveTunerShoulders('p')"></td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-p-pkg" class="${inptCls} !text-pink-400" value="${p_pkg}"></td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-p-m2" class="${inptCls}" value="${p_m2}"></td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-p-m1" class="${inptCls}" value="${p_m1}"></td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-p-0" class="${peakInptCls}" value="${p_0}" oninput="window.recalcCurveTunerShoulders('p')"></td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-p-p1" class="${inptCls}" value="${p_p1}"></td>
+            <td class="p-1"><input type="number" step="any" id="ct-p-p2" class="${inptCls}" value="${p_p2}"></td>
+        </tr>
+        <tr class="bg-orange-950/20 hover:bg-orange-900/30 transition-colors" data-segment="d" data-anchor="${anchorD}">
+            <td class="p-2 text-left border-r border-slate-800 text-orange-300 truncate" title="${anchorD}">
+                <span>${window.displayAbbrev ? (window.displayAbbrev[anchorD] || anchorD) : anchorD}</span>
+                <span class="text-[8px] font-black uppercase text-orange-400 bg-orange-900/60 border border-orange-700 px-1 py-0.2 rounded ml-1">DORM</span>
+            </td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-d-base" class="${inptCls}" value="${d_base}" onchange="window.recalcCurveTunerShoulders('d')"></td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-d-pkg" class="${inptCls} !text-pink-400" value="${d_pkg}"></td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-d-m2" class="${inptCls}" value="${d_m2}"></td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-d-m1" class="${inptCls}" value="${d_m1}"></td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-d-0" class="${peakInptCls}" value="${d_0}" oninput="window.recalcCurveTunerShoulders('d')"></td>
+            <td class="p-1 border-r border-slate-800"><input type="number" step="any" id="ct-d-p1" class="${inptCls}" value="${d_p1}"></td>
+            <td class="p-1"><input type="number" step="any" id="ct-d-p2" class="${inptCls}" value="${d_p2}"></td>
+        </tr>
+    `;
+};
+
+window.adjustCurveTunerPeak = (delta, isPct = false) => {
+    ['p', 'd'].forEach(seg => {
+        const input = document.getElementById(`ct-${seg}-0`);
+        if (!input) return;
+        const cur = parseFloat(input.value) || 0;
+        let nextVal = cur;
+        if (isPct) {
+            nextVal = Math.round(cur * (1 + delta));
+        } else {
+            nextVal = Math.round(cur + delta);
+        }
+        input.value = Math.max(100, nextVal);
+    });
+    window.recalcCurveTunerShoulders('all');
+};
+
+window.recalcCurveTunerShoulders = (segment = 'all') => {
+    const b = window.savedAutofillBaselines || {};
+    const segments = (segment === 'all') ? ['p', 'd'] : [segment];
+
+    segments.forEach(seg => {
+        const baseEl = document.getElementById(`ct-${seg}-base`);
+        const peakEl = document.getElementById(`ct-${seg}-0`);
+        if (!baseEl || !peakEl) return;
+
+        const baseVal = parseFloat(baseEl.value) || (seg === 'p' ? 899 : 199);
+        const newPeak = parseFloat(peakEl.value) || (seg === 'p' ? 5999 : 2499);
+
+        // Reference default ratios (relative spread above base)
+        const defBase = b[`${seg}_base`] || (seg === 'p' ? 899 : 199);
+        const defPeak = b[`${seg}_0`] || (seg === 'p' ? 5999 : 2499);
+        const defSpread = Math.max(100, defPeak - defBase);
+
+        const defM2 = b[`${seg}_m2`] || (seg === 'p' ? 1099 : 299);
+        const defM1 = b[`${seg}_m1`] || (seg === 'p' ? 1999 : 799);
+        const defP1 = b[`${seg}_p1`] || (seg === 'p' ? 1999 : 799);
+        const defP2 = b[`${seg}_p2`] || (seg === 'p' ? 1099 : 299);
+
+        const factorM2 = (defM2 - defBase) / defSpread;
+        const factorM1 = (defM1 - defBase) / defSpread;
+        const factorP1 = (defP1 - defBase) / defSpread;
+        const factorP2 = (defP2 - defBase) / defSpread;
+
+        const newSpread = Math.max(0, newPeak - baseVal);
+
+        const setField = (offTag, factor) => {
+            const el = document.getElementById(`ct-${seg}-${offTag}`);
+            if (el) {
+                const calculated = Math.round(baseVal + (newSpread * factor));
+                el.value = Math.max(baseVal, calculated);
+            }
+        };
+
+        setField('m2', factorM2);
+        setField('m1', factorM1);
+        setField('p1', factorP1);
+        setField('p2', factorP2);
+    });
+};
+
+window.applyCurveTuner = (toDefaultOnly = false) => {
+    const select = document.getElementById('ct-event-select');
+    const evtStr = select?.value;
+    if (!evtStr) return window.customAlert("Please select an upcoming event date.");
+
+    const peakMs = window.parseYMD ? window.parseYMD(evtStr) : new Date(evtStr).getTime();
+    const offsets = [-2, -1, 0, 1, 2];
+
+    const getVal = (id, def) => {
+        const el = document.getElementById(id);
+        const v = parseFloat(el?.value);
+        return (!isNaN(v) && v > 0) ? v : def;
+    };
+
+    const p_pkg = getVal('ct-p-pkg', 1000);
+    const d_pkg = getVal('ct-d-pkg', 200);
+
+    const p_rates = {
+        [-2]: getVal('ct-p-m2', 1099),
+        [-1]: getVal('ct-p-m1', 1999),
+        [0]: getVal('ct-p-0', 5999),
+        [1]: getVal('ct-p-p1', 1999),
+        [2]: getVal('ct-p-p2', 1099)
+    };
+
+    const d_rates = {
+        [-2]: getVal('ct-d-m2', 299),
+        [-1]: getVal('ct-d-m1', 799),
+        [0]: getVal('ct-d-0', 2499),
+        [1]: getVal('ct-d-p1', 799),
+        [2]: getVal('ct-d-p2', 299)
+    };
+
+    const anchorP = window.pricingRules?.anchorPrivate || window.savedAutofillBaselines?.anchor_p;
+    const anchorD = window.pricingRules?.anchorDorm || window.savedAutofillBaselines?.anchor_d;
+
+    window.masterPricing = window.masterPricing || { timeline: {} };
+    window.masterPricing.timeline = window.masterPricing.timeline || {};
+
+    offsets.forEach(off => {
+        const dStr = window.getLocalYMD ? window.getLocalYMD(new Date(peakMs + (off * 86400000))) : new Date(peakMs + (off * 86400000)).toISOString().split('T')[0];
+        window.masterPricing.timeline[dStr] = window.masterPricing.timeline[dStr] || {};
+        const isPeak = (off === 0);
+
+        if (anchorP) {
+            window.masterPricing.timeline[dStr][anchorP] = window.masterPricing.timeline[dStr][anchorP] || { isOverride: {} };
+            const rData = window.masterPricing.timeline[dStr][anchorP];
+            rData.isOverride = rData.isOverride || {};
+            rData.std = p_rates[off];
+            rData.isOverride.std = true;
+            rData.fmp = isPeak ? p_rates[off] : p_pkg;
+            rData.isOverride.fmp = true;
+            if (window.rippleDay) window.rippleDay(dStr, anchorP, true);
+        }
+
+        if (anchorD) {
+            window.masterPricing.timeline[dStr][anchorD] = window.masterPricing.timeline[dStr][anchorD] || { isOverride: {} };
+            const rData = window.masterPricing.timeline[dStr][anchorD];
+            rData.isOverride = rData.isOverride || {};
+            rData.std = d_rates[off];
+            rData.isOverride.std = true;
+            rData.fmp = isPeak ? d_rates[off] : d_pkg;
+            rData.isOverride.fmp = true;
+            if (window.rippleDay) window.rippleDay(dStr, anchorD, true);
+        }
+
+        window.dirtyDates.add(dStr);
+        window.syncedDates.delete(dStr);
+    });
+
+    window.markUnsavedChanges();
+    if (window.renderGrid) window.renderGrid();
+    window.toggleCurveTuner(true);
+
+    window.customAlert(`⚡ Event curve updated for ${evtStr} (±2 days)!\n\nAnchor rates and linked rooms recalculated.\n\nClick "SAVE & SYNC" to push these changes to Channex.`);
+};
+
+window.saveCurveTunerAsDefault = async () => {
+    const getVal = id => {
+        const el = document.getElementById(id);
+        return el ? (parseFloat(el.value) || 0) : 0;
+    };
+
+    const b = window.savedAutofillBaselines || {};
+    b.p_base = getVal('ct-p-base') || b.p_base || 899;
+    b.p_pkg = getVal('ct-p-pkg') || b.p_pkg || 1000;
+    b.p_m2 = getVal('ct-p-m2') || b.p_m2 || 1099;
+    b.p_m1 = getVal('ct-p-m1') || b.p_m1 || 1999;
+    b.p_0 = getVal('ct-p-0') || b.p_0 || 5999;
+    b.p_p1 = getVal('ct-p-p1') || b.p_p1 || 1999;
+    b.p_p2 = getVal('ct-p-p2') || b.p_p2 || 1099;
+
+    b.d_base = getVal('ct-d-base') || b.d_base || 199;
+    b.d_pkg = getVal('ct-d-pkg') || b.d_pkg || 200;
+    b.d_m2 = getVal('ct-d-m2') || b.d_m2 || 299;
+    b.d_m1 = getVal('ct-d-m1') || b.d_m1 || 799;
+    b.d_0 = getVal('ct-d-0') || b.d_0 || 2499;
+    b.d_p1 = getVal('ct-d-p1') || b.d_p1 || 799;
+    b.d_p2 = getVal('ct-d-p2') || b.d_p2 || 299;
+
+    window.savedAutofillBaselines = b;
+
+    try {
+        const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
+        const { doc, setDoc } = window.cmFs;
+        await setDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'pricing', `master_${canonId}`), {
+            autofillBaselines: b,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        window.customAlert("💾 Default event pricing curve template saved to database!\n\nAll future event autofill runs will adopt these baseline numbers.");
+    } catch(err) {
+        console.error("Save baseline error:", err);
+        window.customAlert("Failed to save template: " + err.message);
+    }
 };
 
 // --- SMART RELEVANT-FIELD TAB NAVIGATION (ROW-SCOPED HORIZONTAL JUMP) ---
