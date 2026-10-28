@@ -431,9 +431,141 @@
                     <button type="button" id="merge-btn" title="Merge" onclick="window.requestMerge()" class="btn-tool bg-indigo-100 text-indigo-700 hover:bg-indigo-200"><i data-lucide="merge" size="14" class="shrink-0"></i></button>
                     <button type="button" id="dup-btn" title="Duplicate" onclick="window.requestDuplicate()" class="btn-tool bg-blue-100 text-blue-700 hover:bg-blue-200"><i data-lucide="copy" size="14" class="shrink-0"></i></button>
                     <button type="button" id="hist-btn" title="History" onclick="window.showAuditHistory()" class="btn-tool bg-slate-200 text-slate-700 hover:bg-slate-300"><i data-lucide="clock" size="14" class="shrink-0"></i></button>
-                    <!-- Quick Invoice Button (Calls window.generateGuestInvoice in pms-folio.js) -->
-                    <button type="button" onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10">Split</button></div></div></div></div>
-    <div id="merge-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Merge Bookings</div><div class="p-6 text-center"><p class="font-black text-slate-700 leading-tight text-md mb-4">Select a booking to absorb.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Absorbed booking will be deleted!</span></p><select id="merge-target" class="input-base !text-sm !p-2 mb-6 cursor-pointer"></select><div class="flex gap-2 justify-center"><button onclick="window.closeModal('merge-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button><button id="merge-confirm-btn" onclick="window.confirmMerge()" class="btn-modal bg-indigo-600 text-white px-10">Merge</button></div></div></div></div>
+                    <!-- Quick Invoice / Receipt Button -->
+                    <button type="button" id="invoice-btn" title="Print Invoice" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-100 text-emerald-800 hover:bg-emerald-200 cursor-pointer"><i data-lucide="receipt" size="14" class="shrink-0"></i></button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="window.closeGuestModal()" class="px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-200 text-xs font-black uppercase transition-colors cursor-pointer">Cancel</button>
+                    <button type="button" onclick="window.saveGuest()" id="save-guest-btn" class="px-5 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase shadow-sm transition-colors flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="check" size="14"></i>
+                        <span>SAVE</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- UTILITY MODALS -->
+    <!-- 1. Extra Charges Modal -->
+    <div id="charge-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span>Add Extra Charge / Item</span>
+                <button type="button" onclick="window.closeModal('charge-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
+            </div>
+            <div class="p-3 space-y-2 text-xs">
+                <div>
+                    <label class="field-label">Description / Item</label>
+                    <input type="text" id="charge-desc" placeholder="e.g. Ferry Ticket, Laundry..." class="input-base font-bold uppercase">
+                </div>
+                <div class="flex flex-wrap gap-1" id="charge-presets-container"></div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="field-label">Amount (฿)</label>
+                        <input type="number" id="charge-amount" step="any" placeholder="0" class="input-base font-black text-emerald-700">
+                    </div>
+                    <div>
+                        <label class="field-label">Date</label>
+                        <input type="date" id="charge-date" class="input-base font-bold">
+                    </div>
+                </div>
+            </div>
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="window.closeModal('charge-modal')" class="btn-modal bg-slate-200 text-slate-700 text-xs !py-1 !px-3">Cancel</button>
+                <button type="button" onclick="window.confirmAddCharge()" class="btn-modal bg-emerald-600 text-white text-xs !py-1 !px-4 shadow-sm">Add Charge</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Email Parser Import Modal -->
+    <div id="email-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span>Import Booking Email / Text</span>
+                <button type="button" onclick="window.closeModal('email-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
+            </div>
+            <div class="p-3 text-xs space-y-2">
+                <textarea id="email-textarea" rows="8" class="input-base font-mono text-[11px] whitespace-pre" placeholder="Paste booking confirmation email or text here..."></textarea>
+            </div>
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="window.closeModal('email-modal')" class="btn-modal bg-slate-200 text-slate-700 text-xs !py-1 !px-3">Cancel</button>
+                <button type="button" onclick="if(window.parseEmailBooking) window.parseEmailBooking();" class="btn-modal bg-purple-600 text-white text-xs !py-1 !px-4 shadow-sm">Parse & Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Price Check Modal -->
+    <div id="price-check-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-xs w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span>Price Check (BDC)</span>
+                <button type="button" onclick="window.closeModal('price-check-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
+            </div>
+            <div class="p-3 text-xs space-y-2">
+                <div>
+                    <label class="field-label">Check-in</label>
+                    <input type="date" id="pc-checkin" class="input-base font-bold">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="field-label">Nights</label>
+                        <input type="number" id="pc-nights" value="1" min="1" class="input-base text-center font-bold">
+                    </div>
+                    <div>
+                        <label class="field-label">PAX</label>
+                        <input type="number" id="pc-pax" value="1" min="1" class="input-base text-center font-bold">
+                    </div>
+                </div>
+            </div>
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="window.closeModal('price-check-modal')" class="btn-modal bg-slate-200 text-slate-700 text-xs !py-1 !px-3">Cancel</button>
+                <button type="button" onclick="window.runPriceCheck()" class="btn-modal bg-indigo-600 text-white text-xs !py-1 !px-4 shadow-sm">Check BDC</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Alert Modal -->
+    <div id="alert-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm" id="alert-header-title">Attention</div>
+            <div class="p-6 text-center">
+                <p id="alert-message" class="font-black text-slate-700 leading-tight text-md mb-6 whitespace-pre-line"></p>
+                <div class="flex gap-2 justify-center">
+                    <button id="alert-cancel" onclick="window.closeAlert()" class="btn-modal bg-slate-200 text-slate-700 px-6 hidden">Cancel</button>
+                    <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Split Modal -->
+    <div id="split-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Split Booking</div>
+            <div class="p-6 text-center">
+                <p class="font-black text-slate-700 leading-tight text-md mb-4">Split this booking into two segments?</p>
+                <div class="flex gap-2 justify-center">
+                    <button onclick="window.closeModal('split-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button>
+                    <button type="button" onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10">Split</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Merge Modal -->
+    <div id="merge-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Merge Bookings</div>
+            <div class="p-6 text-center">
+                <p class="font-black text-slate-700 leading-tight text-md mb-4">Select a booking to absorb.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Absorbed booking will be deleted!</span></p>
+                <select id="merge-target" class="input-base !text-sm !p-2 mb-6 cursor-pointer"></select>
+                <div class="flex gap-2 justify-center">
+                    <button onclick="window.closeModal('merge-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button>
+                    <button id="merge-confirm-btn" onclick="window.confirmMerge()" class="btn-modal bg-indigo-600 text-white px-10">Merge</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="custom-tooltip"></div>
 
@@ -521,7 +653,19 @@
 
             const cleanTarget = normalizeRoomStr(rid);
             const canonicalMatch = hotelRooms.find(r => normalizeRoomStr(r.id) === cleanTarget);
-            return canonicalMatch ? canonicalMatch.id : rid;
+            if (canonicalMatch) return canonicalMatch.id;
+
+            // Normalize single-digit numbers to two digits (e.g. A1 -> A01, B2 -> B02)
+            const paddedTarget = cleanTarget.replace(/^([A-Za-z]+)(\d)$/, (m, pfx, d) => `${pfx}0${d}`);
+            const paddedMatch = hotelRooms.find(r => normalizeRoomStr(r.id) === paddedTarget);
+            if (paddedMatch) return paddedMatch.id;
+
+            // Normalize two-digit numbers with leading zero to single digit (e.g. A01 -> A1)
+            const unpaddedTarget = cleanTarget.replace(/^([A-Za-z]+)0(\d)$/, (m, pfx, d) => `${pfx}${d}`);
+            const unpaddedMatch = hotelRooms.find(r => normalizeRoomStr(r.id) === unpaddedTarget);
+            if (unpaddedMatch) return unpaddedMatch.id;
+
+            return rid;
         };
 
         const uiToDbRoom = rid => dbToUiRoom(rid);
