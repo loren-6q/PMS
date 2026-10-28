@@ -898,7 +898,7 @@ window.renderUnifiedRateMapping = () => {
                     </td>
                     <td class="p-1.5 w-48">
                         <select onchange="window.updateRateMapPlan(${globalIdx}, 'channel', this.value)" class="table-input font-bold text-slate-800">
-                            <option value="DEFAULT" ${curChan === 'DEFAULT' ? 'selected' : ''}>DEFAULT (Standard Pipe)</option>
+                            <option value="DEFAULT" ${curChan === 'DEFAULT' ? 'selected' : ''}>DEFAULT (Standard Channel)</option>
                             <option value="Booking.com" ${curChan === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
                             <option value="Hostelworld" ${curChan === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
                             <option value="Agoda" ${curChan === 'Agoda' ? 'selected' : ''}>Agoda</option>
@@ -1600,7 +1600,7 @@ window.loadPropertyFromDatabase = async (propId) => {
 
         const storedChannels = rules.channels || {};
         const defaultChannels = [
-            { channel: 'DEFAULT', desc: 'Standard OTA Pipe', type: '=', val: 0 },
+            { channel: 'DEFAULT', desc: 'Standard Channel', type: '=', val: 0 },
             { channel: 'DIRECT', desc: 'Direct Website Engine', type: '=', val: 0 },
             { channel: 'Booking.com', desc: 'BDC Channel', type: '=', val: 0 },
             { channel: 'Hostelworld', desc: 'HW Channel', type: '+%', val: 15 },
@@ -1633,6 +1633,93 @@ window.loadPropertyFromDatabase = async (propId) => {
         window.populateReviewSummary();
 
         const pCode = document.getElementById('prop-short').value;
+        const isLocal = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' || 
+                        window.location.protocol === 'file:';
+        const baseUrl = isLocal ? '' : 'https://loren-6q.github.io/PMS/';
+        const pmsLink = document.getElementById('btn-goto-pms');
+        const cmLink = document.getElementById('btn-goto-cm');
+        if (pmsLink) pmsLink.href = `${baseUrl}pms.html?p=${encodeURIComponent(pCode)}`;
+        if (cmLink) cmLink.href = `${baseUrl}cm.html?p=${encodeURIComponent(pCode)}`;
+        if (statusEl) statusEl.textContent = `Loaded ${window.compiledRooms.length} beds (${window.roomDefinitions.length} rooms) for ${prop.name || propId}`;
+
+    } catch (err) {
+        console.error("Load property error:", err);
+        if (statusEl) statusEl.textContent = "Error loading property: " + err.message;
+    }
+};
+
+window.switchSetupProperty = (propId) => {
+    if (!propId) return;
+    window.activePropertyId = propId;
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('p', propId);
+    window.history.replaceState({}, '', `${window.location.pathname}?${urlParams.toString()}`);
+    window.loadPropertyFromDatabase(propId);
+};
+
+window.openNewPropertyModal = () => {
+    document.getElementById('new-prop-input-name').value = '';
+    document.getElementById('new-prop-input-short').value = '';
+    document.getElementById('new-prop-input-id').value = '';
+    document.getElementById('new-property-modal').classList.remove('hidden');
+};
+
+window.closeNewPropertyModal = () => {
+    document.getElementById('new-property-modal').classList.add('hidden');
+};
+
+window.confirmCreateNewProperty = async () => {
+    const name = document.getElementById('new-prop-input-name').value.trim();
+    const short = document.getElementById('new-prop-input-short').value.trim().toUpperCase();
+    let slug = document.getElementById('new-prop-input-id').value.trim().toLowerCase();
+
+    if (!name) return window.customAlert("Missing Field", "Please enter a Property Name.");
+    if (!slug) slug = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+
+    window.closeNewPropertyModal();
+
+    try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', slug), {
+            name: name,
+            short: short || slug.toUpperCase(),
+            currency: 'THB',
+            timezone: 'Asia/Bangkok',
+            enableEventRates: false,
+            roomDefinitions: [],
+            rooms: [],
+            addons: loadDefaultAddons(),
+            channex: { apiKey: '', propId: '' },
+            channexMap: [],
+            channexRateMap: []
+        }, { merge: true });
+
+        await window.loadAllPropertiesList();
+        const sel = document.getElementById('property-select');
+        if (sel) sel.value = slug;
+        await window.switchSetupProperty(slug);
+        window.customAlert("Property Created", `Successfully created ${name}!`);
+    } catch(err) {
+        console.error("Create property error:", err);
+        window.customAlert("Error", "Could not create property: " + err.message);
+    }
+};
+
+window.launchApp = (appKey) => {
+    const shortCode = document.getElementById('prop-short').value || window.activePropertyId || 'SWIMS';
+    const isLocal = window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1' || 
+                    window.location.protocol === 'file:';
+    const baseUrl = isLocal ? '' : 'https://loren-6q.github.io/PMS/';
+    if (appKey === 'cm') {
+        window.location.href = `${baseUrl}cm.html?p=${encodeURIComponent(shortCode)}`;
+    } else if (appKey === 'pms') {
+        window.location.href = `${baseUrl}pms.html?p=${encodeURIComponent(shortCode)}`;
+    }
+};
+
+// --------------------------------------------------------------------------
+// SECTION 10: Database Persistence & Property Switcher
         document.getElementById('btn-goto-pms').href = `pms.html?p=${pCode}`;
         document.getElementById('btn-goto-cm').href = `cm.html?p=${pCode}`;
         if (statusEl) statusEl.textContent = `Loaded ${window.compiledRooms.length} beds (${window.roomDefinitions.length} rooms) for ${prop.name || propId}`;
