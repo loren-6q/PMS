@@ -554,7 +554,7 @@
             if (rD.isSubHeader) {
                 const sRow = document.createElement('div');
                 sRow.className = `timeline-grid group-${cGrp} sub-header-row h-[22px]`;
-                const cleanSubLabel = /^room\b/i.test(rD.label) ? rD.label : (/^dorm\b/i.test(rD.label) ? rD.label : `Room ${rD.label}`);
+                const cleanSubLabel = rD.label || '';
                 sRow.innerHTML = `
                     <div class="bg-slate-200 border-y border-slate-300 flex items-center px-2 sticky left-0 z-20 shadow-sm unselectable" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;">
                         <div class="flex items-center gap-1 sticky left-0 bg-slate-200 pr-2">
@@ -581,7 +581,7 @@
             if (rD.isUnassigned) {
                 hHtml = `<span class="text-[11px] font-black text-amber-700">${rD.label}</span>`;
             } else if (rD.isBed) {
-                const bedLabel = /^bed\b/i.test(rD.displayId) ? rD.displayId : `Bed ${rD.displayId}`;
+                const bedLabel = rD.displayId || '';
                 hHtml = `
                     <div class="flex items-center justify-between px-1 w-full gap-1 pl-3">
                         <div class="flex items-center gap-0.5 shrink-0">
