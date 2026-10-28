@@ -1,11 +1,14 @@
 // ==========================================================================
 // PMS FOLIO, FINANCIALS & MODAL CONTROLLER (pms-folio.js)
 // Wild & Wandering Property Management System
+// Hosted at: https://loren-6q.github.io/PMS/pms-folio.js
 // ==========================================================================
 
 (function() {
     const $ = id => document.getElementById(id);
     const $$ = s => document.querySelectorAll(s);
+
+    const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
     const getParseYMD = () => window.parseYMD || (str => {
         if (!str || typeof str !== 'string') return 0;
@@ -359,7 +362,7 @@
     };
 
     // ----------------------------------------------------------------------
-    // 4. ITEMIZED EXTRA CHARGES CONTROLLER
+    // 4. DYNAMIC FOLIO ADD-ONS CATALOGUE & ITEM CHARGES
     // ----------------------------------------------------------------------
     window.openChargeModal = () => {
         const dEl = $('charge-desc');
@@ -369,6 +372,26 @@
         if (aEl) aEl.value = '';
         const getYmdFn = getLocalYMD();
         if (dtEl) dtEl.value = $('check-in')?.value || getYmdFn(new Date());
+
+        // DYNAMIC PRESETS: Pull from active property configuration
+        const presetsWrap = $('charge-presets-container') || $('charge-modal')?.querySelector('.preset-pill')?.parentElement;
+        if (presetsWrap) {
+            const propAddons = (window.currentPropertyConfig && Array.isArray(window.currentPropertyConfig.addons) && window.currentPropertyConfig.addons.length > 0)
+                ? window.currentPropertyConfig.addons
+                : [
+                    { name: 'Ferry Ticket', price: 400 },
+                    { name: 'Van Transfer', price: 300 },
+                    { name: 'Drink Package', price: 350 },
+                    { name: 'Tour Package', price: 1200 },
+                    { name: 'Laundry', price: 100 },
+                    { name: 'Late Checkout', price: 300 },
+                    { name: 'Scooter Rental', price: 250 }
+                ];
+
+            presetsWrap.innerHTML = propAddons.map(a => `
+                <span class="preset-pill" onclick="window.applyChargePreset('${a.name}', ${a.price})">${a.name} ฿${a.price}</span>
+            `).join('');
+        }
 
         const m = $('charge-modal');
         if (m) {
@@ -596,7 +619,7 @@
     };
 
     // ----------------------------------------------------------------------
-    // 6. GUEST FOLIO INVOICE & RECEIPT GENERATOR (DYNAMIC DATABASE DATA)
+    // 6. GUEST FOLIO INVOICE & RECEIPT GENERATOR (DYNAMIC PROPERTY BRANDING)
     // ----------------------------------------------------------------------
     window.generateGuestInvoice = () => {
         const guestId = $('guest-id')?.value;
@@ -634,6 +657,9 @@
         const propertySubtitle = curProp.subtitle || curProp.tagline || "";
         const propertyAddress = curProp.address || "";
         const currencySym = curProp.currencySymbol || (curProp.currency === 'USD' ? '$' : (curProp.currency === 'EUR' ? '€' : (curProp.currency === 'GBP' ? '£' : '฿')));
+
+        // ACTIVE BRAND LOGO: Icon/Logo uploaded in Step 1, falling back to W&W logo
+        const activeLogoUrl = curProp.iconUrl || curProp.logoUrl || DEFAULT_WW_ICON;
 
         const contactParts = [];
         if (curProp.email) contactParts.push(curProp.email);
@@ -717,10 +743,6 @@
             });
         });
 
-        const logoHtml = curProp.logoUrl 
-            ? `<img src="${curProp.logoUrl}" alt="${propertyName}" class="logo" onerror="this.style.display='none'">` 
-            : `<div class="logo-fallback">${propertyName.charAt(0)}</div>`;
-
         const printHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -733,7 +755,6 @@
         .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 24px; }
         .logo-wrap { display: flex; align-items: center; gap: 14px; max-width: 500px; }
         .logo { height: 56px; max-width: 180px; object-fit: contain; }
-        .logo-fallback { width: 48px; height: 48px; border-radius: 8px; background: #4338ca; color: #fff; font-size: 24px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
         .prop-name { font-size: 20px; font-weight: 900; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px; }
         .prop-sub { font-size: 11px; font-weight: 700; color: #64748b; margin-top: 2px; }
         .prop-addr { font-size: 10px; color: #94a3b8; margin-top: 4px; max-width: 340px; }
@@ -779,7 +800,7 @@
     <div class="invoice-card">
         <div class="header">
             <div class="logo-wrap">
-                ${logoHtml}
+                <img src="${activeLogoUrl}" alt="${propertyName}" class="logo" onerror="this.src='${DEFAULT_WW_ICON}'">
                 <div>
                     <h1 class="prop-name">${propertyName}</h1>
                     ${propertySubtitle ? `<p class="prop-sub">${propertySubtitle}</p>` : ''}
