@@ -564,18 +564,21 @@ window.compileRoomsFromDefinitions = () => {
         const p = (r.parentRoom || r.id).toUpperCase().trim();
         if (!existingByParent[p]) existingByParent[p] = [];
         existingByParent[p].push(r);
+        const pClean = p.replace(/^(DORM|ROOM)\s+/i, '');
+        if (!existingByParent[pClean]) existingByParent[pClean] = [];
+        existingByParent[pClean].push(r);
     });
 
+    const naturalCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
     const compiled = [];
 
+    // Iterate strictly in the user's defined order from Step 2
     (window.roomDefinitions || []).forEach((def, defIdx) => {
         const rawName = (def.name || def.id || `ROOM ${defIdx + 1}`).trim();
         const category = (def.category || 'Standard Room').trim();
         const floor = (def.floor || '1').trim();
         const total = parseInt(def.count, 10) || 1;
 
-        // PRIVATE ROOM RULE: If rule is 'private' or isDorm is false, it is strictly a single private room unit.
-        // Even with 2 beds (Twin) or 3 beds (Triple), a private room is ONE unit and must produce only ONE line on the calendar.
         const isPrivate = def.rule === 'private' || def.isDorm === false;
         const isDorm = !isPrivate;
 
@@ -585,7 +588,7 @@ window.compileRoomsFromDefinitions = () => {
                                  existingByParent[parentKey.replace(/^DORM\s+/i, '')] ||
                                  existingByParent[`DORM ${parentKey}`] || [];
 
-            // Detect prefix from existing beds or room letter
+            // Detect existing prefix format or infer from room name
             let pfx = '';
             if (existingBeds.length > 0 && existingBeds[0].id) {
                 const m = existingBeds[0].id.match(/^([A-Za-z]+)/);
@@ -598,24 +601,28 @@ window.compileRoomsFromDefinitions = () => {
                 }
             }
 
+            const dormBeds = [];
             for (let b = 1; b <= total; b++) {
                 let bunkTag = 'single';
                 if (def.rule === 'odd-top') bunkTag = (b % 2 === 1) ? 'top' : 'bottom';
                 else if (def.rule === 'even-top') bunkTag = (b % 2 === 0) ? 'top' : 'bottom';
 
                 let bedId = '';
+                // 1. Preserve existing bed ID verbatim if already defined
                 if (existingBeds[b - 1] && existingBeds[b - 1].id) {
                     bedId = existingBeds[b - 1].id;
                 } else if (pfx) {
+                    // Two-digit format for letter dorms (e.g. A01, B01)
                     bedId = `${pfx}${String(b).padStart(2, '0')}`;
                 } else if (/^\d+$/.test(rawName) || /DORM\s+\d+/i.test(rawName)) {
+                    // Natural unpadded numeric format for numbered dorms (e.g. 301-1, 301-2)
                     const num = rawName.replace(/\D/g, '');
-                    bedId = `${num}-${String(b).padStart(2, '0')}`;
+                    bedId = `${num}-${b}`;
                 } else {
-                    bedId = `${rawName}-${String(b).padStart(2, '0')}`;
+                    bedId = `${rawName}-${b}`;
                 }
 
-                compiled.push({
+                dormBeds.push({
                     id: bedId,
                     type: category,
                     category: category,
@@ -627,8 +634,12 @@ window.compileRoomsFromDefinitions = () => {
                     isDorm: true
                 });
             }
+
+            // Sort beds inside this dorm in natural numeric sequence
+            dormBeds.sort((a, b) => naturalCollator.compare(a.id, b.id));
+            compiled.push(...dormBeds);
         } else {
-            // Exactly ONE entry on the calendar for this private room, recording bedCount
+            // PRIVATE ROOM: Exactly one row on the calendar, recording bed capacity
             compiled.push({
                 id: rawName,
                 type: category,
@@ -644,12 +655,6 @@ window.compileRoomsFromDefinitions = () => {
         }
     });
 
-    // Group contiguously by category so the PMS calendar renders clean, unified sections
-    compiled.sort((a, b) => {
-        if (a.type !== b.type) return a.type.localeCompare(b.type);
-        return a.id.localeCompare(b.id, undefined, { numeric: true });
-    });
-
     window.compiledRooms = compiled;
 
     const rBadge = document.getElementById('room-count-badge');
@@ -658,6 +663,20 @@ window.compileRoomsFromDefinitions = () => {
     if (uBadge) uBadge.innerText = `${compiled.length} Beds/Units Total`;
 
     window.renderBedPreviewDrawer();
+};
+
+window.moveRoomDef = (idx, direction) => {
+    if (!Array.isArray(window.roomDefinitions)) return;
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= window.roomDefinitions.length) return;
+    
+    window.syncRoomDefsFromDOM();
+    const temp = window.roomDefinitions[idx];
+    window.roomDefinitions[idx] = window.roomDefinitions[targetIdx];
+    window.roomDefinitions[targetIdx] = temp;
+    
+    window.compileRoomsFromDefinitions();
+    window.renderRoomDefinitionsTable();
 };
 
 // Read current inputs directly from DOM before saving or re-rendering
@@ -687,7 +706,7 @@ window.renderRoomDefinitionsTable = () => {
     if (!window.roomDefinitions || window.roomDefinitions.length === 0) {
         tbody.innerHTML = `
         <tr>
-            <td colspan="6" class="p-6 text-center text-slate-400 font-bold uppercase text-[11px] tracking-wider">
+            <td colspan="7" class="p-6 text-center text-slate-400 font-bold uppercase text-[11px] tracking-wider">
                 No rooms configured. Use "BATCH DORM" or "BATCH ROOM" above to generate your inventory.
             </td>
         </tr>`;
@@ -703,8 +722,23 @@ window.renderRoomDefinitionsTable = () => {
 
     let html = '';
     window.roomDefinitions.forEach((def, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === window.roomDefinitions.length - 1;
         html += `
         <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-room-idx="${idx}">
+            <td class="p-1.5 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
+                <div class="flex items-center justify-center gap-1">
+                    <span class="w-4 text-center text-slate-600 font-black">${idx + 1}</span>
+                    <div class="flex flex-col ml-0.5">
+                        <button type="button" onclick="window.moveRoomDef(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5" title="Move Up">
+                            <i data-lucide="chevron-up" size="11"></i>
+                        </button>
+                        <button type="button" onclick="window.moveRoomDef(${idx}, 1)" ${isLast ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5" title="Move Down">
+                            <i data-lucide="chevron-down" size="11"></i>
+                        </button>
+                    </div>
+                </div>
+            </td>
             <td class="p-1.5">
                 <input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.updateRoomDefField(${idx}, 'name', this.value)">
             </td>
