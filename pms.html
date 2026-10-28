@@ -690,6 +690,14 @@
         window.getPaid = s => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
         window.getDue = s => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
 
+        window.closeGuestModal = () => {
+            const m = $('guest-modal');
+            if (m) {
+                m.classList.remove('active');
+                m.style.display = 'none';
+            }
+        };
+
         // Native Auto-Revert to Unassigned when clearing all room assignments
         document.addEventListener('DOMContentLoaded', () => {
             const container = $('assigned-rooms-container');
