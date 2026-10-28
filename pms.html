@@ -432,23 +432,7 @@
                     <button type="button" id="dup-btn" title="Duplicate" onclick="window.requestDuplicate()" class="btn-tool bg-blue-100 text-blue-700 hover:bg-blue-200"><i data-lucide="copy" size="14" class="shrink-0"></i></button>
                     <button type="button" id="hist-btn" title="History" onclick="window.showAuditHistory()" class="btn-tool bg-slate-200 text-slate-700 hover:bg-slate-300"><i data-lucide="clock" size="14" class="shrink-0"></i></button>
                     <!-- Quick Invoice Button (Calls window.generateGuestInvoice in pms-folio.js) -->
-                    <button type="button" id="invoice-btn" title="Invoice" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-100 text-emerald-700 hover:bg-emerald-200"><i data-lucide="receipt" size="14" class="shrink-0"></i></button>
-                </div>
-                <div class="flex gap-1 shrink-0 ml-auto">
-                    <button type="button" onclick="window.closeGuestModal()" class="px-3 py-1.5 bg-slate-200 rounded font-bold text-xs uppercase hover:bg-slate-300 transition-colors cursor-pointer shrink-0">Cancel</button>
-                    <button type="button" onclick="window.saveBooking()" id="save-btn" class="px-4 sm:px-5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-xs uppercase shadow-lg flex items-center justify-center gap-1 transition-colors cursor-pointer shrink-0"><i data-lucide="save" size="14" class="shrink-0"></i> Save</button>
-                </div>
-            </div>
-            <div id="audit-log" class="bg-slate-800 text-[9px] text-slate-400 font-bold uppercase text-center py-0.5 rounded-b-lg unselectable"></div>
-        </div>
-    </div>
-
-    <!-- UTILITY MODALS -->
-    <div id="charge-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span class="flex items-center gap-1.5"><i data-lucide="plus-circle" size="16" class="text-blue-400"></i> Add Itemized Charge</span><button type="button" onclick="window.closeModal('charge-modal')" class="p-1 hover:bg-slate-800 rounded cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><div><label class="field-label mb-1">Quick Presets</label><div class="flex flex-wrap gap-1"><span class="preset-pill" onclick="window.applyChargePreset('Ferry Ticket', 400)">Ferry ฿400</span><span class="preset-pill" onclick="window.applyChargePreset('Van Transfer', 300)">Transfer ฿300</span><span class="preset-pill" onclick="window.applyChargePreset('Drink Package', 350)">Drinks ฿350</span><span class="preset-pill" onclick="window.applyChargePreset('Tour Package', 1200)">Tour ฿1200</span><span class="preset-pill" onclick="window.applyChargePreset('Laundry', 100)">Laundry ฿100</span><span class="preset-pill" onclick="window.applyChargePreset('Late Checkout', 300)">Late Out ฿300</span><span class="preset-pill" onclick="window.applyChargePreset('Scooter Rental', 250)">Scooter ฿250</span></div></div><div><label class="field-label mb-0.5">Description</label><input type="text" id="charge-desc" placeholder="e.g. Airport Van, Towel..." class="input-base !p-2 !text-xs uppercase font-black"></div><div class="grid grid-cols-2 gap-2"><div><label class="field-label mb-0.5">Amount (฿)</label><input type="number" id="charge-amount" step="any" placeholder="0" class="input-base !p-2 !text-sm font-black text-blue-700"></div><div><label class="field-label mb-0.5">Date</label><input type="date" id="charge-date" class="input-base !p-2 !text-xs font-black cursor-pointer"></div></div><div class="flex gap-2 justify-end mt-2"><button type="button" onclick="window.closeModal('charge-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button><button type="button" onclick="window.confirmAddCharge()" class="btn-modal bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 shadow-md"><i data-lucide="check" size="14"></i> Add to Folio</button></div></div></div></div>
-    <div id="email-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Data Import</span><button type="button" onclick="window.closeModal('email-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><p class="text-xs font-bold text-slate-500 leading-tight">Paste a confirmation email from Booking.com, Airbnb, or Hostelworld.</p><textarea id="email-textarea" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2" placeholder="Paste text here..."></textarea><div class="flex gap-2 justify-end mt-2"><button onclick="window.closeModal('email-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button><button onclick="window.parseEmail()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1">Extract</button></div></div></div></div>
-    <div id="price-check-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Quick Price Check</span><button type="button" onclick="window.closeModal('price-check-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><div class="grid grid-cols-2 gap-3"><div class="col-span-2"><label class="field-label">Check-In</label><input type="date" id="pc-checkin" class="input-base !p-2 !text-sm"></div><div><label class="field-label">Nights</label><input type="number" id="pc-nights" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div><div><label class="field-label">PAX</label><input type="number" id="pc-pax" value="1" min="1" class="input-base !p-2 !text-sm text-center"></div></div><button onclick="window.runPriceCheck()" class="w-full mt-2 btn-modal bg-pink-600 hover:bg-pink-700 text-white flex justify-center items-center gap-2"><i data-lucide="external-link" size="16"></i> Check Rates</button></div></div></div>
-    <div id="alert-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase flex items-center justify-between text-sm"><span id="alert-header-title">Attention</span><button type="button" onclick="window.closeAlert()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="18"></i></button></div><div class="p-6 text-center"><div id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></div><div id="alert-actions" class="mt-6 flex gap-2 justify-center"><button id="alert-cancel" onclick="window.closeAlert()" class="hidden btn-modal bg-slate-200 text-slate-700">Cancel</button><button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button></div></div></div></div>
-    <div id="split-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Split Stay</div><div class="p-6 text-center"><p class="font-black text-slate-700 leading-tight text-md mb-4">Select date and room to split booking.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Creates a zero-balance linked segment to move guests mid-stay.</span></p><input type="date" id="split-date" class="input-base !text-lg !p-2 mb-4"><div id="split-room-dropdown-container" class="mb-6"></div><div class="flex gap-2 justify-center"><button onclick="window.closeModal('split-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button><button onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10">Split</button></div></div></div></div>
+                    <button type="button" onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10">Split</button></div></div></div></div>
     <div id="merge-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Merge Bookings</div><div class="p-6 text-center"><p class="font-black text-slate-700 leading-tight text-md mb-4">Select a booking to absorb.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Absorbed booking will be deleted!</span></p><select id="merge-target" class="input-base !text-sm !p-2 mb-6 cursor-pointer"></select><div class="flex gap-2 justify-center"><button onclick="window.closeModal('merge-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button><button id="merge-confirm-btn" onclick="window.confirmMerge()" class="btn-modal bg-indigo-600 text-white px-10">Merge</button></div></div></div></div>
 
     <div id="custom-tooltip"></div>
@@ -462,6 +446,7 @@
 
         const $ = id => document.getElementById(id), $$ = s => document.querySelectorAll(s);
         const REQUIRE_LOGIN = false;
+        const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
         const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
         const appId = 'hotel-pms-v1';
@@ -489,6 +474,21 @@
         let hotelRooms = [], roomTypes = [], fmpDates = [];
         window.activeExtraCharges = [];
         window.viewStart = viewStart;
+
+        // Dynamic Favicon Switcher
+        window.updateFavicon = (iconUrl) => {
+            const url = iconUrl || DEFAULT_WW_ICON;
+            let link = document.querySelector("link[rel*='icon']");
+            if (!link) {
+                link = document.createElement('link');
+                link.rel = 'icon';
+                document.head.appendChild(link);
+            }
+            link.type = 'image/png';
+            link.href = url;
+            const appleLink = document.querySelector("link[rel='apple-touch-icon']");
+            if (appleLink) appleLink.href = url;
+        };
 
         const parseYMD = str => { if (!str || typeof str !== 'string') return 0; const p = str.split('-'); return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); };
         const getLocalYMD = d => {
@@ -634,8 +634,10 @@
                 window.PROP_MAP = PROP_MAP;
                 window.PROP_REVERSE_MAP = PROP_REVERSE_MAP;
 
+                // Only consume initialP once on boot; clear so property switches are not reverted
                 if (initialP && PROP_MAP[initialP]) {
                     currentPropertyId = PROP_MAP[initialP];
+                    initialP = null;
                 }
 
                 const switcher = $('main-property-switcher');
@@ -653,8 +655,11 @@
                     window.currentPropertyConfig = propToLoad;
                     document.title = propToLoad.name || 'Wild & Wandering PMS';
 
+                    // Use ICON first for tiny top-left thumbnail and favicon
+                    const activeIcon = propToLoad.iconUrl || propToLoad.logoUrl || DEFAULT_WW_ICON;
                     const logoEl = $('main-brand-logo');
-                    if (logoEl && propToLoad.logoUrl) logoEl.src = propToLoad.logoUrl;
+                    if (logoEl) logoEl.src = activeIcon;
+                    window.updateFavicon(activeIcon);
 
                     hotelRooms = (propToLoad.rooms || []).map(r => ({
                         ...r,
@@ -696,6 +701,7 @@
 
         window.handlePropertySwitch = async propId => {
             if (!propId || propId === currentPropertyId) return;
+            initialP = null; // Clear query override so switcher sticks
             $('boot-loader').style.display = 'flex';
             $('sync-status').innerText = 'Switching Property...';
             currentPropertyId = propId;
