@@ -277,28 +277,31 @@
     const classifyRoomForCalendar = r => {
         const cat = (r.category || r.type || '').toLowerCase();
         const bunk = (r.bunk || r.bed || '').toLowerCase();
-        const isPrivateExplicit = bunk.includes('private') || cat.includes('private');
+        
+        // Explicit private room indicators
+        const isPrivate = bunk.includes('private') || 
+                          cat.includes('private') || 
+                          r.rule === 'private' || 
+                          r.isDorm === false;
 
-        const isDorm = !isPrivateExplicit && (
-            (r.parentRoom && r.parentRoom !== r.id) ||
+        // A room is a dorm ONLY if it is not private AND explicitly has dorm attributes
+        const isDorm = !isPrivate && (
+            r.isDorm === true ||
+            (r.rule && r.rule !== 'private') ||
             cat.includes('dorm') ||
-            cat.includes('bed') ||
-            cat.includes('bunk') ||
             bunk.includes('top') ||
-            bunk.includes('btm') ||
             bunk.includes('bottom') ||
-            bunk.includes('single') ||
-            /^[A-Za-z]+[-_]?\d+$/.test((r.id || '').trim())
+            bunk.includes('bot') ||
+            (r.parentRoom && r.parentRoom !== r.id)
         );
 
-        let baseRoom = r.parentRoom || '';
-        if (!baseRoom) {
-            if ((r.id || '').includes('-')) {
+        // Subheader baseRoom grouping only applies to actual dorm beds with a parent room (e.g. "DORM A")
+        let baseRoom = '';
+        if (isDorm) {
+            if (r.parentRoom && r.parentRoom !== r.id) {
+                baseRoom = r.parentRoom;
+            } else if ((r.id || '').includes('-')) {
                 baseRoom = r.id.split('-')[0].trim();
-            } else {
-                const m = (r.id || '').trim().match(/^([A-Za-z\s]+?)\s*[-_]?\s*(\d+)$/);
-                if (m && m[1]) baseRoom = m[1].trim();
-                else baseRoom = r.id || '';
             }
         }
 
@@ -551,10 +554,11 @@
             if (rD.isSubHeader) {
                 const sRow = document.createElement('div');
                 sRow.className = `timeline-grid group-${cGrp} sub-header-row h-[22px]`;
+                const cleanSubLabel = /^room\b/i.test(rD.label) ? rD.label : (/^dorm\b/i.test(rD.label) ? rD.label : `Room ${rD.label}`);
                 sRow.innerHTML = `
                     <div class="bg-slate-200 border-y border-slate-300 flex items-center px-2 sticky left-0 z-20 shadow-sm unselectable" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;">
                         <div class="flex items-center gap-1 sticky left-0 bg-slate-200 pr-2">
-                            <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">Room ${rD.label}</span>
+                            <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">${cleanSubLabel}</span>
                             ${getFloorIcon(rD.floor)}
                         </div>
                     </div>`;
@@ -577,10 +581,11 @@
             if (rD.isUnassigned) {
                 hHtml = `<span class="text-[11px] font-black text-amber-700">${rD.label}</span>`;
             } else if (rD.isBed) {
+                const bedLabel = /^bed\b/i.test(rD.displayId) ? rD.displayId : `Bed ${rD.displayId}`;
                 hHtml = `
                     <div class="flex items-center justify-between px-1 w-full gap-1 pl-3">
                         <div class="flex items-center gap-0.5 shrink-0">
-                            <span class="text-[12px] font-bold text-slate-600">Bed ${rD.displayId}</span>
+                            <span class="text-[12px] font-bold text-slate-600">${bedLabel}</span>
                             ${getBunkIcon(rD.icon)}
                         </div>
                         <span class="text-[9px] font-bold text-slate-500 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' ? '' : (rD.bed || '')}</span>
@@ -593,7 +598,7 @@
                             ${getFloorIcon(rD.floor)}
                             ${getBunkIcon(rD.icon)}
                         </div>
-                        <span class="text-[10px] font-bold text-slate-600 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' ? '' : (rD.bed || '')}</span>
+                        <span class="text-[10px] font-bold text-slate-600 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' || (rD.bed || '').toUpperCase() === 'PRIVATE' ? '' : (rD.bed || '')}</span>
                     </div>`;
             }
 
