@@ -72,7 +72,7 @@ function normalizeChannelName(raw) {
     if (!raw) return 'Default';
     const s = String(raw).trim();
     if (/^default$/i.test(s)) return 'Default';
-    if (/direct/i.test(s)) return 'Direct';
+    if (/^direct(\s*website)?$/i.test(s)) return 'Direct';
     if (/booking|bdc/i.test(s)) return 'Booking.com';
     if (/hostelworld|hw/i.test(s)) return 'Hostelworld';
     if (/agoda/i.test(s)) return 'Agoda';
@@ -123,9 +123,12 @@ window.pricingRules = {
     evtRefType: '+%',
     evtRefVal: 25,
     channels: {
+        'Default': { type: '=', val: 0 },
+        'Direct': { type: '-%', val: 10 },
         'Booking.com': { type: '=', val: 0 },
         'Hostelworld': { type: '+%', val: 15 },
-        'Direct': { type: '-%', val: 10 }
+        'Agoda': { type: '=', val: 0 },
+        'Expedia': { type: '=', val: 0 }
     }
 };
 window.relationships = [];
@@ -136,7 +139,7 @@ window.restrSpan = 6; // ±6 Days
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
 // --------------------------------------------------------------------------
-// SECTION 1: In-App Modal & Alert System (Zero browser alert/confirm)
+// SECTION 1: Modal & Dialog Controls
 // --------------------------------------------------------------------------
 window.customAlert = (title, message, isConfirm = false, onConfirm = null) => {
     const modal = document.getElementById('custom-app-modal');
@@ -298,7 +301,6 @@ window.handleLogoFileUpload = async (event, logoType) => {
     const statusText = document.getElementById('header-status-text');
     if (statusText) statusText.innerText = `Optimizing ${logoType} image...`;
 
-    // 1. Instant client-side compression (reduces 10MB to ~30KB in 50ms)
     const dimensions = {
         primary: { w: 400, h: 120, q: 0.85 },
         banner: { w: 1200, h: 320, q: 0.80 },
@@ -306,11 +308,8 @@ window.handleLogoFileUpload = async (event, logoType) => {
     }[logoType] || { w: 800, h: 400, q: 0.80 };
 
     const compressed = await compressImage(file, dimensions.w, dimensions.h, dimensions.q);
-
-    // Immediate preview using lightweight compressed DataURL
     window.updateLogoPreview(logoType, compressed.dataUrl);
 
-    // 2. Upload lightweight blob to Firebase Storage (completes in <1s)
     const ext = file.type === 'image/png' ? 'png' : 'jpg';
     const storagePath = `properties/${propId}/logo_${logoType}_${Date.now()}.${ext}`;
 
@@ -847,12 +846,22 @@ window.renderUnifiedMappingCards = () => {
 
     const getChannelBadge = (ch) => {
         const c = (ch || '').toLowerCase();
-        if (c.includes('booking') || c.includes('bdc')) return `<span class="bg-[#003580] text-white px-1.5 py-0.5 text-[9px] font-black rounded shadow-2xs">BDC</span>`;
-        if (c.includes('hostelworld') || c.includes('hw')) return `<span class="bg-[#F15A24] text-white px-1.5 py-0.5 text-[9px] font-black rounded shadow-2xs">HW</span>`;
-        if (c.includes('agoda')) return `<span class="bg-[#87B2D6] text-white px-1.5 py-0.5 text-[9px] font-black rounded shadow-2xs">AG</span>`;
-        if (c.includes('airbnb') || c.includes('abnb')) return `<span class="bg-[#FF5A5F] text-white px-1.5 py-0.5 text-[9px] font-black rounded shadow-2xs">ABnB</span>`;
-        if (c.includes('expedia') || c.includes('exp')) return `<span class="bg-[#facc15] text-[#003580] px-1.5 py-0.5 text-[9px] font-black rounded shadow-2xs">EXP</span>`;
-        return `<span class="bg-emerald-600 text-white px-1.5 py-0.5 text-[8.5px] font-black rounded shadow-2xs">DEFAULT</span>`;
+        if (c.includes('booking') || c.includes('bdc')) return `<span class="bg-[#003580] text-white px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Booking.com</span>`;
+        if (c.includes('hostelworld') || c.includes('hw')) return `<span class="bg-[#F15A24] text-white px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Hostelworld</span>`;
+        if (c.includes('agoda')) return `<span class="bg-[#87B2D6] text-white px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Agoda</span>`;
+        if (c.includes('airbnb') || c.includes('abnb')) return `<span class="bg-[#FF5A5F] text-white px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Airbnb</span>`;
+        if (c.includes('expedia') || c.includes('exp')) return `<span class="bg-[#facc15] text-[#003580] px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Expedia</span>`;
+        return `<span class="bg-slate-700 text-white px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Base (Standard)</span>`;
+    };
+
+    const getChannelBorderAccent = (ch) => {
+        const c = (ch || '').toLowerCase();
+        if (c.includes('booking') || c.includes('bdc')) return 'border-l-4 border-l-[#003580]';
+        if (c.includes('hostelworld') || c.includes('hw')) return 'border-l-4 border-l-[#F15A24]';
+        if (c.includes('agoda')) return 'border-l-4 border-l-[#87B2D6]';
+        if (c.includes('airbnb') || c.includes('abnb')) return 'border-l-4 border-l-[#FF5A5F]';
+        if (c.includes('expedia') || c.includes('exp')) return 'border-l-4 border-l-[#facc15]';
+        return 'border-l-4 border-l-slate-400';
     };
 
     let html = '';
@@ -868,19 +877,19 @@ window.renderUnifiedMappingCards = () => {
         const isMapped = !!mappedChannexId;
 
         html += `
-        <div class="bg-white border ${isMapped ? 'border-slate-300' : 'border-amber-300 bg-amber-50/20'} rounded-lg p-3 shadow-xs">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2 mb-2">
+        <div class="bg-white border ${isMapped ? 'border-slate-300 shadow-xs' : 'border-amber-300 bg-amber-50/20 shadow-xs'} rounded-lg overflow-hidden mb-3">
+            <div class="bg-slate-100/90 border-b border-slate-300 p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div class="flex items-center gap-2">
                     <span class="w-2.5 h-2.5 rounded-full ${isMapped ? 'bg-emerald-500 shadow-xs' : 'bg-amber-400 animate-pulse'}"></span>
-                    <h3 class="text-xs font-black uppercase text-slate-800">${cat}</h3>
-                    <span class="text-[9.5px] font-bold ${isMapped ? 'text-slate-400' : 'text-amber-700 font-black'}">
-                        (${plansForThisRoom.length} Plans ${isMapped ? '' : '• Unmapped'})
+                    <h3 class="text-xs font-black uppercase tracking-wider text-slate-800">${cat}</h3>
+                    <span class="text-[9.5px] px-1.5 py-0.5 rounded font-bold ${isMapped ? 'bg-white text-slate-600 border border-slate-200' : 'bg-amber-100 text-amber-800 font-black border border-amber-300'}">
+                        ${plansForThisRoom.length} Rate Plans ${isMapped ? '' : '• Unmapped'}
                     </span>
                 </div>
 
                 <div class="flex items-center gap-1.5">
                     <label class="text-[9.5px] font-black uppercase text-slate-500">Channex Room:</label>
-                    <select class="table-input font-bold ${isMapped ? 'text-indigo-700' : 'text-amber-800 border-amber-300 bg-amber-50'} !w-56" onchange="window.updateRoomMappingPair('${cat}', this.value)">
+                    <select class="table-input font-bold ${isMapped ? 'text-indigo-700 bg-white' : 'text-amber-800 border-amber-300 bg-amber-50'} !w-56" onchange="window.updateRoomMappingPair('${cat}', this.value)">
                         <option value="">-- Unmapped --</option>
                         ${channexRooms.map(cr => `
                             <option value="${cr.id}" ${cr.id === mappedChannexId ? 'selected' : ''}>${cr.attributes?.title || cr.id}</option>
@@ -890,45 +899,56 @@ window.renderUnifiedMappingCards = () => {
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left text-[11px] border-collapse">
-                    <thead class="bg-slate-50 text-[9px] font-black uppercase text-slate-500 border-b border-slate-200">
+                <table class="w-full text-left text-[11px] border-collapse border-b border-slate-200">
+                    <thead class="bg-slate-800 text-[9.5px] font-black uppercase text-slate-200 border-b border-slate-900">
                         <tr>
-                            <th class="p-1.5">Rate Plan Title</th>
-                            <th class="p-1.5 w-32">Channel</th>
-                            <th class="p-1.5 w-28 text-center">Policy</th>
-                            <th class="p-1.5 w-24 text-center">Product</th>
-                            <th class="p-1.5 text-center w-16">Channex ID</th>
+                            <th class="p-2 border-r border-slate-700">Rate Plan Title</th>
+                            <th class="p-2 w-36 text-center border-r border-slate-700">Channel</th>
+                            <th class="p-2 w-28 text-center border-r border-slate-700">Policy</th>
+                            <th class="p-2 w-28 text-center border-r border-slate-700">Product</th>
+                            <th class="p-2 text-center w-24">Channex ID</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100 font-semibold">
-                        ${plansForThisRoom.length > 0 ? plansForThisRoom.map(p => {
+                    <tbody class="divide-y divide-slate-200 font-semibold">
+                        ${plansForThisRoom.length > 0 ? plansForThisRoom.map((p, pIdx) => {
                             const title = p.attributes?.title || p.id;
                             const isRef = /ref|flexible/i.test(title) && !/non-?ref/i.test(title);
                             const isBdc = /bdc|booking/i.test(title);
                             const isHw = /hw|hostelworld/i.test(title);
+                            const isAgo = /agoda/i.test(title);
+                            const isExp = /expedia/i.test(title);
                             const isEvt = /evt|fmp|event|pkg/i.test(title);
 
-                            const chanName = isBdc ? 'Booking.com' : (isHw ? 'Hostelworld' : 'Default');
+                            let chanName = 'Default';
+                            if (isBdc) chanName = 'Booking.com';
+                            else if (isHw) chanName = 'Hostelworld';
+                            else if (isAgo) chanName = 'Agoda';
+                            else if (isExp) chanName = 'Expedia';
+
+                            const borderAccent = getChannelBorderAccent(chanName);
+                            const zebraClass = pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70';
 
                             return `
-                            <tr class="hover:bg-slate-50 transition-colors">
-                                <td class="p-1.5 font-bold text-slate-800">${title}</td>
-                                <td class="p-1.5">${getChannelBadge(chanName)}</td>
-                                <td class="p-1.5 text-center">
-                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${isRef ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-900 border border-amber-300'}">
+                            <tr class="${zebraClass} hover:bg-indigo-50/50 transition-colors ${borderAccent}">
+                                <td class="p-2 font-bold text-slate-800 border-r border-slate-200">${title}</td>
+                                <td class="p-2 text-center border-r border-slate-200">${getChannelBadge(chanName)}</td>
+                                <td class="p-2 text-center border-r border-slate-200">
+                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${isRef ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-900 border border-amber-300'}">
                                         ${isRef ? 'REFUNDABLE' : 'NON-REF'}
                                     </span>
                                 </td>
-                                <td class="p-1.5 text-center">
-                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${isEvt ? 'bg-pink-100 text-pink-700 border border-pink-300' : 'bg-slate-100 text-slate-700 border border-slate-200'}">
+                                <td class="p-2 text-center border-r border-slate-200">
+                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${isEvt ? 'bg-pink-100 text-pink-700 border border-pink-300' : 'bg-slate-100 text-slate-700 border border-slate-200'}">
                                         ${isEvt ? 'EVENT' : 'STANDARD'}
                                     </span>
                                 </td>
-                                <td class="p-1.5 text-center font-mono text-[9px] text-slate-400">...${p.id.slice(-6)}</td>
+                                <td class="p-2 text-center">
+                                    <span class="font-mono text-[9.5px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">...${p.id.slice(-6)}</span>
+                                </td>
                             </tr>`;
                         }).join('') : `
                         <tr>
-                            <td colspan="5" class="p-3 text-center text-slate-400 italic text-[10px]">
+                            <td colspan="5" class="p-4 text-center text-slate-400 italic text-[11px] bg-slate-50">
                                 No rate plans found in Channex for this room type. Click "+ Create & Push Plan" above to create them automatically.
                             </td>
                         </tr>`}
@@ -1186,38 +1206,37 @@ window.updateRelationshipField = (idx, field, val) => {
     }
 };
 
+// --- CANONICAL CHANNEL RULES RENDERER ---
 window.renderChannelRulesList = () => {
     const container = document.getElementById('channel-rules-container');
     if (!container) return;
 
-    // Canonicalize and deduplicate channels (merges DEFAULT/Default and DIRECT/Direct/Direct Website)
-    const rawChannels = window.pricingRules.channels || {
-        'Booking.com': { type: '=', val: 0 },
-        'Hostelworld': { type: '+%', val: 15 },
-        'Direct': { type: '-%', val: 10 }
-    };
-
+    // Deduplicate any mixed casing from Firestore memory into single canonical keys
+    const rawChannels = window.pricingRules.channels || {};
     const cleanChannels = {};
+
     Object.keys(rawChannels).forEach(rawK => {
         const canonical = normalizeChannelName(rawK);
-        // Only adopt if not already set or if non-zero
-        if (!cleanChannels[canonical] || (rawChannels[rawK]?.val && !cleanChannels[canonical]?.val)) {
+        if (!cleanChannels[canonical]) {
             cleanChannels[canonical] = rawChannels[rawK];
         }
     });
 
-    // Ensure standard OTA presets are always available
+    // Ensure all standard operational channels exist once
+    if (!cleanChannels['Default']) cleanChannels['Default'] = { type: '=', val: 0 };
+    if (!cleanChannels['Direct']) cleanChannels['Direct'] = { type: '-%', val: 10 };
     if (!cleanChannels['Booking.com']) cleanChannels['Booking.com'] = { type: '=', val: 0 };
     if (!cleanChannels['Hostelworld']) cleanChannels['Hostelworld'] = { type: '+%', val: 15 };
-    if (!cleanChannels['Direct']) cleanChannels['Direct'] = { type: '-%', val: 10 };
+    if (!cleanChannels['Agoda']) cleanChannels['Agoda'] = { type: '=', val: 0 };
+    if (!cleanChannels['Expedia']) cleanChannels['Expedia'] = { type: '=', val: 0 };
 
     window.pricingRules.channels = cleanChannels;
 
     const channelBadges = {
+        'Default': 'bg-slate-700 text-white',
+        'Direct': 'bg-teal-600 text-white',
         'Booking.com': 'bg-[#003580] text-white',
         'Hostelworld': 'bg-[#F15A24] text-white',
-        'Direct': 'bg-emerald-600 text-white',
-        'Default': 'bg-slate-700 text-white',
         'Agoda': 'bg-[#87B2D6] text-white',
         'Expedia': 'bg-[#facc15] text-[#003580]',
         'Airbnb': 'bg-[#FF5A5F] text-white'
@@ -1229,10 +1248,10 @@ window.renderChannelRulesList = () => {
         const badgeClass = channelBadges[ch] || 'bg-indigo-600 text-white';
 
         html += `
-        <div class="flex items-center justify-between p-2 rounded bg-white border border-amber-200">
+        <div class="flex items-center justify-between p-2 rounded bg-white border border-amber-200 shadow-2xs">
             <div class="flex items-center gap-2">
-                <span class="px-1.5 py-0.5 rounded text-[9.5px] font-black uppercase ${badgeClass}">${ch}</span>
-                <span class="font-bold text-slate-700 text-xs">${ch === 'Direct' ? 'Direct Bookings' : (ch === 'Default' ? 'Default Standard' : ch)}</span>
+                <span class="px-2 py-0.5 rounded text-[9.5px] font-black uppercase ${badgeClass}">${ch}</span>
+                <span class="font-bold text-slate-700 text-xs">${ch === 'Default' ? 'Default Channex Feed' : (ch === 'Direct' ? 'Direct Booking Engine' : `${ch} OTA Adjustment`)}</span>
             </div>
             <div class="flex items-center gap-1.5">
                 <select class="table-input !w-20 font-black text-center" onchange="window.updateChannelRuleField('${ch}', 'type', this.value)">
@@ -1256,10 +1275,13 @@ window.updateChannelRuleField = (ch, field, val) => {
 };
 
 window.addVerifiedChannelRule = () => {
-    const chName = prompt("Enter OTA Channel Name (e.g. Agoda, Expedia, Airbnb):");
+    const chName = prompt("Enter Channel Name (e.g. Airbnb, Trip.com):");
     if (!chName || !chName.trim()) return;
     const clean = normalizeChannelName(chName.trim());
     window.pricingRules.channels = window.pricingRules.channels || {};
+    if (window.pricingRules.channels[clean]) {
+        return window.customAlert("Channel Exists", `A rule for ${clean} already exists.`);
+    }
     window.pricingRules.channels[clean] = { type: '+%', val: 10 };
     window.renderChannelRulesList();
 };
@@ -1459,7 +1481,7 @@ window.loadPropertyFromDatabase = async (propId) => {
         }));
         window.renderAddonsTable();
 
-        // Step 2 Rooms: Reconstructed strictly by PARENT ROOM/NAME (NEVER collapsed by category!)
+        // Step 2 Rooms: Reconstructed strictly by PARENT ROOM/NAME
         window.roomDefinitions = pData.roomDefinitions || [];
         if (window.roomDefinitions.length === 0 && Array.isArray(pData.rooms) && pData.rooms.length > 0) {
             const roomMap = {};
@@ -1491,17 +1513,13 @@ window.loadPropertyFromDatabase = async (propId) => {
             window.roomDefinitions = Object.keys(roomMap).map((rName, idx) => {
                 const item = roomMap[rName];
                 const isDorm = item.count > 1 || item.category.toLowerCase().includes('dorm') || item.bunks.some(b => b === 'top' || b === 'bottom');
-                let rule = 'private';
-                if (isDorm) {
-                    rule = 'odd-top';
-                }
                 return {
                     id: 'room_' + (idx + 1),
                     name: rName,
                     category: item.category,
                     count: item.count || 1,
                     floor: item.floor || '1',
-                    rule: isDorm ? rule : 'private',
+                    rule: isDorm ? 'odd-top' : 'private',
                     isDorm: isDorm
                 };
             });
@@ -1546,7 +1564,21 @@ window.loadPropertyFromDatabase = async (propId) => {
         if (pPricingDoc.exists()) {
             const pricingData = pPricingDoc.data() || {};
             window.relationships = pricingData.relationships || [];
-            window.pricingRules = pricingData.pricingRules || window.pricingRules;
+            
+            // Clean pricing rules from any contaminated casing variants
+            const loadedChannels = pricingData.pricingRules?.channels || {};
+            const sanitizedChannels = {};
+            Object.keys(loadedChannels).forEach(k => {
+                const canon = normalizeChannelName(k);
+                if (!sanitizedChannels[canon]) {
+                    sanitizedChannels[canon] = loadedChannels[k];
+                }
+            });
+
+            window.pricingRules = {
+                ...(pricingData.pricingRules || window.pricingRules),
+                channels: sanitizedChannels
+            };
             window.savedAutofillBaselines = pricingData.autofillBaselines || {};
         }
 
@@ -1655,11 +1687,20 @@ window.savePropertyToDatabase = async (showModal = true) => {
             { merge: true }
         );
 
-        // 2. Canonicalize Channel rules before writing to Pricing Master
+        // 2. Canonicalize Channel rules (merge duplicates into single clean entries)
         const cleanChannels = {};
         Object.keys(window.pricingRules?.channels || {}).forEach(k => {
-            cleanChannels[normalizeChannelName(k)] = window.pricingRules.channels[k];
+            const canon = normalizeChannelName(k);
+            if (!cleanChannels[canon]) {
+                cleanChannels[canon] = window.pricingRules.channels[k];
+            }
         });
+
+        // Ensure baseline channels exist
+        if (!cleanChannels['Default']) cleanChannels['Default'] = { type: '=', val: 0 };
+        if (!cleanChannels['Direct']) cleanChannels['Direct'] = { type: '-%', val: 10 };
+        if (!cleanChannels['Booking.com']) cleanChannels['Booking.com'] = { type: '=', val: 0 };
+        if (!cleanChannels['Hostelworld']) cleanChannels['Hostelworld'] = { type: '+%', val: 15 };
 
         // 3. Save Pricing Master Document (Deep Sanitized)
         const pricingPayload = {
@@ -1713,7 +1754,71 @@ window.savePropertyToDatabase = async (showModal = true) => {
     }
 };
 
-// --- SECTION 9: Property Switcher & Creation Modal ---
+// --------------------------------------------------------------------------
+// SECTION 9: Property Switcher & Creation Modal
+// --------------------------------------------------------------------------
+window.loadAllPropertiesList = async () => {
+    try {
+        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
+        const list = [];
+        snap.forEach(d => {
+            const data = d.data() || {};
+            list.push({ id: d.id, ...data });
+        });
+
+        window.availableProperties = list;
+        const sel = document.getElementById('property-select');
+        if (sel) {
+            sel.innerHTML = list.map(p => `
+                <option value="${p.id}" ${p.id === window.activePropertyId ? 'selected' : ''}>
+                    ${p.name || p.id} (${(p.short || p.shortCode || p.id).toUpperCase()})
+                </option>
+            `).join('');
+        }
+    } catch (err) {
+        console.error("Load properties list error:", err);
+    }
+};
+
+window.switchSetupProperty = async (propId) => {
+    if (!propId || propId === window.activePropertyId) return;
+    window.activePropertyId = propId;
+    await window.loadPropertyFromDatabase(propId);
+    window.jumpStep(1);
+};
+
+window.openNewPropertyModal = () => {
+    const modal = document.getElementById('new-property-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+};
+
+window.closeNewPropertyModal = () => {
+    const modal = document.getElementById('new-property-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+};
+
+window.confirmCreateNewProperty = async () => {
+    const name = document.getElementById('new-prop-input-name')?.value.trim();
+    const short = document.getElementById('new-prop-input-short')?.value.trim().toUpperCase();
+    const id = document.getElementById('new-prop-input-id')?.value.trim().toLowerCase();
+
+    if (!name || !short || !id) {
+        return window.customAlert("Fields Required", "Please provide Property Name, Short Code, and Property ID / Slug.");
+    }
+
+    const slug = id.replace(/[^a-z0-9_-]/g, '_');
+
+    try {
+        const newPayload = {
+            name,
+            short,
+            shortCode: short,
             currency: 'THB',
             timezone: 'Asia/Bangkok',
             logoUrl: DEFAULT_WW_ICON,
