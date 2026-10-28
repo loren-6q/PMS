@@ -679,6 +679,195 @@ window.moveRoomDef = (idx, direction) => {
     window.renderRoomDefinitionsTable();
 };
 
+// --- CATEGORY-LEVEL BULK REORDERING (MOVES ENTIRE CATEGORIES IN 1 CLICK) ---
+window.moveCategoryBlock = (categoryName, direction) => {
+    window.syncRoomDefsFromDOM();
+    const defs = window.roomDefinitions || [];
+    const categories = [];
+    defs.forEach(d => {
+        const c = d.category || 'Standard Room';
+        if (!categories.includes(c)) categories.push(c);
+    });
+
+    const curIdx = categories.indexOf(categoryName);
+    if (curIdx === -1) return;
+    const targetIdx = curIdx + direction;
+    if (targetIdx < 0 || targetIdx >= categories.length) return;
+
+    // Swap categories in sequence
+    const temp = categories[curIdx];
+    categories[curIdx] = categories[targetIdx];
+    categories[targetIdx] = temp;
+
+    window.applyCategorySequence(categories);
+};
+
+window.sendCategoryToEdge = (categoryName, edge) => {
+    window.syncRoomDefsFromDOM();
+    const defs = window.roomDefinitions || [];
+    const categories = [];
+    defs.forEach(d => {
+        const c = d.category || 'Standard Room';
+        if (!categories.includes(c)) categories.push(c);
+    });
+
+    const curIdx = categories.indexOf(categoryName);
+    if (curIdx === -1) return;
+    categories.splice(curIdx, 1);
+
+    if (edge === 'top') {
+        categories.unshift(categoryName);
+    } else {
+        categories.push(categoryName);
+    }
+
+    window.applyCategorySequence(categories);
+};
+
+window.applyCategorySequence = (categoryOrder) => {
+    const defs = window.roomDefinitions || [];
+    const grouped = {};
+    categoryOrder.forEach(c => { grouped[c] = []; });
+
+    const uncategorized = [];
+    defs.forEach(d => {
+        const c = d.category || 'Standard Room';
+        if (grouped[c]) {
+            grouped[c].push(d);
+        } else {
+            uncategorized.push(d);
+        }
+    });
+
+    const reordered = [];
+    categoryOrder.forEach(c => {
+        if (grouped[c]) reordered.push(...grouped[c]);
+    });
+    reordered.push(...uncategorized);
+
+    window.roomDefinitions = reordered;
+    window.compileRoomsFromDefinitions();
+    window.renderRoomDefinitionsTable();
+};
+
+// --- REORDER CATEGORIES MODAL CONTROLLERS ---
+window._tempCategoryOrder = [];
+
+window.openReorderCategoriesModal = () => {
+    window.syncRoomDefsFromDOM();
+    const defs = window.roomDefinitions || [];
+    const counts = {};
+    const categories = [];
+
+    defs.forEach(d => {
+        const c = d.category || 'Standard Room';
+        if (!counts[c]) {
+            counts[c] = { rooms: 0, beds: 0 };
+            categories.push(c);
+        }
+        counts[c].rooms++;
+        counts[c].beds += parseInt(d.count, 10) || 1;
+    });
+
+    window._tempCategoryOrder = [...categories];
+    window._tempCategoryCounts = counts;
+
+    const modal = document.getElementById('reorder-categories-modal');
+    if (!modal) return;
+    window.renderCategoryReorderList();
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.closeReorderCategoriesModal = () => {
+    const modal = document.getElementById('reorder-categories-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+};
+
+window.renderCategoryReorderList = () => {
+    const listEl = document.getElementById('reorder-cat-list');
+    if (!listEl) return;
+    const cats = window._tempCategoryOrder || [];
+    const counts = window._tempCategoryCounts || {};
+
+    listEl.innerHTML = cats.map((cat, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === cats.length - 1;
+        const info = counts[cat] || { rooms: 0, beds: 0 };
+
+        return `
+        <div class="flex items-center justify-between p-2 rounded bg-white border border-slate-200 shadow-2xs hover:border-indigo-300 transition-colors" data-cat-idx="${idx}">
+            <div class="flex items-center gap-2 min-w-0">
+                <span class="w-5 text-center text-slate-400 font-mono font-black text-[10px]">${idx + 1}</span>
+                <div class="flex flex-col min-w-0">
+                    <span class="font-black text-slate-800 text-xs truncate">${cat}</span>
+                    <span class="text-[9px] font-bold text-slate-400">${info.rooms} rooms • ${info.beds} beds/units</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+                <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="p-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed text-slate-700" title="Move Up">
+                    <i data-lucide="chevron-up" size="14"></i>
+                </button>
+                <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, 1)" ${isLast ? 'disabled' : ''} class="p-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed text-slate-700" title="Move Down">
+                    <i data-lucide="chevron-down" size="14"></i>
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.shiftCategoryOrderItem = (idx, direction) => {
+    const target = idx + direction;
+    if (target < 0 || target >= window._tempCategoryOrder.length) return;
+    const temp = window._tempCategoryOrder[idx];
+    window._tempCategoryOrder[idx] = window._tempCategoryOrder[target];
+    window._tempCategoryOrder[target] = temp;
+    window.renderCategoryReorderList();
+};
+
+window.applyReorderedCategories = () => {
+    if (window._tempCategoryOrder && window._tempCategoryOrder.length > 0) {
+        window.applyCategorySequence(window._tempCategoryOrder);
+    }
+    window.closeReorderCategoriesModal();
+};
+
+// --- DRAG AND DROP HANDLERS FOR ROOM ROWS ---
+let _draggedRoomIdx = null;
+
+window.handleRoomDragStart = (e, idx) => {
+    _draggedRoomIdx = idx;
+    e.dataTransfer.effectAllowed = 'move';
+    e.target.closest('tr')?.classList.add('opacity-40');
+};
+
+window.handleRoomDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+};
+
+window.handleRoomDrop = (e, targetIdx) => {
+    e.preventDefault();
+    if (_draggedRoomIdx === null || _draggedRoomIdx === targetIdx) return;
+    window.syncRoomDefsFromDOM();
+    const moved = window.roomDefinitions.splice(_draggedRoomIdx, 1)[0];
+    window.roomDefinitions.splice(targetIdx, 0, moved);
+    _draggedRoomIdx = null;
+    window.compileRoomsFromDefinitions();
+    window.renderRoomDefinitionsTable();
+};
+
+window.handleRoomDragEnd = () => {
+    _draggedRoomIdx = null;
+    document.querySelectorAll('#room-def-list-body tr').forEach(tr => tr.classList.remove('opacity-40'));
+};
+
 // Read current inputs directly from DOM before saving or re-rendering
 window.syncRoomDefsFromDOM = () => {
     const rows = document.querySelectorAll('#room-def-list-body tr[data-room-idx]');
@@ -715,19 +904,72 @@ window.renderRoomDefinitionsTable = () => {
 
     // Populate Category Datalist for autocomplete
     const catList = document.getElementById('setup-category-datalist');
+    const existingCats = Array.from(new Set((window.roomDefinitions || []).map(r => r.category).filter(Boolean)));
     if (catList) {
-        const existingCats = Array.from(new Set((window.roomDefinitions || []).map(r => r.category).filter(Boolean)));
         catList.innerHTML = existingCats.map(c => `<option value="${c}"></option>`).join('');
     }
 
     let html = '';
+    let lastCategory = null;
+
     window.roomDefinitions.forEach((def, idx) => {
         const isFirst = idx === 0;
         const isLast = idx === window.roomDefinitions.length - 1;
+        const currentCat = def.category || 'Standard Room';
+
+        // Render Category Divider Row when category changes
+        if (currentCat !== lastCategory) {
+            lastCategory = currentCat;
+            const catRooms = window.roomDefinitions.filter(r => (r.category || 'Standard Room') === currentCat);
+            const totalBeds = catRooms.reduce((sum, r) => sum + (parseInt(r.count, 10) || 1), 0);
+            const catIdx = existingCats.indexOf(currentCat);
+            const isFirstCat = catIdx <= 0;
+            const isLastCat = catIdx >= existingCats.length - 1;
+
+            html += `
+            <tr class="bg-slate-800 text-white border-y-2 border-slate-900 sticky z-10 shadow-xs">
+                <td colspan="7" class="p-1.5 px-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="folder" size="13" class="text-indigo-400"></i>
+                            <span class="font-black text-xs uppercase tracking-wider text-slate-100">${currentCat}</span>
+                            <span class="bg-slate-700 text-slate-300 text-[9.5px] font-bold px-2 py-0.5 rounded border border-slate-600">
+                                ${catRooms.length} Rooms • ${totalBeds} Units
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-1">Move Category:</span>
+                            <button type="button" onclick="window.sendCategoryToEdge('${currentCat.replace(/'/g, "\\'")}', 'top')" ${isFirstCat ? 'disabled' : ''} class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded text-[9px] font-black text-slate-200 cursor-pointer disabled:cursor-not-allowed" title="Send Category to Top">
+                                ⤒ TOP
+                            </button>
+                            <button type="button" onclick="window.moveCategoryBlock('${currentCat.replace(/'/g, "\\'")}', -1)" ${isFirstCat ? 'disabled' : ''} class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded text-[9px] font-black text-slate-200 cursor-pointer disabled:cursor-not-allowed" title="Move Category Up">
+                                ▲ UP
+                            </button>
+                            <button type="button" onclick="window.moveCategoryBlock('${currentCat.replace(/'/g, "\\'")}', 1)" ${isLastCat ? 'disabled' : ''} class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded text-[9px] font-black text-slate-200 cursor-pointer disabled:cursor-not-allowed" title="Move Category Down">
+                                ▼ DOWN
+                            </button>
+                            <button type="button" onclick="window.sendCategoryToEdge('${currentCat.replace(/'/g, "\\'")}', 'bottom')" ${isLastCat ? 'disabled' : ''} class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded text-[9px] font-black text-slate-200 cursor-pointer disabled:cursor-not-allowed" title="Send Category to Bottom">
+                                ⤓ BTM
+                            </button>
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+        }
+
         html += `
-        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-room-idx="${idx}">
+        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-room-idx="${idx}"
+            ondragover="window.handleRoomDragOver(event)"
+            ondrop="window.handleRoomDrop(event, ${idx})">
             <td class="p-1.5 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
                 <div class="flex items-center justify-center gap-1">
+                    <span class="cursor-grab text-slate-400 hover:text-slate-700 drag-handle" 
+                          draggable="true" 
+                          ondragstart="window.handleRoomDragStart(event, ${idx})"
+                          ondragend="window.handleRoomDragEnd()"
+                          title="Drag to reorder room">
+                        <i data-lucide="grip-vertical" size="13"></i>
+                    </span>
                     <span class="w-4 text-center text-slate-600 font-black">${idx + 1}</span>
                     <div class="flex flex-col ml-0.5">
                         <button type="button" onclick="window.moveRoomDef(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5" title="Move Up">
