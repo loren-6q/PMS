@@ -1265,26 +1265,6 @@ window.renderUnifiedMappingCards = () => {
     const channexRooms = window.channexRooms || [];
     const channexPlans = window.channexRatePlans || [];
 
-    const getChannelBadge = (ch) => {
-        const c = (ch || '').toLowerCase();
-        if (c.includes('booking') || c.includes('bdc')) return `<span class="bg-[#003580] text-white px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Booking.com</span>`;
-        if (c.includes('hostelworld') || c.includes('hw')) return `<span class="bg-[#F15A24] text-white px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Hostelworld</span>`;
-        if (c.includes('agoda')) return `<span class="bg-[#87B2D6] text-white px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Agoda</span>`;
-        if (c.includes('airbnb') || c.includes('abnb')) return `<span class="bg-[#FF5A5F] text-white px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Airbnb</span>`;
-        if (c.includes('expedia') || c.includes('exp')) return `<span class="bg-[#facc15] text-[#003580] px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Expedia</span>`;
-        return `<span class="bg-slate-700 text-white px-2 py-0.5 text-[9px] font-black rounded shadow-2xs tracking-wide">Base (Standard)</span>`;
-    };
-
-    const getChannelBorderAccent = (ch) => {
-        const c = (ch || '').toLowerCase();
-        if (c.includes('booking') || c.includes('bdc')) return 'border-l-4 border-l-[#003580]';
-        if (c.includes('hostelworld') || c.includes('hw')) return 'border-l-4 border-l-[#F15A24]';
-        if (c.includes('agoda')) return 'border-l-4 border-l-[#87B2D6]';
-        if (c.includes('airbnb') || c.includes('abnb')) return 'border-l-4 border-l-[#FF5A5F]';
-        if (c.includes('expedia') || c.includes('exp')) return 'border-l-4 border-l-[#facc15]';
-        return 'border-l-4 border-l-slate-400';
-    };
-
     let html = '';
     pmsCats.forEach(cat => {
         const mappedRoom = (window.channexMap || []).find(m => m.pmsCategory === cat);
@@ -1298,19 +1278,19 @@ window.renderUnifiedMappingCards = () => {
         const isMapped = !!mappedChannexId;
 
         html += `
-        <div class="bg-white border ${isMapped ? 'border-slate-300 shadow-xs' : 'border-amber-300 bg-amber-50/20 shadow-xs'} rounded-lg overflow-hidden mb-3">
-            <div class="bg-slate-100/90 border-b border-slate-300 p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div class="bg-white border ${isMapped ? 'border-slate-300 shadow-xs' : 'border-amber-300 bg-amber-50/20 shadow-xs'} rounded-lg overflow-hidden mb-2">
+            <div class="bg-slate-100 border-b border-slate-300 p-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                 <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full ${isMapped ? 'bg-emerald-500 shadow-xs' : 'bg-amber-400 animate-pulse'}"></span>
+                    <span class="w-2 h-2 rounded-full ${isMapped ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}"></span>
                     <h3 class="text-xs font-black uppercase tracking-wider text-slate-800">${cat}</h3>
-                    <span class="text-[9.5px] px-1.5 py-0.5 rounded font-bold ${isMapped ? 'bg-white text-slate-600 border border-slate-200' : 'bg-amber-100 text-amber-800 font-black border border-amber-300'}">
+                    <span class="text-[9px] px-1.5 py-0.2 rounded font-bold ${isMapped ? 'bg-white text-slate-600 border border-slate-200' : 'bg-amber-100 text-amber-800 font-black border border-amber-300'}">
                         ${plansForThisRoom.length} Rate Plans ${isMapped ? '' : '• Unmapped'}
                     </span>
                 </div>
 
                 <div class="flex items-center gap-1.5">
-                    <label class="text-[9.5px] font-black uppercase text-slate-500">Channex Room:</label>
-                    <select class="table-input font-bold ${isMapped ? 'text-indigo-700 bg-white' : 'text-amber-800 border-amber-300 bg-amber-50'} !w-56" onchange="window.updateRoomMappingPair('${cat}', this.value)">
+                    <label class="text-[9px] font-black uppercase text-slate-500">Channex Room:</label>
+                    <select class="table-input font-bold ${isMapped ? 'text-indigo-700 bg-white' : 'text-amber-800 border-amber-300 bg-amber-50'} !w-52 !py-0.5 !text-[11px]" onchange="window.updateRoomMappingPair('${cat.replace(/'/g, "\\'")}', this.value)">
                         <option value="">-- Unmapped --</option>
                         ${channexRooms.map(cr => `
                             <option value="${cr.id}" ${cr.id === mappedChannexId ? 'selected' : ''}>${cr.attributes?.title || cr.id}</option>
@@ -1320,19 +1300,21 @@ window.renderUnifiedMappingCards = () => {
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left text-[11px] border-collapse border-b border-slate-200">
-                    <thead class="bg-slate-800 text-[9.5px] font-black uppercase text-slate-200 border-b border-slate-900">
+                <table class="w-full text-left text-[11px] border-collapse">
+                    <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0">
                         <tr>
-                            <th class="p-2 border-r border-slate-700">Rate Plan Title</th>
-                            <th class="p-2 w-36 text-center border-r border-slate-700">Channel</th>
-                            <th class="p-2 w-28 text-center border-r border-slate-700">Policy</th>
-                            <th class="p-2 w-28 text-center border-r border-slate-700">Product</th>
-                            <th class="p-2 text-center w-24">Channex ID</th>
+                            <th class="py-1 px-1.5 border-r border-slate-700">Rate Plan Title</th>
+                            <th class="py-1 px-1.5 w-32 border-r border-slate-700">Channel</th>
+                            <th class="py-1 px-1.5 w-28 text-center border-r border-slate-700">Policy</th>
+                            <th class="py-1 px-1.5 w-24 text-center border-r border-slate-700">Product</th>
+                            <th class="py-1 px-1.5 text-center w-20">Channex ID</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 font-semibold">
                         ${plansForThisRoom.length > 0 ? plansForThisRoom.map((p, pIdx) => {
                             const title = p.attributes?.title || p.id;
+                            const existingRate = (window.channexRateMap || []).find(m => m.ratePlanId === p.id);
+
                             const isRef = /ref|flexible/i.test(title) && !/non-?ref/i.test(title);
                             const isBdc = /bdc|booking/i.test(title);
                             const isHw = /hw|hostelworld/i.test(title);
@@ -1340,36 +1322,52 @@ window.renderUnifiedMappingCards = () => {
                             const isExp = /expedia/i.test(title);
                             const isEvt = /evt|fmp|event|pkg/i.test(title);
 
-                            let chanName = 'Default';
-                            if (isBdc) chanName = 'Booking.com';
-                            else if (isHw) chanName = 'Hostelworld';
-                            else if (isAgo) chanName = 'Agoda';
-                            else if (isExp) chanName = 'Expedia';
+                            let defaultChan = 'Default';
+                            if (isBdc) defaultChan = 'Booking.com';
+                            else if (isHw) defaultChan = 'Hostelworld';
+                            else if (isAgo) defaultChan = 'Agoda';
+                            else if (isExp) defaultChan = 'Expedia';
 
-                            const borderAccent = getChannelBorderAccent(chanName);
+                            const currentChan = existingRate?.channel || defaultChan;
+                            const currentPolicy = existingRate?.policy || (isRef ? 'ref' : 'non-ref');
+                            const currentProduct = existingRate?.product || (isEvt ? 'evt' : 'std');
+
                             const zebraClass = pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70';
 
                             return `
-                            <tr class="${zebraClass} hover:bg-indigo-50/50 transition-colors ${borderAccent}">
-                                <td class="p-2 font-bold text-slate-800 border-r border-slate-200">${title}</td>
-                                <td class="p-2 text-center border-r border-slate-200">${getChannelBadge(chanName)}</td>
-                                <td class="p-2 text-center border-r border-slate-200">
-                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${isRef ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-900 border border-amber-300'}">
-                                        ${isRef ? 'REFUNDABLE' : 'NON-REF'}
-                                    </span>
+                            <tr class="${zebraClass} hover:bg-indigo-50/40 transition-colors">
+                                <td class="py-1 px-1.5 font-bold text-slate-800 border-r border-slate-200">
+                                    <div class="truncate max-w-[240px]" title="${title}">${title}</div>
                                 </td>
-                                <td class="p-2 text-center border-r border-slate-200">
-                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${isEvt ? 'bg-pink-100 text-pink-700 border border-pink-300' : 'bg-slate-100 text-slate-700 border border-slate-200'}">
-                                        ${isEvt ? 'EVENT' : 'STANDARD'}
-                                    </span>
+                                <td class="py-1 px-1 border-r border-slate-200">
+                                    <select class="table-input !py-0.5 !text-[10px] font-bold" onchange="window.updateRatePlanField('${p.id}', 'channel', this.value)">
+                                        <option value="Default" ${currentChan === 'Default' ? 'selected' : ''}>Default</option>
+                                        <option value="Booking.com" ${currentChan === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
+                                        <option value="Hostelworld" ${currentChan === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
+                                        <option value="Agoda" ${currentChan === 'Agoda' ? 'selected' : ''}>Agoda</option>
+                                        <option value="Expedia" ${currentChan === 'Expedia' ? 'selected' : ''}>Expedia</option>
+                                        <option value="Airbnb" ${currentChan === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
+                                    </select>
                                 </td>
-                                <td class="p-2 text-center">
-                                    <span class="font-mono text-[9.5px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">...${p.id.slice(-6)}</span>
+                                <td class="py-1 px-1 text-center border-r border-slate-200">
+                                    <select class="table-input !py-0.5 !text-[10px] font-black text-center ${currentPolicy === 'ref' ? 'text-emerald-700 bg-emerald-50' : 'text-slate-700'}" onchange="window.updateRatePlanField('${p.id}', 'policy', this.value)">
+                                        <option value="non-ref" ${currentPolicy === 'non-ref' ? 'selected' : ''}>Non-Ref</option>
+                                        <option value="ref" ${currentPolicy === 'ref' ? 'selected' : ''}>Ref (+%)</option>
+                                    </select>
+                                </td>
+                                <td class="py-1 px-1 text-center border-r border-slate-200">
+                                    <select class="table-input !py-0.5 !text-[10px] font-black text-center ${currentProduct === 'evt' ? 'text-pink-700 bg-pink-50' : 'text-slate-700'}" onchange="window.updateRatePlanField('${p.id}', 'product', this.value)" title="Product: Standard year-round rate vs Event package rate">
+                                        <option value="std" ${currentProduct === 'std' ? 'selected' : ''}>Standard</option>
+                                        <option value="evt" ${currentProduct === 'evt' ? 'selected' : ''}>Event</option>
+                                    </select>
+                                </td>
+                                <td class="py-1 px-1 text-center">
+                                    <span class="font-mono text-[9px] font-bold text-slate-500 bg-slate-100 px-1 py-0.2 rounded border border-slate-200">...${p.id.slice(-6)}</span>
                                 </td>
                             </tr>`;
                         }).join('') : `
                         <tr>
-                            <td colspan="5" class="p-4 text-center text-slate-400 italic text-[11px] bg-slate-50">
+                            <td colspan="5" class="py-3 text-center text-slate-400 italic text-[11px] bg-slate-50">
                                 No rate plans found in Channex for this room type. Click "+ Create & Push Plan" above to create them automatically.
                             </td>
                         </tr>`}
@@ -1382,257 +1380,23 @@ window.renderUnifiedMappingCards = () => {
     container.innerHTML = html;
 };
 
-window.updateRoomMappingPair = (pmsCat, channexRoomId) => {
-    window.channexMap = window.channexMap || [];
-    const existing = window.channexMap.find(m => m.pmsCategory === pmsCat);
-    const cr = (window.channexRooms || []).find(r => r.id === channexRoomId);
-    const crTitle = cr ? cr.attributes?.title : '';
-
-    if (existing) {
-        existing.channexId = channexRoomId;
-        existing.channexTitle = crTitle || '';
-    } else {
-        window.channexMap.push({ channexId: channexRoomId, channexTitle: crTitle || '', pmsCategory: pmsCat });
+window.updateRatePlanField = (ratePlanId, field, value) => {
+    window.channexRateMap = window.channexRateMap || [];
+    let entry = window.channexRateMap.find(m => m.ratePlanId === ratePlanId);
+    if (!entry) {
+        entry = { ratePlanId, ratePlanTitle: '', pmsCategory: '', channel: 'Default', policy: 'non-ref', product: 'std' };
+        window.channexRateMap.push(entry);
     }
-    window.renderUnifiedMappingCards();
-};
-
-// --- MULTI-ROOM RATE PLAN CREATION MODAL TOOL ---
-window.openCreateRatePlanModal = () => {
-    const modal = document.getElementById('create-rate-plan-modal');
-    if (!modal) return;
-
-    const checklist = document.getElementById('crp-room-checklist');
-    if (checklist) {
-        const pmsCats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
-        checklist.innerHTML = pmsCats.map(cat => `
-            <label class="flex items-center gap-2 p-1 rounded hover:bg-white cursor-pointer text-xs font-bold text-slate-800">
-                <input type="checkbox" value="${cat}" class="crp-room-check row-checkbox" checked>
-                <span>${cat}</span>
-            </label>
-        `).join('');
-    }
-
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    if (window.lucide) window.lucide.createIcons();
-};
-
-window.closeCreateRatePlanModal = () => {
-    const modal = document.getElementById('create-rate-plan-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
+    entry[field] = value;
+    if (field === 'product') {
+        entry.rateSource = value === 'evt' ? 'evt' : 'std';
     }
 };
 
-window.applyRatePlanPreset = (title, channel, policy, product) => {
-    const titleEl = document.getElementById('crp-title');
-    const chanEl = document.getElementById('crp-channel');
-    const polEl = document.getElementById('crp-policy');
-
-    if (titleEl) titleEl.value = title;
-    if (chanEl) chanEl.value = channel;
-    if (polEl) polEl.value = policy;
-};
-
-window.toggleAllTargetRooms = (checked) => {
-    document.querySelectorAll('.crp-room-check').forEach(cb => { cb.checked = !!checked; });
-};
-
-window.executeCreateAndPushRatePlan = async () => {
-    const apiKey = document.getElementById('chan-api-key')?.value.trim();
-    const propId = document.getElementById('chan-prop-id')?.value.trim();
-    const planTitle = document.getElementById('crp-title')?.value.trim();
-    const channel = document.getElementById('crp-channel')?.value || 'DEFAULT';
-    const policy = document.getElementById('crp-policy')?.value || 'non-ref';
-
-    if (!apiKey || !propId) return window.customAlert("Error", "Channex API Key and Property ID must be entered.");
-    if (!planTitle) return window.customAlert("Error", "Enter a title for the rate plan.");
-
-    const selectedCats = Array.from(document.querySelectorAll('.crp-room-check:checked')).map(cb => cb.value);
-    if (selectedCats.length === 0) return window.customAlert("Selection Required", "Select at least one room category to push to.");
-
-    const btn = document.getElementById('btn-confirm-push-rate');
-    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="animate-pulse">Pushing to Channex...</span>`; }
-
-    let createdCount = 0;
-    let failedRooms = [];
-
-    for (const cat of selectedCats) {
-        const mapped = (window.channexMap || []).find(m => m.pmsCategory === cat);
-        const roomId = mapped?.channexId;
-
-        if (!roomId) {
-            failedRooms.push(`${cat} (Not mapped to Channex)`);
-            continue;
-        }
-
-        try {
-            const res = await fetch(`https://app.channex.io/api/v1/rate_plans`, {
-                method: "POST",
-                headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    rate_plan: {
-                        property_id: propId,
-                        room_type_id: roomId,
-                        title: planTitle,
-                        options: [{ occupancy: 1, rate: 100 }]
-                    }
-                })
-            });
-
-            if (res.ok) {
-                const json = await res.json();
-                createdCount++;
-                window.channexRatePlans = window.channexRatePlans || [];
-                window.channexRatePlans.push(json.data);
-            } else {
-                failedRooms.push(cat);
-            }
-        } catch (e) {
-            failedRooms.push(cat);
-        }
-    }
-
-    if (btn) { btn.disabled = false; btn.innerHTML = `<i data-lucide="cloud-upload" size="13"></i> Push to Selected Rooms`; }
-    window.closeCreateRatePlanModal();
-    window.renderUnifiedMappingCards();
-
-    let msg = `Created and pushed "${planTitle}" across ${createdCount} room categories in Channex!`;
-    if (failedRooms.length > 0) msg += `\n\nFailed / Unmapped: ${failedRooms.join(', ')}`;
-    window.customAlert("Rate Plan Creation Complete", msg);
-};
-
-// --------------------------------------------------------------------------
-// SECTION 6: Step 4 - Pricing Rules, Relational Links & Event Curves
-// --------------------------------------------------------------------------
-window.renderPricingStepRules = () => {
-    const pmsCats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
-    const dormAnchorSel = document.getElementById('anchor-dorm-select');
-    const privAnchorSel = document.getElementById('anchor-private-select');
-
-    const defaultDorm = pmsCats.find(c => c.toLowerCase().includes('dorm') || c.toLowerCase().includes('bed')) || pmsCats[0] || '';
-    const defaultPriv = pmsCats.find(c => !c.toLowerCase().includes('dorm') && !c.toLowerCase().includes('bed')) || pmsCats[1] || pmsCats[0] || '';
-
-    if (dormAnchorSel) {
-        dormAnchorSel.innerHTML = pmsCats.map(c => `
-            <option value="${c}" ${(window.pricingRules.anchorDorm === c || (!window.pricingRules.anchorDorm && c === defaultDorm)) ? 'selected' : ''}>${c}</option>
-        `).join('');
-    }
-    if (privAnchorSel) {
-        privAnchorSel.innerHTML = pmsCats.map(c => `
-            <option value="${c}" ${(window.pricingRules.anchorPrivate === c || (!window.pricingRules.anchorPrivate && c === defaultPriv)) ? 'selected' : ''}>${c}</option>
-        `).join('');
-    }
-
-    window.renderRelationshipsTable();
-    window.renderChannelRulesList();
-    window.renderEventPriceTable();
-    window.renderEventRestrTable();
-};
-
-window.renderRelationshipsTable = () => {
-    const tbody = document.getElementById('relationships-table-body');
-    if (!tbody) return;
-
-    const pmsCats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
-    if (!window.relationships || window.relationships.length === 0) {
-        window.relationships = [];
-        if (pmsCats.length > 1) {
-            window.relationships.push({
-                anchor: pmsCats[0],
-                target: pmsCats[1],
-                type: '+',
-                val: 300,
-                typeFmp: '+',
-                valFmp: 500
-            });
-        }
-    }
-
-    let html = '';
-    window.relationships.forEach((rel, idx) => {
-        html += `
-        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-rel-idx="${idx}">
-            <td class="p-1.5">
-                <select class="table-input font-bold" onchange="window.updateRelationshipField(${idx}, 'anchor', this.value)">
-                    ${pmsCats.map(c => `<option value="${c}" ${c === rel.anchor ? 'selected' : ''}>${c}</option>`).join('')}
-                </select>
-            </td>
-            <td class="p-1.5">
-                <select class="table-input font-bold" onchange="window.updateRelationshipField(${idx}, 'target', this.value)">
-                    ${pmsCats.map(c => `<option value="${c}" ${c === rel.target ? 'selected' : ''}>${c}</option>`).join('')}
-                </select>
-            </td>
-            <td class="p-1.5">
-                <div class="flex items-center gap-1">
-                    <select class="table-input !w-16 font-black" onchange="window.updateRelationshipField(${idx}, 'type', this.value)">
-                        <option value="=" ${rel.type === '=' ? 'selected' : ''}>=</option>
-                        <option value="+" ${rel.type === '+' ? 'selected' : ''}>+ ฿</option>
-                        <option value="-" ${rel.type === '-' ? 'selected' : ''}>- ฿</option>
-                        <option value="+%" ${rel.type === '+%' ? 'selected' : ''}>+ %</option>
-                        <option value="-%" ${rel.type === '-%' ? 'selected' : ''}>- %</option>
-                    </select>
-                    <input type="number" step="any" class="table-input font-bold text-center !w-20" value="${rel.val || 0}" onchange="window.updateRelationshipField(${idx}, 'val', parseFloat(this.value)||0)">
-                </div>
-            </td>
-            <td class="p-1.5 evt-col-cell">
-                <div class="flex items-center gap-1">
-                    <select class="table-input !w-16 font-black text-pink-700 bg-pink-50" onchange="window.updateRelationshipField(${idx}, 'typeFmp', this.value)">
-                        <option value="=" ${rel.typeFmp === '=' ? 'selected' : ''}>=</option>
-                        <option value="+" ${rel.typeFmp === '+' ? 'selected' : ''}>+ ฿</option>
-                        <option value="-" ${rel.typeFmp === '-' ? 'selected' : ''}>- ฿</option>
-                        <option value="+%" ${rel.typeFmp === '+%' ? 'selected' : ''}>+ %</option>
-                        <option value="-%" ${rel.typeFmp === '-%' ? 'selected' : ''}>- %</option>
-                    </select>
-                    <input type="number" step="any" class="table-input font-bold text-center !w-20 text-pink-800 bg-pink-50" value="${rel.valFmp || 0}" onchange="window.updateRelationshipField(${idx}, 'valFmp', parseFloat(this.value)||0)">
-                </div>
-            </td>
-            <td class="p-1.5 text-center">
-                <button type="button" onclick="window.removeRelationshipRow(${idx})" class="p-1 text-slate-400 hover:text-rose-600 cursor-pointer">
-                    <i data-lucide="trash-2" size="13"></i>
-                </button>
-            </td>
-        </tr>`;
-    });
-    tbody.innerHTML = html;
-    if (window.lucide) window.lucide.createIcons();
-};
-
-window.addRelationshipRow = () => {
-    const pmsCats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
-    window.relationships = window.relationships || [];
-    window.relationships.push({
-        anchor: pmsCats[0] || 'Anchor Room',
-        target: pmsCats[1] || pmsCats[0] || 'Target Room',
-        type: '+',
-        val: 200,
-        typeFmp: '+',
-        valFmp: 300
-    });
-    window.renderRelationshipsTable();
-};
-
-window.removeRelationshipRow = (idx) => {
-    if (window.relationships && window.relationships[idx]) {
-        window.relationships.splice(idx, 1);
-        window.renderRelationshipsTable();
-    }
-};
-
-window.updateRelationshipField = (idx, field, val) => {
-    if (window.relationships && window.relationships[idx]) {
-        window.relationships[idx][field] = val;
-    }
-};
-
-// --- CANONICAL CHANNEL RULES RENDERER ---
 window.renderChannelRulesList = () => {
     const container = document.getElementById('channel-rules-container');
     if (!container) return;
 
-    // Deduplicate any mixed casing from Firestore memory into single canonical keys
     const rawChannels = window.pricingRules.channels || {};
     const cleanChannels = {};
 
@@ -1643,7 +1407,6 @@ window.renderChannelRulesList = () => {
         }
     });
 
-    // Ensure all standard operational channels exist once
     if (!cleanChannels['Default']) cleanChannels['Default'] = { type: '=', val: 0 };
     if (!cleanChannels['Direct']) cleanChannels['Direct'] = { type: '-%', val: 10 };
     if (!cleanChannels['Booking.com']) cleanChannels['Booking.com'] = { type: '=', val: 0 };
@@ -1669,20 +1432,20 @@ window.renderChannelRulesList = () => {
         const badgeClass = channelBadges[ch] || 'bg-indigo-600 text-white';
 
         html += `
-        <div class="flex items-center justify-between p-2 rounded bg-white border border-amber-200 shadow-2xs">
+        <div class="flex items-center justify-between p-1.5 rounded bg-white border border-slate-200 shadow-2xs">
             <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded text-[9.5px] font-black uppercase ${badgeClass}">${ch}</span>
-                <span class="font-bold text-slate-700 text-xs">${ch === 'Default' ? 'Default Channex Feed' : (ch === 'Direct' ? 'Direct Booking Engine' : `${ch} OTA Adjustment`)}</span>
+                <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${badgeClass}">${ch}</span>
+                <span class="font-bold text-slate-700 text-xs">${ch}</span>
             </div>
             <div class="flex items-center gap-1.5">
-                <select class="table-input !w-20 font-black text-center" onchange="window.updateChannelRuleField('${ch}', 'type', this.value)">
+                <select class="table-input !w-20 font-black text-center !py-0.5" onchange="window.updateChannelRuleField('${ch}', 'type', this.value)">
                     <option value="=" ${rule.type === '=' ? 'selected' : ''}>SYNC (=)</option>
                     <option value="+%" ${rule.type === '+%' ? 'selected' : ''}>+ %</option>
                     <option value="-%" ${rule.type === '-%' ? 'selected' : ''}>- %</option>
                     <option value="+" ${rule.type === '+' ? 'selected' : ''}>+ ฿</option>
                     <option value="-" ${rule.type === '-' ? 'selected' : ''}>- ฿</option>
                 </select>
-                <input type="number" step="any" class="table-input font-bold text-center !w-16" value="${rule.val || 0}" onchange="window.updateChannelRuleField('${ch}', 'val', parseFloat(this.value)||0)">
+                <input type="number" step="any" class="table-input font-bold text-center !w-16 !py-0.5" value="${rule.val || 0}" onchange="window.updateChannelRuleField('${ch}', 'val', parseFloat(this.value)||0)">
             </div>
         </div>`;
     });
