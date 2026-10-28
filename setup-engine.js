@@ -572,8 +572,12 @@ window.compileRoomsFromDefinitions = () => {
         const rawName = (def.name || def.id || `ROOM ${defIdx + 1}`).trim();
         const category = (def.category || 'Standard Room').trim();
         const floor = (def.floor || '1').trim();
-        const isDorm = !!(def.isDorm || category.toLowerCase().includes('dorm') || (def.rule && def.rule.startsWith('odd-') || def.rule === 'even-top'));
         const total = parseInt(def.count, 10) || 1;
+
+        // PRIVATE ROOM RULE: If rule is 'private' or isDorm is false, it is strictly a single private room unit.
+        // Even with 2 beds (Twin) or 3 beds (Triple), a private room is ONE unit and must produce only ONE line on the calendar.
+        const isPrivate = def.rule === 'private' || def.isDorm === false;
+        const isDorm = !isPrivate;
 
         if (isDorm) {
             const parentKey = rawName.toUpperCase();
@@ -624,6 +628,7 @@ window.compileRoomsFromDefinitions = () => {
                 });
             }
         } else {
+            // Exactly ONE entry on the calendar for this private room, recording bedCount
             compiled.push({
                 id: rawName,
                 type: category,
@@ -633,6 +638,7 @@ window.compileRoomsFromDefinitions = () => {
                 bunk: 'private',
                 icon: 'private',
                 parentRoom: rawName,
+                bedCount: total,
                 isDorm: false
             });
         }
@@ -1912,7 +1918,49 @@ window.savePropertyToDatabase = async (showModal = true) => {
             }
         }
 
-        // 3. Canonicalize Channel rules (merge duplicates into single clean entries)
+        // 3. Save Pricing Rules & Channel Adjustments to pricing master document
+        try {
+            const dormAnchor = document.getElementById('anchor-dorm-select')?.value;
+            const privAnchor = document.getElementById('anchor-private-select')?.value;
+            if (dormAnchor) window.pricingRules.anchorDorm = dormAnchor;
+            if (privAnchor) window.pricingRules.anchorPrivate = privAnchor;
+
+            const stdRefVal = parseFloat(document.getElementById('rule-std-ref')?.value);
+            const evtRefVal = parseFloat(document.getElementById('rule-evt-ref')?.value);
+            if (!isNaN(stdRefVal)) window.pricingRules.stdRefVal = stdRefVal;
+            if (!isNaN(evtRefVal)) window.pricingRules.evtRefVal = evtRefVal;
+
+            // Harvest event pricing curves if configured
+            const harvestVal = id => {
+                const el = document.getElementById(id);
+                return el ? (parseFloat(el.value) || 0) : 0;
+            };
+            window.savedAutofillBaselines = window.savedAutofillBaselines || {};
+            const b = window.savedAutofillBaselines;
+            if (document.getElementById('w-p-base')) b.p_base = harvestVal('w-p-base');
+            if (document.getElementById('w-p-pkg')) b.p_pkg = harvestVal('w-p-pkg');
+            if (document.getElementById('w-p-0')) b.p_0 = harvestVal('w-p-0');
+            if (document.getElementById('w-d-base')) b.d_base = harvestVal('w-d-base');
+            if (document.getElementById('w-d-pkg')) b.d_pkg = harvestVal('w-d-pkg');
+            if (document.getElementById('w-d-0')) b.d_0 = harvestVal('w-d-0');
+
+            const pricingDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`);
+            await setDoc(pricingDocRef, sanitizeForFirestore({
+                pricingRules: window.pricingRules,
+                relationships: window.relationships || [],
+                autofillBaselines: window.savedAutofillBaselines,
+                updatedAt: new Date().toISOString()
+            }), { merge: true });
+        } catch (pricingSaveErr) {
+            console.warn("Pricing rules save note:", pricingSaveErr);
+        }
+
+        if (statusText) statusText.innerText = `Saved ${name} successfully`;
+        if (showModal) {
+            window.customAlert("Property Saved", `Configuration for "${name}" (${short}) saved successfully.`);
+        }
+    } catch (err) {
+        console.error("Save property error:", err);
         if (statusText) statusText.innerText = "Error saving property!";
         window.customAlert("Save Error", err.message);
     }
