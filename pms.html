@@ -647,28 +647,30 @@
 
         const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
-        // Universal Canonical Room String Normalizer (Works for ANY property without hardcoded regexes)
-        const normalizeRoomStr = str => (str || '').toUpperCase().replace(/[\s\-_]/g, '');
+        // Universal Tokenized Room Matcher (100% data-driven, zero property-specific assumptions)
+        const tokenizeRoom = str => {
+            if (!str) return [];
+            return (String(str).toUpperCase().replace(/^ROOM\s+/, '').match(/[A-Z]+|\d+/g) || []).map(t => {
+                const n = parseInt(t, 10);
+                return isNaN(n) ? t : n; // Numbers normalized as integers: '01' -> 1, '1' -> 1, '001' -> 1
+            });
+        };
+        const tokensMatch = (t1, t2) => {
+            if (!t1.length || !t2.length || t1.length !== t2.length) return false;
+            return t1.every((v, i) => v === t2[i]);
+        };
 
         const dbToUiRoom = rid => {
             if (!rid) return rid;
-            const nid = rid.toUpperCase().trim();
-            const exactMatch = hotelRooms.find(r => r.id === nid || r.id === rid);
+            const nid = String(rid).toUpperCase().trim();
+            const exactMatch = hotelRooms.find(r => r.id === nid || r.id === rid || String(r.id).toUpperCase() === nid);
             if (exactMatch) return exactMatch.id;
 
-            const cleanTarget = normalizeRoomStr(rid);
-            const canonicalMatch = hotelRooms.find(r => normalizeRoomStr(r.id) === cleanTarget);
-            if (canonicalMatch) return canonicalMatch.id;
-
-            // Normalize single-digit numbers to two digits (e.g. A1 -> A01, B2 -> B02)
-            const paddedTarget = cleanTarget.replace(/^([A-Za-z]+)(\d)$/, (m, pfx, d) => `${pfx}0${d}`);
-            const paddedMatch = hotelRooms.find(r => normalizeRoomStr(r.id) === paddedTarget);
-            if (paddedMatch) return paddedMatch.id;
-
-            // Normalize two-digit numbers with leading zero to single digit (e.g. A01 -> A1)
-            const unpaddedTarget = cleanTarget.replace(/^([A-Za-z]+)0(\d)$/, (m, pfx, d) => `${pfx}${d}`);
-            const unpaddedMatch = hotelRooms.find(r => normalizeRoomStr(r.id) === unpaddedTarget);
-            if (unpaddedMatch) return unpaddedMatch.id;
+            const targetTokens = tokenizeRoom(rid);
+            if (targetTokens.length > 0) {
+                const tokenMatch = hotelRooms.find(r => tokensMatch(tokenizeRoom(r.id), targetTokens));
+                if (tokenMatch) return tokenMatch.id;
+            }
 
             return rid;
         };
