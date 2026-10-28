@@ -410,8 +410,8 @@
                 for (let i = 0; i < Math.max(1, rL.length); i++) uConf.push(s);
             } else {
                 const uCount = rL.filter(rid => {
-                    const normR = window.normalizeRoomId ? window.normalizeRoomId(rid, curProp) : rid;
-                    return !rid || !hotelRooms.some(h => h.id === rid || h.id === normR);
+                    const uiR = window.dbToUiRoom ? window.dbToUiRoom(rid) : rid;
+                    return !rid || !hotelRooms.some(h => h.id === rid || h.id === uiR);
                 }).length;
                 for (let i = 0; i < uCount; i++) uConf.push(s);
             }
@@ -463,9 +463,8 @@
                     floor: '', 
                     icon: r.icon || r.bunk || '',
                     bookings: actStaff.filter(s => {
-                        const rList = getRooms(s).map(rm => window.normalizeRoomId ? window.normalizeRoomId(rm, curProp) : rm);
-                        const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
-                        return (rList.includes(r.id) || rList.includes(normR)) && s.status !== 'unconfirmed' && s.status !== 'charged' && s.status !== 'noshow' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+                        const rList = getRooms(s).map(rm => window.dbToUiRoom ? window.dbToUiRoom(rm) : rm);
+                        return rList.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && s.status !== 'noshow' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
                     })
                 });
             } else {
@@ -479,9 +478,8 @@
                     floor: r.floor, 
                     icon: r.icon || r.bunk || '',
                     bookings: actStaff.filter(s => {
-                        const rList = getRooms(s).map(rm => window.normalizeRoomId ? window.normalizeRoomId(rm, curProp) : rm);
-                        const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
-                        return (rList.includes(r.id) || rList.includes(normR)) && s.status !== 'unconfirmed' && s.status !== 'charged' && s.status !== 'noshow' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+                        const rList = getRooms(s).map(rm => window.dbToUiRoom ? window.dbToUiRoom(rm) : rm);
+                        return rList.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && s.status !== 'noshow' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
                     })
                 });
             }
@@ -529,8 +527,8 @@
                             if (['unconfirmed', 'charged', 'cancelled', 'noshow'].includes(s.status)) return;
                             if (dT >= parseYMD(s.checkIn) && dT < parseYMD(s.checkOut)) {
                                 getRooms(s).forEach(r => {
-                                    const normR = window.normalizeRoomId ? window.normalizeRoomId(r, curProp) : r;
-                                    if (r && (tRIds.includes(r) || tRIds.includes(normR))) occ.add(r);
+                                    const uiR = window.dbToUiRoom ? window.dbToUiRoom(r) : r;
+                                    if (r && (tRIds.includes(r) || tRIds.includes(uiR))) occ.add(uiR || r);
                                 });
                             }
                         });
