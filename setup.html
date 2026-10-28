@@ -215,32 +215,32 @@
             </div>
 
             <!-- Add-ons & Extra Charges Card -->
-            <div class="bg-emerald-50/70 border border-emerald-300 rounded-lg p-3 shadow-xs">
-                <div class="border-b border-emerald-200 pb-2 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-addons', 'chev-prop-addons')">
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-slate-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-addons', 'chev-prop-addons')">
                     <div>
-                        <h2 class="text-xs font-black uppercase text-emerald-950 flex items-center gap-1.5">
-                            <i data-lucide="plus-circle" class="text-emerald-600" size="15"></i> Add-ons & Extra Charges
+                        <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
+                            <i data-lucide="plus-circle" class="text-indigo-600" size="14"></i> Add-ons & Extra Charges
                         </h2>
-                        <p class="text-[10px] text-slate-500 font-semibold">Standard service catalogue for guest billing.</p>
+                        <span class="text-[9.5px] text-slate-400 font-bold">Standard service catalogue for guest billing.</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button onclick="event.stopPropagation(); window.addBlankAddonRow()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase px-2.5 py-1 rounded shadow-xs flex items-center gap-1 cursor-pointer">
-                            <i data-lucide="plus" size="12"></i> Add Item
+                        <button onclick="event.stopPropagation(); window.addBlankAddonRow()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase px-2 py-0.5 rounded shadow-xs flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="plus" size="11"></i> Add Item
                         </button>
-                        <i data-lucide="chevron-down" id="chev-prop-addons" size="14" class="text-emerald-600 transition-transform"></i>
+                        <i data-lucide="chevron-down" id="chev-prop-addons" size="14" class="text-slate-400 transition-transform"></i>
                     </div>
                 </div>
 
-                <div id="sec-prop-addons" class="overflow-x-auto border border-emerald-200 rounded bg-white">
+                <div id="sec-prop-addons" class="overflow-x-auto border border-slate-200 rounded bg-white">
                     <table class="w-full text-left text-[11px] border-collapse">
-                        <thead class="bg-emerald-100/70 text-[9px] font-black uppercase text-emerald-900 border-b border-emerald-200">
+                        <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0">
                             <tr>
-                                <th class="p-1.5 w-16 text-center">Order</th>
-                                <th class="p-1.5 w-2/5">Item / Service Name</th>
-                                <th class="p-1.5 w-1/5">Category</th>
-                                <th class="p-1.5 w-1/5">Unit Price (฿)</th>
-                                <th class="p-1.5 w-1/5">Billing Type</th>
-                                <th class="p-1.5 text-center w-10">Del</th>
+                                <th class="py-1 px-1.5 w-14 text-center">Order</th>
+                                <th class="py-1 px-1.5 w-2/5">Item / Service Name</th>
+                                <th class="py-1 px-1.5 w-1/5">Category</th>
+                                <th class="py-1 px-1.5 w-1/5 text-center">Unit Price (฿)</th>
+                                <th class="py-1 px-1.5 w-1/5">Billing Type</th>
+                                <th class="py-1 px-1.5 text-center w-8">Del</th>
                             </tr>
                         </thead>
                         <tbody id="addon-list-body" class="divide-y divide-slate-100 font-semibold"></tbody>
@@ -251,127 +251,127 @@
 
         <!-- 3.2: STEP 2 - Room Inventory & Generators -->
         <section id="step-content-2" class="flex-1 flex flex-col min-h-0 hidden">
-            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs flex-1 flex flex-col min-h-0">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-200 pb-2 mb-2 shrink-0">
-                    <div class="flex items-center gap-2 flex-wrap">
+            <div class="bg-white border border-slate-300 rounded-lg p-2 shadow-xs flex-1 flex flex-col min-h-0">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-1.5 mb-1.5 shrink-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
                         <h3 class="text-xs font-black uppercase text-slate-800">Room Setup</h3>
-                        <span id="room-count-badge" class="px-2 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-black text-[10px]">0 Rooms</span>
-                        <span id="unit-count-badge" class="px-2 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 font-bold text-[10px]">0 Beds/Units Total</span>
+                        <span id="room-count-badge" class="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-black text-[9.5px]">0 Rooms</span>
+                        <span id="unit-count-badge" class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 font-bold text-[9.5px]">0 Beds/Units Total</span>
                     </div>
 
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        <button onclick="window.addBlankRoomDef()" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
-                            <i data-lucide="plus" size="12"></i> Add Room
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <button onclick="window.addBlankRoomDef()" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
+                            <i data-lucide="plus" size="11"></i> Add Room
                         </button>
-                        <button onclick="window.openReorderCategoriesModal()" class="px-2.5 py-1 rounded bg-indigo-800 hover:bg-indigo-900 text-white text-[10px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs" title="Reorder entire room categories in 1 click">
-                            <i data-lucide="arrow-up-down" size="12"></i> REORDER CATEGORIES
+                        <button onclick="window.openReorderCategoriesModal()" class="px-2 py-0.5 rounded bg-indigo-800 hover:bg-indigo-900 text-white text-[9.5px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs" title="Reorder entire room categories in 1 click">
+                            <i data-lucide="arrow-up-down" size="11"></i> Reorder Categories
                         </button>
-                        <button onclick="window.toggleBatchDormPanel()" class="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
-                            <i data-lucide="bed-double" size="12"></i> BATCH DORM
+                        <button onclick="window.toggleBatchDormPanel()" class="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white text-[9.5px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
+                            <i data-lucide="bed-double" size="11"></i> Batch Dorm
                         </button>
-                        <button onclick="window.toggleBatchRoomPanel()" class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
-                            <i data-lucide="door-closed" size="12"></i> BATCH ROOM
+                        <button onclick="window.toggleBatchRoomPanel()" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
+                            <i data-lucide="door-closed" size="11"></i> Batch Room
                         </button>
-                        <button onclick="window.toggleBedPreviewDrawer()" id="btn-toggle-bed-preview" class="px-2.5 py-1 rounded border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer">
-                            <i data-lucide="eye" size="12"></i> ALL BEDS
+                        <button onclick="window.toggleBedPreviewDrawer()" id="btn-toggle-bed-preview" class="px-2 py-0.5 rounded border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[9.5px] font-black uppercase flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="eye" size="11"></i> All Beds
                         </button>
-                        <button onclick="window.clearAllRoomDefs()" class="px-2 py-1 rounded border border-rose-200 text-rose-600 hover:bg-rose-50 text-[10px] font-black uppercase transition-colors cursor-pointer">
+                        <button onclick="window.clearAllRoomDefs()" class="px-2 py-0.5 rounded border border-rose-200 text-rose-600 hover:bg-rose-50 text-[9.5px] font-black uppercase transition-colors cursor-pointer">
                             Clear
                         </button>
                     </div>
                 </div>
 
                 <!-- BATCH DORM GENERATOR PANEL -->
-                <div id="batch-dorm-panel" class="hidden mb-2 p-2.5 bg-amber-50 border border-amber-300 rounded text-xs shrink-0">
-                    <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-amber-200">
-                        <span class="font-black text-amber-900 uppercase text-[10px] flex items-center gap-1">
-                            <i data-lucide="bed-double" size="13"></i> Batch Dorm Generator
+                <div id="batch-dorm-panel" class="hidden mb-1.5 p-2 bg-amber-50/70 border border-amber-300 rounded text-xs shrink-0">
+                    <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-amber-200">
+                        <span class="font-black text-amber-900 uppercase text-[9.5px] flex items-center gap-1">
+                            <i data-lucide="bed-double" size="12"></i> Batch Dorm Generator
                         </span>
-                        <button onclick="window.toggleBatchDormPanel(false)" class="text-amber-800 hover:text-black cursor-pointer"><i data-lucide="x" size="14"></i></button>
+                        <button onclick="window.toggleBatchDormPanel(false)" class="text-amber-800 hover:text-black cursor-pointer"><i data-lucide="x" size="13"></i></button>
                     </div>
-                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                         <div>
                             <label class="label-base text-amber-900">Room Name</label>
-                            <input type="text" id="gen-dorm-name" placeholder="e.g. DORM A or F" class="table-input font-bold" value="DORM A">
+                            <input type="text" id="gen-dorm-name" placeholder="e.g. DORM A" class="table-input font-bold !py-0.5" value="DORM A">
                         </div>
                         <div class="col-span-2 sm:col-span-1">
                             <label class="label-base text-amber-900">Category Name</label>
-                            <input type="text" id="gen-dorm-cat" placeholder="e.g. 6-Bed Mixed Dorm" class="table-input font-bold" value="STANDARD 6-BED DORM">
+                            <input type="text" id="gen-dorm-cat" placeholder="e.g. 6-Bed Mixed Dorm" class="table-input font-bold !py-0.5" value="Standard 6-Bed Dorm">
                         </div>
                         <div>
                             <label class="label-base text-amber-900">Beds Count</label>
-                            <input type="number" id="gen-dorm-beds" min="1" max="60" value="6" class="table-input font-black text-center">
+                            <input type="number" id="gen-dorm-beds" min="1" max="60" value="6" class="table-input font-black text-center !py-0.5">
                         </div>
                         <div>
                             <label class="label-base text-amber-900">Floor</label>
-                            <input type="text" id="gen-dorm-floor" value="1" class="table-input text-center font-bold">
+                            <input type="text" id="gen-dorm-floor" value="1" class="table-input text-center font-bold !py-0.5">
                         </div>
                         <div>
                             <label class="label-base text-amber-900">Bunk Stacking</label>
-                            <select id="gen-dorm-rule" class="table-input font-bold">
+                            <select id="gen-dorm-rule" class="table-input font-bold !py-0.5">
                                 <option value="odd-top">DORM (Top # Odd)</option>
                                 <option value="even-top">DORM (Top # Even)</option>
                                 <option value="single">DORM (Single Beds)</option>
                             </select>
                         </div>
                     </div>
-                    <div class="flex justify-end mt-2">
-                        <button onclick="window.executeBatchDormGenerate()" class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[10px] rounded shadow-xs cursor-pointer">
+                    <div class="flex justify-end mt-1.5">
+                        <button onclick="window.executeBatchDormGenerate()" class="px-2.5 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[9.5px] rounded shadow-xs cursor-pointer">
                             Generate Dorm Room
                         </button>
                     </div>
                 </div>
 
                 <!-- BATCH ROOM GENERATOR PANEL -->
-                <div id="batch-room-panel" class="hidden mb-2 p-2.5 bg-emerald-50 border border-emerald-300 rounded text-xs shrink-0">
-                    <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-emerald-200">
-                        <span class="font-black text-emerald-900 uppercase text-[10px] flex items-center gap-1">
-                            <i data-lucide="door-closed" size="13"></i> Batch Room Generator
+                <div id="batch-room-panel" class="hidden mb-1.5 p-2 bg-emerald-50/70 border border-emerald-300 rounded text-xs shrink-0">
+                    <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-emerald-200">
+                        <span class="font-black text-emerald-900 uppercase text-[9.5px] flex items-center gap-1">
+                            <i data-lucide="door-closed" size="12"></i> Batch Room Generator
                         </span>
-                        <button onclick="window.toggleBatchRoomPanel(false)" class="text-emerald-800 hover:text-black cursor-pointer"><i data-lucide="x" size="14"></i></button>
+                        <button onclick="window.toggleBatchRoomPanel(false)" class="text-emerald-800 hover:text-black cursor-pointer"><i data-lucide="x" size="13"></i></button>
                     </div>
-                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                         <div>
                             <label class="label-base text-emerald-900">Name / Prefix</label>
-                            <input type="text" id="gen-room-prefix" placeholder="e.g. ROOM or B" class="table-input font-bold" value="ROOM ">
+                            <input type="text" id="gen-room-prefix" placeholder="e.g. ROOM or B" class="table-input font-bold !py-0.5" value="ROOM ">
                         </div>
                         <div>
                             <label class="label-base text-emerald-900">Category Name</label>
-                            <input type="text" id="gen-room-cat" placeholder="e.g. Deluxe King" class="table-input font-bold" value="Deluxe King Room">
+                            <input type="text" id="gen-room-cat" placeholder="e.g. Deluxe King" class="table-input font-bold !py-0.5" value="Deluxe King Room">
                         </div>
                         <div>
                             <label class="label-base text-emerald-900">Start # &rarr; End #</label>
                             <div class="flex items-center gap-1">
-                                <input type="number" id="gen-room-start" value="1" min="1" class="table-input text-center font-bold">
+                                <input type="number" id="gen-room-start" value="1" min="1" class="table-input text-center font-bold !py-0.5">
                                 <span>-</span>
-                                <input type="number" id="gen-room-end" value="4" min="1" class="table-input text-center font-bold">
+                                <input type="number" id="gen-room-end" value="4" min="1" class="table-input text-center font-bold !py-0.5">
                             </div>
                         </div>
                         <div>
                             <label class="label-base text-emerald-900">Floor</label>
-                            <input type="text" id="gen-room-floor" value="1" class="table-input text-center font-bold">
+                            <input type="text" id="gen-room-floor" value="1" class="table-input text-center font-bold !py-0.5">
                         </div>
                         <div class="flex items-end">
-                            <button onclick="window.executeBatchRoomGenerate()" class="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[10px] rounded shadow-xs cursor-pointer">
+                            <button onclick="window.executeBatchRoomGenerate()" class="w-full py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[9.5px] rounded shadow-xs cursor-pointer">
                                 Generate Rooms
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Room Setup Table -->
+                <!-- High-Density Room Setup Table -->
                 <div class="border border-slate-200 rounded flex-1 min-h-0 overflow-y-auto">
                     <datalist id="setup-category-datalist"></datalist>
                     <table class="w-full text-left text-[11px] border-collapse">
-                        <thead class="bg-slate-100 text-[9px] font-black uppercase text-slate-700 border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
+                        <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0 z-20 shadow-xs">
                             <tr>
-                                <th class="p-1.5 w-16 text-center">Order</th>
-                                <th class="p-1.5 w-36">Room Name</th>
-                                <th class="p-1.5">Category</th>
-                                <th class="p-1.5 w-24 text-center">Beds / Units</th>
-                                <th class="p-1.5 w-24">Floor</th>
-                                <th class="p-1.5 w-44">Setup / Rule</th>
-                                <th class="p-1.5 text-center w-10">Del</th>
+                                <th class="py-1 px-1.5 w-14 text-center">Order</th>
+                                <th class="py-1 px-1.5 w-32">Room Name</th>
+                                <th class="py-1 px-1.5">Category</th>
+                                <th class="py-1 px-1.5 w-20 text-center">Units / Beds</th>
+                                <th class="py-1 px-1.5 w-20 text-center">Floor</th>
+                                <th class="py-1 px-1.5 w-36">Room Rule</th>
+                                <th class="py-1 px-1.5 text-center w-8">Del</th>
                             </tr>
                         </thead>
                         <tbody id="room-def-list-body" class="divide-y divide-slate-100 font-semibold"></tbody>
@@ -379,27 +379,27 @@
                 </div>
 
                 <!-- ALL BEDS DRAWER -->
-                <div id="bed-preview-drawer" class="hidden mt-2 p-2.5 bg-slate-200/90 border border-slate-300 rounded max-h-72 overflow-y-auto shrink-0 text-xs">
-                    <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-300">
-                        <span class="font-black text-slate-800 text-[10px] uppercase tracking-wider flex items-center gap-1.5">
-                            <i data-lucide="eye" size="13" class="text-indigo-600"></i> ALL BEDS & UNITS (Extrapolated Layout)
+                <div id="bed-preview-drawer" class="hidden mt-1.5 p-2 bg-slate-100 border border-slate-300 rounded max-h-56 overflow-y-auto shrink-0 text-xs">
+                    <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-slate-200">
+                        <span class="font-black text-slate-800 text-[9.5px] uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="eye" size="12" class="text-indigo-600"></i> All Beds & Units Layout
                         </span>
                     </div>
-                    <div id="bed-preview-groups" class="flex flex-wrap gap-2.5 items-start"></div>
+                    <div id="bed-preview-groups" class="flex flex-wrap gap-2 items-start"></div>
                 </div>
             </div>
         </section>
 
         <!-- 3.3: STEP 3 - Channex API & Multi-Room Rate Plan Tool -->
-        <section id="step-content-3" class="space-y-2.5 flex-1 overflow-y-auto hidden">
+        <section id="step-content-3" class="space-y-2 flex-1 overflow-y-auto hidden">
             <!-- Credentials Header -->
-            <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
-                <div class="border-b border-slate-200 pb-2 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-chan-creds', 'chev-chan-creds')">
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-slate-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-chan-creds', 'chev-chan-creds')">
                     <div class="flex items-center gap-2">
                         <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
-                            <i data-lucide="key-round" class="text-indigo-600" size="15"></i> Channel Manager Connection
+                            <i data-lucide="key-round" class="text-indigo-600" size="14"></i> Channel Manager Connection
                         </h2>
-                        <div id="channex-conn-badge" class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200">
+                        <div id="channex-conn-badge" class="flex items-center gap-1 px-2 py-0.2 rounded-full bg-slate-100 text-slate-600 text-[9.5px] font-bold border border-slate-200">
                             <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Checking...
                         </div>
                     </div>
@@ -409,21 +409,122 @@
                 <div id="sec-chan-creds" class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
                     <div>
                         <label class="label-base">Channex API Key</label>
-                        <input type="password" id="chan-api-key" placeholder="Enter API key..." class="table-input font-mono">
+                        <input type="password" id="chan-api-key" placeholder="Enter API key..." class="table-input font-mono !py-0.5">
                     </div>
                     <div>
                         <label class="label-base">Channex Property ID</label>
-                        <input type="text" id="chan-prop-id" placeholder="UUID e.g. be74cdc9-..." class="table-input font-mono">
+                        <input type="text" id="chan-prop-id" placeholder="UUID e.g. be74cdc9-..." class="table-input font-mono !py-0.5">
                     </div>
                     <div class="flex items-end">
-                        <button onclick="window.fetchChannexData()" class="w-full py-1.5 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase rounded transition-colors shadow-xs cursor-pointer">
+                        <button onclick="window.fetchChannexData()" class="w-full py-1 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase rounded transition-colors shadow-xs cursor-pointer">
                             Fetch Channex Data
                         </button>
                     </div>
                     <div class="flex items-end">
-                        <button onclick="window.openCreateRatePlanModal()" class="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase rounded transition-colors shadow-xs cursor-pointer">
+                        <button onclick="window.openCreateRatePlanModal()" class="w-full py-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9.5px] uppercase rounded transition-colors shadow-xs cursor-pointer">
                             + Create & Push Plan
                         </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UNIFIED ROOM CATEGORY & ACTIVE RATE PLANS CARDS -->
+            <div class="space-y-2" id="unified-mapping-container"></div>
+        </section>
+
+        <!-- 3.4: STEP 4 - Pricing Rules, Relational Links & Event Curves -->
+        <section id="step-content-4" class="space-y-2 flex-1 overflow-y-auto hidden">
+            <!-- Driving Anchors -->
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-slate-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-anchors', 'chev-price-anchors')">
+                    <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
+                        <i data-lucide="anchor" size="14" class="text-indigo-600"></i> Base Rate Anchors
+                    </h2>
+                    <i data-lucide="chevron-down" id="chev-price-anchors" size="14" class="text-slate-400 transition-transform"></i>
+                </div>
+
+                <div id="sec-price-anchors" class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div class="bg-slate-50 p-2 rounded border border-slate-200">
+                        <label class="label-base text-indigo-700">Dorm Master Anchor Room</label>
+                        <select id="anchor-dorm-select" class="table-input font-bold text-slate-800 !py-0.5"></select>
+                    </div>
+                    <div class="bg-slate-50 p-2 rounded border border-slate-200">
+                        <label class="label-base text-indigo-700">Private Master Anchor Room</label>
+                        <select id="anchor-private-select" class="table-input font-bold text-slate-800 !py-0.5"></select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Relational Linking Matrix -->
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2 cursor-pointer" onclick="window.toggleCardSection('sec-price-links', 'chev-price-links')">
+                    <h3 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
+                        <i data-lucide="link" size="14" class="text-indigo-600"></i> Bidirectional Pricing Links
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <button onclick="event.stopPropagation(); window.addRelationshipRow()" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase transition-colors cursor-pointer shadow-xs">
+                            + Add Link Rule
+                        </button>
+                        <i data-lucide="chevron-down" id="chev-price-links" size="14" class="text-slate-400 transition-transform"></i>
+                    </div>
+                </div>
+
+                <div id="sec-price-links" class="overflow-x-auto border border-slate-200 rounded bg-white">
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0">
+                            <tr>
+                                <th class="py-1 px-1.5 w-1/4">Anchor (Base)</th>
+                                <th class="py-1 px-1.5 w-1/4">Target Room</th>
+                                <th class="py-1 px-1.5 w-1/4">Standard Offset</th>
+                                <th class="py-1 px-1.5 w-1/4 evt-col-header text-pink-300">EVT Offset</th>
+                                <th class="py-1 px-1.5 text-center w-8">Del</th>
+                            </tr>
+                        </thead>
+                        <tbody id="relationships-table-body" class="divide-y divide-slate-100 font-semibold"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Refundable Markups & OTA Adjustments -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                    <div class="border-b border-slate-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-markup', 'chev-price-markup')">
+                        <h3 class="text-xs font-black uppercase text-slate-800">Refundable Rate Markups</h3>
+                        <i data-lucide="chevron-down" id="chev-price-markup" size="14" class="text-slate-400 transition-transform"></i>
+                    </div>
+
+                    <div id="sec-price-markup" class="flex flex-wrap items-center gap-3 text-xs pt-0.5">
+                        <div class="flex-1 min-w-[140px]">
+                            <label class="label-base">Standard Dates</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="rule-std-ref" value="25" min="0" max="100" class="table-input !w-16 font-black text-center !py-0.5">
+                                <span class="font-bold text-slate-600 text-[11px]">% above Non-Ref</span>
+                            </div>
+                        </div>
+
+                        <div id="evt-ref-row" class="flex-1 min-w-[140px]">
+                            <label class="label-base text-pink-800">Event / Peak</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="rule-evt-ref" value="25" min="0" max="100" class="table-input !w-16 font-black text-center text-pink-800 border-pink-300 bg-pink-50 !py-0.5">
+                                <span class="font-bold text-pink-900 text-[11px]">% above EVT Non-Ref</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2 cursor-pointer" onclick="window.toggleCardSection('sec-price-channels', 'chev-price-channels')">
+                        <h3 class="text-xs font-black uppercase text-slate-800">Sales Channel Adjustments</h3>
+                        <div class="flex items-center gap-2">
+                            <button onclick="event.stopPropagation(); window.addVerifiedChannelRule()" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-[9.5px] font-black uppercase transition-colors cursor-pointer border border-slate-300">
+                                + Add Channel
+                            </button>
+                            <i data-lucide="chevron-down" id="chev-price-channels" size="14" class="text-slate-400 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <div id="sec-price-channels" class="space-y-1 text-xs">
+                        <div id="channel-rules-container" class="space-y-1"></div>
                     </div>
                 </div>
             </div>
