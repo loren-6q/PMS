@@ -409,10 +409,26 @@
             if (s.status === 'unconfirmed' || s.status === 'charged' || s.status === 'noshow') {
                 for (let i = 0; i < Math.max(1, rL.length); i++) uConf.push(s);
             } else {
-                const uCount = rL.filter(rid => {
+                // Find all valid room assignments on the current property board
+                const validAssigned = rL.filter(rid => {
+                    if (!rid || rid.toLowerCase().includes('unassigned')) return false;
                     const uiR = window.dbToUiRoom ? window.dbToUiRoom(rid) : rid;
-                    return !rid || !hotelRooms.some(h => h.id === rid || h.id === uiR);
-                }).length;
+                    return hotelRooms.some(h => h.id === rid || h.id === uiR);
+                });
+
+                // Calculate genuine unassigned count:
+                // If the booking has at least one valid assigned room on this board,
+                // do NOT duplicate into unassigned unless it explicitly has unassigned companion beds
+                let uCount = 0;
+                if (validAssigned.length === 0) {
+                    uCount = Math.max(1, rL.filter(r => !r || r.toLowerCase().includes('unassigned')).length);
+                } else {
+                    const unassignedTokens = rL.filter(r => !r || r.toLowerCase().includes('unassigned'));
+                    if (unassignedTokens.length > 0 && rL.length > validAssigned.length && (s.pax || 1) > validAssigned.length) {
+                        uCount = unassignedTokens.length;
+                    }
+                }
+
                 for (let i = 0; i < uCount; i++) uConf.push(s);
             }
         });
