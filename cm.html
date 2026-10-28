@@ -1,6 +1,7 @@
 <!-- ==========================================================================
      cm.html - W&W Channel Manager Operations & Rate Matrix
      Wild & Wandering Property Management System
+     Hosted at: https://loren-6q.github.io/PMS/cm.html
      ========================================================================== -->
 <!DOCTYPE html>
 <html lang="en">
@@ -87,7 +88,7 @@
         <header class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-2 shrink-0 z-50 unselectable w-full">
             <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
                 <a href="https://loren-6q.github.io/PMS/index.html" class="flex flex-col min-w-0 mr-1 sm:mr-2 hover:brightness-110 transition-all cursor-pointer">
-                    <img id="cm-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-7 sm:h-9 object-contain">
+                    <img id="cm-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Brand Logo" class="h-7 sm:h-9 object-contain">
                 </a>
                 <div class="flex items-center gap-1.5">
                     <h1 class="font-black uppercase tracking-widest text-xs sm:text-sm text-slate-800 leading-none shrink-0 flex items-center gap-1.5">
@@ -286,7 +287,6 @@
                             <div class="flex items-center gap-1">
                                 <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Target Event:</label>
                                 <select id="ct-event-select" onchange="window.handleCurveEventSelect(this.value)" class="input-base !py-0.5 !px-2 !text-xs font-bold bg-slate-800 text-pink-300 border-slate-700 cursor-pointer">
-                                    <!-- Populated dynamically with upcoming event dates -->
                                 </select>
                             </div>
 
@@ -330,7 +330,6 @@
                                 </tr>
                             </thead>
                             <tbody id="ct-grid-body" class="divide-y divide-slate-700/60 font-black">
-                                <!-- Dynamically populated with Private and Dorm anchor rows -->
                             </tbody>
                         </table>
                     </div>
@@ -565,7 +564,7 @@
         </div>
     </div>
 
-    <!-- Safety Fallbacks & Initializers -->
+    <!-- Safety Fallbacks, Logo Sync & Initializers -->
     <script>
         (function() {
             const isLocal = window.location.hostname === 'localhost' || 
@@ -586,6 +585,14 @@
                 const pmsBtn = document.getElementById('nav-pms-btn');
                 if (setupBtn) setupBtn.href = `${window.APP_BASE_URL}setup.html${q}`;
                 if (pmsBtn) pmsBtn.href = `${window.APP_BASE_URL}pms.html${q}`;
+
+                // Dynamic Brand Logo Hook
+                const brandLogo = document.getElementById('cm-brand-logo');
+                if (brandLogo && window.currentPropertyConfig) {
+                    brandLogo.src = window.currentPropertyConfig.iconUrl 
+                        || window.currentPropertyConfig.logoUrl 
+                        || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
+                }
             };
 
             var tape = document.getElementById('tape-start');
