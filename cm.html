@@ -586,12 +586,23 @@
                 if (setupBtn) setupBtn.href = `${window.APP_BASE_URL}setup.html${q}`;
                 if (pmsBtn) pmsBtn.href = `${window.APP_BASE_URL}pms.html${q}`;
 
-                // Dynamic Brand Logo Hook
+                // Dynamic Brand Icon Hook & Favicon
                 const brandLogo = document.getElementById('cm-brand-logo');
-                if (brandLogo && window.currentPropertyConfig) {
-                    brandLogo.src = window.currentPropertyConfig.iconUrl 
+                if (window.currentPropertyConfig) {
+                    const activeIcon = window.currentPropertyConfig.iconUrl 
                         || window.currentPropertyConfig.logoUrl 
                         || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
+                    if (brandLogo) brandLogo.src = activeIcon;
+
+                    // Dynamically set favicon to property icon
+                    let link = document.querySelector("link[rel*='icon']");
+                    if (!link) {
+                        link = document.createElement('link');
+                        link.rel = 'icon';
+                        document.head.appendChild(link);
+                    }
+                    link.type = 'image/png';
+                    link.href = activeIcon;
                 }
             };
 
