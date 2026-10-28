@@ -263,6 +263,9 @@
                         <button onclick="window.addBlankRoomDef()" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
                             <i data-lucide="plus" size="12"></i> Add Room
                         </button>
+                        <button onclick="window.openReorderCategoriesModal()" class="px-2.5 py-1 rounded bg-indigo-800 hover:bg-indigo-900 text-white text-[10px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs" title="Reorder entire room categories in 1 click">
+                            <i data-lucide="arrow-up-down" size="12"></i> REORDER CATEGORIES
+                        </button>
                         <button onclick="window.toggleBatchDormPanel()" class="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
                             <i data-lucide="bed-double" size="12"></i> BATCH DORM
                         </button>
@@ -647,6 +650,30 @@
     </main>
 
     <!-- SECTION 5: Modals -->
+    <!-- 5.0: Reorder Categories Modal (1-Click Property Ordering) -->
+    <div id="reorder-categories-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-4 border border-slate-300">
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-200">
+                <h4 class="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
+                    <i data-lucide="arrow-up-down" size="15" class="text-indigo-600"></i> Reorder Room Categories
+                </h4>
+                <button onclick="window.closeReorderCategoriesModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="16"></i></button>
+            </div>
+            <p class="text-[11px] text-slate-500 font-semibold mb-3">
+                Move categories up or down to set the exact vertical order on the calendar grid. All underlying rooms will follow this sequence.
+            </p>
+            <div id="reorder-cat-list" class="space-y-1.5 max-h-72 overflow-y-auto p-1 border border-slate-200 rounded bg-slate-50"></div>
+            <div class="flex items-center justify-end gap-1.5 mt-4 pt-2 border-t border-slate-200">
+                <button onclick="window.closeReorderCategoriesModal()" class="px-3 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[10px] font-black uppercase cursor-pointer">
+                    Cancel
+                </button>
+                <button onclick="window.applyReorderedCategories()" class="px-3.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase shadow-xs cursor-pointer">
+                    Apply Category Order
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 5.1: Create New Property Modal -->
     <div id="new-property-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-4 border border-slate-300">
