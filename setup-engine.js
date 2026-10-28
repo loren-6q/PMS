@@ -138,34 +138,113 @@ window.restrSpan = 6; // ±6 Days
 
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
-// --------------------------------------------------------------------------
-// SECTION 1: Modal & Dialog Controls
-// --------------------------------------------------------------------------
+// --- DYNAMIC FAVICON SWITCHER ---
+window.updateFavicon = (iconUrl) => {
+    const url = iconUrl || DEFAULT_WW_ICON;
+    let link = document.querySelector("link[rel*='icon']");
+    if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+    }
+    link.type = 'image/png';
+    link.href = url;
+    const appleLink = document.querySelector("link[rel='apple-touch-icon']");
+    if (appleLink) appleLink.href = url;
+};
+
+// --- NAVIGATION & STEP CONTROLLERS ---
+window.jumpStep = (step) => {
+    const s = Math.max(1, Math.min(5, parseInt(step, 10) || 1));
+    window.currentStep = s;
+
+    for (let i = 1; i <= 5; i++) {
+        const pill = document.getElementById(`pill-step-${i}`);
+        const badge = document.getElementById(`badge-step-${i}`);
+        const sec = document.getElementById(`step-content-${i}`);
+
+        if (i === s) {
+            if (pill) { pill.classList.add('active'); pill.classList.remove('completed'); }
+            if (badge) { badge.className = "w-5 h-5 rounded bg-white text-indigo-700 font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs"; }
+            if (sec) sec.classList.remove('hidden');
+        } else if (i < s) {
+            if (pill) { pill.classList.remove('active'); pill.classList.add('completed'); }
+            if (badge) { badge.className = "w-5 h-5 rounded bg-emerald-100 text-emerald-800 font-black text-[10px] flex items-center justify-center shrink-0 border border-emerald-300"; }
+            if (sec) sec.classList.add('hidden');
+        } else {
+            if (pill) { pill.classList.remove('active', 'completed'); }
+            if (badge) { badge.className = "w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200"; }
+            if (sec) sec.classList.add('hidden');
+        }
+    }
+
+    const indicator = document.getElementById('wizard-step-indicator');
+    if (indicator) indicator.innerText = `Step ${s} of 5`;
+
+    const prevBtn = document.getElementById('btn-prev-step');
+    if (prevBtn) prevBtn.disabled = (s === 1);
+
+    const nextBtn = document.getElementById('btn-next-step');
+    if (nextBtn) {
+        if (s === 5) {
+            nextBtn.innerHTML = `<span>Save All</span> <i data-lucide="check" size="13"></i>`;
+            nextBtn.onclick = () => window.savePropertyToDatabase(true);
+        } else {
+            nextBtn.innerHTML = `<span>Continue</span> <i data-lucide="arrow-right" size="13"></i>`;
+            nextBtn.onclick = () => window.nextStep();
+        }
+    }
+
+    if (s === 3) window.renderUnifiedMappingCards();
+    if (s === 4) window.renderPricingStepRules();
+    if (s === 5) window.renderReviewLaunchStep();
+
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.nextStep = () => {
+    if (window.currentStep < 5) window.jumpStep(window.currentStep + 1);
+};
+
+window.prevStep = () => {
+    if (window.currentStep > 1) window.jumpStep(window.currentStep - 1);
+};
+
+window.toggleCardSection = (sectionId, chevronId, forceState = null) => {
+    const sec = document.getElementById(sectionId);
+    const icon = document.getElementById(chevronId);
+    if (!sec) return;
+    const shouldShow = forceState !== null ? forceState : sec.classList.contains('hidden');
+    if (shouldShow) {
+        sec.classList.remove('hidden');
+        if (icon) icon.style.transform = 'rotate(0deg)';
+    } else {
+        sec.classList.add('hidden');
+        if (icon) icon.style.transform = 'rotate(-90deg)';
+    }
+};
+
+let _customModalCallback = null;
 window.customAlert = (title, message, isConfirm = false, onConfirm = null) => {
     const modal = document.getElementById('custom-app-modal');
     if (!modal) return;
-    const titleEl = document.getElementById('modal-title');
-    const bodyEl = document.getElementById('modal-body');
+    const t = document.getElementById('modal-title');
+    const b = document.getElementById('modal-body');
     const cancelBtn = document.getElementById('modal-cancel-btn');
     const confirmBtn = document.getElementById('modal-confirm-btn');
 
-    if (titleEl) titleEl.innerText = title;
-    if (bodyEl) bodyEl.innerText = message || '';
+    if (t) t.innerText = title || "Notification";
+    if (b) b.innerText = message || "";
 
-    if (isConfirm) {
-        if (cancelBtn) {
-            cancelBtn.classList.remove('hidden');
-            cancelBtn.onclick = () => window.closeCustomModal(false);
-        }
-        if (confirmBtn) {
-            confirmBtn.onclick = () => {
-                window.closeCustomModal(true);
-                if (typeof onConfirm === 'function') onConfirm();
-            };
-        }
-    } else {
-        if (cancelBtn) cancelBtn.classList.add('hidden');
-        if (confirmBtn) confirmBtn.onclick = () => window.closeCustomModal(true);
+    _customModalCallback = onConfirm;
+
+    if (cancelBtn) {
+        if (isConfirm) cancelBtn.classList.remove('hidden');
+        else cancelBtn.classList.add('hidden');
+    }
+
+    if (confirmBtn) {
+        confirmBtn.innerText = isConfirm ? "Confirm" : "OK";
     }
 
     modal.classList.remove('hidden');
@@ -173,99 +252,23 @@ window.customAlert = (title, message, isConfirm = false, onConfirm = null) => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.closeCustomModal = () => {
+window.closeCustomModal = (confirmed) => {
     const modal = document.getElementById('custom-app-modal');
     if (modal) {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
     }
-};
-
-window.toggleCardSection = (sectionId, chevronId) => {
-    const sec = document.getElementById(sectionId);
-    const chev = document.getElementById(chevronId);
-    if (!sec) return;
-    const isHidden = sec.classList.contains('hidden');
-    if (isHidden) {
-        sec.classList.remove('hidden');
-        if (chev) chev.style.transform = 'rotate(0deg)';
+    if (confirmed && typeof _customModalCallback === 'function') {
+        const cb = _customModalCallback;
+        _customModalCallback = null;
+        cb();
     } else {
-        sec.classList.add('hidden');
-        if (chev) chev.style.transform = 'rotate(-90deg)';
+        _customModalCallback = null;
     }
 };
 
 // --------------------------------------------------------------------------
-// SECTION 2: 5-Step Navigation Controller
-// --------------------------------------------------------------------------
-window.jumpStep = (stepNumber) => {
-    const n = Math.max(1, Math.min(window.totalSteps, parseInt(stepNumber, 10)));
-    window.currentStep = n;
-
-    for (let i = 1; i <= window.totalSteps; i++) {
-        const sec = document.getElementById(`step-content-${i}`);
-        const pill = document.getElementById(`pill-step-${i}`);
-        const badge = document.getElementById(`badge-step-${i}`);
-
-        if (sec) {
-            if (i === n) sec.classList.remove('hidden');
-            else sec.classList.add('hidden');
-        }
-
-        if (pill && badge) {
-            if (i === n) {
-                pill.className = "step-pill active py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer shadow-xs";
-                badge.className = "w-5 h-5 rounded bg-white text-indigo-700 font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs";
-            } else if (i < n) {
-                pill.className = "step-pill completed py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer";
-                badge.className = "w-5 h-5 rounded bg-emerald-100 text-emerald-800 font-black text-[10px] flex items-center justify-center shrink-0 border border-emerald-300";
-            } else {
-                pill.className = "step-pill py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer";
-                badge.className = "w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200";
-            }
-        }
-    }
-
-    const prevBtn = document.getElementById('btn-prev-step');
-    const nextBtn = document.getElementById('btn-next-step');
-    const stepInd = document.getElementById('wizard-step-indicator');
-
-    if (prevBtn) prevBtn.disabled = (n === 1);
-    if (nextBtn) {
-        if (n === window.totalSteps) {
-            nextBtn.innerHTML = `<span>Complete</span> <i data-lucide="check-check" size="13"></i>`;
-            nextBtn.className = "flex items-center gap-1 px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase transition-colors shadow-xs cursor-pointer";
-        } else {
-            nextBtn.innerHTML = `<span>Continue</span> <i data-lucide="arrow-right" size="13"></i>`;
-            nextBtn.className = "flex items-center gap-1 px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase transition-colors shadow-xs cursor-pointer";
-        }
-    }
-    if (stepInd) stepInd.innerText = `Step ${n} of ${window.totalSteps}`;
-
-    if (n === 2) window.renderRoomDefinitionsTable();
-    if (n === 3) window.renderUnifiedMappingCards();
-    if (n === 4) window.renderPricingStepRules();
-    if (n === 5) window.renderReviewLaunchStep();
-
-    if (window.lucide) window.lucide.createIcons();
-};
-
-window.nextStep = () => {
-    if (window.currentStep < window.totalSteps) {
-        window.jumpStep(window.currentStep + 1);
-    } else {
-        window.savePropertyToDatabase(true);
-    }
-};
-
-window.prevStep = () => {
-    if (window.currentStep > 1) {
-        window.jumpStep(window.currentStep - 1);
-    }
-};
-
-// --------------------------------------------------------------------------
-// SECTION 3: Step 1 - Brand Asset Manager & Folio Add-ons Catalogue
+// SECTION 3: Step 1 - Brand Asset Manager & Add-ons Catalogue
 // --------------------------------------------------------------------------
 window.updateLogoPreview = (type, url) => {
     const cleanUrl = (url || '').trim() || DEFAULT_WW_ICON;
@@ -327,6 +330,47 @@ window.handleLogoFileUpload = async (event, logoType) => {
     }
 };
 
+window.moveAddon = (idx, direction) => {
+    if (!Array.isArray(window.addonsList)) return;
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= window.addonsList.length) return;
+    
+    const temp = window.addonsList[idx];
+    window.addonsList[idx] = window.addonsList[targetIdx];
+    window.addonsList[targetIdx] = temp;
+    
+    window.addonsList.forEach((item, i) => { item.order = i + 1; });
+    window.renderAddonsTable();
+};
+
+let _draggedAddonIdx = null;
+
+window.handleAddonDragStart = (e, idx) => {
+    _draggedAddonIdx = idx;
+    e.dataTransfer.effectAllowed = 'move';
+    e.target.closest('tr')?.classList.add('opacity-40');
+};
+
+window.handleAddonDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+};
+
+window.handleAddonDrop = (e, targetIdx) => {
+    e.preventDefault();
+    if (_draggedAddonIdx === null || _draggedAddonIdx === targetIdx) return;
+    const movedItem = window.addonsList.splice(_draggedAddonIdx, 1)[0];
+    window.addonsList.splice(targetIdx, 0, movedItem);
+    window.addonsList.forEach((item, i) => { item.order = i + 1; });
+    _draggedAddonIdx = null;
+    window.renderAddonsTable();
+};
+
+window.handleAddonDragEnd = (e) => {
+    _draggedAddonIdx = null;
+    e.target.closest('tr')?.classList.remove('opacity-40');
+};
+
 window.renderAddonsTable = () => {
     const tbody = document.getElementById('addon-list-body');
     if (!tbody) return;
@@ -344,9 +388,32 @@ window.renderAddonsTable = () => {
 
     let html = '';
     window.addonsList.forEach((item, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === window.addonsList.length - 1;
         html += `
-        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-addon-id="${item.id}">
-            <td class="p-1.5 text-center font-mono font-bold text-slate-400 text-[10px]">${idx + 1}</td>
+        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-addon-id="${item.id}"
+            ondragover="window.handleAddonDragOver(event)"
+            ondrop="window.handleAddonDrop(event, ${idx})">
+            <td class="p-1.5 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
+                <div class="flex items-center justify-center gap-1">
+                    <span class="cursor-grab text-slate-400 hover:text-slate-700 drag-handle" 
+                          draggable="true" 
+                          ondragstart="window.handleAddonDragStart(event, ${idx})"
+                          ondragend="window.handleAddonDragEnd(event)"
+                          title="Drag to reorder">
+                        <i data-lucide="grip-vertical" size="13"></i>
+                    </span>
+                    <span class="w-4 text-center text-slate-600">${idx + 1}</span>
+                    <div class="flex flex-col ml-0.5">
+                        <button type="button" onclick="window.moveAddon(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5" title="Move Up">
+                            <i data-lucide="chevron-up" size="11"></i>
+                        </button>
+                        <button type="button" onclick="window.moveAddon(${idx}, 1)" ${isLast ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5" title="Move Down">
+                            <i data-lucide="chevron-down" size="11"></i>
+                        </button>
+                    </div>
+                </div>
+            </td>
             <td class="p-1.5">
                 <input type="text" class="table-input font-bold" value="${item.name || ''}" onchange="window.updateAddonField(${idx}, 'name', this.value)">
             </td>
@@ -497,7 +564,7 @@ window.compileRoomsFromDefinitions = () => {
         const roomName = (def.name || def.id || `ROOM ${defIdx + 1}`).trim();
         const category = (def.category || 'Standard Room').trim();
         const floor = (def.floor || '1').trim();
-        const isDorm = !!(def.isDorm || category.toLowerCase().includes('dorm') || (def.count && def.count > 1));
+        const isDorm = !!(def.isDorm || category.toLowerCase().includes('dorm') || (def.rule && def.rule.startsWith('odd-') || def.rule === 'even-top'));
 
         if (isDorm) {
             const total = parseInt(def.count, 10) || 1;
@@ -515,7 +582,8 @@ window.compileRoomsFromDefinitions = () => {
                     bed: bunkTag,
                     bunk: bunkTag,
                     icon: bunkTag,
-                    parentRoom: roomName
+                    parentRoom: roomName,
+                    isDorm: true
                 });
             }
         } else {
@@ -527,7 +595,8 @@ window.compileRoomsFromDefinitions = () => {
                 bed: 'private',
                 bunk: 'private',
                 icon: 'private',
-                parentRoom: roomName
+                parentRoom: roomName,
+                isDorm: false
             });
         }
     });
@@ -540,6 +609,26 @@ window.compileRoomsFromDefinitions = () => {
     if (uBadge) uBadge.innerText = `${compiled.length} Beds/Units Total`;
 
     window.renderBedPreviewDrawer();
+};
+
+// Read current inputs directly from DOM before saving or re-rendering
+window.syncRoomDefsFromDOM = () => {
+    const rows = document.querySelectorAll('#room-def-list-body tr[data-room-idx]');
+    if (!rows || rows.length === 0) return;
+    rows.forEach(tr => {
+        const idx = parseInt(tr.dataset.roomIdx, 10);
+        if (window.roomDefinitions && window.roomDefinitions[idx]) {
+            const inputs = tr.querySelectorAll('input, select');
+            if (inputs[0] && inputs[0].value.trim()) window.roomDefinitions[idx].name = inputs[0].value.trim();
+            if (inputs[1] && inputs[1].value.trim()) window.roomDefinitions[idx].category = inputs[1].value.trim();
+            if (inputs[2]) window.roomDefinitions[idx].count = parseInt(inputs[2].value, 10) || 1;
+            if (inputs[3]) window.roomDefinitions[idx].floor = inputs[3].value.trim() || '1';
+            if (inputs[4]) {
+                window.roomDefinitions[idx].rule = inputs[4].value;
+                window.roomDefinitions[idx].isDorm = inputs[4].value !== 'private';
+            }
+        }
+    });
 };
 
 window.renderRoomDefinitionsTable = () => {
@@ -1465,10 +1554,15 @@ window.loadPropertyFromDatabase = async (propId) => {
         setVal('prop-phone', pData.phone || '');
         setVal('prop-website', pData.website || '');
 
-        // Logos
+        // Logos & Favicon
+        const activeIcon = pData.iconUrl || pData.logoUrl || DEFAULT_WW_ICON;
         window.updateLogoPreview('primary', pData.logoUrl || DEFAULT_WW_ICON);
         window.updateLogoPreview('banner', pData.bannerUrl || DEFAULT_WW_ICON);
-        window.updateLogoPreview('icon', pData.iconUrl || DEFAULT_WW_ICON);
+        window.updateLogoPreview('icon', activeIcon);
+        window.updateFavicon(activeIcon);
+
+        const navBrandIcon = document.getElementById('nav-brand-icon');
+        if (navBrandIcon) navBrandIcon.src = activeIcon;
 
         // Add-ons (Safely mapped)
         window.addonsList = (pData.addons || []).map((item, idx) => ({
@@ -1481,50 +1575,62 @@ window.loadPropertyFromDatabase = async (propId) => {
         }));
         window.renderAddonsTable();
 
-        // Step 2 Rooms: Reconstructed strictly by PARENT ROOM/NAME
+        // Step 2 Rooms: Faithful reconstruction without mangling private room names
         window.roomDefinitions = pData.roomDefinitions || [];
         if (window.roomDefinitions.length === 0 && Array.isArray(pData.rooms) && pData.rooms.length > 0) {
-            const roomMap = {};
+            const defs = [];
+            const dormMap = {};
+
             pData.rooms.forEach((r, rIdx) => {
-                const c = r.type || r.category || 'Standard Room';
-                let pName = r.parentRoom;
-                if (!pName) {
-                    if (r.id && r.id.includes('-')) {
-                        pName = r.id.split('-')[0].trim();
-                    } else {
-                        pName = r.name || r.room || r.id || `ROOM ${rIdx + 1}`;
+                const cat = r.type || r.category || 'Standard Room';
+                const isExplicitDorm = r.isDorm === true || cat.toLowerCase().includes('dorm') || r.bunk === 'top' || r.bunk === 'bottom';
+
+                if (isExplicitDorm) {
+                    let parent = r.parentRoom;
+                    if (!parent && r.id && r.id.includes('-')) parent = r.id.split('-')[0].trim();
+                    if (!parent) parent = cat;
+
+                    if (!dormMap[parent]) {
+                        dormMap[parent] = {
+                            id: 'room_' + (defs.length + Object.keys(dormMap).length + 1),
+                            name: parent,
+                            category: cat,
+                            count: 0,
+                            floor: r.floor || '1',
+                            rule: r.bunk === 'even-top' ? 'even-top' : 'odd-top',
+                            isDorm: true
+                        };
                     }
-                }
-                pName = pName.trim();
-
-                if (!roomMap[pName]) {
-                    roomMap[pName] = {
-                        name: pName,
-                        category: c,
-                        count: 0,
+                    dormMap[parent].count++;
+                } else {
+                    // Private room: Each room is its own distinct definition with its EXACT real ID
+                    defs.push({
+                        id: 'room_' + (defs.length + 1),
+                        name: r.id || r.name || `ROOM ${rIdx + 1}`,
+                        category: cat,
+                        count: 1,
                         floor: r.floor || '1',
-                        bunks: []
-                    };
+                        rule: 'private',
+                        isDorm: false
+                    });
                 }
-                roomMap[pName].count++;
-                if (r.bunk) roomMap[pName].bunks.push(r.bunk);
             });
 
-            window.roomDefinitions = Object.keys(roomMap).map((rName, idx) => {
-                const item = roomMap[rName];
-                const isDorm = item.count > 1 || item.category.toLowerCase().includes('dorm') || item.bunks.some(b => b === 'top' || b === 'bottom');
-                return {
-                    id: 'room_' + (idx + 1),
-                    name: rName,
-                    category: item.category,
-                    count: item.count || 1,
-                    floor: item.floor || '1',
-                    rule: isDorm ? 'odd-top' : 'private',
-                    isDorm: isDorm
-                };
-            });
+            window.roomDefinitions = [...Object.values(dormMap), ...defs];
         }
-        window.compileRoomsFromDefinitions();
+
+        // PRESERVE original database rooms on load (Never overwrite with synthetic names on load)
+        if (Array.isArray(pData.rooms) && pData.rooms.length > 0) {
+            window.compiledRooms = pData.rooms;
+            const rBadge = document.getElementById('room-count-badge');
+            const uBadge = document.getElementById('unit-count-badge');
+            if (rBadge) rBadge.innerText = `${(window.roomDefinitions || []).length} Rooms`;
+            if (uBadge) uBadge.innerText = `${window.compiledRooms.length} Beds/Units Total`;
+            window.renderBedPreviewDrawer();
+        } else {
+            window.compileRoomsFromDefinitions();
+        }
+
         window.renderRoomDefinitionsTable();
 
         // Step 3 Channex: Preserve existing credentials & check localStorage fallbacks
@@ -1611,6 +1717,9 @@ window.savePropertyToDatabase = async (showModal = true) => {
     const statusText = document.getElementById('header-status-text');
     if (statusText) statusText.innerText = "Saving property configuration...";
 
+    // Sync any uncommitted edits directly from the DOM before saving
+    window.syncRoomDefsFromDOM();
+
     try {
         const getVal = id => {
             const el = document.getElementById(id);
@@ -1632,7 +1741,7 @@ window.savePropertyToDatabase = async (showModal = true) => {
 
         const enableEventRates = !!document.getElementById('toggle-events')?.checked;
 
-        // SAFE ROOM COMPILE: Never wipe rooms if definitions were temporarily unpopulated
+        // SAFE ROOM COMPILE: Only compile if definitions exist; never wipe rooms if definitions were empty
         if ((!window.roomDefinitions || window.roomDefinitions.length === 0) && Array.isArray(window.currentPropertyConfig?.rooms) && window.currentPropertyConfig.rooms.length > 0) {
             console.warn("Safety lock: Preserving existing rooms as definitions are empty.");
             window.compiledRooms = window.currentPropertyConfig.rooms;
@@ -1783,6 +1892,12 @@ window.loadAllPropertiesList = async () => {
 window.switchSetupProperty = async (propId) => {
     if (!propId || propId === window.activePropertyId) return;
     window.activePropertyId = propId;
+    const shortCode = (window.availableProperties.find(p => p.id === propId)?.short || propId).toUpperCase();
+    try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('p', shortCode);
+        window.history.replaceState({}, '', url.toString());
+    } catch(e) {}
     await window.loadPropertyFromDatabase(propId);
     window.jumpStep(1);
 };
