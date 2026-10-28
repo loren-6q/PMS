@@ -90,7 +90,19 @@
         }
     };
 
+    window.closeGuestModal = () => {
+        const m = $('guest-modal');
+        if (m) {
+            m.classList.remove('active');
+            m.style.display = 'none';
+        }
+    };
+
     window.closeModal = id => {
+        if (id === 'guest-modal') {
+            window.closeGuestModal();
+            return;
+        }
         const el = $(id);
         if (el) {
             el.classList.remove('active');
@@ -153,6 +165,76 @@
             m.style.display = 'flex';
         }
         if (window.lucide) window.lucide.createIcons();
+    };
+
+    // ----------------------------------------------------------------------
+    // 1B. BULLETPROOF GUEST SAVE HANDLER & FALLBACK
+    // ----------------------------------------------------------------------
+    const origSaveGuest = window.saveGuest;
+    window.saveGuest = async () => {
+        if (typeof origSaveGuest === 'function') {
+            try {
+                await origSaveGuest();
+                window.closeGuestModal();
+                return;
+            } catch (err) {
+                console.warn("pms-booking saveGuest failed, using direct save:", err);
+            }
+        }
+
+        try {
+            const id = $('guest-id')?.value || ('bk_' + Date.now());
+            const curProp = window.getCurrentPropertyId ? window.getCurrentPropertyId() : (window.currentPropertyId || 'swims_resort');
+            const rList = Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean);
+
+            const payments = [];
+            $$('.payment-row').forEach(r => {
+                payments.push({
+                    date: r.querySelector('.pay-date')?.value || '',
+                    amt: Number(r.querySelector('.pay-amt')?.value) || 0,
+                    method: r.querySelector('.pay-method')?.value || 'cash'
+                });
+            });
+
+            const payload = {
+                firstName: ($('first-name')?.value || '').trim(),
+                lastName: ($('last-name')?.value || '').trim() || 'Guest',
+                phone: ($('phone')?.value || '').trim(),
+                email: ($('email')?.value || '').trim(),
+                country: ($('guest-country')?.value || '').trim(),
+                checkIn: $('check-in')?.value || '',
+                checkOut: $('check-out')?.value || '',
+                pax: parseInt($('pax-count')?.value, 10) || 1,
+                bookedType: $('booked-type')?.value || '',
+                room: rList[0] || '',
+                rooms: rList,
+                totalPrice: parseFloat($('total-price')?.value) || 0,
+                netPrice: parseFloat($('net-price')?.value) || 0,
+                notes: $('guest-notes')?.value || '',
+                source: $('booking-source')?.value || 'direct',
+                bookingDate: $('booking-date')?.value || '',
+                bookId: $('booking-id')?.value || '',
+                linkCode: $('link-code')?.value || '',
+                status: $('guest-status-hidden')?.value || 'new',
+                badCC: $('bad-cc-box')?.dataset.bad === 'true',
+                property: curProp,
+                payments: payments,
+                extraCharges: window.activeExtraCharges || [],
+                updatedAt: new Date().toISOString()
+            };
+
+            const { doc, setDoc } = window.fs;
+            await setDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'staff', id), payload, { merge: true });
+
+            window.closeGuestModal();
+            if (window.triggerAutoSync) window.triggerAutoSync(payload.checkIn, payload.checkOut, [payload.bookedType]);
+            if (window.render) window.render();
+            if (window.renderDashboard) window.renderDashboard();
+            if (window.renderDatabase) window.renderDatabase();
+        } catch (saveErr) {
+            console.error("Direct save guest error:", saveErr);
+            window.showAlert("Error saving booking: " + saveErr.message);
+        }
     };
 
     // ----------------------------------------------------------------------
