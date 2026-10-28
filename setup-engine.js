@@ -28,6 +28,27 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+// --- FIRESTORE DEEP SANITIZER (Guarantees Zero 'undefined' Values) ---
+function sanitizeForFirestore(data) {
+    if (data === undefined) return null;
+    if (data === null) return null;
+    if (Array.isArray(data)) {
+        return data.map(item => sanitizeForFirestore(item));
+    }
+    if (typeof data === 'object' && !(data instanceof Date)) {
+        const cleaned = {};
+        for (const [key, val] of Object.entries(data)) {
+            if (val !== undefined) {
+                cleaned[key] = sanitizeForFirestore(val);
+            } else {
+                cleaned[key] = null;
+            }
+        }
+        return cleaned;
+    }
+    return data;
+}
+
 // --- GLOBAL WIZARD STATE ---
 window.currentStep = 1;
 window.totalSteps = 5;
@@ -62,7 +83,7 @@ window.restrSpan = 6; // ±6 Days
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
 // --------------------------------------------------------------------------
-// SECTION 1: In-App Modal & Alert System (Zero window.alert / confirm)
+// SECTION 1: In-App Modal & Alert System (Zero browser alert/confirm)
 // --------------------------------------------------------------------------
 window.customAlert = (title, message, isConfirm = false, onConfirm = null) => {
     const modal = document.getElementById('custom-app-modal');
@@ -267,7 +288,7 @@ window.renderAddonsTable = () => {
         <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-addon-id="${item.id}">
             <td class="p-1.5 text-center font-mono font-bold text-slate-400 text-[10px]">${idx + 1}</td>
             <td class="p-1.5">
-                <input type="text" class="table-input font-bold" value="${item.name}" onchange="window.updateAddonField(${idx}, 'name', this.value)">
+                <input type="text" class="table-input font-bold" value="${item.name || ''}" onchange="window.updateAddonField(${idx}, 'name', this.value)">
             </td>
             <td class="p-1.5">
                 <input type="text" class="table-input" value="${item.category || 'General'}" onchange="window.updateAddonField(${idx}, 'category', this.value)">
@@ -348,13 +369,13 @@ window.executeBatchDormGenerate = () => {
     const cleanRoomName = roomName.toUpperCase();
     const cleanCatName = catName;
 
-    // Check if room name already exists
     const existing = window.roomDefinitions.find(r => r.name.toUpperCase() === cleanRoomName);
     if (existing) {
         existing.category = cleanCatName;
         existing.count = bedCount;
         existing.floor = floor;
         existing.rule = rule;
+        existing.isDorm = true;
     } else {
         window.roomDefinitions.push({
             id: 'room_' + Math.random().toString(36).substr(2, 7),
@@ -389,6 +410,8 @@ window.executeBatchRoomGenerate = () => {
         if (existing) {
             existing.category = catName;
             existing.floor = floor;
+            existing.count = 1;
+            existing.isDorm = false;
         } else {
             window.roomDefinitions.push({
                 id: 'room_' + Math.random().toString(36).substr(2, 7),
@@ -410,8 +433,11 @@ window.executeBatchRoomGenerate = () => {
 window.compileRoomsFromDefinitions = () => {
     const compiled = [];
 
-    (window.roomDefinitions || []).forEach(def => {
-        const isDorm = def.isDorm || def.category.toLowerCase().includes('dorm') || def.count > 1;
+    (window.roomDefinitions || []).forEach((def, defIdx) => {
+        const roomName = (def.name || def.id || `ROOM ${defIdx + 1}`).trim();
+        const category = (def.category || 'Standard Room').trim();
+        const floor = (def.floor || '1').trim();
+        const isDorm = !!(def.isDorm || category.toLowerCase().includes('dorm') || (def.count && def.count > 1));
 
         if (isDorm) {
             const total = parseInt(def.count, 10) || 1;
@@ -420,28 +446,28 @@ window.compileRoomsFromDefinitions = () => {
                 if (def.rule === 'odd-top') bunkTag = (b % 2 === 1) ? 'top' : 'bottom';
                 else if (def.rule === 'even-top') bunkTag = (b % 2 === 0) ? 'top' : 'bottom';
 
-                const bedId = `${def.name}-${String(b).padStart(2, '0')}`;
+                const bedId = `${roomName}-${String(b).padStart(2, '0')}`;
                 compiled.push({
                     id: bedId,
-                    type: def.category,
-                    category: def.category,
-                    floor: def.floor || '1',
+                    type: category,
+                    category: category,
+                    floor: floor,
                     bed: bunkTag,
                     bunk: bunkTag,
                     icon: bunkTag,
-                    parentRoom: def.name
+                    parentRoom: roomName
                 });
             }
         } else {
             compiled.push({
-                id: def.name,
-                type: def.category,
-                category: def.category,
-                floor: def.floor || '1',
+                id: roomName,
+                type: category,
+                category: category,
+                floor: floor,
                 bed: 'private',
                 bunk: 'private',
                 icon: 'private',
-                parentRoom: def.name
+                parentRoom: roomName
             });
         }
     });
@@ -475,10 +501,10 @@ window.renderRoomDefinitionsTable = () => {
         html += `
         <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-room-idx="${idx}">
             <td class="p-1.5">
-                <input type="text" class="table-input font-bold" value="${def.name}" onchange="window.updateRoomDefField(${idx}, 'name', this.value)">
+                <input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.updateRoomDefField(${idx}, 'name', this.value)">
             </td>
             <td class="p-1.5">
-                <input type="text" class="table-input font-bold text-indigo-700" value="${def.category}" onchange="window.handleCategoryNameChange(${idx}, this.value, '${def.category}')">
+                <input type="text" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.handleCategoryNameChange(${idx}, this.value, '${def.category || ''}')">
             </td>
             <td class="p-1.5 text-center">
                 <input type="number" min="1" max="60" class="table-input font-black text-center !w-16 mx-auto" value="${def.count || 1}" onchange="window.updateRoomDefField(${idx}, 'count', parseInt(this.value,10)||1)">
@@ -620,7 +646,7 @@ window.cascadeRenameCategory = async (oldCat, newCat) => {
             }
 
             if (pDirty) {
-                batch.set(pricingRef, pData, { merge: true });
+                batch.set(pricingRef, sanitizeForFirestore(pData), { merge: true });
             }
         }
 
@@ -698,20 +724,17 @@ window.fetchChannexData = async () => {
     if (badge) badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Connecting...`;
 
     try {
-        // 1. Test Property Endpoint
         const propRes = await fetch(`https://app.channex.io/api/v1/properties/${propId}`, {
             headers: { "user-api-key": apiKey, "Content-Type": "application/json" }
         });
         if (!propRes.ok) throw new Error("Invalid API key or Property ID.");
 
-        // 2. Fetch Room Types
         const rtRes = await fetch(`https://app.channex.io/api/v1/room_types?filter[property_id]=${propId}&pagination[limit]=100`, {
             headers: { "user-api-key": apiKey, "Content-Type": "application/json" }
         });
         const rtJson = await rtRes.json();
         const channexRooms = rtJson.data || [];
 
-        // 3. Fetch Primary Rate Plans (/rate_plans/options)
         const optRes = await fetch(`https://app.channex.io/api/v1/rate_plans/options?filter[property_id]=${propId}`, {
             headers: { "user-api-key": apiKey, "Content-Type": "application/json" }
         });
@@ -722,7 +745,6 @@ window.fetchChannexData = async () => {
         window.channexRooms = channexRooms;
         window.channexRatePlans = cleanRatePlans;
 
-        // Auto-match Channex room types to PMS categories by string similarity
         window.channexMap = channexRooms.map(cr => {
             const crTitle = cr.attributes?.title || '';
             const existing = (window.channexMap || []).find(m => m.channexId === cr.id);
@@ -767,7 +789,6 @@ window.renderUnifiedMappingCards = () => {
         const mappedRoom = (window.channexMap || []).find(m => m.pmsCategory === cat);
         const mappedChannexId = mappedRoom?.channexId || '';
 
-        // Filter rate plans belonging to this Channex room type
         const plansForThisRoom = channexPlans.filter(p => {
             const pRoomId = p.attributes?.room_type_id || p.relationships?.room_type?.data?.id;
             return pRoomId && pRoomId === mappedChannexId;
@@ -793,7 +814,6 @@ window.renderUnifiedMappingCards = () => {
                 </div>
             </div>
 
-            <!-- Rate Plans Sub-Table -->
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-[11px] border-collapse">
                     <thead class="bg-slate-50 text-[9px] font-black uppercase text-slate-500 border-b border-slate-200">
@@ -841,9 +861,9 @@ window.updateRoomMappingPair = (pmsCat, channexRoomId) => {
 
     if (existing) {
         existing.channexId = channexRoomId;
-        existing.channexTitle = crTitle;
+        existing.channexTitle = crTitle || '';
     } else {
-        window.channexMap.push({ channexId: channexRoomId, channexTitle: crTitle, pmsCategory: pmsCat });
+        window.channexMap.push({ channexId: channexRoomId, channexTitle: crTitle || '', pmsCategory: pmsCat });
     }
     window.renderUnifiedMappingCards();
 };
@@ -1090,7 +1110,7 @@ window.renderChannelRulesList = () => {
 
     let html = '';
     Object.keys(channels).forEach(ch => {
-        const rule = channels[ch];
+        const rule = channels[ch] || { type: '=', val: 0 };
         html += `
         <div class="flex items-center justify-between p-2 rounded bg-white border border-amber-200">
             <span class="font-bold text-amber-950 text-xs">${ch}</span>
@@ -1288,7 +1308,7 @@ window.loadPropertyFromDatabase = async (propId) => {
         const propDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
         if (!propDoc.exists()) throw new Error(`Property ${propId} not found.`);
 
-        const pData = propDoc.data();
+        const pData = propDoc.data() || {};
         window.currentPropertyConfig = pData;
         window.activePropertyId = propId;
 
@@ -1308,28 +1328,35 @@ window.loadPropertyFromDatabase = async (propId) => {
         window.updateLogoPreview('banner', pData.bannerUrl || DEFAULT_WW_ICON);
         window.updateLogoPreview('icon', pData.iconUrl || DEFAULT_WW_ICON);
 
-        // Add-ons
-        window.addonsList = pData.addons || [];
+        // Add-ons (Safely mapped)
+        window.addonsList = (pData.addons || []).map((item, idx) => ({
+            id: item.id || `add_${idx + 1}`,
+            order: item.order || (idx + 1),
+            name: item.name || 'Service Item',
+            category: item.category || 'Service',
+            price: typeof item.price === 'number' ? item.price : (parseFloat(item.price) || 0),
+            type: item.type || 'one-off'
+        }));
         window.renderAddonsTable();
 
-        // Step 2 Rooms
+        // Step 2 Rooms (Safely reconstructed)
         window.roomDefinitions = pData.roomDefinitions || [];
         if (window.roomDefinitions.length === 0 && Array.isArray(pData.rooms)) {
-            // Reconstruct clean definitions from rooms if roomDefinitions not yet stored
             const cats = {};
-            pData.rooms.forEach(r => {
-                const c = r.type || r.category || 'Standard';
-                if (!cats[c]) cats[c] = { name: r.parentRoom || r.id, count: 0, floor: r.floor || '1' };
+            pData.rooms.forEach((r, rIdx) => {
+                const c = r.type || r.category || 'Standard Room';
+                const rName = r.parentRoom || r.name || r.room || r.id || `ROOM ${rIdx + 1}`;
+                if (!cats[c]) cats[c] = { name: rName, count: 0, floor: r.floor || '1' };
                 cats[c].count++;
             });
-            window.roomDefinitions = Object.keys(cats).map(c => ({
-                id: 'room_' + Math.random().toString(36).substr(2, 6),
-                name: cats[c].name,
+            window.roomDefinitions = Object.keys(cats).map((c, cIdx) => ({
+                id: 'room_' + (cIdx + 1),
+                name: cats[c].name || `ROOM ${cIdx + 1}`,
                 category: c,
-                count: cats[c].count,
-                floor: cats[c].floor,
-                rule: cats[c].count > 1 ? 'odd-top' : 'private',
-                isDorm: cats[c].count > 1
+                count: cats[c].count || 1,
+                floor: cats[c].floor || '1',
+                rule: (cats[c].count > 1 || c.toLowerCase().includes('dorm')) ? 'odd-top' : 'private',
+                isDorm: (cats[c].count > 1 || c.toLowerCase().includes('dorm'))
             }));
         }
         window.compileRoomsFromDefinitions();
@@ -1339,13 +1366,28 @@ window.loadPropertyFromDatabase = async (propId) => {
         window.channexConfig = pData.channex || { apiKey: '', propId: '', rateMultiplier: 100 };
         setVal('chan-api-key', window.channexConfig.apiKey || '');
         setVal('chan-prop-id', window.channexConfig.propId || '');
-        window.channexMap = pData.channexMap || [];
-        window.channexRateMap = pData.channexRateMap || [];
+        
+        window.channexMap = (pData.channexMap || []).map(m => ({
+            channexId: m.channexId || '',
+            channexTitle: m.channexTitle || '',
+            pmsCategory: m.pmsCategory || ''
+        }));
+        
+        window.channexRateMap = (pData.channexRateMap || []).map(m => ({
+            ratePlanId: m.ratePlanId || '',
+            ratePlanTitle: m.ratePlanTitle || '',
+            channexRoomTitle: m.channexRoomTitle || '',
+            pmsCategory: m.pmsCategory || '',
+            channel: m.channel || 'Default',
+            product: m.product || 'std',
+            policy: m.policy || 'non-ref',
+            rateSource: m.rateSource || 'std'
+        }));
 
         // Step 4 Pricing & Curves
         const pPricingDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`));
         if (pPricingDoc.exists()) {
-            const pricingData = pPricingDoc.data();
+            const pricingData = pPricingDoc.data() || {};
             window.relationships = pricingData.relationships || [];
             window.pricingRules = pricingData.pricingRules || window.pricingRules;
             window.savedAutofillBaselines = pricingData.autofillBaselines || {};
@@ -1381,7 +1423,10 @@ window.savePropertyToDatabase = async (showModal = true) => {
     if (statusText) statusText.innerText = "Saving property configuration...";
 
     try {
-        const getVal = id => document.getElementById(id)?.value?.trim() || '';
+        const getVal = id => {
+            const el = document.getElementById(id);
+            return el && el.value !== undefined ? el.value.trim() : '';
+        };
 
         const name = getVal('prop-name') || propId;
         const short = (getVal('prop-short') || propId).toUpperCase();
@@ -1396,7 +1441,7 @@ window.savePropertyToDatabase = async (showModal = true) => {
         const bannerUrl = getVal('prop-banner-url') || DEFAULT_WW_ICON;
         const iconUrl = getVal('prop-icon-url') || DEFAULT_WW_ICON;
 
-        const enableEventRates = document.getElementById('toggle-events')?.checked || false;
+        const enableEventRates = !!document.getElementById('toggle-events')?.checked;
 
         window.compileRoomsFromDefinitions();
 
@@ -1417,8 +1462,8 @@ window.savePropertyToDatabase = async (showModal = true) => {
             roomDefinitions: window.roomDefinitions || [],
             rooms: window.compiledRooms || [],
             channex: {
-                apiKey: getVal('chan-api-key'),
-                propId: getVal('chan-prop-id'),
+                apiKey: getVal('chan-api-key') || window.channexConfig?.apiKey || '',
+                propId: getVal('chan-prop-id') || window.channexConfig?.propId || '',
                 rateMultiplier: 100
             },
             channexMap: window.channexMap || [],
@@ -1427,16 +1472,27 @@ window.savePropertyToDatabase = async (showModal = true) => {
             updatedAt: new Date().toISOString()
         };
 
-        // 1. Save to Properties document
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), propertyPayload, { merge: true });
+        // 1. Save to Properties document (Deep Sanitized)
+        await setDoc(
+            doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), 
+            sanitizeForFirestore(propertyPayload), 
+            { merge: true }
+        );
 
-        // 2. Save Pricing Master Document
+        // 2. Save Pricing Master Document (Deep Sanitized)
         const pricingPayload = {
-            relationships: window.relationships || [],
+            relationships: (window.relationships || []).map(r => ({
+                anchor: r.anchor || '',
+                target: r.target || '',
+                type: r.type || '=',
+                val: typeof r.val === 'number' ? r.val : (parseFloat(r.val) || 0),
+                typeFmp: r.typeFmp || '=',
+                valFmp: typeof r.valFmp === 'number' ? r.valFmp : (parseFloat(r.valFmp) || 0)
+            })),
             pricingRules: {
                 masterDriver: 'bdc_non_ref',
-                anchorPrivate: document.getElementById('anchor-private-select')?.value || '',
-                anchorDorm: document.getElementById('anchor-dorm-select')?.value || '',
+                anchorPrivate: document.getElementById('anchor-private-select')?.value || window.pricingRules?.anchorPrivate || '',
+                anchorDorm: document.getElementById('anchor-dorm-select')?.value || window.pricingRules?.anchorDorm || '',
                 stdRefType: '+%',
                 stdRefVal: parseFloat(document.getElementById('rule-std-ref')?.value) || 25,
                 evtRefType: '+%',
@@ -1444,7 +1500,7 @@ window.savePropertyToDatabase = async (showModal = true) => {
                 channels: window.pricingRules?.channels || {}
             },
             autofillBaselines: {
-                ...window.savedAutofillBaselines,
+                ...(window.savedAutofillBaselines || {}),
                 p_base: parseFloat(document.getElementById('w-p-base')?.value) || 899,
                 p_pkg: parseFloat(document.getElementById('w-p-pkg')?.value) || 1000,
                 p_0: parseFloat(document.getElementById('w-p-0')?.value) || 5999,
@@ -1455,7 +1511,11 @@ window.savePropertyToDatabase = async (showModal = true) => {
             updatedAt: new Date().toISOString()
         };
 
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`), pricingPayload, { merge: true });
+        await setDoc(
+            doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`), 
+            sanitizeForFirestore(pricingPayload), 
+            { merge: true }
+        );
 
         if (statusText) statusText.innerText = "All configurations saved to database!";
         if (showModal) {
@@ -1480,7 +1540,7 @@ window.loadAllPropertiesList = async () => {
         const snap = await getDocs(propsRef);
         const list = [];
         snap.forEach(d => {
-            const data = d.data();
+            const data = d.data() || {};
             list.push({ id: d.id, name: data.name || d.id, short: data.short || data.shortCode || d.id });
         });
         window.availableProperties = list;
@@ -1546,7 +1606,7 @@ window.confirmCreateNewProperty = async () => {
             createdAt: new Date().toISOString()
         };
 
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', slug), newPayload);
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', slug), sanitizeForFirestore(newPayload));
         window.closeNewPropertyModal();
         await window.loadAllPropertiesList();
         const sel = document.getElementById('property-select');
