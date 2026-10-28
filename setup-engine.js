@@ -558,22 +558,59 @@ window.executeBatchRoomGenerate = () => {
 };
 
 window.compileRoomsFromDefinitions = () => {
+    const existingRooms = window.compiledRooms || window.currentPropertyConfig?.rooms || [];
+    const existingByParent = {};
+    existingRooms.forEach(r => {
+        const p = (r.parentRoom || r.id).toUpperCase().trim();
+        if (!existingByParent[p]) existingByParent[p] = [];
+        existingByParent[p].push(r);
+    });
+
     const compiled = [];
 
     (window.roomDefinitions || []).forEach((def, defIdx) => {
-        const roomName = (def.name || def.id || `ROOM ${defIdx + 1}`).trim();
+        const rawName = (def.name || def.id || `ROOM ${defIdx + 1}`).trim();
         const category = (def.category || 'Standard Room').trim();
         const floor = (def.floor || '1').trim();
         const isDorm = !!(def.isDorm || category.toLowerCase().includes('dorm') || (def.rule && def.rule.startsWith('odd-') || def.rule === 'even-top'));
+        const total = parseInt(def.count, 10) || 1;
 
         if (isDorm) {
-            const total = parseInt(def.count, 10) || 1;
+            const parentKey = rawName.toUpperCase();
+            const existingBeds = existingByParent[parentKey] || 
+                                 existingByParent[parentKey.replace(/^DORM\s+/i, '')] ||
+                                 existingByParent[`DORM ${parentKey}`] || [];
+
+            // Detect prefix from existing beds or room letter
+            let pfx = '';
+            if (existingBeds.length > 0 && existingBeds[0].id) {
+                const m = existingBeds[0].id.match(/^([A-Za-z]+)/);
+                if (m) pfx = m[1].toUpperCase();
+            }
+            if (!pfx) {
+                const m = rawName.match(/(?:DORM\s+)?([A-Za-z]+)$/i);
+                if (m && m[1].length <= 2) {
+                    pfx = m[1].toUpperCase();
+                }
+            }
+
             for (let b = 1; b <= total; b++) {
                 let bunkTag = 'single';
                 if (def.rule === 'odd-top') bunkTag = (b % 2 === 1) ? 'top' : 'bottom';
                 else if (def.rule === 'even-top') bunkTag = (b % 2 === 0) ? 'top' : 'bottom';
 
-                const bedId = `${roomName}-${String(b).padStart(2, '0')}`;
+                let bedId = '';
+                if (existingBeds[b - 1] && existingBeds[b - 1].id) {
+                    bedId = existingBeds[b - 1].id;
+                } else if (pfx) {
+                    bedId = `${pfx}${String(b).padStart(2, '0')}`;
+                } else if (/^\d+$/.test(rawName) || /DORM\s+\d+/i.test(rawName)) {
+                    const num = rawName.replace(/\D/g, '');
+                    bedId = `${num}-${String(b).padStart(2, '0')}`;
+                } else {
+                    bedId = `${rawName}-${String(b).padStart(2, '0')}`;
+                }
+
                 compiled.push({
                     id: bedId,
                     type: category,
@@ -582,23 +619,29 @@ window.compileRoomsFromDefinitions = () => {
                     bed: bunkTag,
                     bunk: bunkTag,
                     icon: bunkTag,
-                    parentRoom: roomName,
+                    parentRoom: rawName,
                     isDorm: true
                 });
             }
         } else {
             compiled.push({
-                id: roomName,
+                id: rawName,
                 type: category,
                 category: category,
                 floor: floor,
                 bed: 'private',
                 bunk: 'private',
                 icon: 'private',
-                parentRoom: roomName,
+                parentRoom: rawName,
                 isDorm: false
             });
         }
+    });
+
+    // Group contiguously by category so the PMS calendar renders clean, unified sections
+    compiled.sort((a, b) => {
+        if (a.type !== b.type) return a.type.localeCompare(b.type);
+        return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
 
     window.compiledRooms = compiled;
@@ -645,6 +688,13 @@ window.renderRoomDefinitionsTable = () => {
         return;
     }
 
+    // Populate Category Datalist for autocomplete
+    const catList = document.getElementById('setup-category-datalist');
+    if (catList) {
+        const existingCats = Array.from(new Set((window.roomDefinitions || []).map(r => r.category).filter(Boolean)));
+        catList.innerHTML = existingCats.map(c => `<option value="${c}"></option>`).join('');
+    }
+
     let html = '';
     window.roomDefinitions.forEach((def, idx) => {
         html += `
@@ -653,7 +703,7 @@ window.renderRoomDefinitionsTable = () => {
                 <input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.updateRoomDefField(${idx}, 'name', this.value)">
             </td>
             <td class="p-1.5">
-                <input type="text" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.handleCategoryNameChange(${idx}, this.value, '${def.category || ''}')">
+                <input type="text" list="setup-category-datalist" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.updateRoomDefField(${idx}, 'category', this.value)">
             </td>
             <td class="p-1.5 text-center">
                 <input type="number" min="1" max="60" class="table-input font-black text-center !w-16 mx-auto" value="${def.count || 1}" onchange="window.updateRoomDefField(${idx}, 'count', parseInt(this.value,10)||1)">
@@ -1603,7 +1653,6 @@ window.loadPropertyFromDatabase = async (propId) => {
                     }
                     dormMap[parent].count++;
                 } else {
-                    // Private room: Each room is its own distinct definition with its EXACT real ID
                     defs.push({
                         id: 'room_' + (defs.length + 1),
                         name: r.id || r.name || `ROOM ${rIdx + 1}`,
@@ -1619,7 +1668,13 @@ window.loadPropertyFromDatabase = async (propId) => {
             window.roomDefinitions = [...Object.values(dormMap), ...defs];
         }
 
-        // PRESERVE original database rooms on load (Never overwrite with synthetic names on load)
+        // Store original categories baseline for clean save-time rename cascading
+        window._originalCategories = {};
+        (window.roomDefinitions || []).forEach(d => {
+            if (d.name) window._originalCategories[d.name] = d.category;
+        });
+
+        // PRESERVE original database rooms on load
         if (Array.isArray(pData.rooms) && pData.rooms.length > 0) {
             window.compiledRooms = pData.rooms;
             const rBadge = document.getElementById('room-count-badge');
@@ -1749,6 +1804,15 @@ window.savePropertyToDatabase = async (showModal = true) => {
             window.compileRoomsFromDefinitions();
         }
 
+        // Detect any category renames made by the user to cascade AT SAVE TIME only
+        const categoryRenames = [];
+        (window.roomDefinitions || []).forEach(def => {
+            const orig = (window._originalCategories || {})[def.name];
+            if (orig && def.category && orig !== def.category) {
+                categoryRenames.push({ oldCat: orig, newCat: def.category });
+            }
+        });
+
         // SAFE CHANNEX PRESERVATION: Never wipe Channex keys if user didn't open Step 3
         const existingChan = window.currentPropertyConfig?.channex || {};
         const chanApiKey = getVal('chan-api-key') || window.channexConfig?.apiKey || existingChan.apiKey || localStorage.getItem('cm_master_channex_api_key') || '';
@@ -1796,68 +1860,59 @@ window.savePropertyToDatabase = async (showModal = true) => {
             { merge: true }
         );
 
-        // 2. Canonicalize Channel rules (merge duplicates into single clean entries)
-        const cleanChannels = {};
-        Object.keys(window.pricingRules?.channels || {}).forEach(k => {
-            const canon = normalizeChannelName(k);
-            if (!cleanChannels[canon]) {
-                cleanChannels[canon] = window.pricingRules.channels[k];
+        // 2. Cascade category renames to bookings and pricing rules if any were changed
+        if (categoryRenames.length > 0) {
+            try {
+                const batch = writeBatch(db);
+                const staffRef = collection(db, 'artifacts', appId, 'public', 'data', 'staff');
+                const qStaff = query(staffRef, where('property', '==', propId));
+                const staffSnap = await getDocs(qStaff);
+
+                staffSnap.forEach(docSnap => {
+                    const data = docSnap.data();
+                    let dirty = false;
+                    const updateObj = {};
+
+                    categoryRenames.forEach(({ oldCat, newCat }) => {
+                        if (data.category === oldCat) { updateObj.category = newCat; dirty = true; }
+                        if (data.bookedType === oldCat) { updateObj.bookedType = newCat; dirty = true; }
+                        if (data.roomType === oldCat) { updateObj.roomType = newCat; dirty = true; }
+                    });
+
+                    if (dirty) batch.update(docSnap.ref, updateObj);
+                });
+
+                const pricingRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`);
+                const pSnap = await getDoc(pricingRef);
+                if (pSnap.exists()) {
+                    const pData = pSnap.data();
+                    let pDirty = false;
+                    categoryRenames.forEach(({ oldCat, newCat }) => {
+                        if (Array.isArray(pData.relationships)) {
+                            pData.relationships.forEach(rel => {
+                                if (rel.anchor === oldCat) { rel.anchor = newCat; pDirty = true; }
+                                if (rel.target === oldCat) { rel.target = newCat; pDirty = true; }
+                            });
+                        }
+                        if (pData.pricingRules) {
+                            if (pData.pricingRules.anchorPrivate === oldCat) { pData.pricingRules.anchorPrivate = newCat; pDirty = true; }
+                            if (pData.pricingRules.anchorDorm === oldCat) { pData.pricingRules.anchorDorm = newCat; pDirty = true; }
+                        }
+                    });
+                    if (pDirty) batch.set(pricingRef, sanitizeForFirestore(pData), { merge: true });
+                }
+
+                await batch.commit();
+                // Update baseline so subsequent saves don't re-cascade
+                (window.roomDefinitions || []).forEach(d => {
+                    if (d.name) window._originalCategories[d.name] = d.category;
+                });
+            } catch (cascadeErr) {
+                console.warn("Cascade rename note:", cascadeErr);
             }
-        });
-
-        // Ensure baseline channels exist
-        if (!cleanChannels['Default']) cleanChannels['Default'] = { type: '=', val: 0 };
-        if (!cleanChannels['Direct']) cleanChannels['Direct'] = { type: '-%', val: 10 };
-        if (!cleanChannels['Booking.com']) cleanChannels['Booking.com'] = { type: '=', val: 0 };
-        if (!cleanChannels['Hostelworld']) cleanChannels['Hostelworld'] = { type: '+%', val: 15 };
-
-        // 3. Save Pricing Master Document (Deep Sanitized)
-        const pricingPayload = {
-            relationships: (window.relationships || []).map(r => ({
-                anchor: r.anchor || '',
-                target: r.target || '',
-                type: r.type || '=',
-                val: typeof r.val === 'number' ? r.val : (parseFloat(r.val) || 0),
-                typeFmp: r.typeFmp || '=',
-                valFmp: typeof r.valFmp === 'number' ? r.valFmp : (parseFloat(r.valFmp) || 0)
-            })),
-            pricingRules: {
-                masterDriver: 'bdc_non_ref',
-                anchorPrivate: document.getElementById('anchor-private-select')?.value || window.pricingRules?.anchorPrivate || '',
-                anchorDorm: document.getElementById('anchor-dorm-select')?.value || window.pricingRules?.anchorDorm || '',
-                stdRefType: '+%',
-                stdRefVal: parseFloat(document.getElementById('rule-std-ref')?.value) || 25,
-                evtRefType: '+%',
-                evtRefVal: parseFloat(document.getElementById('rule-evt-ref')?.value) || 25,
-                channels: cleanChannels
-            },
-            autofillBaselines: {
-                ...(window.savedAutofillBaselines || {}),
-                p_base: parseFloat(document.getElementById('w-p-base')?.value) || 899,
-                p_pkg: parseFloat(document.getElementById('w-p-pkg')?.value) || 1000,
-                p_0: parseFloat(document.getElementById('w-p-0')?.value) || 5999,
-                d_base: parseFloat(document.getElementById('w-d-base')?.value) || 199,
-                d_pkg: parseFloat(document.getElementById('w-d-pkg')?.value) || 200,
-                d_0: parseFloat(document.getElementById('w-d-0')?.value) || 2499
-            },
-            updatedAt: new Date().toISOString()
-        };
-
-        await setDoc(
-            doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`), 
-            sanitizeForFirestore(pricingPayload), 
-            { merge: true }
-        );
-
-        if (statusText) statusText.innerText = "All configurations saved to database!";
-        if (showModal) {
-            window.customAlert(
-                "Property Saved", 
-                `"${name}" configuration, inventory (${window.compiledRooms.length} units), and pricing rules have been saved successfully.`
-            );
         }
-    } catch (err) {
-        console.error("Save property error:", err);
+
+        // 3. Canonicalize Channel rules (merge duplicates into single clean entries)
         if (statusText) statusText.innerText = "Error saving property!";
         window.customAlert("Save Error", err.message);
     }
