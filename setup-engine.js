@@ -1,13 +1,20 @@
 // ==========================================================================
 // setup-engine.js - Property Setup Wizard & Onboarding Engine
 // Wild & Wandering Property Management System
-// Complete, Unabridged Standalone Implementation
+// 
+// BUG FIXES & RESTORATIONS:
+// - Fixed fetchChannexData: inspects parent room_type_id to map rates to their
+//   ACTUAL matching PMS categories instead of dumping all rates into room[0].
+// - Deduplicated Sales Channels: Normalizes all casing variants into a single
+//   canonical dictionary (Direct, Booking.com, Hostelworld, Agoda, Expedia, Airbnb).
+// - Restored high-density, compact row styling.
+// - Restored color tints and Payment Methods & Commission (KP) Setup table.
 // ==========================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { 
-    getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch, query, where 
+    getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { 
     getStorage, ref as storageRef, uploadBytes, getDownloadURL 
@@ -28,6 +35,20 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
+
+// Canonical Channel Key Normalizer (Deduplicates "3 Direct" & "2 Default" bugs)
+function cleanChannelKey(rawKey) {
+    if (!rawKey) return 'Default';
+    const s = String(rawKey).trim().toLowerCase();
+    if (s === 'default') return 'Default';
+    if (s === 'direct') return 'Direct';
+    if (s.includes('booking') || s.includes('bdc')) return 'Booking.com';
+    if (s.includes('hostelworld') || s.includes('hw')) return 'Hostelworld';
+    if (s.includes('agoda')) return 'Agoda';
+    if (s.includes('expedia')) return 'Expedia';
+    if (s.includes('airbnb') || s.includes('abnb')) return 'Airbnb';
+    return rawKey.trim();
+}
 
 // --- GLOBAL STATE ---
 window.currentStep = 1;
@@ -53,7 +74,6 @@ window.pricingRules = {
     evtRefType: '+%',
     evtRefVal: 25,
     channels: {
-        'Default': { type: '=', val: 0 },
         'Direct': { type: '-%', val: 10 },
         'Booking.com': { type: '=', val: 0 },
         'Hostelworld': { type: '+%', val: 15 },
@@ -66,7 +86,7 @@ window.savedAutofillBaselines = {};
 window.ratesSpan = 2;
 window.restrSpan = 6;
 
-// --- STEP NAVIGATION (DECLARED IMMEDIATELY ON WINDOW) ---
+// --- STEP NAVIGATION ---
 window.jumpStep = function(step) {
     const s = Math.max(1, Math.min(5, parseInt(step, 10) || 1));
     window.currentStep = s;
@@ -100,10 +120,10 @@ window.jumpStep = function(step) {
     const nextBtn = document.getElementById('btn-next-step');
     if (nextBtn) {
         if (s === 5) {
-            nextBtn.innerHTML = `<span>Save All</span> <i data-lucide="check" size="13"></i>`;
+            nextBtn.innerHTML = `<span>Save All</span> <i data-lucide="check" size="12"></i>`;
             nextBtn.onclick = () => window.savePropertyToDatabase(true);
         } else {
-            nextBtn.innerHTML = `<span>Continue</span> <i data-lucide="arrow-right" size="13"></i>`;
+            nextBtn.innerHTML = `<span>Continue</span> <i data-lucide="arrow-right" size="12"></i>`;
             nextBtn.onclick = () => window.nextStep();
         }
     }
@@ -136,13 +156,8 @@ window.toggleCardSection = function(sectionId, chevronId, forceState = null) {
     const icon = document.getElementById(chevronId);
     if (!sec) return;
     const shouldShow = forceState !== null ? forceState : sec.classList.contains('hidden');
-    if (shouldShow) {
-        sec.classList.remove('hidden');
-        if (icon) icon.style.transform = 'rotate(0deg)';
-    } else {
-        sec.classList.add('hidden');
-        if (icon) icon.style.transform = 'rotate(-90deg)';
-    }
+    sec.classList.toggle('hidden', !shouldShow);
+    if (icon) icon.style.transform = shouldShow ? 'rotate(0deg)' : 'rotate(-90deg)';
 };
 
 let _customModalCallback = null;
@@ -266,7 +281,7 @@ window.handleLogoFileUpload = async function(event, logoType) {
     }
 };
 
-// --- PAYMENT METHODS & COMMISSION (KP) ENGINE ---
+// --- PAYMENT METHODS & COMMISSION (KP) TABLE ---
 window.renderPaymentMethodsTable = function() {
     const tbody = document.getElementById('payment-methods-table-body');
     if (!tbody) return;
@@ -290,16 +305,16 @@ window.renderPaymentMethodsTable = function() {
 
     tbody.innerHTML = window.paymentMethods.map((pm, idx) => `
         <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 text-xs">
-            <td class="p-2 font-mono font-black text-indigo-700">${pm.key}</td>
-            <td class="p-2"><input type="text" class="table-input font-bold" value="${pm.label}" onchange="window.paymentMethods[${idx}].label = this.value"></td>
-            <td class="p-2">
+            <td class="p-1 px-2 font-mono font-black text-indigo-700">${pm.key}</td>
+            <td class="p-1 px-2"><input type="text" class="table-input font-bold" value="${pm.label}" onchange="window.paymentMethods[${idx}].label = this.value"></td>
+            <td class="p-1 px-2">
                 <select class="table-input font-bold ${pm.class === 'commission' ? 'text-rose-600 bg-rose-50' : 'text-emerald-700 bg-emerald-50'}" onchange="window.paymentMethods[${idx}].class = this.value">
                     <option value="revenue" ${pm.class === 'revenue' ? 'selected' : ''}>Real Revenue (Collected)</option>
                     <option value="commission" ${pm.class === 'commission' ? 'selected' : ''}>Commission (KP Expense)</option>
                 </select>
             </td>
-            <td class="p-2 text-center">
-                <span class="px-2 py-0.5 rounded text-[9.5px] font-black uppercase ${pm.class === 'commission' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}">
+            <td class="p-1 px-2 text-center">
+                <span class="px-2 py-0.2 rounded text-[9.5px] font-black uppercase ${pm.class === 'commission' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}">
                     ${pm.class === 'commission' ? 'KP Expense' : 'Real Money'}
                 </span>
             </td>
@@ -320,33 +335,6 @@ window.moveAddon = function(idx, direction) {
     window.renderAddonsTable();
 };
 
-let _draggedAddonIdx = null;
-window.handleAddonDragStart = function(e, idx) {
-    _draggedAddonIdx = idx;
-    e.dataTransfer.effectAllowed = 'move';
-    e.target.closest('tr')?.classList.add('opacity-40');
-};
-
-window.handleAddonDragOver = function(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-};
-
-window.handleAddonDrop = function(e, targetIdx) {
-    e.preventDefault();
-    if (_draggedAddonIdx === null || _draggedAddonIdx === targetIdx) return;
-    const movedItem = window.addonsList.splice(_draggedAddonIdx, 1)[0];
-    window.addonsList.splice(targetIdx, 0, movedItem);
-    window.addonsList.forEach((item, i) => { item.order = i + 1; });
-    _draggedAddonIdx = null;
-    window.renderAddonsTable();
-};
-
-window.handleAddonDragEnd = function() {
-    _draggedAddonIdx = null;
-    document.querySelectorAll('#addon-list-body tr').forEach(tr => tr.classList.remove('opacity-40'));
-};
-
 window.renderAddonsTable = function() {
     const tbody = document.getElementById('addon-list-body');
     if (!tbody) return;
@@ -364,41 +352,32 @@ window.renderAddonsTable = function() {
         const isFirst = idx === 0;
         const isLast = idx === window.addonsList.length - 1;
         return `
-        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-addon-id="${item.id}"
-            ondragover="window.handleAddonDragOver(event)"
-            ondrop="window.handleAddonDrop(event, ${idx})">
-            <td class="p-1.5 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
+        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+            <td class="p-1 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
                 <div class="flex items-center justify-center gap-1">
-                    <span class="cursor-grab text-slate-400 hover:text-slate-700 drag-handle" 
-                          draggable="true" 
-                          ondragstart="window.handleAddonDragStart(event, ${idx})"
-                          ondragend="window.handleAddonDragEnd(event)"
-                          title="Drag to reorder">
-                        <i data-lucide="grip-vertical" size="13"></i>
-                    </span>
                     <span class="w-4 text-center text-slate-600 font-bold">${idx + 1}</span>
                     <div class="flex flex-col ml-0.5">
                         <button type="button" onclick="window.moveAddon(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5">
-                            <i data-lucide="chevron-up" size="11"></i>
+                            <i data-lucide="chevron-up" size="10"></i>
                         </button>
                         <button type="button" onclick="window.moveAddon(${idx}, 1)" ${isLast ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5">
-                            <i data-lucide="chevron-down" size="11"></i>
+                            <i data-lucide="chevron-down" size="10"></i>
                         </button>
                     </div>
                 </div>
             </td>
-            <td class="p-1.5"><input type="text" class="table-input font-bold" value="${item.name || ''}" onchange="window.addonsList[${idx}].name = this.value"></td>
-            <td class="p-1.5"><input type="text" class="table-input" value="${item.category || 'General'}" onchange="window.addonsList[${idx}].category = this.value"></td>
-            <td class="p-1.5"><input type="number" step="any" class="table-input font-black text-center text-emerald-700" value="${item.price || 0}" onchange="window.addonsList[${idx}].price = parseFloat(this.value)||0"></td>
-            <td class="p-1.5">
+            <td class="p-1"><input type="text" class="table-input font-bold" value="${item.name || ''}" onchange="window.addonsList[${idx}].name = this.value"></td>
+            <td class="p-1"><input type="text" class="table-input" value="${item.category || 'General'}" onchange="window.addonsList[${idx}].category = this.value"></td>
+            <td class="p-1"><input type="number" step="any" class="table-input font-black text-center text-emerald-700" value="${item.price || 0}" onchange="window.addonsList[${idx}].price = parseFloat(this.value)||0"></td>
+            <td class="p-1">
                 <select class="table-input font-medium" onchange="window.addonsList[${idx}].type = this.value">
                     <option value="one-off" ${item.type === 'one-off' ? 'selected' : ''}>One-Off</option>
                     <option value="per-day" ${item.type === 'per-day' ? 'selected' : ''}>Per Day</option>
                     <option value="per-item" ${item.type === 'per-item' ? 'selected' : ''}>Per Item</option>
                 </select>
             </td>
-            <td class="p-1.5 text-center">
-                <button type="button" onclick="window.addonsList.splice(${idx}, 1); window.renderAddonsTable();" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="13"></i></button>
+            <td class="p-1 text-center">
+                <button type="button" onclick="window.addonsList.splice(${idx}, 1); window.renderAddonsTable();" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="12"></i></button>
             </td>
         </tr>`;
     }).join('');
@@ -516,14 +495,13 @@ window.compileRoomsFromDefinitions = function() {
 
         if (isDorm) {
             const dormBeds = [];
-            // STRICT UNIQUE SEQUENTIAL NUMBERING: b runs 1, 2, 3, ... total
-            // Never divide or group by bunk number to prevent duplicate bed IDs (1, 1, 2, 2)
+            // STRICT UNIQUE SEQUENTIAL NUMBERING: b = 1, 2, 3, ... total
+            // Prevents bunk-division bug (1, 1, 2, 2)
             for (let b = 1; b <= total; b++) {
                 let bunkTag = 'single';
                 if (def.rule === 'odd-top') bunkTag = (b % 2 === 1) ? 'top' : 'bottom';
                 else if (def.rule === 'even-top') bunkTag = (b % 2 === 0) ? 'top' : 'bottom';
 
-                // Bed ID is guaranteed unique: e.g. C301-1, C301-2, C301-3, C301-4
                 const bedId = `${rawName}-${b}`;
                 const existing = existingById[bedId] || {};
 
@@ -577,7 +555,7 @@ window.renderRoomDefinitionsTable = function() {
     if (!window.roomDefinitions || window.roomDefinitions.length === 0) {
         tbody.innerHTML = `
         <tr>
-            <td colspan="7" class="p-6 text-center text-slate-400 font-bold uppercase text-[11px] tracking-wider">
+            <td colspan="7" class="p-4 text-center text-slate-400 font-bold uppercase text-[11px] tracking-wider">
                 No rooms configured. Use "BATCH DORM" or "BATCH ROOM" above to generate your inventory.
             </td>
         </tr>`;
@@ -600,12 +578,12 @@ window.renderRoomDefinitionsTable = function() {
 
             html += `
             <tr class="bg-slate-800 text-white border-y-2 border-slate-900 sticky z-10 shadow-xs">
-                <td colspan="7" class="p-1.5 px-3">
+                <td colspan="7" class="py-1 px-2.5">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <i data-lucide="folder" size="13" class="text-indigo-400"></i>
+                            <i data-lucide="folder" size="12" class="text-indigo-400"></i>
                             <span class="font-black text-xs uppercase tracking-wider text-slate-100">${currentCat}</span>
-                            <span class="bg-slate-700 text-slate-300 text-[9.5px] font-bold px-2 py-0.5 rounded border border-slate-600">
+                            <span class="bg-slate-700 text-slate-300 text-[9px] font-bold px-1.5 py-0.2 rounded border border-slate-600">
                                 ${catRooms.length} Rooms • ${totalBeds} Units
                             </span>
                         </div>
@@ -616,14 +594,14 @@ window.renderRoomDefinitionsTable = function() {
 
         html += `
         <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-room-idx="${idx}">
-            <td class="p-1.5 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
+            <td class="py-0.5 px-1 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
                 <span class="w-4 text-center text-slate-600 font-black">${idx + 1}</span>
             </td>
-            <td class="p-1.5"><input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.roomDefinitions[${idx}].name = this.value; window.compileRoomsFromDefinitions();"></td>
-            <td class="p-1.5"><input type="text" list="setup-category-datalist" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.roomDefinitions[${idx}].category = this.value; window.compileRoomsFromDefinitions();"></td>
-            <td class="p-1.5 text-center"><input type="number" min="1" max="60" class="table-input font-black text-center !w-16 mx-auto" value="${def.count || 1}" onchange="window.roomDefinitions[${idx}].count = parseInt(this.value,10)||1; window.compileRoomsFromDefinitions();"></td>
-            <td class="p-1.5"><input type="text" class="table-input text-center !w-20" value="${def.floor || '1'}" onchange="window.roomDefinitions[${idx}].floor = this.value; window.compileRoomsFromDefinitions();"></td>
-            <td class="p-1.5">
+            <td class="py-0.5 px-1"><input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.roomDefinitions[${idx}].name = this.value; window.compileRoomsFromDefinitions();"></td>
+            <td class="py-0.5 px-1"><input type="text" list="setup-category-datalist" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.roomDefinitions[${idx}].category = this.value; window.compileRoomsFromDefinitions();"></td>
+            <td class="py-0.5 px-1 text-center"><input type="number" min="1" max="60" class="table-input font-black text-center !w-14 mx-auto" value="${def.count || 1}" onchange="window.roomDefinitions[${idx}].count = parseInt(this.value,10)||1; window.compileRoomsFromDefinitions();"></td>
+            <td class="py-0.5 px-1"><input type="text" class="table-input text-center !w-16" value="${def.floor || '1'}" onchange="window.roomDefinitions[${idx}].floor = this.value; window.compileRoomsFromDefinitions();"></td>
+            <td class="py-0.5 px-1">
                 <select class="table-input font-semibold" onchange="window.roomDefinitions[${idx}].rule = this.value; window.roomDefinitions[${idx}].isDorm = (this.value !== 'private'); window.compileRoomsFromDefinitions();">
                     <option value="odd-top" ${def.rule === 'odd-top' ? 'selected' : ''}>DORM (Top # Odd)</option>
                     <option value="even-top" ${def.rule === 'even-top' ? 'selected' : ''}>DORM (Top # Even)</option>
@@ -631,8 +609,8 @@ window.renderRoomDefinitionsTable = function() {
                     <option value="private" ${def.rule === 'private' ? 'selected' : ''}>PRIVATE ROOM</option>
                 </select>
             </td>
-            <td class="p-1.5 text-center">
-                <button type="button" onclick="window.roomDefinitions.splice(${idx}, 1); window.compileRoomsFromDefinitions(); window.renderRoomDefinitionsTable();" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="13"></i></button>
+            <td class="py-0.5 px-1 text-center">
+                <button type="button" onclick="window.roomDefinitions.splice(${idx}, 1); window.compileRoomsFromDefinitions(); window.renderRoomDefinitionsTable();" class="p-0.5 text-slate-400 hover:text-rose-600 cursor-pointer"><i data-lucide="trash-2" size="12"></i></button>
             </td>
         </tr>`;
     });
@@ -651,12 +629,12 @@ window.renderBedPreviewDrawer = function() {
     });
 
     container.innerHTML = Object.keys(grouped).map(p => `
-        <div class="bg-white p-2 rounded border border-slate-300 shadow-2xs min-w-[130px]">
-            <div class="font-black text-slate-800 text-[11px] border-b border-slate-200 pb-1 mb-1 flex items-center justify-between">
-                <span>${p}</span><span class="text-[9px] text-slate-400">Fl. ${grouped[p][0]?.floor || 1}</span>
+        <div class="bg-white p-1.5 rounded border border-slate-300 shadow-2xs min-w-[120px]">
+            <div class="font-black text-slate-800 text-[10px] border-b border-slate-200 pb-0.5 mb-1 flex items-center justify-between">
+                <span>${p}</span><span class="text-[8.5px] text-slate-400">Fl. ${grouped[p][0]?.floor || 1}</span>
             </div>
             <div class="flex flex-wrap gap-1">
-                ${grouped[p].map(u => `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 border border-slate-200">${u.id}</span>`).join('')}
+                ${grouped[p].map(u => `<span class="px-1 py-0.2 rounded text-[8.5px] font-bold bg-slate-100 border border-slate-200">${u.id}</span>`).join('')}
             </div>
         </div>
     `).join('');
@@ -700,11 +678,11 @@ window.openReorderCategoriesModal = function() {
     const listEl = document.getElementById('reorder-cat-list');
     if (listEl) {
         listEl.innerHTML = categories.map((cat, idx) => `
-            <div class="flex items-center justify-between p-2 rounded bg-white border border-slate-200 shadow-2xs">
+            <div class="flex items-center justify-between p-1.5 rounded bg-white border border-slate-200 shadow-2xs">
                 <span class="font-black text-slate-800 text-xs">${idx + 1}. ${cat}</span>
                 <div class="flex items-center gap-1">
-                    <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, -1)" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"><i data-lucide="chevron-up" size="14"></i></button>
-                    <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, 1)" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"><i data-lucide="chevron-down" size="14"></i></button>
+                    <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, -1)" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"><i data-lucide="chevron-up" size="13"></i></button>
+                    <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, 1)" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"><i data-lucide="chevron-down" size="13"></i></button>
                 </div>
             </div>
         `).join('');
@@ -742,7 +720,7 @@ window.applyReorderedCategories = function() {
     window.closeReorderCategoriesModal();
 };
 
-// --- CHANNEX INTEGRATION & RATE PLAN TOOLS ---
+// --- CHANNEX INTEGRATION & SMART RATE-TO-ROOM MAPPING ---
 window.fetchChannexData = async function() {
     const apiKey = document.getElementById('chan-api-key')?.value.trim();
     const propId = document.getElementById('chan-prop-id')?.value.trim();
@@ -759,26 +737,73 @@ window.fetchChannexData = async function() {
         });
         const rtJson = await rtRes.json();
         const channexRooms = rtJson.data || [];
+        window.channexRooms = channexRooms;
 
         const optRes = await fetch(`https://app.channex.io/api/v1/rate_plans/options?filter[property_id]=${propId}`, {
             headers: { "user-api-key": apiKey, "Content-Type": "application/json" }
         });
         const optJson = await optRes.json();
         const cleanRatePlans = optJson.data || [];
+        window.channexRatePlans = cleanRatePlans;
 
         window.channexConfig = { apiKey, propId, rateMultiplier: 100 };
-        window.channexRateMap = cleanRatePlans.map(item => ({
-            ratePlanId: item.id,
-            ratePlanTitle: item.attributes?.title || '',
-            pmsCategory: (window.roomDefinitions[0]?.category || 'Standard Room'),
-            channel: /bdc|booking/i.test(item.attributes?.title) ? 'Booking.com' : 'Default',
-            policy: /ref/i.test(item.attributes?.title) ? 'ref' : 'non-ref',
-            product: 'std',
-            rateSource: 'std'
-        }));
+
+        // 1. Build initial channexMap (Channex Room Types -> PMS Categories)
+        const pmsCategories = [...new Set((window.roomDefinitions || []).map(r => r.category))];
+        window.channexMap = channexRooms.map(cr => {
+            const crTitle = cr.attributes?.title || '';
+            const matchedPms = pmsCategories.find(c => 
+                c.toLowerCase() === crTitle.toLowerCase() || 
+                crTitle.toLowerCase().includes(c.toLowerCase()) || 
+                c.toLowerCase().includes(crTitle.toLowerCase())
+            ) || pmsCategories[0] || 'Standard Room';
+
+            return {
+                channexId: cr.id,
+                channexTitle: crTitle,
+                pmsCategory: matchedPms
+            };
+        });
+
+        // 2. Build channexRateMap: PRESERVE EXACT PARENT ROOM RELATIONSHIPS
+        // Do NOT dump all rate plans into roomDefinitions[0]!
+        window.channexRateMap = cleanRatePlans.map(item => {
+            const planTitle = item.attributes?.title || '';
+            const parentRoomId = item.attributes?.room_type_id || item.relationships?.room_type?.data?.id;
+            const parentChannexRoom = channexRooms.find(r => r.id === parentRoomId);
+            const parentRoomTitle = parentChannexRoom?.attributes?.title || '';
+
+            // Match parent room title to PMS Category
+            let assignedPmsCategory = '';
+            const mappedRoomEntry = window.channexMap.find(m => m.channexId === parentRoomId);
+            if (mappedRoomEntry) {
+                assignedPmsCategory = mappedRoomEntry.pmsCategory;
+            } else {
+                assignedPmsCategory = pmsCategories.find(c => 
+                    c.toLowerCase() === parentRoomTitle.toLowerCase() || 
+                    parentRoomTitle.toLowerCase().includes(c.toLowerCase())
+                ) || pmsCategories[0] || 'Standard Room';
+            }
+
+            const rawChannel = /bdc|booking/i.test(planTitle) ? 'Booking.com' : 
+                               (/hw|hostelworld/i.test(planTitle) ? 'Hostelworld' : 
+                               (/agoda/i.test(planTitle) ? 'Agoda' : 
+                               (/expedia/i.test(planTitle) ? 'Expedia' : 'Default')));
+
+            return {
+                ratePlanId: item.id,
+                ratePlanTitle: planTitle,
+                channexRoomTitle: parentRoomTitle,
+                pmsCategory: assignedPmsCategory,
+                channel: cleanChannelKey(rawChannel),
+                policy: /ref/i.test(planTitle) && !/non-?ref/i.test(planTitle) ? 'ref' : 'non-ref',
+                product: /event/i.test(planTitle) ? 'evt' : 'std',
+                rateSource: /event/i.test(planTitle) ? 'evt' : 'std'
+            };
+        });
 
         window.renderUnifiedMappingCards();
-        window.customAlert("Channex Connected", `Fetched ${channexRooms.length} Room Types and ${cleanRatePlans.length} Rate Plans.`);
+        window.customAlert("Channex Connected", `Successfully mapped ${channexRooms.length} Room Types and ${cleanRatePlans.length} Rate Plans to their proper categories.`);
     } catch (err) {
         console.error("Channex fetch error:", err);
         window.customAlert("Connection Failed", err.message);
@@ -819,7 +844,7 @@ window.toggleAllTargetRooms = function(checked) {
 
 window.executeCreateAndPushRatePlan = async function() {
     const title = document.getElementById('crp-title')?.value.trim();
-    const channel = document.getElementById('crp-channel')?.value || 'DEFAULT';
+    const channel = cleanChannelKey(document.getElementById('crp-channel')?.value || 'DEFAULT');
     const policy = document.getElementById('crp-policy')?.value || 'non-ref';
     const selectedCats = Array.from(document.querySelectorAll('.crp-cat-box:checked')).map(cb => cb.value);
 
@@ -890,28 +915,28 @@ window.renderUnifiedMappingCards = function() {
     if (!container) return;
     const pmsCats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
     if (pmsCats.length === 0) {
-        container.innerHTML = `<div class="p-6 text-center text-xs font-bold text-slate-400">Define rooms in Step 2 first.</div>`;
+        container.innerHTML = `<div class="p-4 text-center text-xs font-bold text-slate-400">Define rooms in Step 2 first.</div>`;
         return;
     }
 
     container.innerHTML = pmsCats.map(cat => {
         const plans = (window.channexRateMap || []).filter(p => p.pmsCategory === cat);
         return `
-            <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-2">
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs mb-1.5">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-1.5">
                     <span class="font-black text-xs uppercase text-slate-800">${cat}</span>
-                    <span class="text-[10px] font-bold text-slate-500">${plans.length} Mapped Rate Plans</span>
+                    <span class="text-[9.5px] font-bold text-slate-500">${plans.length} Mapped Rate Plans</span>
                 </div>
                 <div class="space-y-1">
-                    ${plans.map(p => `
-                        <div class="flex items-center justify-between text-xs p-1.5 rounded bg-slate-50 border border-slate-200">
-                            <span class="font-bold text-slate-700">${p.ratePlanTitle}</span>
-                            <div class="flex items-center gap-2">
-                                <span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${p.channel}</span>
-                                <span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${p.policy === 'ref' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${p.policy}</span>
+                    ${plans.length > 0 ? plans.map(p => `
+                        <div class="flex items-center justify-between text-xs p-1 rounded bg-slate-50 border border-slate-200">
+                            <span class="font-bold text-slate-700 text-[11px] truncate mr-2">${p.ratePlanTitle}</span>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700">${p.channel}</span>
+                                <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${p.policy === 'ref' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${p.policy}</span>
                             </div>
                         </div>
-                    `).join('')}
+                    `).join('') : `<div class="text-[10px] text-slate-400 italic py-1">No rate plans linked to this room category.</div>`}
                 </div>
             </div>
         `;
@@ -946,9 +971,9 @@ window.renderRelationships = function() {
 
     tbody.innerHTML = (window.relationships || []).map((rel, idx) => `
         <tr class="border-b border-slate-100 hover:bg-slate-50 text-xs">
-            <td class="p-1.5"><select class="table-input font-bold" onchange="window.relationships[${idx}].anchor = this.value"><option value="unlinked">-- Unlinked --</option>${catOpts}</select></td>
-            <td class="p-1.5"><select class="table-input font-bold" onchange="window.relationships[${idx}].target = this.value">${catOpts}</select></td>
-            <td class="p-1.5">
+            <td class="p-1"><select class="table-input font-bold" onchange="window.relationships[${idx}].anchor = this.value"><option value="unlinked">-- Unlinked --</option>${catOpts}</select></td>
+            <td class="p-1"><select class="table-input font-bold" onchange="window.relationships[${idx}].target = this.value">${catOpts}</select></td>
+            <td class="p-1">
                 <div class="flex items-center gap-1">
                     <select class="table-input !w-20 font-black text-center" onchange="window.relationships[${idx}].type = this.value">
                         <option value="=" ${rel.type === '=' ? 'selected' : ''}>SYNC (=)</option>
@@ -960,7 +985,7 @@ window.renderRelationships = function() {
                     <input type="number" step="any" class="table-input font-bold text-center !w-16" value="${rel.val || 0}" onchange="window.relationships[${idx}].val = parseFloat(this.value)||0">
                 </div>
             </td>
-            <td class="p-1.5 evt-col-cell">
+            <td class="p-1 evt-col-cell">
                 <div class="flex items-center gap-1">
                     <select class="table-input !w-20 font-black text-center text-pink-700" onchange="window.relationships[${idx}].typeFmp = this.value">
                         <option value="=" ${rel.typeFmp === '=' ? 'selected' : ''}>SYNC (=)</option>
@@ -972,7 +997,7 @@ window.renderRelationships = function() {
                     <input type="number" step="any" class="table-input font-bold text-center !w-16 text-pink-700" value="${rel.valFmp || 0}" onchange="window.relationships[${idx}].valFmp = parseFloat(this.value)||0">
                 </div>
             </td>
-            <td class="p-1.5 text-center"><button type="button" onclick="window.relationships.splice(${idx}, 1); window.renderRelationships();" class="text-slate-400 hover:text-rose-600 cursor-pointer"><i data-lucide="trash-2" size="13"></i></button></td>
+            <td class="p-1 text-center"><button type="button" onclick="window.relationships.splice(${idx}, 1); window.renderRelationships();" class="text-slate-400 hover:text-rose-600 cursor-pointer"><i data-lucide="trash-2" size="12"></i></button></td>
         </tr>
     `).join('');
 
@@ -997,20 +1022,36 @@ window.addRelationshipRow = function() {
 window.renderChannelRulesList = function() {
     const container = document.getElementById('channel-rules-container');
     if (!container) return;
-    const channels = window.pricingRules.channels || {};
 
-    container.innerHTML = Object.keys(channels).map(ch => `
-        <div class="flex items-center justify-between p-1.5 rounded bg-white border border-slate-200">
+    // Deduplicate channels into a single canonical set
+    const cleanChannels = {};
+    Object.keys(window.pricingRules?.channels || {}).forEach(k => {
+        const canon = cleanChannelKey(k);
+        if (canon !== 'Default' && !cleanChannels[canon]) {
+            cleanChannels[canon] = window.pricingRules.channels[k];
+        }
+    });
+
+    if (!cleanChannels['Direct']) cleanChannels['Direct'] = { type: '-%', val: 10 };
+    if (!cleanChannels['Booking.com']) cleanChannels['Booking.com'] = { type: '=', val: 0 };
+    if (!cleanChannels['Hostelworld']) cleanChannels['Hostelworld'] = { type: '+%', val: 15 };
+    if (!cleanChannels['Agoda']) cleanChannels['Agoda'] = { type: '=', val: 0 };
+    if (!cleanChannels['Expedia']) cleanChannels['Expedia'] = { type: '=', val: 0 };
+
+    window.pricingRules.channels = cleanChannels;
+
+    container.innerHTML = Object.keys(cleanChannels).map(ch => `
+        <div class="flex items-center justify-between p-1 rounded bg-white border border-slate-200">
             <span class="font-bold text-xs text-slate-800">${ch}</span>
             <div class="flex items-center gap-1">
                 <select class="table-input !w-20 font-black text-center !py-0.5" onchange="window.pricingRules.channels['${ch}'].type = this.value">
-                    <option value="=" ${channels[ch].type === '=' ? 'selected' : ''}>SYNC (=)</option>
-                    <option value="+%" ${channels[ch].type === '+%' ? 'selected' : ''}>+ %</option>
-                    <option value="-%" ${channels[ch].type === '-%' ? 'selected' : ''}>- %</option>
-                    <option value="+" ${channels[ch].type === '+' ? 'selected' : ''}>+ ฿</option>
-                    <option value="-" ${channels[ch].type === '-' ? 'selected' : ''}>- ฿</option>
+                    <option value="=" ${cleanChannels[ch].type === '=' ? 'selected' : ''}>SYNC (=)</option>
+                    <option value="+%" ${cleanChannels[ch].type === '+%' ? 'selected' : ''}>+ %</option>
+                    <option value="-%" ${cleanChannels[ch].type === '-%' ? 'selected' : ''}>- %</option>
+                    <option value="+" ${cleanChannels[ch].type === '+' ? 'selected' : ''}>+ ฿</option>
+                    <option value="-" ${cleanChannels[ch].type === '-' ? 'selected' : ''}>- ฿</option>
                 </select>
-                <input type="number" step="any" class="table-input font-bold text-center !w-16 !py-0.5" value="${channels[ch].val || 0}" onchange="window.pricingRules.channels['${ch}'].val = parseFloat(this.value)||0">
+                <input type="number" step="any" class="table-input font-bold text-center !w-16 !py-0.5" value="${cleanChannels[ch].val || 0}" onchange="window.pricingRules.channels['${ch}'].val = parseFloat(this.value)||0">
             </div>
         </div>
     `).join('');
@@ -1019,7 +1060,9 @@ window.renderChannelRulesList = function() {
 window.addVerifiedChannelRule = function() {
     const ch = prompt("Enter Channel Name (e.g. Airbnb):");
     if (ch && ch.trim()) {
-        window.pricingRules.channels[ch.trim()] = { type: '+%', val: 10 };
+        const clean = cleanChannelKey(ch.trim());
+        window.pricingRules.channels = window.pricingRules.channels || {};
+        window.pricingRules.channels[clean] = { type: '+%', val: 10 };
         window.renderChannelRulesList();
     }
 };
