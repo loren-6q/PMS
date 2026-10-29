@@ -1,7 +1,5 @@
 // ==========================================================================
-// PMS BOOKING & RESERVATION FUNCTIONS (pms-booking.js)
-// Wild & Wandering Property Management System
-// Complete, Unabridged Implementation with Room Persistence & Dropdown Immunity
+// pms-booking.js - PMS Booking & Reservation Modal Controller
 // ==========================================================================
 
 (function() {
@@ -502,7 +500,8 @@
             }
             const opt = document.createElement('option');
             opt.value = r.id;
-            opt.innerText = `${r.id} (${r.bed || '?'})`;
+            const bunkArrow = (r.bunk === 'top' || r.bed === 'top') ? ' ↑' : ((r.bunk === 'bottom' || r.bunk === 'bot' || r.bed === 'bottom' || r.bed === 'bot') ? ' ↓' : '');
+            opt.innerText = `${r.id}${bunkArrow}`;
             og.appendChild(opt);
         });
 
@@ -832,7 +831,8 @@
                 }
                 const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
                 const isOccupied = occ.has(r.id) || occ.has(normR);
-                optHtml += `<option value="${r.id}" ${isOccupied ? 'disabled class="text-slate-400"' : 'class="font-bold"'}>${r.id} (${r.bed || '?'})${isOccupied ? ' (OCCUPIED)' : ''}</option>`;
+                const bunkArrow = (r.bunk === 'top' || r.bed === 'top') ? ' ↑' : ((r.bunk === 'bottom' || r.bunk === 'bot' || r.bed === 'bottom' || r.bed === 'bot') ? ' ↓' : '');
+                optHtml += `<option value="${r.id}" ${isOccupied ? 'disabled class="text-slate-400"' : 'class="font-bold"'}>${r.id}${bunkArrow}${isOccupied ? ' (OCCUPIED)' : ''}</option>`;
             });
             if (cg !== '') optHtml += `</optgroup>`;
             optHtml += `</select>`;
