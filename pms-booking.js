@@ -1,6 +1,7 @@
 // ==========================================================================
 // PMS BOOKING & RESERVATION FUNCTIONS (pms-booking.js)
 // Wild & Wandering Property Management System
+// Complete, Unabridged Implementation with Room Persistence & Dropdown Immunity
 // ==========================================================================
 
 (function() {
@@ -107,7 +108,7 @@
             const canonProp = window.toCanonicalPropId ? window.toCanonicalPropId(curProp) : curProp;
             const info = await getPropertyChannexInfo(canonProp);
             if (!info || !info.channex || !info.channex.apiKey || !info.channex.propId) {
-                return; // Property not mapped to Channex
+                return;
             }
 
             const { apiKey, propId } = info.channex;
@@ -127,7 +128,6 @@
             }
             if (datesToProcess.length === 0) return;
 
-            // In-memory staff list with real-time override/delete compensation
             let staffList = (getStaff() || []).filter(b => b.id !== deletedId);
             if (overrideBooking) {
                 const exIdx = staffList.findIndex(b => b.id === overrideBooking.id);
@@ -150,7 +150,6 @@
                 }
             });
 
-            // Pre-calculate live availability per date per PMS category
             const availMap = {};
             datesToProcess.forEach(dStr => {
                 availMap[dStr] = {};
@@ -241,7 +240,7 @@
             });
 
             if (availPayload.length > 0) {
-                const res = await fetch(`https://app.channex.io/api/v1/availability`, {
+                await fetch(`https://app.channex.io/api/v1/availability`, {
                     method: "POST",
                     headers: {
                         "user-api-key": apiKey,
@@ -249,13 +248,6 @@
                     },
                     body: JSON.stringify({ values: availPayload })
                 });
-
-                if (res.ok) {
-                    console.log(`📡 [Channex Auto-Push] Successfully updated ${availPayload.length} availability ranges for ${canonProp}`);
-                } else {
-                    const errData = await res.json().catch(() => ({}));
-                    console.warn("⚠️ [Channex Auto-Push] Response status:", res.status, errData);
-                }
             }
         } catch (err) {
             console.warn("Channex Auto-Sync dispatch notice:", err);
@@ -277,7 +269,6 @@
             console.warn("Auto-sync notice:", e);
         }
 
-        // Auto-push live inventory to Channex in background
         if (window.autoSyncChannexAvailability && start && end) {
             window.autoSyncChannexAvailability(start, end, roomTypes, overrideBooking, deletedId).catch(err => {
                 console.warn("[Channex Sync] Auto-push notice:", err);
@@ -327,12 +318,9 @@
 
         getStaff().forEach(s => {
             if (s.id === excludeBookingId) return;
-            
-            // Standardize Property Comparison via pms-core
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
             if (sProp !== curProp) return;
 
-            // Universal Status Occupancy Evaluator via pms-core
             const rList = getRooms(s);
             const isUnassigned = rList.length === 0 || rList[0] === "";
             const isOccupying = window.isOccupyingBooking 
@@ -487,9 +475,16 @@
         return freeInType[0].id;
     };
 
-    window.addRoomSelect = (val = "") => {
+    // ----------------------------------------------------------------------
+    // IMMUNE ROOM DROPDOWN & PRESERVATION (PREVENTS SILENT DELETION)
+    // ----------------------------------------------------------------------
+    window.addRoomSelect = (val = "", isManualAdd = false) => {
+        // If called without arguments (e.g. staff clicked "+ ADD"), set isManualAdd to true
+        if (arguments.length === 0) isManualAdd = true;
+
         const c = $('assigned-rooms-container');
         if (!c) return;
+        const curProp = getPropId();
         const w = document.createElement('div');
         const sel = document.createElement('select');
         w.className = "flex items-stretch gap-1 w-full";
@@ -511,8 +506,18 @@
             og.appendChild(opt);
         });
 
-        // Auto-suggest available room if empty
-        if (!val) {
+        // 1. Dropdown Immunity: If the booking references a legacy/unmatched room, never drop to blank
+        if (val) {
+            const normVal = window.normalizeRoomId ? window.normalizeRoomId(val, curProp) : val.toUpperCase().trim();
+            const exists = Array.from(sel.options).some(o => o.value === val || (window.normalizeRoomId && window.normalizeRoomId(o.value, curProp) === normVal));
+            if (!exists) {
+                const legacyOpt = document.createElement('option');
+                legacyOpt.value = val;
+                legacyOpt.innerText = `⚠️ ${val} (Preserved)`;
+                sel.appendChild(legacyOpt);
+            }
+        } else if (isManualAdd) {
+            // Suggest next vacant room ONLY when user explicitly clicked "+ ADD"
             const suggested = window.suggestAvailableRoom($('booked-type')?.value);
             if (suggested) val = suggested;
         }
@@ -522,9 +527,13 @@
         del.type = "button";
         del.className = "w-6 flex justify-center items-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 flex-shrink-0 shadow-sm transition-colors cursor-pointer";
         del.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>`;
+        
+        // 2. Auto-Revert to Unassigned: Never allow zero room slots
         del.onclick = () => {
             w.remove();
-            if (c.children.length === 0) window.addRoomSelect("");
+            if (c.children.length === 0) {
+                window.addRoomSelect("", false);
+            }
             window.updateAvailableRooms();
         };
 
@@ -640,6 +649,18 @@
             if (el) el.value = val || "";
         });
 
+        // Average Rate Visual Flag (Subtle color & tooltip on total price input)
+        const totPriceEl = $('total-price');
+        if (totPriceEl) {
+            if (s.isAverageRate) {
+                totPriceEl.classList.add('text-amber-600');
+                totPriceEl.title = "Average daily rate applied (OTA did not send nightly rate breakdown)";
+            } else {
+                totPriceEl.classList.remove('text-amber-600');
+                totPriceEl.title = "";
+            }
+        }
+
         let pSt = s.status || "future";
         if ($('guest-status-hidden')) $('guest-status-hidden').value = pSt;
         const cycle = window.STATUS_CYCLE || [];
@@ -654,11 +675,19 @@
 
         if ($('net-price')) $('net-price').dataset.override = s.netOverride ? 'true' : 'false';
         if ($('assigned-rooms-container')) $('assigned-rooms-container').innerHTML = '';
+        
+        // Pass false so opening an unassigned booking NEVER picks an arbitrary room
         const rL = getRooms(s).length ? getRooms(s) : (isN ? [] : [""]);
-        if (rL.length > 0) { rL.forEach(r => window.addRoomSelect(r)); } else { window.addRoomSelect(""); }
+        if (rL.length > 0) { 
+            rL.forEach(r => window.addRoomSelect(r, false)); 
+        } else { 
+            window.addRoomSelect("", false); 
+        }
 
         if ($('payments-list')) $('payments-list').innerHTML = '';
-        if (s.payments && window.addPaymentRow) s.payments.forEach(p => window.addPaymentRow(p.date, Number(p.amt || 0).toFixed(2), p.method, true));
+        if (s.payments && window.addPaymentRow) {
+            s.payments.forEach(p => window.addPaymentRow(p.date, Number(p.amt || 0).toFixed(2), p.method, true));
+        }
 
         window.activeExtraCharges = Array.isArray(s.extraCharges) ? [...s.extraCharges] : [];
         if (window.renderExtraCharges) window.renderExtraCharges();
@@ -690,7 +719,6 @@
             window.toggleSection('meta-section', 'meta-chevron', true);
         }
 
-        // Render dynamic Stay Itinerary Stripe
         window.renderItineraryStripe(s);
 
         ['delete-btn', 'split-btn', 'merge-btn', 'dup-btn', 'hist-btn'].forEach(id => {
@@ -936,7 +964,7 @@
             if (a.linkedId && a.linkedId === cur.linkedId) scoreA += 50;
             if (b.linkedId && b.linkedId === cur.linkedId) scoreB += 50;
             if (a.lastName && a.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreA += 30;
-            if (b.lastName && b.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreB += 30;
+            if (b.lastName && b.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreA += 30;
             if (parseFn(a.checkOut) === curIn || parseFn(a.checkIn) === curOut) scoreA += 40;
             if (parseFn(b.checkOut) === curIn || parseFn(b.checkIn) === curOut) scoreB += 40;
             return scoreB - scoreA;
@@ -1036,7 +1064,7 @@
         if ($('check-out')) $('check-out').value = `${o.getFullYear()}-${String(o.getMonth() + 1).padStart(2, '0')}-${String(o.getDate()).padStart(2, '0')}`;
         if (window.updateNightsDisplay) window.updateNightsDisplay();
         if ($('assigned-rooms-container')) $('assigned-rooms-container').innerHTML = '';
-        window.addRoomSelect(r);
+        window.addRoomSelect(r, false);
 
         const curProp = getPropId();
         const pCode = window.toDisplayPropKey ? window.toDisplayPropKey(curProp) : 'SWIMS';
@@ -1086,7 +1114,6 @@
                     const isOcc = window.isOccupyingBooking ? window.isOccupyingBooking(s.status) : (s.status !== 'cancelled');
                     if (sProp !== curProp || s.bookId !== bId || s.id === id || !isOcc) return false;
                     
-                    // Allow valid contiguous split legs sharing a link code or having non-overlapping dates
                     const parseFn = window.parseYMD || (str => Date.parse(str));
                     const isLinked = linkCodeVal && s.linkedId && linkCodeVal === s.linkedId;
                     const isContiguousOrSplit = parseFn(cI) >= parseFn(s.checkOut) || parseFn(cO) <= parseFn(s.checkIn);
