@@ -1,12 +1,6 @@
 // ==========================================================================
 // setup-engine.js - Property Setup Wizard & Onboarding Engine
 // Wild & Wandering Property Management System
-// 
-// BUG FIXES & RESTORATIONS:
-// - Property-Scoped Channels: Empties in-memory channel rules on property switch.
-//   Derives channels strictly from that property's own Channex rate plans + Direct & Default.
-// - Fixed fetchChannexData: maps plans strictly to parent room category.
-// - Restored high-density, compact row styling with rich color coding across steps.
 // ==========================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -34,7 +28,6 @@ const storage = getStorage(app);
 
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
-// Canonical Channel Key Normalizer
 function cleanChannelKey(rawKey) {
     if (!rawKey) return 'Default';
     const s = String(rawKey).trim().toLowerCase();
@@ -48,7 +41,6 @@ function cleanChannelKey(rawKey) {
     return rawKey.trim();
 }
 
-// --- GLOBAL STATE ---
 window.currentStep = 1;
 window.totalSteps = 5;
 window.activePropertyId = '';
@@ -64,7 +56,7 @@ window.channexRatePlans = [];
 window.channexMap = [];
 window.channexRateMap = [];
 window.pricingRules = {
-    masterDriver: 'bdc_non_ref',
+    masterDriver: 'Direct',
     anchorPrivate: '',
     anchorDorm: '',
     stdRefType: '+%',
@@ -78,7 +70,6 @@ window.savedAutofillBaselines = {};
 window.ratesSpan = 2;
 window.restrSpan = 6;
 
-// --- STEP NAVIGATION ---
 window.jumpStep = function(step) {
     const s = Math.max(1, Math.min(5, parseInt(step, 10) || 1));
     window.currentStep = s;
@@ -128,7 +119,10 @@ window.jumpStep = function(step) {
         window.compileRoomsFromDefinitions();
         window.renderRoomDefinitionsTable();
     }
-    if (s === 3) window.renderUnifiedMappingCards();
+    if (s === 3) {
+        window.renderRoomMappingTable();
+        window.renderUnifiedMappingCards();
+    }
     if (s === 4) window.renderPricingStepRules();
     if (s === 5) window.renderReviewLaunchStep();
 
@@ -228,7 +222,6 @@ function sanitizeForFirestore(data) {
     return data;
 }
 
-// --- LOGO UPLOADS & PREVIEWS ---
 window.updateLogoPreview = function(type, url) {
     const cleanUrl = (url || '').trim() || DEFAULT_WW_ICON;
     const img = document.getElementById(`preview-logo-${type}`);
@@ -267,13 +260,12 @@ window.handleLogoFileUpload = async function(event, logoType) {
         await uploadBytes(sRef, compressed.blob);
         const downloadUrl = await getDownloadURL(sRef);
         window.updateLogoPreview(logoType, downloadUrl);
-        window.customAlert("Success", `${logoType.toUpperCase()} logo uploaded and updated.`);
+        window.customAlert("Success", `${logoType.toUpperCase()} logo uploaded.`);
     } catch (err) {
         console.warn("Storage upload failed, keeping compressed thumbnail DataURL:", err);
     }
 };
 
-// --- PAYMENT METHODS & COMMISSION (KP) TABLE ---
 window.renderPaymentMethodsTable = function() {
     const tbody = document.getElementById('payment-methods-table-body');
     if (!tbody) return;
@@ -314,7 +306,6 @@ window.renderPaymentMethodsTable = function() {
     `).join('');
 };
 
-// --- ADDONS MANAGEMENT ---
 window.moveAddon = function(idx, direction) {
     if (!Array.isArray(window.addonsList)) return;
     const targetIdx = idx + direction;
@@ -345,31 +336,31 @@ window.renderAddonsTable = function() {
         const isLast = idx === window.addonsList.length - 1;
         return `
         <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
-            <td class="p-1 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
+            <td class="text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
                 <div class="flex items-center justify-center gap-1">
-                    <span class="w-4 text-center text-slate-600 font-bold">${idx + 1}</span>
-                    <div class="flex flex-col ml-0.5">
-                        <button type="button" onclick="window.moveAddon(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5">
-                            <i data-lucide="chevron-up" size="10"></i>
+                    <span class="w-3 text-center text-slate-600 font-bold">${idx + 1}</span>
+                    <div class="order-btn-col">
+                        <button type="button" onclick="window.moveAddon(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="order-arrow-btn text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed">
+                            <i data-lucide="chevron-up"></i>
                         </button>
-                        <button type="button" onclick="window.moveAddon(${idx}, 1)" ${isLast ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5">
-                            <i data-lucide="chevron-down" size="10"></i>
+                        <button type="button" onclick="window.moveAddon(${idx}, 1)" ${isLast ? 'disabled' : ''} class="order-arrow-btn text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed">
+                            <i data-lucide="chevron-down"></i>
                         </button>
                     </div>
                 </div>
             </td>
-            <td class="p-1"><input type="text" class="table-input font-bold" value="${item.name || ''}" onchange="window.addonsList[${idx}].name = this.value"></td>
-            <td class="p-1"><input type="text" class="table-input" value="${item.category || 'General'}" onchange="window.addonsList[${idx}].category = this.value"></td>
-            <td class="p-1"><input type="number" step="any" class="table-input font-black text-center text-emerald-700" value="${item.price || 0}" onchange="window.addonsList[${idx}].price = parseFloat(this.value)||0"></td>
-            <td class="p-1">
+            <td><input type="text" class="table-input font-bold" value="${item.name || ''}" onchange="window.addonsList[${idx}].name = this.value"></td>
+            <td><input type="text" class="table-input" value="${item.category || 'General'}" onchange="window.addonsList[${idx}].category = this.value"></td>
+            <td><input type="number" step="any" class="table-input font-black text-center text-emerald-700" value="${item.price || 0}" onchange="window.addonsList[${idx}].price = parseFloat(this.value)||0"></td>
+            <td>
                 <select class="table-input font-medium" onchange="window.addonsList[${idx}].type = this.value">
                     <option value="one-off" ${item.type === 'one-off' ? 'selected' : ''}>One-Off</option>
                     <option value="per-day" ${item.type === 'per-day' ? 'selected' : ''}>Per Day</option>
                     <option value="per-item" ${item.type === 'per-item' ? 'selected' : ''}>Per Item</option>
                 </select>
             </td>
-            <td class="p-1 text-center">
-                <button type="button" onclick="window.addonsList.splice(${idx}, 1); window.renderAddonsTable();" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="12"></i></button>
+            <td class="text-center">
+                <button type="button" onclick="window.addonsList.splice(${idx}, 1); window.renderAddonsTable();" class="p-0.5 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="12"></i></button>
             </td>
         </tr>`;
     }).join('');
@@ -389,7 +380,6 @@ window.addBlankAddonRow = function() {
     window.renderAddonsTable();
 };
 
-// --- ROOM INVENTORY DEFINITIONS & GENERATORS ---
 window.toggleBatchDormPanel = function(forceState = null) {
     const p = document.getElementById('batch-dorm-panel');
     if (!p) return;
@@ -538,6 +528,31 @@ window.compileRoomsFromDefinitions = function() {
     window.renderBedPreviewDrawer();
 };
 
+window.updateRoomDefField = function(idx, field, value) {
+    if (!window.roomDefinitions[idx]) return;
+    window.roomDefinitions[idx][field] = value;
+
+    if (field === 'category') {
+        const targetCategory = String(value).trim();
+        window.roomDefinitions[idx].category = targetCategory;
+
+        const currentCatOrder = [];
+        window.roomDefinitions.forEach(d => {
+            const c = (d.category || 'Standard Room').trim();
+            if (!currentCatOrder.includes(c)) currentCatOrder.push(c);
+        });
+
+        const grouped = [];
+        currentCatOrder.forEach(cat => {
+            grouped.push(...window.roomDefinitions.filter(d => (d.category || 'Standard Room').trim() === cat));
+        });
+        window.roomDefinitions = grouped;
+    }
+
+    window.compileRoomsFromDefinitions();
+    window.renderRoomDefinitionsTable();
+};
+
 window.renderRoomDefinitionsTable = function() {
     const tbody = document.getElementById('room-def-list-body');
     if (!tbody) return;
@@ -584,7 +599,6 @@ window.renderRoomDefinitionsTable = function() {
             </tr>`;
         }
 
-        // Visual distinction: Dorms get warm amber tint, Privates get crisp white/slate
         const rowBg = isDorm ? 'bg-amber-50/20 hover:bg-amber-50/50' : 'bg-white hover:bg-slate-50';
 
         html += `
@@ -592,10 +606,10 @@ window.renderRoomDefinitionsTable = function() {
             <td class="py-0.5 px-1 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
                 <span class="w-4 text-center text-slate-600 font-black">${idx + 1}</span>
             </td>
-            <td class="py-0.5 px-1"><input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.roomDefinitions[${idx}].name = this.value; window.compileRoomsFromDefinitions();"></td>
-            <td class="py-0.5 px-1"><input type="text" list="setup-category-datalist" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.roomDefinitions[${idx}].category = this.value; window.compileRoomsFromDefinitions();"></td>
-            <td class="py-0.5 px-1 text-center"><input type="number" min="1" max="60" class="table-input font-black text-center !w-14 mx-auto ${isDorm ? 'text-amber-700' : 'text-slate-800'}" value="${def.count || 1}" onchange="window.roomDefinitions[${idx}].count = parseInt(this.value,10)||1; window.compileRoomsFromDefinitions();"></td>
-            <td class="py-0.5 px-1"><input type="text" class="table-input text-center !w-16" value="${def.floor || '1'}" onchange="window.roomDefinitions[${idx}].floor = this.value; window.compileRoomsFromDefinitions();"></td>
+            <td class="py-0.5 px-1"><input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.updateRoomDefField(${idx}, 'name', this.value)"></td>
+            <td class="py-0.5 px-1"><input type="text" list="setup-category-datalist" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.updateRoomDefField(${idx}, 'category', this.value)"></td>
+            <td class="py-0.5 px-1 text-center"><input type="number" min="1" max="60" class="table-input font-black text-center !w-14 mx-auto ${isDorm ? 'text-amber-700' : 'text-slate-800'}" value="${def.count || 1}" onchange="window.updateRoomDefField(${idx}, 'count', parseInt(this.value,10)||1)"></td>
+            <td class="py-0.5 px-1"><input type="text" class="table-input text-center !w-16" value="${def.floor || '1'}" onchange="window.updateRoomDefField(${idx}, 'floor', this.value)"></td>
             <td class="py-0.5 px-1">
                 <select class="table-input font-semibold ${isDorm ? 'text-amber-800 bg-amber-50/50' : 'text-slate-700'}" onchange="window.roomDefinitions[${idx}].rule = this.value; window.roomDefinitions[${idx}].isDorm = (this.value !== 'private'); window.compileRoomsFromDefinitions(); window.renderRoomDefinitionsTable();">
                     <option value="odd-top" ${def.rule === 'odd-top' ? 'selected' : ''}>DORM (Top # Odd)</option>
@@ -631,11 +645,17 @@ window.renderBedPreviewDrawer = function() {
                 <span>${p}</span><span class="text-[8.5px] text-slate-400">Fl. ${units[0]?.floor || 1}</span>
             </div>
             <div class="flex flex-wrap gap-1">
-                ${units.map(u => `
-                    <span class="px-1 py-0.2 rounded text-[8.5px] font-bold ${u.bunk === 'top' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : (u.bunk === 'bottom' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700 border border-slate-200')}">
+                ${units.map(u => {
+                    const isTop = u.bunk === 'top' || u.bed === 'top' || u.icon === 'top' || String(u.bed).toLowerCase().includes('top') || String(u.icon).toLowerCase().includes('top');
+                    const isBottom = u.bunk === 'bottom' || u.bunk === 'bot' || u.bed === 'bottom' || u.bed === 'bot' || u.icon === 'bot' || u.icon === 'bottom' || String(u.bed).toLowerCase().includes('bot') || String(u.icon).toLowerCase().includes('bottom');
+                    const pillColor = isTop 
+                        ? 'bg-indigo-100 text-indigo-800 border-indigo-300 font-black' 
+                        : (isBottom ? 'bg-amber-100 text-amber-800 border-amber-300 font-black' : 'bg-slate-100 text-slate-700 border-slate-300 font-bold');
+                    return `
+                    <span class="px-1.5 py-0.5 rounded text-[9px] border ${pillColor}">
                         ${u.id}
-                    </span>
-                `).join('')}
+                    </span>`;
+                }).join('')}
             </div>
         </div>`;
     }).join('');
@@ -660,7 +680,6 @@ window.addBlankRoomDef = function() {
     window.renderRoomDefinitionsTable();
 };
 
-// --- CATEGORY REORDERING ENGINE ---
 window.openReorderCategoriesModal = function() {
     const defs = window.roomDefinitions || [];
     const counts = {};
@@ -721,7 +740,6 @@ window.applyReorderedCategories = function() {
     window.closeReorderCategoriesModal();
 };
 
-// --- CHANNEX INTEGRATION & SMART RATE-TO-ROOM MAPPING ---
 window.fetchChannexData = async function() {
     const apiKey = document.getElementById('chan-api-key')?.value.trim();
     const propId = document.getElementById('chan-prop-id')?.value.trim();
@@ -749,78 +767,126 @@ window.fetchChannexData = async function() {
 
         window.channexConfig = { apiKey, propId, rateMultiplier: 100 };
 
-        // 1. Build initial channexMap (Channex Room Types -> PMS Categories)
         const pmsCategories = [...new Set((window.roomDefinitions || []).map(r => r.category))];
-        window.channexMap = channexRooms.map(cr => {
-            const crTitle = cr.attributes?.title || '';
-            const matchedPms = pmsCategories.find(c => 
-                c.toLowerCase() === crTitle.toLowerCase() || 
-                crTitle.toLowerCase().includes(c.toLowerCase()) || 
-                c.toLowerCase().includes(crTitle.toLowerCase())
-            ) || pmsCategories[0] || 'Standard Room';
+
+        window.channexMap = pmsCategories.map(cat => {
+            const normCat = cat.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const bestChannex = channexRooms.find(cr => {
+                const normCr = (cr.attributes?.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                return normCr === normCat || (normCr && normCat.includes(normCr)) || (normCat && normCr.includes(normCat));
+            });
 
             return {
-                channexId: cr.id,
-                channexTitle: crTitle,
-                pmsCategory: matchedPms
+                pmsCategory: cat,
+                channexId: bestChannex ? bestChannex.id : '',
+                channexTitle: bestChannex ? bestChannex.attributes?.title : ''
             };
         });
 
-        // 2. Build channexRateMap: MAP STRICTLY TO PARENT ROOM CATEGORY
-        window.channexRateMap = cleanRatePlans.map(item => {
-            const planTitle = item.attributes?.title || '';
-            const parentRoomId = item.attributes?.room_type_id || item.relationships?.room_type?.data?.id;
-            const parentChannexRoom = channexRooms.find(r => r.id === parentRoomId);
-            const parentRoomTitle = parentChannexRoom?.attributes?.title || '';
-
-            let assignedPmsCategory = '';
-            const mappedRoomEntry = window.channexMap.find(m => m.channexId === parentRoomId);
-            if (mappedRoomEntry) {
-                assignedPmsCategory = mappedRoomEntry.pmsCategory;
-            } else {
-                assignedPmsCategory = pmsCategories.find(c => 
-                    c.toLowerCase() === parentRoomTitle.toLowerCase() || 
-                    parentRoomTitle.toLowerCase().includes(c.toLowerCase())
-                ) || pmsCategories[0] || 'Standard Room';
-            }
-
-            const rawChannel = /bdc|booking/i.test(planTitle) ? 'Booking.com' : 
-                               (/hw|hostelworld/i.test(planTitle) ? 'Hostelworld' : 
-                               (/agoda/i.test(planTitle) ? 'Agoda' : 
-                               (/expedia/i.test(planTitle) ? 'Expedia' : 'Default')));
-
-            return {
-                ratePlanId: item.id,
-                ratePlanTitle: planTitle,
-                channexRoomTitle: parentRoomTitle,
-                pmsCategory: assignedPmsCategory,
-                channel: cleanChannelKey(rawChannel),
-                policy: /ref/i.test(planTitle) && !/non-?ref/i.test(planTitle) ? 'ref' : 'non-ref',
-                product: /event/i.test(planTitle) ? 'evt' : 'std',
-                rateSource: /event/i.test(planTitle) ? 'evt' : 'std'
-            };
-        });
-
-        // 3. Populate Property-Scoped Channel Rules
+        window.buildChannexRateMapFromRoomMapping();
         window.populateChannelsFromRateMap();
 
+        window.renderRoomMappingTable();
         window.renderUnifiedMappingCards();
-        window.customAlert("Channex Connected", `Successfully mapped ${channexRooms.length} Room Types and ${cleanRatePlans.length} Rate Plans to their proper categories.`);
+        window.customAlert("Channex Connected", `Mapped ${channexRooms.length} Channex Room Types and ${cleanRatePlans.length} Rate Plans.`);
     } catch (err) {
         console.error("Channex fetch error:", err);
         window.customAlert("Connection Failed", err.message);
     }
 };
 
-// DERIVES CHANNELS STRICTLY FROM THE PROPERTY'S OWN RATE MAP
+window.buildChannexRateMapFromRoomMapping = function() {
+    const plans = window.channexRatePlans || [];
+    const rooms = window.channexRooms || [];
+    const mapping = window.channexMap || [];
+
+    window.channexRateMap = plans.map(p => {
+        const planTitle = (p.attributes?.title || '').trim();
+        const roomId = p.attributes?.room_type_id || p.relationships?.room_type?.data?.id;
+        const parentRoom = rooms.find(r => String(r.id) === String(roomId));
+        const parentRoomTitle = parentRoom?.attributes?.title || '';
+
+        const mappedRoom = mapping.find(m => String(m.channexId) === String(roomId));
+        const assignedPmsCategory = mappedRoom ? mappedRoom.pmsCategory : '';
+
+        const rawChannel = /bdc|booking/i.test(planTitle) ? 'Booking.com' : 
+                           (/hw|hostelworld/i.test(planTitle) ? 'Hostelworld' : 
+                           (/agoda/i.test(planTitle) ? 'Agoda' : 
+                           (/expedia/i.test(planTitle) ? 'Expedia' : 
+                           (/airbnb/i.test(planTitle) ? 'Airbnb' : 'Default'))));
+
+        return {
+            ratePlanId: p.id,
+            ratePlanTitle: planTitle,
+            roomTypeId: roomId,
+            channexRoomTitle: parentRoomTitle,
+            pmsCategory: assignedPmsCategory,
+            channel: cleanChannelKey(rawChannel),
+            policy: /ref/i.test(planTitle) && !/non-?ref/i.test(planTitle) ? 'ref' : 'non-ref',
+            product: /event/i.test(planTitle) ? 'evt' : 'std',
+            rateSource: /event/i.test(planTitle) ? 'evt' : 'std'
+        };
+    });
+};
+
+window.renderRoomMappingTable = function() {
+    const container = document.getElementById('channex-room-mapping-container');
+    if (!container) return;
+
+    const pmsCats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
+    const channexRooms = window.channexRooms || [];
+
+    if (pmsCats.length === 0) {
+        container.innerHTML = `<div class="p-2 text-slate-400 text-xs">Define room categories in Step 2 first.</div>`;
+        return;
+    }
+
+    container.innerHTML = pmsCats.map(cat => {
+        const mapped = (window.channexMap || []).find(m => m.pmsCategory === cat);
+        const mappedId = mapped ? mapped.channexId : '';
+
+        return `
+        <div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+            <span class="font-bold text-xs text-slate-800">${cat}</span>
+            <div class="flex items-center gap-1.5">
+                <span class="text-[9.5px] font-bold text-slate-400">&rarr;</span>
+                <select class="table-input !w-52 !h-[22px] font-bold ${mappedId ? 'text-indigo-800 bg-white border-indigo-300' : 'text-slate-400 border-slate-300'}" onchange="window.updateRoomMapping('${cat}', this.value)">
+                    <option value="">-- Select Channex Room --</option>
+                    ${channexRooms.map(cr => `
+                        <option value="${cr.id}" ${String(cr.id) === String(mappedId) ? 'selected' : ''}>${cr.attributes?.title || cr.id}</option>
+                    `).join('')}
+                </select>
+            </div>
+        </div>`;
+    }).join('');
+};
+
+window.updateRoomMapping = function(pmsCat, channexRoomId) {
+    window.channexMap = window.channexMap || [];
+    let entry = window.channexMap.find(m => m.pmsCategory === pmsCat);
+    const cr = (window.channexRooms || []).find(r => String(r.id) === String(channexRoomId));
+
+    if (!entry) {
+        entry = { pmsCategory: pmsCat, channexId: channexRoomId, channexTitle: cr?.attributes?.title || '' };
+        window.channexMap.push(entry);
+    } else {
+        entry.channexId = channexRoomId;
+        entry.channexTitle = cr?.attributes?.title || '';
+    }
+
+    window.buildChannexRateMapFromRoomMapping();
+    window.populateChannelsFromRateMap();
+    window.renderRoomMappingTable();
+    window.renderUnifiedMappingCards();
+};
+
 window.populateChannelsFromRateMap = function() {
     const existing = window.pricingRules?.channels || {};
     const propertyChannels = {};
 
-    // 1. Direct (Default Built-in Engine)
+    propertyChannels['Default'] = { type: '=', val: 0 };
     propertyChannels['Direct'] = existing['Direct'] || { type: '-%', val: 10 };
 
-    // 2. Discover channels actively present in this property's rate map
     (window.channexRateMap || []).forEach(plan => {
         const ch = cleanChannelKey(plan.channel);
         if (ch && ch !== 'Default' && ch !== 'Direct') {
@@ -834,117 +900,14 @@ window.populateChannelsFromRateMap = function() {
     window.renderChannelRulesList();
 };
 
-window.openCreateRatePlanModal = function() {
-    const checklist = document.getElementById('crp-room-checklist');
-    const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
-    if (checklist) {
-        checklist.innerHTML = cats.map(c => `
-            <label class="flex items-center gap-2 p-1 rounded bg-white border border-slate-200 cursor-pointer text-xs font-bold">
-                <input type="checkbox" value="${c}" checked class="crp-cat-box rounded"> <span>${c}</span>
-            </label>
-        `).join('');
-    }
-    const modal = document.getElementById('create-rate-plan-modal');
-    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
-};
-
-window.closeCreateRatePlanModal = function() {
-    const modal = document.getElementById('create-rate-plan-modal');
-    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
-};
-
-window.applyRatePlanPreset = function(title, channel, policy) {
-    const t = document.getElementById('crp-title');
-    const c = document.getElementById('crp-channel');
-    const p = document.getElementById('crp-policy');
-    if (t) t.value = title;
-    if (c) c.value = channel;
-    if (p) p.value = policy;
-};
-
-window.toggleAllTargetRooms = function(checked) {
-    document.querySelectorAll('.crp-cat-box').forEach(cb => cb.checked = !!checked);
-};
-
-window.executeCreateAndPushRatePlan = async function() {
-    const title = document.getElementById('crp-title')?.value.trim();
-    const channel = cleanChannelKey(document.getElementById('crp-channel')?.value || 'DEFAULT');
-    const policy = document.getElementById('crp-policy')?.value || 'non-ref';
-    const selectedCats = Array.from(document.querySelectorAll('.crp-cat-box:checked')).map(cb => cb.value);
-
-    if (!title) return window.customAlert("Validation Error", "Please provide a Rate Plan Title.");
-    if (selectedCats.length === 0) return window.customAlert("Validation Error", "Please select at least one Room Category.");
-
-    const apiKey = window.channexConfig?.apiKey || document.getElementById('chan-api-key')?.value.trim();
-    const propId = window.channexConfig?.propId || document.getElementById('chan-prop-id')?.value.trim();
-
-    let pushedCount = 0;
-    for (const cat of selectedCats) {
-        const mappedRoom = (window.channexMap || []).find(m => m.pmsCategory === cat);
-        const roomId = mappedRoom?.channexId;
-
-        if (apiKey && propId && roomId) {
-            try {
-                const res = await fetch("https://app.channex.io/api/v1/rate_plans", {
-                    method: "POST",
-                    headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        rate_plan: {
-                            property_id: propId,
-                            room_type_id: roomId,
-                            title: title,
-                            options: [{ occupancy: 1, rate: 100 }]
-                        }
-                    })
-                });
-                if (res.ok) {
-                    const json = await res.json();
-                    const newId = json.data?.id;
-                    window.channexRateMap.push({
-                        ratePlanId: newId,
-                        ratePlanTitle: title,
-                        pmsCategory: cat,
-                        channel,
-                        policy,
-                        product: /event/i.test(title) ? 'evt' : 'std',
-                        rateSource: /event/i.test(title) ? 'evt' : 'std'
-                    });
-                    pushedCount++;
-                }
-            } catch (err) {
-                console.warn(`Could not push to Channex for ${cat}:`, err);
-            }
-        } else {
-            const localId = 'plan_' + Math.random().toString(36).substr(2, 9);
-            window.channexRateMap.push({
-                ratePlanId: localId,
-                ratePlanTitle: title,
-                pmsCategory: cat,
-                channel,
-                policy,
-                product: /event/i.test(title) ? 'evt' : 'std',
-                rateSource: /event/i.test(title) ? 'evt' : 'std'
-            });
-            pushedCount++;
+window.updateRatePlanField = function(ratePlanId, field, value) {
+    const plan = (window.channexRateMap || []).find(p => p.ratePlanId === ratePlanId);
+    if (plan) {
+        plan[field] = value;
+        if (field === 'channel') {
+            window.populateChannelsFromRateMap();
         }
     }
-
-    window.populateChannelsFromRateMap();
-    window.closeCreateRatePlanModal();
-    window.renderUnifiedMappingCards();
-    window.customAlert("Rate Plans Ready", `Saved "${title}" across ${pushedCount} categories.`);
-};
-
-// PMS-Style Authentic Brand Badges
-window.getChannelBadgeHtml = function(channel) {
-    const ch = cleanChannelKey(channel);
-    if (ch === 'Booking.com') return `<span class="bg-[#003580] text-white px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">BDC</span>`;
-    if (ch === 'Hostelworld') return `<span class="bg-[#F15A24] text-white px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">HW</span>`;
-    if (ch === 'Agoda') return `<span class="bg-[#87B2D6] text-white px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">AGODA</span>`;
-    if (ch === 'Expedia') return `<span class="bg-[#facc15] text-[#003580] px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">EXPEDIA</span>`;
-    if (ch === 'Airbnb') return `<span class="bg-[#FF5A5F] text-white px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">AIRBNB</span>`;
-    if (ch === 'Direct') return `<span class="bg-teal-600 text-white px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">DIRECT</span>`;
-    return `<span class="bg-emerald-600 text-white px-1.5 py-0.2 text-[9px] font-black rounded shrink-0">DEFAULT</span>`;
 };
 
 window.renderUnifiedMappingCards = function() {
@@ -964,23 +927,38 @@ window.renderUnifiedMappingCards = function() {
             <div class="${cardBg} border border-slate-300 rounded-lg p-2.5 shadow-xs mb-1.5">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-1.5">
                     <div class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span class="w-2 h-2 rounded-full ${plans.length > 0 ? 'bg-emerald-500' : 'bg-amber-400'}"></span>
                         <span class="font-black text-xs uppercase text-slate-800">${cat}</span>
                     </div>
                     <span class="text-[9.5px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
-                        ${plans.length} Mapped Rate Plans
+                        ${plans.length} Rate Plans
                     </span>
                 </div>
                 <div class="space-y-1">
                     ${plans.length > 0 ? plans.map(p => `
                         <div class="flex items-center justify-between text-xs p-1 px-1.5 rounded bg-white border border-slate-200 hover:border-indigo-300 transition-colors">
-                            <span class="font-bold text-slate-700 text-[11px] truncate mr-2">${p.ratePlanTitle}</span>
+                            <span class="font-bold text-slate-700 text-[11px] truncate mr-2" title="${p.ratePlanTitle}">${p.ratePlanTitle}</span>
                             <div class="flex items-center gap-1.5 shrink-0">
-                                ${window.getChannelBadgeHtml(p.channel)}
-                                <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${p.policy === 'ref' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-700 border border-slate-200'}">${p.policy}</span>
+                                <select class="table-input !w-28 !h-[20px] font-bold" onchange="window.updateRatePlanField('${p.ratePlanId}', 'channel', this.value)">
+                                    <option value="Default" ${p.channel === 'Default' ? 'selected' : ''}>Default</option>
+                                    <option value="Direct" ${p.channel === 'Direct' ? 'selected' : ''}>Direct</option>
+                                    <option value="Booking.com" ${p.channel === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
+                                    <option value="Hostelworld" ${p.channel === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
+                                    <option value="Agoda" ${p.channel === 'Agoda' ? 'selected' : ''}>Agoda</option>
+                                    <option value="Expedia" ${p.channel === 'Expedia' ? 'selected' : ''}>Expedia</option>
+                                    <option value="Airbnb" ${p.channel === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
+                                </select>
+                                <select class="table-input !w-24 !h-[20px] font-bold" onchange="window.updateRatePlanField('${p.ratePlanId}', 'policy', this.value)">
+                                    <option value="non-ref" ${p.policy === 'non-ref' ? 'selected' : ''}>Non-Ref</option>
+                                    <option value="ref" ${p.policy === 'ref' ? 'selected' : ''}>Ref (+%)</option>
+                                </select>
+                                <select class="table-input !w-20 !h-[20px] font-bold text-center" onchange="window.updateRatePlanField('${p.ratePlanId}', 'product', this.value)">
+                                    <option value="std" ${p.product === 'std' ? 'selected' : ''}>Std</option>
+                                    <option value="evt" ${p.product === 'evt' ? 'selected' : ''}>Event</option>
+                                </select>
                             </div>
                         </div>
-                    `).join('') : `<div class="text-[10px] text-slate-400 italic py-1 px-1">No rate plans linked to this category.</div>`}
+                    `).join('') : `<div class="text-[10px] text-slate-400 italic py-1 px-1">Map a Channex Room in section 1 above to link rate plans.</div>`}
                 </div>
             </div>
         `;
@@ -988,15 +966,27 @@ window.renderUnifiedMappingCards = function() {
     if (window.lucide) window.lucide.createIcons();
 };
 
-// --- STEP 4 PRICING & CHANNELS ---
+window.getChannelBadgeHtml = function(channel) {
+    const ch = (channel || '').toLowerCase();
+    if (ch.includes('booking') || ch.includes('bdc')) return `<span class="bg-[#003580] text-white px-1.5 py-0.2 text-[9px] font-black rounded shrink-0">BDC</span>`;
+    if (ch.includes('hostelworld') || ch.includes('hw')) return `<span class="bg-[#F15A24] text-white px-1.5 py-0.2 text-[9px] font-black rounded shrink-0">HW</span>`;
+    if (ch.includes('agoda')) return `<span class="bg-[#87B2D6] text-white px-1.5 py-0.2 text-[9px] font-black rounded shrink-0">AGODA</span>`;
+    if (ch.includes('expedia')) return `<span class="bg-[#facc15] text-[#003580] px-1.5 py-0.2 text-[9px] font-black rounded shrink-0">EXP</span>`;
+    if (ch.includes('airbnb')) return `<span class="bg-[#FF5A5F] text-white px-1.5 py-0.2 text-[9px] font-black rounded shrink-0">AIRBNB</span>`;
+    if (ch.includes('direct')) return `<span class="bg-teal-600 text-white px-1.5 py-0.2 text-[9px] font-black rounded shrink-0">DIRECT</span>`;
+    return `<span class="bg-emerald-600 text-white px-1.5 py-0.2 text-[9px] font-black rounded shrink-0">DEFAULT</span>`;
+};
+
 window.renderPricingStepRules = function() {
     const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
     const dormSelect = document.getElementById('anchor-dorm-select');
     const privSelect = document.getElementById('anchor-private-select');
+    const masterDriverSelect = document.getElementById('rule-master-driver');
 
     const opts = cats.map(c => `<option value="${c}">${c}</option>`).join('');
     if (dormSelect) { dormSelect.innerHTML = opts; dormSelect.value = window.pricingRules.anchorDorm || cats.find(c => c.toLowerCase().includes('dorm')) || cats[0] || ''; }
     if (privSelect) { privSelect.innerHTML = opts; privSelect.value = window.pricingRules.anchorPrivate || cats.find(c => !c.toLowerCase().includes('dorm')) || cats[0] || ''; }
+    if (masterDriverSelect) { masterDriverSelect.value = window.pricingRules.masterDriver || 'Direct'; }
 
     const stdRefInput = document.getElementById('rule-std-ref');
     const evtRefInput = document.getElementById('rule-evt-ref');
@@ -1041,7 +1031,7 @@ window.renderRelationships = function() {
                     <input type="number" step="any" class="table-input font-bold text-center !w-16 text-pink-700" value="${rel.valFmp || 0}" onchange="window.relationships[${idx}].valFmp = parseFloat(this.value)||0">
                 </div>
             </td>
-            <td class="p-1 text-center"><button type="button" onclick="window.relationships.splice(${idx}, 1); window.renderRelationships();" class="text-slate-400 hover:text-rose-600 cursor-pointer"><i data-lucide="trash-2" size="12"></i></button></td>
+            <td class="p-1 text-center"><button type="button" onclick="window.relationships.splice(${idx}, 1); window.renderRelationships();" class="text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="12"></i></button></td>
         </tr>
     `).join('');
 
@@ -1068,68 +1058,56 @@ window.renderChannelRulesList = function() {
     if (!container) return;
 
     const channels = window.pricingRules.channels || {};
-    const keys = Object.keys(channels).filter(k => k !== 'Default');
+    if (!channels['Default']) channels['Default'] = { type: '=', val: 0 };
+    if (!channels['Direct']) channels['Direct'] = { type: '-%', val: 10 };
 
-    if (keys.length === 0) {
-        container.innerHTML = `
-            <div class="text-[10px] text-slate-400 italic p-2 bg-white rounded border border-slate-200">
-                All OTAs are currently selling directly from your Base Rate Anchor. Click "+ Add Channel" to define custom multipliers.
-            </div>`;
-        return;
-    }
+    const keys = Object.keys(channels);
+    const masterDriver = window.pricingRules.masterDriver || 'Direct';
 
     container.innerHTML = keys.map(ch => {
         const conf = channels[ch] || { type: '=', val: 0 };
         const badgeHtml = window.getChannelBadgeHtml(ch);
+        const isMaster = (ch === masterDriver);
 
         return `
-        <div class="flex items-center justify-between p-1 px-2 rounded bg-white border border-slate-200 shadow-2xs">
+        <div class="flex items-center justify-between p-1 px-2 rounded bg-white border ${isMaster ? 'border-indigo-400 bg-indigo-50/20' : 'border-slate-200'} shadow-2xs">
             <div class="flex items-center gap-2">
                 ${badgeHtml}
                 <span class="font-bold text-xs text-slate-800">${ch}</span>
+                ${isMaster ? '<span class="text-[8px] font-black uppercase bg-indigo-600 text-white px-1.5 py-0.2 rounded">Master Anchor (1:1)</span>' : ''}
             </div>
             <div class="flex items-center gap-1">
-                <select class="table-input !w-20 font-black text-center !py-0.5" onchange="window.pricingRules.channels['${ch}'].type = this.value">
-                    <option value="=" ${conf.type === '=' ? 'selected' : ''}>SYNC (=)</option>
-                    <option value="+%" ${conf.type === '+%' ? 'selected' : ''}>+ %</option>
-                    <option value="-%" ${conf.type === '-%' ? 'selected' : ''}>- %</option>
-                    <option value="+" ${conf.type === '+' ? 'selected' : ''}>+ ฿</option>
-                    <option value="-" ${conf.type === '-' ? 'selected' : ''}>- ฿</option>
-                </select>
-                <input type="number" step="any" class="table-input font-bold text-center !w-16 !py-0.5" value="${conf.val || 0}" onchange="window.pricingRules.channels['${ch}'].val = parseFloat(this.value)||0">
+                ${isMaster ? `
+                    <span class="text-[10px] font-black text-indigo-700 px-2 uppercase">1:1 Baseline (= 0)</span>
+                ` : `
+                    <select class="table-input !w-20 font-black text-center !py-0.5" onchange="window.pricingRules.channels['${ch}'].type = this.value">
+                        <option value="=" ${conf.type === '=' ? 'selected' : ''}>SYNC (=)</option>
+                        <option value="+%" ${conf.type === '+%' ? 'selected' : ''}>+ %</option>
+                        <option value="-%" ${conf.type === '-%' ? 'selected' : ''}>- %</option>
+                        <option value="+" ${conf.type === '+' ? 'selected' : ''}>+ ฿</option>
+                        <option value="-" ${conf.type === '-' ? 'selected' : ''}>- ฿</option>
+                    </select>
+                    <input type="number" step="any" class="table-input font-bold text-center !w-16 !py-0.5" value="${conf.val || 0}" onchange="window.pricingRules.channels['${ch}'].val = parseFloat(this.value)||0">
+                `}
             </div>
         </div>`;
     }).join('');
+    if (window.lucide) window.lucide.createIcons();
 };
 
 window.addVerifiedChannelRule = function() {
-    const ch = prompt("Enter Channel Name (e.g. Airbnb):");
+    const ch = prompt("Enter Channel Name (e.g. Airbnb, Trip.com):");
     if (ch && ch.trim()) {
         const clean = cleanChannelKey(ch.trim());
-        window.pricingRules.channels = window.pricingRules.channels || {};
         window.pricingRules.channels[clean] = { type: '+%', val: 10 };
         window.renderChannelRulesList();
     }
 };
 
 window.toggleEventSettings = function(enabled) {
-    const panel = document.getElementById('event-curve-panel');
-    if (panel) panel.classList.toggle('hidden', !enabled);
     document.querySelectorAll('.evt-col-header, .evt-col-cell, #evt-ref-row').forEach(el => {
         el.style.display = enabled ? '' : 'none';
     });
-};
-
-window.cycleRatesSpan = function() {
-    window.ratesSpan = (window.ratesSpan === 2) ? 3 : 2;
-    const pill = document.getElementById('rates-span-pill');
-    if (pill) pill.innerText = `±${window.ratesSpan} Days`;
-};
-
-window.cycleRestrSpan = function() {
-    window.restrSpan = (window.restrSpan === 6) ? 7 : (window.restrSpan === 7 ? 2 : 6);
-    const pill = document.getElementById('restr-span-pill');
-    if (pill) pill.innerText = `±${window.restrSpan} Days`;
 };
 
 window.renderReviewLaunchStep = function() {
@@ -1147,11 +1125,33 @@ window.launchApp = function(appKey) {
     window.location.href = `${appKey}.html?p=${encodeURIComponent(pCode)}`;
 };
 
-// --- DATABASE LOAD & SAVE ---
 window.loadPropertyFromDatabase = async function(propId) {
     if (!propId) return;
     const statusText = document.getElementById('header-status-text');
     if (statusText) statusText.innerText = `Loading ${propId}...`;
+
+    window.currentPropertyConfig = {};
+    window.roomDefinitions = [];
+    window.compiledRooms = [];
+    window.addonsList = [];
+    window.paymentMethods = [];
+    window.channexConfig = { apiKey: '', propId: '', rateMultiplier: 100 };
+    window.channexRooms = [];
+    window.channexRatePlans = [];
+    window.channexMap = [];
+    window.channexRateMap = [];
+    window.pricingRules = {
+        masterDriver: 'Direct',
+        anchorPrivate: '',
+        anchorDorm: '',
+        stdRefType: '+%',
+        stdRefVal: 25,
+        evtRefType: '+%',
+        evtRefVal: 25,
+        channels: {}
+    };
+    window.relationships = [];
+    window.savedAutofillBaselines = {};
 
     try {
         const propDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
@@ -1160,9 +1160,6 @@ window.loadPropertyFromDatabase = async function(propId) {
         const pData = propDoc.data() || {};
         window.currentPropertyConfig = pData;
         window.activePropertyId = propId;
-
-        // Reset memory state completely on property switch
-        window.pricingRules.channels = {};
 
         const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
         setVal('prop-name', pData.name || propId);
@@ -1197,6 +1194,7 @@ window.loadPropertyFromDatabase = async function(propId) {
         window.channexConfig = pData.channex || {};
         setVal('chan-api-key', window.channexConfig.apiKey || '');
         setVal('chan-prop-id', window.channexConfig.propId || '');
+        window.channexMap = pData.channexMap || [];
         window.channexRateMap = pData.channexRateMap || [];
 
         const pPricingDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`));
@@ -1206,7 +1204,6 @@ window.loadPropertyFromDatabase = async function(propId) {
             window.pricingRules = { ...window.pricingRules, ...(pDataPricing.pricingRules || {}) };
         }
 
-        // Strictly derive channels from this property's own rate map
         window.populateChannelsFromRateMap();
 
         if (statusText) statusText.innerText = "Ready";
@@ -1254,6 +1251,7 @@ window.savePropertyToDatabase = async function(showModal = true) {
                 propId: getVal('chan-prop-id') || window.channexConfig.propId || '',
                 rateMultiplier: 100
             },
+            channexMap: window.channexMap || [],
             channexRateMap: window.channexRateMap || [],
             updatedAt: new Date().toISOString()
         };
@@ -1262,8 +1260,10 @@ window.savePropertyToDatabase = async function(showModal = true) {
 
         const dormAnchor = document.getElementById('anchor-dorm-select')?.value;
         const privAnchor = document.getElementById('anchor-private-select')?.value;
+        const masterDriver = document.getElementById('rule-master-driver')?.value;
         if (dormAnchor) window.pricingRules.anchorDorm = dormAnchor;
         if (privAnchor) window.pricingRules.anchorPrivate = privAnchor;
+        if (masterDriver) window.pricingRules.masterDriver = masterDriver;
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`), sanitizeForFirestore({
             pricingRules: window.pricingRules,
@@ -1287,7 +1287,6 @@ window.switchSetupProperty = async function(propId) {
     window.jumpStep(1);
 };
 
-// --- INITIALIZER ---
 async function initSetupEngine() {
     try {
         await signInAnonymously(auth);
