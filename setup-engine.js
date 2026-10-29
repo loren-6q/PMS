@@ -43,7 +43,6 @@ window.jumpStep = function(step) {
 window.nextStep = function() { if (window.currentStep < 5) window.jumpStep(window.currentStep + 1); };
 window.prevStep = function() { if (window.currentStep > 1) window.jumpStep(window.currentStep - 1); };
 
-// Card collapse toggle
 window.toggleCardSection = function(contentId, chevronId) {
     const el = document.getElementById(contentId);
     const ch = document.getElementById(chevronId);
@@ -79,7 +78,6 @@ export const appId = 'hotel-pms-v1';
 window.db = db;
 window.auth = auth;
 
-// Working Memory State
 window.currentPropertyId = 'swims_resort';
 window.currentPropertyConfig = {};
 window.availableProperties = [];
@@ -250,7 +248,7 @@ window.deleteAddonRow = function(idx) {
     window.renderAddonsTable();
 };
 
-// --- SECTION 4: STEP 2 (ROOM INVENTORY & COMPILER) ---
+// --- SECTION 4: STEP 2 (ROOM INVENTORY, COMPILER & RECOVERY) ---
 
 window.compileRoomsFromDefinitions = function() {
     const compiled = [];
@@ -263,11 +261,14 @@ window.compileRoomsFromDefinitions = function() {
         const floor = def.floor || '1';
         const total = Math.max(1, parseInt(def.beds || def.units || 1, 10));
 
+        // Preserve immutable room ID if it exists; never overwrite with renamed string
+        const baseId = def.id ? String(def.id).trim().toUpperCase() : rawName;
+
         if (rule === 'private') {
-            let roomId = rawName;
+            let roomId = baseId;
             let counter = 1;
             while (usedIds.has(roomId)) {
-                roomId = `${rawName}_${counter++}`;
+                roomId = `${baseId}_${counter++}`;
             }
             usedIds.add(roomId);
 
@@ -284,9 +285,8 @@ window.compileRoomsFromDefinitions = function() {
                 isDorm: false
             });
         } else {
-            // Dorm rooms: strict sequential bed numbering (1..total)
             for (let b = 1; b <= total; b++) {
-                const bedId = `${rawName}-${b}`;
+                const bedId = def.id ? `${baseId}-${b}` : `${rawName}-${b}`;
                 usedIds.add(bedId);
 
                 let bunkType = 'single';
@@ -339,7 +339,6 @@ window.renderRoomDefinitionsTable = function() {
         const curCat = room.category || 'Standard Room';
         const isDorm = room.rule && room.rule !== 'private';
 
-        // When category changes, render universal theme divider banner
         if (curCat !== lastCategory) {
             lastCategory = curCat;
             if (!categoryThemeMap[curCat]) {
@@ -422,7 +421,6 @@ window.handleRoomCategoryChange = function(index, newCategory) {
     if (!window.roomDefinitions[index]) return;
     window.roomDefinitions[index].category = newCategory.trim();
 
-    // Re-group array so all rooms in the same category cluster together
     const grouped = {};
     const categoryOrder = [];
 
@@ -474,58 +472,110 @@ window.clearAllRoomDefs = function() {
     });
 };
 
-// Batch Generators
-window.toggleBatchDormPanel = function(force) {
-    const el = document.getElementById('batch-dorm-panel');
-    if (!el) return;
-    el.classList.toggle('hidden', force !== undefined ? !force : !el.classList.contains('hidden'));
+// ==========================================================================
+// EMERGENCY RECOVERY FUNCTIONS: RECONCILE ROOMS DIRECTLY FROM LIVE BOOKINGS
+// ==========================================================================
+window.rebuildRoomsFromLiveBookings = async function() {
+    const curProp = window.currentPropertyId;
+    window.customAlert("Rebuild From Bookings", `Scan live guest bookings for ${curProp} and reconstruct exact matching rooms and bed counts?`, true, async () => {
+        try {
+            const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
+            const bookings = snap.docs.map(d => d.data());
+            const curBookings = bookings.filter(b => {
+                const bProp = window.toCanonicalPropId ? window.toCanonicalPropId(b.property) : b.property;
+                return bProp === curProp;
+            });
+
+            if (curBookings.length === 0) {
+                return window.customAlert("No Bookings", `No bookings found for property: ${curProp}`);
+            }
+
+            const roomMap = new Map();
+
+            curBookings.forEach(b => {
+                const rList = b.rooms?.length ? b.rooms : (b.room ? [b.room] : []);
+                rList.forEach(rid => {
+                    if (!rid || String(rid).toLowerCase().includes('unassigned')) return;
+                    const cleanRid = String(rid).toUpperCase().trim();
+                    const isDorm = cleanRid.includes('-');
+                    const parentName = isDorm ? cleanRid.split('-')[0].trim() : cleanRid;
+                    const bedNum = isDorm ? (parseInt(cleanRid.split('-')[1], 10) || 1) : 1;
+                    const category = b.bookedType || (isDorm ? "Dorm Category" : "Private Category");
+
+                    if (!roomMap.has(parentName)) {
+                        roomMap.set(parentName, {
+                            name: parentName,
+                            category: category,
+                            units: 1,
+                            beds: 1,
+                            floor: "1",
+                            rule: isDorm ? 'odd-top' : 'private',
+                            maxBed: bedNum
+                        });
+                    } else {
+                        const existing = roomMap.get(parentName);
+                        if (bedNum > existing.maxBed) {
+                            existing.maxBed = bedNum;
+                            existing.beds = bedNum;
+                            existing.units = bedNum;
+                        }
+                    }
+                });
+            });
+
+            if (roomMap.size === 0) {
+                return window.customAlert("Notice", "Bookings exist but none had physical room numbers assigned.");
+            }
+
+            const newDefs = Array.from(roomMap.values());
+            window.roomDefinitions = newDefs;
+            window.renderRoomDefinitionsTable();
+            await window.savePropertyToDatabase(false);
+
+            window.customAlert("Rooms Rebuilt!", `Successfully reconstructed ${newDefs.length} rooms from live bookings!\n\nAll existing guest reservations will now render on their respective rows.`);
+
+        } catch (err) {
+            console.error("Rebuild error:", err);
+            window.customAlert("Rebuild Failed", err.message);
+        }
+    });
 };
 
-window.toggleBatchRoomPanel = function(force) {
-    const el = document.getElementById('batch-room-panel');
-    if (!el) return;
-    el.classList.toggle('hidden', force !== undefined ? !force : !el.classList.contains('hidden'));
-};
+window.restoreSwimsDefaultRooms = async function() {
+    window.customAlert("Restore SWIMS Inventory", "Restore all 79 physical rooms and dorms from the verified SWIMS catalog?", true, async () => {
+        try {
+            const res = await fetch("https://loren-6q.github.io/PMS/swims_rooms_backup.json");
+            if (!res.ok) throw new Error("Could not load swims_rooms_backup.json");
+            const catalog = await res.json();
 
-window.executeBatchDormGenerate = function() {
-    const name = document.getElementById('gen-dorm-name')?.value.trim() || 'DORM A';
-    const cat = document.getElementById('gen-dorm-cat')?.value.trim() || 'Standard 6-Bed Dorm';
-    const beds = parseInt(document.getElementById('gen-dorm-beds')?.value, 10) || 6;
-    const floor = document.getElementById('gen-dorm-floor')?.value.trim() || '1';
-    const rule = document.getElementById('gen-dorm-rule')?.value || 'odd-top';
+            const grouped = {};
+            catalog.forEach(r => {
+                const parent = r.parentRoom || r.id;
+                if (!grouped[parent]) {
+                    grouped[parent] = {
+                        id: parent,
+                        name: parent,
+                        category: r.category || r.type,
+                        units: 1,
+                        beds: 1,
+                        floor: r.floor || "1",
+                        rule: r.isDorm ? (r.rule || "odd-top") : "private"
+                    };
+                } else if (r.isDorm) {
+                    grouped[parent].beds += 1;
+                    grouped[parent].units += 1;
+                }
+            });
 
-    window.roomDefinitions.push({ name, category: cat, units: beds, beds, floor, rule });
-    window.toggleBatchDormPanel(false);
-    window.renderRoomDefinitionsTable();
-};
-
-window.executeBatchRoomGenerate = function() {
-    const prefix = document.getElementById('gen-room-prefix')?.value.trim() || 'ROOM ';
-    const cat = document.getElementById('gen-room-cat')?.value.trim() || 'Deluxe King Room';
-    const start = parseInt(document.getElementById('gen-room-start')?.value, 10) || 1;
-    const end = parseInt(document.getElementById('gen-room-end')?.value, 10) || 4;
-    const floor = document.getElementById('gen-room-floor')?.value.trim() || '1';
-
-    for (let i = start; i <= end; i++) {
-        window.roomDefinitions.push({
-            name: `${prefix}${i}`,
-            category: cat,
-            units: 1,
-            beds: 1,
-            floor: floor,
-            rule: 'private'
-        });
-    }
-    window.toggleBatchRoomPanel(false);
-    window.renderRoomDefinitionsTable();
-};
-
-// All Beds Preview Drawer
-window.toggleBedPreviewDrawer = function() {
-    const el = document.getElementById('bed-preview-drawer');
-    if (!el) return;
-    el.classList.toggle('hidden');
-    window.renderBedPreviewDrawer();
+            window.roomDefinitions = Object.values(grouped);
+            window.renderRoomDefinitionsTable();
+            await window.savePropertyToDatabase(false);
+            window.customAlert("SWIMS Restored", "All 79 physical rooms and dorms have been restored.");
+        } catch (err) {
+            console.error("SWIMS restore error:", err);
+            window.customAlert("Restore Failed", err.message);
+        }
+    });
 };
 
 window.renderBedPreviewDrawer = function() {
@@ -534,78 +584,152 @@ window.renderBedPreviewDrawer = function() {
     container.innerHTML = '';
 
     const grouped = {};
-    window.compiledRooms.forEach(u => {
-        const cat = u.category || 'Standard Room';
+    (window.compiledRooms || []).forEach(r => {
+        const cat = r.category || 'Standard Room';
         if (!grouped[cat]) grouped[cat] = [];
-        grouped[cat].push(u);
+        grouped[cat].push(r);
     });
 
     Object.entries(grouped).forEach(([cat, units]) => {
         const card = document.createElement('div');
-        card.className = "bg-white border border-slate-300 rounded p-1.5 shadow-2xs flex flex-col gap-1 min-w-[150px]";
-        
-        let pillsHtml = `<div class="font-black text-slate-800 text-[10px] uppercase border-b border-slate-200 pb-0.5 mb-0.5 flex justify-between"><span>${cat}</span><span class="text-indigo-600">${units.length}</span></div><div class="flex flex-wrap gap-1">`;
-        
-        units.forEach(u => {
-            const isTop = u.bed === 'top' || u.bunk === 'top';
-            const isBottom = u.bed === 'bottom' || u.bunk === 'bottom' || u.icon === 'bot';
-            const colorClass = isTop ? 'bg-indigo-100 text-indigo-900 border-indigo-300' : (isBottom ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-slate-100 text-slate-800 border-slate-300');
-            const iconText = isTop ? '▲' : (isBottom ? '▼' : '●');
+        card.className = "bg-white p-2 rounded border border-slate-300 shadow-2xs flex flex-col gap-1 min-w-[200px]";
+        let html = `<div class="font-black text-[10px] uppercase text-slate-800 border-b border-slate-200 pb-1 mb-1 flex justify-between">
+            <span>${cat}</span>
+            <span class="text-indigo-600">${units.length} Units</span>
+        </div><div class="flex flex-wrap gap-1">`;
 
-            pillsHtml += `<span class="px-1 py-0.2 rounded border font-mono font-bold text-[9px] flex items-center gap-0.5 ${colorClass}"><span>${u.id}</span><span class="text-[7.5px] opacity-70">${iconText}</span></span>`;
+        units.forEach(u => {
+            const isTop = u.bunk === 'top' || u.icon === 'top' || String(u.bed).toLowerCase().includes('top');
+            const isBot = u.bunk === 'bottom' || u.bunk === 'bot' || u.icon === 'bot' || String(u.bed).toLowerCase().includes('bot');
+            const pillClass = isTop
+                ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                : (isBot ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-700 border-slate-300');
+
+            html += `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-bold border ${pillClass}">${u.id}</span>`;
         });
-        pillsHtml += `</div>`;
-        card.innerHTML = pillsHtml;
+        html += `</div>`;
+        card.innerHTML = html;
         container.appendChild(card);
     });
 };
 
-// Reorder Categories Modal
-window._tempCategoryOrder = [];
+window.toggleBedPreviewDrawer = function() {
+    const el = document.getElementById('bed-preview-drawer');
+    if (el) el.classList.toggle('hidden');
+};
+
+window.toggleBatchDormPanel = function(force) {
+    const el = document.getElementById('batch-dorm-panel');
+    if (!el) return;
+    if (force !== undefined) el.classList.toggle('hidden', !force);
+    else el.classList.toggle('hidden');
+};
+
+window.toggleBatchRoomPanel = function(force) {
+    const el = document.getElementById('batch-room-panel');
+    if (!el) return;
+    if (force !== undefined) el.classList.toggle('hidden', !force);
+    else el.classList.toggle('hidden');
+};
+
+window.executeBatchDormGenerate = function() {
+    const name = (document.getElementById('gen-dorm-name')?.value || 'DORM').trim().toUpperCase();
+    const cat = (document.getElementById('gen-dorm-cat')?.value || 'Standard Dorm').trim();
+    const beds = parseInt(document.getElementById('gen-dorm-beds')?.value, 10) || 6;
+    const floor = (document.getElementById('gen-dorm-floor')?.value || '1').trim();
+    const rule = document.getElementById('gen-dorm-rule')?.value || 'odd-top';
+
+    window.roomDefinitions.push({
+        id: name,
+        name: name,
+        category: cat,
+        units: beds,
+        beds: beds,
+        floor: floor,
+        rule: rule
+    });
+
+    window.renderRoomDefinitionsTable();
+    window.toggleBatchDormPanel(false);
+};
+
+window.executeBatchRoomGenerate = function() {
+    const prefix = (document.getElementById('gen-room-prefix')?.value || 'ROOM ').trim().toUpperCase();
+    const cat = (document.getElementById('gen-room-cat')?.value || 'Deluxe King Room').trim();
+    const start = parseInt(document.getElementById('gen-room-start')?.value, 10) || 1;
+    const end = parseInt(document.getElementById('gen-room-end')?.value, 10) || 1;
+    const floor = (document.getElementById('gen-room-floor')?.value || '1').trim();
+
+    for (let i = start; i <= end; i++) {
+        const rName = `${prefix}${i}`;
+        window.roomDefinitions.push({
+            id: rName,
+            name: rName,
+            category: cat,
+            units: 1,
+            beds: 1,
+            floor: floor,
+            rule: 'private'
+        });
+    }
+
+    window.renderRoomDefinitionsTable();
+    window.toggleBatchRoomPanel(false);
+};
+
 window.openReorderCategoriesModal = function() {
-    const distinct = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    window._tempCategoryOrder = [...distinct];
+    const distinctCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
+    window._tempCategoryOrder = [...distinctCategories];
     window.renderReorderCategoryList();
-    const modal = document.getElementById('reorder-categories-modal');
-    if (modal) modal.classList.remove('hidden');
+    const m = document.getElementById('reorder-categories-modal');
+    if (m) {
+        m.classList.remove('hidden');
+        m.style.display = 'flex';
+    }
+};
+
+window.closeReorderCategoriesModal = function() {
+    const m = document.getElementById('reorder-categories-modal');
+    if (m) {
+        m.classList.add('hidden');
+        m.style.display = 'none';
+    }
 };
 
 window.renderReorderCategoryList = function() {
     const list = document.getElementById('reorder-cat-list');
-    if (!list) return;
+    if (!list || !window._tempCategoryOrder) return;
     list.innerHTML = '';
 
     window._tempCategoryOrder.forEach((cat, idx) => {
-        const item = document.createElement('div');
-        item.className = "flex items-center justify-between p-1 bg-white border border-slate-200 rounded shadow-2xs text-xs font-bold text-slate-800";
-        item.innerHTML = `
-            <div class="flex items-center gap-1.5">
-                <span class="font-mono text-[10px] text-slate-400">${idx + 1}</span>
-                <span>${cat}</span>
-            </div>
+        const div = document.createElement('div');
+        div.className = "flex items-center justify-between p-1.5 rounded border border-slate-200 bg-slate-50 text-xs font-bold";
+        div.innerHTML = `
+            <span>${cat}</span>
             <div class="flex items-center gap-1">
-                <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, -1)" class="p-0.5 text-slate-500 hover:text-indigo-600 ${idx === 0 ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}" ${idx === 0 ? 'disabled' : ''}>
-                    <i data-lucide="chevron-up" size="14"></i>
+                <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, -1)" class="p-0.5 hover:bg-slate-200 rounded text-slate-600 ${idx === 0 ? 'opacity-20 cursor-not-allowed' : ''}" ${idx === 0 ? 'disabled' : ''}>
+                    <i data-lucide="chevron-up" size="13"></i>
                 </button>
-                <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, 1)" class="p-0.5 text-slate-500 hover:text-indigo-600 ${idx === window._tempCategoryOrder.length - 1 ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}" ${idx === window._tempCategoryOrder.length - 1 ? 'disabled' : ''}>
-                    <i data-lucide="chevron-down" size="14"></i>
+                <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, 1)" class="p-0.5 hover:bg-slate-200 rounded text-slate-600 ${idx === window._tempCategoryOrder.length - 1 ? 'opacity-20 cursor-not-allowed' : ''}" ${idx === window._tempCategoryOrder.length - 1 ? 'disabled' : ''}>
+                    <i data-lucide="chevron-down" size="13"></i>
                 </button>
             </div>
         `;
-        list.appendChild(item);
+        list.appendChild(div);
     });
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.shiftCategoryOrderItem = function(idx, delta) {
-    const target = idx + delta;
-    if (target < 0 || target >= window._tempCategoryOrder.length) return;
-    const cat = window._tempCategoryOrder.splice(idx, 1)[0];
-    window._tempCategoryOrder.splice(target, 0, cat);
+window.shiftCategoryOrderItem = function(index, delta) {
+    const target = index + delta;
+    if (!window._tempCategoryOrder || target < 0 || target >= window._tempCategoryOrder.length) return;
+    const item = window._tempCategoryOrder.splice(index, 1)[0];
+    window._tempCategoryOrder.splice(target, 0, item);
     window.renderReorderCategoryList();
 };
 
 window.applyReorderedCategories = function() {
+    if (!window._tempCategoryOrder) return;
     const grouped = {};
     window.roomDefinitions.forEach(r => {
         const cat = r.category || 'Standard Room';
@@ -613,327 +737,304 @@ window.applyReorderedCategories = function() {
         grouped[cat].push(r);
     });
 
-    const newDefs = [];
+    const regrouped = [];
     window._tempCategoryOrder.forEach(cat => {
-        if (grouped[cat]) newDefs.push(...grouped[cat]);
-    });
-    // Add any unlisted
-    Object.keys(grouped).forEach(cat => {
-        if (!window._tempCategoryOrder.includes(cat)) newDefs.push(...grouped[cat]);
+        if (grouped[cat]) regrouped.push(...grouped[cat]);
     });
 
-    window.roomDefinitions = newDefs;
+    Object.keys(grouped).forEach(cat => {
+        if (!window._tempCategoryOrder.includes(cat)) regrouped.push(...grouped[cat]);
+    });
+
+    window.roomDefinitions = regrouped;
     window.closeReorderCategoriesModal();
     window.renderRoomDefinitionsTable();
 };
 
-window.closeReorderCategoriesModal = function() {
-    const modal = document.getElementById('reorder-categories-modal');
-    if (modal) modal.classList.add('hidden');
-};
-
-// --- SECTION 5: STEP 3 (CHANNEX MAPPING & PROTOCOL ENGINE) ---
-
-function getPlanRoomTypeId(p) {
-    return p.relationships?.room_type?.data?.id || p.attributes?.room_type_id || p.room_type_id || null;
-}
+// --- SECTION 5: STEP 3 (CHANNEX ROOM & RATE PLAN MAPPING) ---
 
 window.fetchChannexData = async function() {
-    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
-    const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
+    const apiKey = document.getElementById('chan-api-key')?.value.trim();
+    const propId = document.getElementById('chan-prop-id')?.value.trim();
 
     if (!apiKey || !propId) {
-        return window.customAlert("Missing Credentials", "Please enter both Channex API Key and Property UUID.");
+        return window.customAlert("Credentials Required", "Please enter both the Channex API Key and Property UUID.");
     }
 
-    window.channexConfig.apiKey = apiKey;
-    window.channexConfig.propId = propId;
-
-    const btn = event?.target;
-    if (btn) btn.innerText = "FETCHING...";
+    window.showLoader('FETCHING CHANNEX DATA...');
 
     try {
-        const baseUrl = "https://app.channex.io/api/v1";
         const headers = { "user-api-key": apiKey, "Content-Type": "application/json" };
+        const host = "https://app.channex.io/api/v1";
 
-        // 1. Fetch Room Types
-        const rRes = await fetch(`${baseUrl}/room_types?filter[property_id]=${propId}&pagination[limit]=100`, { headers });
-        const rData = await rRes.json();
-        window.channexRooms = rData.data || [];
+        const rRes = await fetch(`${host}/room_types?filter[property_id]=${propId}&pagination[limit]=100`, { headers });
+        const rJson = await rRes.json();
+        window.channexRooms = rJson.data || [];
 
-        // 2. Fetch Rate Plans (Filtered via options endpoint to purge channel-derived phantom plans)
-        let plans = [];
-        try {
-            const optRes = await fetch(`${baseUrl}/rate_plans/options?filter[property_id]=${propId}&pagination[limit]=100`, { headers });
-            if (optRes.ok) {
-                const optData = await optRes.json();
-                plans = optData.data || [];
-            }
-        } catch (e) {
-            console.warn("Falling back to standard rate plans:", e);
-        }
+        const pRes = await fetch(`${host}/rate_plans?filter[property_id]=${propId}&pagination[limit]=100`, { headers });
+        const pJson = await pRes.json();
+        const allPlans = pJson.data || [];
 
-        if (plans.length === 0) {
-            const pRes = await fetch(`${baseUrl}/rate_plans?filter[property_id]=${propId}&pagination[limit]=100`, { headers });
-            const pData = await pRes.json();
-            plans = pData.data || [];
-        }
-
-        // Strict filter: exclude OTA channel-derived internal plans
-        window.channexRatePlans = plans.filter(p => {
-            const attr = p.attributes || p;
-            if (attr.ui_read_only === true) return false;
-            if (attr.parent_rate_plan_id) return false;
-            if (attr.channel_id) return false;
-            const title = (attr.title || '').toLowerCase();
-            if (title.startsWith('booking.com') || title.startsWith('agoda') || title.startsWith('expedia')) return false;
+        // Filter out OTA-derived mapping rate plans to keep primary plans
+        const cleanRatePlans = allPlans.filter(p => {
+            const attr = p.attributes || {};
+            if (attr.ui_read_only === true || attr.parent_rate_plan_id != null || attr.channel_id != null) return false;
+            const t = (attr.title || '').trim().toLowerCase();
+            if (t.startsWith('booking.com') || t.startsWith('agoda') || t.startsWith('hostelworld') || t.startsWith('expedia')) return false;
             return true;
         });
 
-        // 3. Fetch Connected Channels
-        try {
-            const cRes = await fetch(`${baseUrl}/channels?filter[property_id]=${propId}`, { headers });
-            if (cRes.ok) {
-                const cData = await cRes.json();
-                const otaChannels = (cData.data || []).map(c => c.attributes?.title || c.title).filter(Boolean);
-                window.populateChannelsFromChannex(otaChannels);
-            }
-        } catch (e) {}
+        window.channexRatePlans = cleanRatePlans;
 
-        window.renderStep3Mapping();
-        window.customAlert("Success", `Connected! Downloaded ${window.channexRooms.length} room types and ${window.channexRatePlans.length} primary rate plans.`);
+        // Auto-match Channex room types to PMS categories
+        const pmsCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
+        window.channexMap = [];
+
+        pmsCategories.forEach(pmsCat => {
+            const normPms = pmsCat.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const matchedChannex = window.channexRooms.find(cr => {
+                const normCr = (cr.attributes?.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                return normCr === normPms || normCr.includes(normPms) || normPms.includes(normCr);
+            });
+
+            if (matchedChannex) {
+                window.channexMap.push({
+                    pmsCategory: pmsCat,
+                    channexId: matchedChannex.id,
+                    channexTitle: matchedChannex.attributes?.title || ''
+                });
+            }
+        });
+
+        // Map rate plans directly under their parent room types
+        window.channexRateMap = cleanRatePlans.map(item => {
+            const rId = item.relationships?.room_type?.data?.id || item.attributes?.room_type_id;
+            const parentRoom = window.channexRooms.find(r => r.id === rId);
+            const parentTitle = parentRoom?.attributes?.title || '';
+            const mappedRule = window.channexMap.find(m => m.channexId === rId);
+            const pmsCat = mappedRule ? mappedRule.pmsCategory : '';
+
+            const title = item.attributes?.title || '';
+            const lower = title.toLowerCase();
+            const policy = (lower.includes('non-ref') || lower.includes('non ref') || lower.includes('nr')) ? 'non-ref' : 'ref';
+            const product = (lower.includes('fmp') || lower.includes('evt') || lower.includes('event')) ? 'evt' : 'std';
+
+            return {
+                ratePlanId: item.id,
+                ratePlanTitle: title,
+                channexRoomId: rId || '',
+                channexRoomTitle: parentTitle,
+                pmsCategory: pmsCat,
+                channel: 'Default',
+                policy: policy,
+                product: product
+            };
+        });
+
+        window.renderStep3UnifiedMapping();
+        window.customAlert("Channex Fetched", `Successfully fetched ${window.channexRooms.length} room types and ${cleanRatePlans.length} rate plans.`);
 
     } catch (err) {
-        console.error("Channex Fetch Error:", err);
-        window.customAlert("Fetch Error", err.message);
+        console.error("Fetch Channex Error:", err);
+        window.customAlert("Fetch Failed", err.message);
     } finally {
-        if (btn) btn.innerText = "Fetch Channex Data";
+        window.hideLoader();
     }
 };
 
-window.populateChannelsFromChannex = function(otaChannels = []) {
-    const preserved = {
-        'Default': window.pricingRules.channels?.Default || { type: '=', val: 0 },
-        'Direct': window.pricingRules.channels?.Direct || { type: '-%', val: 10 }
-    };
-    otaChannels.forEach(c => {
-        preserved[c] = window.pricingRules.channels?.[c] || { type: '+%', val: 15 };
-    });
-    window.pricingRules.channels = preserved;
-    window.renderChannelRulesList();
-};
-
-window.renderStep3Mapping = function() {
+window.renderStep3UnifiedMapping = function() {
     const container = document.getElementById('unified-mapping-container');
+    const badge = document.getElementById('channex-mapping-progress-badge');
     if (!container) return;
     container.innerHTML = '';
 
     const pmsCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    const channexRooms = window.channexRooms || [];
-    const allPlans = window.channexRatePlans || [];
-
-    if (pmsCategories.length === 0) {
-        container.innerHTML = `<div class="p-6 text-center text-slate-400 font-bold bg-white rounded border border-slate-200">No PMS Room Categories configured in Step 2. Please create rooms first.</div>`;
-        return;
-    }
-
-    let mappedCount = 0;
+    let pairedCount = 0;
 
     pmsCategories.forEach(pmsCat => {
-        const existingMap = (window.channexMap || []).find(m => m.pmsCategory === pmsCat);
-        const mappedRoomId = existingMap?.channexId || '';
-        const isMapped = !!mappedRoomId;
-        if (isMapped) mappedCount++;
+        const mapping = window.channexMap.find(m => m.pmsCategory === pmsCat);
+        const isPaired = !!(mapping && mapping.channexId);
+        if (isPaired) pairedCount++;
 
-        // Rate plans belonging to this mapped room type
-        const attachedPlans = isMapped ? allPlans.filter(p => getPlanRoomTypeId(p) === mappedRoomId) : [];
+        const associatedRates = isPaired
+            ? (window.channexRateMap || []).filter(r => r.channexRoomId === mapping.channexId)
+            : [];
 
         const card = document.createElement('div');
-        card.className = "bg-white border rounded-lg p-2.5 shadow-2xs flex flex-col gap-2 transition-all " + (isMapped ? "border-emerald-300" : "border-amber-300");
+        card.className = "bg-white border rounded-lg overflow-hidden shadow-xs " + (isPaired ? "border-slate-300" : "border-amber-300");
 
-        let selectOptions = `<option value="">-- Unmapped / Select Channex Room --</option>`;
-        channexRooms.forEach(cr => {
-            const crTitle = cr.attributes?.title || cr.title || cr.id;
-            selectOptions += `<option value="${cr.id}" ${cr.id === mappedRoomId ? 'selected' : ''}>${crTitle}</option>`;
+        let selectHtml = `<select class="table-input font-bold ${isPaired ? 'border-emerald-400 bg-emerald-50 text-emerald-950 font-black' : 'border-amber-400 bg-amber-50 text-amber-900 ring-2 ring-amber-300 animate-pulse'}" onchange="window.updateRoomTypeMapping('${pmsCat}', this.value)">
+            <option value="">-- UNMAPPED: SELECT CHANNEX ROOM TYPE --</option>`;
+
+        (window.channexRooms || []).forEach(cr => {
+            const selected = mapping && mapping.channexId === cr.id ? 'selected' : '';
+            selectHtml += `<option value="${cr.id}" ${selected}>${cr.attributes?.title || cr.id}</option>`;
         });
+        selectHtml += `</select>`;
 
-        const statusBadge = isMapped
-            ? `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 font-black text-[9.5px]">🟢 Paired (${attachedPlans.length} Rates)</span>`
-            : `<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-black text-[9.5px] animate-pulse">⚠️ Unmapped</span>`;
+        let ratesHtml = '';
+        if (isPaired && associatedRates.length > 0) {
+            ratesHtml = `
+                <div class="overflow-x-auto border-t border-slate-200">
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-slate-800 text-[9px] font-black uppercase text-white">
+                            <tr>
+                                <th class="py-1 px-2 w-2/5">Channex Rate Plan</th>
+                                <th class="py-1 px-2 w-1/4">Sales Channel</th>
+                                <th class="py-1 px-2 w-1/5">Policy</th>
+                                <th class="py-1 px-2 w-1/6">Product</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 font-semibold">`;
+
+            associatedRates.forEach(plan => {
+                ratesHtml += `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-1 px-2 font-bold text-slate-800">${plan.ratePlanTitle}</td>
+                        <td class="py-1 px-2">
+                            <select class="table-input" onchange="plan.channel = this.value">
+                                <option value="Default" ${plan.channel === 'Default' ? 'selected' : ''}>Default</option>
+                                <option value="Direct" ${plan.channel === 'Direct' ? 'selected' : ''}>Direct</option>
+                                <option value="Booking.com" ${plan.channel === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
+                                <option value="Hostelworld" ${plan.channel === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
+                                <option value="Agoda" ${plan.channel === 'Agoda' ? 'selected' : ''}>Agoda</option>
+                                <option value="Expedia" ${plan.channel === 'Expedia' ? 'selected' : ''}>Expedia</option>
+                                <option value="Airbnb" ${plan.channel === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
+                            </select>
+                        </td>
+                        <td class="py-1 px-2">
+                            <select class="table-input font-bold" onchange="plan.policy = this.value">
+                                <option value="non-ref" ${plan.policy === 'non-ref' ? 'selected' : ''}>Non-Ref</option>
+                                <option value="ref" ${plan.policy === 'ref' ? 'selected' : ''}>Ref (+%)</option>
+                            </select>
+                        </td>
+                        <td class="py-1 px-2">
+                            <select class="table-input font-bold" onchange="plan.product = this.value">
+                                <option value="std" ${plan.product === 'std' ? 'selected' : ''}>Standard</option>
+                                <option value="evt" ${plan.product === 'evt' ? 'selected' : ''}>Event Pkg</option>
+                            </select>
+                        </td>
+                    </tr>`;
+            });
+            ratesHtml += `</tbody></table></div>`;
+        } else if (isPaired) {
+            ratesHtml = `<div class="p-2.5 text-center text-slate-400 font-bold text-[10px] uppercase">No rate plans linked to this Channex room. Click "+ Create & Push Plan" above.</div>`;
+        } else {
+            ratesHtml = `<div class="p-2.5 text-center text-amber-800 bg-amber-50/50 font-bold text-[10px] uppercase">Select the matching Channex room type above to reveal rate plans.</div>`;
+        }
 
         card.innerHTML = `
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-1.5 border-b border-slate-200">
+            <div class="p-2 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div class="flex items-center gap-1.5">
-                    <span class="font-black text-slate-900 text-xs uppercase">${pmsCat}</span>
-                    ${statusBadge}
+                    <span class="font-black text-xs uppercase text-slate-800">${pmsCat}</span>
+                    <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${isPaired ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
+                        ${isPaired ? `🟢 Paired (${associatedRates.length} Rates)` : '⚠️ Action Required: Select Room'}
+                    </span>
                 </div>
-                <div class="flex items-center gap-1.5">
-                    <label class="text-[9.5px] font-black uppercase text-slate-400">Channex Room:</label>
-                    <select class="table-input font-bold !w-60 ${isMapped ? 'border-emerald-400 text-emerald-950 bg-emerald-50' : 'border-amber-400 text-amber-950 bg-amber-50 ring-2 ring-amber-300 animate-pulse'}" onchange="window.handleChannexRoomPairing('${pmsCat}', this.value)">
-                        ${selectOptions}
-                    </select>
-                </div>
+                <div class="w-full sm:w-72">${selectHtml}</div>
             </div>
-            <div id="plans-table-wrap-${pmsCat.replace(/\s+/g, '_')}"></div>
+            ${ratesHtml}
         `;
-
         container.appendChild(card);
-
-        // Render rate plans if room is paired
-        const plansWrap = card.querySelector(`#plans-table-wrap-${pmsCat.replace(/\s+/g, '_')}`);
-        if (!isMapped) {
-            plansWrap.innerHTML = `<p class="text-[10px] text-amber-700 font-semibold p-1 bg-amber-50 rounded">Select a matching Channex Room Type above to load its rate plans, or click [+ Create & Push Plan] to add one.</p>`;
-        } else if (attachedPlans.length === 0) {
-            plansWrap.innerHTML = `<p class="text-[10px] text-slate-400 font-semibold p-1 bg-slate-50 rounded">No rate plans found in Channex for this room type. Click [+ Create & Push Plan] to generate one.</p>`;
-        } else {
-            let tableHtml = `
-                <table class="w-full text-left text-[11px] border-collapse">
-                    <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900">
-                        <tr>
-                            <th class="py-0.5 px-1.5 w-1/3">Rate Plan Title</th>
-                            <th class="py-0.5 px-1.5 w-1/4">Sales Channel</th>
-                            <th class="py-0.5 px-1.5 w-1/5">Policy</th>
-                            <th class="py-0.5 px-1.5 w-1/5">Product</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 font-semibold">
-            `;
-            attachedPlans.forEach(plan => {
-                const planId = plan.id;
-                const planTitle = plan.attributes?.title || plan.title || '';
-                let existingRateMap = (window.channexRateMap || []).find(r => r.ratePlanId === planId);
-                if (!existingRateMap) {
-                    existingRateMap = {
-                        ratePlanId: planId,
-                        ratePlanTitle: planTitle,
-                        pmsCategory: pmsCat,
-                        channel: 'Default',
-                        policy: /non-?ref/i.test(planTitle) ? 'non-ref' : 'ref',
-                        product: /evt|fmp|event/i.test(planTitle) ? 'evt' : 'std'
-                    };
-                    window.channexRateMap.push(existingRateMap);
-                }
-
-                tableHtml += `
-                    <tr class="hover:bg-slate-50">
-                        <td class="font-bold text-slate-800">${planTitle}</td>
-                        <td>
-                            <select class="table-input font-bold" onchange="window.updateRateMapEntry('${planId}', 'channel', this.value)">
-                                <option value="Default" ${existingRateMap.channel === 'Default' ? 'selected' : ''}>Default</option>
-                                <option value="Booking.com" ${existingRateMap.channel === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
-                                <option value="Hostelworld" ${existingRateMap.channel === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
-                                <option value="Agoda" ${existingRateMap.channel === 'Agoda' ? 'selected' : ''}>Agoda</option>
-                                <option value="Expedia" ${existingRateMap.channel === 'Expedia' ? 'selected' : ''}>Expedia</option>
-                                <option value="Airbnb" ${existingRateMap.channel === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
-                            </select>
-                        </td>
-                        <td>
-                            <select class="table-input font-bold" onchange="window.updateRateMapEntry('${planId}', 'policy', this.value)">
-                                <option value="non-ref" ${existingRateMap.policy === 'non-ref' ? 'selected' : ''}>Non-Refundable</option>
-                                <option value="ref" ${existingRateMap.policy === 'ref' ? 'selected' : ''}>Flexible (+%)</option>
-                            </select>
-                        </td>
-                        <td>
-                            <select class="table-input font-bold" onchange="window.updateRateMapEntry('${planId}', 'product', this.value)">
-                                <option value="std" ${existingRateMap.product === 'std' ? 'selected' : ''}>Standard</option>
-                                <option value="evt" ${existingRateMap.product === 'evt' ? 'selected' : ''}>Event / Peak</option>
-                            </select>
-                        </td>
-                    </tr>
-                `;
-            });
-            tableHtml += `</tbody></table>`;
-            plansWrap.innerHTML = tableHtml;
-        }
     });
 
-    const progBadge = document.getElementById('channex-mapping-progress-badge');
-    if (progBadge) {
-        progBadge.innerText = `${mappedCount} of ${pmsCategories.length} Rooms Paired`;
-        progBadge.className = mappedCount === pmsCategories.length ? "text-[9.5px] font-bold text-emerald-600" : "text-[9.5px] font-bold text-amber-600";
+    if (badge) {
+        badge.innerText = `${pairedCount} of ${pmsCategories.length} Categories Paired`;
+        badge.className = pairedCount === pmsCategories.length
+            ? "text-[9.5px] font-black text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded"
+            : "text-[9.5px] font-black text-amber-700 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded";
     }
 };
 
-window.handleChannexRoomPairing = function(pmsCat, channexRoomId) {
-    window.channexMap = window.channexMap || [];
-    const idx = window.channexMap.findIndex(m => m.pmsCategory === pmsCat);
+window.updateRoomTypeMapping = function(pmsCat, channexRoomId) {
+    const existingIdx = window.channexMap.findIndex(m => m.pmsCategory === pmsCat);
     if (!channexRoomId) {
-        if (idx > -1) window.channexMap.splice(idx, 1);
+        if (existingIdx > -1) window.channexMap.splice(existingIdx, 1);
     } else {
-        if (idx > -1) window.channexMap[idx].channexId = channexRoomId;
-        else window.channexMap.push({ pmsCategory: pmsCat, channexId: channexRoomId });
+        const cRoom = window.channexRooms.find(r => r.id === channexRoomId);
+        const title = cRoom?.attributes?.title || '';
+        if (existingIdx > -1) {
+            window.channexMap[existingIdx].channexId = channexRoomId;
+            window.channexMap[existingIdx].channexTitle = title;
+        } else {
+            window.channexMap.push({ pmsCategory: pmsCat, channexId: channexRoomId, channexTitle: title });
+        }
+
+        (window.channexRateMap || []).forEach(plan => {
+            if (plan.channexRoomId === channexRoomId) {
+                plan.pmsCategory = pmsCat;
+            }
+        });
     }
-    window.renderStep3Mapping();
+    window.renderStep3UnifiedMapping();
 };
 
-window.updateRateMapEntry = function(ratePlanId, field, val) {
-    const entry = (window.channexRateMap || []).find(r => r.ratePlanId === ratePlanId);
-    if (entry) entry[field] = val;
-};
-
-// Create Rate Plan Modal
 window.openCreateRatePlanModal = function() {
-    const list = document.getElementById('crp-room-checklist');
-    const pmsCats = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    if (list) {
-        list.innerHTML = pmsCats.map(cat => `
-            <label class="flex items-center gap-1.5 p-0.5 hover:bg-slate-100 rounded cursor-pointer text-[10px] font-bold text-slate-700">
-                <input type="checkbox" value="${cat}" class="crp-room-checkbox cursor-pointer" checked>
-                <span>${cat}</span>
+    const checklist = document.getElementById('crp-room-checklist');
+    if (!checklist) return;
+    checklist.innerHTML = '';
+
+    const pmsCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
+    pmsCategories.forEach((cat, idx) => {
+        const mapping = window.channexMap.find(m => m.pmsCategory === cat);
+        const isPaired = !!(mapping && mapping.channexId);
+
+        checklist.innerHTML += `
+            <label class="flex items-center gap-1.5 p-1 rounded hover:bg-white text-xs cursor-pointer">
+                <input type="checkbox" value="${cat}" class="crp-room-cb" ${isPaired ? 'checked' : 'disabled'}>
+                <span class="${isPaired ? 'font-bold text-slate-800' : 'text-slate-400 line-through'}">${cat}</span>
+                ${isPaired ? '' : '<span class="text-[9px] text-amber-600 font-bold">(Unpaired)</span>'}
             </label>
-        `).join('');
+        `;
+    });
+
+    const m = document.getElementById('create-rate-plan-modal');
+    if (m) {
+        m.classList.remove('hidden');
+        m.style.display = 'flex';
     }
-    const modal = document.getElementById('create-rate-plan-modal');
-    if (modal) modal.classList.remove('hidden');
 };
 
 window.closeCreateRatePlanModal = function() {
-    const modal = document.getElementById('create-rate-plan-modal');
-    if (modal) modal.classList.add('hidden');
+    const m = document.getElementById('create-rate-plan-modal');
+    if (m) {
+        m.classList.add('hidden');
+        m.style.display = 'none';
+    }
 };
 
 window.toggleAllTargetRooms = function(checked) {
-    document.querySelectorAll('.crp-room-checkbox').forEach(cb => { cb.checked = checked; });
-};
-
-window.applyRatePlanPreset = function(title, channel, policy) {
-    const tInp = document.getElementById('crp-title');
-    const cSel = document.getElementById('crp-channel');
-    const pSel = document.getElementById('crp-policy');
-    if (tInp) tInp.value = title;
-    if (cSel) cSel.value = channel;
-    if (pSel) pSel.value = policy;
+    document.querySelectorAll('.crp-room-cb:not(:disabled)').forEach(cb => { cb.checked = checked; });
 };
 
 window.executeCreateAndPushRatePlan = async function() {
     const title = document.getElementById('crp-title')?.value.trim();
     const channel = document.getElementById('crp-channel')?.value;
     const policy = document.getElementById('crp-policy')?.value;
-    const selectedRooms = Array.from(document.querySelectorAll('.crp-room-checkbox:checked')).map(cb => cb.value);
+    const selectedCats = Array.from(document.querySelectorAll('.crp-room-cb:checked')).map(cb => cb.value);
 
-    if (!title || selectedRooms.length === 0) {
-        return window.customAlert("Missing Data", "Please enter a rate plan title and select at least one room.");
-    }
+    if (!title) return window.customAlert("Title Required", "Please enter a rate plan title.");
+    if (selectedCats.length === 0) return window.customAlert("Room Required", "Please select at least one paired room category.");
+
+    const apiKey = document.getElementById('chan-api-key')?.value.trim();
+    const propId = document.getElementById('chan-prop-id')?.value.trim();
+    if (!apiKey || !propId) return window.customAlert("Credentials Required", "Channex API credentials are missing.");
 
     const btn = document.getElementById('btn-confirm-push-rate');
-    if (btn) btn.innerText = "PUSHING...";
+    if (btn) { btn.disabled = true; btn.innerText = "PUSHING..."; }
 
     try {
-        const apiKey = window.channexConfig?.apiKey;
-        const propId = window.channexConfig?.propId;
-        let createdCount = 0;
-
-        for (let pmsCat of selectedRooms) {
-            const mappedRoom = (window.channexMap || []).find(m => m.pmsCategory === pmsCat);
-            if (!mappedRoom || !mappedRoom.channexId) continue;
+        for (let cat of selectedCats) {
+            const map = window.channexMap.find(m => m.pmsCategory === cat);
+            if (!map || !map.channexId) continue;
 
             const payload = {
                 rate_plan: {
-                    title: `${title} (${pmsCat})`,
+                    title: `${title} - ${cat}`,
+                    room_type_id: map.channexId,
                     property_id: propId,
-                    room_type_id: mappedRoom.channexId,
-                    currency: document.getElementById('prop-currency')?.value || 'THB',
-                    options: [{ occupancy: 1, is_primary: true }]
+                    currency: document.getElementById('prop-currency')?.value || "THB",
+                    options: []
                 }
             };
 
@@ -943,57 +1044,59 @@ window.executeCreateAndPushRatePlan = async function() {
                 body: JSON.stringify(payload)
             });
 
-            if (res.ok) {
-                const j = await res.json();
-                if (j.data?.id) {
-                    window.channexRateMap.push({
-                        ratePlanId: j.data.id,
-                        ratePlanTitle: j.data.attributes?.title || title,
-                        pmsCategory: pmsCat,
-                        channel,
-                        policy,
-                        product: /evt|fmp|event/i.test(title) ? 'evt' : 'std'
-                    });
-                    createdCount++;
-                }
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || `Failed to create rate plan for ${cat}`);
             }
+
+            const created = await res.json();
+            window.channexRateMap.push({
+                ratePlanId: created.data.id,
+                ratePlanTitle: created.data.attributes?.title || title,
+                channexRoomId: map.channexId,
+                channexRoomTitle: map.channexTitle,
+                pmsCategory: cat,
+                channel: channel,
+                policy: policy,
+                product: 'std'
+            });
         }
 
         window.closeCreateRatePlanModal();
-        window.renderStep3Mapping();
-        window.customAlert("Success", `Created and pushed ${createdCount} rate plans to Channex.`);
+        window.renderStep3UnifiedMapping();
+        window.customAlert("Plans Created", `Successfully pushed rate plan to ${selectedCats.length} room types.`);
 
-    } catch (e) {
-        window.customAlert("Push Error", e.message);
+    } catch (err) {
+        console.error("Create Plan Error:", err);
+        window.customAlert("Push Failed", err.message);
     } finally {
-        if (btn) btn.innerText = "Push to Selected Rooms";
+        if (btn) { btn.disabled = false; btn.innerText = "Push to Selected Rooms"; }
     }
 };
 
-// --- SECTION 6: STEP 4 (PRICING ANCHORS, LINKS, CHANNELS, CURVES) ---
+// --- SECTION 6: STEP 4 (PRICING RULES, ANCHORS & LINKS) ---
 
-window.renderStep4Anchors = function() {
-    const dormSelect = document.getElementById('anchor-dorm-select');
-    const privSelect = document.getElementById('anchor-private-select');
-    const pmsCats = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
+window.renderStep4Pricing = function() {
+    const dormSel = document.getElementById('anchor-dorm-select');
+    const privSel = document.getElementById('anchor-private-select');
+    if (!dormSel || !privSel) return;
 
-    const dormCats = pmsCats.filter(c => {
-        const r = window.roomDefinitions.find(rd => rd.category === c);
-        return r && r.rule !== 'private';
+    dormSel.innerHTML = '';
+    privSel.innerHTML = '';
+
+    const pmsCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
+    pmsCategories.forEach(cat => {
+        const isDorm = window.roomDefinitions.some(r => r.category === cat && r.rule !== 'private');
+        const opt = `<option value="${cat}">${cat}</option>`;
+        if (isDorm) dormSel.innerHTML += opt;
+        else privSel.innerHTML += opt;
     });
-    const privCats = pmsCats.filter(c => !dormCats.includes(c));
 
-    if (dormSelect) {
-        dormSelect.innerHTML = dormCats.map(c => `<option value="${c}" ${c === window.pricingRules.dormAnchor ? 'selected' : ''}>${c}</option>`).join('');
-        if (!window.pricingRules.dormAnchor && dormCats[0]) window.pricingRules.dormAnchor = dormCats[0];
-        dormSelect.onchange = e => { window.pricingRules.dormAnchor = e.target.value; };
-    }
+    if (window.pricingRules.dormAnchor) dormSel.value = window.pricingRules.dormAnchor;
+    if (window.pricingRules.privateAnchor) privSel.value = window.pricingRules.privateAnchor;
 
-    if (privSelect) {
-        privSelect.innerHTML = privCats.map(c => `<option value="${c}" ${c === window.pricingRules.privAnchor ? 'selected' : ''}>${c}</option>`).join('');
-        if (!window.pricingRules.privAnchor && privCats[0]) window.pricingRules.privAnchor = privCats[0];
-        privSelect.onchange = e => { window.pricingRules.privAnchor = e.target.value; };
-    }
+    window.renderRelationshipsTable();
+    window.renderChannelRulesList();
 };
 
 window.renderRelationshipsTable = function() {
@@ -1001,65 +1104,68 @@ window.renderRelationshipsTable = function() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const pmsCats = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
+    const categories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
 
-    window.relationships.forEach((rel, idx) => {
+    (window.relationships || []).forEach((rel, idx) => {
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-50";
 
-        let anchorOpts = pmsCats.map(c => `<option value="${c}" ${c === rel.anchor ? 'selected' : ''}>${c}</option>`).join('');
-        let targetOpts = pmsCats.map(c => `<option value="${c}" ${c === rel.target ? 'selected' : ''}>${c}</option>`).join('');
+        let anchorOpts = categories.map(c => `<option value="${c}" ${rel.anchor === c ? 'selected' : ''}>${c}</option>`).join('');
+        let targetOpts = categories.map(c => `<option value="${c}" ${rel.target === c ? 'selected' : ''}>${c}</option>`).join('');
 
         tr.innerHTML = `
-            <td><select class="table-input font-bold" onchange="window.relationships[${idx}].anchor = this.value">${anchorOpts}</select></td>
-            <td><select class="table-input font-bold" onchange="window.relationships[${idx}].target = this.value">${targetOpts}</select></td>
+            <td><select class="table-input" onchange="window.relationships[${idx}].anchor = this.value">${anchorOpts}</select></td>
+            <td><select class="table-input" onchange="window.relationships[${idx}].target = this.value">${targetOpts}</select></td>
             <td>
                 <div class="flex items-center gap-1">
-                    <select class="table-input !w-16 font-bold" onchange="window.relationships[${idx}].type = this.value">
-                        <option value="=" ${rel.type === '=' ? 'selected' : ''}>=</option>
+                    <select class="table-input !w-14" onchange="window.relationships[${idx}].type = this.value">
                         <option value="+" ${rel.type === '+' ? 'selected' : ''}>+</option>
                         <option value="-" ${rel.type === '-' ? 'selected' : ''}>-</option>
                         <option value="+%" ${rel.type === '+%' ? 'selected' : ''}>+%</option>
                         <option value="-%" ${rel.type === '-%' ? 'selected' : ''}>-%</option>
+                        <option value="=" ${rel.type === '=' ? 'selected' : ''}>=</option>
                     </select>
                     <input type="number" value="${rel.val || 0}" class="table-input text-center font-bold" onchange="window.relationships[${idx}].val = parseFloat(this.value) || 0">
                 </div>
             </td>
             <td>
                 <div class="flex items-center gap-1">
-                    <select class="table-input !w-16 font-bold text-pink-700 bg-pink-50" onchange="window.relationships[${idx}].typeFmp = this.value">
-                        <option value="=" ${rel.typeFmp === '=' ? 'selected' : ''}>=</option>
+                    <select class="table-input !w-14 text-pink-700 bg-pink-50" onchange="window.relationships[${idx}].typeFmp = this.value">
                         <option value="+" ${rel.typeFmp === '+' ? 'selected' : ''}>+</option>
                         <option value="-" ${rel.typeFmp === '-' ? 'selected' : ''}>-</option>
                         <option value="+%" ${rel.typeFmp === '+%' ? 'selected' : ''}>+%</option>
                         <option value="-%" ${rel.typeFmp === '-%' ? 'selected' : ''}>-%</option>
+                        <option value="=" ${rel.typeFmp === '=' ? 'selected' : ''}>=</option>
                     </select>
                     <input type="number" value="${rel.valFmp !== undefined ? rel.valFmp : (rel.val || 0)}" class="table-input text-center font-bold text-pink-700 bg-pink-50" onchange="window.relationships[${idx}].valFmp = parseFloat(this.value) || 0">
                 </div>
             </td>
             <td class="text-center">
-                <button type="button" onclick="window.relationships.splice(${idx}, 1); window.renderRelationshipsTable();" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5">
+                <button type="button" onclick="window.deleteRelationshipRow(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5">
                     <i data-lucide="trash-2" size="13"></i>
                 </button>
             </td>
         `;
         tbody.appendChild(tr);
     });
-
     if (window.lucide) window.lucide.createIcons();
 };
 
 window.addRelationshipRow = function() {
-    const pmsCats = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    if (pmsCats.length < 2) return window.customAlert("Notice", "You need at least 2 room categories to configure linking rules.");
+    const cats = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
     window.relationships.push({
-        anchor: pmsCats[0],
-        target: pmsCats[1] || pmsCats[0],
-        type: "+%",
-        val: 20,
-        typeFmp: "+%",
-        valFmp: 20
+        anchor: cats[0] || 'Room 1',
+        target: cats[1] || cats[0] || 'Room 2',
+        type: '+',
+        val: 100,
+        typeFmp: '+',
+        valFmp: 100
     });
+    window.renderRelationshipsTable();
+};
+
+window.deleteRelationshipRow = function(idx) {
+    window.relationships.splice(idx, 1);
     window.renderRelationshipsTable();
 };
 
@@ -1068,187 +1174,128 @@ window.renderChannelRulesList = function() {
     if (!container) return;
     container.innerHTML = '';
 
-    const master = window.pricingRules.masterDriver || 'Direct';
-    const channels = window.pricingRules.channels || {};
+    const masterDriver = window.pricingRules.masterDriver || 'Direct';
+    const channels = ['Default', 'Direct', 'Booking.com', 'Hostelworld', 'Agoda', 'Expedia', 'Airbnb'];
 
-    // Ensure Default and Direct are permanently present
-    if (!channels.Default) channels.Default = { type: '=', val: 0 };
-    if (!channels.Direct) channels.Direct = { type: '-%', val: 10 };
+    channels.forEach(ch => {
+        const isMaster = (ch === masterDriver);
+        const rule = window.pricingRules.channels[ch] || { type: '=', val: 0 };
 
-    Object.entries(channels).forEach(([chanName, rule]) => {
-        const isMaster = chanName === master;
-        const div = document.createElement('div');
-        div.className = "flex items-center justify-between p-1 bg-white border border-amber-200 rounded text-xs";
-        div.innerHTML = `
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between p-1.5 rounded border border-slate-200 bg-white text-xs";
+        row.innerHTML = `
             <div class="flex items-center gap-1.5">
-                <span class="font-black text-slate-800">${chanName}</span>
-                ${isMaster ? '<span class="px-1 py-0.2 rounded bg-indigo-100 text-indigo-800 font-black text-[8px] uppercase">1:1 MASTER</span>' : ''}
+                <span class="font-black ${isMaster ? 'text-indigo-700' : 'text-slate-800'}">${ch}</span>
+                ${isMaster ? '<span class="text-[8px] bg-indigo-100 text-indigo-800 font-black px-1 rounded uppercase">Master Anchor (= 0)</span>' : ''}
             </div>
+            ${isMaster ? '<span class="text-[10px] font-bold text-slate-400">Baseline 1:1</span>' : `
             <div class="flex items-center gap-1">
-                <select class="table-input !w-16 font-bold" ${isMaster ? 'disabled' : ''} onchange="window.pricingRules.channels['${chanName}'].type = this.value">
-                    <option value="=" ${rule.type === '=' ? 'selected' : ''}>SYNC (=)</option>
+                <select class="table-input !w-14" onchange="window.updateChannelRule('${ch}', 'type', this.value)">
+                    <option value="=" ${rule.type === '=' ? 'selected' : ''}>=</option>
+                    <option value="+" ${rule.type === '+' ? 'selected' : ''}>+</option>
+                    <option value="-" ${rule.type === '-' ? 'selected' : ''}>-</option>
                     <option value="+%" ${rule.type === '+%' ? 'selected' : ''}>+%</option>
                     <option value="-%" ${rule.type === '-%' ? 'selected' : ''}>-%</option>
-                    <option value="+" ${rule.type === '+' ? 'selected' : ''}>+ ฿</option>
-                    <option value="-" ${rule.type === '-' ? 'selected' : ''}>- ฿</option>
                 </select>
-                <input type="number" value="${rule.val || 0}" ${isMaster ? 'disabled' : ''} class="table-input !w-14 text-center font-black" onchange="window.pricingRules.channels['${chanName}'].val = parseFloat(this.value) || 0">
-            </div>
+                <input type="number" value="${rule.val || 0}" class="table-input !w-16 text-center font-bold" onchange="window.updateChannelRule('${ch}', 'val', parseFloat(this.value) || 0)">
+            </div>`}
         `;
-        container.appendChild(div);
+        container.appendChild(row);
     });
 };
 
-window.addVerifiedChannelRule = function() {
-    const name = prompt("Enter Sales Channel Name (e.g. Hostelworld, Agoda, Expedia):");
-    if (!name) return;
-    const clean = name.trim();
-    if (!window.pricingRules.channels[clean]) {
-        window.pricingRules.channels[clean] = { type: '+%', val: 15 };
-        window.renderChannelRulesList();
-    }
+window.updateChannelRule = function(ch, field, val) {
+    if (!window.pricingRules.channels[ch]) window.pricingRules.channels[ch] = { type: '=', val: 0 };
+    window.pricingRules.channels[ch][field] = val;
 };
 
-window.toggleEventSettings = function(checked) {
-    const panel = document.getElementById('event-curve-panel');
-    if (panel) panel.classList.toggle('hidden', !checked);
-    window.renderEventCurveTables();
-};
-
-window.cycleRatesSpan = function() {
-    window.eventCurves.ratesSpan = window.eventCurves.ratesSpan === '±2' ? '±1' : (window.eventCurves.ratesSpan === '±1' ? '±3' : '±2');
-    const pill = document.getElementById('rates-span-pill');
-    if (pill) pill.innerText = `${window.eventCurves.ratesSpan} Days`;
-    window.renderEventCurveTables();
-};
-
-window.cycleRestrSpan = function() {
-    window.eventCurves.restrSpan = window.eventCurves.restrSpan === '±6' ? '±4' : (window.eventCurves.restrSpan === '±4' ? '±7' : '±6');
-    const pill = document.getElementById('restr-span-pill');
-    if (pill) pill.innerText = `${window.eventCurves.restrSpan} Days`;
-    window.renderEventCurveTables();
-};
-
-window.renderEventCurveTables = function() {
-    const priceThead = document.getElementById('event-price-thead');
-    const priceTbody = document.getElementById('event-price-tbody');
-    const restrThead = document.getElementById('event-restr-thead');
-    const restrTbody = document.getElementById('event-restr-tbody');
-
-    if (priceThead && priceTbody) {
-        priceThead.innerHTML = `
-            <tr class="bg-pink-100 text-pink-900 text-[9px] font-black uppercase">
-                <th class="p-1">Anchor</th>
-                <th class="p-1">EVT -2</th>
-                <th class="p-1">EVT -1</th>
-                <th class="p-1 bg-amber-400 text-amber-950 font-black">PEAK (0)</th>
-                <th class="p-1">EVT +1</th>
-                <th class="p-1">EVT +2</th>
-            </tr>
-        `;
-        priceTbody.innerHTML = `
-            <tr class="hover:bg-pink-50">
-                <td class="p-1 font-black text-slate-800 text-left">Dorm Master</td>
-                <td class="p-1"><input type="number" value="450" class="table-input text-center font-bold"></td>
-                <td class="p-1"><input type="number" value="700" class="table-input text-center font-bold"></td>
-                <td class="p-1 bg-amber-50"><input type="number" value="1200" class="table-input text-center font-black text-amber-900"></td>
-                <td class="p-1"><input type="number" value="700" class="table-input text-center font-bold"></td>
-                <td class="p-1"><input type="number" value="450" class="table-input text-center font-bold"></td>
-            </tr>
-            <tr class="hover:bg-pink-50">
-                <td class="p-1 font-black text-slate-800 text-left">Private Master</td>
-                <td class="p-1"><input type="number" value="1800" class="table-input text-center font-bold"></td>
-                <td class="p-1"><input type="number" value="2500" class="table-input text-center font-bold"></td>
-                <td class="p-1 bg-amber-50"><input type="number" value="4500" class="table-input text-center font-black text-amber-900"></td>
-                <td class="p-1"><input type="number" value="2500" class="table-input text-center font-bold"></td>
-                <td class="p-1"><input type="number" value="1800" class="table-input text-center font-bold"></td>
-            </tr>
-        `;
-    }
-
-    if (restrThead && restrTbody) {
-        restrThead.innerHTML = `
-            <tr class="bg-indigo-100 text-indigo-950 text-[9px] font-black uppercase">
-                <th class="p-1">Rule</th>
-                <th class="p-1">EVT -3</th>
-                <th class="p-1">EVT -2</th>
-                <th class="p-1">EVT -1</th>
-                <th class="p-1 bg-amber-400 text-amber-950 font-black">PEAK (0)</th>
-                <th class="p-1">EVT +1</th>
-                <th class="p-1">EVT +2</th>
-                <th class="p-1">EVT +3</th>
-            </tr>
-        `;
-        restrTbody.innerHTML = `
-            <tr class="hover:bg-indigo-50">
-                <td class="p-1 font-black text-slate-800 text-left">Min Stay (Nights)</td>
-                <td class="p-1"><input type="number" value="2" class="table-input text-center font-bold"></td>
-                <td class="p-1"><input type="number" value="3" class="table-input text-center font-bold"></td>
-                <td class="p-1"><input type="number" value="4" class="table-input text-center font-bold"></td>
-                <td class="p-1 bg-amber-50"><input type="number" value="4" class="table-input text-center font-black text-amber-900"></td>
-                <td class="p-1"><input type="number" value="3" class="table-input text-center font-bold"></td>
-                <td class="p-1"><input type="number" value="2" class="table-input text-center font-bold"></td>
-                <td class="p-1"><input type="number" value="1" class="table-input text-center font-bold"></td>
-            </tr>
-        `;
-    }
-};
-
-// --- SECTION 7: STEP 5 (VERIFICATION & LAUNCH) ---
+// --- SECTION 7: STEP 5 REVIEW, PERSISTENCE & BOOTLOADER ---
 
 window.updateStep5Review = function() {
+    const propName = document.getElementById('prop-name')?.value || window.currentPropertyId;
+    const propShort = document.getElementById('prop-short')?.value || 'PROP';
+
     const revName = document.getElementById('rev-prop-name');
     const revCode = document.getElementById('rev-prop-code');
     const revInv = document.getElementById('rev-inv-count');
     const revCat = document.getElementById('rev-cat-count');
-    const revChan = document.getElementById('rev-chan-status');
-    const revPlans = document.getElementById('rev-chan-plans');
+    const revChanStatus = document.getElementById('rev-chan-status');
+    const revChanPlans = document.getElementById('rev-chan-plans');
 
-    if (revName) revName.innerText = document.getElementById('prop-name')?.value || window.currentPropertyConfig.name || '--';
-    if (revCode) revCode.innerText = document.getElementById('prop-short')?.value || window.currentPropertyConfig.short || '--';
-    if (revInv) revInv.innerText = `${window.compiledRooms.length} Physical Units`;
-    const distinctCats = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    if (revCat) revCat.innerText = `${distinctCats.length} Room Categories`;
-
-    const isConnected = !!(window.channexConfig?.apiKey && window.channexConfig?.propId);
-    if (revChan) revChan.innerText = isConnected ? "Connected (Channex API)" : "Not Configured";
-    if (revPlans) revPlans.innerText = `${window.channexRateMap.length} Mapped Rate Plans`;
+    if (revName) revName.innerText = propName;
+    if (revCode) revCode.innerText = propShort;
+    if (revInv) revInv.innerText = `${window.compiledRooms.length} Units`;
+    if (revCat) revCat.innerText = `${new Set(window.roomDefinitions.map(r => r.category)).size} Categories`;
+    if (revChanStatus) revChanStatus.innerText = window.channexConfig?.propId ? "Connected" : "Not Configured";
+    if (revChanPlans) revChanPlans.innerText = `${window.channexRateMap.length} Plans Mapped`;
 };
 
-window.launchApp = function(target) {
-    const curShort = document.getElementById('prop-short')?.value.trim() || 'SWIMS';
-    const page = target === 'cm' ? 'cm.html' : 'pms.html';
-    window.location.href = `https://loren-6q.github.io/PMS/${page}?p=${encodeURIComponent(curShort)}`;
-};
-
-// --- SECTION 8: PERSISTENCE (SAVE & LOAD) ---
-
-window.loadPropertyFromDatabase = async function(propId) {
-    const headerStatus = document.getElementById('header-status-text');
-    if (headerStatus) headerStatus.innerText = `Loading ${propId}...`;
-
-    // 1. Purge all in-memory arrays so zero state bleeds between properties
-    window.currentPropertyConfig = {};
-    window.roomDefinitions = [];
-    window.compiledRooms = [];
-    window.addonsList = [];
-    window.paymentMethods = [...DEFAULT_PAYMENT_METHODS];
-    window.channexRooms = [];
-    window.channexRatePlans = [];
-    window.channexMap = [];
-    window.channexRateMap = [];
-    window.pricingRules = { masterDriver: 'Direct', channels: {}, stdRefType: '+%', stdRefVal: 25, evtRefType: '+%', evtRefVal: 25 };
-    window.relationships = [];
+window.savePropertyToDatabase = async function(showMessage = true) {
+    const btn = document.getElementById('btn-save-header');
+    if (btn) { btn.disabled = true; btn.innerText = "SAVING..."; }
 
     try {
-        const propRef = doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId);
-        const snap = await getDoc(propRef);
+        const propId = window.currentPropertyId;
+        window.compileRoomsFromDefinitions();
 
+        const dataToSave = {
+            id: propId,
+            name: document.getElementById('prop-name')?.value.trim() || propId,
+            short: document.getElementById('prop-short')?.value.trim().toUpperCase() || 'PROP',
+            currency: document.getElementById('prop-currency')?.value || 'THB',
+            timezone: document.getElementById('prop-timezone')?.value || 'Asia/Bangkok',
+            address: document.getElementById('prop-address')?.value || '',
+            email: document.getElementById('prop-email')?.value || '',
+            phone: document.getElementById('prop-phone')?.value || '',
+            logoUrl: document.getElementById('prop-logo-url')?.value || '',
+            bannerUrl: document.getElementById('prop-banner-url')?.value || '',
+            iconUrl: document.getElementById('prop-icon-url')?.value || '',
+            payments: window.paymentMethods,
+            addons: window.addonsList,
+            roomDefinitions: window.roomDefinitions,
+            rooms: window.compiledRooms,
+            channex: {
+                apiKey: document.getElementById('chan-api-key')?.value.trim() || '',
+                propId: document.getElementById('chan-prop-id')?.value.trim() || ''
+            },
+            channexMap: window.channexMap,
+            channexRateMap: window.channexRateMap,
+            pricingRules: {
+                masterDriver: document.getElementById('rule-master-driver')?.value || 'Direct',
+                dormAnchor: document.getElementById('anchor-dorm-select')?.value || '',
+                privateAnchor: document.getElementById('anchor-private-select')?.value || '',
+                channels: window.pricingRules.channels,
+                stdRefVal: parseFloat(document.getElementById('rule-std-ref')?.value) || 25,
+                evtRefVal: parseFloat(document.getElementById('rule-evt-ref')?.value) || 25
+            },
+            relationships: window.relationships,
+            updatedAt: new Date().toISOString()
+        };
+
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), dataToSave, { merge: true });
+
+        if (showMessage) {
+            window.customAlert("Saved", "Property setup successfully saved to cloud.");
+        }
+    } catch (err) {
+        console.error("Save Error:", err);
+        window.customAlert("Save Error", err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerText = "SAVE"; }
+        if (window.lucide) window.lucide.createIcons();
+    }
+};
+
+window.loadPropertyFromDatabase = async function(propId) {
+    window.currentPropertyId = propId;
+    window.safeUpdateUrlParam ? window.safeUpdateUrlParam('p', propId.toUpperCase()) : null;
+
+    try {
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
         if (snap.exists()) {
             const data = snap.data();
             window.currentPropertyConfig = data;
 
-            // Step 1: Profile
             const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
             setVal('prop-name', data.name);
             setVal('prop-short', data.short);
@@ -1257,174 +1304,81 @@ window.loadPropertyFromDatabase = async function(propId) {
             setVal('prop-address', data.address);
             setVal('prop-email', data.email);
             setVal('prop-phone', data.phone);
-
-            // Logos
             setVal('prop-logo-url', data.logoUrl);
             setVal('prop-banner-url', data.bannerUrl);
             setVal('prop-icon-url', data.iconUrl);
+
             window.updateLogoPreview('primary', data.logoUrl);
             window.updateLogoPreview('banner', data.bannerUrl);
             window.updateLogoPreview('icon', data.iconUrl);
 
-            // Payments & Add-ons
-            if (Array.isArray(data.paymentMethods) && data.paymentMethods.length > 0) {
-                window.paymentMethods = data.paymentMethods;
-            }
-            window.renderPaymentMethodsTable();
-
+            window.paymentMethods = Array.isArray(data.payments) && data.payments.length > 0 ? data.payments : [...DEFAULT_PAYMENT_METHODS];
             window.addonsList = Array.isArray(data.addons) && data.addons.length > 0 ? data.addons : [...DEFAULT_ADDONS];
-            window.renderAddonsTable();
+            window.roomDefinitions = Array.isArray(data.roomDefinitions) ? data.roomDefinitions : [];
+            window.channexConfig = data.channex || { apiKey: '', propId: '' };
+            setVal('chan-api-key', window.channexConfig.apiKey);
+            setVal('chan-prop-id', window.channexConfig.propId);
 
-            // Step 2: Room Definitions (Editable, with auto-count pre-filler fallback)
-            if (Array.isArray(data.roomDefinitions) && data.roomDefinitions.length > 0) {
-                window.roomDefinitions = data.roomDefinitions.map(rd => {
-                    let beds = parseInt(rd.beds || rd.units, 10);
-                    // Pre-fill fallback: if definition has 0 or undefined, count matching physical rooms
-                    if ((!beds || beds <= 0) && Array.isArray(data.rooms)) {
-                        const raw = (rd.name || '').trim().toUpperCase();
-                        const matches = data.rooms.filter(r => (r.parentRoom && r.parentRoom.toUpperCase() === raw) || r.id.toUpperCase().startsWith(raw));
-                        beds = matches.length > 0 ? matches.length : 1;
-                    }
-                    return { ...rd, beds: Math.max(1, beds || 1), units: Math.max(1, beds || 1) };
-                });
-            } else if (Array.isArray(data.rooms) && data.rooms.length > 0) {
-                // If only compiled rooms exist, construct definitions
-                const catGrouped = {};
-                data.rooms.forEach(r => {
-                    const parent = r.parentRoom || r.id.split('-')[0];
-                    if (!catGrouped[parent]) {
-                        catGrouped[parent] = { name: parent, category: r.category || r.type, beds: 0, floor: r.floor || '1', rule: r.isDorm ? 'odd-top' : 'private' };
-                    }
-                    catGrouped[parent].beds++;
-                });
-                window.roomDefinitions = Object.values(catGrouped);
-            }
-            window.renderRoomDefinitionsTable();
-
-            // Step 3: Channex Mapping
-            setVal('chan-api-key', data.channex?.apiKey);
-            setVal('chan-prop-id', data.channex?.propId);
-            window.channexConfig = data.channex || { apiKey: '', propId: '', rateMultiplier: 100 };
             window.channexMap = Array.isArray(data.channexMap) ? data.channexMap : [];
             window.channexRateMap = Array.isArray(data.channexRateMap) ? data.channexRateMap : [];
+            window.relationships = Array.isArray(data.relationships) ? data.relationships : [];
+            window.pricingRules = data.pricingRules || { masterDriver: 'Direct', channels: {} };
 
-            // Step 4: Pricing Rules
-            if (data.pricingRules) window.pricingRules = data.pricingRules;
-            if (Array.isArray(data.relationships)) window.relationships = data.relationships;
-            window.renderStep4Anchors();
-            window.renderRelationshipsTable();
-            window.renderChannelRulesList();
+            window.renderPaymentMethodsTable();
+            window.renderAddonsTable();
+            window.renderRoomDefinitionsTable();
+            window.renderStep3UnifiedMapping();
+            window.renderStep4Pricing();
         }
-
-        if (headerStatus) headerStatus.innerText = `Active: ${window.currentPropertyConfig.name || propId}`;
     } catch (err) {
         console.error("Load Error:", err);
-        if (headerStatus) headerStatus.innerText = `Error loading ${propId}`;
     }
 };
 
-window.savePropertyToDatabase = async function(showMessage = true) {
-    const propId = window.currentPropertyId;
-    if (!propId) return;
-
-    window.compileRoomsFromDefinitions();
-
-    const payload = {
-        name: document.getElementById('prop-name')?.value.trim() || 'Wild & Wandering Property',
-        short: document.getElementById('prop-short')?.value.trim().toUpperCase() || 'WW',
-        currency: document.getElementById('prop-currency')?.value || 'THB',
-        timezone: document.getElementById('prop-timezone')?.value || 'Asia/Bangkok',
-        address: document.getElementById('prop-address')?.value.trim() || '',
-        email: document.getElementById('prop-email')?.value.trim() || '',
-        phone: document.getElementById('prop-phone')?.value.trim() || '',
-        logoUrl: document.getElementById('prop-logo-url')?.value.trim() || '',
-        bannerUrl: document.getElementById('prop-banner-url')?.value.trim() || '',
-        iconUrl: document.getElementById('prop-icon-url')?.value.trim() || '',
-        paymentMethods: window.paymentMethods,
-        addons: window.addonsList,
-        roomDefinitions: window.roomDefinitions,
-        rooms: window.compiledRooms,
-        channex: {
-            apiKey: document.getElementById('chan-api-key')?.value.trim() || '',
-            propId: document.getElementById('chan-prop-id')?.value.trim() || '',
-            rateMultiplier: 100
-        },
-        channexMap: window.channexMap,
-        channexRateMap: window.channexRateMap,
-        pricingRules: window.pricingRules,
-        relationships: window.relationships,
-        updatedAt: new Date().toISOString()
-    };
-
-    try {
-        const propRef = doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId);
-        await setDoc(propRef, payload, { merge: true });
-        if (showMessage) window.customAlert("Saved", "Property setup successfully saved to cloud database.");
-    } catch (e) {
-        window.customAlert("Save Error", e.message);
-    }
+window.switchSetupProperty = function(propId) {
+    if (propId) window.loadPropertyFromDatabase(propId);
 };
 
-// Property Switcher
-window.switchSetupProperty = async function(propId) {
-    if (!propId || propId === window.currentPropertyId) return;
-    window.currentPropertyId = propId;
-    const found = window.availableProperties.find(p => p.id === propId);
-    if (found?.short) {
-        window.history.replaceState({}, '', `?p=${encodeURIComponent(found.short)}`);
-    }
-    await window.loadPropertyFromDatabase(propId);
+window.launchApp = function(appType) {
+    const curProp = window.currentPropertyId || 'swims_resort';
+    const short = document.getElementById('prop-short')?.value || curProp;
+    const target = appType === 'cm' ? 'cm.html' : 'pms.html';
+    window.location.href = `https://loren-6q.github.io/PMS/${target}?p=${encodeURIComponent(short)}`;
 };
-
-// Modal helpers
-window.closeCustomModal = function() {
-    const m = document.getElementById('custom-app-modal');
-    if (m) m.classList.add('hidden');
-};
-
-// --- SECTION 9: BOOTLOADER ---
 
 async function initSetupEngine() {
     try {
         await signInAnonymously(auth);
-    } catch (e) {
-        console.warn("Auth note:", e);
-    }
+    } catch(e) {}
 
-    // Dynamic Property Loading from Firestore (No hardcoded maps)
-    try {
-        const propsSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
-        window.availableProperties = propsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-        const select = document.getElementById('property-select');
-        if (select) {
-            select.innerHTML = window.availableProperties.map(p => `
-                <option value="${p.id}">${p.name || p.id} (${p.short || p.id.toUpperCase()})</option>
-            `).join('');
-        }
-    } catch (e) {
-        console.warn("Could not query properties collection:", e);
-    }
-
-    // Resolve URL ?p= parameter
     const urlParams = new URLSearchParams(window.location.search);
     const pParam = (urlParams.get('p') || '').trim();
-    let targetPropId = window.availableProperties[0]?.id || 'swims_resort';
 
-    if (pParam) {
-        const matched = window.availableProperties.find(p => 
-            p.id.toLowerCase() === pParam.toLowerCase() ||
-            (p.short && p.short.toLowerCase() === pParam.toLowerCase())
-        );
-        if (matched) targetPropId = matched.id;
+    try {
+        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
+        const props = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.availableProperties = props;
+
+        const sel = document.getElementById('property-select');
+        if (sel) {
+            sel.innerHTML = props.map(p => `<option value="${p.id}">${p.name || p.id}</option>`).join('');
+        }
+
+        let targetId = props[0]?.id || 'swims_resort';
+        if (pParam) {
+            const matched = props.find(p => 
+                p.id.toLowerCase() === pParam.toLowerCase() || 
+                (p.short && p.short.toLowerCase() === pParam.toLowerCase())
+            );
+            if (matched) targetId = matched.id;
+        }
+
+        if (sel) sel.value = targetId;
+        await window.loadPropertyFromDatabase(targetId);
+
+    } catch (e) {
+        console.warn("Setup Engine Init:", e);
     }
-
-    window.currentPropertyId = targetPropId;
-    const select = document.getElementById('property-select');
-    if (select) select.value = targetPropId;
-
-    await window.loadPropertyFromDatabase(targetPropId);
-    window.jumpStep(1);
 }
 
 if (document.readyState === 'loading') {
