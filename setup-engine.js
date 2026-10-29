@@ -29,6 +29,7 @@ const storage = getStorage(app);
 
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
+// --- GLOBAL STATE ---
 window.currentStep = 1;
 window.totalSteps = 5;
 window.activePropertyId = '';
@@ -65,67 +66,8 @@ window.savedAutofillBaselines = {};
 window.ratesSpan = 2;
 window.restrSpan = 6;
 
-async function compressImage(file, maxWidth = 1200, maxHeight = 400, quality = 0.82) {
-    return new Promise((resolve) => {
-        if (!file || !file.type.startsWith('image/')) return resolve({ blob: file, dataUrl: '' });
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                let w = img.width;
-                let h = img.height;
-                if (w > maxWidth || h > maxHeight) {
-                    const ratio = Math.min(maxWidth / w, maxHeight / h);
-                    w = Math.round(w * ratio);
-                    h = Math.round(h * ratio);
-                }
-                const canvas = document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, w, h);
-                const isPng = file.type === 'image/png';
-                const mime = isPng ? 'image/png' : 'image/jpeg';
-                canvas.toBlob((blob) => {
-                    resolve({ blob: blob || file, dataUrl: canvas.toDataURL(mime, quality) });
-                }, mime, quality);
-            };
-            img.onerror = () => resolve({ blob: file, dataUrl: e.target.result });
-            img.src = e.target.result;
-        };
-        reader.onerror = () => resolve({ blob: file, dataUrl: '' });
-        reader.readAsDataURL(file);
-    });
-}
-
-function normalizeChannelName(raw) {
-    if (!raw) return 'Default';
-    const s = String(raw).trim();
-    if (/^default$/i.test(s)) return 'Default';
-    if (/^direct(\s*website)?$/i.test(s)) return 'Direct';
-    if (/booking|bdc/i.test(s)) return 'Booking.com';
-    if (/hostelworld|hw/i.test(s)) return 'Hostelworld';
-    if (/agoda/i.test(s)) return 'Agoda';
-    if (/expedia/i.test(s)) return 'Expedia';
-    if (/airbnb/i.test(s)) return 'Airbnb';
-    return s;
-}
-
-function sanitizeForFirestore(data) {
-    if (data === undefined || data === null) return null;
-    if (Array.isArray(data)) return data.map(item => sanitizeForFirestore(item));
-    if (typeof data === 'object' && !(data instanceof Date)) {
-        const cleaned = {};
-        for (const [key, val] of Object.entries(data)) {
-            cleaned[key] = val !== undefined ? sanitizeForFirestore(val) : null;
-        }
-        return cleaned;
-    }
-    return data;
-}
-
-// --- STEP NAVIGATION ---
-window.jumpStep = (step) => {
+// --- STEP NAVIGATION (DECLARED IMMEDIATELY ON WINDOW) ---
+window.jumpStep = function(step) {
     const s = Math.max(1, Math.min(5, parseInt(step, 10) || 1));
     window.currentStep = s;
 
@@ -166,7 +108,14 @@ window.jumpStep = (step) => {
         }
     }
 
-    if (s === 1) window.renderPaymentMethodsTable();
+    if (s === 1) {
+        window.renderPaymentMethodsTable();
+        window.renderAddonsTable();
+    }
+    if (s === 2) {
+        window.compileRoomsFromDefinitions();
+        window.renderRoomDefinitionsTable();
+    }
     if (s === 3) window.renderUnifiedMappingCards();
     if (s === 4) window.renderPricingStepRules();
     if (s === 5) window.renderReviewLaunchStep();
@@ -174,10 +123,15 @@ window.jumpStep = (step) => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.nextStep = () => { if (window.currentStep < 5) window.jumpStep(window.currentStep + 1); };
-window.prevStep = () => { if (window.currentStep > 1) window.jumpStep(window.currentStep - 1); };
+window.nextStep = function() {
+    if (window.currentStep < 5) window.jumpStep(window.currentStep + 1);
+};
 
-window.toggleCardSection = (sectionId, chevronId, forceState = null) => {
+window.prevStep = function() {
+    if (window.currentStep > 1) window.jumpStep(window.currentStep - 1);
+};
+
+window.toggleCardSection = function(sectionId, chevronId, forceState = null) {
     const sec = document.getElementById(sectionId);
     const icon = document.getElementById(chevronId);
     if (!sec) return;
@@ -192,7 +146,7 @@ window.toggleCardSection = (sectionId, chevronId, forceState = null) => {
 };
 
 let _customModalCallback = null;
-window.customAlert = (title, message, isConfirm = false, onConfirm = null) => {
+window.customAlert = function(title, message, isConfirm = false, onConfirm = null) {
     const modal = document.getElementById('custom-app-modal');
     if (!modal) return alert(`${title}\n\n${message}`);
     document.getElementById('modal-title').innerText = title || "Notification";
@@ -209,7 +163,7 @@ window.customAlert = (title, message, isConfirm = false, onConfirm = null) => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.closeCustomModal = (confirmed) => {
+window.closeCustomModal = function(confirmed) {
     const modal = document.getElementById('custom-app-modal');
     if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
     if (confirmed && typeof _customModalCallback === 'function') {
@@ -221,8 +175,54 @@ window.closeCustomModal = (confirmed) => {
     }
 };
 
+async function compressImage(file, maxWidth = 1200, maxHeight = 400, quality = 0.82) {
+    return new Promise((resolve) => {
+        if (!file || !file.type.startsWith('image/')) return resolve({ blob: file, dataUrl: '' });
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                let w = img.width;
+                let h = img.height;
+                if (w > maxWidth || h > maxHeight) {
+                    const ratio = Math.min(maxWidth / w, maxHeight / h);
+                    w = Math.round(w * ratio);
+                    h = Math.round(h * ratio);
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                const isPng = file.type === 'image/png';
+                const mime = isPng ? 'image/png' : 'image/jpeg';
+                canvas.toBlob((blob) => {
+                    resolve({ blob: blob || file, dataUrl: canvas.toDataURL(mime, quality) });
+                }, mime, quality);
+            };
+            img.onerror = () => resolve({ blob: file, dataUrl: e.target.result });
+            img.src = e.target.result;
+        };
+        reader.onerror = () => resolve({ blob: file, dataUrl: '' });
+        reader.readAsDataURL(file);
+    });
+}
+
+function sanitizeForFirestore(data) {
+    if (data === undefined || data === null) return null;
+    if (Array.isArray(data)) return data.map(item => sanitizeForFirestore(item));
+    if (typeof data === 'object' && !(data instanceof Date)) {
+        const cleaned = {};
+        for (const [key, val] of Object.entries(data)) {
+            cleaned[key] = val !== undefined ? sanitizeForFirestore(val) : null;
+        }
+        return cleaned;
+    }
+    return data;
+}
+
 // --- LOGO UPLOADS & PREVIEWS ---
-window.updateLogoPreview = (type, url) => {
+window.updateLogoPreview = function(type, url) {
     const cleanUrl = (url || '').trim() || DEFAULT_WW_ICON;
     const img = document.getElementById(`preview-logo-${type}`);
     const inp = document.getElementById(`prop-${type === 'primary' ? 'logo' : (type === 'banner' ? 'banner' : 'icon')}-url`);
@@ -234,18 +234,15 @@ window.updateLogoPreview = (type, url) => {
     }
 };
 
-window.resetLogosToDefault = () => {
+window.resetLogosToDefault = function() {
     ['primary', 'banner', 'icon'].forEach(t => window.updateLogoPreview(t, DEFAULT_WW_ICON));
 };
 
-window.handleLogoFileUpload = async (event, logoType) => {
+window.handleLogoFileUpload = async function(event, logoType) {
     const file = event.target?.files?.[0];
     if (!file) return;
 
     const propId = window.activePropertyId || 'swims_resort';
-    const statusText = document.getElementById('header-status-text');
-    if (statusText) statusText.innerText = `Optimizing ${logoType}...`;
-
     const dimensions = {
         primary: { w: 400, h: 120, q: 0.85 },
         banner: { w: 1200, h: 320, q: 0.80 },
@@ -259,21 +256,18 @@ window.handleLogoFileUpload = async (event, logoType) => {
     const storagePath = `properties/${propId}/logo_${logoType}_${Date.now()}.${ext}`;
 
     try {
-        if (statusText) statusText.innerText = `Uploading ${logoType}...`;
         const sRef = storageRef(storage, storagePath);
         await uploadBytes(sRef, compressed.blob);
         const downloadUrl = await getDownloadURL(sRef);
         window.updateLogoPreview(logoType, downloadUrl);
-        if (statusText) statusText.innerText = "Ready";
         window.customAlert("Success", `${logoType.toUpperCase()} logo uploaded and updated.`);
     } catch (err) {
         console.warn("Storage upload failed, keeping compressed thumbnail DataURL:", err);
-        if (statusText) statusText.innerText = "Saved locally";
     }
 };
 
 // --- PAYMENT METHODS & COMMISSION (KP) ENGINE ---
-window.renderPaymentMethodsTable = () => {
+window.renderPaymentMethodsTable = function() {
     const tbody = document.getElementById('payment-methods-table-body');
     if (!tbody) return;
 
@@ -314,7 +308,7 @@ window.renderPaymentMethodsTable = () => {
 };
 
 // --- ADDONS MANAGEMENT ---
-window.moveAddon = (idx, direction) => {
+window.moveAddon = function(idx, direction) {
     if (!Array.isArray(window.addonsList)) return;
     const targetIdx = idx + direction;
     if (targetIdx < 0 || targetIdx >= window.addonsList.length) return;
@@ -327,18 +321,18 @@ window.moveAddon = (idx, direction) => {
 };
 
 let _draggedAddonIdx = null;
-window.handleAddonDragStart = (e, idx) => {
+window.handleAddonDragStart = function(e, idx) {
     _draggedAddonIdx = idx;
     e.dataTransfer.effectAllowed = 'move';
     e.target.closest('tr')?.classList.add('opacity-40');
 };
 
-window.handleAddonDragOver = (e) => {
+window.handleAddonDragOver = function(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
 };
 
-window.handleAddonDrop = (e, targetIdx) => {
+window.handleAddonDrop = function(e, targetIdx) {
     e.preventDefault();
     if (_draggedAddonIdx === null || _draggedAddonIdx === targetIdx) return;
     const movedItem = window.addonsList.splice(_draggedAddonIdx, 1)[0];
@@ -348,12 +342,12 @@ window.handleAddonDrop = (e, targetIdx) => {
     window.renderAddonsTable();
 };
 
-window.handleAddonDragEnd = (e) => {
+window.handleAddonDragEnd = function() {
     _draggedAddonIdx = null;
-    e.target.closest('tr')?.classList.remove('opacity-40');
+    document.querySelectorAll('#addon-list-body tr').forEach(tr => tr.classList.remove('opacity-40'));
 };
 
-window.renderAddonsTable = () => {
+window.renderAddonsTable = function() {
     const tbody = document.getElementById('addon-list-body');
     if (!tbody) return;
 
@@ -411,7 +405,7 @@ window.renderAddonsTable = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.addBlankAddonRow = () => {
+window.addBlankAddonRow = function() {
     window.addonsList = window.addonsList || [];
     window.addonsList.push({
         id: 'add_' + Math.random().toString(36).substr(2, 7),
@@ -425,21 +419,21 @@ window.addBlankAddonRow = () => {
 };
 
 // --- ROOM INVENTORY DEFINITIONS & GENERATORS ---
-window.toggleBatchDormPanel = (forceState = null) => {
+window.toggleBatchDormPanel = function(forceState = null) {
     const p = document.getElementById('batch-dorm-panel');
     if (!p) return;
     const shouldShow = forceState !== null ? forceState : p.classList.contains('hidden');
     p.classList.toggle('hidden', !shouldShow);
 };
 
-window.toggleBatchRoomPanel = (forceState = null) => {
+window.toggleBatchRoomPanel = function(forceState = null) {
     const p = document.getElementById('batch-room-panel');
     if (!p) return;
     const shouldShow = forceState !== null ? forceState : p.classList.contains('hidden');
     p.classList.toggle('hidden', !shouldShow);
 };
 
-window.executeBatchDormGenerate = () => {
+window.executeBatchDormGenerate = function() {
     const roomName = (document.getElementById('gen-dorm-name')?.value || 'DORM A').trim().toUpperCase();
     const catName = (document.getElementById('gen-dorm-cat')?.value || 'Standard 6-Bed Dorm').trim();
     const bedCount = parseInt(document.getElementById('gen-dorm-beds')?.value, 10) || 6;
@@ -470,7 +464,7 @@ window.executeBatchDormGenerate = () => {
     window.renderRoomDefinitionsTable();
 };
 
-window.executeBatchRoomGenerate = () => {
+window.executeBatchRoomGenerate = function() {
     const prefix = document.getElementById('gen-room-prefix')?.value || 'ROOM ';
     const catName = (document.getElementById('gen-room-cat')?.value || 'Deluxe King Room').trim();
     const startNum = parseInt(document.getElementById('gen-room-start')?.value, 10) || 1;
@@ -505,8 +499,7 @@ window.executeBatchRoomGenerate = () => {
     window.renderRoomDefinitionsTable();
 };
 
-// IMMUTABLE ID PRESERVATION: Compiles beds without rewriting existing physical IDs
-window.compileRoomsFromDefinitions = () => {
+window.compileRoomsFromDefinitions = function() {
     const existingRooms = window.compiledRooms || window.currentPropertyConfig?.rooms || [];
     const existingById = {};
     existingRooms.forEach(r => { if (r.id) existingById[r.id] = r; });
@@ -574,7 +567,7 @@ window.compileRoomsFromDefinitions = () => {
     window.renderBedPreviewDrawer();
 };
 
-window.renderRoomDefinitionsTable = () => {
+window.renderRoomDefinitionsTable = function() {
     const tbody = document.getElementById('room-def-list-body');
     if (!tbody) return;
 
@@ -644,7 +637,7 @@ window.renderRoomDefinitionsTable = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.renderBedPreviewDrawer = () => {
+window.renderBedPreviewDrawer = function() {
     const container = document.getElementById('bed-preview-groups');
     if (!container) return;
     const grouped = {};
@@ -666,12 +659,12 @@ window.renderBedPreviewDrawer = () => {
     `).join('');
 };
 
-window.toggleBedPreviewDrawer = (force) => {
+window.toggleBedPreviewDrawer = function(force) {
     const d = document.getElementById('bed-preview-drawer');
     if (d) d.classList.toggle('hidden', force !== undefined ? !force : undefined);
 };
 
-window.clearAllRoomDefs = () => {
+window.clearAllRoomDefs = function() {
     window.customAlert("Clear Rooms", "Wipe all configured rooms?", true, () => {
         window.roomDefinitions = [];
         window.compileRoomsFromDefinitions();
@@ -679,14 +672,14 @@ window.clearAllRoomDefs = () => {
     });
 };
 
-window.addBlankRoomDef = () => {
+window.addBlankRoomDef = function() {
     window.roomDefinitions.push({ id: 'room_' + Date.now(), name: `ROOM ${window.roomDefinitions.length + 1}`, category: 'Standard Room', count: 1, floor: '1', rule: 'private', isDorm: false });
     window.compileRoomsFromDefinitions();
     window.renderRoomDefinitionsTable();
 };
 
 // --- CATEGORY REORDERING ENGINE ---
-window.openReorderCategoriesModal = () => {
+window.openReorderCategoriesModal = function() {
     const defs = window.roomDefinitions || [];
     const counts = {};
     const categories = [];
@@ -707,8 +700,8 @@ window.openReorderCategoriesModal = () => {
             <div class="flex items-center justify-between p-2 rounded bg-white border border-slate-200 shadow-2xs">
                 <span class="font-black text-slate-800 text-xs">${idx + 1}. ${cat}</span>
                 <div class="flex items-center gap-1">
-                    <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, -1)" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"><i data-lucide="chevron-up" size="14"></i></button>
-                    <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, 1)" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"><i data-lucide="chevron-down" size="14"></i></button>
+                    <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, -1)" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"><i data-lucide="chevron-up" size="14"></i></button>
+                    <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, 1)" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"><i data-lucide="chevron-down" size="14"></i></button>
                 </div>
             </div>
         `).join('');
@@ -719,12 +712,12 @@ window.openReorderCategoriesModal = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.closeReorderCategoriesModal = () => {
+window.closeReorderCategoriesModal = function() {
     const modal = document.getElementById('reorder-categories-modal');
     if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 };
 
-window.shiftCategoryOrderItem = (idx, direction) => {
+window.shiftCategoryOrderItem = function(idx, direction) {
     const target = idx + direction;
     if (target < 0 || target >= window._tempCategoryOrder.length) return;
     const temp = window._tempCategoryOrder[idx];
@@ -733,7 +726,7 @@ window.shiftCategoryOrderItem = (idx, direction) => {
     window.openReorderCategoriesModal();
 };
 
-window.applyReorderedCategories = () => {
+window.applyReorderedCategories = function() {
     const order = window._tempCategoryOrder || [];
     const defs = window.roomDefinitions || [];
     const reordered = [];
@@ -746,8 +739,8 @@ window.applyReorderedCategories = () => {
     window.closeReorderCategoriesModal();
 };
 
-// --- CHANNEX INTEGRATION & RATE PLAN CREATOR ---
-window.fetchChannexData = async () => {
+// --- CHANNEX INTEGRATION & RATE PLAN TOOLS ---
+window.fetchChannexData = async function() {
     const apiKey = document.getElementById('chan-api-key')?.value.trim();
     const propId = document.getElementById('chan-prop-id')?.value.trim();
     if (!apiKey || !propId) return window.customAlert("Credentials Required", "Enter both your Channex API Key and Property ID.");
@@ -789,7 +782,7 @@ window.fetchChannexData = async () => {
     }
 };
 
-window.openCreateRatePlanModal = () => {
+window.openCreateRatePlanModal = function() {
     const checklist = document.getElementById('crp-room-checklist');
     const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
     if (checklist) {
@@ -803,12 +796,12 @@ window.openCreateRatePlanModal = () => {
     if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
 };
 
-window.closeCreateRatePlanModal = () => {
+window.closeCreateRatePlanModal = function() {
     const modal = document.getElementById('create-rate-plan-modal');
     if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 };
 
-window.applyRatePlanPreset = (title, channel, policy) => {
+window.applyRatePlanPreset = function(title, channel, policy) {
     const t = document.getElementById('crp-title');
     const c = document.getElementById('crp-channel');
     const p = document.getElementById('crp-policy');
@@ -817,11 +810,11 @@ window.applyRatePlanPreset = (title, channel, policy) => {
     if (p) p.value = policy;
 };
 
-window.toggleAllTargetRooms = (checked) => {
+window.toggleAllTargetRooms = function(checked) {
     document.querySelectorAll('.crp-cat-box').forEach(cb => cb.checked = !!checked);
 };
 
-window.executeCreateAndPushRatePlan = async () => {
+window.executeCreateAndPushRatePlan = async function() {
     const title = document.getElementById('crp-title')?.value.trim();
     const channel = document.getElementById('crp-channel')?.value || 'DEFAULT';
     const policy = document.getElementById('crp-policy')?.value || 'non-ref';
@@ -889,7 +882,7 @@ window.executeCreateAndPushRatePlan = async () => {
     window.customAlert("Rate Plans Ready", `Saved "${title}" across ${pushedCount} categories.`);
 };
 
-window.renderUnifiedMappingCards = () => {
+window.renderUnifiedMappingCards = function() {
     const container = document.getElementById('unified-mapping-container');
     if (!container) return;
     const pmsCats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
@@ -924,7 +917,7 @@ window.renderUnifiedMappingCards = () => {
 };
 
 // --- STEP 4 PRICING & CHANNELS ---
-window.renderPricingStepRules = () => {
+window.renderPricingStepRules = function() {
     const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
     const dormSelect = document.getElementById('anchor-dorm-select');
     const privSelect = document.getElementById('anchor-private-select');
@@ -942,7 +935,7 @@ window.renderPricingStepRules = () => {
     window.renderChannelRulesList();
 };
 
-window.renderRelationships = () => {
+window.renderRelationships = function() {
     const tbody = document.getElementById('relationships-table-body');
     if (!tbody) return;
     const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
@@ -976,7 +969,7 @@ window.renderRelationships = () => {
                     <input type="number" step="any" class="table-input font-bold text-center !w-16 text-pink-700" value="${rel.valFmp || 0}" onchange="window.relationships[${idx}].valFmp = parseFloat(this.value)||0">
                 </div>
             </td>
-            <td class="p-1.5 text-center"><button type="button" onclick="window.relationships.splice(${idx}, 1); window.renderRelationships();" class="text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="13"></i></button></td>
+            <td class="p-1.5 text-center"><button type="button" onclick="window.relationships.splice(${idx}, 1); window.renderRelationships();" class="text-slate-400 hover:text-rose-600 cursor-pointer"><i data-lucide="trash-2" size="13"></i></button></td>
         </tr>
     `).join('');
 
@@ -992,13 +985,13 @@ window.renderRelationships = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.addRelationshipRow = () => {
+window.addRelationshipRow = function() {
     const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
     window.relationships.push({ anchor: cats[0] || '', target: cats[1] || cats[0] || '', type: '=', val: 0, typeFmp: '=', valFmp: 0 });
     window.renderRelationships();
 };
 
-window.renderChannelRulesList = () => {
+window.renderChannelRulesList = function() {
     const container = document.getElementById('channel-rules-container');
     if (!container) return;
     const channels = window.pricingRules.channels || {};
@@ -1020,7 +1013,7 @@ window.renderChannelRulesList = () => {
     `).join('');
 };
 
-window.addVerifiedChannelRule = () => {
+window.addVerifiedChannelRule = function() {
     const ch = prompt("Enter Channel Name (e.g. Airbnb):");
     if (ch && ch.trim()) {
         window.pricingRules.channels[ch.trim()] = { type: '+%', val: 10 };
@@ -1028,7 +1021,7 @@ window.addVerifiedChannelRule = () => {
     }
 };
 
-window.toggleEventSettings = (enabled) => {
+window.toggleEventSettings = function(enabled) {
     const panel = document.getElementById('event-curve-panel');
     if (panel) panel.classList.toggle('hidden', !enabled);
     document.querySelectorAll('.evt-col-header, .evt-col-cell, #evt-ref-row').forEach(el => {
@@ -1036,19 +1029,19 @@ window.toggleEventSettings = (enabled) => {
     });
 };
 
-window.cycleRatesSpan = () => {
+window.cycleRatesSpan = function() {
     window.ratesSpan = (window.ratesSpan === 2) ? 3 : 2;
     const pill = document.getElementById('rates-span-pill');
     if (pill) pill.innerText = `±${window.ratesSpan} Days`;
 };
 
-window.cycleRestrSpan = () => {
+window.cycleRestrSpan = function() {
     window.restrSpan = (window.restrSpan === 6) ? 7 : (window.restrSpan === 7 ? 2 : 6);
     const pill = document.getElementById('restr-span-pill');
     if (pill) pill.innerText = `±${window.restrSpan} Days`;
 };
 
-window.renderReviewLaunchStep = () => {
+window.renderReviewLaunchStep = function() {
     const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
     setTxt('rev-prop-name', document.getElementById('prop-name')?.value || window.activePropertyId);
     setTxt('rev-prop-code', document.getElementById('prop-short')?.value || '');
@@ -1058,13 +1051,13 @@ window.renderReviewLaunchStep = () => {
     setTxt('rev-chan-plans', `${(window.channexRateMap || []).length} Plans Mapped`);
 };
 
-window.launchApp = (appKey) => {
+window.launchApp = function(appKey) {
     const pCode = (document.getElementById('prop-short')?.value || window.activePropertyId || 'SWIMS').toUpperCase();
     window.location.href = `${appKey}.html?p=${encodeURIComponent(pCode)}`;
 };
 
 // --- DATABASE LOAD & SAVE ---
-window.loadPropertyFromDatabase = async (propId) => {
+window.loadPropertyFromDatabase = async function(propId) {
     if (!propId) return;
     const statusText = document.getElementById('header-status-text');
     if (statusText) statusText.innerText = `Loading ${propId}...`;
@@ -1126,7 +1119,7 @@ window.loadPropertyFromDatabase = async (propId) => {
     }
 };
 
-window.savePropertyToDatabase = async (showModal = true) => {
+window.savePropertyToDatabase = async function(showModal = true) {
     const propId = window.activePropertyId;
     if (!propId) return window.customAlert("Error", "No active property selected.");
 
@@ -1190,7 +1183,7 @@ window.savePropertyToDatabase = async (showModal = true) => {
     }
 };
 
-window.switchSetupProperty = async (propId) => {
+window.switchSetupProperty = async function(propId) {
     if (!propId || propId === window.activePropertyId) return;
     window.activePropertyId = propId;
     await window.loadPropertyFromDatabase(propId);
