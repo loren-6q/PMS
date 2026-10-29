@@ -1238,6 +1238,27 @@ window.savePropertyToDatabase = async function(showMessage = true) {
         const propId = window.currentPropertyId;
         window.compileRoomsFromDefinitions();
 
+        // --- CIRCUIT BREAKER: PREVENT ACCIDENTAL ROOM PURGES ---
+        const existingRoomsCount = window.currentPropertyConfig?.rooms?.length || 0;
+        const newRoomsCount = window.compiledRooms.length;
+
+        if (existingRoomsCount > 0 && newRoomsCount === 0) {
+            throw new Error(`CIRCUIT BREAKER ACTIVATED: Attempted to save 0 rooms over an existing catalog of ${existingRoomsCount} rooms. Overwrite blocked.`);
+        }
+
+        // --- AUTOMATIC ROLLING BACKUP BEFORE OVERWRITE ---
+        if (window.currentPropertyConfig && Object.keys(window.currentPropertyConfig).length > 0) {
+            try {
+                const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'property_backups', `${propId}_${Date.now()}`);
+                await setDoc(backupRef, {
+                    config: window.currentPropertyConfig,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (backupErr) {
+                console.warn("[Setup Engine] Pre-save snapshot notice:", backupErr.message);
+            }
+        }
+
         const dataToSave = {
             id: propId,
             name: document.getElementById('prop-name')?.value.trim() || propId,
@@ -1273,6 +1294,9 @@ window.savePropertyToDatabase = async function(showMessage = true) {
         };
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), dataToSave, { merge: true });
+
+        // Update in-memory reference to newly saved state
+        window.currentPropertyConfig = { ...dataToSave };
 
         if (showMessage) {
             window.customAlert("Saved", "Property setup successfully saved to cloud.");
@@ -1314,7 +1338,42 @@ window.loadPropertyFromDatabase = async function(propId) {
 
             window.paymentMethods = Array.isArray(data.payments) && data.payments.length > 0 ? data.payments : [...DEFAULT_PAYMENT_METHODS];
             window.addonsList = Array.isArray(data.addons) && data.addons.length > 0 ? data.addons : [...DEFAULT_ADDONS];
-            window.roomDefinitions = Array.isArray(data.roomDefinitions) ? data.roomDefinitions : [];
+
+            // --- PERMANENT ROOM RECOVERY: NEVER INITIALIZE EMPTY IF ROOMS EXIST ---
+            if (Array.isArray(data.roomDefinitions) && data.roomDefinitions.length > 0) {
+                window.roomDefinitions = data.roomDefinitions;
+            } else if (Array.isArray(data.rooms) && data.rooms.length > 0) {
+                // Auto-hydrate roomDefinitions from compiled physical rooms
+                const defMap = new Map();
+                data.rooms.forEach(r => {
+                    const rId = String(r.id || '').toUpperCase().trim();
+                    const isDorm = r.isDorm || rId.includes('-');
+                    const parent = r.parentRoom ? String(r.parentRoom).toUpperCase().trim() : (isDorm ? rId.split('-')[0].trim() : rId);
+                    const cat = r.category || r.type || 'Standard Room';
+                    const floor = r.floor || '1';
+                    const rule = r.rule || (isDorm ? 'odd-top' : 'private');
+
+                    if (!defMap.has(parent)) {
+                        defMap.set(parent, {
+                            id: parent,
+                            name: r.name ? (isDorm ? parent : r.name) : parent,
+                            category: cat,
+                            units: 1,
+                            beds: 1,
+                            floor: floor,
+                            rule: rule
+                        });
+                    } else {
+                        const existing = defMap.get(parent);
+                        existing.beds = (existing.beds || 1) + 1;
+                        existing.units = existing.beds;
+                    }
+                });
+                window.roomDefinitions = Array.from(defMap.values());
+            } else {
+                window.roomDefinitions = [];
+            }
+
             window.channexConfig = data.channex || { apiKey: '', propId: '' };
             setVal('chan-api-key', window.channexConfig.apiKey);
             setVal('chan-prop-id', window.channexConfig.propId);
