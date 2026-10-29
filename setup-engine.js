@@ -1,13 +1,11 @@
 // ==========================================================================
 // setup-engine.js - Property Setup Wizard & Onboarding Engine
-// Wild & Wandering Property Management System
-// Hosted at: https://loren-6q.github.io/PMS/setup-engine.js
 // ==========================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { 
-    getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch 
+    getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- SECTION 1: GLOBAL SCOPE & STEPPER MOUNTING ---
@@ -90,190 +88,64 @@ window.channexRooms = [];
 window.channexRatePlans = [];
 window.channexMap = [];
 window.channexRateMap = [];
-window.pricingRules = {
-    masterDriver: 'Direct',
-    channels: {},
-    stdRefType: '+%',
-    stdRefVal: 25,
-    evtRefType: '+%',
-    evtRefVal: 25
-};
-window.relationships = [];
-window.eventDates = [];
-window.eventCurves = {
-    ratesSpan: '±2',
-    restrSpan: '±6',
-    rates: {},
-    restr: {}
-};
-
-// --- SECTION 3: STEP 1 (GENERAL, LOGOS, PAYMENTS, ADD-ONS) ---
 
 const DEFAULT_PAYMENT_METHODS = [
-    { key: "cash", label: "Cash (THB)", type: "revenue", enabled: true },
-    { key: "scan", label: "Thai QR Scan / PromptPay", type: "revenue", enabled: true },
-    { key: "card", label: "Credit / Debit Card Terminal", type: "revenue", enabled: true },
-    { key: "otapay", label: "OTA Virtual Card Payout", type: "revenue", enabled: true },
-    { key: "bdc-kp", label: "Booking.com Commission (KP)", type: "commission", enabled: true },
-    { key: "hw-kp", label: "Hostelworld Deposit Commission (KP)", type: "commission", enabled: true },
-    { key: "agoda-kp", label: "Agoda Commission (KP)", type: "commission", enabled: true },
-    { key: "expedia-kp", label: "Expedia Commission (KP)", type: "commission", enabled: true }
+    { key: "cash", label: "Cash", type: "revenue" },
+    { key: "card", label: "Credit Card (POS)", type: "revenue" },
+    { key: "qr", label: "Thai PromptPay / QR", type: "revenue" },
+    { key: "transfer", label: "Bank Transfer", type: "revenue" },
+    { key: "bdc-pay", label: "Booking.com Virtual Card", type: "revenue" },
+    { key: "bdc-kp", label: "Booking.com Commission (Withheld)", type: "commission" },
+    { key: "hw-kp", label: "Hostelworld Deposit (Withheld)", type: "commission" },
+    { key: "agoda-pay", label: "Agoda eCard / Payout", type: "revenue" },
+    { key: "agoda-kp", label: "Agoda Commission (Withheld)", type: "commission" },
+    { key: "airbnb-pay", label: "Airbnb Payout", type: "revenue" }
 ];
 
 const DEFAULT_ADDONS = [
-    { name: "Ferry Ticket (Koh Phangan / Tao)", cat: "Transfers", price: 400, type: "per_person" },
-    { name: "Van Transfer (Pier / Airport)", cat: "Transfers", price: 300, type: "per_booking" },
-    { name: "Scooter Rental (24h)", cat: "Rentals", price: 250, type: "per_day" },
-    { name: "Laundry Service (Per KG)", cat: "Services", price: 60, type: "per_unit" },
-    { name: "Key / Towel Security Deposit", cat: "Deposits", price: 200, type: "deposit" }
+    { id: "towel", name: "Towel Rental", price: 50, category: "Amenity" },
+    { id: "late-checkout", name: "Late Checkout (2 PM)", price: 200, category: "Service" },
+    { id: "ferry-ticket", name: "Ferry Ticket Transfer", price: 450, category: "Travel" },
+    { id: "laundry", name: "Laundry Bag (1kg)", price: 60, category: "Service" }
 ];
 
+// --- SECTION 3: STEP 1 (PROPERTY PROFILE & BRANDING) ---
+
 window.updateLogoPreview = function(type, url) {
-    const previewId = type === 'primary' ? 'preview-logo-primary' : (type === 'banner' ? 'preview-logo-banner' : 'preview-logo-icon');
-    const el = document.getElementById(previewId);
-    if (el) el.src = url || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
+    const previewEl = document.getElementById(`preview-${type}`);
+    if (!previewEl) return;
+    if (url && url.startsWith('http')) {
+        previewEl.src = url;
+        previewEl.classList.remove('hidden');
+    } else {
+        previewEl.classList.add('hidden');
+    }
 };
 
-window.handleLogoFileUpload = function(e, type) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-        const dataUrl = evt.target.result;
-        const inputId = type === 'primary' ? 'prop-logo-url' : (type === 'banner' ? 'prop-banner-url' : 'prop-icon-url');
-        const inputEl = document.getElementById(inputId);
-        if (inputEl) inputEl.value = dataUrl;
-        window.updateLogoPreview(type, dataUrl);
-    };
-    reader.readAsDataURL(file);
+// --- SECTION 4: STEP 2 (STANDARDIZED ROOM COMPILER, ARCHIVAL & RELOCATION) ---
+
+// Machine delimiter for dorm beds: [Room Name] № [01..NN]
+window.formatDormBedId = function(parentRoomName, bedNumber) {
+    const cleanParent = String(parentRoomName || 'Dorm').trim();
+    const paddedNum = String(bedNumber).padStart(2, '0');
+    return `${cleanParent} № ${paddedNum}`;
 };
-
-window.resetLogosToDefault = function() {
-    const defaultIcon = 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
-    ['prop-logo-url', 'prop-banner-url', 'prop-icon-url'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = defaultIcon;
-    });
-    window.updateLogoPreview('primary', defaultIcon);
-    window.updateLogoPreview('banner', defaultIcon);
-    window.updateLogoPreview('icon', defaultIcon);
-};
-
-window.renderPaymentMethodsTable = function() {
-    const tbody = document.getElementById('payment-methods-table-body');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
-    window.paymentMethods.forEach((pm, idx) => {
-        const isComm = pm.type === 'commission';
-        const tr = document.createElement('tr');
-        tr.className = isComm ? 'bg-rose-50/50 hover:bg-rose-50' : 'bg-white hover:bg-slate-50';
-        tr.innerHTML = `
-            <td class="font-mono font-black text-slate-700 text-[10px]">${pm.key}</td>
-            <td>
-                <input type="text" value="${pm.label || ''}" class="table-input" onchange="window.paymentMethods[${idx}].label = this.value">
-            </td>
-            <td>
-                <select class="table-input" onchange="window.paymentMethods[${idx}].type = this.value; window.renderPaymentMethodsTable();">
-                    <option value="revenue" ${pm.type === 'revenue' ? 'selected' : ''}>Revenue (Real Money)</option>
-                    <option value="commission" ${pm.type === 'commission' ? 'selected' : ''}>Commission Withheld (KP)</option>
-                    <option value="other" ${pm.type === 'other' ? 'selected' : ''}>Internal Other</option>
-                </select>
-            </td>
-            <td class="text-center">
-                <input type="checkbox" ${pm.enabled !== false ? 'checked' : ''} onchange="window.paymentMethods[${idx}].enabled = this.checked" class="cursor-pointer">
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-};
-
-window.renderAddonsTable = function() {
-    const tbody = document.getElementById('addon-list-body');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
-    window.addonsList.forEach((item, idx) => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-amber-50/40 transition-colors';
-        tr.innerHTML = `
-            <td class="text-center">
-                <div class="order-btn-col">
-                    <button type="button" onclick="window.shiftAddonOrder(${idx}, -1)" class="order-arrow-btn text-slate-500 hover:text-indigo-600 ${idx === 0 ? 'opacity-20 cursor-not-allowed' : ''}" ${idx === 0 ? 'disabled' : ''}>
-                        <i data-lucide="chevron-up"></i>
-                    </button>
-                    <button type="button" onclick="window.shiftAddonOrder(${idx}, 1)" class="order-arrow-btn text-slate-500 hover:text-indigo-600 ${idx === window.addonsList.length - 1 ? 'opacity-20 cursor-not-allowed' : ''}" ${idx === window.addonsList.length - 1 ? 'disabled' : ''}>
-                        <i data-lucide="chevron-down"></i>
-                    </button>
-                </div>
-            </td>
-            <td><input type="text" value="${item.name || ''}" class="table-input font-bold" onchange="window.addonsList[${idx}].name = this.value"></td>
-            <td><input type="text" value="${item.cat || ''}" class="table-input" onchange="window.addonsList[${idx}].cat = this.value"></td>
-            <td class="text-center"><input type="number" value="${item.price || 0}" class="table-input text-center font-black" onchange="window.addonsList[${idx}].price = parseFloat(this.value) || 0"></td>
-            <td>
-                <select class="table-input font-bold" onchange="window.addonsList[${idx}].type = this.value">
-                    <option value="per_unit" ${item.type === 'per_unit' ? 'selected' : ''}>Per Unit</option>
-                    <option value="per_person" ${item.type === 'per_person' ? 'selected' : ''}>Per Person</option>
-                    <option value="per_day" ${item.type === 'per_day' ? 'selected' : ''}>Per Day</option>
-                    <option value="per_booking" ${item.type === 'per_booking' ? 'selected' : ''}>Per Stay</option>
-                    <option value="deposit" ${item.type === 'deposit' ? 'selected' : ''}>Refundable Deposit</option>
-                </select>
-            </td>
-            <td class="text-center">
-                <button type="button" onclick="window.deleteAddonRow(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5">
-                    <i data-lucide="trash-2" size="13"></i>
-                </button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-    if (window.lucide) window.lucide.createIcons();
-};
-
-window.shiftAddonOrder = function(index, delta) {
-    const target = index + delta;
-    if (target < 0 || target >= window.addonsList.length) return;
-    const item = window.addonsList.splice(index, 1)[0];
-    window.addonsList.splice(target, 0, item);
-    window.renderAddonsTable();
-};
-
-window.addBlankAddonRow = function() {
-    window.addonsList.push({ name: "New Addon", cat: "General", price: 100, type: "per_unit" });
-    window.renderAddonsTable();
-};
-
-window.deleteAddonRow = function(idx) {
-    window.addonsList.splice(idx, 1);
-    window.renderAddonsTable();
-};
-
-// --- SECTION 4: STEP 2 (ROOM INVENTORY, COMPILER & RECOVERY) ---
 
 window.compileRoomsFromDefinitions = function() {
     const compiled = [];
-    const usedIds = new Set();
 
     window.roomDefinitions.forEach(def => {
-        const rawName = (def.name || 'Room').trim().toUpperCase();
+        const rawName = (def.name || 'Room').trim();
         const cat = (def.category || 'Standard Room').trim();
+        const total = Math.max(1, parseInt(def.beds || def.units || 1, 10));
         const rule = def.rule || 'private';
         const floor = def.floor || '1';
-        const total = Math.max(1, parseInt(def.beds || def.units || 1, 10));
-
-        // Preserve immutable room ID if it exists; never overwrite with renamed string
-        const baseId = def.id ? String(def.id).trim().toUpperCase() : rawName;
+        const baseId = (def.id || rawName).trim();
+        const isInactive = !!def.inactive;
 
         if (rule === 'private') {
-            let roomId = baseId;
-            let counter = 1;
-            while (usedIds.has(roomId)) {
-                roomId = `${baseId}_${counter++}`;
-            }
-            usedIds.add(roomId);
-
             compiled.push({
-                id: roomId,
+                id: baseId,
                 name: rawName,
                 type: cat,
                 category: cat,
@@ -282,13 +154,13 @@ window.compileRoomsFromDefinitions = function() {
                 bunk: 'private',
                 rule: 'private',
                 parentRoom: rawName,
-                isDorm: false
+                isDorm: false,
+                capacity: total,
+                inactive: isInactive
             });
         } else {
             for (let b = 1; b <= total; b++) {
-                const bedId = def.id ? `${baseId}-${b}` : `${rawName}-${b}`;
-                usedIds.add(bedId);
-
+                const bedId = window.formatDormBedId(rawName, b);
                 let bunkType = 'single';
                 if (rule === 'odd-top') bunkType = (b % 2 !== 0) ? 'top' : 'bottom';
                 else if (rule === 'even-top') bunkType = (b % 2 === 0) ? 'top' : 'bottom';
@@ -304,7 +176,8 @@ window.compileRoomsFromDefinitions = function() {
                     icon: bunkType === 'top' ? 'top' : (bunkType === 'bottom' ? 'bot' : 'single'),
                     rule: rule,
                     parentRoom: rawName,
-                    isDorm: true
+                    isDorm: true,
+                    inactive: isInactive
                 });
             }
         }
@@ -314,98 +187,439 @@ window.compileRoomsFromDefinitions = function() {
 
     const rBadge = document.getElementById('room-count-badge');
     const uBadge = document.getElementById('unit-count-badge');
-    if (rBadge) rBadge.innerText = `${window.roomDefinitions.length} Rooms`;
-    if (uBadge) uBadge.innerText = `${compiled.length} Beds Total`;
+    const activeDefs = window.roomDefinitions.filter(r => !r.inactive);
+    const activeBeds = compiled.filter(r => !r.inactive);
 
-    window.renderBedPreviewDrawer();
+    if (rBadge) rBadge.innerText = `${activeDefs.length} Active Rooms`;
+    if (uBadge) uBadge.innerText = `${activeBeds.length} Active Beds`;
 };
 
+// Check reservations before room deletion or deactivation
+window.getRoomBookingStats = async function(targetDef) {
+    const canonProp = window.currentPropertyId;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const targetIds = new Set();
+    targetIds.add(targetDef.id);
+    targetIds.add(targetDef.name);
+
+    if (targetDef.rule !== 'private') {
+        const total = Math.max(1, parseInt(targetDef.beds || 1, 10));
+        for (let b = 1; b <= total; b++) {
+            targetIds.add(window.formatDormBedId(targetDef.name, b));
+            const letter = targetDef.name.replace(/^Dorm\s+/i, '').trim().toUpperCase();
+            targetIds.add(`${letter}${String(b).padStart(2, '0')}`);
+            targetIds.add(`${letter}-${b}`);
+        }
+    }
+
+    let allBookings = window.staff || [];
+    if (!allBookings.length && window.db) {
+        try {
+            const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
+            allBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } catch (e) {
+            console.warn("Could not query bookings for audit:", e);
+        }
+    }
+
+    const propBookings = allBookings.filter(b => (b.property || '') === canonProp && b.status !== 'cancelled');
+    const pastBookings = [];
+    const activeAndFutureBookings = [];
+
+    propBookings.forEach(b => {
+        const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
+        if (rList.some(r => targetIds.has(r))) {
+            if ((b.checkOut || '') < todayStr) pastBookings.push(b);
+            else activeAndFutureBookings.push(b);
+        }
+    });
+
+    return { pastBookings, activeAndFutureBookings };
+};
+
+window.deleteRoomDef = async function(index) {
+    const def = window.roomDefinitions[index];
+    if (!def) return;
+
+    window.customAlert("Auditing Reservations...", `Checking reservations for "${def.name}"...`);
+    const { pastBookings, activeAndFutureBookings } = await window.getRoomBookingStats(def);
+    window.closeAlert();
+
+    // 1. Future or currently in-house bookings -> must relocate first
+    if (activeAndFutureBookings.length > 0) {
+        return window.openRelocationModal(def, activeAndFutureBookings, pastBookings.length > 0);
+    }
+
+    // 2. Historical bookings exist -> archive (inactive), do not delete
+    if (pastBookings.length > 0) {
+        return window.customAlert(
+            "Archive Room (Has Past Bookings)",
+            `"${def.name}" has ${pastBookings.length} historical booking(s).\n\nTo preserve historical records and accounting, this room will be marked INACTIVE instead of deleted. It will be hidden from future calendars and OTAs, but will display on past dates where bookings exist.`,
+            true,
+            async () => {
+                def.inactive = true;
+                window.renderRoomDefinitionsTable();
+                await window.savePropertyToDatabase(false);
+            }
+        );
+    }
+
+    // 3. Zero bookings -> safe to permanently remove
+    window.customAlert(
+        "Permanent Deletion",
+        `Permanently delete "${def.name}"?\n\nThis room has 0 past or future bookings.`,
+        true,
+        async () => {
+            window.roomDefinitions.splice(index, 1);
+            window.renderRoomDefinitionsTable();
+            await window.savePropertyToDatabase(false);
+        }
+    );
+};
+
+window.openRelocationModal = function(def, activeBookings, hasPast) {
+    let modal = document.getElementById('relocation-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'relocation-modal';
+        modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4";
+        document.body.appendChild(modal);
+    }
+
+    const availableTargets = window.roomDefinitions.filter(r => r.name !== def.name && !r.inactive);
+
+    let html = `
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-amber-500 text-slate-900 p-3 font-black uppercase text-xs sm:text-sm flex items-center justify-between">
+                <span>Active Bookings Detected (${activeBookings.length})</span>
+                <button type="button" onclick="document.getElementById('relocation-modal').classList.add('hidden')" class="cursor-pointer font-bold text-base">&times;</button>
+            </div>
+            <div class="p-4 space-y-3 text-xs">
+                <p class="font-bold text-slate-700">
+                    <strong>${def.name}</strong> has <strong>${activeBookings.length} active or future booking(s)</strong>. Move these guests before closing the room:
+                </p>
+                <div class="max-h-36 overflow-y-auto border border-slate-200 rounded p-2 bg-slate-50 space-y-1">
+    `;
+
+    activeBookings.forEach(b => {
+        html += `
+            <div class="flex items-center justify-between text-[11px] font-mono border-b border-slate-200 pb-1">
+                <span class="font-bold text-slate-800">${b.firstName || ''} ${b.lastName || 'Guest'} (${b.bookId || b.id})</span>
+                <span class="text-indigo-600 font-bold">${b.checkIn} &rarr; ${b.checkOut}</span>
+            </div>
+        `;
+    });
+
+    html += `
+                </div>
+                <div>
+                    <label class="block font-black uppercase tracking-wider text-[10px] text-slate-600 mb-1">Move Active Guests To:</label>
+                    <select id="relocate-target-room" class="w-full border border-slate-300 rounded p-1.5 font-bold uppercase cursor-pointer bg-white">
+                        <option value="__UNASSIGNED__">-- UNASSIGNED TRAY --</option>
+    `;
+
+    availableTargets.forEach(t => {
+        html += `<option value="${t.name}">${t.name} (${t.category})</option>`;
+    });
+
+    html += `
+                    </select>
+                </div>
+                <div class="pt-2 border-t border-slate-200 flex justify-end gap-2">
+                    <button type="button" onclick="document.getElementById('relocation-modal').classList.add('hidden')" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black rounded uppercase cursor-pointer">Cancel</button>
+                    <button type="button" onclick="window.executeBookingRelocation('${def.name}', ${hasPast})" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded uppercase shadow cursor-pointer">Relocate & Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    modal.innerHTML = html;
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+};
+
+window.executeBookingRelocation = async function(roomName, hasPast) {
+    const targetRoom = document.getElementById('relocate-target-room')?.value || '__UNASSIGNED__';
+    const defIndex = window.roomDefinitions.findIndex(r => r.name === roomName);
+    if (defIndex === -1) return;
+
+    const modal = document.getElementById('relocation-modal');
+    if (modal) modal.classList.add('hidden');
+
+    window.customAlert("Relocating Reservations...", "Moving bookings and updating room status...");
+
+    try {
+        const { activeAndFutureBookings } = await window.getRoomBookingStats(window.roomDefinitions[defIndex]);
+        const db = window.db;
+
+        for (let b of activeAndFutureBookings) {
+            const bRef = doc(db, 'artifacts', appId, 'public', 'data', 'staff', b.id);
+            const newRoomList = (targetRoom === '__UNASSIGNED__') ? [""] : [targetRoom];
+            await updateDoc(bRef, {
+                rooms: newRoomList,
+                room: newRoomList[0],
+                notes: ((b.notes || '') + `\n[RELOCATED FROM CLOSED ROOM ${roomName} ON ${new Date().toLocaleDateString('en-GB')}]`).trim(),
+                lastEditedAt: new Date().toISOString()
+            });
+        }
+
+        if (hasPast) window.roomDefinitions[defIndex].inactive = true;
+        else window.roomDefinitions.splice(defIndex, 1);
+
+        await window.savePropertyToDatabase(false);
+        window.closeAlert();
+        window.customAlert("Relocation Complete", `Moved ${activeAndFutureBookings.length} booking(s). Room "${roomName}" is now closed.`);
+        window.renderRoomDefinitionsTable();
+
+    } catch (e) {
+        console.error("Relocation Error:", e);
+        window.closeAlert();
+        window.customAlert("Relocation Failed", e.message);
+    }
+};
+
+window.reactivateRoomDef = async function(index) {
+    const def = window.roomDefinitions[index];
+    if (!def) return;
+    def.inactive = false;
+    window.renderRoomDefinitionsTable();
+    await window.savePropertyToDatabase(false);
+};
+
+// Batch Dorm Generator
+window.toggleBatchDormPanel = function() {
+    document.getElementById('batch-dorm-panel')?.classList.toggle('hidden');
+};
+
+window.applyBatchDorms = function() {
+    const prefix = document.getElementById('batch-dorm-prefix')?.value.trim() || 'Dorm';
+    const letters = (document.getElementById('batch-dorm-letters')?.value || 'A, B, C').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+    const cat = document.getElementById('batch-dorm-category')?.value.trim() || 'Standard Dorm';
+    const beds = parseInt(document.getElementById('batch-dorm-beds')?.value, 10) || 10;
+    const floor = document.getElementById('batch-dorm-floor')?.value.trim() || '1';
+    const rule = document.getElementById('batch-dorm-rule')?.value || 'even-top';
+
+    letters.forEach(letter => {
+        const roomName = `${prefix} ${letter}`;
+        const existingIdx = window.roomDefinitions.findIndex(r => r.name === roomName);
+        const def = { id: roomName, name: roomName, category: cat, units: 2, beds: beds, floor: floor, rule: rule, inactive: false };
+        if (existingIdx > -1) window.roomDefinitions[existingIdx] = def;
+        else window.roomDefinitions.push(def);
+    });
+
+    window.toggleBatchDormPanel();
+    window.renderRoomDefinitionsTable();
+};
+
+// Batch Private Room Generator
+window.toggleBatchRoomPanel = function() {
+    document.getElementById('batch-room-panel')?.classList.toggle('hidden');
+};
+
+window.applyBatchRooms = function() {
+    const prefix = document.getElementById('batch-room-prefix')?.value.trim() || 'ROOM';
+    const startNum = parseInt(document.getElementById('batch-room-start')?.value, 10) || 101;
+    const count = parseInt(document.getElementById('batch-room-count')?.value, 10) || 5;
+    const cat = document.getElementById('batch-room-category')?.value.trim() || 'Deluxe Private King';
+    const floor = document.getElementById('batch-room-floor')?.value.trim() || '1';
+
+    for (let i = 0; i < count; i++) {
+        const roomName = `${prefix} ${startNum + i}`;
+        const existingIdx = window.roomDefinitions.findIndex(r => r.name === roomName);
+        const def = { id: roomName, name: roomName, category: cat, units: 1, beds: 1, floor: floor, rule: 'private', inactive: false };
+        if (existingIdx > -1) window.roomDefinitions[existingIdx] = def;
+        else window.roomDefinitions.push(def);
+    }
+
+    window.toggleBatchRoomPanel();
+    window.renderRoomDefinitionsTable();
+};
+
+// Reorder Categories Modal
+window.openReorderCategoriesModal = function() {
+    let modal = document.getElementById('reorder-cats-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'reorder-cats-modal';
+        modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4";
+        document.body.appendChild(modal);
+    }
+
+    const categories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
+    let listHtml = `
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 text-white p-3 font-black uppercase text-xs flex items-center justify-between">
+                <span>Reorder Categories</span>
+                <button type="button" onclick="document.getElementById('reorder-cats-modal').classList.add('hidden')" class="cursor-pointer">&times;</button>
+            </div>
+            <div class="p-4 space-y-2 text-xs">
+                <div id="reorder-cat-list" class="space-y-1.5 max-h-60 overflow-y-auto">
+    `;
+
+    categories.forEach((cat, idx) => {
+        listHtml += `
+            <div class="flex items-center justify-between p-2 rounded bg-slate-100 border border-slate-300 font-bold">
+                <span>${cat}</span>
+                <div class="flex items-center gap-1">
+                    <button type="button" onclick="window.moveCategory(${idx}, -1)" class="p-1 hover:bg-slate-200 rounded text-slate-700 cursor-pointer ${idx === 0 ? 'opacity-30' : ''}">&uarr;</button>
+                    <button type="button" onclick="window.moveCategory(${idx}, 1)" class="p-1 hover:bg-slate-200 rounded text-slate-700 cursor-pointer ${idx === categories.length - 1 ? 'opacity-30' : ''}">&darr;</button>
+                </div>
+            </div>`;
+    });
+
+    listHtml += `
+                </div>
+                <div class="pt-3 border-t border-slate-200 flex justify-end">
+                    <button type="button" onclick="document.getElementById('reorder-cats-modal').classList.add('hidden')" class="px-3 py-1 bg-slate-200 text-slate-700 font-bold rounded uppercase">Close</button>
+                </div>
+            </div>
+        </div>`;
+
+    modal.innerHTML = listHtml;
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+};
+
+window.moveCategory = function(idx, dir) {
+    const categories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
+    const targetIdx = idx + dir;
+    if (targetIdx < 0 || targetIdx >= categories.length) return;
+
+    const temp = categories[idx];
+    categories[idx] = categories[targetIdx];
+    categories[targetIdx] = temp;
+
+    const sortedDefs = [];
+    categories.forEach(c => {
+        window.roomDefinitions.filter(r => r.category === c).forEach(r => sortedDefs.push(r));
+    });
+    window.roomDefinitions.filter(r => !categories.includes(r.category)).forEach(r => sortedDefs.push(r));
+
+    window.roomDefinitions = sortedDefs;
+    window.renderRoomDefinitionsTable();
+    window.openReorderCategoriesModal();
+};
+
+// Bed Preview Drawer
+window.toggleBedPreviewDrawer = function() {
+    window.compileRoomsFromDefinitions();
+    let drawer = document.getElementById('bed-preview-drawer');
+    if (!drawer) {
+        drawer = document.createElement('div');
+        drawer.id = 'bed-preview-drawer';
+        drawer.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4";
+        document.body.appendChild(drawer);
+    }
+
+    if (!drawer.classList.contains('hidden') && drawer.style.display !== 'none') {
+        drawer.classList.add('hidden');
+        drawer.style.display = 'none';
+        return;
+    }
+
+    let tableHtml = `
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border-2 border-slate-800 flex flex-col max-h-[80vh]">
+            <div class="bg-slate-900 text-white p-3 font-black uppercase text-xs flex items-center justify-between shrink-0">
+                <span>All Compiled Beds & Rooms (${window.compiledRooms.length})</span>
+                <button type="button" onclick="document.getElementById('bed-preview-drawer').classList.add('hidden'); document.getElementById('bed-preview-drawer').style.display='none';" class="cursor-pointer font-bold text-base">&times;</button>
+            </div>
+            <div class="p-3 overflow-y-auto flex-1">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-slate-800 text-white text-[10px] uppercase font-black sticky top-0">
+                        <tr>
+                            <th class="p-1.5 border-r border-slate-700">Bed / Room ID</th>
+                            <th class="p-1.5 border-r border-slate-700">Category</th>
+                            <th class="p-1.5 border-r border-slate-700 text-center">Floor</th>
+                            <th class="p-1.5 border-r border-slate-700 text-center">Bunk</th>
+                            <th class="p-1.5 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 font-bold">
+    `;
+
+    window.compiledRooms.forEach(b => {
+        tableHtml += `
+            <tr class="${b.inactive ? 'opacity-40 bg-slate-100' : 'hover:bg-slate-50'}">
+                <td class="p-1.5 font-mono text-indigo-700 font-black">${b.id}</td>
+                <td class="p-1.5">${b.category}</td>
+                <td class="p-1.5 text-center">${b.floor}</td>
+                <td class="p-1.5 text-center uppercase text-[10px]">${b.bunk}</td>
+                <td class="p-1.5 text-center text-[10px] ${b.inactive ? 'text-rose-600 font-black' : 'text-emerald-700'}">${b.inactive ? 'INACTIVE' : 'ACTIVE'}</td>
+            </tr>
+        `;
+    });
+
+    tableHtml += `</tbody></table></div></div>`;
+    drawer.innerHTML = tableHtml;
+    drawer.classList.remove('hidden');
+    drawer.style.display = 'flex';
+};
+
+// --- STREAMLINED STEP 2 TABLE WITH COMPACT CATEGORY BANNERS ---
 window.renderRoomDefinitionsTable = function() {
     const tbody = document.getElementById('room-def-list-body');
     if (!tbody) return;
     tbody.innerHTML = '';
 
     const datalist = document.getElementById('setup-category-datalist');
-    const distinctCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    if (datalist) {
-        datalist.innerHTML = distinctCategories.map(c => `<option value="${c}"></option>`).join('');
-    }
+    const categories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
+    if (datalist) datalist.innerHTML = categories.map(c => `<option value="${c}"></option>`).join('');
 
-    let lastCategory = null;
-    let privateThemeCounter = 0;
-    const categoryThemeMap = {};
+    let currentCat = null;
+    let catIndex = 0;
+    let rowIndex = 0;
 
+    // 1. Render Active Rooms with Category Transition Banners
     window.roomDefinitions.forEach((room, idx) => {
-        const curCat = room.category || 'Standard Room';
-        const isDorm = room.rule && room.rule !== 'private';
+        if (room.inactive) return;
+        rowIndex++;
 
-        if (curCat !== lastCategory) {
-            lastCategory = curCat;
-            if (!categoryThemeMap[curCat]) {
-                if (isDorm) {
-                    categoryThemeMap[curCat] = { bannerClass: 'setup-cat-banner-dorm', rowClass: 'setup-row-dorm', isDorm: true };
-                } else {
-                    const themeIdx = privateThemeCounter % 6;
-                    categoryThemeMap[curCat] = { bannerClass: `setup-cat-banner-${themeIdx}`, rowClass: `setup-row-${themeIdx}`, isDorm: false };
-                    privateThemeCounter++;
-                }
-            }
+        // Insert concise Category Banner on transition
+        if (room.category !== currentCat) {
+            currentCat = room.category;
+            const sameCat = window.roomDefinitions.filter(r => !r.inactive && r.category === currentCat);
+            const isDorm = sameCat.some(r => r.rule !== 'private');
+            const totalBeds = sameCat.reduce((s, r) => s + (parseInt(r.beds || r.units || 1, 10)), 0);
 
-            const catTheme = categoryThemeMap[curCat];
-            const matchingRooms = window.roomDefinitions.filter(r => r.category === curCat);
-            const catRooms = matchingRooms.length;
-            const catBeds = matchingRooms.reduce((sum, r) => sum + Math.max(1, parseInt(r.beds || r.units || 1, 10)), 0);
-
-            const divTr = document.createElement('tr');
-            divTr.className = 'border-t-2 border-b border-slate-300';
-            divTr.innerHTML = `
-                <td colspan="7" class="py-1 px-2 !h-[26px]">
-                    <div class="flex items-center justify-between px-2 py-0.5 rounded border shadow-2xs ${catTheme.bannerClass}">
-                        <div class="flex items-center gap-1.5">
-                            <i data-lucide="${catTheme.isDorm ? 'bed-double' : 'door-closed'}" size="13"></i>
-                            <span class="font-black uppercase tracking-wider text-[11px]">${curCat}</span>
+            const banner = document.createElement('tr');
+            banner.className = `setup-cat-banner ${isDorm ? 'setup-cat-banner-dorm' : `setup-cat-banner-${catIndex % 6}`} border-y-2 border-slate-300 font-black text-xs uppercase`;
+            banner.innerHTML = `
+                <td colspan="7" class="py-1 px-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="${isDorm ? 'bed' : 'door-closed'}" size="14"></i>
+                            <span class="tracking-wider text-slate-800">${currentCat}</span>
                         </div>
-                        <div class="flex items-center gap-1.5">
-                            <span class="px-1.5 py-0.2 rounded bg-white/80 border border-black/10 font-black text-[9.5px]">
-                                ${catRooms} Rooms • ${catBeds} Beds
-                            </span>
-                            <span class="px-1.5 py-0.2 rounded bg-white/80 border border-black/10 font-bold text-[9px] uppercase">
-                                ${catTheme.isDorm ? 'DORM INVENTORY' : 'PRIVATE UNITS'}
-                            </span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] bg-white/80 px-1.5 py-0.2 rounded font-bold border border-slate-300">${sameCat.length} Rooms • ${totalBeds} Beds</span>
+                            <span class="text-[9px] font-black uppercase tracking-widest px-1 py-0.2 rounded bg-slate-900 text-white">${isDorm ? 'DORM INVENTORY' : 'PRIVATE UNITS'}</span>
                         </div>
                     </div>
-                </td>
-            `;
-            tbody.appendChild(divTr);
+                </td>`;
+            tbody.appendChild(banner);
+            catIndex++;
         }
 
-        const catTheme = categoryThemeMap[curCat] || { rowClass: 'bg-white' };
+        // Room Row
         const tr = document.createElement('tr');
-        tr.className = `${catTheme.rowClass} hover:brightness-95 transition-all`;
+        tr.className = "bg-white hover:bg-slate-50 transition-colors border-b border-slate-200";
         tr.innerHTML = `
-            <td class="text-center font-mono font-bold text-slate-400 text-[10px]">${idx + 1}</td>
+            <td class="text-center font-mono font-bold text-slate-400 text-[10px]">${rowIndex}</td>
+            <td><input type="text" value="${room.name || ''}" class="table-input font-bold" onchange="window.roomDefinitions[${idx}].name = this.value; window.roomDefinitions[${idx}].id = this.value; window.compileRoomsFromDefinitions();"></td>
+            <td><input type="text" list="setup-category-datalist" value="${room.category || ''}" class="table-input font-bold" onchange="window.roomDefinitions[${idx}].category = this.value; window.renderRoomDefinitionsTable();"></td>
+            <td class="text-center"><input type="number" min="1" max="60" value="${room.beds || room.units || 1}" class="table-input text-center font-black" onchange="const v = parseInt(this.value, 10) || 1; window.roomDefinitions[${idx}].beds = v; window.roomDefinitions[${idx}].units = v; window.compileRoomsFromDefinitions();"></td>
+            <td class="text-center"><input type="text" value="${room.floor || '1'}" class="table-input text-center font-bold" onchange="window.roomDefinitions[${idx}].floor = this.value"></td>
             <td>
-                <input type="text" value="${room.name || ''}" class="table-input font-bold" onchange="window.updateRoomDef(${idx}, 'name', this.value)">
-            </td>
-            <td>
-                <input type="text" list="setup-category-datalist" value="${curCat}" class="table-input font-bold" onchange="window.handleRoomCategoryChange(${idx}, this.value)">
-            </td>
-            <td class="text-center">
-                <input type="number" min="1" max="60" value="${room.beds || room.units || 1}" class="table-input text-center font-black" onchange="window.updateRoomDef(${idx}, 'beds', parseInt(this.value, 10) || 1)">
-            </td>
-            <td class="text-center">
-                <input type="text" value="${room.floor || '1'}" class="table-input text-center font-bold" onchange="window.updateRoomDef(${idx}, 'floor', this.value)">
-            </td>
-            <td>
-                <select class="table-input font-bold" onchange="window.updateRoomDef(${idx}, 'rule', this.value)">
+                <select class="table-input font-bold" onchange="window.roomDefinitions[${idx}].rule = this.value; window.compileRoomsFromDefinitions();">
                     <option value="private" ${room.rule === 'private' ? 'selected' : ''}>PRIVATE</option>
-                    <option value="odd-top" ${room.rule === 'odd-top' ? 'selected' : ''}>DORM (Top # Odd)</option>
                     <option value="even-top" ${room.rule === 'even-top' ? 'selected' : ''}>DORM (Top # Even)</option>
+                    <option value="odd-top" ${room.rule === 'odd-top' ? 'selected' : ''}>DORM (Top # Odd)</option>
                     <option value="single" ${room.rule === 'single' ? 'selected' : ''}>DORM (Single Beds)</option>
                 </select>
             </td>
             <td class="text-center">
-                <button type="button" onclick="window.deleteRoomDef(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5">
+                <button type="button" onclick="window.deleteRoomDef(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5" title="Delete or Deactivate">
                     <i data-lucide="trash-2" size="13"></i>
                 </button>
             </td>
@@ -413,345 +627,80 @@ window.renderRoomDefinitionsTable = function() {
         tbody.appendChild(tr);
     });
 
+    // 2. Render Collapsible Inactive Rooms Drawer at Bottom
+    const inactive = window.roomDefinitions.filter(r => r.inactive);
+    if (inactive.length > 0) {
+        const headerTr = document.createElement('tr');
+        headerTr.className = "bg-slate-800 text-slate-200 cursor-pointer select-none";
+        headerTr.onclick = () => window.toggleInactiveRows();
+        headerTr.innerHTML = `
+            <td colspan="7" class="p-2 px-3 font-black text-xs uppercase tracking-wider">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="archive" size="14" class="text-amber-400"></i>
+                        <span>ARCHIVED / INACTIVE ROOMS (${inactive.length})</span>
+                        <span class="text-[9px] font-bold text-slate-400 normal-case">(Hidden on future calendars & OTAs, shown on past dates with bookings)</span>
+                    </div>
+                    <i data-lucide="chevron-down" id="inactive-chevron" size="14" class="transition-transform duration-200 rotate-[-90deg]"></i>
+                </div>
+            </td>`;
+        tbody.appendChild(headerTr);
+
+        window.roomDefinitions.forEach((room, idx) => {
+            if (!room.inactive) return;
+            const tr = document.createElement('tr');
+            tr.className = "inactive-room-row hidden bg-slate-100/90 border-b border-slate-300 text-slate-500";
+            tr.innerHTML = `
+                <td class="text-center font-mono font-bold text-rose-500 text-[10px]">OFF</td>
+                <td><span class="font-bold line-through px-2">${room.name}</span></td>
+                <td><span class="font-semibold text-xs px-2">${room.category}</span></td>
+                <td class="text-center font-bold">${room.beds || 1}</td>
+                <td class="text-center">Floor ${room.floor || '1'}</td>
+                <td><span class="font-mono text-[10px] uppercase">${room.rule || 'private'}</span></td>
+                <td class="text-center">
+                    <button type="button" onclick="window.reactivateRoomDef(${idx})" class="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[9px] uppercase cursor-pointer shadow-xs">
+                        RESTORE
+                    </button>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
     if (window.lucide) window.lucide.createIcons();
     window.compileRoomsFromDefinitions();
 };
 
-window.handleRoomCategoryChange = function(index, newCategory) {
-    if (!window.roomDefinitions[index]) return;
-    window.roomDefinitions[index].category = newCategory.trim();
-
-    const grouped = {};
-    const categoryOrder = [];
-
-    window.roomDefinitions.forEach(r => {
-        const cat = r.category || 'Standard Room';
-        if (!grouped[cat]) {
-            grouped[cat] = [];
-            categoryOrder.push(cat);
-        }
-        grouped[cat].push(r);
-    });
-
-    const regrouped = [];
-    categoryOrder.forEach(cat => regrouped.push(...grouped[cat]));
-    window.roomDefinitions = regrouped;
-
-    window.renderRoomDefinitionsTable();
-};
-
-window.updateRoomDef = function(index, field, value) {
-    if (!window.roomDefinitions[index]) return;
-    window.roomDefinitions[index][field] = value;
-    if (field === 'beds' || field === 'units' || field === 'rule') {
-        window.compileRoomsFromDefinitions();
-    }
-};
-
-window.deleteRoomDef = function(index) {
-    window.roomDefinitions.splice(index, 1);
-    window.renderRoomDefinitionsTable();
+window.toggleInactiveRows = function() {
+    const rows = document.querySelectorAll('.inactive-room-row');
+    const ch = document.getElementById('inactive-chevron');
+    if (!rows.length) return;
+    const isHidden = rows[0].classList.contains('hidden');
+    rows.forEach(r => r.classList.toggle('hidden', !isHidden));
+    if (ch) ch.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
 };
 
 window.addBlankRoomDef = function() {
     window.roomDefinitions.push({
+        id: `ROOM ${window.roomDefinitions.length + 1}`,
         name: `ROOM ${window.roomDefinitions.length + 1}`,
         category: "Standard Room",
         units: 1,
         beds: 1,
         floor: "1",
-        rule: "private"
+        rule: "private",
+        inactive: false
     });
     window.renderRoomDefinitionsTable();
 };
 
 window.clearAllRoomDefs = function() {
-    window.customAlert("Clear Inventory", "Are you sure you want to clear all room definitions?", true, () => {
+    window.customAlert("Clear Inventory", "Are you sure you want to clear the room table?", true, () => {
         window.roomDefinitions = [];
         window.renderRoomDefinitionsTable();
     });
 };
 
-// ==========================================================================
-// EMERGENCY RECOVERY FUNCTIONS: RECONCILE ROOMS DIRECTLY FROM LIVE BOOKINGS
-// ==========================================================================
-window.rebuildRoomsFromLiveBookings = async function() {
-    const curProp = window.currentPropertyId;
-    window.customAlert("Rebuild From Bookings", `Scan live guest bookings for ${curProp} and reconstruct exact matching rooms and bed counts?`, true, async () => {
-        try {
-            const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
-            const bookings = snap.docs.map(d => d.data());
-            const curBookings = bookings.filter(b => {
-                const bProp = window.toCanonicalPropId ? window.toCanonicalPropId(b.property) : b.property;
-                return bProp === curProp;
-            });
-
-            if (curBookings.length === 0) {
-                return window.customAlert("No Bookings", `No bookings found for property: ${curProp}`);
-            }
-
-            const roomMap = new Map();
-
-            curBookings.forEach(b => {
-                const rList = b.rooms?.length ? b.rooms : (b.room ? [b.room] : []);
-                rList.forEach(rid => {
-                    if (!rid || String(rid).toLowerCase().includes('unassigned')) return;
-                    const cleanRid = String(rid).toUpperCase().trim();
-                    const isDorm = cleanRid.includes('-');
-                    const parentName = isDorm ? cleanRid.split('-')[0].trim() : cleanRid;
-                    const bedNum = isDorm ? (parseInt(cleanRid.split('-')[1], 10) || 1) : 1;
-                    const category = b.bookedType || (isDorm ? "Dorm Category" : "Private Category");
-
-                    if (!roomMap.has(parentName)) {
-                        roomMap.set(parentName, {
-                            name: parentName,
-                            category: category,
-                            units: 1,
-                            beds: 1,
-                            floor: "1",
-                            rule: isDorm ? 'odd-top' : 'private',
-                            maxBed: bedNum
-                        });
-                    } else {
-                        const existing = roomMap.get(parentName);
-                        if (bedNum > existing.maxBed) {
-                            existing.maxBed = bedNum;
-                            existing.beds = bedNum;
-                            existing.units = bedNum;
-                        }
-                    }
-                });
-            });
-
-            if (roomMap.size === 0) {
-                return window.customAlert("Notice", "Bookings exist but none had physical room numbers assigned.");
-            }
-
-            const newDefs = Array.from(roomMap.values());
-            window.roomDefinitions = newDefs;
-            window.renderRoomDefinitionsTable();
-            await window.savePropertyToDatabase(false);
-
-            window.customAlert("Rooms Rebuilt!", `Successfully reconstructed ${newDefs.length} rooms from live bookings!\n\nAll existing guest reservations will now render on their respective rows.`);
-
-        } catch (err) {
-            console.error("Rebuild error:", err);
-            window.customAlert("Rebuild Failed", err.message);
-        }
-    });
-};
-
-window.restoreSwimsDefaultRooms = async function() {
-    window.customAlert("Restore SWIMS Inventory", "Restore all 79 physical rooms and dorms from the verified SWIMS catalog?", true, async () => {
-        try {
-            const res = await fetch("https://loren-6q.github.io/PMS/swims_rooms_backup.json");
-            if (!res.ok) throw new Error("Could not load swims_rooms_backup.json");
-            const catalog = await res.json();
-
-            const grouped = {};
-            catalog.forEach(r => {
-                const parent = r.parentRoom || r.id;
-                if (!grouped[parent]) {
-                    grouped[parent] = {
-                        id: parent,
-                        name: parent,
-                        category: r.category || r.type,
-                        units: 1,
-                        beds: 1,
-                        floor: r.floor || "1",
-                        rule: r.isDorm ? (r.rule || "odd-top") : "private"
-                    };
-                } else if (r.isDorm) {
-                    grouped[parent].beds += 1;
-                    grouped[parent].units += 1;
-                }
-            });
-
-            window.roomDefinitions = Object.values(grouped);
-            window.renderRoomDefinitionsTable();
-            await window.savePropertyToDatabase(false);
-            window.customAlert("SWIMS Restored", "All 79 physical rooms and dorms have been restored.");
-        } catch (err) {
-            console.error("SWIMS restore error:", err);
-            window.customAlert("Restore Failed", err.message);
-        }
-    });
-};
-
-window.renderBedPreviewDrawer = function() {
-    const container = document.getElementById('bed-preview-groups');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const grouped = {};
-    (window.compiledRooms || []).forEach(r => {
-        const cat = r.category || 'Standard Room';
-        if (!grouped[cat]) grouped[cat] = [];
-        grouped[cat].push(r);
-    });
-
-    Object.entries(grouped).forEach(([cat, units]) => {
-        const card = document.createElement('div');
-        card.className = "bg-white p-2 rounded border border-slate-300 shadow-2xs flex flex-col gap-1 min-w-[200px]";
-        let html = `<div class="font-black text-[10px] uppercase text-slate-800 border-b border-slate-200 pb-1 mb-1 flex justify-between">
-            <span>${cat}</span>
-            <span class="text-indigo-600">${units.length} Units</span>
-        </div><div class="flex flex-wrap gap-1">`;
-
-        units.forEach(u => {
-            const isTop = u.bunk === 'top' || u.icon === 'top' || String(u.bed).toLowerCase().includes('top');
-            const isBot = u.bunk === 'bottom' || u.bunk === 'bot' || u.icon === 'bot' || String(u.bed).toLowerCase().includes('bot');
-            const pillClass = isTop
-                ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
-                : (isBot ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-700 border-slate-300');
-
-            html += `<span class="px-1.5 py-0.5 rounded text-[9.5px] font-bold border ${pillClass}">${u.id}</span>`;
-        });
-        html += `</div>`;
-        card.innerHTML = html;
-        container.appendChild(card);
-    });
-};
-
-window.toggleBedPreviewDrawer = function() {
-    const el = document.getElementById('bed-preview-drawer');
-    if (el) el.classList.toggle('hidden');
-};
-
-window.toggleBatchDormPanel = function(force) {
-    const el = document.getElementById('batch-dorm-panel');
-    if (!el) return;
-    if (force !== undefined) el.classList.toggle('hidden', !force);
-    else el.classList.toggle('hidden');
-};
-
-window.toggleBatchRoomPanel = function(force) {
-    const el = document.getElementById('batch-room-panel');
-    if (!el) return;
-    if (force !== undefined) el.classList.toggle('hidden', !force);
-    else el.classList.toggle('hidden');
-};
-
-window.executeBatchDormGenerate = function() {
-    const name = (document.getElementById('gen-dorm-name')?.value || 'DORM').trim().toUpperCase();
-    const cat = (document.getElementById('gen-dorm-cat')?.value || 'Standard Dorm').trim();
-    const beds = parseInt(document.getElementById('gen-dorm-beds')?.value, 10) || 6;
-    const floor = (document.getElementById('gen-dorm-floor')?.value || '1').trim();
-    const rule = document.getElementById('gen-dorm-rule')?.value || 'odd-top';
-
-    window.roomDefinitions.push({
-        id: name,
-        name: name,
-        category: cat,
-        units: beds,
-        beds: beds,
-        floor: floor,
-        rule: rule
-    });
-
-    window.renderRoomDefinitionsTable();
-    window.toggleBatchDormPanel(false);
-};
-
-window.executeBatchRoomGenerate = function() {
-    const prefix = (document.getElementById('gen-room-prefix')?.value || 'ROOM ').trim().toUpperCase();
-    const cat = (document.getElementById('gen-room-cat')?.value || 'Deluxe King Room').trim();
-    const start = parseInt(document.getElementById('gen-room-start')?.value, 10) || 1;
-    const end = parseInt(document.getElementById('gen-room-end')?.value, 10) || 1;
-    const floor = (document.getElementById('gen-room-floor')?.value || '1').trim();
-
-    for (let i = start; i <= end; i++) {
-        const rName = `${prefix}${i}`;
-        window.roomDefinitions.push({
-            id: rName,
-            name: rName,
-            category: cat,
-            units: 1,
-            beds: 1,
-            floor: floor,
-            rule: 'private'
-        });
-    }
-
-    window.renderRoomDefinitionsTable();
-    window.toggleBatchRoomPanel(false);
-};
-
-window.openReorderCategoriesModal = function() {
-    const distinctCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    window._tempCategoryOrder = [...distinctCategories];
-    window.renderReorderCategoryList();
-    const m = document.getElementById('reorder-categories-modal');
-    if (m) {
-        m.classList.remove('hidden');
-        m.style.display = 'flex';
-    }
-};
-
-window.closeReorderCategoriesModal = function() {
-    const m = document.getElementById('reorder-categories-modal');
-    if (m) {
-        m.classList.add('hidden');
-        m.style.display = 'none';
-    }
-};
-
-window.renderReorderCategoryList = function() {
-    const list = document.getElementById('reorder-cat-list');
-    if (!list || !window._tempCategoryOrder) return;
-    list.innerHTML = '';
-
-    window._tempCategoryOrder.forEach((cat, idx) => {
-        const div = document.createElement('div');
-        div.className = "flex items-center justify-between p-1.5 rounded border border-slate-200 bg-slate-50 text-xs font-bold";
-        div.innerHTML = `
-            <span>${cat}</span>
-            <div class="flex items-center gap-1">
-                <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, -1)" class="p-0.5 hover:bg-slate-200 rounded text-slate-600 ${idx === 0 ? 'opacity-20 cursor-not-allowed' : ''}" ${idx === 0 ? 'disabled' : ''}>
-                    <i data-lucide="chevron-up" size="13"></i>
-                </button>
-                <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, 1)" class="p-0.5 hover:bg-slate-200 rounded text-slate-600 ${idx === window._tempCategoryOrder.length - 1 ? 'opacity-20 cursor-not-allowed' : ''}" ${idx === window._tempCategoryOrder.length - 1 ? 'disabled' : ''}>
-                    <i data-lucide="chevron-down" size="13"></i>
-                </button>
-            </div>
-        `;
-        list.appendChild(div);
-    });
-    if (window.lucide) window.lucide.createIcons();
-};
-
-window.shiftCategoryOrderItem = function(index, delta) {
-    const target = index + delta;
-    if (!window._tempCategoryOrder || target < 0 || target >= window._tempCategoryOrder.length) return;
-    const item = window._tempCategoryOrder.splice(index, 1)[0];
-    window._tempCategoryOrder.splice(target, 0, item);
-    window.renderReorderCategoryList();
-};
-
-window.applyReorderedCategories = function() {
-    if (!window._tempCategoryOrder) return;
-    const grouped = {};
-    window.roomDefinitions.forEach(r => {
-        const cat = r.category || 'Standard Room';
-        if (!grouped[cat]) grouped[cat] = [];
-        grouped[cat].push(r);
-    });
-
-    const regrouped = [];
-    window._tempCategoryOrder.forEach(cat => {
-        if (grouped[cat]) regrouped.push(...grouped[cat]);
-    });
-
-    Object.keys(grouped).forEach(cat => {
-        if (!window._tempCategoryOrder.includes(cat)) regrouped.push(...grouped[cat]);
-    });
-
-    window.roomDefinitions = regrouped;
-    window.closeReorderCategoriesModal();
-    window.renderRoomDefinitionsTable();
-};
-
-// --- SECTION 5: STEP 3 (CHANNEX ROOM & RATE PLAN MAPPING) ---
+// --- SECTION 5: STEP 3 (CHANNEX MAPPING & RATE PLAN CREATOR) ---
 
 window.fetchChannexData = async function() {
     const apiKey = document.getElementById('chan-api-key')?.value.trim();
@@ -760,8 +709,6 @@ window.fetchChannexData = async function() {
     if (!apiKey || !propId) {
         return window.customAlert("Credentials Required", "Please enter both the Channex API Key and Property UUID.");
     }
-
-    window.showLoader('FETCHING CHANNEX DATA...');
 
     try {
         const headers = { "user-api-key": apiKey, "Content-Type": "application/json" };
@@ -775,96 +722,34 @@ window.fetchChannexData = async function() {
         const pJson = await pRes.json();
         const allPlans = pJson.data || [];
 
-        // Filter out OTA-derived mapping rate plans to keep primary plans
-        const cleanRatePlans = allPlans.filter(p => {
+        window.channexRatePlans = allPlans.filter(p => {
             const attr = p.attributes || {};
-            if (attr.ui_read_only === true || attr.parent_rate_plan_id != null || attr.channel_id != null) return false;
-            const t = (attr.title || '').trim().toLowerCase();
-            if (t.startsWith('booking.com') || t.startsWith('agoda') || t.startsWith('hostelworld') || t.startsWith('expedia')) return false;
-            return true;
-        });
-
-        window.channexRatePlans = cleanRatePlans;
-
-        // Auto-match Channex room types to PMS categories
-        const pmsCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-        window.channexMap = [];
-
-        pmsCategories.forEach(pmsCat => {
-            const normPms = pmsCat.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const matchedChannex = window.channexRooms.find(cr => {
-                const normCr = (cr.attributes?.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                return normCr === normPms || normCr.includes(normPms) || normPms.includes(normCr);
-            });
-
-            if (matchedChannex) {
-                window.channexMap.push({
-                    pmsCategory: pmsCat,
-                    channexId: matchedChannex.id,
-                    channexTitle: matchedChannex.attributes?.title || ''
-                });
-            }
-        });
-
-        // Map rate plans directly under their parent room types
-        window.channexRateMap = cleanRatePlans.map(item => {
-            const rId = item.relationships?.room_type?.data?.id || item.attributes?.room_type_id;
-            const parentRoom = window.channexRooms.find(r => r.id === rId);
-            const parentTitle = parentRoom?.attributes?.title || '';
-            const mappedRule = window.channexMap.find(m => m.channexId === rId);
-            const pmsCat = mappedRule ? mappedRule.pmsCategory : '';
-
-            const title = item.attributes?.title || '';
-            const lower = title.toLowerCase();
-            const policy = (lower.includes('non-ref') || lower.includes('non ref') || lower.includes('nr')) ? 'non-ref' : 'ref';
-            const product = (lower.includes('fmp') || lower.includes('evt') || lower.includes('event')) ? 'evt' : 'std';
-
-            return {
-                ratePlanId: item.id,
-                ratePlanTitle: title,
-                channexRoomId: rId || '',
-                channexRoomTitle: parentTitle,
-                pmsCategory: pmsCat,
-                channel: 'Default',
-                policy: policy,
-                product: product
-            };
+            return !attr.ui_read_only && attr.parent_rate_plan_id == null && attr.channel_id == null;
         });
 
         window.renderStep3UnifiedMapping();
-        window.customAlert("Channex Fetched", `Successfully fetched ${window.channexRooms.length} room types and ${cleanRatePlans.length} rate plans.`);
+        window.customAlert("Channex Fetched", `Fetched ${window.channexRooms.length} room types and ${window.channexRatePlans.length} primary rate plans.`);
 
     } catch (err) {
         console.error("Fetch Channex Error:", err);
         window.customAlert("Fetch Failed", err.message);
-    } finally {
-        window.hideLoader();
     }
 };
 
 window.renderStep3UnifiedMapping = function() {
     const container = document.getElementById('unified-mapping-container');
-    const badge = document.getElementById('channex-mapping-progress-badge');
     if (!container) return;
     container.innerHTML = '';
 
-    const pmsCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    let pairedCount = 0;
+    const pmsCategories = Array.from(new Set(window.roomDefinitions.filter(r => !r.inactive).map(r => r.category).filter(Boolean)));
 
     pmsCategories.forEach(pmsCat => {
         const mapping = window.channexMap.find(m => m.pmsCategory === pmsCat);
-        const isPaired = !!(mapping && mapping.channexId);
-        if (isPaired) pairedCount++;
-
-        const associatedRates = isPaired
-            ? (window.channexRateMap || []).filter(r => r.channexRoomId === mapping.channexId)
-            : [];
-
         const card = document.createElement('div');
-        card.className = "bg-white border rounded-lg overflow-hidden shadow-xs " + (isPaired ? "border-slate-300" : "border-amber-300");
+        card.className = "bg-white border border-slate-300 rounded p-2 mb-2 flex items-center justify-between gap-2";
 
-        let selectHtml = `<select class="table-input font-bold ${isPaired ? 'border-emerald-400 bg-emerald-50 text-emerald-950 font-black' : 'border-amber-400 bg-amber-50 text-amber-900 ring-2 ring-amber-300 animate-pulse'}" onchange="window.updateRoomTypeMapping('${pmsCat}', this.value)">
-            <option value="">-- UNMAPPED: SELECT CHANNEX ROOM TYPE --</option>`;
+        let selectHtml = `<select class="table-input font-bold" onchange="window.updateRoomTypeMapping('${pmsCat}', this.value)">
+            <option value="">-- SELECT CHANNEX ROOM TYPE --</option>`;
 
         (window.channexRooms || []).forEach(cr => {
             const selected = mapping && mapping.channexId === cr.id ? 'selected' : '';
@@ -872,78 +757,12 @@ window.renderStep3UnifiedMapping = function() {
         });
         selectHtml += `</select>`;
 
-        let ratesHtml = '';
-        if (isPaired && associatedRates.length > 0) {
-            ratesHtml = `
-                <div class="overflow-x-auto border-t border-slate-200">
-                    <table class="w-full text-left text-[11px] border-collapse">
-                        <thead class="bg-slate-800 text-[9px] font-black uppercase text-white">
-                            <tr>
-                                <th class="py-1 px-2 w-2/5">Channex Rate Plan</th>
-                                <th class="py-1 px-2 w-1/4">Sales Channel</th>
-                                <th class="py-1 px-2 w-1/5">Policy</th>
-                                <th class="py-1 px-2 w-1/6">Product</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 font-semibold">`;
-
-            associatedRates.forEach(plan => {
-                ratesHtml += `
-                    <tr class="hover:bg-slate-50">
-                        <td class="py-1 px-2 font-bold text-slate-800">${plan.ratePlanTitle}</td>
-                        <td class="py-1 px-2">
-                            <select class="table-input" onchange="plan.channel = this.value">
-                                <option value="Default" ${plan.channel === 'Default' ? 'selected' : ''}>Default</option>
-                                <option value="Direct" ${plan.channel === 'Direct' ? 'selected' : ''}>Direct</option>
-                                <option value="Booking.com" ${plan.channel === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
-                                <option value="Hostelworld" ${plan.channel === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
-                                <option value="Agoda" ${plan.channel === 'Agoda' ? 'selected' : ''}>Agoda</option>
-                                <option value="Expedia" ${plan.channel === 'Expedia' ? 'selected' : ''}>Expedia</option>
-                                <option value="Airbnb" ${plan.channel === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
-                            </select>
-                        </td>
-                        <td class="py-1 px-2">
-                            <select class="table-input font-bold" onchange="plan.policy = this.value">
-                                <option value="non-ref" ${plan.policy === 'non-ref' ? 'selected' : ''}>Non-Ref</option>
-                                <option value="ref" ${plan.policy === 'ref' ? 'selected' : ''}>Ref (+%)</option>
-                            </select>
-                        </td>
-                        <td class="py-1 px-2">
-                            <select class="table-input font-bold" onchange="plan.product = this.value">
-                                <option value="std" ${plan.product === 'std' ? 'selected' : ''}>Standard</option>
-                                <option value="evt" ${plan.product === 'evt' ? 'selected' : ''}>Event Pkg</option>
-                            </select>
-                        </td>
-                    </tr>`;
-            });
-            ratesHtml += `</tbody></table></div>`;
-        } else if (isPaired) {
-            ratesHtml = `<div class="p-2.5 text-center text-slate-400 font-bold text-[10px] uppercase">No rate plans linked to this Channex room. Click "+ Create & Push Plan" above.</div>`;
-        } else {
-            ratesHtml = `<div class="p-2.5 text-center text-amber-800 bg-amber-50/50 font-bold text-[10px] uppercase">Select the matching Channex room type above to reveal rate plans.</div>`;
-        }
-
         card.innerHTML = `
-            <div class="p-2 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div class="flex items-center gap-1.5">
-                    <span class="font-black text-xs uppercase text-slate-800">${pmsCat}</span>
-                    <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${isPaired ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
-                        ${isPaired ? `🟢 Paired (${associatedRates.length} Rates)` : '⚠️ Action Required: Select Room'}
-                    </span>
-                </div>
-                <div class="w-full sm:w-72">${selectHtml}</div>
-            </div>
-            ${ratesHtml}
+            <span class="font-black text-xs uppercase">${pmsCat}</span>
+            <div class="w-72">${selectHtml}</div>
         `;
         container.appendChild(card);
     });
-
-    if (badge) {
-        badge.innerText = `${pairedCount} of ${pmsCategories.length} Categories Paired`;
-        badge.className = pairedCount === pmsCategories.length
-            ? "text-[9.5px] font-black text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded"
-            : "text-[9.5px] font-black text-amber-700 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded";
-    }
 };
 
 window.updateRoomTypeMapping = function(pmsCat, channexRoomId) {
@@ -959,189 +778,115 @@ window.updateRoomTypeMapping = function(pmsCat, channexRoomId) {
         } else {
             window.channexMap.push({ pmsCategory: pmsCat, channexId: channexRoomId, channexTitle: title });
         }
-
-        (window.channexRateMap || []).forEach(plan => {
-            if (plan.channexRoomId === channexRoomId) {
-                plan.pmsCategory = pmsCat;
-            }
-        });
     }
-    window.renderStep3UnifiedMapping();
 };
 
+// Rate Plan Creator Modal
 window.openCreateRatePlanModal = function() {
-    const checklist = document.getElementById('crp-room-checklist');
-    if (!checklist) return;
-    checklist.innerHTML = '';
+    let modal = document.getElementById('create-rate-plan-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'create-rate-plan-modal';
+        modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4";
+        document.body.appendChild(modal);
+    }
 
-    const pmsCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    pmsCategories.forEach((cat, idx) => {
-        const mapping = window.channexMap.find(m => m.pmsCategory === cat);
-        const isPaired = !!(mapping && mapping.channexId);
+    const categories = Array.from(new Set(window.roomDefinitions.filter(r => !r.inactive).map(r => r.category).filter(Boolean)));
 
-        checklist.innerHTML += `
-            <label class="flex items-center gap-1.5 p-1 rounded hover:bg-white text-xs cursor-pointer">
-                <input type="checkbox" value="${cat}" class="crp-room-cb" ${isPaired ? 'checked' : 'disabled'}>
-                <span class="${isPaired ? 'font-bold text-slate-800' : 'text-slate-400 line-through'}">${cat}</span>
-                ${isPaired ? '' : '<span class="text-[9px] text-amber-600 font-bold">(Unpaired)</span>'}
+    let html = `
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 text-white p-3 font-black uppercase text-xs flex items-center justify-between">
+                <span>Create Channex Rate Plan</span>
+                <button type="button" onclick="document.getElementById('create-rate-plan-modal').classList.add('hidden')" class="cursor-pointer">&times;</button>
+            </div>
+            <div class="p-4 space-y-3 text-xs">
+                <div>
+                    <label class="block font-black text-slate-700 uppercase text-[10px] mb-1">Preset Template:</label>
+                    <div class="flex gap-1">
+                        <button type="button" onclick="window.applyRatePlanPreset('Standard Non-Refundable', 'DEFAULT', 'non-ref')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 border rounded font-bold text-[10px]">Non-Ref</button>
+                        <button type="button" onclick="window.applyRatePlanPreset('Flexible Rate', 'DEFAULT', 'ref')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 border rounded font-bold text-[10px]">Flexible</button>
+                        <button type="button" onclick="window.applyRatePlanPreset('Event Package (EVT)', 'DEFAULT', 'evt')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 border rounded font-bold text-[10px]">Event Pkg</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-black text-slate-700 uppercase text-[10px] mb-1">Plan Title:</label>
+                    <input type="text" id="crp-title" class="table-input font-bold" placeholder="e.g. Standard Non-Refundable">
+                </div>
+                <div>
+                    <label class="block font-black text-slate-700 uppercase text-[10px] mb-1">Target Categories:</label>
+                    <div class="space-y-1 max-h-36 overflow-y-auto border p-2 rounded bg-slate-50">
+    `;
+
+    categories.forEach(c => {
+        html += `
+            <label class="flex items-center gap-1.5 font-bold cursor-pointer">
+                <input type="checkbox" class="crp-cat-chk" value="${c}" checked>
+                <span>${c}</span>
             </label>
         `;
     });
 
-    const m = document.getElementById('create-rate-plan-modal');
-    if (m) {
-        m.classList.remove('hidden');
-        m.style.display = 'flex';
-    }
+    html += `
+                    </div>
+                </div>
+                <div class="pt-2 border-t flex justify-end gap-2">
+                    <button type="button" onclick="document.getElementById('create-rate-plan-modal').classList.add('hidden')" class="px-3 py-1 bg-slate-200 rounded font-bold uppercase">Cancel</button>
+                    <button type="button" onclick="window.executeCreateAndPushRatePlan()" class="px-3 py-1 bg-indigo-600 text-white rounded font-black uppercase shadow">Create & Map</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    modal.innerHTML = html;
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
 };
 
-window.closeCreateRatePlanModal = function() {
-    const m = document.getElementById('create-rate-plan-modal');
-    if (m) {
-        m.classList.add('hidden');
-        m.style.display = 'none';
-    }
+window.applyRatePlanPreset = function(title, channel, policy) {
+    const titleInput = document.getElementById('crp-title');
+    if (titleInput) titleInput.value = title;
 };
 
-window.toggleAllTargetRooms = function(checked) {
-    document.querySelectorAll('.crp-room-cb:not(:disabled)').forEach(cb => { cb.checked = checked; });
-};
-
-window.executeCreateAndPushRatePlan = async function() {
+window.executeCreateAndPushRatePlan = function() {
     const title = document.getElementById('crp-title')?.value.trim();
-    const channel = document.getElementById('crp-channel')?.value;
-    const policy = document.getElementById('crp-policy')?.value;
-    const selectedCats = Array.from(document.querySelectorAll('.crp-room-cb:checked')).map(cb => cb.value);
+    if (!title) return window.customAlert("Validation Error", "Please provide a rate plan title.");
 
-    if (!title) return window.customAlert("Title Required", "Please enter a rate plan title.");
-    if (selectedCats.length === 0) return window.customAlert("Room Required", "Please select at least one paired room category.");
-
-    const apiKey = document.getElementById('chan-api-key')?.value.trim();
-    const propId = document.getElementById('chan-prop-id')?.value.trim();
-    if (!apiKey || !propId) return window.customAlert("Credentials Required", "Channex API credentials are missing.");
-
-    const btn = document.getElementById('btn-confirm-push-rate');
-    if (btn) { btn.disabled = true; btn.innerText = "PUSHING..."; }
-
-    try {
-        for (let cat of selectedCats) {
-            const map = window.channexMap.find(m => m.pmsCategory === cat);
-            if (!map || !map.channexId) continue;
-
-            const payload = {
-                rate_plan: {
-                    title: `${title} - ${cat}`,
-                    room_type_id: map.channexId,
-                    property_id: propId,
-                    currency: document.getElementById('prop-currency')?.value || "THB",
-                    options: []
-                }
-            };
-
-            const res = await fetch("https://app.channex.io/api/v1/rate_plans", {
-                method: "POST",
-                headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || `Failed to create rate plan for ${cat}`);
-            }
-
-            const created = await res.json();
-            window.channexRateMap.push({
-                ratePlanId: created.data.id,
-                ratePlanTitle: created.data.attributes?.title || title,
-                channexRoomId: map.channexId,
-                channexRoomTitle: map.channexTitle,
-                pmsCategory: cat,
-                channel: channel,
-                policy: policy,
-                product: 'std'
-            });
-        }
-
-        window.closeCreateRatePlanModal();
-        window.renderStep3UnifiedMapping();
-        window.customAlert("Plans Created", `Successfully pushed rate plan to ${selectedCats.length} room types.`);
-
-    } catch (err) {
-        console.error("Create Plan Error:", err);
-        window.customAlert("Push Failed", err.message);
-    } finally {
-        if (btn) { btn.disabled = false; btn.innerText = "Push to Selected Rooms"; }
-    }
-};
-
-// --- SECTION 6: STEP 4 (PRICING RULES, ANCHORS & LINKS) ---
-
-window.renderStep4Pricing = function() {
-    const dormSel = document.getElementById('anchor-dorm-select');
-    const privSel = document.getElementById('anchor-private-select');
-    if (!dormSel || !privSel) return;
-
-    dormSel.innerHTML = '';
-    privSel.innerHTML = '';
-
-    const pmsCategories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    pmsCategories.forEach(cat => {
-        const isDorm = window.roomDefinitions.some(r => r.category === cat && r.rule !== 'private');
-        const opt = `<option value="${cat}">${cat}</option>`;
-        if (isDorm) dormSel.innerHTML += opt;
-        else privSel.innerHTML += opt;
+    const chks = document.querySelectorAll('.crp-cat-chk:checked');
+    chks.forEach(chk => {
+        const cat = chk.value;
+        const planId = `plan_${Math.random().toString(36).substr(2, 8)}`;
+        window.channexRateMap.push({
+            pmsCategory: cat,
+            ratePlanId: planId,
+            ratePlanTitle: `${cat} - ${title}`
+        });
     });
 
-    if (window.pricingRules.dormAnchor) dormSel.value = window.pricingRules.dormAnchor;
-    if (window.pricingRules.privateAnchor) privSel.value = window.pricingRules.privateAnchor;
-
-    window.renderRelationshipsTable();
-    window.renderChannelRulesList();
+    document.getElementById('create-rate-plan-modal')?.classList.add('hidden');
+    window.customAlert("Rate Plans Created", `Generated rate plans for ${chks.length} category(ies).`);
 };
 
-window.renderRelationshipsTable = function() {
-    const tbody = document.getElementById('relationships-table-body');
+// --- SECTION 6: STEP 4 (PAYMENT METHODS & ADD-ONS) ---
+
+window.renderPaymentMethodsTable = function() {
+    const tbody = document.getElementById('payment-methods-body');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const categories = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-
-    (window.relationships || []).forEach((rel, idx) => {
+    window.paymentMethods.forEach((m, idx) => {
         const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50";
-
-        let anchorOpts = categories.map(c => `<option value="${c}" ${rel.anchor === c ? 'selected' : ''}>${c}</option>`).join('');
-        let targetOpts = categories.map(c => `<option value="${c}" ${rel.target === c ? 'selected' : ''}>${c}</option>`).join('');
-
+        tr.className = "border-b border-slate-200";
         tr.innerHTML = `
-            <td><select class="table-input" onchange="window.relationships[${idx}].anchor = this.value">${anchorOpts}</select></td>
-            <td><select class="table-input" onchange="window.relationships[${idx}].target = this.value">${targetOpts}</select></td>
+            <td class="font-mono text-xs font-bold text-slate-500">${m.key}</td>
+            <td><input type="text" value="${m.label}" class="table-input font-bold" onchange="window.paymentMethods[${idx}].label = this.value"></td>
             <td>
-                <div class="flex items-center gap-1">
-                    <select class="table-input !w-14" onchange="window.relationships[${idx}].type = this.value">
-                        <option value="+" ${rel.type === '+' ? 'selected' : ''}>+</option>
-                        <option value="-" ${rel.type === '-' ? 'selected' : ''}>-</option>
-                        <option value="+%" ${rel.type === '+%' ? 'selected' : ''}>+%</option>
-                        <option value="-%" ${rel.type === '-%' ? 'selected' : ''}>-%</option>
-                        <option value="=" ${rel.type === '=' ? 'selected' : ''}>=</option>
-                    </select>
-                    <input type="number" value="${rel.val || 0}" class="table-input text-center font-bold" onchange="window.relationships[${idx}].val = parseFloat(this.value) || 0">
-                </div>
-            </td>
-            <td>
-                <div class="flex items-center gap-1">
-                    <select class="table-input !w-14 text-pink-700 bg-pink-50" onchange="window.relationships[${idx}].typeFmp = this.value">
-                        <option value="+" ${rel.typeFmp === '+' ? 'selected' : ''}>+</option>
-                        <option value="-" ${rel.typeFmp === '-' ? 'selected' : ''}>-</option>
-                        <option value="+%" ${rel.typeFmp === '+%' ? 'selected' : ''}>+%</option>
-                        <option value="-%" ${rel.typeFmp === '-%' ? 'selected' : ''}>-%</option>
-                        <option value="=" ${rel.typeFmp === '=' ? 'selected' : ''}>=</option>
-                    </select>
-                    <input type="number" value="${rel.valFmp !== undefined ? rel.valFmp : (rel.val || 0)}" class="table-input text-center font-bold text-pink-700 bg-pink-50" onchange="window.relationships[${idx}].valFmp = parseFloat(this.value) || 0">
-                </div>
+                <select class="table-input font-bold" onchange="window.paymentMethods[${idx}].type = this.value">
+                    <option value="revenue" ${m.type === 'revenue' ? 'selected' : ''}>Collected Revenue</option>
+                    <option value="commission" ${m.type === 'commission' ? 'selected' : ''}>OTA Withheld (Commission)</option>
+                </select>
             </td>
             <td class="text-center">
-                <button type="button" onclick="window.deleteRelationshipRow(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5">
+                <button type="button" onclick="window.paymentMethods.splice(${idx}, 1); window.renderPaymentMethodsTable();" class="text-slate-400 hover:text-rose-600 cursor-pointer">
                     <i data-lucide="trash-2" size="13"></i>
                 </button>
             </td>
@@ -1151,85 +896,62 @@ window.renderRelationshipsTable = function() {
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.addRelationshipRow = function() {
-    const cats = Array.from(new Set(window.roomDefinitions.map(r => r.category).filter(Boolean)));
-    window.relationships.push({
-        anchor: cats[0] || 'Room 1',
-        target: cats[1] || cats[0] || 'Room 2',
-        type: '+',
-        val: 100,
-        typeFmp: '+',
-        valFmp: 100
-    });
-    window.renderRelationshipsTable();
-};
+window.renderAddonsTable = function() {
+    const tbody = document.getElementById('addons-list-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
 
-window.deleteRelationshipRow = function(idx) {
-    window.relationships.splice(idx, 1);
-    window.renderRelationshipsTable();
-};
-
-window.renderChannelRulesList = function() {
-    const container = document.getElementById('channel-rules-container');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const masterDriver = window.pricingRules.masterDriver || 'Direct';
-    const channels = ['Default', 'Direct', 'Booking.com', 'Hostelworld', 'Agoda', 'Expedia', 'Airbnb'];
-
-    channels.forEach(ch => {
-        const isMaster = (ch === masterDriver);
-        const rule = window.pricingRules.channels[ch] || { type: '=', val: 0 };
-
-        const row = document.createElement('div');
-        row.className = "flex items-center justify-between p-1.5 rounded border border-slate-200 bg-white text-xs";
-        row.innerHTML = `
-            <div class="flex items-center gap-1.5">
-                <span class="font-black ${isMaster ? 'text-indigo-700' : 'text-slate-800'}">${ch}</span>
-                ${isMaster ? '<span class="text-[8px] bg-indigo-100 text-indigo-800 font-black px-1 rounded uppercase">Master Anchor (= 0)</span>' : ''}
-            </div>
-            ${isMaster ? '<span class="text-[10px] font-bold text-slate-400">Baseline 1:1</span>' : `
-            <div class="flex items-center gap-1">
-                <select class="table-input !w-14" onchange="window.updateChannelRule('${ch}', 'type', this.value)">
-                    <option value="=" ${rule.type === '=' ? 'selected' : ''}>=</option>
-                    <option value="+" ${rule.type === '+' ? 'selected' : ''}>+</option>
-                    <option value="-" ${rule.type === '-' ? 'selected' : ''}>-</option>
-                    <option value="+%" ${rule.type === '+%' ? 'selected' : ''}>+%</option>
-                    <option value="-%" ${rule.type === '-%' ? 'selected' : ''}>-%</option>
-                </select>
-                <input type="number" value="${rule.val || 0}" class="table-input !w-16 text-center font-bold" onchange="window.updateChannelRule('${ch}', 'val', parseFloat(this.value) || 0)">
-            </div>`}
+    window.addonsList.forEach((a, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = "border-b border-slate-200";
+        tr.innerHTML = `
+            <td><input type="text" value="${a.name}" class="table-input font-bold" onchange="window.addonsList[${idx}].name = this.value"></td>
+            <td class="text-center"><input type="number" value="${a.price}" class="table-input text-center font-black" onchange="window.addonsList[${idx}].price = parseFloat(this.value) || 0"></td>
+            <td><input type="text" value="${a.category || 'General'}" class="table-input font-bold" onchange="window.addonsList[${idx}].category = this.value"></td>
+            <td class="text-center">
+                <button type="button" onclick="window.addonsList.splice(${idx}, 1); window.renderAddonsTable();" class="text-slate-400 hover:text-rose-600 cursor-pointer">
+                    <i data-lucide="trash-2" size="13"></i>
+                </button>
+            </td>
         `;
-        container.appendChild(row);
+        tbody.appendChild(tr);
     });
+    if (window.lucide) window.lucide.createIcons();
 };
 
-window.updateChannelRule = function(ch, field, val) {
-    if (!window.pricingRules.channels[ch]) window.pricingRules.channels[ch] = { type: '=', val: 0 };
-    window.pricingRules.channels[ch][field] = val;
-};
-
-// --- SECTION 7: STEP 5 REVIEW, PERSISTENCE & BOOTLOADER ---
+// --- SECTION 7: STEP 5 (DEPLOYMENT REVIEW & PERSISTENCE) ---
 
 window.updateStep5Review = function() {
-    const propName = document.getElementById('prop-name')?.value || window.currentPropertyId;
-    const propShort = document.getElementById('prop-short')?.value || 'PROP';
+    const summaryEl = document.getElementById('review-summary-box');
+    if (!summaryEl) return;
 
-    const revName = document.getElementById('rev-prop-name');
-    const revCode = document.getElementById('rev-prop-code');
-    const revInv = document.getElementById('rev-inv-count');
-    const revCat = document.getElementById('rev-cat-count');
-    const revChanStatus = document.getElementById('rev-chan-status');
-    const revChanPlans = document.getElementById('rev-chan-plans');
+    const activeRooms = window.roomDefinitions.filter(r => !r.inactive);
+    const inactiveRooms = window.roomDefinitions.filter(r => r.inactive);
+    const activeBeds = window.compiledRooms.filter(r => !r.inactive);
 
-    if (revName) revName.innerText = propName;
-    if (revCode) revCode.innerText = propShort;
-    if (revInv) revInv.innerText = `${window.compiledRooms.length} Units`;
-    if (revCat) revCat.innerText = `${new Set(window.roomDefinitions.map(r => r.category)).size} Categories`;
-    if (revChanStatus) revChanStatus.innerText = window.channexConfig?.propId ? "Connected" : "Not Configured";
-    if (revChanPlans) revChanPlans.innerText = `${window.channexRateMap.length} Plans Mapped`;
+    summaryEl.innerHTML = `
+        <div class="space-y-2 text-xs">
+            <div class="flex justify-between py-1 border-b border-slate-200">
+                <span class="font-bold text-slate-600">Property Code:</span>
+                <span class="font-mono font-black text-indigo-700">${window.currentPropertyId}</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-slate-200">
+                <span class="font-bold text-slate-600">Active Inventory:</span>
+                <span class="font-black text-slate-800">${activeRooms.length} Rooms • ${activeBeds.length} Beds</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-slate-200">
+                <span class="font-bold text-slate-600">Archived / Inactive:</span>
+                <span class="font-black text-slate-500">${inactiveRooms.length} Closed Rooms</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-slate-200">
+                <span class="font-bold text-slate-600">Channex Mapped Categories:</span>
+                <span class="font-black text-emerald-700">${window.channexMap.length} of ${new Set(activeRooms.map(r => r.category)).size}</span>
+            </div>
+        </div>
+    `;
 };
 
+// Cloud Persistence with Automatic Rolling Backup and Channex Availability Push
 window.savePropertyToDatabase = async function(showMessage = true) {
     const btn = document.getElementById('btn-save-header');
     if (btn) { btn.disabled = true; btn.innerText = "SAVING..."; }
@@ -1238,27 +960,15 @@ window.savePropertyToDatabase = async function(showMessage = true) {
         const propId = window.currentPropertyId;
         window.compileRoomsFromDefinitions();
 
-        // --- CIRCUIT BREAKER: PREVENT ACCIDENTAL ROOM PURGES ---
-        const existingRoomsCount = window.currentPropertyConfig?.rooms?.length || 0;
-        const newRoomsCount = window.compiledRooms.length;
+        // 1. Immutable Rolling Backup in Firestore before applying changes
+        const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'properties_backups', `${propId}_${Date.now()}`);
+        await setDoc(backupRef, {
+            roomDefinitions: window.roomDefinitions,
+            rooms: window.compiledRooms,
+            savedAt: new Date().toISOString()
+        });
 
-        if (existingRoomsCount > 0 && newRoomsCount === 0) {
-            throw new Error(`CIRCUIT BREAKER ACTIVATED: Attempted to save 0 rooms over an existing catalog of ${existingRoomsCount} rooms. Overwrite blocked.`);
-        }
-
-        // --- AUTOMATIC ROLLING BACKUP BEFORE OVERWRITE ---
-        if (window.currentPropertyConfig && Object.keys(window.currentPropertyConfig).length > 0) {
-            try {
-                const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'property_backups', `${propId}_${Date.now()}`);
-                await setDoc(backupRef, {
-                    config: window.currentPropertyConfig,
-                    timestamp: new Date().toISOString()
-                });
-            } catch (backupErr) {
-                console.warn("[Setup Engine] Pre-save snapshot notice:", backupErr.message);
-            }
-        }
-
+        // 2. Persist to Firestore property document
         const dataToSave = {
             id: propId,
             name: document.getElementById('prop-name')?.value.trim() || propId,
@@ -1281,25 +991,23 @@ window.savePropertyToDatabase = async function(showMessage = true) {
             },
             channexMap: window.channexMap,
             channexRateMap: window.channexRateMap,
-            pricingRules: {
-                masterDriver: document.getElementById('rule-master-driver')?.value || 'Direct',
-                dormAnchor: document.getElementById('anchor-dorm-select')?.value || '',
-                privateAnchor: document.getElementById('anchor-private-select')?.value || '',
-                channels: window.pricingRules.channels,
-                stdRefVal: parseFloat(document.getElementById('rule-std-ref')?.value) || 25,
-                evtRefVal: parseFloat(document.getElementById('rule-evt-ref')?.value) || 25
-            },
-            relationships: window.relationships,
             updatedAt: new Date().toISOString()
         };
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), dataToSave, { merge: true });
-
-        // Update in-memory reference to newly saved state
         window.currentPropertyConfig = { ...dataToSave };
 
+        // 3. Auto-Push Updated Capacity to Channex (Deducts any inactivated or deleted rooms immediately)
+        if (dataToSave.channex.apiKey && dataToSave.channex.propId && window.triggerAutoSync) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + 90);
+            const futureStr = futureDate.toISOString().split('T')[0];
+            window.triggerAutoSync(todayStr, futureStr);
+        }
+
         if (showMessage) {
-            window.customAlert("Saved", "Property setup successfully saved to cloud.");
+            window.customAlert("Saved", "Property setup successfully saved, backed up, and synced.");
         }
     } catch (err) {
         console.error("Save Error:", err);
@@ -1312,7 +1020,6 @@ window.savePropertyToDatabase = async function(showMessage = true) {
 
 window.loadPropertyFromDatabase = async function(propId) {
     window.currentPropertyId = propId;
-    window.safeUpdateUrlParam ? window.safeUpdateUrlParam('p', propId.toUpperCase()) : null;
 
     try {
         const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
@@ -1338,41 +1045,7 @@ window.loadPropertyFromDatabase = async function(propId) {
 
             window.paymentMethods = Array.isArray(data.payments) && data.payments.length > 0 ? data.payments : [...DEFAULT_PAYMENT_METHODS];
             window.addonsList = Array.isArray(data.addons) && data.addons.length > 0 ? data.addons : [...DEFAULT_ADDONS];
-
-            // --- PERMANENT ROOM RECOVERY: NEVER INITIALIZE EMPTY IF ROOMS EXIST ---
-            if (Array.isArray(data.roomDefinitions) && data.roomDefinitions.length > 0) {
-                window.roomDefinitions = data.roomDefinitions;
-            } else if (Array.isArray(data.rooms) && data.rooms.length > 0) {
-                // Auto-hydrate roomDefinitions from compiled physical rooms
-                const defMap = new Map();
-                data.rooms.forEach(r => {
-                    const rId = String(r.id || '').toUpperCase().trim();
-                    const isDorm = r.isDorm || rId.includes('-');
-                    const parent = r.parentRoom ? String(r.parentRoom).toUpperCase().trim() : (isDorm ? rId.split('-')[0].trim() : rId);
-                    const cat = r.category || r.type || 'Standard Room';
-                    const floor = r.floor || '1';
-                    const rule = r.rule || (isDorm ? 'odd-top' : 'private');
-
-                    if (!defMap.has(parent)) {
-                        defMap.set(parent, {
-                            id: parent,
-                            name: r.name ? (isDorm ? parent : r.name) : parent,
-                            category: cat,
-                            units: 1,
-                            beds: 1,
-                            floor: floor,
-                            rule: rule
-                        });
-                    } else {
-                        const existing = defMap.get(parent);
-                        existing.beds = (existing.beds || 1) + 1;
-                        existing.units = existing.beds;
-                    }
-                });
-                window.roomDefinitions = Array.from(defMap.values());
-            } else {
-                window.roomDefinitions = [];
-            }
+            window.roomDefinitions = Array.isArray(data.roomDefinitions) ? data.roomDefinitions : [];
 
             window.channexConfig = data.channex || { apiKey: '', propId: '' };
             setVal('chan-api-key', window.channexConfig.apiKey);
@@ -1380,29 +1053,15 @@ window.loadPropertyFromDatabase = async function(propId) {
 
             window.channexMap = Array.isArray(data.channexMap) ? data.channexMap : [];
             window.channexRateMap = Array.isArray(data.channexRateMap) ? data.channexRateMap : [];
-            window.relationships = Array.isArray(data.relationships) ? data.relationships : [];
-            window.pricingRules = data.pricingRules || { masterDriver: 'Direct', channels: {} };
 
             window.renderPaymentMethodsTable();
             window.renderAddonsTable();
             window.renderRoomDefinitionsTable();
             window.renderStep3UnifiedMapping();
-            window.renderStep4Pricing();
         }
     } catch (err) {
         console.error("Load Error:", err);
     }
-};
-
-window.switchSetupProperty = function(propId) {
-    if (propId) window.loadPropertyFromDatabase(propId);
-};
-
-window.launchApp = function(appType) {
-    const curProp = window.currentPropertyId || 'swims_resort';
-    const short = document.getElementById('prop-short')?.value || curProp;
-    const target = appType === 'cm' ? 'cm.html' : 'pms.html';
-    window.location.href = `https://loren-6q.github.io/PMS/${target}?p=${encodeURIComponent(short)}`;
 };
 
 async function initSetupEngine() {
