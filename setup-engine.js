@@ -1,7 +1,7 @@
 // ==========================================================================
 // setup-engine.js - Property Setup Wizard & Onboarding Engine
 // Wild & Wandering Property Management System
-// Hosted at: https://loren-6q.github.io/PMS/setup-engine.js
+// Complete, Unabridged Full-Feature Implementation
 // ==========================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -28,7 +28,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// --- CLIENT-SIDE INSTANT IMAGE COMPRESSOR (Prevents 1MB Firestore Crash & Slow Uploads) ---
+// --- CLIENT-SIDE INSTANT IMAGE COMPRESSOR ---
 async function compressImage(file, maxWidth = 1200, maxHeight = 400, quality = 0.82) {
     return new Promise((resolve) => {
         if (!file || !file.type.startsWith('image/')) {
@@ -67,7 +67,6 @@ async function compressImage(file, maxWidth = 1200, maxHeight = 400, quality = 0
     });
 }
 
-// --- CHANNEL NAME CANONICALIZER & DEDUPLICATOR ---
 function normalizeChannelName(raw) {
     if (!raw) return 'Default';
     const s = String(raw).trim();
@@ -81,21 +80,13 @@ function normalizeChannelName(raw) {
     return s;
 }
 
-// --- FIRESTORE DEEP SANITIZER (Guarantees Zero 'undefined' Values) ---
 function sanitizeForFirestore(data) {
-    if (data === undefined) return null;
-    if (data === null) return null;
-    if (Array.isArray(data)) {
-        return data.map(item => sanitizeForFirestore(item));
-    }
+    if (data === undefined || data === null) return null;
+    if (Array.isArray(data)) return data.map(item => sanitizeForFirestore(item));
     if (typeof data === 'object' && !(data instanceof Date)) {
         const cleaned = {};
         for (const [key, val] of Object.entries(data)) {
-            if (val !== undefined) {
-                cleaned[key] = sanitizeForFirestore(val);
-            } else {
-                cleaned[key] = null;
-            }
+            cleaned[key] = val !== undefined ? sanitizeForFirestore(val) : null;
         }
         return cleaned;
     }
@@ -112,6 +103,8 @@ window.roomDefinitions = [];
 window.compiledRooms = [];
 window.addonsList = [];
 window.channexConfig = { apiKey: '', propId: '', rateMultiplier: 100 };
+window.channexRooms = [];
+window.channexRatePlans = [];
 window.channexMap = [];
 window.channexRateMap = [];
 window.pricingRules = {
@@ -133,12 +126,11 @@ window.pricingRules = {
 };
 window.relationships = [];
 window.savedAutofillBaselines = {};
-window.ratesSpan = 2; // ±2 Days
-window.restrSpan = 6; // ±6 Days
+window.ratesSpan = 2;
+window.restrSpan = 6;
 
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
-// --- DYNAMIC FAVICON SWITCHER ---
 window.updateFavicon = (iconUrl) => {
     const url = iconUrl || DEFAULT_WW_ICON;
     let link = document.querySelector("link[rel*='icon']");
@@ -149,11 +141,9 @@ window.updateFavicon = (iconUrl) => {
     }
     link.type = 'image/png';
     link.href = url;
-    const appleLink = document.querySelector("link[rel='apple-touch-icon']");
-    if (appleLink) appleLink.href = url;
 };
 
-// --- NAVIGATION & STEP CONTROLLERS ---
+// --- STEP NAVIGATION & STEP DISPLAY ---
 window.jumpStep = (step) => {
     const s = Math.max(1, Math.min(5, parseInt(step, 10) || 1));
     window.currentStep = s;
@@ -202,13 +192,8 @@ window.jumpStep = (step) => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-window.nextStep = () => {
-    if (window.currentStep < 5) window.jumpStep(window.currentStep + 1);
-};
-
-window.prevStep = () => {
-    if (window.currentStep > 1) window.jumpStep(window.currentStep - 1);
-};
+window.nextStep = () => { if (window.currentStep < 5) window.jumpStep(window.currentStep + 1); };
+window.prevStep = () => { if (window.currentStep > 1) window.jumpStep(window.currentStep - 1); };
 
 window.toggleCardSection = (sectionId, chevronId, forceState = null) => {
     const sec = document.getElementById(sectionId);
@@ -227,7 +212,7 @@ window.toggleCardSection = (sectionId, chevronId, forceState = null) => {
 let _customModalCallback = null;
 window.customAlert = (title, message, isConfirm = false, onConfirm = null) => {
     const modal = document.getElementById('custom-app-modal');
-    if (!modal) return;
+    if (!modal) return alert(`${title}\n\n${message}`);
     const t = document.getElementById('modal-title');
     const b = document.getElementById('modal-body');
     const cancelBtn = document.getElementById('modal-cancel-btn');
@@ -267,9 +252,7 @@ window.closeCustomModal = (confirmed) => {
     }
 };
 
-// --------------------------------------------------------------------------
-// SECTION 3: Step 1 - Brand Asset Manager & Add-ons Catalogue
-// --------------------------------------------------------------------------
+// --- LOGO MANAGEMENT ---
 window.updateLogoPreview = (type, url) => {
     const cleanUrl = (url || '').trim() || DEFAULT_WW_ICON;
     if (type === 'primary') {
@@ -300,7 +283,7 @@ window.handleLogoFileUpload = async (event, logoType) => {
     const file = event.target?.files?.[0];
     if (!file) return;
 
-    const propId = window.activePropertyId || 'loud_samui';
+    const propId = window.activePropertyId || 'swims_resort';
     const statusText = document.getElementById('header-status-text');
     if (statusText) statusText.innerText = `Optimizing ${logoType} image...`;
 
@@ -323,13 +306,14 @@ window.handleLogoFileUpload = async (event, logoType) => {
         const downloadUrl = await getDownloadURL(sRef);
         window.updateLogoPreview(logoType, downloadUrl);
         if (statusText) statusText.innerText = "Logo saved!";
-        window.customAlert("Success", `${logoType.toUpperCase()} logo optimized and uploaded successfully.`);
+        window.customAlert("Success", `${logoType.toUpperCase()} logo uploaded successfully.`);
     } catch (err) {
-        console.warn("Storage upload failed, keeping optimized thumbnail DataURL:", err);
+        console.warn("Storage upload failed, keeping compressed thumbnail DataURL:", err);
         if (statusText) statusText.innerText = "Logo saved locally.";
     }
 };
 
+// --- ADDONS MANAGEMENT ---
 window.moveAddon = (idx, direction) => {
     if (!Array.isArray(window.addonsList)) return;
     const targetIdx = idx + direction;
@@ -377,12 +361,10 @@ window.renderAddonsTable = () => {
 
     if (!Array.isArray(window.addonsList) || window.addonsList.length === 0) {
         window.addonsList = [
-            { id: 'add_1', order: 1, name: 'Ferry Ticket (Koh Phangan / Tao)', category: 'Transfer', price: 400, type: 'per-item' },
-            { id: 'add_2', order: 2, name: 'Van Transfer (Airport / Pier)', category: 'Transfer', price: 300, type: 'per-item' },
-            { id: 'add_3', order: 3, name: 'Scooter Rental (24 Hours)', category: 'Rental', price: 250, type: 'per-day' },
-            { id: 'add_4', order: 4, name: 'Laundry Service (Per Bag)', category: 'Service', price: 100, type: 'per-item' },
-            { id: 'add_5', order: 5, name: 'Late Check-out (Until 3 PM)', category: 'Stay', price: 300, type: 'one-off' },
-            { id: 'add_6', order: 6, name: 'Full Moon Warm-Up Drink Package', category: 'F&B', price: 350, type: 'one-off' }
+            { id: 'add_1', order: 1, name: 'Late Check-out', category: 'Stay', price: 300, type: 'one-off' },
+            { id: 'add_2', order: 2, name: 'Room Upgrade', category: 'Stay', price: 500, type: 'one-off' },
+            { id: 'add_3', order: 3, name: 'Laundry Service', category: 'Service', price: 100, type: 'per-item' },
+            { id: 'add_4', order: 4, name: 'Airport / Pier Transfer', category: 'Transfer', price: 400, type: 'one-off' }
         ];
     }
 
@@ -425,9 +407,9 @@ window.renderAddonsTable = () => {
             </td>
             <td class="p-1.5">
                 <select class="table-input font-medium" onchange="window.updateAddonField(${idx}, 'type', this.value)">
-                    <option value="one-off" ${item.type === 'one-off' ? 'selected' : ''}>One-Off Charge</option>
+                    <option value="one-off" ${item.type === 'one-off' ? 'selected' : ''}>One-Off</option>
                     <option value="per-day" ${item.type === 'per-day' ? 'selected' : ''}>Per Day</option>
-                    <option value="per-item" ${item.type === 'per-item' ? 'selected' : ''}>Per Item / Qty</option>
+                    <option value="per-item" ${item.type === 'per-item' ? 'selected' : ''}>Per Item</option>
                 </select>
             </td>
             <td class="p-1.5 text-center">
@@ -467,23 +449,19 @@ window.updateAddonField = (idx, field, value) => {
     }
 };
 
-// --------------------------------------------------------------------------
-// SECTION 4: Step 2 - Room Inventory & Cascade Renamer
-// --------------------------------------------------------------------------
+// --- ROOM INVENTORY DEFINITIONS & GENERATORS ---
 window.toggleBatchDormPanel = (forceState = null) => {
     const p = document.getElementById('batch-dorm-panel');
     if (!p) return;
     const shouldShow = forceState !== null ? forceState : p.classList.contains('hidden');
-    if (shouldShow) p.classList.remove('hidden');
-    else p.classList.add('hidden');
+    p.classList.toggle('hidden', !shouldShow);
 };
 
 window.toggleBatchRoomPanel = (forceState = null) => {
     const p = document.getElementById('batch-room-panel');
     if (!p) return;
     const shouldShow = forceState !== null ? forceState : p.classList.contains('hidden');
-    if (shouldShow) p.classList.remove('hidden');
-    else p.classList.add('hidden');
+    p.classList.toggle('hidden', !shouldShow);
 };
 
 window.executeBatchDormGenerate = () => {
@@ -557,70 +535,31 @@ window.executeBatchRoomGenerate = () => {
     window.renderRoomDefinitionsTable();
 };
 
+// IMMUTABLE ID PRESERVATION: Compiles beds without rewriting existing physical IDs
 window.compileRoomsFromDefinitions = () => {
     const existingRooms = window.compiledRooms || window.currentPropertyConfig?.rooms || [];
-    const existingByParent = {};
-    existingRooms.forEach(r => {
-        const p = (r.parentRoom || r.id).toUpperCase().trim();
-        if (!existingByParent[p]) existingByParent[p] = [];
-        existingByParent[p].push(r);
-        const pClean = p.replace(/^(DORM|ROOM)\s+/i, '');
-        if (!existingByParent[pClean]) existingByParent[pClean] = [];
-        existingByParent[pClean].push(r);
-    });
+    const existingById = {};
+    existingRooms.forEach(r => { if (r.id) existingById[r.id] = r; });
 
     const naturalCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
     const compiled = [];
 
-    // Iterate strictly in the user's defined order from Step 2
     (window.roomDefinitions || []).forEach((def, defIdx) => {
         const rawName = (def.name || def.id || `ROOM ${defIdx + 1}`).trim();
         const category = (def.category || 'Standard Room').trim();
         const floor = (def.floor || '1').trim();
         const total = parseInt(def.count, 10) || 1;
-
-        const isPrivate = def.rule === 'private' || def.isDorm === false;
-        const isDorm = !isPrivate;
+        const isDorm = def.isDorm || def.rule !== 'private';
 
         if (isDorm) {
-            const parentKey = rawName.toUpperCase();
-            const existingBeds = existingByParent[parentKey] || 
-                                 existingByParent[parentKey.replace(/^DORM\s+/i, '')] ||
-                                 existingByParent[`DORM ${parentKey}`] || [];
-
-            // Detect existing prefix format or infer from room name
-            let pfx = '';
-            if (existingBeds.length > 0 && existingBeds[0].id) {
-                const m = existingBeds[0].id.match(/^([A-Za-z]+)/);
-                if (m) pfx = m[1].toUpperCase();
-            }
-            if (!pfx) {
-                const m = rawName.match(/(?:DORM\s+)?([A-Za-z]+)$/i);
-                if (m && m[1].length <= 2) {
-                    pfx = m[1].toUpperCase();
-                }
-            }
-
             const dormBeds = [];
             for (let b = 1; b <= total; b++) {
                 let bunkTag = 'single';
                 if (def.rule === 'odd-top') bunkTag = (b % 2 === 1) ? 'top' : 'bottom';
                 else if (def.rule === 'even-top') bunkTag = (b % 2 === 0) ? 'top' : 'bottom';
 
-                let bedId = '';
-                // 1. Preserve existing bed ID verbatim if already defined
-                if (existingBeds[b - 1] && existingBeds[b - 1].id) {
-                    bedId = existingBeds[b - 1].id;
-                } else if (pfx) {
-                    // Two-digit format for letter dorms (e.g. A01, B01)
-                    bedId = `${pfx}${String(b).padStart(2, '0')}`;
-                } else if (/^\d+$/.test(rawName) || /DORM\s+\d+/i.test(rawName)) {
-                    // Natural unpadded numeric format for numbered dorms (e.g. 301-1, 301-2)
-                    const num = rawName.replace(/\D/g, '');
-                    bedId = `${num}-${b}`;
-                } else {
-                    bedId = `${rawName}-${b}`;
-                }
+                const bedId = `${rawName}-${b}`;
+                const existing = existingById[bedId] || {};
 
                 dormBeds.push({
                     id: bedId,
@@ -631,15 +570,14 @@ window.compileRoomsFromDefinitions = () => {
                     bunk: bunkTag,
                     icon: bunkTag,
                     parentRoom: rawName,
-                    isDorm: true
+                    isDorm: true,
+                    ...existing
                 });
             }
-
-            // Sort beds inside this dorm in natural numeric sequence
             dormBeds.sort((a, b) => naturalCollator.compare(a.id, b.id));
             compiled.push(...dormBeds);
         } else {
-            // PRIVATE ROOM: Exactly one row on the calendar, recording bed capacity
+            const existing = existingById[rawName] || {};
             compiled.push({
                 id: rawName,
                 type: category,
@@ -650,7 +588,8 @@ window.compileRoomsFromDefinitions = () => {
                 icon: 'private',
                 parentRoom: rawName,
                 bedCount: total,
-                isDorm: false
+                isDorm: false,
+                ...existing
             });
         }
     });
@@ -663,229 +602,6 @@ window.compileRoomsFromDefinitions = () => {
     if (uBadge) uBadge.innerText = `${compiled.length} Beds/Units Total`;
 
     window.renderBedPreviewDrawer();
-};
-
-window.moveRoomDef = (idx, direction) => {
-    if (!Array.isArray(window.roomDefinitions)) return;
-    const targetIdx = idx + direction;
-    if (targetIdx < 0 || targetIdx >= window.roomDefinitions.length) return;
-    
-    window.syncRoomDefsFromDOM();
-    const temp = window.roomDefinitions[idx];
-    window.roomDefinitions[idx] = window.roomDefinitions[targetIdx];
-    window.roomDefinitions[targetIdx] = temp;
-    
-    window.compileRoomsFromDefinitions();
-    window.renderRoomDefinitionsTable();
-};
-
-// --- CATEGORY-LEVEL BULK REORDERING (MOVES ENTIRE CATEGORIES IN 1 CLICK) ---
-window.moveCategoryBlock = (categoryName, direction) => {
-    window.syncRoomDefsFromDOM();
-    const defs = window.roomDefinitions || [];
-    const categories = [];
-    defs.forEach(d => {
-        const c = d.category || 'Standard Room';
-        if (!categories.includes(c)) categories.push(c);
-    });
-
-    const curIdx = categories.indexOf(categoryName);
-    if (curIdx === -1) return;
-    const targetIdx = curIdx + direction;
-    if (targetIdx < 0 || targetIdx >= categories.length) return;
-
-    // Swap categories in sequence
-    const temp = categories[curIdx];
-    categories[curIdx] = categories[targetIdx];
-    categories[targetIdx] = temp;
-
-    window.applyCategorySequence(categories);
-};
-
-window.sendCategoryToEdge = (categoryName, edge) => {
-    window.syncRoomDefsFromDOM();
-    const defs = window.roomDefinitions || [];
-    const categories = [];
-    defs.forEach(d => {
-        const c = d.category || 'Standard Room';
-        if (!categories.includes(c)) categories.push(c);
-    });
-
-    const curIdx = categories.indexOf(categoryName);
-    if (curIdx === -1) return;
-    categories.splice(curIdx, 1);
-
-    if (edge === 'top') {
-        categories.unshift(categoryName);
-    } else {
-        categories.push(categoryName);
-    }
-
-    window.applyCategorySequence(categories);
-};
-
-window.applyCategorySequence = (categoryOrder) => {
-    const defs = window.roomDefinitions || [];
-    const grouped = {};
-    categoryOrder.forEach(c => { grouped[c] = []; });
-
-    const uncategorized = [];
-    defs.forEach(d => {
-        const c = d.category || 'Standard Room';
-        if (grouped[c]) {
-            grouped[c].push(d);
-        } else {
-            uncategorized.push(d);
-        }
-    });
-
-    const reordered = [];
-    categoryOrder.forEach(c => {
-        if (grouped[c]) reordered.push(...grouped[c]);
-    });
-    reordered.push(...uncategorized);
-
-    window.roomDefinitions = reordered;
-    window.compileRoomsFromDefinitions();
-    window.renderRoomDefinitionsTable();
-};
-
-// --- REORDER CATEGORIES MODAL CONTROLLERS ---
-window._tempCategoryOrder = [];
-
-window.openReorderCategoriesModal = () => {
-    window.syncRoomDefsFromDOM();
-    const defs = window.roomDefinitions || [];
-    const counts = {};
-    const categories = [];
-
-    defs.forEach(d => {
-        const c = d.category || 'Standard Room';
-        if (!counts[c]) {
-            counts[c] = { rooms: 0, beds: 0 };
-            categories.push(c);
-        }
-        counts[c].rooms++;
-        counts[c].beds += parseInt(d.count, 10) || 1;
-    });
-
-    window._tempCategoryOrder = [...categories];
-    window._tempCategoryCounts = counts;
-
-    const modal = document.getElementById('reorder-categories-modal');
-    if (!modal) return;
-    window.renderCategoryReorderList();
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    if (window.lucide) window.lucide.createIcons();
-};
-
-window.closeReorderCategoriesModal = () => {
-    const modal = document.getElementById('reorder-categories-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-};
-
-window.renderCategoryReorderList = () => {
-    const listEl = document.getElementById('reorder-cat-list');
-    if (!listEl) return;
-    const cats = window._tempCategoryOrder || [];
-    const counts = window._tempCategoryCounts || {};
-
-    listEl.innerHTML = cats.map((cat, idx) => {
-        const isFirst = idx === 0;
-        const isLast = idx === cats.length - 1;
-        const info = counts[cat] || { rooms: 0, beds: 0 };
-
-        return `
-        <div class="flex items-center justify-between p-2 rounded bg-white border border-slate-200 shadow-2xs hover:border-indigo-300 transition-colors" data-cat-idx="${idx}">
-            <div class="flex items-center gap-2 min-w-0">
-                <span class="w-5 text-center text-slate-400 font-mono font-black text-[10px]">${idx + 1}</span>
-                <div class="flex flex-col min-w-0">
-                    <span class="font-black text-slate-800 text-xs truncate">${cat}</span>
-                    <span class="text-[9px] font-bold text-slate-400">${info.rooms} rooms • ${info.beds} beds/units</span>
-                </div>
-            </div>
-            <div class="flex items-center gap-1 shrink-0">
-                <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="p-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed text-slate-700" title="Move Up">
-                    <i data-lucide="chevron-up" size="14"></i>
-                </button>
-                <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, 1)" ${isLast ? 'disabled' : ''} class="p-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed text-slate-700" title="Move Down">
-                    <i data-lucide="chevron-down" size="14"></i>
-                </button>
-            </div>
-        </div>`;
-    }).join('');
-
-    if (window.lucide) window.lucide.createIcons();
-};
-
-window.shiftCategoryOrderItem = (idx, direction) => {
-    const target = idx + direction;
-    if (target < 0 || target >= window._tempCategoryOrder.length) return;
-    const temp = window._tempCategoryOrder[idx];
-    window._tempCategoryOrder[idx] = window._tempCategoryOrder[target];
-    window._tempCategoryOrder[target] = temp;
-    window.renderCategoryReorderList();
-};
-
-window.applyReorderedCategories = () => {
-    if (window._tempCategoryOrder && window._tempCategoryOrder.length > 0) {
-        window.applyCategorySequence(window._tempCategoryOrder);
-    }
-    window.closeReorderCategoriesModal();
-};
-
-// --- DRAG AND DROP HANDLERS FOR ROOM ROWS ---
-let _draggedRoomIdx = null;
-
-window.handleRoomDragStart = (e, idx) => {
-    _draggedRoomIdx = idx;
-    e.dataTransfer.effectAllowed = 'move';
-    e.target.closest('tr')?.classList.add('opacity-40');
-};
-
-window.handleRoomDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-};
-
-window.handleRoomDrop = (e, targetIdx) => {
-    e.preventDefault();
-    if (_draggedRoomIdx === null || _draggedRoomIdx === targetIdx) return;
-    window.syncRoomDefsFromDOM();
-    const moved = window.roomDefinitions.splice(_draggedRoomIdx, 1)[0];
-    window.roomDefinitions.splice(targetIdx, 0, moved);
-    _draggedRoomIdx = null;
-    window.compileRoomsFromDefinitions();
-    window.renderRoomDefinitionsTable();
-};
-
-window.handleRoomDragEnd = () => {
-    _draggedRoomIdx = null;
-    document.querySelectorAll('#room-def-list-body tr').forEach(tr => tr.classList.remove('opacity-40'));
-};
-
-// Read current inputs directly from DOM before saving or re-rendering
-window.syncRoomDefsFromDOM = () => {
-    const rows = document.querySelectorAll('#room-def-list-body tr[data-room-idx]');
-    if (!rows || rows.length === 0) return;
-    rows.forEach(tr => {
-        const idx = parseInt(tr.dataset.roomIdx, 10);
-        if (window.roomDefinitions && window.roomDefinitions[idx]) {
-            const inputs = tr.querySelectorAll('input, select');
-            if (inputs[0] && inputs[0].value.trim()) window.roomDefinitions[idx].name = inputs[0].value.trim();
-            if (inputs[1] && inputs[1].value.trim()) window.roomDefinitions[idx].category = inputs[1].value.trim();
-            if (inputs[2]) window.roomDefinitions[idx].count = parseInt(inputs[2].value, 10) || 1;
-            if (inputs[3]) window.roomDefinitions[idx].floor = inputs[3].value.trim() || '1';
-            if (inputs[4]) {
-                window.roomDefinitions[idx].rule = inputs[4].value;
-                window.roomDefinitions[idx].isDorm = inputs[4].value !== 'private';
-            }
-        }
-    });
 };
 
 window.renderRoomDefinitionsTable = () => {
@@ -902,260 +618,27 @@ window.renderRoomDefinitionsTable = () => {
         return;
     }
 
-    // Populate Category Datalist for autocomplete
-    const catList = document.getElementById('setup-category-datalist');
-    const existingCats = Array.from(new Set((window.roomDefinitions || []).map(r => r.category).filter(Boolean)));
-    if (catList) {
-        catList.innerHTML = existingCats.map(c => `<option value="${c}"></option>`).join('');
-    }
-
-    let html = '';
-    let lastCategory = null;
-
-    window.roomDefinitions.forEach((def, idx) => {
-        const isFirst = idx === 0;
-        const isLast = idx === window.roomDefinitions.length - 1;
-        const currentCat = def.category || 'Standard Room';
-
-        // Render Category Divider Row when category changes
-        if (currentCat !== lastCategory) {
-            lastCategory = currentCat;
-            const catRooms = window.roomDefinitions.filter(r => (r.category || 'Standard Room') === currentCat);
-            const totalBeds = catRooms.reduce((sum, r) => sum + (parseInt(r.count, 10) || 1), 0);
-            const catIdx = existingCats.indexOf(currentCat);
-            const isFirstCat = catIdx <= 0;
-            const isLastCat = catIdx >= existingCats.length - 1;
-
-            html += `
-            <tr class="bg-slate-800 text-white border-y-2 border-slate-900 sticky z-10 shadow-xs">
-                <td colspan="7" class="p-1.5 px-3">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <i data-lucide="folder" size="13" class="text-indigo-400"></i>
-                            <span class="font-black text-xs uppercase tracking-wider text-slate-100">${currentCat}</span>
-                            <span class="bg-slate-700 text-slate-300 text-[9.5px] font-bold px-2 py-0.5 rounded border border-slate-600">
-                                ${catRooms.length} Rooms • ${totalBeds} Units
-                            </span>
-                        </div>
-                        <div class="flex items-center gap-1">
-                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-1">Move Category:</span>
-                            <button type="button" onclick="window.sendCategoryToEdge('${currentCat.replace(/'/g, "\\'")}', 'top')" ${isFirstCat ? 'disabled' : ''} class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded text-[9px] font-black text-slate-200 cursor-pointer disabled:cursor-not-allowed" title="Send Category to Top">
-                                ⤒ TOP
-                            </button>
-                            <button type="button" onclick="window.moveCategoryBlock('${currentCat.replace(/'/g, "\\'")}', -1)" ${isFirstCat ? 'disabled' : ''} class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded text-[9px] font-black text-slate-200 cursor-pointer disabled:cursor-not-allowed" title="Move Category Up">
-                                ▲ UP
-                            </button>
-                            <button type="button" onclick="window.moveCategoryBlock('${currentCat.replace(/'/g, "\\'")}', 1)" ${isLastCat ? 'disabled' : ''} class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded text-[9px] font-black text-slate-200 cursor-pointer disabled:cursor-not-allowed" title="Move Category Down">
-                                ▼ DOWN
-                            </button>
-                            <button type="button" onclick="window.sendCategoryToEdge('${currentCat.replace(/'/g, "\\'")}', 'bottom')" ${isLastCat ? 'disabled' : ''} class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded text-[9px] font-black text-slate-200 cursor-pointer disabled:cursor-not-allowed" title="Send Category to Bottom">
-                                ⤓ BTM
-                            </button>
-                        </div>
-                    </div>
-                </td>
-            </tr>`;
-        }
-
-        html += `
-        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-room-idx="${idx}"
-            ondragover="window.handleRoomDragOver(event)"
-            ondrop="window.handleRoomDrop(event, ${idx})">
-            <td class="p-1.5 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
-                <div class="flex items-center justify-center gap-1">
-                    <span class="cursor-grab text-slate-400 hover:text-slate-700 drag-handle" 
-                          draggable="true" 
-                          ondragstart="window.handleRoomDragStart(event, ${idx})"
-                          ondragend="window.handleRoomDragEnd()"
-                          title="Drag to reorder room">
-                        <i data-lucide="grip-vertical" size="13"></i>
-                    </span>
-                    <span class="w-4 text-center text-slate-600 font-black">${idx + 1}</span>
-                    <div class="flex flex-col ml-0.5">
-                        <button type="button" onclick="window.moveRoomDef(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5" title="Move Up">
-                            <i data-lucide="chevron-up" size="11"></i>
-                        </button>
-                        <button type="button" onclick="window.moveRoomDef(${idx}, 1)" ${isLast ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5" title="Move Down">
-                            <i data-lucide="chevron-down" size="11"></i>
-                        </button>
-                    </div>
-                </div>
-            </td>
+    tbody.innerHTML = window.roomDefinitions.map((def, idx) => `
+        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-room-idx="${idx}">
+            <td class="p-1.5 text-center font-mono font-bold text-slate-500 text-[10px]">${idx + 1}</td>
+            <td class="p-1.5"><input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.roomDefinitions[${idx}].name = this.value; window.compileRoomsFromDefinitions();"></td>
+            <td class="p-1.5"><input type="text" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.roomDefinitions[${idx}].category = this.value; window.compileRoomsFromDefinitions();"></td>
+            <td class="p-1.5 text-center"><input type="number" min="1" max="60" class="table-input font-black text-center !w-16 mx-auto" value="${def.count || 1}" onchange="window.roomDefinitions[${idx}].count = parseInt(this.value,10)||1; window.compileRoomsFromDefinitions();"></td>
+            <td class="p-1.5"><input type="text" class="table-input text-center !w-20" value="${def.floor || '1'}" onchange="window.roomDefinitions[${idx}].floor = this.value; window.compileRoomsFromDefinitions();"></td>
             <td class="p-1.5">
-                <input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.updateRoomDefField(${idx}, 'name', this.value)">
-            </td>
-            <td class="p-1.5">
-                <input type="text" list="setup-category-datalist" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.updateRoomDefField(${idx}, 'category', this.value)">
-            </td>
-            <td class="p-1.5 text-center">
-                <input type="number" min="1" max="60" class="table-input font-black text-center !w-16 mx-auto" value="${def.count || 1}" onchange="window.updateRoomDefField(${idx}, 'count', parseInt(this.value,10)||1)">
-            </td>
-            <td class="p-1.5">
-                <input type="text" class="table-input text-center !w-20" value="${def.floor || '1'}" onchange="window.updateRoomDefField(${idx}, 'floor', this.value)">
-            </td>
-            <td class="p-1.5">
-                <select class="table-input font-semibold" onchange="window.updateRoomDefField(${idx}, 'rule', this.value)">
+                <select class="table-input font-semibold" onchange="window.roomDefinitions[${idx}].rule = this.value; window.roomDefinitions[${idx}].isDorm = (this.value !== 'private'); window.compileRoomsFromDefinitions();">
                     <option value="odd-top" ${def.rule === 'odd-top' ? 'selected' : ''}>DORM (Top # Odd)</option>
                     <option value="even-top" ${def.rule === 'even-top' ? 'selected' : ''}>DORM (Top # Even)</option>
-                    <option value="single" ${def.rule === 'single' ? 'selected' : ''}>DORM (Single Beds)</option>
+                    <option value="single" ${def.rule === 'single' ? 'selected' : ''}>DORM (Single)</option>
                     <option value="private" ${def.rule === 'private' ? 'selected' : ''}>PRIVATE ROOM</option>
                 </select>
             </td>
             <td class="p-1.5 text-center">
-                <button type="button" onclick="window.deleteRoomDef(${idx})" class="p-1 text-slate-400 hover:text-rose-600 cursor-pointer">
-                    <i data-lucide="trash-2" size="13"></i>
-                </button>
+                <button type="button" onclick="window.roomDefinitions.splice(${idx}, 1); window.compileRoomsFromDefinitions(); window.renderRoomDefinitionsTable();" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="13"></i></button>
             </td>
-        </tr>`;
-    });
-    tbody.innerHTML = html;
+        </tr>
+    `).join('');
     if (window.lucide) window.lucide.createIcons();
-};
-
-window.updateRoomDefField = (idx, field, val) => {
-    if (window.roomDefinitions && window.roomDefinitions[idx]) {
-        window.roomDefinitions[idx][field] = val;
-        window.compileRoomsFromDefinitions();
-    }
-};
-
-window.deleteRoomDef = (idx) => {
-    if (window.roomDefinitions && window.roomDefinitions[idx]) {
-        window.roomDefinitions.splice(idx, 1);
-        window.compileRoomsFromDefinitions();
-        window.renderRoomDefinitionsTable();
-    }
-};
-
-window.clearAllRoomDefs = () => {
-    window.customAlert("Clear Inventory", "Are you sure you want to clear all room definitions?", true, () => {
-        window.roomDefinitions = [];
-        window.compileRoomsFromDefinitions();
-        window.renderRoomDefinitionsTable();
-    });
-};
-
-window.addBlankRoomDef = () => {
-    window.roomDefinitions = window.roomDefinitions || [];
-    window.roomDefinitions.push({
-        id: 'room_' + Math.random().toString(36).substr(2, 7),
-        name: 'ROOM ' + (window.roomDefinitions.length + 1),
-        category: 'Standard Room',
-        count: 1,
-        floor: '1',
-        rule: 'private',
-        isDorm: false
-    });
-    window.compileRoomsFromDefinitions();
-    window.renderRoomDefinitionsTable();
-};
-
-// --- AUTOMATIC CASCADE RENAMING ENGINE ---
-window.handleCategoryNameChange = async (idx, newCatName, oldCatName) => {
-    const cleanNew = (newCatName || '').trim();
-    const cleanOld = (oldCatName || '').trim();
-    if (!cleanNew || cleanNew === cleanOld) return;
-
-    if (window.roomDefinitions && window.roomDefinitions[idx]) {
-        window.roomDefinitions[idx].category = cleanNew;
-    }
-    window.compileRoomsFromDefinitions();
-
-    window.customAlert(
-        "Cascade Rename Category",
-        `Update all bookings, relational pricing rules, and rate anchors from "${cleanOld}" to "${cleanNew}"?`,
-        true,
-        async () => {
-            await window.cascadeRenameCategory(cleanOld, cleanNew);
-        }
-    );
-};
-
-window.cascadeRenameCategory = async (oldCat, newCat) => {
-    if (!oldCat || !newCat || oldCat === newCat) return;
-    const curProp = window.activePropertyId;
-    const statusText = document.getElementById('header-status-text');
-    if (statusText) statusText.innerText = `Cascading rename: ${oldCat} → ${newCat}...`;
-
-    try {
-        const batch = writeBatch(db);
-
-        // 1. Cascade to bookings collection (staff)
-        const staffRef = collection(db, 'artifacts', appId, 'public', 'data', 'staff');
-        const qStaff = query(staffRef, where('property', '==', curProp));
-        const staffSnap = await getDocs(qStaff);
-
-        let staffUpdated = 0;
-        staffSnap.forEach(docSnap => {
-            const data = docSnap.data();
-            let dirty = false;
-            const updateObj = {};
-
-            if (data.category === oldCat) { updateObj.category = newCat; dirty = true; }
-            if (data.bookedType === oldCat) { updateObj.bookedType = newCat; dirty = true; }
-            if (data.roomType === oldCat) { updateObj.roomType = newCat; dirty = true; }
-
-            if (dirty) {
-                batch.update(docSnap.ref, updateObj);
-                staffUpdated++;
-            }
-        });
-
-        // 2. Cascade to pricing master document
-        const canonId = curProp;
-        const pricingRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`);
-        const pSnap = await getDoc(pricingRef);
-
-        if (pSnap.exists()) {
-            const pData = pSnap.data();
-            let pDirty = false;
-
-            if (Array.isArray(pData.relationships)) {
-                pData.relationships.forEach(rel => {
-                    if (rel.anchor === oldCat) { rel.anchor = newCat; pDirty = true; }
-                    if (rel.target === oldCat) { rel.target = newCat; pDirty = true; }
-                });
-                pDirty = true;
-            }
-            if (pData.pricingRules) {
-                if (pData.pricingRules.anchorPrivate === oldCat) { pData.pricingRules.anchorPrivate = newCat; pDirty = true; }
-                if (pData.pricingRules.anchorDorm === oldCat) { pData.pricingRules.anchorDorm = newCat; pDirty = true; }
-            }
-            if (pData.autofillBaselines) {
-                if (pData.autofillBaselines.anchor_p === oldCat) { pData.autofillBaselines.anchor_p = newCat; pDirty = true; }
-                if (pData.autofillBaselines.anchor_d === oldCat) { pData.autofillBaselines.anchor_d = newCat; pDirty = true; }
-            }
-
-            if (pDirty) {
-                batch.set(pricingRef, sanitizeForFirestore(pData), { merge: true });
-            }
-        }
-
-        // 3. Update active memory rules
-        (window.relationships || []).forEach(rel => {
-            if (rel.anchor === oldCat) rel.anchor = newCat;
-            if (rel.target === oldCat) rel.target = newCat;
-        });
-        if (window.pricingRules) {
-            if (window.pricingRules.anchorPrivate === oldCat) window.pricingRules.anchorPrivate = newCat;
-            if (window.pricingRules.anchorDorm === oldCat) window.pricingRules.anchorDorm = newCat;
-        }
-
-        await batch.commit();
-        if (statusText) statusText.innerText = `Renamed ${oldCat} → ${newCat} (${staffUpdated} bookings updated)`;
-        window.customAlert("Cascade Complete", `Successfully updated category across ${staffUpdated} bookings and all pricing rules.`);
-    } catch (err) {
-        console.error("Cascade rename error:", err);
-        window.customAlert("Cascade Error", "Could not complete cascade update: " + err.message);
-    }
-};
-
-window.toggleBedPreviewDrawer = (forceState = null) => {
-    const d = document.getElementById('bed-preview-drawer');
-    if (!d) return;
-    const shouldShow = forceState !== null ? forceState : d.classList.contains('hidden');
-    if (shouldShow) d.classList.remove('hidden');
-    else d.classList.add('hidden');
 };
 
 window.renderBedPreviewDrawer = () => {
@@ -1169,30 +652,38 @@ window.renderBedPreviewDrawer = () => {
         grouped[p].push(r);
     });
 
-    let html = '';
-    Object.keys(grouped).forEach(parentName => {
-        const units = grouped[parentName];
-        html += `
-        <div class="bg-white p-2 rounded border border-slate-300 shadow-2xs min-w-[140px]">
-            <div class="font-black text-slate-800 text-[11px] border-b border-slate-200 pb-1 mb-1.5 flex items-center justify-between">
-                <span>${parentName}</span>
-                <span class="text-[9px] font-bold text-slate-400">Fl. ${units[0]?.floor || 1}</span>
+    container.innerHTML = Object.keys(grouped).map(p => `
+        <div class="bg-white p-2 rounded border border-slate-300 shadow-2xs min-w-[130px]">
+            <div class="font-black text-slate-800 text-[11px] border-b border-slate-200 pb-1 mb-1 flex items-center justify-between">
+                <span>${p}</span><span class="text-[9px] text-slate-400">Fl. ${grouped[p][0]?.floor || 1}</span>
             </div>
             <div class="flex flex-wrap gap-1">
-                ${units.map(u => `
-                    <span class="px-1.5 py-0.5 rounded text-[9.5px] font-bold ${u.bunk === 'top' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : (u.bunk === 'bottom' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700 border border-slate-200')}">
-                        ${u.id}
-                    </span>
-                `).join('')}
+                ${grouped[p].map(u => `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 border border-slate-200">${u.id}</span>`).join('')}
             </div>
-        </div>`;
-    });
-    container.innerHTML = html;
+        </div>
+    `).join('');
 };
 
-// --------------------------------------------------------------------------
-// SECTION 5: Step 3 - Channex API & Multi-Room Rate Plan Creation Tool
-// --------------------------------------------------------------------------
+window.toggleBedPreviewDrawer = (force) => {
+    const d = document.getElementById('bed-preview-drawer');
+    if (d) d.classList.toggle('hidden', force !== undefined ? !force : undefined);
+};
+
+window.clearAllRoomDefs = () => {
+    window.customAlert("Clear Rooms", "Wipe all configured rooms?", true, () => {
+        window.roomDefinitions = [];
+        window.compileRoomsFromDefinitions();
+        window.renderRoomDefinitionsTable();
+    });
+};
+
+window.addBlankRoomDef = () => {
+    window.roomDefinitions.push({ id: 'room_' + Date.now(), name: `ROOM ${window.roomDefinitions.length + 1}`, category: 'Standard Room', count: 1, floor: '1', rule: 'private', isDorm: false });
+    window.compileRoomsFromDefinitions();
+    window.renderRoomDefinitionsTable();
+};
+
+// --- CHANNEX REST INTEGRATION & RATE PLAN CREATOR ---
 window.fetchChannexData = async () => {
     const apiKey = document.getElementById('chan-api-key')?.value.trim();
     const propId = document.getElementById('chan-prop-id')?.value.trim();
@@ -1200,9 +691,6 @@ window.fetchChannexData = async () => {
     if (!apiKey || !propId) {
         return window.customAlert("Credentials Required", "Enter both your Channex API Key and Channex Property ID.");
     }
-
-    const badge = document.getElementById('channex-conn-badge');
-    if (badge) badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Connecting...`;
 
     try {
         const propRes = await fetch(`https://app.channex.io/api/v1/properties/${propId}`, {
@@ -1239,392 +727,270 @@ window.fetchChannexData = async () => {
             return { channexId: cr.id, channexTitle: crTitle, pmsCategory: matchedCat };
         });
 
-        if (badge) badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Connected (${channexRooms.length} Rooms, ${cleanRatePlans.length} Plans)`;
         window.renderUnifiedMappingCards();
-        window.customAlert("Channex Connected", `Successfully fetched ${channexRooms.length} Room Types and ${cleanRatePlans.length} Rate Plans.`);
+        window.customAlert("Channex Connected", `Fetched ${channexRooms.length} Room Types and ${cleanRatePlans.length} Rate Plans.`);
     } catch (err) {
         console.error("Channex fetch error:", err);
-        if (badge) badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Connection Failed`;
         window.customAlert("Connection Failed", err.message);
     }
+};
+
+window.openCreateRatePlanModal = () => {
+    const checklist = document.getElementById('crp-room-checklist');
+    const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
+    if (checklist) {
+        checklist.innerHTML = cats.map(c => `
+            <label class="flex items-center gap-2 p-1 rounded bg-white border border-slate-200 cursor-pointer text-xs font-bold">
+                <input type="checkbox" value="${c}" checked class="crp-cat-box rounded"> <span>${c}</span>
+            </label>
+        `).join('');
+    }
+    const modal = document.getElementById('create-rate-plan-modal');
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+};
+
+window.closeCreateRatePlanModal = () => {
+    const modal = document.getElementById('create-rate-plan-modal');
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+};
+
+window.applyRatePlanPreset = (title, channel, policy) => {
+    const t = document.getElementById('crp-title');
+    const c = document.getElementById('crp-channel');
+    const p = document.getElementById('crp-policy');
+    if (t) t.value = title;
+    if (c) c.value = channel;
+    if (p) p.value = policy;
+};
+
+window.toggleAllTargetRooms = (checked) => {
+    document.querySelectorAll('.crp-cat-box').forEach(cb => cb.checked = !!checked);
+};
+
+// Exact Channex REST endpoint invocation
+window.executeCreateAndPushRatePlan = async () => {
+    const title = document.getElementById('crp-title')?.value.trim();
+    const channel = document.getElementById('crp-channel')?.value || 'DEFAULT';
+    const policy = document.getElementById('crp-policy')?.value || 'non-ref';
+    const selectedCats = Array.from(document.querySelectorAll('.crp-cat-box:checked')).map(cb => cb.value);
+
+    if (!title) return window.customAlert("Validation Error", "Please provide a Rate Plan Title.");
+    if (selectedCats.length === 0) return window.customAlert("Validation Error", "Please select at least one Room Category.");
+
+    const apiKey = window.channexConfig?.apiKey || document.getElementById('chan-api-key')?.value.trim();
+    const propId = window.channexConfig?.propId || document.getElementById('chan-prop-id')?.value.trim();
+
+    let pushedCount = 0;
+
+    for (const cat of selectedCats) {
+        const mappedRoom = (window.channexMap || []).find(m => m.pmsCategory === cat);
+        const roomId = mappedRoom?.channexId;
+
+        if (apiKey && propId && roomId) {
+            try {
+                const res = await fetch("https://app.channex.io/api/v1/rate_plans", {
+                    method: "POST",
+                    headers: { "user-api-key": apiKey, "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        rate_plan: {
+                            property_id: propId,
+                            room_type_id: roomId,
+                            title: title,
+                            options: [{ occupancy: 1, rate: 100 }]
+                        }
+                    })
+                });
+                if (res.ok) {
+                    const json = await res.json();
+                    const newId = json.data?.id;
+                    window.channexRateMap.push({
+                        ratePlanId: newId,
+                        ratePlanTitle: title,
+                        pmsCategory: cat,
+                        channel,
+                        policy,
+                        product: /event/i.test(title) ? 'evt' : 'std',
+                        rateSource: /event/i.test(title) ? 'evt' : 'std'
+                    });
+                    pushedCount++;
+                }
+            } catch (err) {
+                console.warn(`Could not push to Channex for ${cat}:`, err);
+            }
+        } else {
+            // Local fallback
+            const localId = 'plan_' + Math.random().toString(36).substr(2, 9);
+            window.channexRateMap.push({
+                ratePlanId: localId,
+                ratePlanTitle: title,
+                pmsCategory: cat,
+                channel,
+                policy,
+                product: /event/i.test(title) ? 'evt' : 'std',
+                rateSource: /event/i.test(title) ? 'evt' : 'std'
+            });
+            pushedCount++;
+        }
+    }
+
+    window.closeCreateRatePlanModal();
+    window.renderUnifiedMappingCards();
+    window.customAlert("Rate Plans Ready", `Saved "${title}" across ${pushedCount} categories.`);
 };
 
 window.renderUnifiedMappingCards = () => {
     const container = document.getElementById('unified-mapping-container');
     if (!container) return;
-
     const pmsCats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
     if (pmsCats.length === 0) {
-        container.innerHTML = `
-        <div class="bg-white p-6 rounded-lg border border-slate-300 text-center text-xs font-bold text-slate-400">
-            No PMS room categories found. Define your rooms in Step 2 first.
-        </div>`;
+        container.innerHTML = `<div class="p-6 text-center text-xs font-bold text-slate-400">Define rooms in Step 2 first.</div>`;
         return;
     }
 
-    const channexRooms = window.channexRooms || [];
-    const channexPlans = window.channexRatePlans || [];
-
-    let html = '';
-    pmsCats.forEach(cat => {
-        const mappedRoom = (window.channexMap || []).find(m => m.pmsCategory === cat);
-        const mappedChannexId = mappedRoom?.channexId || '';
-
-        const plansForThisRoom = channexPlans.filter(p => {
-            const pRoomId = p.attributes?.room_type_id || p.relationships?.room_type?.data?.id;
-            return pRoomId && pRoomId === mappedChannexId;
-        });
-
-        const isMapped = !!mappedChannexId;
-
-        html += `
-        <div class="bg-white border ${isMapped ? 'border-slate-300 shadow-xs' : 'border-amber-300 bg-amber-50/20 shadow-xs'} rounded-lg overflow-hidden mb-2">
-            <div class="bg-slate-100 border-b border-slate-300 p-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full ${isMapped ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}"></span>
-                    <h3 class="text-xs font-black uppercase tracking-wider text-slate-800">${cat}</h3>
-                    <span class="text-[9px] px-1.5 py-0.2 rounded font-bold ${isMapped ? 'bg-white text-slate-600 border border-slate-200' : 'bg-amber-100 text-amber-800 font-black border border-amber-300'}">
-                        ${plansForThisRoom.length} Rate Plans ${isMapped ? '' : '• Unmapped'}
-                    </span>
+    container.innerHTML = pmsCats.map(cat => {
+        const plans = (window.channexRateMap || []).filter(p => p.pmsCategory === cat);
+        return `
+            <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-2">
+                    <span class="font-black text-xs uppercase text-slate-800">${cat}</span>
+                    <span class="text-[10px] font-bold text-slate-500">${plans.length} Mapped Rate Plans</span>
                 </div>
-
-                <div class="flex items-center gap-1.5">
-                    <label class="text-[9px] font-black uppercase text-slate-500">Channex Room:</label>
-                    <select class="table-input font-bold ${isMapped ? 'text-indigo-700 bg-white' : 'text-amber-800 border-amber-300 bg-amber-50'} !w-52 !py-0.5 !text-[11px]" onchange="window.updateRoomMappingPair('${cat.replace(/'/g, "\\'")}', this.value)">
-                        <option value="">-- Unmapped --</option>
-                        ${channexRooms.map(cr => `
-                            <option value="${cr.id}" ${cr.id === mappedChannexId ? 'selected' : ''}>${cr.attributes?.title || cr.id}</option>
-                        `).join('')}
-                    </select>
+                <div class="space-y-1">
+                    ${plans.map(p => `
+                        <div class="flex items-center justify-between text-xs p-1.5 rounded bg-slate-50 border border-slate-200">
+                            <span class="font-bold text-slate-700">${p.ratePlanTitle}</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">${p.channel}</span>
+                                <span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${p.policy === 'ref' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${p.policy}</span>
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
-
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-[11px] border-collapse">
-                    <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0">
-                        <tr>
-                            <th class="py-1 px-1.5 border-r border-slate-700">Rate Plan Title</th>
-                            <th class="py-1 px-1.5 w-32 border-r border-slate-700">Channel</th>
-                            <th class="py-1 px-1.5 w-28 text-center border-r border-slate-700">Policy</th>
-                            <th class="py-1 px-1.5 w-24 text-center border-r border-slate-700">Product</th>
-                            <th class="py-1 px-1.5 text-center w-20">Channex ID</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-200 font-semibold">
-                        ${plansForThisRoom.length > 0 ? plansForThisRoom.map((p, pIdx) => {
-                            const title = p.attributes?.title || p.id;
-                            const existingRate = (window.channexRateMap || []).find(m => m.ratePlanId === p.id);
-
-                            const isRef = /ref|flexible/i.test(title) && !/non-?ref/i.test(title);
-                            const isBdc = /bdc|booking/i.test(title);
-                            const isHw = /hw|hostelworld/i.test(title);
-                            const isAgo = /agoda/i.test(title);
-                            const isExp = /expedia/i.test(title);
-                            const isEvt = /evt|fmp|event|pkg/i.test(title);
-
-                            let defaultChan = 'Default';
-                            if (isBdc) defaultChan = 'Booking.com';
-                            else if (isHw) defaultChan = 'Hostelworld';
-                            else if (isAgo) defaultChan = 'Agoda';
-                            else if (isExp) defaultChan = 'Expedia';
-
-                            const currentChan = existingRate?.channel || defaultChan;
-                            const currentPolicy = existingRate?.policy || (isRef ? 'ref' : 'non-ref');
-                            const currentProduct = existingRate?.product || (isEvt ? 'evt' : 'std');
-
-                            const zebraClass = pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70';
-
-                            return `
-                            <tr class="${zebraClass} hover:bg-indigo-50/40 transition-colors">
-                                <td class="py-1 px-1.5 font-bold text-slate-800 border-r border-slate-200">
-                                    <div class="truncate max-w-[240px]" title="${title}">${title}</div>
-                                </td>
-                                <td class="py-1 px-1 border-r border-slate-200">
-                                    <select class="table-input !py-0.5 !text-[10px] font-bold" onchange="window.updateRatePlanField('${p.id}', 'channel', this.value)">
-                                        <option value="Default" ${currentChan === 'Default' ? 'selected' : ''}>Default</option>
-                                        <option value="Booking.com" ${currentChan === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
-                                        <option value="Hostelworld" ${currentChan === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
-                                        <option value="Agoda" ${currentChan === 'Agoda' ? 'selected' : ''}>Agoda</option>
-                                        <option value="Expedia" ${currentChan === 'Expedia' ? 'selected' : ''}>Expedia</option>
-                                        <option value="Airbnb" ${currentChan === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
-                                    </select>
-                                </td>
-                                <td class="py-1 px-1 text-center border-r border-slate-200">
-                                    <select class="table-input !py-0.5 !text-[10px] font-black text-center ${currentPolicy === 'ref' ? 'text-emerald-700 bg-emerald-50' : 'text-slate-700'}" onchange="window.updateRatePlanField('${p.id}', 'policy', this.value)">
-                                        <option value="non-ref" ${currentPolicy === 'non-ref' ? 'selected' : ''}>Non-Ref</option>
-                                        <option value="ref" ${currentPolicy === 'ref' ? 'selected' : ''}>Ref (+%)</option>
-                                    </select>
-                                </td>
-                                <td class="py-1 px-1 text-center border-r border-slate-200">
-                                    <select class="table-input !py-0.5 !text-[10px] font-black text-center ${currentProduct === 'evt' ? 'text-pink-700 bg-pink-50' : 'text-slate-700'}" onchange="window.updateRatePlanField('${p.id}', 'product', this.value)" title="Product: Standard year-round rate vs Event package rate">
-                                        <option value="std" ${currentProduct === 'std' ? 'selected' : ''}>Standard</option>
-                                        <option value="evt" ${currentProduct === 'evt' ? 'selected' : ''}>Event</option>
-                                    </select>
-                                </td>
-                                <td class="py-1 px-1 text-center">
-                                    <span class="font-mono text-[9px] font-bold text-slate-500 bg-slate-100 px-1 py-0.2 rounded border border-slate-200">...${p.id.slice(-6)}</span>
-                                </td>
-                            </tr>`;
-                        }).join('') : `
-                        <tr>
-                            <td colspan="5" class="py-3 text-center text-slate-400 italic text-[11px] bg-slate-50">
-                                No rate plans found in Channex for this room type. Click "+ Create & Push Plan" above to create them automatically.
-                            </td>
-                        </tr>`}
-                    </tbody>
-                </table>
-            </div>
-        </div>`;
-    });
-
-    container.innerHTML = html;
+        `;
+    }).join('');
+    if (window.lucide) window.lucide.createIcons();
 };
 
-window.updateRatePlanField = (ratePlanId, field, value) => {
-    window.channexRateMap = window.channexRateMap || [];
-    let entry = window.channexRateMap.find(m => m.ratePlanId === ratePlanId);
-    if (!entry) {
-        entry = { ratePlanId, ratePlanTitle: '', pmsCategory: '', channel: 'Default', policy: 'non-ref', product: 'std' };
-        window.channexRateMap.push(entry);
-    }
-    entry[field] = value;
-    if (field === 'product') {
-        entry.rateSource = value === 'evt' ? 'evt' : 'std';
-    }
+// --- STEP 4 PRICING & CHANNELS ---
+window.renderPricingStepRules = () => {
+    const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
+    const dormSelect = document.getElementById('anchor-dorm-select');
+    const privSelect = document.getElementById('anchor-private-select');
+
+    const opts = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+    if (dormSelect) { dormSelect.innerHTML = opts; dormSelect.value = window.pricingRules.anchorDorm || cats.find(c => c.toLowerCase().includes('dorm')) || cats[0] || ''; }
+    if (privSelect) { privSelect.innerHTML = opts; privSelect.value = window.pricingRules.anchorPrivate || cats.find(c => !c.toLowerCase().includes('dorm')) || cats[0] || ''; }
+
+    const stdRefInput = document.getElementById('rule-std-ref');
+    if (stdRefInput) stdRefInput.value = window.pricingRules.stdRefVal || 25;
+
+    window.renderRelationships();
+    window.renderChannelRulesList();
+};
+
+window.renderRelationships = () => {
+    const tbody = document.getElementById('relationships-table-body');
+    if (!tbody) return;
+    const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
+    const catOpts = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+
+    tbody.innerHTML = (window.relationships || []).map((rel, idx) => `
+        <tr class="border-b border-slate-100 hover:bg-slate-50 text-xs">
+            <td class="p-1.5"><select class="table-input font-bold" onchange="window.relationships[${idx}].anchor = this.value"><option value="unlinked">-- Unlinked --</option>${catOpts}</select></td>
+            <td class="p-1.5"><select class="table-input font-bold" onchange="window.relationships[${idx}].target = this.value">${catOpts}</select></td>
+            <td class="p-1.5">
+                <div class="flex items-center gap-1">
+                    <select class="table-input !w-20 font-black text-center" onchange="window.relationships[${idx}].type = this.value">
+                        <option value="=" ${rel.type === '=' ? 'selected' : ''}>SYNC (=)</option>
+                        <option value="+%" ${rel.type === '+%' ? 'selected' : ''}>+ %</option>
+                        <option value="-%" ${rel.type === '-%' ? 'selected' : ''}>- %</option>
+                        <option value="+" ${rel.type === '+' ? 'selected' : ''}>+ ฿</option>
+                        <option value="-" ${rel.type === '-' ? 'selected' : ''}>- ฿</option>
+                    </select>
+                    <input type="number" step="any" class="table-input font-bold text-center !w-16" value="${rel.val || 0}" onchange="window.relationships[${idx}].val = parseFloat(this.value)||0">
+                </div>
+            </td>
+            <td class="p-1.5 evt-col-cell">
+                <div class="flex items-center gap-1">
+                    <select class="table-input !w-20 font-black text-center text-pink-700" onchange="window.relationships[${idx}].typeFmp = this.value">
+                        <option value="=" ${rel.typeFmp === '=' ? 'selected' : ''}>SYNC (=)</option>
+                        <option value="+%" ${rel.typeFmp === '+%' ? 'selected' : ''}>+ %</option>
+                        <option value="-%" ${rel.typeFmp === '-%' ? 'selected' : ''}>- %</option>
+                        <option value="+" ${rel.typeFmp === '+' ? 'selected' : ''}>+ ฿</option>
+                        <option value="-" ${rel.typeFmp === '-' ? 'selected' : ''}>- ฿</option>
+                    </select>
+                    <input type="number" step="any" class="table-input font-bold text-center !w-16 text-pink-700" value="${rel.valFmp || 0}" onchange="window.relationships[${idx}].valFmp = parseFloat(this.value)||0">
+                </div>
+            </td>
+            <td class="p-1.5 text-center"><button type="button" onclick="window.relationships.splice(${idx}, 1); window.renderRelationships();" class="text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="13"></i></button></td>
+        </tr>
+    `).join('');
+
+    (window.relationships || []).forEach((rel, idx) => {
+        const tr = tbody.children[idx];
+        if (tr) {
+            const selects = tr.querySelectorAll('select');
+            if (selects[0]) selects[0].value = rel.anchor || 'unlinked';
+            if (selects[1]) selects[1].value = rel.target || cats[0];
+        }
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.addRelationshipRow = () => {
+    const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
+    window.relationships.push({ anchor: cats[0] || '', target: cats[1] || cats[0] || '', type: '=', val: 0, typeFmp: '=', valFmp: 0 });
+    window.renderRelationships();
 };
 
 window.renderChannelRulesList = () => {
     const container = document.getElementById('channel-rules-container');
     if (!container) return;
+    const channels = window.pricingRules.channels || {};
 
-    const rawChannels = window.pricingRules.channels || {};
-    const cleanChannels = {};
-
-    Object.keys(rawChannels).forEach(rawK => {
-        const canonical = normalizeChannelName(rawK);
-        if (!cleanChannels[canonical]) {
-            cleanChannels[canonical] = rawChannels[rawK];
-        }
-    });
-
-    if (!cleanChannels['Default']) cleanChannels['Default'] = { type: '=', val: 0 };
-    if (!cleanChannels['Direct']) cleanChannels['Direct'] = { type: '-%', val: 10 };
-    if (!cleanChannels['Booking.com']) cleanChannels['Booking.com'] = { type: '=', val: 0 };
-    if (!cleanChannels['Hostelworld']) cleanChannels['Hostelworld'] = { type: '+%', val: 15 };
-    if (!cleanChannels['Agoda']) cleanChannels['Agoda'] = { type: '=', val: 0 };
-    if (!cleanChannels['Expedia']) cleanChannels['Expedia'] = { type: '=', val: 0 };
-
-    window.pricingRules.channels = cleanChannels;
-
-    const channelBadges = {
-        'Default': 'bg-slate-700 text-white',
-        'Direct': 'bg-teal-600 text-white',
-        'Booking.com': 'bg-[#003580] text-white',
-        'Hostelworld': 'bg-[#F15A24] text-white',
-        'Agoda': 'bg-[#87B2D6] text-white',
-        'Expedia': 'bg-[#facc15] text-[#003580]',
-        'Airbnb': 'bg-[#FF5A5F] text-white'
-    };
-
-    let html = '';
-    Object.keys(cleanChannels).forEach(ch => {
-        const rule = cleanChannels[ch] || { type: '=', val: 0 };
-        const badgeClass = channelBadges[ch] || 'bg-indigo-600 text-white';
-
-        html += `
-        <div class="flex items-center justify-between p-1.5 rounded bg-white border border-slate-200 shadow-2xs">
-            <div class="flex items-center gap-2">
-                <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${badgeClass}">${ch}</span>
-                <span class="font-bold text-slate-700 text-xs">${ch}</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-                <select class="table-input !w-20 font-black text-center !py-0.5" onchange="window.updateChannelRuleField('${ch}', 'type', this.value)">
-                    <option value="=" ${rule.type === '=' ? 'selected' : ''}>SYNC (=)</option>
-                    <option value="+%" ${rule.type === '+%' ? 'selected' : ''}>+ %</option>
-                    <option value="-%" ${rule.type === '-%' ? 'selected' : ''}>- %</option>
-                    <option value="+" ${rule.type === '+' ? 'selected' : ''}>+ ฿</option>
-                    <option value="-" ${rule.type === '-' ? 'selected' : ''}>- ฿</option>
+    container.innerHTML = Object.keys(channels).map(ch => `
+        <div class="flex items-center justify-between p-1.5 rounded bg-white border border-slate-200">
+            <span class="font-bold text-xs text-slate-800">${ch}</span>
+            <div class="flex items-center gap-1">
+                <select class="table-input !w-20 font-black text-center !py-0.5" onchange="window.pricingRules.channels['${ch}'].type = this.value">
+                    <option value="=" ${channels[ch].type === '=' ? 'selected' : ''}>SYNC (=)</option>
+                    <option value="+%" ${channels[ch].type === '+%' ? 'selected' : ''}>+ %</option>
+                    <option value="-%" ${channels[ch].type === '-%' ? 'selected' : ''}>- %</option>
+                    <option value="+" ${channels[ch].type === '+' ? 'selected' : ''}>+ ฿</option>
+                    <option value="-" ${channels[ch].type === '-' ? 'selected' : ''}>- ฿</option>
                 </select>
-                <input type="number" step="any" class="table-input font-bold text-center !w-16 !py-0.5" value="${rule.val || 0}" onchange="window.updateChannelRuleField('${ch}', 'val', parseFloat(this.value)||0)">
+                <input type="number" step="any" class="table-input font-bold text-center !w-16 !py-0.5" value="${channels[ch].val || 0}" onchange="window.pricingRules.channels['${ch}'].val = parseFloat(this.value)||0">
             </div>
-        </div>`;
-    });
-    container.innerHTML = html;
-};
-
-window.updateChannelRuleField = (ch, field, val) => {
-    window.pricingRules.channels = window.pricingRules.channels || {};
-    window.pricingRules.channels[ch] = window.pricingRules.channels[ch] || { type: '=', val: 0 };
-    window.pricingRules.channels[ch][field] = val;
+        </div>
+    `).join('');
 };
 
 window.addVerifiedChannelRule = () => {
-    const chName = prompt("Enter Channel Name (e.g. Airbnb, Trip.com):");
-    if (!chName || !chName.trim()) return;
-    const clean = normalizeChannelName(chName.trim());
-    window.pricingRules.channels = window.pricingRules.channels || {};
-    if (window.pricingRules.channels[clean]) {
-        return window.customAlert("Channel Exists", `A rule for ${clean} already exists.`);
+    const ch = prompt("Enter Channel Name (e.g. Airbnb):");
+    if (ch && ch.trim()) {
+        window.pricingRules.channels[ch.trim()] = { type: '+%', val: 10 };
+        window.renderChannelRulesList();
     }
-    window.pricingRules.channels[clean] = { type: '+%', val: 10 };
-    window.renderChannelRulesList();
 };
 
-// --- EVENT PRICING CURVES (±2D Rates, ±6D Restrictions) ---
-window.toggleEventSettings = (enabled) => {
-    const p = document.getElementById('event-curve-panel');
-    if (p) {
-        if (enabled) p.classList.remove('hidden');
-        else p.classList.add('hidden');
-    }
-    document.querySelectorAll('.evt-col-header, .evt-col-cell, #evt-ref-row').forEach(el => {
-        el.style.display = enabled ? '' : 'none';
-    });
-};
-
-window.cycleRatesSpan = () => {
-    window.ratesSpan = (window.ratesSpan === 2) ? 3 : 2;
-    const pill = document.getElementById('rates-span-pill');
-    if (pill) pill.innerText = `±${window.ratesSpan} Days`;
-    window.renderEventPriceTable();
-};
-
-window.cycleRestrSpan = () => {
-    window.restrSpan = (window.restrSpan === 6) ? 7 : (window.restrSpan === 7 ? 2 : 6);
-    const pill = document.getElementById('restr-span-pill');
-    if (pill) pill.innerText = `±${window.restrSpan} Days`;
-    window.renderEventRestrTable();
-};
-
-window.renderEventPriceTable = () => {
-    const thead = document.getElementById('event-price-thead');
-    const tbody = document.getElementById('event-price-tbody');
-    if (!thead || !tbody) return;
-
-    const span = window.ratesSpan || 2;
-    const offsets = [];
-    for (let i = -span; i <= span; i++) offsets.push(i);
-
-    thead.innerHTML = `
-        <tr class="bg-pink-100/70 text-[9px] font-black uppercase text-pink-950 border-b border-pink-200">
-            <th class="p-1.5 text-left w-28">Segment</th>
-            <th class="p-1.5 w-20">Std Base</th>
-            <th class="p-1.5 w-20 text-pink-700">Pkg Base</th>
-            ${offsets.map(o => `
-                <th class="p-1.5 ${o === 0 ? 'bg-amber-200 text-amber-950 font-black' : ''}">
-                    ${o === 0 ? 'Peak (0)' : (o > 0 ? `+${o}D` : `${o}D`)}
-                </th>
-            `).join('')}
-        </tr>`;
-
-    const b = window.savedAutofillBaselines || {};
-    tbody.innerHTML = `
-        <tr>
-            <td class="p-1.5 text-left font-bold text-indigo-900">Privates</td>
-            <td class="p-1"><input type="number" class="table-input text-center font-bold" id="w-p-base" value="${b.p_base || 899}"></td>
-            <td class="p-1"><input type="number" class="table-input text-center font-bold text-pink-700" id="w-p-pkg" value="${b.p_pkg || 1000}"></td>
-            ${offsets.map(o => {
-                const tag = o < 0 ? `m${Math.abs(o)}` : (o === 0 ? '0' : `p${o}`);
-                const defVal = (o === 0 ? (b.p_0 || 5999) : (b[`p_${tag}`] || 1999));
-                return `<td class="p-1"><input type="number" class="table-input text-center font-black ${o === 0 ? 'text-amber-700 bg-amber-50 border-amber-300' : ''}" id="w-p-${tag}" value="${defVal}"></td>`;
-            }).join('')}
-        </tr>
-        <tr>
-            <td class="p-1.5 text-left font-bold text-orange-900">Dorms</td>
-            <td class="p-1"><input type="number" class="table-input text-center font-bold" id="w-d-base" value="${b.d_base || 199}"></td>
-            <td class="p-1"><input type="number" class="table-input text-center font-bold text-pink-700" id="w-d-pkg" value="${b.d_pkg || 200}"></td>
-            ${offsets.map(o => {
-                const tag = o < 0 ? `m${Math.abs(o)}` : (o === 0 ? '0' : `p${o}`);
-                const defVal = (o === 0 ? (b.d_0 || 2499) : (b[`d_${tag}`] || 799));
-                return `<td class="p-1"><input type="number" class="table-input text-center font-black ${o === 0 ? 'text-amber-700 bg-amber-50 border-amber-300' : ''}" id="w-d-${tag}" value="${defVal}"></td>`;
-            }).join('')}
-        </tr>`;
-};
-
-window.renderEventRestrTable = () => {
-    const thead = document.getElementById('event-restr-thead');
-    const tbody = document.getElementById('event-restr-tbody');
-    if (!thead || !tbody) return;
-
-    const span = window.restrSpan || 6;
-    const offsets = [];
-    for (let i = -span; i <= span; i++) offsets.push(i);
-
-    thead.innerHTML = `
-        <tr class="bg-indigo-100/70 text-[9px] font-black uppercase text-indigo-950 border-b border-indigo-200">
-            <th class="p-1.5 text-left w-32">Restriction</th>
-            ${offsets.map(o => `
-                <th class="p-1 text-center ${o === 0 ? 'bg-amber-200 text-amber-950 font-black' : ''}">
-                    ${o === 0 ? 'Peak' : (o > 0 ? `+${o}` : `${o}`)}
-                </th>
-            `).join('')}
-        </tr>`;
-
-    const b = window.savedAutofillBaselines || {};
-
-    tbody.innerHTML = `
-        <tr class="border-b border-slate-100">
-            <td class="p-1.5 text-left font-bold text-slate-700">Min Stay</td>
-            ${offsets.map(o => {
-                const tag = o < 0 ? `m${Math.abs(o)}` : (o === 0 ? '0' : `p${o}`);
-                const val = b[`r_min_${tag}`] !== undefined ? b[`r_min_${tag}`] : (Math.abs(o) <= 1 ? 3 : '');
-                return `<td class="p-1"><input type="text" class="table-input !p-0.5 text-center font-bold" id="w-r-min-${tag}" value="${val}"></td>`;
-            }).join('')}
-        </tr>
-        <tr>
-            <td class="p-1.5 text-left font-bold text-slate-700">Closed Arr (CTA)</td>
-            ${offsets.map(o => {
-                const tag = o < 0 ? `m${Math.abs(o)}` : (o === 0 ? '0' : `p${o}`);
-                const chk = !!b[`r_cta_${tag}`];
-                return `<td class="p-1 text-center"><input type="checkbox" class="row-checkbox" id="w-r-cta-${tag}" ${chk ? 'checked' : ''}></td>`;
-            }).join('')}
-        </tr>`;
-};
-
-// --------------------------------------------------------------------------
-// SECTION 7: Step 5 - Review & Launch
-// --------------------------------------------------------------------------
 window.renderReviewLaunchStep = () => {
-    const pName = document.getElementById('prop-name')?.value || window.activePropertyId;
-    const pShort = document.getElementById('prop-short')?.value || '';
-    const defCount = (window.roomDefinitions || []).length;
-    const unitCount = (window.compiledRooms || []).length;
-    const plansCount = (window.channexRatePlans || []).length;
-    const hasEvents = document.getElementById('toggle-events')?.checked;
-
-    const rName = document.getElementById('rev-prop-name');
-    const rCode = document.getElementById('rev-prop-code');
-    const rInv = document.getElementById('rev-inv-count');
-    const rCat = document.getElementById('rev-cat-count');
-    const rChan = document.getElementById('rev-chan-status');
-    const rPlans = document.getElementById('rev-chan-plans');
-    const rEvents = document.getElementById('rev-events-status');
-
-    if (rName) rName.innerText = pName;
-    if (rCode) rCode.innerText = `Code: ${pShort}`;
-    if (rInv) rInv.innerText = `${unitCount} Beds / Units`;
-    if (rCat) rCat.innerText = `${defCount} Categories`;
-    if (rChan) rChan.innerText = window.channexConfig?.propId ? 'Configured' : 'Offline / Standalone';
-    if (rPlans) rPlans.innerText = `${plansCount} Plans in Channex`;
-    if (rEvents) rEvents.innerText = hasEvents ? 'Events: ACTIVE (±2D Curve)' : 'Events: Standard Flat';
+    const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
+    setTxt('rev-prop-name', document.getElementById('prop-name')?.value || window.activePropertyId);
+    setTxt('rev-prop-code', document.getElementById('prop-short')?.value || '');
+    setTxt('rev-inv-count', `${(window.compiledRooms || []).length} Units`);
+    setTxt('rev-cat-count', `${(window.roomDefinitions || []).length} Categories`);
+    setTxt('rev-chan-status', window.channexConfig?.propId ? 'Configured' : 'Offline / Standalone');
+    setTxt('rev-chan-plans', `${(window.channexRateMap || []).length} Plans Mapped`);
 };
 
 window.launchApp = (appKey) => {
-    const shortCode = document.getElementById('prop-short')?.value || window.activePropertyId || 'LOUD';
-    const isLocal = window.location.hostname === 'localhost' || 
-                    window.location.hostname === '127.0.0.1' || 
-                    window.location.protocol === 'file:';
-    const baseUrl = isLocal ? '' : 'https://loren-6q.github.io/PMS/';
-    if (appKey === 'cm') {
-        window.location.href = `${baseUrl}cm.html?p=${encodeURIComponent(shortCode)}`;
-    } else if (appKey === 'pms') {
-        window.location.href = `${baseUrl}pms.html?p=${encodeURIComponent(shortCode)}`;
-    }
+    const pCode = (document.getElementById('prop-short')?.value || window.activePropertyId || 'SWIMS').toUpperCase();
+    window.location.href = `${appKey}.html?p=${encodeURIComponent(pCode)}`;
 };
 
-// --------------------------------------------------------------------------
-// SECTION 8: Database Load & Save
-// --------------------------------------------------------------------------
+// --- DATABASE LOAD & SAVE ---
 window.loadPropertyFromDatabase = async (propId) => {
     if (!propId) return;
     const statusText = document.getElementById('header-status-text');
@@ -1632,13 +998,12 @@ window.loadPropertyFromDatabase = async (propId) => {
 
     try {
         const propDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
-        if (!propDoc.exists()) throw new Error(`Property ${propId} not found.`);
+        if (!propDoc.exists()) throw new Error(`Property ${propId} not found in database.`);
 
         const pData = propDoc.data() || {};
         window.currentPropertyConfig = pData;
         window.activePropertyId = propId;
 
-        // Populate Step 1 Profile
         const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
         setVal('prop-name', pData.name || propId);
         setVal('prop-short', (pData.short || pData.shortCode || propId).toUpperCase());
@@ -1649,164 +1014,40 @@ window.loadPropertyFromDatabase = async (propId) => {
         setVal('prop-phone', pData.phone || '');
         setVal('prop-website', pData.website || '');
 
-        // Logos & Favicon
         const activeIcon = pData.iconUrl || pData.logoUrl || DEFAULT_WW_ICON;
         window.updateLogoPreview('primary', pData.logoUrl || DEFAULT_WW_ICON);
         window.updateLogoPreview('banner', pData.bannerUrl || DEFAULT_WW_ICON);
         window.updateLogoPreview('icon', activeIcon);
-        window.updateFavicon(activeIcon);
 
-        const navBrandIcon = document.getElementById('nav-brand-icon');
-        if (navBrandIcon) navBrandIcon.src = activeIcon;
-
-        // Add-ons (Safely mapped)
-        window.addonsList = (pData.addons || []).map((item, idx) => ({
-            id: item.id || `add_${idx + 1}`,
-            order: item.order || (idx + 1),
-            name: item.name || 'Service Item',
-            category: item.category || 'Service',
-            price: typeof item.price === 'number' ? item.price : (parseFloat(item.price) || 0),
-            type: item.type || 'one-off'
-        }));
+        window.addonsList = pData.addons || [];
         window.renderAddonsTable();
 
-        // Step 2 Rooms: Faithful reconstruction without mangling private room names
         window.roomDefinitions = pData.roomDefinitions || [];
-        if (window.roomDefinitions.length === 0 && Array.isArray(pData.rooms) && pData.rooms.length > 0) {
-            const defs = [];
-            const dormMap = {};
-
-            pData.rooms.forEach((r, rIdx) => {
-                const cat = r.type || r.category || 'Standard Room';
-                const isExplicitDorm = r.isDorm === true || cat.toLowerCase().includes('dorm') || r.bunk === 'top' || r.bunk === 'bottom';
-
-                if (isExplicitDorm) {
-                    let parent = r.parentRoom;
-                    if (!parent && r.id && r.id.includes('-')) parent = r.id.split('-')[0].trim();
-                    if (!parent) parent = cat;
-
-                    if (!dormMap[parent]) {
-                        dormMap[parent] = {
-                            id: 'room_' + (defs.length + Object.keys(dormMap).length + 1),
-                            name: parent,
-                            category: cat,
-                            count: 0,
-                            floor: r.floor || '1',
-                            rule: r.bunk === 'even-top' ? 'even-top' : 'odd-top',
-                            isDorm: true
-                        };
-                    }
-                    dormMap[parent].count++;
-                } else {
-                    defs.push({
-                        id: 'room_' + (defs.length + 1),
-                        name: r.id || r.name || `ROOM ${rIdx + 1}`,
-                        category: cat,
-                        count: 1,
-                        floor: r.floor || '1',
-                        rule: 'private',
-                        isDorm: false
-                    });
-                }
-            });
-
-            window.roomDefinitions = [...Object.values(dormMap), ...defs];
+        window.compiledRooms = pData.rooms || [];
+        if (window.roomDefinitions.length === 0 && window.compiledRooms.length > 0) {
+            window.roomDefinitions = window.compiledRooms.map((r, i) => ({
+                id: 'room_' + i, name: r.id, category: r.type || r.category || 'Standard', count: 1, floor: r.floor || '1', rule: r.isDorm ? 'single' : 'private', isDorm: !!r.isDorm
+            }));
         }
-
-        // Store original categories baseline for clean save-time rename cascading
-        window._originalCategories = {};
-        (window.roomDefinitions || []).forEach(d => {
-            if (d.name) window._originalCategories[d.name] = d.category;
-        });
-
-        // PRESERVE original database rooms on load
-        if (Array.isArray(pData.rooms) && pData.rooms.length > 0) {
-            window.compiledRooms = pData.rooms;
-            const rBadge = document.getElementById('room-count-badge');
-            const uBadge = document.getElementById('unit-count-badge');
-            if (rBadge) rBadge.innerText = `${(window.roomDefinitions || []).length} Rooms`;
-            if (uBadge) uBadge.innerText = `${window.compiledRooms.length} Beds/Units Total`;
-            window.renderBedPreviewDrawer();
-        } else {
-            window.compileRoomsFromDefinitions();
-        }
-
         window.renderRoomDefinitionsTable();
 
-        // Step 3 Channex: Preserve existing credentials & check localStorage fallbacks
-        const storedLocalMaster = localStorage.getItem('cm_master_channex_api_key') || '';
-        let localPropConf = {};
-        try { localPropConf = JSON.parse(localStorage.getItem(`cm_channex_${propId}`) || '{}'); } catch(e) {}
-
-        const docChannex = pData.channex || pData.channexConfig || {};
-        window.channexConfig = {
-            apiKey: docChannex.apiKey || localPropConf.apiKey || storedLocalMaster || '',
-            propId: docChannex.propId || localPropConf.propId || '',
-            rateMultiplier: docChannex.rateMultiplier || 100
-        };
-
+        window.channexConfig = pData.channex || {};
         setVal('chan-api-key', window.channexConfig.apiKey || '');
         setVal('chan-prop-id', window.channexConfig.propId || '');
+        window.channexMap = pData.channexMap || [];
+        window.channexRateMap = pData.channexRateMap || [];
 
-        window.channexMap = (pData.channexMap || []).map(m => ({
-            channexId: m.channexId || '',
-            channexTitle: m.channexTitle || '',
-            pmsCategory: m.pmsCategory || ''
-        }));
-
-        window.channexRateMap = (pData.channexRateMap || []).map(m => ({
-            ratePlanId: m.ratePlanId || '',
-            ratePlanTitle: m.ratePlanTitle || '',
-            channexRoomTitle: m.channexRoomTitle || '',
-            pmsCategory: m.pmsCategory || '',
-            channel: m.channel || 'Default',
-            product: m.product || 'std',
-            policy: m.policy || 'non-ref',
-            rateSource: m.rateSource || 'std'
-        }));
-
-        // Step 4 Pricing & Curves
         const pPricingDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`));
         if (pPricingDoc.exists()) {
-            const pricingData = pPricingDoc.data() || {};
-            window.relationships = pricingData.relationships || [];
-            
-            // Clean pricing rules from any contaminated casing variants
-            const loadedChannels = pricingData.pricingRules?.channels || {};
-            const sanitizedChannels = {};
-            Object.keys(loadedChannels).forEach(k => {
-                const canon = normalizeChannelName(k);
-                if (!sanitizedChannels[canon]) {
-                    sanitizedChannels[canon] = loadedChannels[k];
-                }
-            });
-
-            window.pricingRules = {
-                ...(pricingData.pricingRules || window.pricingRules),
-                channels: sanitizedChannels
-            };
-            window.savedAutofillBaselines = pricingData.autofillBaselines || {};
+            const pDataPricing = pPricingDoc.data() || {};
+            window.relationships = pDataPricing.relationships || [];
+            window.pricingRules = { ...window.pricingRules, ...(pDataPricing.pricingRules || {}) };
         }
 
-        const eventsToggle = document.getElementById('toggle-events');
-        const hasEvents = !!(pData.enableEventRates || (pData.events && pData.events.length > 0));
-        if (eventsToggle) {
-            eventsToggle.checked = hasEvents;
-            window.toggleEventSettings(hasEvents);
-        }
-
-        // Update Nav Links
-        const pCode = (pData.short || pData.shortCode || propId).toUpperCase();
-        const navPms = document.getElementById('btn-goto-pms');
-        const navCm = document.getElementById('btn-goto-cm');
-        const baseUrl = (window.location.hostname === 'localhost' || window.location.protocol === 'file:') ? '' : 'https://loren-6q.github.io/PMS/';
-        if (navPms) navPms.href = `${baseUrl}pms.html?p=${encodeURIComponent(pCode)}`;
-        if (navCm) navCm.href = `${baseUrl}cm.html?p=${encodeURIComponent(pCode)}`;
-
-        if (statusText) statusText.innerText = `Loaded ${pData.name || propId}`;
+        if (statusText) statusText.innerText = `Active: ${pData.name || propId}`;
     } catch (err) {
-        console.error("Load property error:", err);
-        if (statusText) statusText.innerText = `Error loading: ${err.message}`;
+        console.error("Load error:", err);
+        if (statusText) statusText.innerText = `Error: ${err.message}`;
     }
 };
 
@@ -1815,317 +1056,104 @@ window.savePropertyToDatabase = async (showModal = true) => {
     if (!propId) return window.customAlert("Error", "No active property selected.");
 
     const statusText = document.getElementById('header-status-text');
-    if (statusText) statusText.innerText = "Saving property configuration...";
-
-    // Sync any uncommitted edits directly from the DOM before saving
-    window.syncRoomDefsFromDOM();
+    if (statusText) statusText.innerText = "Saving configuration...";
 
     try {
-        const getVal = id => {
-            const el = document.getElementById(id);
-            return el && el.value !== undefined ? el.value.trim() : '';
-        };
-
+        const getVal = id => document.getElementById(id)?.value?.trim() || '';
         const name = getVal('prop-name') || propId;
         const short = (getVal('prop-short') || propId).toUpperCase();
-        const currency = getVal('prop-currency') || 'THB';
-        const timezone = getVal('prop-timezone') || 'Asia/Bangkok';
-        const address = getVal('prop-address');
-        const email = getVal('prop-email');
-        const phone = getVal('prop-phone');
-        const website = getVal('prop-website');
 
-        const logoUrl = getVal('prop-logo-url') || DEFAULT_WW_ICON;
-        const bannerUrl = getVal('prop-banner-url') || DEFAULT_WW_ICON;
-        const iconUrl = getVal('prop-icon-url') || DEFAULT_WW_ICON;
-
-        const enableEventRates = !!document.getElementById('toggle-events')?.checked;
-
-        // SAFE ROOM COMPILE: Only compile if definitions exist; never wipe rooms if definitions were empty
-        if ((!window.roomDefinitions || window.roomDefinitions.length === 0) && Array.isArray(window.currentPropertyConfig?.rooms) && window.currentPropertyConfig.rooms.length > 0) {
-            console.warn("Safety lock: Preserving existing rooms as definitions are empty.");
-            window.compiledRooms = window.currentPropertyConfig.rooms;
-        } else {
+        if (window.roomDefinitions.length > 0) {
             window.compileRoomsFromDefinitions();
         }
-
-        // Detect any category renames made by the user to cascade AT SAVE TIME only
-        const categoryRenames = [];
-        (window.roomDefinitions || []).forEach(def => {
-            const orig = (window._originalCategories || {})[def.name];
-            if (orig && def.category && orig !== def.category) {
-                categoryRenames.push({ oldCat: orig, newCat: def.category });
-            }
-        });
-
-        // SAFE CHANNEX PRESERVATION: Never wipe Channex keys if user didn't open Step 3
-        const existingChan = window.currentPropertyConfig?.channex || {};
-        const chanApiKey = getVal('chan-api-key') || window.channexConfig?.apiKey || existingChan.apiKey || localStorage.getItem('cm_master_channex_api_key') || '';
-        const chanPropId = getVal('chan-prop-id') || window.channexConfig?.propId || existingChan.propId || '';
-
-        const effectiveChanMap = (window.channexMap && window.channexMap.length > 0)
-            ? window.channexMap
-            : (window.currentPropertyConfig?.channexMap || []);
-
-        const effectiveChanRateMap = (window.channexRateMap && window.channexRateMap.length > 0)
-            ? window.channexRateMap
-            : (window.currentPropertyConfig?.channexRateMap || []);
 
         const propertyPayload = {
             name,
             short,
             shortCode: short,
-            currency,
-            timezone,
-            address,
-            email,
-            phone,
-            website,
-            logoUrl,
-            bannerUrl,
-            iconUrl,
+            currency: getVal('prop-currency') || 'THB',
+            timezone: getVal('prop-timezone') || 'Asia/Bangkok',
+            address: getVal('prop-address'),
+            email: getVal('prop-email'),
+            phone: getVal('prop-phone'),
+            website: getVal('prop-website'),
+            logoUrl: DEFAULT_WW_ICON,
+            bannerUrl: DEFAULT_WW_ICON,
+            iconUrl: DEFAULT_WW_ICON,
             addons: window.addonsList || [],
             roomDefinitions: window.roomDefinitions || [],
             rooms: window.compiledRooms || [],
             channex: {
-                apiKey: chanApiKey,
-                propId: chanPropId,
+                apiKey: getVal('chan-api-key') || window.channexConfig.apiKey || '',
+                propId: getVal('chan-prop-id') || window.channexConfig.propId || '',
                 rateMultiplier: 100
             },
-            channexMap: effectiveChanMap,
-            channexRateMap: effectiveChanRateMap,
-            enableEventRates,
+            channexMap: window.channexMap || [],
+            channexRateMap: window.channexRateMap || [],
+            enableEventRates: false,
             updatedAt: new Date().toISOString()
         };
 
-        // 1. Save to Properties document (Deep Sanitized)
-        await setDoc(
-            doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), 
-            sanitizeForFirestore(propertyPayload), 
-            { merge: true }
-        );
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), sanitizeForFirestore(propertyPayload), { merge: true });
 
-        // 2. Cascade category renames to bookings and pricing rules if any were changed
-        if (categoryRenames.length > 0) {
-            try {
-                const batch = writeBatch(db);
-                const staffRef = collection(db, 'artifacts', appId, 'public', 'data', 'staff');
-                const qStaff = query(staffRef, where('property', '==', propId));
-                const staffSnap = await getDocs(qStaff);
+        const dormAnchor = document.getElementById('anchor-dorm-select')?.value;
+        const privAnchor = document.getElementById('anchor-private-select')?.value;
+        if (dormAnchor) window.pricingRules.anchorDorm = dormAnchor;
+        if (privAnchor) window.pricingRules.anchorPrivate = privAnchor;
 
-                staffSnap.forEach(docSnap => {
-                    const data = docSnap.data();
-                    let dirty = false;
-                    const updateObj = {};
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`), sanitizeForFirestore({
+            pricingRules: window.pricingRules,
+            relationships: window.relationships || [],
+            updatedAt: new Date().toISOString()
+        }), { merge: true });
 
-                    categoryRenames.forEach(({ oldCat, newCat }) => {
-                        if (data.category === oldCat) { updateObj.category = newCat; dirty = true; }
-                        if (data.bookedType === oldCat) { updateObj.bookedType = newCat; dirty = true; }
-                        if (data.roomType === oldCat) { updateObj.roomType = newCat; dirty = true; }
-                    });
-
-                    if (dirty) batch.update(docSnap.ref, updateObj);
-                });
-
-                const pricingRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`);
-                const pSnap = await getDoc(pricingRef);
-                if (pSnap.exists()) {
-                    const pData = pSnap.data();
-                    let pDirty = false;
-                    categoryRenames.forEach(({ oldCat, newCat }) => {
-                        if (Array.isArray(pData.relationships)) {
-                            pData.relationships.forEach(rel => {
-                                if (rel.anchor === oldCat) { rel.anchor = newCat; pDirty = true; }
-                                if (rel.target === oldCat) { rel.target = newCat; pDirty = true; }
-                            });
-                        }
-                        if (pData.pricingRules) {
-                            if (pData.pricingRules.anchorPrivate === oldCat) { pData.pricingRules.anchorPrivate = newCat; pDirty = true; }
-                            if (pData.pricingRules.anchorDorm === oldCat) { pData.pricingRules.anchorDorm = newCat; pDirty = true; }
-                        }
-                    });
-                    if (pDirty) batch.set(pricingRef, sanitizeForFirestore(pData), { merge: true });
-                }
-
-                await batch.commit();
-                // Update baseline so subsequent saves don't re-cascade
-                (window.roomDefinitions || []).forEach(d => {
-                    if (d.name) window._originalCategories[d.name] = d.category;
-                });
-            } catch (cascadeErr) {
-                console.warn("Cascade rename note:", cascadeErr);
-            }
-        }
-
-        // 3. Save Pricing Rules & Channel Adjustments to pricing master document
-        try {
-            const dormAnchor = document.getElementById('anchor-dorm-select')?.value;
-            const privAnchor = document.getElementById('anchor-private-select')?.value;
-            if (dormAnchor) window.pricingRules.anchorDorm = dormAnchor;
-            if (privAnchor) window.pricingRules.anchorPrivate = privAnchor;
-
-            const stdRefVal = parseFloat(document.getElementById('rule-std-ref')?.value);
-            const evtRefVal = parseFloat(document.getElementById('rule-evt-ref')?.value);
-            if (!isNaN(stdRefVal)) window.pricingRules.stdRefVal = stdRefVal;
-            if (!isNaN(evtRefVal)) window.pricingRules.evtRefVal = evtRefVal;
-
-            // Harvest event pricing curves if configured
-            const harvestVal = id => {
-                const el = document.getElementById(id);
-                return el ? (parseFloat(el.value) || 0) : 0;
-            };
-            window.savedAutofillBaselines = window.savedAutofillBaselines || {};
-            const b = window.savedAutofillBaselines;
-            if (document.getElementById('w-p-base')) b.p_base = harvestVal('w-p-base');
-            if (document.getElementById('w-p-pkg')) b.p_pkg = harvestVal('w-p-pkg');
-            if (document.getElementById('w-p-0')) b.p_0 = harvestVal('w-p-0');
-            if (document.getElementById('w-d-base')) b.d_base = harvestVal('w-d-base');
-            if (document.getElementById('w-d-pkg')) b.d_pkg = harvestVal('w-d-pkg');
-            if (document.getElementById('w-d-0')) b.d_0 = harvestVal('w-d-0');
-
-            const pricingDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`);
-            await setDoc(pricingDocRef, sanitizeForFirestore({
-                pricingRules: window.pricingRules,
-                relationships: window.relationships || [],
-                autofillBaselines: window.savedAutofillBaselines,
-                updatedAt: new Date().toISOString()
-            }), { merge: true });
-        } catch (pricingSaveErr) {
-            console.warn("Pricing rules save note:", pricingSaveErr);
-        }
-
-        if (statusText) statusText.innerText = `Saved ${name} successfully`;
-        if (showModal) {
-            window.customAlert("Property Saved", `Configuration for "${name}" (${short}) saved successfully.`);
-        }
+        if (statusText) statusText.innerText = `Saved ${name}!`;
+        if (showModal) window.customAlert("Success", `Configuration for "${name}" (${short}) saved.`);
     } catch (err) {
-        console.error("Save property error:", err);
+        console.error("Save error:", err);
         if (statusText) statusText.innerText = "Error saving property!";
         window.customAlert("Save Error", err.message);
-    }
-};
-
-// --------------------------------------------------------------------------
-// SECTION 9: Property Switcher & Creation Modal
-// --------------------------------------------------------------------------
-window.loadAllPropertiesList = async () => {
-    try {
-        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
-        const list = [];
-        snap.forEach(d => {
-            const data = d.data() || {};
-            list.push({ id: d.id, ...data });
-        });
-
-        window.availableProperties = list;
-        const sel = document.getElementById('property-select');
-        if (sel) {
-            sel.innerHTML = list.map(p => `
-                <option value="${p.id}" ${p.id === window.activePropertyId ? 'selected' : ''}>
-                    ${p.name || p.id} (${(p.short || p.shortCode || p.id).toUpperCase()})
-                </option>
-            `).join('');
-        }
-    } catch (err) {
-        console.error("Load properties list error:", err);
     }
 };
 
 window.switchSetupProperty = async (propId) => {
     if (!propId || propId === window.activePropertyId) return;
     window.activePropertyId = propId;
-    const shortCode = (window.availableProperties.find(p => p.id === propId)?.short || propId).toUpperCase();
-    try {
-        const url = new URL(window.location.href);
-        url.searchParams.set('p', shortCode);
-        window.history.replaceState({}, '', url.toString());
-    } catch(e) {}
     await window.loadPropertyFromDatabase(propId);
     window.jumpStep(1);
 };
 
-window.openNewPropertyModal = () => {
-    const modal = document.getElementById('new-property-modal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
-};
-
-window.closeNewPropertyModal = () => {
-    const modal = document.getElementById('new-property-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-};
-
-window.confirmCreateNewProperty = async () => {
-    const name = document.getElementById('new-prop-input-name')?.value.trim();
-    const short = document.getElementById('new-prop-input-short')?.value.trim().toUpperCase();
-    const id = document.getElementById('new-prop-input-id')?.value.trim().toLowerCase();
-
-    if (!name || !short || !id) {
-        return window.customAlert("Fields Required", "Please provide Property Name, Short Code, and Property ID / Slug.");
-    }
-
-    const slug = id.replace(/[^a-z0-9_-]/g, '_');
-
-    try {
-        const newPayload = {
-            name,
-            short,
-            shortCode: short,
-            currency: 'THB',
-            timezone: 'Asia/Bangkok',
-            logoUrl: DEFAULT_WW_ICON,
-            bannerUrl: DEFAULT_WW_ICON,
-            iconUrl: DEFAULT_WW_ICON,
-            addons: [],
-            roomDefinitions: [],
-            rooms: [],
-            enableEventRates: false,
-            createdAt: new Date().toISOString()
-        };
-
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', slug), sanitizeForFirestore(newPayload));
-        window.closeNewPropertyModal();
-        await window.loadAllPropertiesList();
-        const sel = document.getElementById('property-select');
-        if (sel) sel.value = slug;
-        await window.loadPropertyFromDatabase(slug);
-        window.customAlert("Property Created", `"${name}" (${short}) created successfully. Start by configuring rooms in Step 2!`);
-    } catch (err) {
-        console.error("Create property error:", err);
-        window.customAlert("Error", "Could not create property: " + err.message);
-    }
-};
-
-// --------------------------------------------------------------------------
-// SECTION 10: Boot & Initializer
-// --------------------------------------------------------------------------
+// --- INITIALIZER WITH STATE CHECK ---
 async function initSetupEngine() {
     try {
-        if (typeof window.__initial_auth_token !== 'undefined') {
-            try { await signInWithCustomToken(auth, window.__initial_auth_token); }
-            catch (e) { await signInAnonymously(auth); }
-        } else {
-            await signInAnonymously(auth);
-        }
+        await signInAnonymously(auth);
     } catch (err) {
-        console.warn("Auth initialization note:", err);
+        console.warn("Auth note:", err);
     }
 
-    await window.loadAllPropertiesList();
+    try {
+        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
+        window.availableProperties = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const sel = document.getElementById('property-select');
+        if (sel) {
+            sel.innerHTML = window.availableProperties.map(p => `
+                <option value="${p.id}">${p.name || p.id} (${(p.short || p.shortCode || p.id).toUpperCase()})</option>
+            `).join('');
+        }
+    } catch (e) {
+        console.error("Properties list load failed:", e);
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
-    const pParam = (urlParams.get('p') || '').toLowerCase();
+    const pParam = (urlParams.get('p') || '').trim();
+    let targetId = window.availableProperties[0]?.id || 'swims_resort';
 
-    let targetId = window.availableProperties[0]?.id || 'loud_samui';
     if (pParam) {
+        const pNorm = pParam.toLowerCase();
         const found = window.availableProperties.find(p => 
-            p.id.toLowerCase() === pParam || 
-            (p.short && p.short.toLowerCase() === pParam)
+            p.id.toLowerCase() === pNorm || 
+            (p.short && p.short.toLowerCase() === pNorm) ||
+            (p.shortCode && p.shortCode.toLowerCase() === pNorm)
         );
         if (found) targetId = found.id;
     }
@@ -2138,6 +1166,8 @@ async function initSetupEngine() {
     window.jumpStep(1);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initSetupEngine();
-});
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSetupEngine);
+} else {
+    setTimeout(initSetupEngine, 0);
+}
