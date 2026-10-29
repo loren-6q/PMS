@@ -42,6 +42,17 @@ function cleanChannelKey(rawKey) {
     return rawKey.trim();
 }
 
+function getPlanRoomTypeId(p) {
+    if (!p) return '';
+    return p.relationships?.room_type?.data?.id
+        || p.attributes?.room_type_id
+        || p.room_type_id
+        || p.relationships?.room_types?.data?.[0]?.id
+        || p.attributes?.room_type?.id
+        || (p.room_type && typeof p.room_type === 'string' ? p.room_type : p.room_type?.id)
+        || '';
+}
+
 window.currentStep = 1;
 window.totalSteps = 5;
 window.activePropertyId = '';
@@ -428,37 +439,61 @@ window.renderRoomDefinitionsTable = function() {
         return;
     }
 
-    tbody.innerHTML = window.roomDefinitions.map((r, idx) => `
-        <tr class="hover:bg-slate-50 transition-colors">
-            <td class="text-center font-mono font-bold text-slate-400">${idx + 1}</td>
-            <td>
-                <input type="text" value="${r.name || ''}" class="table-input font-bold" onchange="window.roomDefinitions[${idx}].name = this.value; window.compileRoomsFromDefinitions();">
-            </td>
-            <td>
-                <input type="text" list="setup-category-datalist" value="${r.category || ''}" class="table-input font-bold" onchange="window.handleRoomCategoryChange(${idx}, this.value)">
-            </td>
-            <td class="text-center">
-                <input type="number" min="1" max="60" value="${r.bedsCount || 1}" class="table-input text-center font-bold" onchange="window.roomDefinitions[${idx}].bedsCount = parseInt(this.value, 10) || 1; window.compileRoomsFromDefinitions();">
-            </td>
-            <td class="text-center">
-                <input type="text" value="${r.floor || '1'}" class="table-input text-center font-bold" onchange="window.roomDefinitions[${idx}].floor = this.value; window.compileRoomsFromDefinitions();">
-            </td>
-            <td>
-                <select class="table-input font-bold" onchange="window.roomDefinitions[${idx}].rule = this.value; window.compileRoomsFromDefinitions();">
-                    <option value="odd-top" ${r.rule === 'odd-top' ? 'selected' : ''}>DORM (Top # Odd)</option>
-                    <option value="even-top" ${r.rule === 'even-top' ? 'selected' : ''}>DORM (Top # Even)</option>
-                    <option value="single" ${r.rule === 'single' ? 'selected' : ''}>DORM (Single Beds)</option>
-                    <option value="private" ${r.rule === 'private' ? 'selected' : ''}>PRIVATE ROOM</option>
-                </select>
-            </td>
-            <td class="text-center">
-                <button type="button" onclick="window.removeRoomDef(${idx})" class="text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer">
-                    <i data-lucide="trash-2" size="12"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
+    let rowsHtml = '';
+    let lastCategory = null;
 
+    window.roomDefinitions.forEach((r, idx) => {
+        const currentCategory = (r.category || 'Standard Room').trim();
+
+        // GENTLE LINE DIVIDER BETWEEN ROOM CATEGORIES
+        if (currentCategory !== lastCategory) {
+            rowsHtml += `
+                <tr class="bg-slate-100/90 border-t-2 border-b border-slate-300">
+                    <td colspan="7" class="py-1 px-2 text-[10px] font-black uppercase text-slate-700 tracking-wider select-none">
+                        <div class="flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0"></span>
+                            <span class="text-indigo-950 font-black">${currentCategory}</span>
+                            <div class="h-px bg-slate-300 flex-1"></div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            lastCategory = currentCategory;
+        }
+
+        rowsHtml += `
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="text-center font-mono font-bold text-slate-400">${idx + 1}</td>
+                <td>
+                    <input type="text" value="${r.name || ''}" class="table-input font-bold" onchange="window.roomDefinitions[${idx}].name = this.value; window.compileRoomsFromDefinitions();">
+                </td>
+                <td>
+                    <input type="text" list="setup-category-datalist" value="${r.category || ''}" class="table-input font-bold" onchange="window.handleRoomCategoryChange(${idx}, this.value)">
+                </td>
+                <td class="text-center">
+                    <input type="number" min="1" max="60" value="${r.bedsCount || 1}" class="table-input text-center font-bold" onchange="window.roomDefinitions[${idx}].bedsCount = parseInt(this.value, 10) || 1; window.compileRoomsFromDefinitions();">
+                </td>
+                <td class="text-center">
+                    <input type="text" value="${r.floor || '1'}" class="table-input text-center font-bold" onchange="window.roomDefinitions[${idx}].floor = this.value; window.compileRoomsFromDefinitions();">
+                </td>
+                <td>
+                    <select class="table-input font-bold" onchange="window.roomDefinitions[${idx}].rule = this.value; window.compileRoomsFromDefinitions();">
+                        <option value="odd-top" ${r.rule === 'odd-top' ? 'selected' : ''}>DORM (Top # Odd)</option>
+                        <option value="even-top" ${r.rule === 'even-top' ? 'selected' : ''}>DORM (Top # Even)</option>
+                        <option value="single" ${r.rule === 'single' ? 'selected' : ''}>DORM (Single Beds)</option>
+                        <option value="private" ${r.rule === 'private' ? 'selected' : ''}>PRIVATE ROOM</option>
+                    </select>
+                </td>
+                <td class="text-center">
+                    <button type="button" onclick="window.removeRoomDef(${idx})" class="text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer">
+                        <i data-lucide="trash-2" size="12"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = rowsHtml;
     window.compileRoomsFromDefinitions();
     if (window.lucide) window.lucide.createIcons();
 };
@@ -467,7 +502,7 @@ window.handleRoomCategoryChange = function(index, newCategory) {
     if (!window.roomDefinitions[index]) return;
     window.roomDefinitions[index].category = newCategory.trim();
 
-    // Re-group rooms under identical categories
+    // Re-group rooms under identical categories to preserve divider sequencing
     const groups = {};
     window.roomDefinitions.forEach(r => {
         const cat = r.category || 'Standard Room';
@@ -661,13 +696,14 @@ window.fetchChannexData = async function() {
     window.channexConfig.propId = propId;
 
     try {
-        const roomsRes = await fetch(`https://app.channex.io/api/v1/room_types?filter[property_id]=${propId}`, {
+        // Use pagination[limit]=100 so Channex doesn't cap return list at default 10 items
+        const roomsRes = await fetch(`https://app.channex.io/api/v1/room_types?filter[property_id]=${propId}&pagination[limit]=100`, {
             headers: { "user-api-key": apiKey }
         });
         const roomsJson = await roomsRes.json();
         window.channexRooms = roomsJson.data || [];
 
-        const plansRes = await fetch(`https://app.channex.io/api/v1/rate_plans?filter[property_id]=${propId}`, {
+        const plansRes = await fetch(`https://app.channex.io/api/v1/rate_plans?filter[property_id]=${propId}&pagination[limit]=100`, {
             headers: { "user-api-key": apiKey }
         });
         const plansJson = await plansRes.json();
@@ -717,9 +753,19 @@ window.renderStep3Mapping = function() {
         const isMapped = !!mapping.channexId;
         if (isMapped) mappedCount++;
 
-        const roomPlans = isMapped
-            ? (window.channexRatePlans || []).filter(p => p.attributes?.room_type_id === mapping.channexId)
-            : [];
+        // Robust plan filtering: checks relationships.room_type.data.id, attributes.room_type_id, and saved rate map
+        let roomPlans = [];
+
+        if (isMapped && window.channexRatePlans && window.channexRatePlans.length > 0) {
+            roomPlans = window.channexRatePlans.filter(p => {
+                const rId = getPlanRoomTypeId(p);
+                return rId && rId === mapping.channexId;
+            });
+        }
+
+        // If rate plans were not fetched fresh, fall back to displaying plans previously saved in Firestore
+        const savedPlans = (window.channexRateMap || []).filter(rm => rm.pmsCategory === pmsCat);
+        const displayPlansCount = roomPlans.length > 0 ? roomPlans.length : savedPlans.length;
 
         return `
             <div class="border rounded-lg bg-white overflow-hidden shadow-xs transition-all ${isMapped ? 'border-emerald-300' : 'border-amber-300'}">
@@ -729,7 +775,7 @@ window.renderStep3Mapping = function() {
                     <div class="flex items-center gap-2">
                         <span class="text-xs font-black uppercase ${isMapped ? 'text-emerald-950' : 'text-amber-950'}">${pmsCat}</span>
                         ${isMapped
-                            ? `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-black text-[9.5px] border border-emerald-300 flex items-center gap-1">🟢 Paired (${roomPlans.length} Rates)</span>`
+                            ? `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-black text-[9.5px] border border-emerald-300 flex items-center gap-1">🟢 Paired (${displayPlansCount} Rates)</span>`
                             : `<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-black text-[9.5px] border border-amber-300 flex items-center gap-1 animate-pulse">⚠️ Unmapped — Select Channex Room</span>`
                         }
                     </div>
@@ -753,7 +799,7 @@ window.renderStep3Mapping = function() {
                         <div class="p-3 text-center text-amber-800 font-bold text-xs bg-amber-50/50 rounded border border-amber-100">
                             Select the matching Channex Room in the header above to load its rate plans.
                         </div>
-                    ` : (roomPlans.length === 0 ? `
+                    ` : (displayPlansCount === 0 ? `
                         <div class="p-3 text-center text-slate-400 font-semibold text-xs bg-slate-50 rounded border border-slate-100">
                             No rate plans found in Channex for this room. Click "+ Create & Push Plan" above to create one.
                         </div>
@@ -769,35 +815,42 @@ window.renderStep3Mapping = function() {
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 font-semibold">
-                                    ${roomPlans.map(plan => {
-                                        let planMap = (window.channexRateMap || []).find(rm => rm.ratePlanId === plan.id);
-                                        if (!planMap) {
-                                            const pTitle = (plan.attributes?.title || '').toLowerCase();
-                                            let chan = 'Default';
-                                            if (pTitle.includes('booking.com') || pTitle.includes('bdc')) chan = 'Booking.com';
-                                            else if (pTitle.includes('hostelworld') || pTitle.includes('hw')) chan = 'Hostelworld';
-                                            else if (pTitle.includes('agoda')) chan = 'Agoda';
-                                            else if (pTitle.includes('direct')) chan = 'Direct';
+                                    ${(roomPlans.length > 0 ? roomPlans : savedPlans).map(item => {
+                                        const planId = item.id || item.ratePlanId;
+                                        const planTitle = item.attributes?.title || item.title || item.ratePlanTitle || planId;
 
-                                            const pol = (pTitle.includes('flexible') || pTitle.includes('ref')) && !pTitle.includes('non-') ? 'ref' : 'non-ref';
-                                            const prod = pTitle.includes('event') || pTitle.includes('fmp') ? 'evt' : 'std';
+                                        let planMap = (window.channexRateMap || []).find(rm => rm.ratePlanId === planId);
+                                        if (!planMap) {
+                                            const pTitleLower = String(planTitle).toLowerCase();
+                                            let chan = 'Default';
+                                            if (pTitleLower.includes('booking.com') || pTitleLower.includes('bdc')) chan = 'Booking.com';
+                                            else if (pTitleLower.includes('hostelworld') || pTitleLower.includes('hw')) chan = 'Hostelworld';
+                                            else if (pTitleLower.includes('agoda')) chan = 'Agoda';
+                                            else if (pTitleLower.includes('direct')) chan = 'Direct';
+                                            else if (pTitleLower.includes('expedia')) chan = 'Expedia';
+                                            else if (pTitleLower.includes('airbnb')) chan = 'Airbnb';
+
+                                            const pol = (pTitleLower.includes('flexible') || pTitleLower.includes('ref')) && !pTitleLower.includes('non-') ? 'ref' : 'non-ref';
+                                            const prod = pTitleLower.includes('event') || pTitleLower.includes('fmp') ? 'evt' : 'std';
 
                                             planMap = {
-                                                ratePlanId: plan.id,
-                                                ratePlanTitle: plan.attributes?.title || '',
+                                                ratePlanId: planId,
+                                                ratePlanTitle: planTitle,
                                                 pmsCategory: pmsCat,
                                                 channel: chan,
                                                 policy: pol,
                                                 product: prod
                                             };
                                             window.channexRateMap.push(planMap);
+                                        } else {
+                                            planMap.pmsCategory = pmsCat;
                                         }
 
                                         return `
                                             <tr class="hover:bg-slate-50 transition-colors">
-                                                <td class="font-bold text-slate-800">${plan.attributes?.title || plan.id}</td>
+                                                <td class="font-bold text-slate-800">${planTitle}</td>
                                                 <td>
-                                                    <select class="table-input font-bold" onchange="window.updateRatePlanMapping('${plan.id}', 'channel', this.value)">
+                                                    <select class="table-input font-bold" onchange="window.updateRatePlanMapping('${planId}', 'channel', this.value)">
                                                         <option value="Default" ${planMap.channel === 'Default' ? 'selected' : ''}>Default (1:1 Base)</option>
                                                         <option value="Direct" ${planMap.channel === 'Direct' ? 'selected' : ''}>Direct Engine</option>
                                                         <option value="Booking.com" ${planMap.channel === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
@@ -808,13 +861,13 @@ window.renderStep3Mapping = function() {
                                                     </select>
                                                 </td>
                                                 <td>
-                                                    <select class="table-input font-bold" onchange="window.updateRatePlanMapping('${plan.id}', 'policy', this.value)">
+                                                    <select class="table-input font-bold" onchange="window.updateRatePlanMapping('${planId}', 'policy', this.value)">
                                                         <option value="non-ref" ${planMap.policy === 'non-ref' ? 'selected' : ''}>Non-Refundable</option>
                                                         <option value="ref" ${planMap.policy === 'ref' ? 'selected' : ''}>Flexible (+%)</option>
                                                     </select>
                                                 </td>
                                                 <td>
-                                                    <select class="table-input font-bold" onchange="window.updateRatePlanMapping('${plan.id}', 'product', this.value)">
+                                                    <select class="table-input font-bold" onchange="window.updateRatePlanMapping('${planId}', 'product', this.value)">
                                                         <option value="std" ${planMap.product === 'std' ? 'selected' : ''}>Standard Rate</option>
                                                         <option value="evt" ${planMap.product === 'evt' ? 'selected' : ''}>Event Package (EVT)</option>
                                                     </select>
@@ -850,6 +903,19 @@ window.handleRoomPairChange = function(pmsCategory, selectedChannexId) {
 
     const crObj = (window.channexRooms || []).find(r => r.id === selectedChannexId);
     mapping.channexTitle = crObj ? (crObj.attributes?.title || '') : '';
+
+    // Automatically re-target matched rate plans to this pmsCategory
+    if (selectedChannexId && window.channexRatePlans && window.channexRatePlans.length > 0) {
+        window.channexRatePlans.forEach(plan => {
+            const rId = getPlanRoomTypeId(plan);
+            if (rId === selectedChannexId) {
+                let planMap = (window.channexRateMap || []).find(rm => rm.ratePlanId === plan.id);
+                if (planMap) {
+                    planMap.pmsCategory = pmsCategory;
+                }
+            }
+        });
+    }
 
     window.renderStep3Mapping();
 };
@@ -1207,7 +1273,6 @@ window.savePropertyToDatabase = async function(showAlertMsg = true) {
 window.loadPropertyFromDatabase = async function(propId) {
     if (!propId) return;
 
-    // Purge in-memory state so no cross-property bleed can occur
     window.activePropertyId = propId;
     window.currentPropertyConfig = {};
     window.roomDefinitions = [];
