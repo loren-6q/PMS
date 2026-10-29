@@ -16,26 +16,62 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Google Fonts: Roboto Condensed -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
+    <!-- Universal Core Utilities -->
+    <script src="core.js"></script>
+    <!-- Instant Fallback Stepper Stubs -->
+    <script>
+        window.currentStep = 1;
+        window.jumpStep = window.jumpStep || function(step) {
+            window.currentStep = Math.max(1, Math.min(5, parseInt(step, 10) || 1));
+            for (let i = 1; i <= 5; i++) {
+                const pill = document.getElementById('pill-step-' + i);
+                const badge = document.getElementById('badge-step-' + i);
+                const sec = document.getElementById('step-content-' + i);
+                if (pill) {
+                    pill.classList.toggle('active', i === window.currentStep);
+                    pill.classList.toggle('completed', i < window.currentStep);
+                }
+                if (badge) {
+                    if (i === window.currentStep) badge.className = "w-5 h-5 rounded bg-white text-indigo-700 font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs";
+                    else if (i < window.currentStep) badge.className = "w-5 h-5 rounded bg-emerald-100 text-emerald-800 font-black text-[10px] flex items-center justify-center shrink-0 border border-emerald-300";
+                    else badge.className = "w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200";
+                }
+                if (sec) sec.classList.toggle('hidden', i !== window.currentStep);
+            }
+            const ind = document.getElementById('wizard-step-indicator');
+            if (ind) ind.innerText = 'Step ' + window.currentStep + ' of 5';
+            const prevBtn = document.getElementById('btn-prev-step');
+            if (prevBtn) prevBtn.disabled = (window.currentStep === 1);
+        };
+        window.nextStep = window.nextStep || function() { if (window.currentStep < 5) window.jumpStep(window.currentStep + 1); };
+        window.prevStep = window.prevStep || function() { if (window.currentStep > 1) window.jumpStep(window.currentStep - 1); };
+    </script>
     <style>
-        body { font-family: 'Roboto Condensed', sans-serif; font-size: 13px; }
+        body { font-family: 'Roboto Condensed', sans-serif; font-size: 12px; }
+        .step-pill { background-color: #ffffff; color: #64748b; border: 1px solid #e2e8f0; }
+        .step-pill.active { background-color: #4f46e5; color: #ffffff; border-color: #4338ca; }
+        .step-pill.completed { background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+        .table-input { border: 1px solid #cbd5e1; border-radius: 0.25rem; padding: 0.15rem 0.35rem; outline: none; font-size: 0.75rem; font-weight: 700; font-family: 'Roboto Condensed', sans-serif; background-color: #ffffff; transition: border-color 0.15s, box-shadow 0.15s; width: 100%; box-sizing: border-box; height: 22px; }
+        .table-input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18); background-color: #fff; }
+        .label-base { display: block; font-size: 0.625rem; font-weight: 900; color: #64748b; margin-bottom: 0.15rem; text-transform: uppercase; letter-spacing: 0.08em; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col antialiased overflow-hidden">
 
-    <!-- SECTION 1: Global Header & Active Property Selector -->
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-40 px-3 py-1.5 flex items-center justify-between shadow-xs shrink-0">
+    <!-- Global Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-40 px-3 py-1 flex items-center justify-between shadow-xs shrink-0">
         <div class="flex items-center gap-2">
-            <a href="https://loren-6q.github.io/PMS/index.html" class="flex items-center hover:opacity-90 transition-opacity">
-                <img id="nav-brand-icon" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-7 sm:h-8 object-contain mr-1">
+            <a href="index.html" class="flex items-center hover:opacity-90 transition-opacity">
+                <img id="nav-brand-icon" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Brand Logo" class="h-7 sm:h-8 object-contain mr-1">
             </a>
             <div>
                 <h1 class="text-xs font-black text-slate-900 leading-tight">Property Setup Wizard</h1>
-                <p class="text-[9px] text-slate-500 font-semibold" id="header-status-text">Loading configuration...</p>
+                <p class="text-[9px] text-slate-400 font-bold" id="header-status-text">Configuration Engine</p>
             </div>
 
             <div class="h-4 w-px bg-slate-200 mx-1"></div>
@@ -53,11 +89,11 @@
         </div>
 
         <div class="flex items-center gap-1.5">
-            <a id="btn-goto-pms" href="https://loren-6q.github.io/PMS/pms.html" onclick="event.preventDefault(); window.launchApp('pms')" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-bold transition-colors">
+            <a id="btn-goto-pms" href="pms.html" onclick="event.preventDefault(); window.launchApp('pms')" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-bold transition-colors">
                 <i data-lucide="layout-grid" size="13" class="text-indigo-600"></i>
                 <span class="hidden sm:inline">PMS</span>
             </a>
-            <a id="btn-goto-cm" href="https://loren-6q.github.io/PMS/cm.html" onclick="event.preventDefault(); window.launchApp('cm')" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-bold transition-colors">
+            <a id="btn-goto-cm" href="cm.html" onclick="event.preventDefault(); window.launchApp('cm')" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-bold transition-colors">
                 <i data-lucide="calendar" size="13" class="text-indigo-600"></i>
                 <span class="hidden sm:inline">Channel Manager</span>
             </a>
@@ -68,12 +104,12 @@
         </div>
     </header>
 
-    <!-- SECTION 2: 5-Step Navigation Bar -->
-    <nav class="bg-white border-b border-slate-200 px-3 py-1.5 shrink-0">
+    <!-- 5-Step Stepper Navigation -->
+    <nav class="bg-white border-b border-slate-200 px-3 py-1 shrink-0">
         <div class="max-w-7xl mx-auto grid grid-cols-5 gap-1.5">
             <button onclick="window.jumpStep(1)" id="pill-step-1" class="step-pill active py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
                 <span id="badge-step-1" class="w-5 h-5 rounded bg-white text-indigo-700 font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs">1</span>
-                <span class="text-[11px] font-extrabold truncate">General & Add-ons</span>
+                <span class="text-[11px] font-extrabold truncate">General & Payments</span>
             </button>
             <button onclick="window.jumpStep(2)" id="pill-step-2" class="step-pill py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
                 <span id="badge-step-2" class="w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200">2</span>
@@ -94,21 +130,18 @@
         </div>
     </nav>
 
-    <!-- SECTION 3: Main Step Panels Container -->
-    <main class="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
+    <!-- Main Stepper Panels Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-2 flex flex-col gap-2 min-h-0 overflow-hidden">
 
-        <!-- 3.1: STEP 1 - General Property Profile, Logos & Add-ons -->
-        <section id="step-content-1" class="space-y-2.5 flex-1 overflow-y-auto">
+        <!-- 3.1: STEP 1 - Profile, Logos, Payments & Add-ons -->
+        <section id="step-content-1" class="space-y-2 flex-1 overflow-y-auto">
             <!-- Property Profile Card -->
-            <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
-                <div class="border-b border-slate-200 pb-2 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-profile', 'chev-prop-profile')">
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-slate-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-profile', 'chev-prop-profile')">
                     <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
-                        <i data-lucide="building" class="text-indigo-600" size="15"></i> Property Profile
+                        <i data-lucide="building" class="text-indigo-600" size="14"></i> Property Profile
                     </h2>
-                    <div class="flex items-center gap-2">
-                        <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">Step 1 of 5</span>
-                        <i data-lucide="chevron-down" id="chev-prop-profile" size="14" class="text-slate-400 transition-transform"></i>
-                    </div>
+                    <i data-lucide="chevron-down" id="chev-prop-profile" size="14" class="text-slate-400 transition-transform"></i>
                 </div>
 
                 <div id="sec-prop-profile" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
@@ -141,72 +174,65 @@
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="label-base">Physical Address</label>
-                        <input type="text" id="prop-address" placeholder="e.g. 166/47 Moo 2, Chaweng Beach Road, Koh Samui" class="table-input font-medium">
+                        <input type="text" id="prop-address" placeholder="Physical Address" class="table-input font-medium">
                     </div>
                     <div>
                         <label class="label-base">Contact Email</label>
-                        <input type="email" id="prop-email" placeholder="e.g. stay@wildandwandering.com" class="table-input font-medium">
+                        <input type="email" id="prop-email" placeholder="Email" class="table-input font-medium">
                     </div>
                     <div>
                         <label class="label-base">Phone / WhatsApp</label>
-                        <input type="text" id="prop-phone" placeholder="e.g. +66 77 123 456" class="table-input font-medium">
-                    </div>
-                    <div class="col-span-1 sm:col-span-2">
-                        <label class="label-base">Website</label>
-                        <input type="text" id="prop-website" placeholder="e.g. https://wildandwandering.com" class="table-input font-medium">
+                        <input type="text" id="prop-phone" placeholder="Phone" class="table-input font-medium">
                     </div>
                 </div>
             </div>
 
             <!-- Brand Assets & Logo Manager Card -->
-            <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
-                <div class="border-b border-slate-200 pb-2 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-logos', 'chev-prop-logos')">
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-slate-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-logos', 'chev-prop-logos')">
                     <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
-                        <i data-lucide="image" class="text-indigo-600" size="15"></i> Brand Assets & Logos
+                        <i data-lucide="image" class="text-indigo-600" size="14"></i> Brand Assets & Logos
                     </h2>
                     <div class="flex items-center gap-2">
-                        <button type="button" onclick="event.stopPropagation(); window.resetLogosToDefault()" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[9.5px] font-black uppercase rounded border border-slate-300 cursor-pointer transition-colors">
-                            Reset to Default W&W
+                        <button type="button" onclick="event.stopPropagation(); window.resetLogosToDefault()" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[9px] font-black uppercase rounded border border-slate-300 cursor-pointer transition-colors">
+                            Reset to Default
                         </button>
                         <i data-lucide="chevron-down" id="chev-prop-logos" size="14" class="text-slate-400 transition-transform"></i>
                     </div>
                 </div>
 
-                <div id="sec-prop-logos" class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                    <!-- 1. Primary Brand Logo -->
-                    <div class="border border-slate-200 rounded p-2.5 bg-slate-50 flex flex-col gap-2">
-                        <span class="label-base text-slate-700">Primary Brand Logo (Navbar & Invoices)</span>
-                        <div class="h-16 w-full bg-white rounded border border-slate-200 flex items-center justify-center p-1 overflow-hidden">
+                <div id="sec-prop-logos" class="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                    <div class="border border-slate-200 rounded p-2 bg-slate-50 flex flex-col gap-1.5">
+                        <span class="label-base text-slate-700">Primary Brand Logo</span>
+                        <div class="h-12 w-full bg-white rounded border border-slate-200 flex items-center justify-center p-1 overflow-hidden">
                             <img id="preview-logo-primary" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Primary Logo" class="h-full object-contain">
                         </div>
                         <input type="text" id="prop-logo-url" placeholder="Direct Image URL..." oninput="window.updateLogoPreview('primary', this.value)" class="table-input font-mono !text-[10px]">
-                        <label class="px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-black text-[10px] uppercase text-center cursor-pointer shadow-2xs">
+                        <label class="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-black text-[9.5px] uppercase text-center cursor-pointer shadow-2xs">
                             Upload File
                             <input type="file" accept="image/*" class="hidden" onchange="window.handleLogoFileUpload(event, 'primary')">
                         </label>
                     </div>
 
-                    <!-- 2. Header Banner Stripe -->
-                    <div class="border border-slate-200 rounded p-2.5 bg-slate-50 flex flex-col gap-2">
-                        <span class="label-base text-slate-700">Header Banner / Stripe (Wide Banners)</span>
-                        <div class="h-16 w-full bg-white rounded border border-slate-200 flex items-center justify-center p-1 overflow-hidden">
+                    <div class="border border-slate-200 rounded p-2 bg-slate-50 flex flex-col gap-1.5">
+                        <span class="label-base text-slate-700">Header Banner / Stripe</span>
+                        <div class="h-12 w-full bg-white rounded border border-slate-200 flex items-center justify-center p-1 overflow-hidden">
                             <img id="preview-logo-banner" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Banner Logo" class="h-full object-contain">
                         </div>
                         <input type="text" id="prop-banner-url" placeholder="Direct Image URL..." oninput="window.updateLogoPreview('banner', this.value)" class="table-input font-mono !text-[10px]">
-                        <label class="px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-black text-[10px] uppercase text-center cursor-pointer shadow-2xs">
+                        <label class="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-black text-[9.5px] uppercase text-center cursor-pointer shadow-2xs">
                             Upload File
                             <input type="file" accept="image/*" class="hidden" onchange="window.handleLogoFileUpload(event, 'banner')">
                         </label>
                     </div>
 
-                    <!-- 3. Square Icon / Favicon -->
-                    <div class="border border-slate-200 rounded p-2.5 bg-slate-50 flex flex-col gap-2">
-                        <span class="label-base text-slate-700">Square Favicon & App Icon (1:1 Ratio)</span>
-                        <div class="h-16 w-full bg-white rounded border border-slate-200 flex items-center justify-center p-1 overflow-hidden">
-                            <img id="preview-logo-icon" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="App Icon" class="h-12 w-12 object-contain rounded">
+                    <div class="border border-slate-200 rounded p-2 bg-slate-50 flex flex-col gap-1.5">
+                        <span class="label-base text-slate-700">Square Favicon & App Icon</span>
+                        <div class="h-12 w-full bg-white rounded border border-slate-200 flex items-center justify-center p-1 overflow-hidden">
+                            <img id="preview-logo-icon" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="App Icon" class="h-10 w-10 object-contain rounded">
                         </div>
                         <input type="text" id="prop-icon-url" placeholder="Direct Image URL..." oninput="window.updateLogoPreview('icon', this.value)" class="table-input font-mono !text-[10px]">
-                        <label class="px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-black text-[10px] uppercase text-center cursor-pointer shadow-2xs">
+                        <label class="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-black text-[9.5px] uppercase text-center cursor-pointer shadow-2xs">
                             Upload File
                             <input type="file" accept="image/*" class="hidden" onchange="window.handleLogoFileUpload(event, 'icon')">
                         </label>
@@ -214,9 +240,36 @@
                 </div>
             </div>
 
+            <!-- Payment Methods & Commission (KP) Setup Card -->
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-slate-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-payments', 'chev-prop-payments')">
+                    <div>
+                        <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
+                            <i data-lucide="credit-card" class="text-emerald-600" size="14"></i> Payment Methods & Commission (KP) Setup
+                        </h2>
+                        <span class="text-[9.5px] text-slate-400 font-bold">Configure settlement methods and OTA commission withholding.</span>
+                    </div>
+                    <i data-lucide="chevron-down" id="chev-prop-payments" size="14" class="text-slate-400 transition-transform"></i>
+                </div>
+
+                <div id="sec-prop-payments" class="overflow-x-auto border border-slate-200 rounded bg-white">
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0">
+                            <tr>
+                                <th class="py-1 px-2 w-32">Identifier / Key</th>
+                                <th class="py-1 px-2">Display Label</th>
+                                <th class="py-1 px-2 w-48">Accounting Class</th>
+                                <th class="py-1 px-2 w-28 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payment-methods-table-body" class="divide-y divide-slate-100 font-semibold"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Add-ons & Extra Charges Card -->
             <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
-                <div class="border-b border-slate-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-addons', 'chev-prop-addons')">
+                <div class="border-b border-slate-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-addons', 'chev-prop-addons')">
                     <div>
                         <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
                             <i data-lucide="plus-circle" class="text-indigo-600" size="14"></i> Add-ons & Extra Charges
@@ -249,12 +302,12 @@
             </div>
         </section>
 
-        <!-- 3.2: STEP 2 - Room Inventory & Generators -->
+        <!-- 3.2: STEP 2 - Compact Room Inventory -->
         <section id="step-content-2" class="flex-1 flex flex-col min-h-0 hidden">
             <div class="bg-white border border-slate-300 rounded-lg p-2 shadow-xs flex-1 flex flex-col min-h-0">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-1.5 mb-1.5 shrink-0">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-1 mb-1 shrink-0">
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <h3 class="text-xs font-black uppercase text-slate-800">Room Setup</h3>
+                        <h3 class="text-xs font-black uppercase text-slate-800">Room Inventory</h3>
                         <span id="room-count-badge" class="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-black text-[9.5px]">0 Rooms</span>
                         <span id="unit-count-badge" class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 font-bold text-[9.5px]">0 Beds/Units Total</span>
                     </div>
@@ -282,8 +335,8 @@
                 </div>
 
                 <!-- BATCH DORM GENERATOR PANEL -->
-                <div id="batch-dorm-panel" class="hidden mb-1.5 p-2 bg-amber-50/70 border border-amber-300 rounded text-xs shrink-0">
-                    <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-amber-200">
+                <div id="batch-dorm-panel" class="hidden mb-1 p-2 bg-amber-50/70 border border-amber-300 rounded text-xs shrink-0">
+                    <div class="flex items-center justify-between pb-1 mb-1 border-b border-amber-200">
                         <span class="font-black text-amber-900 uppercase text-[9.5px] flex items-center gap-1">
                             <i data-lucide="bed-double" size="12"></i> Batch Dorm Generator
                         </span>
@@ -292,30 +345,30 @@
                     <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                         <div>
                             <label class="label-base text-amber-900">Room Name</label>
-                            <input type="text" id="gen-dorm-name" placeholder="e.g. DORM A" class="table-input font-bold !py-0.5" value="DORM A">
+                            <input type="text" id="gen-dorm-name" placeholder="e.g. DORM A" class="table-input font-bold" value="DORM A">
                         </div>
                         <div class="col-span-2 sm:col-span-1">
                             <label class="label-base text-amber-900">Category Name</label>
-                            <input type="text" id="gen-dorm-cat" placeholder="e.g. 6-Bed Mixed Dorm" class="table-input font-bold !py-0.5" value="Standard 6-Bed Dorm">
+                            <input type="text" id="gen-dorm-cat" placeholder="e.g. 6-Bed Mixed Dorm" class="table-input font-bold" value="Standard 6-Bed Dorm">
                         </div>
                         <div>
                             <label class="label-base text-amber-900">Beds Count</label>
-                            <input type="number" id="gen-dorm-beds" min="1" max="60" value="6" class="table-input font-black text-center !py-0.5">
+                            <input type="number" id="gen-dorm-beds" min="1" max="60" value="6" class="table-input font-black text-center">
                         </div>
                         <div>
                             <label class="label-base text-amber-900">Floor</label>
-                            <input type="text" id="gen-dorm-floor" value="1" class="table-input text-center font-bold !py-0.5">
+                            <input type="text" id="gen-dorm-floor" value="1" class="table-input text-center font-bold">
                         </div>
                         <div>
                             <label class="label-base text-amber-900">Bunk Stacking</label>
-                            <select id="gen-dorm-rule" class="table-input font-bold !py-0.5">
+                            <select id="gen-dorm-rule" class="table-input font-bold">
                                 <option value="odd-top">DORM (Top # Odd)</option>
                                 <option value="even-top">DORM (Top # Even)</option>
                                 <option value="single">DORM (Single Beds)</option>
                             </select>
                         </div>
                     </div>
-                    <div class="flex justify-end mt-1.5">
+                    <div class="flex justify-end mt-1">
                         <button onclick="window.executeBatchDormGenerate()" class="px-2.5 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[9.5px] rounded shadow-xs cursor-pointer">
                             Generate Dorm Room
                         </button>
@@ -323,8 +376,8 @@
                 </div>
 
                 <!-- BATCH ROOM GENERATOR PANEL -->
-                <div id="batch-room-panel" class="hidden mb-1.5 p-2 bg-emerald-50/70 border border-emerald-300 rounded text-xs shrink-0">
-                    <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-emerald-200">
+                <div id="batch-room-panel" class="hidden mb-1 p-2 bg-emerald-50/70 border border-emerald-300 rounded text-xs shrink-0">
+                    <div class="flex items-center justify-between pb-1 mb-1 border-b border-emerald-200">
                         <span class="font-black text-emerald-900 uppercase text-[9.5px] flex items-center gap-1">
                             <i data-lucide="door-closed" size="12"></i> Batch Room Generator
                         </span>
@@ -333,43 +386,43 @@
                     <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                         <div>
                             <label class="label-base text-emerald-900">Name / Prefix</label>
-                            <input type="text" id="gen-room-prefix" placeholder="e.g. ROOM or B" class="table-input font-bold !py-0.5" value="ROOM ">
+                            <input type="text" id="gen-room-prefix" placeholder="e.g. ROOM or B" class="table-input font-bold" value="ROOM ">
                         </div>
                         <div>
                             <label class="label-base text-emerald-900">Category Name</label>
-                            <input type="text" id="gen-room-cat" placeholder="e.g. Deluxe King" class="table-input font-bold !py-0.5" value="Deluxe King Room">
+                            <input type="text" id="gen-room-cat" placeholder="e.g. Deluxe King" class="table-input font-bold" value="Deluxe King Room">
                         </div>
                         <div>
                             <label class="label-base text-emerald-900">Start # &rarr; End #</label>
                             <div class="flex items-center gap-1">
-                                <input type="number" id="gen-room-start" value="1" min="1" class="table-input text-center font-bold !py-0.5">
+                                <input type="number" id="gen-room-start" value="1" min="1" class="table-input text-center font-bold">
                                 <span>-</span>
-                                <input type="number" id="gen-room-end" value="4" min="1" class="table-input text-center font-bold !py-0.5">
+                                <input type="number" id="gen-room-end" value="4" min="1" class="table-input text-center font-bold">
                             </div>
                         </div>
                         <div>
                             <label class="label-base text-emerald-900">Floor</label>
-                            <input type="text" id="gen-room-floor" value="1" class="table-input text-center font-bold !py-0.5">
+                            <input type="text" id="gen-room-floor" value="1" class="table-input text-center font-bold">
                         </div>
                         <div class="flex items-end">
-                            <button onclick="window.executeBatchRoomGenerate()" class="w-full py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[9.5px] rounded shadow-xs cursor-pointer">
+                            <button onclick="window.executeBatchRoomGenerate()" class="w-full py-0.5 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[9.5px] rounded shadow-xs cursor-pointer h-[22px]">
                                 Generate Rooms
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- High-Density Room Setup Table -->
+                <!-- High-Density Compact Inventory Table (Fits 35-45 rows comfortably) -->
                 <div class="border border-slate-200 rounded flex-1 min-h-0 overflow-y-auto">
                     <datalist id="setup-category-datalist"></datalist>
                     <table class="w-full text-left text-[11px] border-collapse">
                         <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0 z-20 shadow-xs">
                             <tr>
-                                <th class="py-1 px-1.5 w-14 text-center">Order</th>
+                                <th class="py-1 px-1.5 w-12 text-center">#</th>
                                 <th class="py-1 px-1.5 w-32">Room Name</th>
                                 <th class="py-1 px-1.5">Category</th>
                                 <th class="py-1 px-1.5 w-20 text-center">Units / Beds</th>
-                                <th class="py-1 px-1.5 w-20 text-center">Floor</th>
+                                <th class="py-1 px-1.5 w-16 text-center">Floor</th>
                                 <th class="py-1 px-1.5 w-36">Room Rule</th>
                                 <th class="py-1 px-1.5 text-center w-8">Del</th>
                             </tr>
@@ -378,14 +431,14 @@
                     </table>
                 </div>
 
-                <!-- ALL BEDS DRAWER -->
-                <div id="bed-preview-drawer" class="hidden mt-1.5 p-2 bg-slate-100 border border-slate-300 rounded max-h-56 overflow-y-auto shrink-0 text-xs">
-                    <div class="flex items-center justify-between pb-1 mb-1.5 border-b border-slate-200">
+                <!-- ALL BEDS PREVIEW DRAWER -->
+                <div id="bed-preview-drawer" class="hidden mt-1 p-2 bg-slate-100 border border-slate-300 rounded max-h-48 overflow-y-auto shrink-0 text-xs">
+                    <div class="flex items-center justify-between pb-1 mb-1 border-b border-slate-200">
                         <span class="font-black text-slate-800 text-[9.5px] uppercase tracking-wider flex items-center gap-1.5">
                             <i data-lucide="eye" size="12" class="text-indigo-600"></i> All Beds & Units Layout
                         </span>
                     </div>
-                    <div id="bed-preview-groups" class="flex flex-wrap gap-2 items-start"></div>
+                    <div id="bed-preview-groups" class="flex flex-wrap gap-1.5 items-start"></div>
                 </div>
             </div>
         </section>
@@ -393,8 +446,8 @@
         <!-- 3.3: STEP 3 - Channex API & Multi-Room Rate Plan Tool -->
         <section id="step-content-3" class="space-y-2 flex-1 overflow-y-auto hidden">
             <!-- Credentials Header -->
-            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
-                <div class="border-b border-slate-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-chan-creds', 'chev-chan-creds')">
+            <div class="bg-white border border-slate-300 rounded-lg p-2 shadow-xs">
+                <div class="border-b border-slate-200 pb-1 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-chan-creds', 'chev-chan-creds')">
                     <div class="flex items-center gap-2">
                         <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
                             <i data-lucide="key-round" class="text-indigo-600" size="14"></i> Channel Manager Connection
@@ -409,55 +462,55 @@
                 <div id="sec-chan-creds" class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
                     <div>
                         <label class="label-base">Channex API Key</label>
-                        <input type="password" id="chan-api-key" placeholder="Enter API key..." class="table-input font-mono !py-0.5">
+                        <input type="password" id="chan-api-key" placeholder="Enter API key..." class="table-input font-mono">
                     </div>
                     <div>
                         <label class="label-base">Channex Property ID</label>
-                        <input type="text" id="chan-prop-id" placeholder="UUID e.g. be74cdc9-..." class="table-input font-mono !py-0.5">
+                        <input type="text" id="chan-prop-id" placeholder="UUID e.g. be74cdc9-..." class="table-input font-mono">
                     </div>
                     <div class="flex items-end">
-                        <button onclick="window.fetchChannexData()" class="w-full py-1 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase rounded transition-colors shadow-xs cursor-pointer">
+                        <button onclick="window.fetchChannexData()" class="w-full py-1 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase rounded transition-colors shadow-xs cursor-pointer h-[22px]">
                             Fetch Channex Data
                         </button>
                     </div>
                     <div class="flex items-end">
-                        <button onclick="window.openCreateRatePlanModal()" class="w-full py-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9.5px] uppercase rounded transition-colors shadow-xs cursor-pointer">
+                        <button onclick="window.openCreateRatePlanModal()" class="w-full py-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9.5px] uppercase rounded transition-colors shadow-xs cursor-pointer h-[22px]">
                             + Create & Push Plan
                         </button>
                     </div>
                 </div>
             </div>
 
-            <!-- UNIFIED ROOM CATEGORY & ACTIVE RATE PLANS CARDS -->
-            <div class="space-y-2" id="unified-mapping-container"></div>
+            <!-- Unified Room Category & Rate Plan Mapping Cards -->
+            <div class="space-y-1.5" id="unified-mapping-container"></div>
         </section>
 
         <!-- 3.4: STEP 4 - Pricing Rules, Relational Links & Event Curves -->
         <section id="step-content-4" class="space-y-2 flex-1 overflow-y-auto hidden">
             <!-- Driving Anchors -->
-            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
-                <div class="border-b border-slate-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-anchors', 'chev-price-anchors')">
-                    <h2 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
+            <div class="bg-indigo-50/70 border border-indigo-200 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-indigo-200 pb-1 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-anchors', 'chev-price-anchors')">
+                    <h2 class="text-xs font-black uppercase text-indigo-950 flex items-center gap-1.5">
                         <i data-lucide="anchor" size="14" class="text-indigo-600"></i> Base Rate Anchors
                     </h2>
-                    <i data-lucide="chevron-down" id="chev-price-anchors" size="14" class="text-slate-400 transition-transform"></i>
+                    <i data-lucide="chevron-down" id="chev-price-anchors" size="14" class="text-indigo-600 transition-transform"></i>
                 </div>
 
                 <div id="sec-price-anchors" class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div class="bg-slate-50 p-2 rounded border border-slate-200">
+                    <div class="bg-white p-2 rounded border border-indigo-200 shadow-2xs">
                         <label class="label-base text-indigo-700">Dorm Master Anchor Room</label>
-                        <select id="anchor-dorm-select" class="table-input font-bold text-slate-800 !py-0.5"></select>
+                        <select id="anchor-dorm-select" class="table-input font-bold text-slate-800"></select>
                     </div>
-                    <div class="bg-slate-50 p-2 rounded border border-slate-200">
+                    <div class="bg-white p-2 rounded border border-indigo-200 shadow-2xs">
                         <label class="label-base text-indigo-700">Private Master Anchor Room</label>
-                        <select id="anchor-private-select" class="table-input font-bold text-slate-800 !py-0.5"></select>
+                        <select id="anchor-private-select" class="table-input font-bold text-slate-800"></select>
                     </div>
                 </div>
             </div>
 
             <!-- Relational Linking Matrix -->
-            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2 cursor-pointer" onclick="window.toggleCardSection('sec-price-links', 'chev-price-links')">
+            <div class="bg-slate-50/90 border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-1 mb-1.5 cursor-pointer" onclick="window.toggleCardSection('sec-price-links', 'chev-price-links')">
                     <h3 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
                         <i data-lucide="link" size="14" class="text-indigo-600"></i> Bidirectional Pricing Links
                     </h3>
@@ -465,7 +518,7 @@
                         <button onclick="event.stopPropagation(); window.addRelationshipRow()" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase transition-colors cursor-pointer shadow-xs">
                             + Add Link Rule
                         </button>
-                        <i data-lucide="chevron-down" id="chev-price-links" size="14" class="text-slate-400 transition-transform"></i>
+                        <i data-lucide="chevron-down" id="chev-price-links" size="14" class="text-slate-500 transition-transform"></i>
                     </div>
                 </div>
 
@@ -487,115 +540,14 @@
 
             <!-- Refundable Markups & OTA Adjustments -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
-                    <div class="border-b border-slate-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-markup', 'chev-price-markup')">
-                        <h3 class="text-xs font-black uppercase text-slate-800">Refundable Rate Markups</h3>
-                        <i data-lucide="chevron-down" id="chev-price-markup" size="14" class="text-slate-400 transition-transform"></i>
-                    </div>
-
-                    <div id="sec-price-markup" class="flex flex-wrap items-center gap-3 text-xs pt-0.5">
-                        <div class="flex-1 min-w-[140px]">
-                            <label class="label-base">Standard Dates</label>
-                            <div class="flex items-center gap-1.5">
-                                <input type="number" id="rule-std-ref" value="25" min="0" max="100" class="table-input !w-16 font-black text-center !py-0.5">
-                                <span class="font-bold text-slate-600 text-[11px]">% above Non-Ref</span>
-                            </div>
-                        </div>
-
-                        <div id="evt-ref-row" class="flex-1 min-w-[140px]">
-                            <label class="label-base text-pink-800">Event / Peak</label>
-                            <div class="flex items-center gap-1.5">
-                                <input type="number" id="rule-evt-ref" value="25" min="0" max="100" class="table-input !w-16 font-black text-center text-pink-800 border-pink-300 bg-pink-50 !py-0.5">
-                                <span class="font-bold text-pink-900 text-[11px]">% above EVT Non-Ref</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs">
-                    <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2 cursor-pointer" onclick="window.toggleCardSection('sec-price-channels', 'chev-price-channels')">
-                        <h3 class="text-xs font-black uppercase text-slate-800">Sales Channel Adjustments</h3>
-                        <div class="flex items-center gap-2">
-                            <button onclick="event.stopPropagation(); window.addVerifiedChannelRule()" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 text-[9.5px] font-black uppercase transition-colors cursor-pointer border border-slate-300">
-                                + Add Channel
-                            </button>
-                            <i data-lucide="chevron-down" id="chev-price-channels" size="14" class="text-slate-400 transition-transform"></i>
-                        </div>
-                    </div>
-
-                    <div id="sec-price-channels" class="space-y-1 text-xs">
-                        <div id="channel-rules-container" class="space-y-1"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- UNIFIED ROOM CATEGORY & ACTIVE RATE PLANS CARDS -->
-            <div class="space-y-3" id="unified-mapping-container"></div>
-        </section>
-
-        <!-- 3.4: STEP 4 - Pricing Rules, Relational Links & Event Curves -->
-        <section id="step-content-4" class="space-y-2.5 flex-1 overflow-y-auto hidden">
-            <!-- Driving Anchors -->
-            <div class="bg-indigo-50/70 border border-indigo-300 rounded-lg p-3 shadow-xs">
-                <div class="border-b border-indigo-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-anchors', 'chev-price-anchors')">
-                    <h2 class="text-xs font-black uppercase text-indigo-950 flex items-center gap-1.5">
-                        <i data-lucide="anchor" size="14" class="text-indigo-600"></i> Base Rate Anchors
-                    </h2>
-                    <i data-lucide="chevron-down" id="chev-price-anchors" size="14" class="text-indigo-600 transition-transform"></i>
-                </div>
-
-                <div id="sec-price-anchors" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div class="bg-white p-2.5 rounded border border-indigo-200 shadow-2xs">
-                        <label class="label-base text-indigo-700">Dorm Master Anchor Room</label>
-                        <select id="anchor-dorm-select" class="table-input font-bold text-slate-800"></select>
-                    </div>
-                    <div class="bg-white p-2.5 rounded border border-indigo-200 shadow-2xs">
-                        <label class="label-base text-indigo-700">Private Master Anchor Room</label>
-                        <select id="anchor-private-select" class="table-input font-bold text-slate-800"></select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Relational Linking Matrix -->
-            <div class="bg-slate-50/90 border border-slate-300 rounded-lg p-3 shadow-xs">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2 cursor-pointer" onclick="window.toggleCardSection('sec-price-links', 'chev-price-links')">
-                    <h3 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
-                        <i data-lucide="link" size="14" class="text-indigo-600"></i> Bidirectional Pricing Links
-                    </h3>
-                    <div class="flex items-center gap-2">
-                        <button onclick="event.stopPropagation(); window.addRelationshipRow()" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase transition-colors cursor-pointer shadow-xs">
-                            + Add Link Rule
-                        </button>
-                        <i data-lucide="chevron-down" id="chev-price-links" size="14" class="text-slate-500 transition-transform"></i>
-                    </div>
-                </div>
-
-                <div id="sec-price-links" class="overflow-x-auto border border-slate-200 rounded bg-white">
-                    <table class="w-full text-left text-[11px] border-collapse">
-                        <thead class="bg-slate-100 text-[9px] font-black uppercase text-slate-600 border-b border-slate-200">
-                            <tr>
-                                <th class="p-1.5 w-1/4">Anchor (Base)</th>
-                                <th class="p-1.5 w-1/4">Target Room</th>
-                                <th class="p-1.5 w-1/4">Standard Offset</th>
-                                <th class="p-1.5 w-1/4 evt-col-header text-pink-700">EVT Offset</th>
-                                <th class="p-1.5 text-center w-10">Del</th>
-                            </tr>
-                        </thead>
-                        <tbody id="relationships-table-body" class="divide-y divide-slate-100 font-semibold"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Refundable Markups & OTA Adjustments -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <div class="bg-emerald-50/70 border border-emerald-300 rounded-lg p-3 shadow-xs">
-                    <div class="border-b border-emerald-200 pb-1.5 mb-2 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-markup', 'chev-price-markup')">
+                <div class="bg-emerald-50/70 border border-emerald-300 rounded-lg p-2.5 shadow-xs">
+                    <div class="border-b border-emerald-200 pb-1 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-markup', 'chev-price-markup')">
                         <h3 class="text-xs font-black uppercase text-emerald-950">Refundable Rate Markups</h3>
                         <i data-lucide="chevron-down" id="chev-price-markup" size="14" class="text-emerald-700 transition-transform"></i>
                     </div>
 
-                    <div id="sec-price-markup" class="flex flex-wrap items-center gap-4 text-xs pt-1">
-                        <div class="flex-1 min-w-[140px]">
+                    <div id="sec-price-markup" class="flex flex-wrap items-center gap-3 text-xs pt-0.5">
+                        <div class="flex-1 min-w-[130px]">
                             <label class="label-base">Standard Dates</label>
                             <div class="flex items-center gap-1.5">
                                 <input type="number" id="rule-std-ref" value="25" min="0" max="100" class="table-input !w-16 font-black text-center">
@@ -603,7 +555,7 @@
                             </div>
                         </div>
 
-                        <div id="evt-ref-row" class="flex-1 min-w-[140px]">
+                        <div id="evt-ref-row" class="flex-1 min-w-[130px]">
                             <label class="label-base text-pink-800">Event / Peak</label>
                             <div class="flex items-center gap-1.5">
                                 <input type="number" id="rule-evt-ref" value="25" min="0" max="100" class="table-input !w-16 font-black text-center text-pink-800 border-pink-300 bg-pink-50">
@@ -613,29 +565,28 @@
                     </div>
                 </div>
 
-                <div class="bg-amber-50/70 border border-amber-300 rounded-lg p-3 shadow-xs">
-                    <div class="flex items-center justify-between border-b border-amber-200 pb-1.5 mb-2 cursor-pointer" onclick="window.toggleCardSection('sec-price-channels', 'chev-price-channels')">
+                <div class="bg-amber-50/70 border border-amber-300 rounded-lg p-2.5 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-amber-200 pb-1 mb-1.5 cursor-pointer" onclick="window.toggleCardSection('sec-price-channels', 'chev-price-channels')">
                         <div>
                             <h3 class="text-xs font-black uppercase text-amber-950">Sales Channel Adjustments</h3>
-                            <span class="text-[9.5px] font-bold text-slate-500">DEFAULT feeds general OTAs; DIRECT is for your direct booking engine.</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button onclick="event.stopPropagation(); window.addVerifiedChannelRule()" class="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-black uppercase transition-colors cursor-pointer border border-amber-300">
+                            <button onclick="event.stopPropagation(); window.addVerifiedChannelRule()" class="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[9.5px] font-black uppercase transition-colors cursor-pointer border border-amber-300">
                                 + Add Channel
                             </button>
                             <i data-lucide="chevron-down" id="chev-price-channels" size="14" class="text-amber-700 transition-transform"></i>
                         </div>
                     </div>
 
-                    <div id="sec-price-channels" class="space-y-1.5 text-xs">
-                        <div id="channel-rules-container" class="space-y-1.5"></div>
+                    <div id="sec-price-channels" class="space-y-1 text-xs">
+                        <div id="channel-rules-container" class="space-y-1"></div>
                     </div>
                 </div>
             </div>
 
             <!-- Seasonal / Event Pricing Curves -->
-            <div class="bg-pink-50/70 border border-pink-300 rounded-lg p-3 shadow-xs">
-                <div class="flex items-center justify-between border-b border-pink-200 pb-2 mb-2">
+            <div class="bg-pink-50/70 border border-pink-300 rounded-lg p-2.5 shadow-xs">
+                <div class="flex items-center justify-between border-b border-pink-200 pb-1 mb-1.5">
                     <div class="cursor-pointer flex items-center gap-1.5" onclick="window.toggleCardSection('event-curve-panel', 'chev-price-events')">
                         <h3 class="text-xs font-black uppercase text-pink-950 flex items-center gap-1.5">
                             <i data-lucide="sparkles" size="14" class="text-pink-600"></i> Seasonal / Event Pricing
@@ -644,17 +595,17 @@
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="toggle-events" onchange="window.toggleEventSettings(this.checked)" class="sr-only peer">
-                        <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                        <div class="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-pink-600"></div>
                     </label>
                 </div>
 
-                <div id="event-curve-panel" class="hidden space-y-3">
-                    <div class="border border-pink-200 rounded bg-white p-2.5 shadow-2xs">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2 pb-1.5 border-b border-pink-100">
-                            <span class="text-[10px] font-black text-pink-800 uppercase tracking-wider">Default Peak Pricing Curve</span>
-                            <div class="flex items-center gap-1 bg-pink-50 p-0.5 rounded border border-pink-200 text-[10px]">
+                <div id="event-curve-panel" class="hidden space-y-2">
+                    <div class="border border-pink-200 rounded bg-white p-2 shadow-2xs">
+                        <div class="flex items-center justify-between pb-1 mb-1 border-b border-pink-100">
+                            <span class="text-[9.5px] font-black text-pink-800 uppercase tracking-wider">Peak Pricing Curve</span>
+                            <div class="flex items-center gap-1 bg-pink-50 p-0.5 rounded border border-pink-200 text-[9.5px]">
                                 <span class="text-[9px] font-black uppercase text-pink-900 px-1">Rates Span:</span>
-                                <button onclick="window.cycleRatesSpan()" id="rates-span-pill" class="px-2 py-0.5 rounded font-black text-white bg-pink-600 border border-pink-700 shadow-2xs cursor-pointer hover:bg-pink-700 transition-colors">
+                                <button onclick="window.cycleRatesSpan()" id="rates-span-pill" class="px-1.5 py-0.2 rounded font-black text-white bg-pink-600 cursor-pointer">
                                     ±2 Days
                                 </button>
                             </div>
@@ -667,12 +618,12 @@
                         </div>
                     </div>
 
-                    <div class="border border-pink-200 rounded bg-white p-2.5 shadow-2xs">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2 pb-1.5 border-b border-pink-100">
-                            <span class="text-[10px] font-black text-pink-800 uppercase tracking-wider">Default Peak Stay Restrictions Curve</span>
-                            <div class="flex items-center gap-1 bg-pink-50 p-0.5 rounded border border-pink-200 text-[10px]">
+                    <div class="border border-pink-200 rounded bg-white p-2 shadow-2xs">
+                        <div class="flex items-center justify-between pb-1 mb-1 border-b border-pink-100">
+                            <span class="text-[9.5px] font-black text-pink-800 uppercase tracking-wider">Peak Stay Restrictions Curve</span>
+                            <div class="flex items-center gap-1 bg-pink-50 p-0.5 rounded border border-pink-200 text-[9.5px]">
                                 <span class="text-[9px] font-black uppercase text-pink-900 px-1">Restr Span:</span>
-                                <button onclick="window.cycleRestrSpan()" id="restr-span-pill" class="px-2 py-0.5 rounded font-black text-white bg-indigo-600 border border-indigo-700 shadow-2xs cursor-pointer hover:bg-indigo-700 transition-colors">
+                                <button onclick="window.cycleRestrSpan()" id="restr-span-pill" class="px-1.5 py-0.2 rounded font-black text-white bg-indigo-600 cursor-pointer">
                                     ±6 Days
                                 </button>
                             </div>
@@ -689,86 +640,86 @@
         </section>
 
         <!-- 3.5: STEP 5 - Review & Launch -->
-        <section id="step-content-5" class="space-y-2.5 flex-1 overflow-y-auto hidden">
+        <section id="step-content-5" class="space-y-2 flex-1 overflow-y-auto hidden">
             <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
-                <div class="border-b border-slate-200 pb-1.5 mb-3">
+                <div class="border-b border-slate-200 pb-1.5 mb-2">
                     <h2 class="text-xs font-black uppercase text-slate-800">Setup Verification</h2>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-4">
-                    <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-3">
+                    <div class="p-2 rounded border border-slate-200 bg-slate-50">
                         <div class="text-[9px] font-black uppercase text-slate-400">Property</div>
                         <div id="rev-prop-name" class="text-xs font-black text-slate-800 mt-0.5">--</div>
                         <div id="rev-prop-code" class="text-[10px] font-mono font-bold text-slate-500">--</div>
                     </div>
-                    <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                    <div class="p-2 rounded border border-slate-200 bg-slate-50">
                         <div class="text-[9px] font-black uppercase text-slate-400">Room Inventory</div>
                         <div id="rev-inv-count" class="text-xs font-black text-indigo-700 mt-0.5">0 Units</div>
                         <div id="rev-cat-count" class="text-[10px] font-bold text-slate-500">0 Categories</div>
                     </div>
-                    <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                    <div class="p-2 rounded border border-slate-200 bg-slate-50">
                         <div class="text-[9px] font-black uppercase text-slate-400">Channel Manager</div>
                         <div id="rev-chan-status" class="text-xs font-black text-slate-800 mt-0.5">--</div>
                         <div id="rev-chan-plans" class="text-[10px] font-bold text-slate-500">0 Rate Plans</div>
                     </div>
-                    <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
+                    <div class="p-2 rounded border border-slate-200 bg-slate-50">
                         <div class="text-[9px] font-black uppercase text-slate-400">Pricing Logic</div>
                         <div id="rev-rules-status" class="text-xs font-black text-emerald-700 mt-0.5">Ready</div>
                         <div id="rev-events-status" class="text-[10px] font-bold text-slate-500">Events: Off</div>
                     </div>
                 </div>
 
-                <div class="flex flex-col sm:flex-row items-center justify-center gap-2 pt-3 border-t border-slate-200">
-                    <button onclick="window.launchApp('cm')" class="w-full sm:w-auto px-5 py-2 rounded bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] uppercase flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer">
-                        <i data-lucide="calendar" size="14"></i> Open Channel Manager (cm.html)
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2 border-t border-slate-200">
+                    <button onclick="window.launchApp('cm')" class="w-full sm:w-auto px-4 py-1.5 rounded bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] uppercase flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer">
+                        <i data-lucide="calendar" size="13"></i> Open Channel Manager (cm.html)
                     </button>
-                    <button onclick="window.launchApp('pms')" class="w-full sm:w-auto px-5 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[11px] uppercase flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer">
-                        <i data-lucide="layout-grid" size="14"></i> Open Front Desk PMS (pms.html)
+                    <button onclick="window.launchApp('pms')" class="w-full sm:w-auto px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[11px] uppercase flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer">
+                        <i data-lucide="layout-grid" size="13"></i> Open Front Desk PMS (pms.html)
                     </button>
                 </div>
             </div>
         </section>
 
-        <!-- SECTION 4: Stepper Footer Navigation Controls -->
-        <footer class="pt-2 pb-1 flex items-center justify-between border-t border-slate-200 shrink-0 bg-white px-2 mt-auto rounded-b">
-            <button id="btn-prev-step" onclick="window.prevStep()" class="flex items-center gap-1 px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 text-[11px] font-black uppercase transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
-                <i data-lucide="arrow-left" size="13"></i> Previous
+        <!-- Stepper Footer Navigation Controls -->
+        <footer class="pt-1.5 pb-1 flex items-center justify-between border-t border-slate-200 shrink-0 bg-white px-2 mt-auto rounded-b">
+            <button id="btn-prev-step" onclick="window.prevStep()" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 text-[10px] font-black uppercase transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                <i data-lucide="arrow-left" size="12"></i> Previous
             </button>
 
-            <span id="wizard-step-indicator" class="text-[11px] font-black uppercase text-slate-400">Step 1 of 5</span>
+            <span id="wizard-step-indicator" class="text-[10px] font-black uppercase text-slate-400">Step 1 of 5</span>
 
-            <div class="flex items-center gap-2">
-                <button onclick="window.savePropertyToDatabase(true)" id="btn-save-footer" class="flex items-center gap-1 px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase transition-colors shadow-xs cursor-pointer">
-                    <i data-lucide="save" size="13"></i>
+            <div class="flex items-center gap-1.5">
+                <button onclick="window.savePropertyToDatabase(true)" id="btn-save-footer" class="flex items-center gap-1 px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase transition-colors shadow-xs cursor-pointer">
+                    <i data-lucide="save" size="12"></i>
                     <span>SAVE</span>
                 </button>
-                <button id="btn-next-step" onclick="window.nextStep()" class="flex items-center gap-1 px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase transition-colors shadow-xs cursor-pointer">
-                    <span>Continue</span> <i data-lucide="arrow-right" size="13"></i>
+                <button id="btn-next-step" onclick="window.nextStep()" class="flex items-center gap-1 px-3.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase transition-colors shadow-xs cursor-pointer">
+                    <span>Continue</span> <i data-lucide="arrow-right" size="12"></i>
                 </button>
             </div>
         </footer>
 
     </main>
 
-    <!-- SECTION 5: Modals -->
-    <!-- 5.0: Reorder Categories Modal (1-Click Property Ordering) -->
+    <!-- Modals -->
+    <!-- 5.0: Reorder Categories Modal -->
     <div id="reorder-categories-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
-        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-4 border border-slate-300">
-            <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-200">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-3 border border-slate-300">
+            <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200">
                 <h4 class="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
-                    <i data-lucide="arrow-up-down" size="15" class="text-indigo-600"></i> Reorder Room Categories
+                    <i data-lucide="arrow-up-down" size="14" class="text-indigo-600"></i> Reorder Room Categories
                 </h4>
-                <button onclick="window.closeReorderCategoriesModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="16"></i></button>
+                <button onclick="window.closeReorderCategoriesModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="15"></i></button>
             </div>
-            <p class="text-[11px] text-slate-500 font-semibold mb-3">
-                Move categories up or down to set the exact vertical order on the calendar grid. All underlying rooms will follow this sequence.
+            <p class="text-[10px] text-slate-500 font-semibold mb-2">
+                Move categories up or down to set vertical order on the calendar grid. All underlying rooms will follow this sequence.
             </p>
-            <div id="reorder-cat-list" class="space-y-1.5 max-h-72 overflow-y-auto p-1 border border-slate-200 rounded bg-slate-50"></div>
-            <div class="flex items-center justify-end gap-1.5 mt-4 pt-2 border-t border-slate-200">
-                <button onclick="window.closeReorderCategoriesModal()" class="px-3 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[10px] font-black uppercase cursor-pointer">
+            <div id="reorder-cat-list" class="space-y-1 max-h-64 overflow-y-auto p-1 border border-slate-200 rounded bg-slate-50"></div>
+            <div class="flex items-center justify-end gap-1.5 mt-3 pt-1.5 border-t border-slate-200">
+                <button onclick="window.closeReorderCategoriesModal()" class="px-2.5 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[9.5px] font-black uppercase cursor-pointer">
                     Cancel
                 </button>
-                <button onclick="window.applyReorderedCategories()" class="px-3.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase shadow-xs cursor-pointer">
+                <button onclick="window.applyReorderedCategories()" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-black uppercase shadow-xs cursor-pointer">
                     Apply Category Order
                 </button>
             </div>
@@ -777,14 +728,14 @@
 
     <!-- 5.1: Create New Property Modal -->
     <div id="new-property-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
-        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-4 border border-slate-300">
-            <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-200">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-3.5 border border-slate-300">
+            <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-200">
                 <h4 class="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
-                    <i data-lucide="plus-circle" size="15" class="text-indigo-600"></i> Create New Property
+                    <i data-lucide="plus-circle" size="14" class="text-indigo-600"></i> Create New Property
                 </h4>
-                <button onclick="window.closeNewPropertyModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="16"></i></button>
+                <button onclick="window.closeNewPropertyModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="15"></i></button>
             </div>
-            <div class="space-y-2.5 text-xs">
+            <div class="space-y-2 text-xs">
                 <div>
                     <label class="label-base">Property Name</label>
                     <input type="text" id="new-prop-input-name" placeholder="e.g. WET Pool Party Hostel" class="table-input font-bold">
@@ -799,11 +750,11 @@
                     <span class="text-[9px] text-slate-400">Used in URL (?p=WET) and database.</span>
                 </div>
             </div>
-            <div class="flex items-center justify-end gap-1.5 mt-4 pt-2 border-t border-slate-200">
-                <button onclick="window.closeNewPropertyModal()" class="px-3 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[10px] font-black uppercase cursor-pointer">
+            <div class="flex items-center justify-end gap-1.5 mt-3 pt-1.5 border-t border-slate-200">
+                <button onclick="window.closeNewPropertyModal()" class="px-2.5 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[9.5px] font-black uppercase cursor-pointer">
                     Cancel
                 </button>
-                <button onclick="window.confirmCreateNewProperty()" class="px-3.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase shadow-xs cursor-pointer">
+                <button onclick="window.confirmCreateNewProperty()" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-black uppercase shadow-xs cursor-pointer">
                     Create Property
                 </button>
             </div>
@@ -812,27 +763,27 @@
 
     <!-- 5.2: Create & Push Rate Plan Tool Modal -->
     <div id="create-rate-plan-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
-        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-4 border border-slate-300">
-            <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-200">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-3.5 border border-slate-300">
+            <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200">
                 <h4 class="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
-                    <i data-lucide="tags" size="15" class="text-emerald-600"></i> Create & Push Rate Plan to Channex
+                    <i data-lucide="tags" size="14" class="text-emerald-600"></i> Create & Push Rate Plan to Channex
                 </h4>
-                <button onclick="window.closeCreateRatePlanModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="16"></i></button>
+                <button onclick="window.closeCreateRatePlanModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="15"></i></button>
             </div>
 
             <!-- Quick Template Presets -->
-            <div class="mb-3 p-2 bg-slate-50 rounded border border-slate-200">
-                <span class="text-[9px] font-black uppercase text-slate-500 block mb-1">Quick Presets:</span>
+            <div class="mb-2 p-1.5 bg-slate-50 rounded border border-slate-200">
+                <span class="text-[9px] font-black uppercase text-slate-500 block mb-0.5">Quick Presets:</span>
                 <div class="flex flex-wrap gap-1">
-                    <button type="button" onclick="window.applyRatePlanPreset('Standard Non-Refundable', 'DEFAULT', 'non-ref', 'std')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9.5px] font-bold text-slate-700 cursor-pointer">Non-Ref (Default)</button>
-                    <button type="button" onclick="window.applyRatePlanPreset('Standard Flexible', 'DEFAULT', 'ref', 'std')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9.5px] font-bold text-slate-700 cursor-pointer">Ref (+%) (Default)</button>
-                    <button type="button" onclick="window.applyRatePlanPreset('BDC Non-Refundable', 'Booking.com', 'non-ref', 'std')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9.5px] font-bold text-slate-700 cursor-pointer">BDC Non-Ref</button>
-                    <button type="button" onclick="window.applyRatePlanPreset('BDC Flexible', 'Booking.com', 'ref', 'std')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9.5px] font-bold text-slate-700 cursor-pointer">BDC Flexible</button>
-                    <button type="button" onclick="window.applyRatePlanPreset('Event Party Package', 'DEFAULT', 'non-ref', 'evt')" class="px-1.5 py-0.5 rounded bg-pink-50 hover:bg-pink-100 border border-pink-300 text-[9.5px] font-bold text-pink-800 cursor-pointer">⚡ Event Package</button>
+                    <button type="button" onclick="window.applyRatePlanPreset('Standard Non-Refundable', 'DEFAULT', 'non-ref')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer">Non-Ref (Default)</button>
+                    <button type="button" onclick="window.applyRatePlanPreset('Standard Flexible', 'DEFAULT', 'ref')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer">Ref (+%) (Default)</button>
+                    <button type="button" onclick="window.applyRatePlanPreset('BDC Non-Refundable', 'Booking.com', 'non-ref')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer">BDC Non-Ref</button>
+                    <button type="button" onclick="window.applyRatePlanPreset('BDC Flexible', 'Booking.com', 'ref')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer">BDC Flexible</button>
+                    <button type="button" onclick="window.applyRatePlanPreset('Event Rate', 'DEFAULT', 'non-ref')" class="px-1.5 py-0.5 rounded bg-pink-50 hover:bg-pink-100 border border-pink-300 text-[9px] font-bold text-pink-800 cursor-pointer">⚡ Event Rate</button>
                 </div>
             </div>
 
-            <div class="space-y-2.5 text-xs">
+            <div class="space-y-2 text-xs">
                 <div>
                     <label class="label-base">Rate Plan Title</label>
                     <input type="text" id="crp-title" placeholder="e.g. Standard Non-Refundable Rate" class="table-input font-bold" value="Standard Non-Refundable">
@@ -860,7 +811,7 @@
 
                 <!-- Target Rooms Selector -->
                 <div>
-                    <div class="flex items-center justify-between mb-1">
+                    <div class="flex items-center justify-between mb-0.5">
                         <label class="label-base mb-0">Push To Which Rooms?</label>
                         <div class="flex gap-1 text-[9px] font-black uppercase text-indigo-700">
                             <button type="button" onclick="window.toggleAllTargetRooms(true)" class="hover:underline cursor-pointer">All</button>
@@ -868,36 +819,36 @@
                             <button type="button" onclick="window.toggleAllTargetRooms(false)" class="hover:underline cursor-pointer">None</button>
                         </div>
                     </div>
-                    <div id="crp-room-checklist" class="max-h-32 overflow-y-auto border border-slate-200 rounded p-1.5 bg-slate-50 space-y-1">
+                    <div id="crp-room-checklist" class="max-h-28 overflow-y-auto border border-slate-200 rounded p-1 bg-slate-50 space-y-0.5">
                     </div>
                 </div>
             </div>
 
-            <div class="flex items-center justify-end gap-1.5 mt-4 pt-2 border-t border-slate-200">
-                <button onclick="window.closeCreateRatePlanModal()" class="px-3 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[10px] font-black uppercase cursor-pointer">
+            <div class="flex items-center justify-end gap-1.5 mt-3 pt-1.5 border-t border-slate-200">
+                <button onclick="window.closeCreateRatePlanModal()" class="px-2.5 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[9.5px] font-black uppercase cursor-pointer">
                     Cancel
                 </button>
-                <button onclick="window.executeCreateAndPushRatePlan()" id="btn-confirm-push-rate" class="px-3.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase shadow-xs cursor-pointer flex items-center gap-1">
-                    <i data-lucide="cloud-upload" size="13"></i>
+                <button onclick="window.executeCreateAndPushRatePlan()" id="btn-confirm-push-rate" class="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-black uppercase shadow-xs cursor-pointer flex items-center gap-1">
+                    <i data-lucide="cloud-upload" size="12"></i>
                     <span>Push to Selected Rooms</span>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- 5.3: Generic In-App Notification Modal -->
+    <!-- 5.3: In-App Notification Modal -->
     <div id="custom-app-modal" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 hidden">
-        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-4 border border-slate-200">
-            <div id="modal-icon-container" class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mb-2">
-                <i data-lucide="info" size="16"></i>
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-3.5 border border-slate-200">
+            <div id="modal-icon-container" class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mb-1.5">
+                <i data-lucide="info" size="15"></i>
             </div>
             <h4 id="modal-title" class="text-xs font-black uppercase text-slate-900">Notification</h4>
-            <p id="modal-body" class="text-[11px] font-semibold text-slate-600 mt-1 mb-3 leading-relaxed whitespace-pre-wrap">Message...</p>
+            <p id="modal-body" class="text-[11px] font-semibold text-slate-600 mt-0.5 mb-2.5 leading-relaxed whitespace-pre-wrap">Message...</p>
             <div class="flex items-center justify-end gap-1.5">
-                <button id="modal-cancel-btn" onclick="window.closeCustomModal(false)" class="px-3 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[10px] font-black uppercase cursor-pointer hidden">
+                <button id="modal-cancel-btn" onclick="window.closeCustomModal(false)" class="px-2.5 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[9.5px] font-black uppercase cursor-pointer hidden">
                     Cancel
                 </button>
-                <button id="modal-confirm-btn" onclick="window.closeCustomModal(true)" class="px-3.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase shadow-xs cursor-pointer">
+                <button id="modal-confirm-btn" onclick="window.closeCustomModal(true)" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-black uppercase shadow-xs cursor-pointer">
                     OK
                 </button>
             </div>
