@@ -1,5 +1,5 @@
 <!-- ==========================================================================
-     setup.html - Property Setup Wizard & Onboarding Engine
+     setup.html - Property Setup Wizard & Onboarding UI
      Wild & Wandering Property Management System
      Hosted at: https://loren-6q.github.io/PMS/setup.html
      ========================================================================== -->
@@ -12,18 +12,14 @@
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
-    <!-- Universal Core Utilities -->
     <script src="core.js"></script>
-    <!-- Instant Fallback Stepper Stubs -->
     <script>
         window.currentStep = 1;
         window.jumpStep = window.jumpStep || function(step) {
@@ -57,7 +53,6 @@
         .step-pill.active { background-color: #4f46e5; color: #ffffff; border-color: #4338ca; }
         .step-pill.completed { background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; }
         
-        /* Ultra-Dense Compact Table Rows Override */
         #addon-list-body tr, #payment-methods-table-body tr, #room-def-list-body tr {
             height: 24px !important;
             max-height: 24px !important;
@@ -68,7 +63,6 @@
             line-height: 1.1 !important;
             vertical-align: middle !important;
         }
-        #addon-list-body .table-input, #payment-methods-table-body .table-input, #room-def-list-body .table-input,
         .table-input {
             border: 1px solid #cbd5e1;
             border-radius: 0.25rem;
@@ -89,7 +83,6 @@
         .table-input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18); background-color: #fff; }
         .label-base { display: block; font-size: 0.625rem; font-weight: 900; color: #64748b; margin-bottom: 0.15rem; text-transform: uppercase; letter-spacing: 0.08em; }
 
-        /* Order button stack */
         .order-btn-col {
             display: flex;
             flex-direction: column;
@@ -119,7 +112,9 @@
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col antialiased overflow-hidden">
 
-    <!-- Global Header -->
+    <!-- ==========================================================================
+         SECTION 1: TOP NAVIGATION HEADER
+         ========================================================================== -->
     <header class="bg-white border-b border-slate-200 sticky top-0 z-40 px-3 py-1 flex items-center justify-between shadow-xs shrink-0">
         <div class="flex items-center gap-2">
             <a href="index.html" class="flex items-center hover:opacity-90 transition-opacity">
@@ -132,7 +127,6 @@
 
             <div class="h-4 w-px bg-slate-200 mx-1"></div>
 
-            <!-- Property Switcher with "+ New" button -->
             <div class="flex items-center gap-1 bg-slate-100 rounded p-0.5 border border-slate-200">
                 <i data-lucide="building-2" size="13" class="text-slate-500 ml-1"></i>
                 <select id="property-select" onchange="window.switchSetupProperty(this.value)" class="bg-transparent text-[11px] font-bold text-slate-800 pr-1 py-0 cursor-pointer outline-none">
@@ -160,7 +154,9 @@
         </div>
     </header>
 
-    <!-- 5-Step Stepper Navigation -->
+    <!-- ==========================================================================
+         SECTION 2: 5-STEP STEPPER NAVIGATION
+         ========================================================================== -->
     <nav class="bg-white border-b border-slate-200 px-3 py-1 shrink-0">
         <div class="max-w-7xl mx-auto grid grid-cols-5 gap-1.5">
             <button onclick="window.jumpStep(1)" id="pill-step-1" class="step-pill active py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
@@ -186,12 +182,14 @@
         </div>
     </nav>
 
-    <!-- Main Stepper Panels Container -->
+    <!-- Main Content Container -->
     <main class="flex-1 max-w-7xl w-full mx-auto p-2 flex flex-col gap-2 min-h-0 overflow-hidden">
 
-        <!-- 3.1: STEP 1 - Profile, Logos, Payments & Add-ons (COLOR-CODED SECTIONS) -->
+        <!-- ==========================================================================
+             SECTION 3: STEP 1 - GENERAL PROFILE, BRAND ASSETS, PAYMENTS & ADD-ONS
+             ========================================================================== -->
         <section id="step-content-1" class="space-y-2 flex-1 overflow-y-auto">
-            <!-- 1. Property Profile Card (Indigo Tint) -->
+            <!-- Property Details Card -->
             <div class="bg-indigo-50/50 border border-indigo-200 rounded-lg p-2.5 shadow-xs">
                 <div class="border-b border-indigo-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-profile', 'chev-prop-profile')">
                     <h2 class="text-xs font-black uppercase text-indigo-950 flex items-center gap-1.5">
@@ -243,7 +241,7 @@
                 </div>
             </div>
 
-            <!-- 2. Brand Assets & Logo Manager Card (Purple Tint) -->
+            <!-- Brand Assets & Logos Card -->
             <div class="bg-purple-50/50 border border-purple-200 rounded-lg p-2.5 shadow-xs">
                 <div class="border-b border-purple-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-logos', 'chev-prop-logos')">
                     <h2 class="text-xs font-black uppercase text-purple-950 flex items-center gap-1.5">
@@ -296,7 +294,7 @@
                 </div>
             </div>
 
-            <!-- 3. Payment Methods & Commission (KP) Setup Card (Emerald / Rose Tint) -->
+            <!-- Payment Methods & Commission (KP) Setup Card -->
             <div class="bg-emerald-50/50 border border-emerald-200 rounded-lg p-2.5 shadow-xs">
                 <div class="border-b border-emerald-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-payments', 'chev-prop-payments')">
                     <div>
@@ -323,7 +321,7 @@
                 </div>
             </div>
 
-            <!-- 4. Add-ons & Extra Charges Card (Amber Tint) -->
+            <!-- Add-ons & Extra Charges Card -->
             <div class="bg-amber-50/50 border border-amber-200 rounded-lg p-2.5 shadow-xs">
                 <div class="border-b border-amber-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-addons', 'chev-prop-addons')">
                     <div>
@@ -358,7 +356,9 @@
             </div>
         </section>
 
-        <!-- 3.2: STEP 2 - Compact Room Inventory (COLOR CODED) -->
+        <!-- ==========================================================================
+             SECTION 4: STEP 2 - ROOM INVENTORY SETUP & BATCH GENERATORS
+             ========================================================================== -->
         <section id="step-content-2" class="flex-1 flex flex-col min-h-0 hidden">
             <div class="bg-white border border-slate-300 rounded-lg p-2 shadow-xs flex-1 flex flex-col min-h-0">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-1 mb-1 shrink-0">
@@ -390,7 +390,7 @@
                     </div>
                 </div>
 
-                <!-- BATCH DORM GENERATOR PANEL (Warm Amber) -->
+                <!-- Batch Dorm Panel -->
                 <div id="batch-dorm-panel" class="hidden mb-1 p-2 bg-amber-50/90 border border-amber-300 rounded text-xs shrink-0 shadow-xs">
                     <div class="flex items-center justify-between pb-1 mb-1 border-b border-amber-200">
                         <span class="font-black text-amber-900 uppercase text-[9.5px] flex items-center gap-1">
@@ -431,7 +431,7 @@
                     </div>
                 </div>
 
-                <!-- BATCH ROOM GENERATOR PANEL (Fresh Emerald) -->
+                <!-- Batch Private Room Panel -->
                 <div id="batch-room-panel" class="hidden mb-1 p-2 bg-emerald-50/90 border border-emerald-300 rounded text-xs shrink-0 shadow-xs">
                     <div class="flex items-center justify-between pb-1 mb-1 border-b border-emerald-200">
                         <span class="font-black text-emerald-900 uppercase text-[9.5px] flex items-center gap-1">
@@ -468,7 +468,7 @@
                     </div>
                 </div>
 
-                <!-- High-Density Compact Inventory Table -->
+                <!-- Room Definitions Table -->
                 <div class="border border-slate-200 rounded flex-1 min-h-0 overflow-y-auto">
                     <datalist id="setup-category-datalist"></datalist>
                     <table class="w-full text-left text-[11px] border-collapse">
@@ -487,7 +487,7 @@
                     </table>
                 </div>
 
-                <!-- ALL BEDS PREVIEW DRAWER -->
+                <!-- Bed Preview Drawer -->
                 <div id="bed-preview-drawer" class="hidden mt-1 p-2 bg-slate-100 border border-slate-300 rounded max-h-48 overflow-y-auto shrink-0 text-xs">
                     <div class="flex items-center justify-between pb-1 mb-1 border-b border-slate-200">
                         <span class="font-black text-slate-800 text-[9.5px] uppercase tracking-wider flex items-center gap-1.5">
@@ -499,18 +499,17 @@
             </div>
         </section>
 
-        <!-- 3.3: STEP 3 - Channex API & Multi-Room Rate Plan Tool (INDIGO / WHITE CARDS) -->
+        <!-- ==========================================================================
+             SECTION 5: STEP 3 - CHANNEL MANAGER CONNECTION & UNIFIED MAPPING
+             ========================================================================== -->
         <section id="step-content-3" class="space-y-2 flex-1 overflow-y-auto hidden">
-            <!-- Credentials Header (Sky Blue Tint) -->
+            <!-- Channex Credentials Card -->
             <div class="bg-sky-50/60 border border-sky-200 rounded-lg p-2 shadow-xs">
                 <div class="border-b border-sky-200 pb-1 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-chan-creds', 'chev-chan-creds')">
                     <div class="flex items-center gap-2">
                         <h2 class="text-xs font-black uppercase text-sky-950 flex items-center gap-1.5">
                             <i data-lucide="key-round" class="text-sky-600" size="14"></i> Channel Manager Connection
                         </h2>
-                        <div id="channex-conn-badge" class="flex items-center gap-1 px-2 py-0.2 rounded-full bg-white text-slate-600 text-[9.5px] font-bold border border-sky-200">
-                            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Checking...
-                        </div>
                     </div>
                     <i data-lucide="chevron-down" id="chev-chan-creds" size="14" class="text-sky-600 transition-transform"></i>
                 </div>
@@ -537,38 +536,55 @@
                 </div>
             </div>
 
-            <!-- Unified Room Category & Rate Plan Mapping Cards -->
-            <div class="space-y-1.5" id="unified-mapping-container"></div>
+            <!-- Unified Room Mapping & Inherited Rate Plans Container -->
+            <div class="space-y-2" id="unified-mapping-container"></div>
         </section>
 
-        <!-- 3.4: STEP 4 - Pricing Rules, Relational Links & Event Curves (DISTINCT THEMATIC TINTS) -->
+        <!-- ==========================================================================
+             SECTION 6: STEP 4 - PRICING RULES, RELATIONAL LINKS & EVENT CURVES
+             ========================================================================== -->
         <section id="step-content-4" class="space-y-2 flex-1 overflow-y-auto hidden">
-            <!-- 1. Driving Anchors (Indigo Card) -->
+            <!-- Base Rate Anchors & Master Channel Card -->
             <div class="bg-indigo-50/70 border border-indigo-200 rounded-lg p-2.5 shadow-xs">
                 <div class="border-b border-indigo-200 pb-1 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-anchors', 'chev-price-anchors')">
-                    <h2 class="text-xs font-black uppercase text-indigo-950 flex items-center gap-1.5">
-                        <i data-lucide="anchor" size="14" class="text-indigo-600"></i> Base Rate Anchors
-                    </h2>
+                    <div>
+                        <h2 class="text-xs font-black uppercase text-indigo-950 flex items-center gap-1.5">
+                            <i data-lucide="anchor" size="14" class="text-indigo-600"></i> Base Rate Anchors & Master Channel
+                        </h2>
+                        <span class="text-[9px] text-indigo-700 font-bold">The master channel receives the exact price typed on the calendar (1:1 baseline).</span>
+                    </div>
                     <i data-lucide="chevron-down" id="chev-price-anchors" size="14" class="text-indigo-600 transition-transform"></i>
                 </div>
 
-                <div id="sec-price-anchors" class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div id="sec-price-anchors" class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                     <div class="bg-white p-2 rounded border border-indigo-200 shadow-2xs">
-                        <label class="label-base text-indigo-700">Dorm Master Anchor Room</label>
+                        <label class="label-base text-indigo-700">Master Anchor Channel</label>
+                        <select id="rule-master-driver" class="table-input font-bold text-slate-800" onchange="window.pricingRules.masterDriver = this.value; window.renderChannelRulesList();">
+                            <option value="Direct" selected>Direct (Website Booking Engine)</option>
+                            <option value="Default">Default (Standard Channel)</option>
+                            <option value="Booking.com">Booking.com</option>
+                            <option value="Hostelworld">Hostelworld</option>
+                            <option value="Agoda">Agoda</option>
+                            <option value="Expedia">Expedia</option>
+                            <option value="Airbnb">Airbnb</option>
+                        </select>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-indigo-200 shadow-2xs">
+                        <label class="label-base text-indigo-700">Dorm Master Room Anchor</label>
                         <select id="anchor-dorm-select" class="table-input font-bold text-slate-800"></select>
                     </div>
                     <div class="bg-white p-2 rounded border border-indigo-200 shadow-2xs">
-                        <label class="label-base text-indigo-700">Private Master Anchor Room</label>
+                        <label class="label-base text-indigo-700">Private Master Room Anchor</label>
                         <select id="anchor-private-select" class="table-input font-bold text-slate-800"></select>
                     </div>
                 </div>
             </div>
 
-            <!-- 2. Relational Linking Matrix (Slate / Blue Card) -->
+            <!-- Bidirectional Room Pricing Links Card -->
             <div class="bg-slate-50/90 border border-slate-300 rounded-lg p-2.5 shadow-xs">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-1 mb-1.5 cursor-pointer" onclick="window.toggleCardSection('sec-price-links', 'chev-price-links')">
                     <h3 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
-                        <i data-lucide="link" size="14" class="text-indigo-600"></i> Bidirectional Pricing Links
+                        <i data-lucide="link" size="14" class="text-indigo-600"></i> Bidirectional Room Pricing Links
                     </h3>
                     <div class="flex items-center gap-2">
                         <button onclick="event.stopPropagation(); window.addRelationshipRow()" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase transition-colors cursor-pointer shadow-xs">
@@ -594,7 +610,7 @@
                 </div>
             </div>
 
-            <!-- 3. Markups & OTA Channels (Emerald & Amber Cards) -->
+            <!-- Refundable Markups & Channel Adjustments -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
                 <div class="bg-emerald-50/70 border border-emerald-300 rounded-lg p-2.5 shadow-xs">
                     <div class="border-b border-emerald-200 pb-1 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-markup', 'chev-price-markup')">
@@ -640,7 +656,7 @@
                 </div>
             </div>
 
-            <!-- 4. Seasonal / Event Pricing Curves (Pink Card) -->
+            <!-- Seasonal & Event Dual-Curve Panel -->
             <div class="bg-pink-50/70 border border-pink-300 rounded-lg p-2.5 shadow-xs">
                 <div class="flex items-center justify-between border-b border-pink-200 pb-1 mb-1.5">
                     <div class="cursor-pointer flex items-center gap-1.5" onclick="window.toggleCardSection('event-curve-panel', 'chev-price-events')">
@@ -695,7 +711,9 @@
             </div>
         </section>
 
-        <!-- 3.5: STEP 5 - Review & Launch -->
+        <!-- ==========================================================================
+             SECTION 7: STEP 5 - SETUP VERIFICATION & SYSTEM LAUNCH
+             ========================================================================== -->
         <section id="step-content-5" class="space-y-2 flex-1 overflow-y-auto hidden">
             <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
                 <div class="border-b border-slate-200 pb-1.5 mb-2">
@@ -736,7 +754,9 @@
             </div>
         </section>
 
-        <!-- Stepper Footer Navigation Controls -->
+        <!-- ==========================================================================
+             SECTION 8: STEPPER FOOTER CONTROLS
+             ========================================================================== -->
         <footer class="pt-1.5 pb-1 flex items-center justify-between border-t border-slate-200 shrink-0 bg-white px-2 mt-auto rounded-b">
             <button id="btn-prev-step" onclick="window.prevStep()" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 text-[10px] font-black uppercase transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                 <i data-lucide="arrow-left" size="12"></i> Previous
@@ -757,8 +777,9 @@
 
     </main>
 
-    <!-- Modals -->
-    <!-- 5.0: Reorder Categories Modal -->
+    <!-- ==========================================================================
+         SECTION 9: APPLICATION MODALS & DIALOGS
+         ========================================================================== -->
     <div id="reorder-categories-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-3 border border-slate-300">
             <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200">
@@ -782,7 +803,6 @@
         </div>
     </div>
 
-    <!-- 5.1: Create New Property Modal -->
     <div id="new-property-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-3.5 border border-slate-300">
             <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-200">
@@ -817,7 +837,6 @@
         </div>
     </div>
 
-    <!-- 5.2: Create & Push Rate Plan Tool Modal -->
     <div id="create-rate-plan-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-3.5 border border-slate-300">
             <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200">
@@ -827,7 +846,6 @@
                 <button onclick="window.closeCreateRatePlanModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="15"></i></button>
             </div>
 
-            <!-- Quick Template Presets -->
             <div class="mb-2 p-1.5 bg-slate-50 rounded border border-slate-200">
                 <span class="text-[9px] font-black uppercase text-slate-500 block mb-0.5">Quick Presets:</span>
                 <div class="flex flex-wrap gap-1">
@@ -865,7 +883,6 @@
                     </div>
                 </div>
 
-                <!-- Target Rooms Selector -->
                 <div>
                     <div class="flex items-center justify-between mb-0.5">
                         <label class="label-base mb-0">Push To Which Rooms?</label>
@@ -892,7 +909,6 @@
         </div>
     </div>
 
-    <!-- 5.3: In-App Notification Modal -->
     <div id="custom-app-modal" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-3.5 border border-slate-200">
             <div id="modal-icon-container" class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mb-1.5">
@@ -911,7 +927,6 @@
         </div>
     </div>
 
-    <!-- External Setup Wizard Engine Module -->
     <script type="module" src="setup-engine.js"></script>
 </body>
 </html>
