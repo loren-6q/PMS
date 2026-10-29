@@ -120,7 +120,6 @@ window.jumpStep = function(step) {
         window.renderRoomDefinitionsTable();
     }
     if (s === 3) {
-        window.renderRoomMappingTable();
         window.renderUnifiedMappingCards();
     }
     if (s === 4) window.renderPricingStepRules();
@@ -262,7 +261,7 @@ window.handleLogoFileUpload = async function(event, logoType) {
         window.updateLogoPreview(logoType, downloadUrl);
         window.customAlert("Success", `${logoType.toUpperCase()} logo uploaded.`);
     } catch (err) {
-        console.warn("Storage upload failed, keeping compressed thumbnail DataURL:", err);
+        console.warn("Storage upload notice:", err);
     }
 };
 
@@ -770,10 +769,14 @@ window.fetchChannexData = async function() {
         const pmsCategories = [...new Set((window.roomDefinitions || []).map(r => r.category))];
 
         window.channexMap = pmsCategories.map(cat => {
+            const existing = (window.channexMap || []).find(m => m.pmsCategory === cat);
+            if (existing && existing.channexId) return existing;
+
             const normCat = cat.toLowerCase().replace(/[^a-z0-9]/g, '');
             const bestChannex = channexRooms.find(cr => {
                 const normCr = (cr.attributes?.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                return normCr === normCat || (normCr && normCat.includes(normCr)) || (normCat && normCr.includes(normCat));
+                if (!normCr || !normCat) return false;
+                return normCr === normCat || normCat.includes(normCr) || normCr.includes(normCat);
             });
 
             return {
@@ -785,9 +788,8 @@ window.fetchChannexData = async function() {
 
         window.buildChannexRateMapFromRoomMapping();
         window.populateChannelsFromRateMap();
-
-        window.renderRoomMappingTable();
         window.renderUnifiedMappingCards();
+
         window.customAlert("Channex Connected", `Mapped ${channexRooms.length} Channex Room Types and ${cleanRatePlans.length} Rate Plans.`);
     } catch (err) {
         console.error("Channex fetch error:", err);
@@ -799,6 +801,7 @@ window.buildChannexRateMapFromRoomMapping = function() {
     const plans = window.channexRatePlans || [];
     const rooms = window.channexRooms || [];
     const mapping = window.channexMap || [];
+    const existingRateMap = window.channexRateMap || [];
 
     window.channexRateMap = plans.map(p => {
         const planTitle = (p.attributes?.title || '').trim();
@@ -809,11 +812,15 @@ window.buildChannexRateMapFromRoomMapping = function() {
         const mappedRoom = mapping.find(m => String(m.channexId) === String(roomId));
         const assignedPmsCategory = mappedRoom ? mappedRoom.pmsCategory : '';
 
-        const rawChannel = /bdc|booking/i.test(planTitle) ? 'Booking.com' : 
-                           (/hw|hostelworld/i.test(planTitle) ? 'Hostelworld' : 
-                           (/agoda/i.test(planTitle) ? 'Agoda' : 
-                           (/expedia/i.test(planTitle) ? 'Expedia' : 
-                           (/airbnb/i.test(planTitle) ? 'Airbnb' : 'Default'))));
+        const prev = existingRateMap.find(ep => ep.ratePlanId === p.id);
+
+        const rawChannel = prev?.channel || (
+            /bdc|booking/i.test(planTitle) ? 'Booking.com' : 
+            (/hw|hostelworld/i.test(planTitle) ? 'Hostelworld' : 
+            (/agoda/i.test(planTitle) ? 'Agoda' : 
+            (/expedia/i.test(planTitle) ? 'Expedia' : 
+            (/airbnb/i.test(planTitle) ? 'Airbnb' : 'Default'))))
+        );
 
         return {
             ratePlanId: p.id,
@@ -822,43 +829,11 @@ window.buildChannexRateMapFromRoomMapping = function() {
             channexRoomTitle: parentRoomTitle,
             pmsCategory: assignedPmsCategory,
             channel: cleanChannelKey(rawChannel),
-            policy: /ref/i.test(planTitle) && !/non-?ref/i.test(planTitle) ? 'ref' : 'non-ref',
-            product: /event/i.test(planTitle) ? 'evt' : 'std',
-            rateSource: /event/i.test(planTitle) ? 'evt' : 'std'
+            policy: prev?.policy || (/ref/i.test(planTitle) && !/non-?ref/i.test(planTitle) ? 'ref' : 'non-ref'),
+            product: prev?.product || (/event/i.test(planTitle) ? 'evt' : 'std'),
+            rateSource: prev?.rateSource || (/event/i.test(planTitle) ? 'evt' : 'std')
         };
     });
-};
-
-window.renderRoomMappingTable = function() {
-    const container = document.getElementById('channex-room-mapping-container');
-    if (!container) return;
-
-    const pmsCats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
-    const channexRooms = window.channexRooms || [];
-
-    if (pmsCats.length === 0) {
-        container.innerHTML = `<div class="p-2 text-slate-400 text-xs">Define room categories in Step 2 first.</div>`;
-        return;
-    }
-
-    container.innerHTML = pmsCats.map(cat => {
-        const mapped = (window.channexMap || []).find(m => m.pmsCategory === cat);
-        const mappedId = mapped ? mapped.channexId : '';
-
-        return `
-        <div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
-            <span class="font-bold text-xs text-slate-800">${cat}</span>
-            <div class="flex items-center gap-1.5">
-                <span class="text-[9.5px] font-bold text-slate-400">&rarr;</span>
-                <select class="table-input !w-52 !h-[22px] font-bold ${mappedId ? 'text-indigo-800 bg-white border-indigo-300' : 'text-slate-400 border-slate-300'}" onchange="window.updateRoomMapping('${cat}', this.value)">
-                    <option value="">-- Select Channex Room --</option>
-                    ${channexRooms.map(cr => `
-                        <option value="${cr.id}" ${String(cr.id) === String(mappedId) ? 'selected' : ''}>${cr.attributes?.title || cr.id}</option>
-                    `).join('')}
-                </select>
-            </div>
-        </div>`;
-    }).join('');
 };
 
 window.updateRoomMapping = function(pmsCat, channexRoomId) {
@@ -876,7 +851,6 @@ window.updateRoomMapping = function(pmsCat, channexRoomId) {
 
     window.buildChannexRateMapFromRoomMapping();
     window.populateChannelsFromRateMap();
-    window.renderRoomMappingTable();
     window.renderUnifiedMappingCards();
 };
 
@@ -919,46 +893,62 @@ window.renderUnifiedMappingCards = function() {
         return;
     }
 
+    const channexRooms = window.channexRooms || [];
+
     container.innerHTML = pmsCats.map((cat, idx) => {
-        const plans = (window.channexRateMap || []).filter(p => p.pmsCategory === cat);
+        const mapped = (window.channexMap || []).find(m => m.pmsCategory === cat);
+        const mappedRoomId = mapped ? mapped.channexId : '';
+        const plansForThisCat = (window.channexRateMap || []).filter(p => (mappedRoomId && String(p.roomTypeId) === String(mappedRoomId)) || p.pmsCategory === cat);
         const cardBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70';
 
         return `
             <div class="${cardBg} border border-slate-300 rounded-lg p-2.5 shadow-xs mb-1.5">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-1.5">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-1.5 flex-wrap gap-2">
                     <div class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full ${plans.length > 0 ? 'bg-emerald-500' : 'bg-amber-400'}"></span>
+                        <span class="w-2.5 h-2.5 rounded-full ${mappedRoomId ? 'bg-emerald-500' : 'bg-amber-400'}"></span>
                         <span class="font-black text-xs uppercase text-slate-800">${cat}</span>
                     </div>
-                    <span class="text-[9.5px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
-                        ${plans.length} Rate Plans
-                    </span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[9.5px] font-black text-slate-500 uppercase">Channex Room:</span>
+                        <select class="table-input !w-56 !h-[22px] font-bold ${mappedRoomId ? 'text-indigo-800 bg-white border-indigo-300' : 'text-slate-400 border-slate-300'}" onchange="window.updateRoomMapping('${cat}', this.value)">
+                            <option value="">-- Unmapped / Select Channex Room --</option>
+                            ${channexRooms.map(cr => `
+                                <option value="${cr.id}" ${String(cr.id) === String(mappedRoomId) ? 'selected' : ''}>${cr.attributes?.title || cr.id}</option>
+                            `).join('')}
+                        </select>
+                        <span class="text-[9.5px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                            ${plansForThisCat.length} Plans
+                        </span>
+                    </div>
                 </div>
+
                 <div class="space-y-1">
-                    ${plans.length > 0 ? plans.map(p => `
-                        <div class="flex items-center justify-between text-xs p-1 px-1.5 rounded bg-white border border-slate-200 hover:border-indigo-300 transition-colors">
-                            <span class="font-bold text-slate-700 text-[11px] truncate mr-2" title="${p.ratePlanTitle}">${p.ratePlanTitle}</span>
-                            <div class="flex items-center gap-1.5 shrink-0">
-                                <select class="table-input !w-28 !h-[20px] font-bold" onchange="window.updateRatePlanField('${p.ratePlanId}', 'channel', this.value)">
-                                    <option value="Default" ${p.channel === 'Default' ? 'selected' : ''}>Default</option>
-                                    <option value="Direct" ${p.channel === 'Direct' ? 'selected' : ''}>Direct</option>
-                                    <option value="Booking.com" ${p.channel === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
-                                    <option value="Hostelworld" ${p.channel === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
-                                    <option value="Agoda" ${p.channel === 'Agoda' ? 'selected' : ''}>Agoda</option>
-                                    <option value="Expedia" ${p.channel === 'Expedia' ? 'selected' : ''}>Expedia</option>
-                                    <option value="Airbnb" ${p.channel === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
-                                </select>
-                                <select class="table-input !w-24 !h-[20px] font-bold" onchange="window.updateRatePlanField('${p.ratePlanId}', 'policy', this.value)">
-                                    <option value="non-ref" ${p.policy === 'non-ref' ? 'selected' : ''}>Non-Ref</option>
-                                    <option value="ref" ${p.policy === 'ref' ? 'selected' : ''}>Ref (+%)</option>
-                                </select>
-                                <select class="table-input !w-20 !h-[20px] font-bold text-center" onchange="window.updateRatePlanField('${p.ratePlanId}', 'product', this.value)">
-                                    <option value="std" ${p.product === 'std' ? 'selected' : ''}>Std</option>
-                                    <option value="evt" ${p.product === 'evt' ? 'selected' : ''}>Event</option>
-                                </select>
+                    ${mappedRoomId ? (
+                        plansForThisCat.length > 0 ? plansForThisCat.map(p => `
+                            <div class="flex items-center justify-between text-xs p-1 px-1.5 rounded bg-white border border-slate-200 hover:border-indigo-300 transition-colors">
+                                <span class="font-bold text-slate-700 text-[11px] truncate mr-2" title="${p.ratePlanTitle}">${p.ratePlanTitle}</span>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <select class="table-input !w-28 !h-[20px] font-bold" onchange="window.updateRatePlanField('${p.ratePlanId}', 'channel', this.value)">
+                                        <option value="Default" ${p.channel === 'Default' ? 'selected' : ''}>Default</option>
+                                        <option value="Direct" ${p.channel === 'Direct' ? 'selected' : ''}>Direct</option>
+                                        <option value="Booking.com" ${p.channel === 'Booking.com' ? 'selected' : ''}>Booking.com</option>
+                                        <option value="Hostelworld" ${p.channel === 'Hostelworld' ? 'selected' : ''}>Hostelworld</option>
+                                        <option value="Agoda" ${p.channel === 'Agoda' ? 'selected' : ''}>Agoda</option>
+                                        <option value="Expedia" ${p.channel === 'Expedia' ? 'selected' : ''}>Expedia</option>
+                                        <option value="Airbnb" ${p.channel === 'Airbnb' ? 'selected' : ''}>Airbnb</option>
+                                    </select>
+                                    <select class="table-input !w-24 !h-[20px] font-bold" onchange="window.updateRatePlanField('${p.ratePlanId}', 'policy', this.value)">
+                                        <option value="non-ref" ${p.policy === 'non-ref' ? 'selected' : ''}>Non-Ref</option>
+                                        <option value="ref" ${p.policy === 'ref' ? 'selected' : ''}>Ref (+%)</option>
+                                    </select>
+                                    <select class="table-input !w-20 !h-[20px] font-bold text-center" onchange="window.updateRatePlanField('${p.ratePlanId}', 'product', this.value)">
+                                        <option value="std" ${p.product === 'std' ? 'selected' : ''}>Std</option>
+                                        <option value="evt" ${p.product === 'evt' ? 'selected' : ''}>Event</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                    `).join('') : `<div class="text-[10px] text-slate-400 italic py-1 px-1">Map a Channex Room in section 1 above to link rate plans.</div>`}
+                        `).join('') : `<div class="text-[10px] text-slate-400 italic py-1 px-1">No rate plans found in Channex for this room type. Click "+ Create & Push Plan" above to create one.</div>`
+                    ) : `<div class="text-[10px] text-slate-400 italic py-1 px-1">Select a Channex Room in the header above to link this category and manage its rate plans.</div>`}
                 </div>
             </div>
         `;
@@ -1197,6 +1187,13 @@ window.loadPropertyFromDatabase = async function(propId) {
         window.channexMap = pData.channexMap || [];
         window.channexRateMap = pData.channexRateMap || [];
 
+        if (Array.isArray(window.channexMap) && window.channexMap.length > 0) {
+            window.channexRooms = window.channexMap.filter(m => m.channexId).map(m => ({
+                id: m.channexId,
+                attributes: { title: m.channexTitle || m.channexId }
+            }));
+        }
+
         const pPricingDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`));
         if (pPricingDoc.exists()) {
             const pDataPricing = pPricingDoc.data() || {};
@@ -1285,6 +1282,135 @@ window.switchSetupProperty = async function(propId) {
     window.activePropertyId = propId;
     await window.loadPropertyFromDatabase(propId);
     window.jumpStep(1);
+};
+
+window.openNewPropertyModal = function() {
+    const modal = document.getElementById('new-property-modal');
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+};
+
+window.closeNewPropertyModal = function() {
+    const modal = document.getElementById('new-property-modal');
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+};
+
+window.confirmCreateNewProperty = async function() {
+    const name = document.getElementById('new-prop-input-name')?.value.trim();
+    const short = (document.getElementById('new-prop-input-short')?.value.trim() || '').toUpperCase();
+    let propId = document.getElementById('new-prop-input-id')?.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+
+    if (!name || !short) return window.customAlert("Validation Error", "Name and Short Code are required.");
+    if (!propId) propId = short.toLowerCase();
+
+    try {
+        const newDoc = {
+            name,
+            short,
+            shortCode: short,
+            currency: 'THB',
+            timezone: 'Asia/Bangkok',
+            rooms: [],
+            roomDefinitions: [],
+            addons: [],
+            paymentMethods: [],
+            channex: {},
+            channexMap: [],
+            channexRateMap: [],
+            createdAt: new Date().toISOString()
+        };
+
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), newDoc);
+        window.closeNewPropertyModal();
+
+        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
+        window.availableProperties = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const sel = document.getElementById('property-select');
+        if (sel) {
+            sel.innerHTML = window.availableProperties.map(p => `
+                <option value="${p.id}" ${p.id === propId ? 'selected' : ''}>${p.name || p.id} (${(p.short || p.shortCode || p.id).toUpperCase()})</option>
+            `).join('');
+        }
+
+        window.switchSetupProperty(propId);
+    } catch (err) {
+        window.customAlert("Creation Failed", err.message);
+    }
+};
+
+window.openCreateRatePlanModal = function() {
+    const list = document.getElementById('crp-room-checklist');
+    const cats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
+    if (list) {
+        list.innerHTML = cats.map(c => `
+            <label class="flex items-center gap-1.5 p-1 rounded hover:bg-slate-100 cursor-pointer text-xs">
+                <input type="checkbox" value="${c}" checked class="crp-room-cb row-checkbox">
+                <span class="font-bold text-slate-800">${c}</span>
+            </label>
+        `).join('');
+    }
+    const modal = document.getElementById('create-rate-plan-modal');
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+};
+
+window.closeCreateRatePlanModal = function() {
+    const modal = document.getElementById('create-rate-plan-modal');
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+};
+
+window.applyRatePlanPreset = function(title, channel, policy) {
+    const tInp = document.getElementById('crp-title');
+    const cInp = document.getElementById('crp-channel');
+    const pInp = document.getElementById('crp-policy');
+    if (tInp) tInp.value = title;
+    if (cInp) cInp.value = channel;
+    if (pInp) pInp.value = policy;
+};
+
+window.toggleAllTargetRooms = function(checked) {
+    document.querySelectorAll('.crp-room-cb').forEach(cb => { cb.checked = checked; });
+};
+
+window.executeCreateAndPushRatePlan = async function() {
+    const title = document.getElementById('crp-title')?.value.trim();
+    const channel = cleanChannelKey(document.getElementById('crp-channel')?.value);
+    const policy = document.getElementById('crp-policy')?.value;
+    const selectedRooms = Array.from(document.querySelectorAll('.crp-room-cb:checked')).map(cb => cb.value);
+
+    if (!title) return window.customAlert("Validation Error", "Title is required.");
+    if (selectedRooms.length === 0) return window.customAlert("Validation Error", "Select at least one room category.");
+
+    const btn = document.getElementById('btn-confirm-push-rate');
+    const orig = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerText = "Creating..."; }
+
+    try {
+        selectedRooms.forEach(pmsCat => {
+            const mappedRoom = (window.channexMap || []).find(m => m.pmsCategory === pmsCat);
+            const roomId = mappedRoom ? mappedRoom.channexId : '';
+            const newId = 'local_' + Math.random().toString(36).substr(2, 9);
+
+            window.channexRateMap.push({
+                ratePlanId: newId,
+                ratePlanTitle: title,
+                roomTypeId: roomId,
+                channexRoomTitle: mappedRoom ? mappedRoom.channexTitle : '',
+                pmsCategory: pmsCat,
+                channel: channel,
+                policy: policy,
+                product: /event/i.test(title) ? 'evt' : 'std',
+                rateSource: /event/i.test(title) ? 'evt' : 'std'
+            });
+        });
+
+        window.populateChannelsFromRateMap();
+        window.renderUnifiedMappingCards();
+        window.closeCreateRatePlanModal();
+        window.customAlert("Success", `Created "${title}" across ${selectedRooms.length} room categories.`);
+    } catch (err) {
+        window.customAlert("Creation Failed", err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    }
 };
 
 async function initSetupEngine() {
