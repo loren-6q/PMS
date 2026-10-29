@@ -9,9 +9,6 @@
 
     const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
-    // --------------------------------------------------------------------------
-    // SECTION 1: SVG Icons & Visual Badge Registry
-    // --------------------------------------------------------------------------
     window.SVGS = window.SVGS || {
         upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
         upPaid: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#4ade80" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -26,9 +23,6 @@
         fbBad: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg>`
     };
 
-    // --------------------------------------------------------------------------
-    // SECTION 2: Master Booking Status Cycle
-    // --------------------------------------------------------------------------
     window.STATUS_CYCLE = window.STATUS_CYCLE || [
         { val: 'new', bg: '#ec4899', txt: '#fff' },
         { val: 'future', bg: '#7fc6f5', txt: '#1e293b' },
@@ -45,9 +39,6 @@
 
     window.masterState = 0;
 
-    // --------------------------------------------------------------------------
-    // SECTION 3: Global Data Getters & Helpers
-    // --------------------------------------------------------------------------
     const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
     const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
     const getPropId = () => {
@@ -64,9 +55,6 @@
         return t ? Math.round((t - Date.UTC(vS.getFullYear(), vS.getMonth(), vS.getDate())) / 86400000) : -1;
     };
 
-    // --------------------------------------------------------------------------
-    // SECTION 4: Navigation & Timeline Controls
-    // --------------------------------------------------------------------------
     window.prevPeriod = () => {
         if (!window.viewStart) window.viewStart = new Date();
         window.viewStart.setDate(window.viewStart.getDate() - 7);
@@ -104,9 +92,6 @@
         }
     };
 
-    // --------------------------------------------------------------------------
-    // SECTION 5: Search & Jump Controls
-    // --------------------------------------------------------------------------
     window.handleSearch = v => {
         window.searchTerm = v.trim().toUpperCase();
         window.searchMatchIndex = 0;
@@ -179,22 +164,9 @@
             const mc = $('match-counter');
             if (mc) mc.innerText = `Match ${idx + 1} of ${m.length}`;
             window.render();
-
-            setTimeout(() => {
-                const rList = getRooms(targetBooking);
-                const isUnassigned = rList.length === 0 || rList[0] === "" || targetBooking.status === 'unconfirmed' || targetBooking.status === 'charged';
-                if (isUnassigned) {
-                    $$('.group-unassigned-unconfirmed').forEach(r => r.style.display = 'grid');
-                    const icon = $('icon-unassigned-unconfirmed');
-                    if (icon) icon.style.transform = 'rotate(0deg)';
-                }
-            }, 80);
         }
     };
 
-    // --------------------------------------------------------------------------
-    // SECTION 6: Group Accordions
-    // --------------------------------------------------------------------------
     window.toggleAllGroups = () => {
         window.masterState = ((window.masterState || 0) + 1) % 4;
         const g = new Set();
@@ -241,9 +213,6 @@
         });
     };
 
-    // --------------------------------------------------------------------------
-    // SECTION 7: Floor & Bunk Helpers
-    // --------------------------------------------------------------------------
     const getFloorIcon = f => {
         if (!f) return '';
         const fStr = String(f).toLowerCase().trim();
@@ -271,20 +240,15 @@
         return '';
     };
 
-    // --------------------------------------------------------------------------
-    // SECTION 8: Universal Room & Dorm Classifier
-    // --------------------------------------------------------------------------
     const classifyRoomForCalendar = r => {
         const cat = (r.category || r.type || '').toLowerCase();
         const bunk = (r.bunk || r.bed || '').toLowerCase();
         
-        // Explicit private room indicators
         const isPrivate = bunk.includes('private') || 
                           cat.includes('private') || 
                           r.rule === 'private' || 
                           r.isDorm === false;
 
-        // A room is a dorm ONLY if it is not private AND explicitly has dorm attributes
         const isDorm = !isPrivate && (
             r.isDorm === true ||
             (r.rule && r.rule !== 'private') ||
@@ -295,7 +259,6 @@
             (r.parentRoom && r.parentRoom !== r.id)
         );
 
-        // Subheader baseRoom grouping only applies to actual dorm beds with a parent room (e.g. "DORM A")
         let baseRoom = '';
         if (isDorm) {
             if (r.parentRoom && r.parentRoom !== r.id) {
@@ -308,9 +271,6 @@
         return { isDorm, baseRoom };
     };
 
-    // --------------------------------------------------------------------------
-    // SECTION 9: Main Timeline Renderer
-    // --------------------------------------------------------------------------
     window.render = () => {
         if (!window.viewStart) {
             window.viewStart = new Date();
@@ -401,35 +361,39 @@
         const uConf = [];
 
         // ----------------------------------------------------------------------
-        // SECTION 10: Unassigned Tray
+        // SECTION 10: Unassigned Tray (Preserving Core Status Rules)
         // ----------------------------------------------------------------------
         actStaff.forEach(s => {
             if (parseYMD(s.checkIn) > veUTC || parseYMD(s.checkOut) < vsUTC) return;
             const rL = getRooms(s).length ? getRooms(s) : [""];
-            if (s.status === 'unconfirmed' || s.status === 'charged' || s.status === 'noshow') {
+
+            // CORE STATUS RULE: Charged, Unconfirmed, No-Show, and Vol are DESIGNED to be Unassigned
+            // so they do not block real-world physical beds.
+            const isUnassignedStatus = ['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status);
+
+            if (isUnassignedStatus) {
                 for (let i = 0; i < Math.max(1, rL.length); i++) uConf.push(s);
             } else {
-                // Find all valid room assignments on the current property board
+                // ACTIVE STATUS (future, here, left, special, new):
+                // Verify whether the booking actually has a room assigned on this board
                 const validAssigned = rL.filter(rid => {
                     if (!rid || rid.toLowerCase().includes('unassigned')) return false;
                     const uiR = window.dbToUiRoom ? window.dbToUiRoom(rid) : rid;
-                    return hotelRooms.some(h => h.id === rid || h.id === uiR);
+                    const normR = window.normalizeRoomId ? window.normalizeRoomId(rid, curProp) : rid.toUpperCase().trim();
+                    const normUiR = window.normalizeRoomId ? window.normalizeRoomId(uiR, curProp) : uiR.toUpperCase().trim();
+                    return hotelRooms.some(h => {
+                        const normH = window.normalizeRoomId ? window.normalizeRoomId(h.id, curProp) : h.id.toUpperCase().trim();
+                        return h.id === rid || h.id === uiR || normH === normR || normH === normUiR;
+                    });
                 });
 
-                // Calculate genuine unassigned count:
-                // If the booking has at least one valid assigned room on this board,
-                // do NOT duplicate into unassigned unless it explicitly has unassigned companion beds
-                let uCount = 0;
                 if (validAssigned.length === 0) {
-                    uCount = Math.max(1, rL.filter(r => !r || r.toLowerCase().includes('unassigned')).length);
+                    const uCount = Math.max(1, rL.filter(r => !r || r.toLowerCase().includes('unassigned')).length);
+                    for (let i = 0; i < uCount; i++) uConf.push(s);
                 } else {
-                    const unassignedTokens = rL.filter(r => !r || r.toLowerCase().includes('unassigned'));
-                    if (unassignedTokens.length > 0 && rL.length > validAssigned.length && (s.pax || 1) > validAssigned.length) {
-                        uCount = unassignedTokens.length;
-                    }
+                    const unassignedSlots = rL.filter(r => !r || r.toLowerCase().includes('unassigned'));
+                    for (let i = 0; i < unassignedSlots.length; i++) uConf.push(s);
                 }
-
-                for (let i = 0; i < uCount; i++) uConf.push(s);
             }
         });
 
@@ -457,6 +421,20 @@
             }
 
             const { isDorm, baseRoom } = classifyRoomForCalendar(r);
+            const normRoomId = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id.toUpperCase().trim();
+
+            const isAssignedToThisRoom = (s) => {
+                // Disallow unassigned statuses from occupying physical room rows
+                if (['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status)) return false;
+
+                const rList = getRooms(s).map(rm => {
+                    const ui = window.dbToUiRoom ? window.dbToUiRoom(rm) : rm;
+                    return window.normalizeRoomId ? window.normalizeRoomId(ui, curProp) : ui.toUpperCase().trim();
+                });
+
+                const matches = rList.includes(normRoomId) || rList.includes(r.id.toUpperCase().trim());
+                return matches && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+            };
 
             if (isDorm) {
                 const prevRoom = idx > 0 ? arr[idx - 1] : null;
@@ -478,10 +456,7 @@
                     bed: r.bed || r.bunk || '', 
                     floor: '', 
                     icon: r.icon || r.bunk || '',
-                    bookings: actStaff.filter(s => {
-                        const rList = getRooms(s).map(rm => window.dbToUiRoom ? window.dbToUiRoom(rm) : rm);
-                        return rList.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && s.status !== 'noshow' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
-                    })
+                    bookings: actStaff.filter(isAssignedToThisRoom)
                 });
             } else {
                 tRows.push({
@@ -493,10 +468,7 @@
                     bed: r.bed || r.bunk || '', 
                     floor: r.floor, 
                     icon: r.icon || r.bunk || '',
-                    bookings: actStaff.filter(s => {
-                        const rList = getRooms(s).map(rm => window.dbToUiRoom ? window.dbToUiRoom(rm) : rm);
-                        return rList.includes(r.id) && s.status !== 'unconfirmed' && s.status !== 'charged' && s.status !== 'noshow' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
-                    })
+                    bookings: actStaff.filter(isAssignedToThisRoom)
                 });
             }
         });
@@ -504,9 +476,6 @@
         const tt = $('custom-tooltip');
         let cGrp = '';
 
-        // ----------------------------------------------------------------------
-        // SECTION 11: Timeline Grid Assembly & Booking Bar Overlays
-        // ----------------------------------------------------------------------
         tRows.forEach(rD => {
             if (rD.isDivider) {
                 cGrp = (rD.label || 'UNKNOWN').replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
@@ -540,7 +509,7 @@
                         const dT = days[i].getTime();
                         const occ = new Set();
                         actStaff.forEach(s => {
-                            if (['unconfirmed', 'charged', 'cancelled', 'noshow'].includes(s.status)) return;
+                            if (['unconfirmed', 'charged', 'cancelled', 'noshow', 'vol'].includes(s.status)) return;
                             if (dT >= parseYMD(s.checkIn) && dT < parseYMD(s.checkOut)) {
                                 getRooms(s).forEach(r => {
                                     const uiR = window.dbToUiRoom ? window.dbToUiRoom(r) : r;
@@ -738,9 +707,6 @@
             body.appendChild(row);
         });
 
-        // ----------------------------------------------------------------------
-        // SECTION 12: Group State Restoration & Lucide Initialization
-        // ----------------------------------------------------------------------
         if (window.masterState && window.masterState !== 0) {
             const g = new Set();
             $$('.group-header').forEach(el => { if (el.dataset.group) g.add(el.dataset.group); });
@@ -750,9 +716,6 @@
         if (window.lucide) window.lucide.createIcons();
     };
 
-    // --------------------------------------------------------------------------
-    // SECTION 13: Legend Drawer Controller & SVG Key Mounter
-    // --------------------------------------------------------------------------
     window.toggleLegendDrawer = () => {
         const leg = document.getElementById('calendar-legend');
         const chevron = document.getElementById('legend-toggle-chevron');
@@ -783,34 +746,9 @@
                 el.innerHTML = window.SVGS[k];
             }
         });
-
-        // Interactive toast tooltip: clicking any legend item with a title pops up a center toast
-        const legEl = document.getElementById('calendar-legend');
-        if (legEl && !legEl.dataset.listenerAttached) {
-            legEl.dataset.listenerAttached = 'true';
-            legEl.addEventListener('click', e => {
-                const target = e.target.closest('[title]');
-                if (!target) return;
-                const titleTxt = target.getAttribute('title');
-                const tt = document.getElementById('custom-tooltip');
-                if (tt && titleTxt) {
-                    tt.innerText = titleTxt;
-                    tt.style.display = 'block';
-                    tt.style.position = 'fixed';
-                    tt.style.bottom = '48px';
-                    tt.style.left = '50%';
-                    tt.style.transform = 'translateX(-50%)';
-                    tt.style.zIndex = '9999';
-                    tt.className = 'bg-slate-900 text-white font-bold text-xs px-3 py-1.5 rounded-lg shadow-xl border border-slate-700 pointer-events-none transition-opacity';
-                    clearTimeout(window._legTtTimer);
-                    window._legTtTimer = setTimeout(() => { if (tt) tt.style.display = 'none'; }, 2200);
-                }
-            });
-        }
         return true;
     };
 
-    // Auto-mount legend SVGs on load
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => window.mountLegendSvgs());
     } else {
