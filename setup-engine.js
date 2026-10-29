@@ -516,11 +516,14 @@ window.compileRoomsFromDefinitions = function() {
 
         if (isDorm) {
             const dormBeds = [];
+            // STRICT UNIQUE SEQUENTIAL NUMBERING: b runs 1, 2, 3, ... total
+            // Never divide or group by bunk number to prevent duplicate bed IDs (1, 1, 2, 2)
             for (let b = 1; b <= total; b++) {
                 let bunkTag = 'single';
                 if (def.rule === 'odd-top') bunkTag = (b % 2 === 1) ? 'top' : 'bottom';
                 else if (def.rule === 'even-top') bunkTag = (b % 2 === 0) ? 'top' : 'bottom';
 
+                // Bed ID is guaranteed unique: e.g. C301-1, C301-2, C301-3, C301-4
                 const bedId = `${rawName}-${b}`;
                 const existing = existingById[bedId] || {};
 
