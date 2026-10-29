@@ -1,6 +1,5 @@
 // ==========================================================================
 // pms-calendar.js - PMS Calendar Timeline & Grid Engine
-// Wild & Wandering Property Management System
 // ==========================================================================
 
 (function() {
@@ -9,6 +8,7 @@
 
     const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
+    // SVG icon suite for reservation bars
     window.SVGS = window.SVGS || {
         upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
         upPaid: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#4ade80" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -263,6 +263,8 @@
         if (isDorm) {
             if (r.parentRoom && r.parentRoom !== r.id) {
                 baseRoom = r.parentRoom;
+            } else if ((r.id || '').includes('№')) {
+                baseRoom = r.id.split('№')[0].trim();
             } else if ((r.id || '').includes('-')) {
                 baseRoom = r.id.split('-')[0].trim();
             }
@@ -270,10 +272,10 @@
 
         return { isDorm, baseRoom };
     };
+
     // Format-agnostic room matcher: matches "Dorm A № 01", "A01", "A-01", "A-1", and "B01"
     const normMatch = (a, b) => {
         if (!a || !b) return false;
-        // Clean out №, dashes, underscores, and whitespace for bulletproof matching
         const cleanA = String(a).replace(/[№#\-_:\s]/g, '').toUpperCase().trim();
         const cleanB = String(b).replace(/[№#\-_:\s]/g, '').toUpperCase().trim();
         if (cleanA === cleanB) return true;
@@ -370,31 +372,47 @@
         const tRows = [];
         const uConf = [];
 
-        // ----------------------------------------------------------------------
-        // DYNAMIC INACTIVE ROOM FILTERING (PAST-ONLY RENDER)
-        // ----------------------------------------------------------------------
-        // Active rooms always render. Inactive rooms ONLY render if they have a
-        // valid booking within the currently displayed date window.
-        const visibleRooms = hotelRooms.filter(r => {
-            if (!r.inactive) return true;
+        // Route unassigned / unconfirmed bookings
+        actStaff.forEach(s => {
+            if (s.status === 'cancelled') return;
+            const rList = getRooms(s).filter(Boolean);
+            const isUnassigned = rList.length === 0 || rList[0] === "" || ['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status);
+            if (isUnassigned && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC) {
+                uConf.push(s);
+            }
+        });
 
+        if (uConf.length > 0) {
+            tRows.push({ isDivider: true, label: "UNASSIGNED / UNCONFIRMED", isUnconfirmedZone: true });
+            const rows = [];
+            uConf.forEach(s => {
+                let p = false;
+                for (let r of rows) {
+                    if (!r.some(e => parseYMD(s.checkIn) < parseYMD(e.checkOut) && parseYMD(e.checkIn) < parseYMD(s.checkOut))) {
+                        r.push(s);
+                        p = true;
+                        break;
+                    }
+                }
+                if (!p) rows.push([s]);
+            });
+            rows.forEach((r, idx) => tRows.push({ isUnassigned: true, label: `U-${idx + 1}`, bookings: r }));
+        }
+
+        // Active rooms always render; Inactive rooms only render if bookings exist in view window
+        const activeHotelRooms = hotelRooms.filter(r => !r.inactive);
+        const archivedHotelRooms = hotelRooms.filter(r => {
+            if (!r.inactive) return false;
             const targetHId = String(r.id || '').toUpperCase().trim();
-            const hasBookingInWindow = actStaff.some(s => {
+            return actStaff.some(s => {
                 if (['cancelled', 'noshow'].includes(s.status)) return false;
                 const inMs = parseYMD(s.checkIn);
                 const outMs = parseYMD(s.checkOut);
                 if (inMs > veUTC || outMs < vsUTC) return false;
-
                 const rList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
                 return rList.some(rm => normMatch(rm, targetHId));
             });
-
-            return hasBookingInWindow;
         });
-
-        // Split into active catalog and archived historical rooms
-        const activeHotelRooms = visibleRooms.filter(r => !r.inactive);
-        const archivedHotelRooms = visibleRooms.filter(r => !!r.inactive);
 
         // Render Active Hotel Rooms
         activeHotelRooms.forEach((r, idx, arr) => {
@@ -423,11 +441,19 @@
                     tRows.push({ isSubHeader: true, label: baseRoom, floor: r.floor });
                 }
 
+                // Concise display on sidebar bed row: № 01 instead of repeating Dorm A
+                let bedLabel = r.id || '';
+                if (bedLabel.includes('№')) {
+                    bedLabel = '№ ' + bedLabel.split('№')[1].trim();
+                } else if (baseRoom && bedLabel.startsWith(baseRoom)) {
+                    bedLabel = bedLabel.replace(baseRoom, '').trim();
+                }
+
                 tRows.push({
                     isRoom: true, 
                     isBed: true, 
                     id: r.id, 
-                    displayId: r.id, 
+                    displayId: bedLabel, 
                     type: r.type, 
                     bed: r.bed || r.bunk || '', 
                     floor: '', 
@@ -449,7 +475,7 @@
             }
         });
 
-        // Render Inactive Historical Rooms at the Bottom (Muted / Archived Zone)
+        // Render Inactive Historical Rooms at Bottom (Archived Zone)
         if (archivedHotelRooms.length > 0) {
             tRows.push({ isDivider: true, label: "ARCHIVED / CLOSED ROOMS (PAST DATA)", isArchivedZone: true });
             archivedHotelRooms.forEach(r => {
@@ -463,7 +489,7 @@
                     isRoom: true,
                     isArchived: true,
                     id: r.id,
-                    displayId: `[ARCHIVED] ${r.id}`,
+                    displayId: `[CLOSED] ${r.id}`,
                     type: r.type,
                     bed: r.bed || '',
                     floor: r.floor,
@@ -471,81 +497,6 @@
                 });
             });
         }
-            }
-        });
-
-        if (uConf.length > 0) {
-            tRows.push({ isDivider: true, label: "UNASSIGNED / UNCONFIRMED", isUnconfirmedZone: true });
-            const rows = [];
-            uConf.forEach(s => {
-                let p = false;
-                for (let r of rows) {
-                    if (!r.some(e => parseYMD(s.checkIn) < parseYMD(e.checkOut) && parseYMD(e.checkIn) < parseYMD(s.checkOut))) {
-                        r.push(s);
-                        p = true;
-                        break;
-                    }
-                }
-                if (!p) rows.push([s]);
-            });
-            rows.forEach((r, idx) => tRows.push({ isUnassigned: true, label: `U-${idx + 1}`, bookings: r }));
-        }
-
-        hotelRooms.forEach((r, idx, arr) => {
-            if (!r.type || !r.id) return;
-            if (r.type !== (idx > 0 && arr[idx - 1] ? arr[idx - 1].type : null)) {
-                tRows.push({ isDivider: true, label: r.type });
-            }
-
-            const { isDorm, baseRoom } = classifyRoomForCalendar(r);
-            const targetHId = String(r.id || '').toUpperCase().trim();
-            const normRoomId = window.normalizeRoomId ? String(window.normalizeRoomId(r.id, curProp)).toUpperCase().trim() : targetHId;
-
-            const isAssignedToThisRoom = (s) => {
-                if (['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status)) return false;
-
-                const rList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
-                const matches = rList.some(rm => normMatch(rm, targetHId) || normMatch(rm, normRoomId));
-
-                return matches && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
-            };
-
-            if (isDorm) {
-                const prevRoom = idx > 0 ? arr[idx - 1] : null;
-                const prevClassification = prevRoom ? classifyRoomForCalendar(prevRoom) : null;
-                const prevBaseRoom = (prevClassification && prevClassification.isDorm && prevRoom.type === r.type) 
-                    ? prevClassification.baseRoom 
-                    : null;
-
-                if (baseRoom && baseRoom !== prevBaseRoom) {
-                    tRows.push({ isSubHeader: true, label: baseRoom, floor: r.floor });
-                }
-
-                tRows.push({
-                    isRoom: true, 
-                    isBed: true, 
-                    id: r.id, 
-                    displayId: r.id, 
-                    type: r.type, 
-                    bed: r.bed || r.bunk || '', 
-                    floor: '', 
-                    icon: r.icon || r.bunk || '',
-                    bookings: actStaff.filter(isAssignedToThisRoom)
-                });
-            } else {
-                tRows.push({
-                    isRoom: true, 
-                    isPrivate: true, 
-                    id: r.id, 
-                    displayId: r.id, 
-                    type: r.type, 
-                    bed: r.bed || r.bunk || '', 
-                    floor: r.floor, 
-                    icon: r.icon || r.bunk || '',
-                    bookings: actStaff.filter(isAssignedToThisRoom)
-                });
-            }
-        });
 
         const tt = $('custom-tooltip');
         let cGrp = '';
@@ -572,7 +523,8 @@
                     hRow.innerHTML = `<div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-[var(--sidebar-w)]" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span class="truncate pr-1">${rD.label}</span><div class="flex items-center gap-1 shrink-0"><span id="state-${cGrp}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div></div>`;
                     body.appendChild(hRow);
 
-                    const tRIds = hotelRooms.filter(hr => hr.type === rD.label).map(hr => hr.id);
+                    // Dynamic Availability summary row for this category
+                    const tRIds = hotelRooms.filter(hr => hr.type === rD.label && !hr.inactive).map(hr => hr.id);
                     const cap = tRIds.length;
                     const aRow = document.createElement('div');
                     aRow.className = `timeline-grid avail-row-${cGrp} h-[20px]`;
@@ -624,7 +576,7 @@
             }
 
             const row = document.createElement('div');
-            row.className = `timeline-grid bed-row group-${cGrp}`;
+            row.className = `timeline-grid bed-row group-${cGrp} ${rD.isArchived ? 'opacity-60 bg-slate-100' : ''}`;
             if (cGrp === 'unassigned-unconfirmed') {
                 const hasMatch = searchTerm && rD.bookings && rD.bookings.some(s =>
                     ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) ||
@@ -638,11 +590,10 @@
             if (rD.isUnassigned) {
                 hHtml = `<span class="text-[11px] font-black text-amber-700">${rD.label}</span>`;
             } else if (rD.isBed) {
-                const bedLabel = rD.displayId || '';
                 hHtml = `
                     <div class="flex items-center justify-between px-1 w-full gap-1 pl-3">
                         <div class="flex items-center gap-0.5 shrink-0">
-                            <span class="text-[12px] font-bold text-slate-600">${bedLabel}</span>
+                            <span class="text-[12px] font-bold text-slate-600">${rD.displayId}</span>
                             ${getBunkIcon(rD.icon)}
                         </div>
                         <span class="text-[9px] font-bold text-slate-500 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' ? '' : (rD.bed || '')}</span>
@@ -679,6 +630,7 @@
                 row.appendChild(c);
             }
 
+            // Render reservation bars
             rD.bookings.forEach(s => {
                 const eS = getDayIndex(s.checkIn) + 0.3;
                 const eE = getDayIndex(s.checkOut) + 0.25;
@@ -824,8 +776,12 @@
     };
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => window.mountLegendSvgs());
+        document.addEventListener('DOMContentLoaded', () => {
+            window.mountLegendSvgs();
+            window.render();
+        });
     } else {
         window.mountLegendSvgs();
+        setTimeout(() => window.render(), 0);
     }
 })();
