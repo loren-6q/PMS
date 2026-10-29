@@ -1,11 +1,6 @@
 // ==========================================================================
 // pms-calendar.js - PMS Calendar Timeline & Grid Engine
 // Wild & Wandering Property Management System
-// 
-// WITH ZERO-LOSS AUTO-HEALING ROOM INJECTOR:
-// If room definitions in setup.html are missing room IDs that live bookings
-// reference, this engine automatically synthesizes those room rows so
-// bookings NEVER get dumped into the Unassigned tray due to catalog mismatches.
 // ==========================================================================
 
 (function() {
@@ -275,6 +270,16 @@
 
         return { isDorm, baseRoom };
     };
+    // Format-agnostic room matcher: matches "Dorm A № 01", "A01", "A-01", "A-1", and "B01"
+    const normMatch = (a, b) => {
+        if (!a || !b) return false;
+        // Clean out №, dashes, underscores, and whitespace for bulletproof matching
+        const cleanA = String(a).replace(/[№#\-_:\s]/g, '').toUpperCase().trim();
+        const cleanB = String(b).replace(/[№#\-_:\s]/g, '').toUpperCase().trim();
+        if (cleanA === cleanB) return true;
+        const stripZero = s => s.replace(/^([A-Z]+)0*(\d+)$/, '$1$2');
+        return stripZero(cleanA) === stripZero(cleanB);
+    };
 
     window.render = () => {
         if (!window.viewStart) {
@@ -366,39 +371,106 @@
         const uConf = [];
 
         // ----------------------------------------------------------------------
-        // SECTION 10: Unassigned Tray (Preserving Core Status Rules)
+        // DYNAMIC INACTIVE ROOM FILTERING (PAST-ONLY RENDER)
         // ----------------------------------------------------------------------
-        actStaff.forEach(s => {
-            if (parseYMD(s.checkIn) > veUTC || parseYMD(s.checkOut) < vsUTC) return;
-            const rL = getRooms(s).length ? getRooms(s) : [""];
+        // Active rooms always render. Inactive rooms ONLY render if they have a
+        // valid booking within the currently displayed date window.
+        const visibleRooms = hotelRooms.filter(r => {
+            if (!r.inactive) return true;
 
-            // CORE STATUS RULE: Charged, Unconfirmed, No-Show, and Vol are DESIGNED to be Unassigned
-            const isUnassignedStatus = ['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status);
+            const targetHId = String(r.id || '').toUpperCase().trim();
+            const hasBookingInWindow = actStaff.some(s => {
+                if (['cancelled', 'noshow'].includes(s.status)) return false;
+                const inMs = parseYMD(s.checkIn);
+                const outMs = parseYMD(s.checkOut);
+                if (inMs > veUTC || outMs < vsUTC) return false;
 
-            if (isUnassignedStatus) {
-                for (let i = 0; i < Math.max(1, rL.length); i++) uConf.push(s);
-            } else {
-                // ACTIVE STATUS (future, here, left, special, new):
-                const validAssigned = rL.filter(rid => {
-                    if (!rid || String(rid).toLowerCase().includes('unassigned')) return false;
-                    const cleanRid = String(rid).toUpperCase().trim();
-                    const uiR = window.dbToUiRoom ? String(window.dbToUiRoom(rid)).toUpperCase().trim() : cleanRid;
-                    const normR = window.normalizeRoomId ? String(window.normalizeRoomId(rid, curProp)).toUpperCase().trim() : cleanRid;
+                const rList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
+                return rList.some(rm => normMatch(rm, targetHId));
+            });
 
-                    return hotelRooms.some(h => {
-                        const hId = String(h.id || '').toUpperCase().trim();
-                        const normH = window.normalizeRoomId ? String(window.normalizeRoomId(h.id, curProp)).toUpperCase().trim() : hId;
-                        return hId === cleanRid || hId === uiR || normH === normR || hId === normR;
-                    });
-                });
+            return hasBookingInWindow;
+        });
 
-                if (validAssigned.length === 0) {
-                    const uCount = Math.max(1, rL.filter(r => !r || String(r).toLowerCase().includes('unassigned')).length);
-                    for (let i = 0; i < uCount; i++) uConf.push(s);
-                } else {
-                    const unassignedSlots = rL.filter(r => !r || String(r).toLowerCase().includes('unassigned'));
-                    for (let i = 0; i < unassignedSlots.length; i++) uConf.push(s);
+        // Split into active catalog and archived historical rooms
+        const activeHotelRooms = visibleRooms.filter(r => !r.inactive);
+        const archivedHotelRooms = visibleRooms.filter(r => !!r.inactive);
+
+        // Render Active Hotel Rooms
+        activeHotelRooms.forEach((r, idx, arr) => {
+            if (!r.type || !r.id) return;
+            if (r.type !== (idx > 0 && arr[idx - 1] ? arr[idx - 1].type : null)) {
+                tRows.push({ isDivider: true, label: r.type });
+            }
+
+            const { isDorm, baseRoom } = classifyRoomForCalendar(r);
+            const targetHId = String(r.id || '').toUpperCase().trim();
+
+            const isAssignedToThisRoom = (s) => {
+                if (['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status)) return false;
+                const rList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
+                return rList.some(rm => normMatch(rm, targetHId)) && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+            };
+
+            if (isDorm) {
+                const prevRoom = idx > 0 ? arr[idx - 1] : null;
+                const prevClassification = prevRoom ? classifyRoomForCalendar(prevRoom) : null;
+                const prevBaseRoom = (prevClassification && prevClassification.isDorm && prevRoom.type === r.type) 
+                    ? prevClassification.baseRoom 
+                    : null;
+
+                if (baseRoom && baseRoom !== prevBaseRoom) {
+                    tRows.push({ isSubHeader: true, label: baseRoom, floor: r.floor });
                 }
+
+                tRows.push({
+                    isRoom: true, 
+                    isBed: true, 
+                    id: r.id, 
+                    displayId: r.id, 
+                    type: r.type, 
+                    bed: r.bed || r.bunk || '', 
+                    floor: '', 
+                    icon: r.icon || r.bunk || '',
+                    bookings: actStaff.filter(isAssignedToThisRoom)
+                });
+            } else {
+                tRows.push({
+                    isRoom: true, 
+                    isPrivate: true, 
+                    id: r.id, 
+                    displayId: r.id, 
+                    type: r.type, 
+                    bed: r.bed || r.bunk || '', 
+                    floor: r.floor, 
+                    icon: r.icon || r.bunk || '',
+                    bookings: actStaff.filter(isAssignedToThisRoom)
+                });
+            }
+        });
+
+        // Render Inactive Historical Rooms at the Bottom (Muted / Archived Zone)
+        if (archivedHotelRooms.length > 0) {
+            tRows.push({ isDivider: true, label: "ARCHIVED / CLOSED ROOMS (PAST DATA)", isArchivedZone: true });
+            archivedHotelRooms.forEach(r => {
+                const targetHId = String(r.id || '').toUpperCase().trim();
+                const isAssigned = (s) => {
+                    const rList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
+                    return rList.some(rm => normMatch(rm, targetHId)) && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+                };
+
+                tRows.push({
+                    isRoom: true,
+                    isArchived: true,
+                    id: r.id,
+                    displayId: `[ARCHIVED] ${r.id}`,
+                    type: r.type,
+                    bed: r.bed || '',
+                    floor: r.floor,
+                    bookings: actStaff.filter(isAssigned)
+                });
+            });
+        }
             }
         });
 
@@ -432,15 +504,9 @@
             const isAssignedToThisRoom = (s) => {
                 if (['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status)) return false;
 
-                const rList = getRooms(s).map(rm => {
-                    const cleanRm = String(rm || '').toUpperCase().trim();
-                    const ui = window.dbToUiRoom ? String(window.dbToUiRoom(rm)).toUpperCase().trim() : cleanRm;
-                    return window.normalizeRoomId ? String(window.normalizeRoomId(ui, curProp)).toUpperCase().trim() : cleanRm;
-                });
+                const rList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
+                const matches = rList.some(rm => normMatch(rm, targetHId) || normMatch(rm, normRoomId));
 
-                const rawList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
-
-                const matches = rList.includes(normRoomId) || rList.includes(targetHId) || rawList.includes(targetHId);
                 return matches && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
             };
 
