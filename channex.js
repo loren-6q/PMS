@@ -129,6 +129,32 @@ export const ChannexClient = {
         return this.request(`/booking_revisions/${revisionId}`, {
             method: "GET"
         }, apiKey, isStaging);
+    },
+
+    // --- FULL DATA SYNC (CERTIFICATION TEST 1: EXACTLY 2 API CALLS FOR 500 DAYS) ---
+    async executeFullSync(propId, apiKey, availValues, restrValues, isStaging = false) {
+        let availabilityTaskId = null;
+        let restrictionsTaskId = null;
+
+        // Call 1 of 2: 500 days of Availability (All Rooms)
+        if (availValues && availValues.length > 0) {
+            const availRes = await this.request("/availability", {
+                method: "POST",
+                body: JSON.stringify({ values: availValues })
+            }, apiKey, isStaging);
+            availabilityTaskId = availRes.data?.[0]?.id || availRes.data?.id || null;
+        }
+
+        // Call 2 of 2: 500 days of Rates & Restrictions (All Rate Plans)
+        if (restrValues && restrValues.length > 0) {
+            const restrRes = await this.request("/restrictions", {
+                method: "POST",
+                body: JSON.stringify({ values: restrValues })
+            }, apiKey, isStaging);
+            restrictionsTaskId = restrRes.data?.[0]?.id || restrRes.data?.id || null;
+        }
+
+        return { availabilityTaskId, restrictionsTaskId };
     }
 };
 
