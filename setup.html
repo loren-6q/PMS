@@ -56,9 +56,65 @@
         .step-pill { background-color: #ffffff; color: #64748b; border: 1px solid #e2e8f0; }
         .step-pill.active { background-color: #4f46e5; color: #ffffff; border-color: #4338ca; }
         .step-pill.completed { background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; }
-        .table-input { border: 1px solid #cbd5e1; border-radius: 0.25rem; padding: 0.15rem 0.35rem; outline: none; font-size: 0.75rem; font-weight: 700; font-family: 'Roboto Condensed', sans-serif; background-color: #ffffff; transition: border-color 0.15s, box-shadow 0.15s; width: 100%; box-sizing: border-box; height: 22px; }
+        
+        /* Ultra-Dense Compact Table Rows Override */
+        #addon-list-body tr, #payment-methods-table-body tr, #room-def-list-body tr {
+            height: 24px !important;
+            max-height: 24px !important;
+        }
+        #addon-list-body td, #payment-methods-table-body td, #room-def-list-body td {
+            padding: 1px 4px !important;
+            font-size: 11px !important;
+            line-height: 1.1 !important;
+            vertical-align: middle !important;
+        }
+        #addon-list-body .table-input, #payment-methods-table-body .table-input, #room-def-list-body .table-input,
+        .table-input {
+            border: 1px solid #cbd5e1;
+            border-radius: 0.25rem;
+            padding: 0px 4px !important;
+            outline: none;
+            font-size: 11px !important;
+            font-weight: 700;
+            font-family: 'Roboto Condensed', sans-serif;
+            background-color: #ffffff;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            width: 100%;
+            box-sizing: border-box;
+            height: 20px !important;
+            min-height: 20px !important;
+            max-height: 20px !important;
+            line-height: 1 !important;
+        }
         .table-input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18); background-color: #fff; }
         .label-base { display: block; font-size: 0.625rem; font-weight: 900; color: #64748b; margin-bottom: 0.15rem; text-transform: uppercase; letter-spacing: 0.08em; }
+
+        /* Order button stack */
+        .order-btn-col {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 1px;
+            height: 20px;
+        }
+        .order-arrow-btn {
+            height: 9px !important;
+            width: 14px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            line-height: 0 !important;
+            cursor: pointer;
+        }
+        .order-arrow-btn svg, .order-arrow-btn i {
+            width: 9px !important;
+            height: 9px !important;
+            max-width: 9px !important;
+            max-height: 9px !important;
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col antialiased overflow-hidden">
