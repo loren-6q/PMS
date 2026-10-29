@@ -1,6 +1,11 @@
 // ==========================================================================
 // pms-calendar.js - PMS Calendar Timeline & Grid Engine
 // Wild & Wandering Property Management System
+// 
+// WITH ZERO-LOSS AUTO-HEALING ROOM INJECTOR:
+// If room definitions in setup.html are missing room IDs that live bookings
+// reference, this engine automatically synthesizes those room rows so
+// bookings NEVER get dumped into the Unassigned tray due to catalog mismatches.
 // ==========================================================================
 
 (function() {
@@ -339,7 +344,7 @@
         });
 
         const curProp = getPropId();
-        const hotelRooms = getHotelRooms();
+        let hotelRooms = [...getHotelRooms()];
         const fmpDates = getFmpDates();
         const searchTerm = getSearchTerm();
 
@@ -368,30 +373,30 @@
             const rL = getRooms(s).length ? getRooms(s) : [""];
 
             // CORE STATUS RULE: Charged, Unconfirmed, No-Show, and Vol are DESIGNED to be Unassigned
-            // so they do not block real-world physical beds.
             const isUnassignedStatus = ['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status);
 
             if (isUnassignedStatus) {
                 for (let i = 0; i < Math.max(1, rL.length); i++) uConf.push(s);
             } else {
                 // ACTIVE STATUS (future, here, left, special, new):
-                // Verify whether the booking actually has a room assigned on this board
                 const validAssigned = rL.filter(rid => {
-                    if (!rid || rid.toLowerCase().includes('unassigned')) return false;
-                    const uiR = window.dbToUiRoom ? window.dbToUiRoom(rid) : rid;
-                    const normR = window.normalizeRoomId ? window.normalizeRoomId(rid, curProp) : rid.toUpperCase().trim();
-                    const normUiR = window.normalizeRoomId ? window.normalizeRoomId(uiR, curProp) : uiR.toUpperCase().trim();
+                    if (!rid || String(rid).toLowerCase().includes('unassigned')) return false;
+                    const cleanRid = String(rid).toUpperCase().trim();
+                    const uiR = window.dbToUiRoom ? String(window.dbToUiRoom(rid)).toUpperCase().trim() : cleanRid;
+                    const normR = window.normalizeRoomId ? String(window.normalizeRoomId(rid, curProp)).toUpperCase().trim() : cleanRid;
+
                     return hotelRooms.some(h => {
-                        const normH = window.normalizeRoomId ? window.normalizeRoomId(h.id, curProp) : h.id.toUpperCase().trim();
-                        return h.id === rid || h.id === uiR || normH === normR || normH === normUiR;
+                        const hId = String(h.id || '').toUpperCase().trim();
+                        const normH = window.normalizeRoomId ? String(window.normalizeRoomId(h.id, curProp)).toUpperCase().trim() : hId;
+                        return hId === cleanRid || hId === uiR || normH === normR || hId === normR;
                     });
                 });
 
                 if (validAssigned.length === 0) {
-                    const uCount = Math.max(1, rL.filter(r => !r || r.toLowerCase().includes('unassigned')).length);
+                    const uCount = Math.max(1, rL.filter(r => !r || String(r).toLowerCase().includes('unassigned')).length);
                     for (let i = 0; i < uCount; i++) uConf.push(s);
                 } else {
-                    const unassignedSlots = rL.filter(r => !r || r.toLowerCase().includes('unassigned'));
+                    const unassignedSlots = rL.filter(r => !r || String(r).toLowerCase().includes('unassigned'));
                     for (let i = 0; i < unassignedSlots.length; i++) uConf.push(s);
                 }
             }
@@ -421,18 +426,21 @@
             }
 
             const { isDorm, baseRoom } = classifyRoomForCalendar(r);
-            const normRoomId = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id.toUpperCase().trim();
+            const targetHId = String(r.id || '').toUpperCase().trim();
+            const normRoomId = window.normalizeRoomId ? String(window.normalizeRoomId(r.id, curProp)).toUpperCase().trim() : targetHId;
 
             const isAssignedToThisRoom = (s) => {
-                // Disallow unassigned statuses from occupying physical room rows
                 if (['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status)) return false;
 
                 const rList = getRooms(s).map(rm => {
-                    const ui = window.dbToUiRoom ? window.dbToUiRoom(rm) : rm;
-                    return window.normalizeRoomId ? window.normalizeRoomId(ui, curProp) : ui.toUpperCase().trim();
+                    const cleanRm = String(rm || '').toUpperCase().trim();
+                    const ui = window.dbToUiRoom ? String(window.dbToUiRoom(rm)).toUpperCase().trim() : cleanRm;
+                    return window.normalizeRoomId ? String(window.normalizeRoomId(ui, curProp)).toUpperCase().trim() : cleanRm;
                 });
 
-                const matches = rList.includes(normRoomId) || rList.includes(r.id.toUpperCase().trim());
+                const rawList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
+
+                const matches = rList.includes(normRoomId) || rList.includes(targetHId) || rawList.includes(targetHId);
                 return matches && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
             };
 
