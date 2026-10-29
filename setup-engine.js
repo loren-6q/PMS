@@ -3,12 +3,10 @@
 // Wild & Wandering Property Management System
 // 
 // BUG FIXES & RESTORATIONS:
-// - Fixed fetchChannexData: inspects parent room_type_id to map rates to their
-//   ACTUAL matching PMS categories instead of dumping all rates into room[0].
-// - Deduplicated Sales Channels: Normalizes all casing variants into a single
-//   canonical dictionary (Direct, Booking.com, Hostelworld, Agoda, Expedia, Airbnb).
-// - Restored high-density, compact row styling.
-// - Restored color tints and Payment Methods & Commission (KP) Setup table.
+// - Property-Scoped Channels: Empties in-memory channel rules on property switch.
+//   Derives channels strictly from that property's own Channex rate plans + Direct & Default.
+// - Fixed fetchChannexData: maps plans strictly to parent room category.
+// - Restored high-density, compact row styling with rich color coding across steps.
 // ==========================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -36,7 +34,7 @@ const storage = getStorage(app);
 
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
-// Canonical Channel Key Normalizer (Deduplicates "3 Direct" & "2 Default" bugs)
+// Canonical Channel Key Normalizer
 function cleanChannelKey(rawKey) {
     if (!rawKey) return 'Default';
     const s = String(rawKey).trim().toLowerCase();
@@ -73,13 +71,7 @@ window.pricingRules = {
     stdRefVal: 25,
     evtRefType: '+%',
     evtRefVal: 25,
-    channels: {
-        'Direct': { type: '-%', val: 10 },
-        'Booking.com': { type: '=', val: 0 },
-        'Hostelworld': { type: '+%', val: 15 },
-        'Agoda': { type: '=', val: 0 },
-        'Expedia': { type: '=', val: 0 }
-    }
+    channels: {}
 };
 window.relationships = [];
 window.savedAutofillBaselines = {};
@@ -304,11 +296,11 @@ window.renderPaymentMethodsTable = function() {
     }
 
     tbody.innerHTML = window.paymentMethods.map((pm, idx) => `
-        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 text-xs">
+        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 text-xs ${pm.class === 'commission' ? 'bg-rose-50/30' : 'bg-emerald-50/20'}">
             <td class="p-1 px-2 font-mono font-black text-indigo-700">${pm.key}</td>
             <td class="p-1 px-2"><input type="text" class="table-input font-bold" value="${pm.label}" onchange="window.paymentMethods[${idx}].label = this.value"></td>
             <td class="p-1 px-2">
-                <select class="table-input font-bold ${pm.class === 'commission' ? 'text-rose-600 bg-rose-50' : 'text-emerald-700 bg-emerald-50'}" onchange="window.paymentMethods[${idx}].class = this.value">
+                <select class="table-input font-bold ${pm.class === 'commission' ? 'text-rose-700 bg-rose-50 border-rose-300' : 'text-emerald-700 bg-emerald-50 border-emerald-300'}" onchange="window.paymentMethods[${idx}].class = this.value; window.renderPaymentMethodsTable();">
                     <option value="revenue" ${pm.class === 'revenue' ? 'selected' : ''}>Real Revenue (Collected)</option>
                     <option value="commission" ${pm.class === 'commission' ? 'selected' : ''}>Commission (KP Expense)</option>
                 </select>
@@ -495,8 +487,6 @@ window.compileRoomsFromDefinitions = function() {
 
         if (isDorm) {
             const dormBeds = [];
-            // STRICT UNIQUE SEQUENTIAL NUMBERING: b = 1, 2, 3, ... total
-            // Prevents bunk-division bug (1, 1, 2, 2)
             for (let b = 1; b <= total; b++) {
                 let bunkTag = 'single';
                 if (def.rule === 'odd-top') bunkTag = (b % 2 === 1) ? 'top' : 'bottom';
@@ -571,19 +561,21 @@ window.renderRoomDefinitionsTable = function() {
 
     window.roomDefinitions.forEach((def, idx) => {
         const currentCat = def.category || 'Standard Room';
+        const isDorm = def.isDorm || def.rule !== 'private';
+
         if (currentCat !== lastCategory) {
             lastCategory = currentCat;
             const catRooms = window.roomDefinitions.filter(r => (r.category || 'Standard Room') === currentCat);
             const totalBeds = catRooms.reduce((sum, r) => sum + (parseInt(r.count, 10) || 1), 0);
 
             html += `
-            <tr class="bg-slate-800 text-white border-y-2 border-slate-900 sticky z-10 shadow-xs">
+            <tr class="bg-slate-900 text-white border-y-2 border-slate-950 sticky z-10 shadow-xs">
                 <td colspan="7" class="py-1 px-2.5">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <i data-lucide="folder" size="12" class="text-indigo-400"></i>
+                            <i data-lucide="folder" size="13" class="text-indigo-400"></i>
                             <span class="font-black text-xs uppercase tracking-wider text-slate-100">${currentCat}</span>
-                            <span class="bg-slate-700 text-slate-300 text-[9px] font-bold px-1.5 py-0.2 rounded border border-slate-600">
+                            <span class="bg-indigo-950 text-indigo-300 text-[9px] font-bold px-1.5 py-0.2 rounded border border-indigo-700">
                                 ${catRooms.length} Rooms • ${totalBeds} Units
                             </span>
                         </div>
@@ -592,17 +584,20 @@ window.renderRoomDefinitionsTable = function() {
             </tr>`;
         }
 
+        // Visual distinction: Dorms get warm amber tint, Privates get crisp white/slate
+        const rowBg = isDorm ? 'bg-amber-50/20 hover:bg-amber-50/50' : 'bg-white hover:bg-slate-50';
+
         html += `
-        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-room-idx="${idx}">
+        <tr class="${rowBg} transition-colors border-b border-slate-100" data-room-idx="${idx}">
             <td class="py-0.5 px-1 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
                 <span class="w-4 text-center text-slate-600 font-black">${idx + 1}</span>
             </td>
             <td class="py-0.5 px-1"><input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.roomDefinitions[${idx}].name = this.value; window.compileRoomsFromDefinitions();"></td>
             <td class="py-0.5 px-1"><input type="text" list="setup-category-datalist" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.roomDefinitions[${idx}].category = this.value; window.compileRoomsFromDefinitions();"></td>
-            <td class="py-0.5 px-1 text-center"><input type="number" min="1" max="60" class="table-input font-black text-center !w-14 mx-auto" value="${def.count || 1}" onchange="window.roomDefinitions[${idx}].count = parseInt(this.value,10)||1; window.compileRoomsFromDefinitions();"></td>
+            <td class="py-0.5 px-1 text-center"><input type="number" min="1" max="60" class="table-input font-black text-center !w-14 mx-auto ${isDorm ? 'text-amber-700' : 'text-slate-800'}" value="${def.count || 1}" onchange="window.roomDefinitions[${idx}].count = parseInt(this.value,10)||1; window.compileRoomsFromDefinitions();"></td>
             <td class="py-0.5 px-1"><input type="text" class="table-input text-center !w-16" value="${def.floor || '1'}" onchange="window.roomDefinitions[${idx}].floor = this.value; window.compileRoomsFromDefinitions();"></td>
             <td class="py-0.5 px-1">
-                <select class="table-input font-semibold" onchange="window.roomDefinitions[${idx}].rule = this.value; window.roomDefinitions[${idx}].isDorm = (this.value !== 'private'); window.compileRoomsFromDefinitions();">
+                <select class="table-input font-semibold ${isDorm ? 'text-amber-800 bg-amber-50/50' : 'text-slate-700'}" onchange="window.roomDefinitions[${idx}].rule = this.value; window.roomDefinitions[${idx}].isDorm = (this.value !== 'private'); window.compileRoomsFromDefinitions(); window.renderRoomDefinitionsTable();">
                     <option value="odd-top" ${def.rule === 'odd-top' ? 'selected' : ''}>DORM (Top # Odd)</option>
                     <option value="even-top" ${def.rule === 'even-top' ? 'selected' : ''}>DORM (Top # Even)</option>
                     <option value="single" ${def.rule === 'single' ? 'selected' : ''}>DORM (Single)</option>
@@ -628,16 +623,22 @@ window.renderBedPreviewDrawer = function() {
         grouped[p].push(r);
     });
 
-    container.innerHTML = Object.keys(grouped).map(p => `
+    container.innerHTML = Object.keys(grouped).map(p => {
+        const units = grouped[p];
+        return `
         <div class="bg-white p-1.5 rounded border border-slate-300 shadow-2xs min-w-[120px]">
             <div class="font-black text-slate-800 text-[10px] border-b border-slate-200 pb-0.5 mb-1 flex items-center justify-between">
-                <span>${p}</span><span class="text-[8.5px] text-slate-400">Fl. ${grouped[p][0]?.floor || 1}</span>
+                <span>${p}</span><span class="text-[8.5px] text-slate-400">Fl. ${units[0]?.floor || 1}</span>
             </div>
             <div class="flex flex-wrap gap-1">
-                ${grouped[p].map(u => `<span class="px-1 py-0.2 rounded text-[8.5px] font-bold bg-slate-100 border border-slate-200">${u.id}</span>`).join('')}
+                ${units.map(u => `
+                    <span class="px-1 py-0.2 rounded text-[8.5px] font-bold ${u.bunk === 'top' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : (u.bunk === 'bottom' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700 border border-slate-200')}">
+                        ${u.id}
+                    </span>
+                `).join('')}
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 };
 
 window.toggleBedPreviewDrawer = function(force) {
@@ -765,15 +766,13 @@ window.fetchChannexData = async function() {
             };
         });
 
-        // 2. Build channexRateMap: PRESERVE EXACT PARENT ROOM RELATIONSHIPS
-        // Do NOT dump all rate plans into roomDefinitions[0]!
+        // 2. Build channexRateMap: MAP STRICTLY TO PARENT ROOM CATEGORY
         window.channexRateMap = cleanRatePlans.map(item => {
             const planTitle = item.attributes?.title || '';
             const parentRoomId = item.attributes?.room_type_id || item.relationships?.room_type?.data?.id;
             const parentChannexRoom = channexRooms.find(r => r.id === parentRoomId);
             const parentRoomTitle = parentChannexRoom?.attributes?.title || '';
 
-            // Match parent room title to PMS Category
             let assignedPmsCategory = '';
             const mappedRoomEntry = window.channexMap.find(m => m.channexId === parentRoomId);
             if (mappedRoomEntry) {
@@ -802,12 +801,37 @@ window.fetchChannexData = async function() {
             };
         });
 
+        // 3. Populate Property-Scoped Channel Rules
+        window.populateChannelsFromRateMap();
+
         window.renderUnifiedMappingCards();
         window.customAlert("Channex Connected", `Successfully mapped ${channexRooms.length} Room Types and ${cleanRatePlans.length} Rate Plans to their proper categories.`);
     } catch (err) {
         console.error("Channex fetch error:", err);
         window.customAlert("Connection Failed", err.message);
     }
+};
+
+// DERIVES CHANNELS STRICTLY FROM THE PROPERTY'S OWN RATE MAP
+window.populateChannelsFromRateMap = function() {
+    const existing = window.pricingRules?.channels || {};
+    const propertyChannels = {};
+
+    // 1. Direct (Default Built-in Engine)
+    propertyChannels['Direct'] = existing['Direct'] || { type: '-%', val: 10 };
+
+    // 2. Discover channels actively present in this property's rate map
+    (window.channexRateMap || []).forEach(plan => {
+        const ch = cleanChannelKey(plan.channel);
+        if (ch && ch !== 'Default' && ch !== 'Direct') {
+            if (!propertyChannels[ch]) {
+                propertyChannels[ch] = existing[ch] || { type: '=', val: 0 };
+            }
+        }
+    });
+
+    window.pricingRules.channels = propertyChannels;
+    window.renderChannelRulesList();
 };
 
 window.openCreateRatePlanModal = function() {
@@ -905,9 +929,22 @@ window.executeCreateAndPushRatePlan = async function() {
         }
     }
 
+    window.populateChannelsFromRateMap();
     window.closeCreateRatePlanModal();
     window.renderUnifiedMappingCards();
     window.customAlert("Rate Plans Ready", `Saved "${title}" across ${pushedCount} categories.`);
+};
+
+// PMS-Style Authentic Brand Badges
+window.getChannelBadgeHtml = function(channel) {
+    const ch = cleanChannelKey(channel);
+    if (ch === 'Booking.com') return `<span class="bg-[#003580] text-white px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">BDC</span>`;
+    if (ch === 'Hostelworld') return `<span class="bg-[#F15A24] text-white px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">HW</span>`;
+    if (ch === 'Agoda') return `<span class="bg-[#87B2D6] text-white px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">AGODA</span>`;
+    if (ch === 'Expedia') return `<span class="bg-[#facc15] text-[#003580] px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">EXPEDIA</span>`;
+    if (ch === 'Airbnb') return `<span class="bg-[#FF5A5F] text-white px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">AIRBNB</span>`;
+    if (ch === 'Direct') return `<span class="bg-teal-600 text-white px-1.5 py-0.2 text-[9.5px] font-black rounded shrink-0">DIRECT</span>`;
+    return `<span class="bg-emerald-600 text-white px-1.5 py-0.2 text-[9px] font-black rounded shrink-0">DEFAULT</span>`;
 };
 
 window.renderUnifiedMappingCards = function() {
@@ -919,24 +956,31 @@ window.renderUnifiedMappingCards = function() {
         return;
     }
 
-    container.innerHTML = pmsCats.map(cat => {
+    container.innerHTML = pmsCats.map((cat, idx) => {
         const plans = (window.channexRateMap || []).filter(p => p.pmsCategory === cat);
+        const cardBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70';
+
         return `
-            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-xs mb-1.5">
+            <div class="${cardBg} border border-slate-300 rounded-lg p-2.5 shadow-xs mb-1.5">
                 <div class="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-1.5">
-                    <span class="font-black text-xs uppercase text-slate-800">${cat}</span>
-                    <span class="text-[9.5px] font-bold text-slate-500">${plans.length} Mapped Rate Plans</span>
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span class="font-black text-xs uppercase text-slate-800">${cat}</span>
+                    </div>
+                    <span class="text-[9.5px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                        ${plans.length} Mapped Rate Plans
+                    </span>
                 </div>
                 <div class="space-y-1">
                     ${plans.length > 0 ? plans.map(p => `
-                        <div class="flex items-center justify-between text-xs p-1 rounded bg-slate-50 border border-slate-200">
+                        <div class="flex items-center justify-between text-xs p-1 px-1.5 rounded bg-white border border-slate-200 hover:border-indigo-300 transition-colors">
                             <span class="font-bold text-slate-700 text-[11px] truncate mr-2">${p.ratePlanTitle}</span>
                             <div class="flex items-center gap-1.5 shrink-0">
-                                <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700">${p.channel}</span>
-                                <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${p.policy === 'ref' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${p.policy}</span>
+                                ${window.getChannelBadgeHtml(p.channel)}
+                                <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${p.policy === 'ref' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-700 border border-slate-200'}">${p.policy}</span>
                             </div>
                         </div>
-                    `).join('') : `<div class="text-[10px] text-slate-400 italic py-1">No rate plans linked to this room category.</div>`}
+                    `).join('') : `<div class="text-[10px] text-slate-400 italic py-1 px-1">No rate plans linked to this category.</div>`}
                 </div>
             </div>
         `;
@@ -1023,38 +1067,39 @@ window.renderChannelRulesList = function() {
     const container = document.getElementById('channel-rules-container');
     if (!container) return;
 
-    // Deduplicate channels into a single canonical set
-    const cleanChannels = {};
-    Object.keys(window.pricingRules?.channels || {}).forEach(k => {
-        const canon = cleanChannelKey(k);
-        if (canon !== 'Default' && !cleanChannels[canon]) {
-            cleanChannels[canon] = window.pricingRules.channels[k];
-        }
-    });
+    const channels = window.pricingRules.channels || {};
+    const keys = Object.keys(channels).filter(k => k !== 'Default');
 
-    if (!cleanChannels['Direct']) cleanChannels['Direct'] = { type: '-%', val: 10 };
-    if (!cleanChannels['Booking.com']) cleanChannels['Booking.com'] = { type: '=', val: 0 };
-    if (!cleanChannels['Hostelworld']) cleanChannels['Hostelworld'] = { type: '+%', val: 15 };
-    if (!cleanChannels['Agoda']) cleanChannels['Agoda'] = { type: '=', val: 0 };
-    if (!cleanChannels['Expedia']) cleanChannels['Expedia'] = { type: '=', val: 0 };
+    if (keys.length === 0) {
+        container.innerHTML = `
+            <div class="text-[10px] text-slate-400 italic p-2 bg-white rounded border border-slate-200">
+                All OTAs are currently selling directly from your Base Rate Anchor. Click "+ Add Channel" to define custom multipliers.
+            </div>`;
+        return;
+    }
 
-    window.pricingRules.channels = cleanChannels;
+    container.innerHTML = keys.map(ch => {
+        const conf = channels[ch] || { type: '=', val: 0 };
+        const badgeHtml = window.getChannelBadgeHtml(ch);
 
-    container.innerHTML = Object.keys(cleanChannels).map(ch => `
-        <div class="flex items-center justify-between p-1 rounded bg-white border border-slate-200">
-            <span class="font-bold text-xs text-slate-800">${ch}</span>
+        return `
+        <div class="flex items-center justify-between p-1 px-2 rounded bg-white border border-slate-200 shadow-2xs">
+            <div class="flex items-center gap-2">
+                ${badgeHtml}
+                <span class="font-bold text-xs text-slate-800">${ch}</span>
+            </div>
             <div class="flex items-center gap-1">
                 <select class="table-input !w-20 font-black text-center !py-0.5" onchange="window.pricingRules.channels['${ch}'].type = this.value">
-                    <option value="=" ${cleanChannels[ch].type === '=' ? 'selected' : ''}>SYNC (=)</option>
-                    <option value="+%" ${cleanChannels[ch].type === '+%' ? 'selected' : ''}>+ %</option>
-                    <option value="-%" ${cleanChannels[ch].type === '-%' ? 'selected' : ''}>- %</option>
-                    <option value="+" ${cleanChannels[ch].type === '+' ? 'selected' : ''}>+ ฿</option>
-                    <option value="-" ${cleanChannels[ch].type === '-' ? 'selected' : ''}>- ฿</option>
+                    <option value="=" ${conf.type === '=' ? 'selected' : ''}>SYNC (=)</option>
+                    <option value="+%" ${conf.type === '+%' ? 'selected' : ''}>+ %</option>
+                    <option value="-%" ${conf.type === '-%' ? 'selected' : ''}>- %</option>
+                    <option value="+" ${conf.type === '+' ? 'selected' : ''}>+ ฿</option>
+                    <option value="-" ${conf.type === '-' ? 'selected' : ''}>- ฿</option>
                 </select>
-                <input type="number" step="any" class="table-input font-bold text-center !w-16 !py-0.5" value="${cleanChannels[ch].val || 0}" onchange="window.pricingRules.channels['${ch}'].val = parseFloat(this.value)||0">
+                <input type="number" step="any" class="table-input font-bold text-center !w-16 !py-0.5" value="${conf.val || 0}" onchange="window.pricingRules.channels['${ch}'].val = parseFloat(this.value)||0">
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 };
 
 window.addVerifiedChannelRule = function() {
@@ -1116,6 +1161,9 @@ window.loadPropertyFromDatabase = async function(propId) {
         window.currentPropertyConfig = pData;
         window.activePropertyId = propId;
 
+        // Reset memory state completely on property switch
+        window.pricingRules.channels = {};
+
         const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
         setVal('prop-name', pData.name || propId);
         setVal('prop-short', (pData.short || pData.shortCode || propId).toUpperCase());
@@ -1157,6 +1205,9 @@ window.loadPropertyFromDatabase = async function(propId) {
             window.relationships = pDataPricing.relationships || [];
             window.pricingRules = { ...window.pricingRules, ...(pDataPricing.pricingRules || {}) };
         }
+
+        // Strictly derive channels from this property's own rate map
+        window.populateChannelsFromRateMap();
 
         if (statusText) statusText.innerText = "Ready";
     } catch (err) {
