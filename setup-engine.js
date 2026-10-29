@@ -1,7 +1,7 @@
 // ==========================================================================
 // setup-engine.js - Property Setup Wizard & Onboarding Engine
 // Wild & Wandering Property Management System
-// Complete, Unabridged Full-Feature Implementation
+// Complete, Unabridged Standalone Implementation
 // ==========================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -13,7 +13,6 @@ import {
     getStorage, ref as storageRef, uploadBytes, getDownloadURL 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
-// --- FIREBASE INITIALIZATION ---
 const firebaseConfig = {
     apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU",
     authDomain: "swimspms.firebaseapp.com",
@@ -28,12 +27,47 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// --- CLIENT-SIDE INSTANT IMAGE COMPRESSOR ---
+const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
+
+window.currentStep = 1;
+window.totalSteps = 5;
+window.activePropertyId = '';
+window.availableProperties = [];
+window.currentPropertyConfig = {};
+window.roomDefinitions = [];
+window.compiledRooms = [];
+window.addonsList = [];
+window.paymentMethods = [];
+window.channexConfig = { apiKey: '', propId: '', rateMultiplier: 100 };
+window.channexRooms = [];
+window.channexRatePlans = [];
+window.channexMap = [];
+window.channexRateMap = [];
+window.pricingRules = {
+    masterDriver: 'bdc_non_ref',
+    anchorPrivate: '',
+    anchorDorm: '',
+    stdRefType: '+%',
+    stdRefVal: 25,
+    evtRefType: '+%',
+    evtRefVal: 25,
+    channels: {
+        'Default': { type: '=', val: 0 },
+        'Direct': { type: '-%', val: 10 },
+        'Booking.com': { type: '=', val: 0 },
+        'Hostelworld': { type: '+%', val: 15 },
+        'Agoda': { type: '=', val: 0 },
+        'Expedia': { type: '=', val: 0 }
+    }
+};
+window.relationships = [];
+window.savedAutofillBaselines = {};
+window.ratesSpan = 2;
+window.restrSpan = 6;
+
 async function compressImage(file, maxWidth = 1200, maxHeight = 400, quality = 0.82) {
     return new Promise((resolve) => {
-        if (!file || !file.type.startsWith('image/')) {
-            return resolve({ blob: file, dataUrl: '' });
-        }
+        if (!file || !file.type.startsWith('image/')) return resolve({ blob: file, dataUrl: '' });
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
@@ -53,10 +87,7 @@ async function compressImage(file, maxWidth = 1200, maxHeight = 400, quality = 0
                 const isPng = file.type === 'image/png';
                 const mime = isPng ? 'image/png' : 'image/jpeg';
                 canvas.toBlob((blob) => {
-                    resolve({
-                        blob: blob || file,
-                        dataUrl: canvas.toDataURL(mime, quality)
-                    });
+                    resolve({ blob: blob || file, dataUrl: canvas.toDataURL(mime, quality) });
                 }, mime, quality);
             };
             img.onerror = () => resolve({ blob: file, dataUrl: e.target.result });
@@ -93,57 +124,7 @@ function sanitizeForFirestore(data) {
     return data;
 }
 
-// --- GLOBAL WIZARD STATE ---
-window.currentStep = 1;
-window.totalSteps = 5;
-window.activePropertyId = '';
-window.availableProperties = [];
-window.currentPropertyConfig = {};
-window.roomDefinitions = [];
-window.compiledRooms = [];
-window.addonsList = [];
-window.channexConfig = { apiKey: '', propId: '', rateMultiplier: 100 };
-window.channexRooms = [];
-window.channexRatePlans = [];
-window.channexMap = [];
-window.channexRateMap = [];
-window.pricingRules = {
-    masterDriver: 'bdc_non_ref',
-    anchorPrivate: '',
-    anchorDorm: '',
-    stdRefType: '+%',
-    stdRefVal: 25,
-    evtRefType: '+%',
-    evtRefVal: 25,
-    channels: {
-        'Default': { type: '=', val: 0 },
-        'Direct': { type: '-%', val: 10 },
-        'Booking.com': { type: '=', val: 0 },
-        'Hostelworld': { type: '+%', val: 15 },
-        'Agoda': { type: '=', val: 0 },
-        'Expedia': { type: '=', val: 0 }
-    }
-};
-window.relationships = [];
-window.savedAutofillBaselines = {};
-window.ratesSpan = 2;
-window.restrSpan = 6;
-
-const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
-
-window.updateFavicon = (iconUrl) => {
-    const url = iconUrl || DEFAULT_WW_ICON;
-    let link = document.querySelector("link[rel*='icon']");
-    if (!link) {
-        link = document.createElement('link');
-        link.rel = 'icon';
-        document.head.appendChild(link);
-    }
-    link.type = 'image/png';
-    link.href = url;
-};
-
-// --- STEP NAVIGATION & STEP DISPLAY ---
+// --- STEP NAVIGATION ---
 window.jumpStep = (step) => {
     const s = Math.max(1, Math.min(5, parseInt(step, 10) || 1));
     window.currentStep = s;
@@ -162,8 +143,8 @@ window.jumpStep = (step) => {
             if (badge) { badge.className = "w-5 h-5 rounded bg-emerald-100 text-emerald-800 font-black text-[10px] flex items-center justify-center shrink-0 border border-emerald-300"; }
             if (sec) sec.classList.add('hidden');
         } else {
-            if (pill) { pill.classList.remove('active', 'completed'); }
-            if (badge) { badge.className = "w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200"; }
+            if (pill) pill.classList.remove('active', 'completed');
+            if (badge) badge.className = "w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200";
             if (sec) sec.classList.add('hidden');
         }
     }
@@ -185,6 +166,7 @@ window.jumpStep = (step) => {
         }
     }
 
+    if (s === 1) window.renderPaymentMethodsTable();
     if (s === 3) window.renderUnifiedMappingCards();
     if (s === 4) window.renderPricingStepRules();
     if (s === 5) window.renderReviewLaunchStep();
@@ -213,24 +195,14 @@ let _customModalCallback = null;
 window.customAlert = (title, message, isConfirm = false, onConfirm = null) => {
     const modal = document.getElementById('custom-app-modal');
     if (!modal) return alert(`${title}\n\n${message}`);
-    const t = document.getElementById('modal-title');
-    const b = document.getElementById('modal-body');
-    const cancelBtn = document.getElementById('modal-cancel-btn');
-    const confirmBtn = document.getElementById('modal-confirm-btn');
-
-    if (t) t.innerText = title || "Notification";
-    if (b) b.innerText = message || "";
-
+    document.getElementById('modal-title').innerText = title || "Notification";
+    document.getElementById('modal-body').innerText = message || "";
     _customModalCallback = onConfirm;
 
-    if (cancelBtn) {
-        if (isConfirm) cancelBtn.classList.remove('hidden');
-        else cancelBtn.classList.add('hidden');
-    }
-
-    if (confirmBtn) {
-        confirmBtn.innerText = isConfirm ? "Confirm" : "OK";
-    }
+    const cancelBtn = document.getElementById('modal-cancel-btn');
+    const confirmBtn = document.getElementById('modal-confirm-btn');
+    if (cancelBtn) cancelBtn.classList.toggle('hidden', !isConfirm);
+    if (confirmBtn) confirmBtn.innerText = isConfirm ? "Confirm" : "OK";
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -239,10 +211,7 @@ window.customAlert = (title, message, isConfirm = false, onConfirm = null) => {
 
 window.closeCustomModal = (confirmed) => {
     const modal = document.getElementById('custom-app-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
     if (confirmed && typeof _customModalCallback === 'function') {
         const cb = _customModalCallback;
         _customModalCallback = null;
@@ -252,31 +221,21 @@ window.closeCustomModal = (confirmed) => {
     }
 };
 
-// --- LOGO MANAGEMENT ---
+// --- LOGO UPLOADS & PREVIEWS ---
 window.updateLogoPreview = (type, url) => {
     const cleanUrl = (url || '').trim() || DEFAULT_WW_ICON;
-    if (type === 'primary') {
-        const img = document.getElementById('preview-logo-primary');
-        const inp = document.getElementById('prop-logo-url');
-        if (img) img.src = cleanUrl;
-        if (inp && inp.value !== cleanUrl) inp.value = cleanUrl;
-    } else if (type === 'banner') {
-        const img = document.getElementById('preview-logo-banner');
-        const inp = document.getElementById('prop-banner-url');
-        if (img) img.src = cleanUrl;
-        if (inp && inp.value !== cleanUrl) inp.value = cleanUrl;
-    } else if (type === 'icon') {
-        const img = document.getElementById('preview-logo-icon');
-        const inp = document.getElementById('prop-icon-url');
-        if (img) img.src = cleanUrl;
-        if (inp && inp.value !== cleanUrl) inp.value = cleanUrl;
+    const img = document.getElementById(`preview-logo-${type}`);
+    const inp = document.getElementById(`prop-${type === 'primary' ? 'logo' : (type === 'banner' ? 'banner' : 'icon')}-url`);
+    if (img) img.src = cleanUrl;
+    if (inp && inp.value !== cleanUrl) inp.value = cleanUrl;
+    if (type === 'icon') {
+        const navIcon = document.getElementById('nav-brand-icon');
+        if (navIcon) navIcon.src = cleanUrl;
     }
 };
 
 window.resetLogosToDefault = () => {
-    window.updateLogoPreview('primary', DEFAULT_WW_ICON);
-    window.updateLogoPreview('banner', DEFAULT_WW_ICON);
-    window.updateLogoPreview('icon', DEFAULT_WW_ICON);
+    ['primary', 'banner', 'icon'].forEach(t => window.updateLogoPreview(t, DEFAULT_WW_ICON));
 };
 
 window.handleLogoFileUpload = async (event, logoType) => {
@@ -285,7 +244,7 @@ window.handleLogoFileUpload = async (event, logoType) => {
 
     const propId = window.activePropertyId || 'swims_resort';
     const statusText = document.getElementById('header-status-text');
-    if (statusText) statusText.innerText = `Optimizing ${logoType} image...`;
+    if (statusText) statusText.innerText = `Optimizing ${logoType}...`;
 
     const dimensions = {
         primary: { w: 400, h: 120, q: 0.85 },
@@ -300,17 +259,58 @@ window.handleLogoFileUpload = async (event, logoType) => {
     const storagePath = `properties/${propId}/logo_${logoType}_${Date.now()}.${ext}`;
 
     try {
-        if (statusText) statusText.innerText = `Uploading ${logoType} logo...`;
+        if (statusText) statusText.innerText = `Uploading ${logoType}...`;
         const sRef = storageRef(storage, storagePath);
         await uploadBytes(sRef, compressed.blob);
         const downloadUrl = await getDownloadURL(sRef);
         window.updateLogoPreview(logoType, downloadUrl);
-        if (statusText) statusText.innerText = "Logo saved!";
-        window.customAlert("Success", `${logoType.toUpperCase()} logo uploaded successfully.`);
+        if (statusText) statusText.innerText = "Ready";
+        window.customAlert("Success", `${logoType.toUpperCase()} logo uploaded and updated.`);
     } catch (err) {
         console.warn("Storage upload failed, keeping compressed thumbnail DataURL:", err);
-        if (statusText) statusText.innerText = "Logo saved locally.";
+        if (statusText) statusText.innerText = "Saved locally";
     }
+};
+
+// --- PAYMENT METHODS & COMMISSION (KP) ENGINE ---
+window.renderPaymentMethodsTable = () => {
+    const tbody = document.getElementById('payment-methods-table-body');
+    if (!tbody) return;
+
+    if (!Array.isArray(window.paymentMethods) || window.paymentMethods.length === 0) {
+        window.paymentMethods = [
+            { key: 'cash', label: 'Cash (In-House)', class: 'revenue', active: true },
+            { key: 'card', label: 'Credit Card (Terminal / Stripe)', class: 'revenue', active: true },
+            { key: 'scan', label: 'QR Scan / Bank Transfer', class: 'revenue', active: true },
+            { key: 'bdc-pay', label: 'Booking.com Virtual Card', class: 'revenue', active: true },
+            { key: 'bdc-kp', label: 'Booking.com Commission Withheld', class: 'commission', active: true },
+            { key: 'agoda-pay', label: 'Agoda Payout (Prepaid)', class: 'revenue', active: true },
+            { key: 'agoda-kp', label: 'Agoda Commission Withheld', class: 'commission', active: true },
+            { key: 'hw-kp', label: 'Hostelworld Online Deposit (Commission)', class: 'commission', active: true },
+            { key: 'airbnb-pay', label: 'Airbnb Payout', class: 'revenue', active: true },
+            { key: 'airbnb-kp', label: 'Airbnb Host Fee Withheld', class: 'commission', active: true },
+            { key: 'expedia-pay', label: 'Expedia Payout', class: 'revenue', active: true },
+            { key: 'expedia-kp', label: 'Expedia Commission Withheld', class: 'commission', active: true }
+        ];
+    }
+
+    tbody.innerHTML = window.paymentMethods.map((pm, idx) => `
+        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 text-xs">
+            <td class="p-2 font-mono font-black text-indigo-700">${pm.key}</td>
+            <td class="p-2"><input type="text" class="table-input font-bold" value="${pm.label}" onchange="window.paymentMethods[${idx}].label = this.value"></td>
+            <td class="p-2">
+                <select class="table-input font-bold ${pm.class === 'commission' ? 'text-rose-600 bg-rose-50' : 'text-emerald-700 bg-emerald-50'}" onchange="window.paymentMethods[${idx}].class = this.value">
+                    <option value="revenue" ${pm.class === 'revenue' ? 'selected' : ''}>Real Revenue (Collected)</option>
+                    <option value="commission" ${pm.class === 'commission' ? 'selected' : ''}>Commission (KP Expense)</option>
+                </select>
+            </td>
+            <td class="p-2 text-center">
+                <span class="px-2 py-0.5 rounded text-[9.5px] font-black uppercase ${pm.class === 'commission' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}">
+                    ${pm.class === 'commission' ? 'KP Expense' : 'Real Money'}
+                </span>
+            </td>
+        </tr>
+    `).join('');
 };
 
 // --- ADDONS MANAGEMENT ---
@@ -322,13 +322,11 @@ window.moveAddon = (idx, direction) => {
     const temp = window.addonsList[idx];
     window.addonsList[idx] = window.addonsList[targetIdx];
     window.addonsList[targetIdx] = temp;
-    
     window.addonsList.forEach((item, i) => { item.order = i + 1; });
     window.renderAddonsTable();
 };
 
 let _draggedAddonIdx = null;
-
 window.handleAddonDragStart = (e, idx) => {
     _draggedAddonIdx = idx;
     e.dataTransfer.effectAllowed = 'move';
@@ -368,11 +366,10 @@ window.renderAddonsTable = () => {
         ];
     }
 
-    let html = '';
-    window.addonsList.forEach((item, idx) => {
+    tbody.innerHTML = window.addonsList.map((item, idx) => {
         const isFirst = idx === 0;
         const isLast = idx === window.addonsList.length - 1;
-        html += `
+        return `
         <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-addon-id="${item.id}"
             ondragover="window.handleAddonDragOver(event)"
             ondrop="window.handleAddonDrop(event, ${idx})">
@@ -385,41 +382,32 @@ window.renderAddonsTable = () => {
                           title="Drag to reorder">
                         <i data-lucide="grip-vertical" size="13"></i>
                     </span>
-                    <span class="w-4 text-center text-slate-600">${idx + 1}</span>
+                    <span class="w-4 text-center text-slate-600 font-bold">${idx + 1}</span>
                     <div class="flex flex-col ml-0.5">
-                        <button type="button" onclick="window.moveAddon(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5" title="Move Up">
+                        <button type="button" onclick="window.moveAddon(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5">
                             <i data-lucide="chevron-up" size="11"></i>
                         </button>
-                        <button type="button" onclick="window.moveAddon(${idx}, 1)" ${isLast ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5" title="Move Down">
+                        <button type="button" onclick="window.moveAddon(${idx}, 1)" ${isLast ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed leading-none p-0.5">
                             <i data-lucide="chevron-down" size="11"></i>
                         </button>
                     </div>
                 </div>
             </td>
+            <td class="p-1.5"><input type="text" class="table-input font-bold" value="${item.name || ''}" onchange="window.addonsList[${idx}].name = this.value"></td>
+            <td class="p-1.5"><input type="text" class="table-input" value="${item.category || 'General'}" onchange="window.addonsList[${idx}].category = this.value"></td>
+            <td class="p-1.5"><input type="number" step="any" class="table-input font-black text-center text-emerald-700" value="${item.price || 0}" onchange="window.addonsList[${idx}].price = parseFloat(this.value)||0"></td>
             <td class="p-1.5">
-                <input type="text" class="table-input font-bold" value="${item.name || ''}" onchange="window.updateAddonField(${idx}, 'name', this.value)">
-            </td>
-            <td class="p-1.5">
-                <input type="text" class="table-input" value="${item.category || 'General'}" onchange="window.updateAddonField(${idx}, 'category', this.value)">
-            </td>
-            <td class="p-1.5">
-                <input type="number" step="any" class="table-input font-black text-center text-emerald-700" value="${item.price || 0}" onchange="window.updateAddonField(${idx}, 'price', parseFloat(this.value)||0)">
-            </td>
-            <td class="p-1.5">
-                <select class="table-input font-medium" onchange="window.updateAddonField(${idx}, 'type', this.value)">
+                <select class="table-input font-medium" onchange="window.addonsList[${idx}].type = this.value">
                     <option value="one-off" ${item.type === 'one-off' ? 'selected' : ''}>One-Off</option>
                     <option value="per-day" ${item.type === 'per-day' ? 'selected' : ''}>Per Day</option>
                     <option value="per-item" ${item.type === 'per-item' ? 'selected' : ''}>Per Item</option>
                 </select>
             </td>
             <td class="p-1.5 text-center">
-                <button type="button" onclick="window.removeAddonRow(${idx})" class="p-1 text-slate-400 hover:text-rose-600 cursor-pointer">
-                    <i data-lucide="trash-2" size="13"></i>
-                </button>
+                <button type="button" onclick="window.addonsList.splice(${idx}, 1); window.renderAddonsTable();" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="13"></i></button>
             </td>
         </tr>`;
-    });
-    tbody.innerHTML = html;
+    }).join('');
     if (window.lucide) window.lucide.createIcons();
 };
 
@@ -434,19 +422,6 @@ window.addBlankAddonRow = () => {
         type: 'one-off'
     });
     window.renderAddonsTable();
-};
-
-window.removeAddonRow = (idx) => {
-    if (window.addonsList && window.addonsList[idx]) {
-        window.addonsList.splice(idx, 1);
-        window.renderAddonsTable();
-    }
-};
-
-window.updateAddonField = (idx, field, value) => {
-    if (window.addonsList && window.addonsList[idx]) {
-        window.addonsList[idx][field] = value;
-    }
 };
 
 // --- ROOM INVENTORY DEFINITIONS & GENERATORS ---
@@ -465,18 +440,15 @@ window.toggleBatchRoomPanel = (forceState = null) => {
 };
 
 window.executeBatchDormGenerate = () => {
-    const roomName = document.getElementById('gen-dorm-name')?.value.trim() || 'DORM A';
-    const catName = document.getElementById('gen-dorm-cat')?.value.trim() || 'Standard 6-Bed Dorm';
+    const roomName = (document.getElementById('gen-dorm-name')?.value || 'DORM A').trim().toUpperCase();
+    const catName = (document.getElementById('gen-dorm-cat')?.value || 'Standard 6-Bed Dorm').trim();
     const bedCount = parseInt(document.getElementById('gen-dorm-beds')?.value, 10) || 6;
-    const floor = document.getElementById('gen-dorm-floor')?.value.trim() || '1';
+    const floor = (document.getElementById('gen-dorm-floor')?.value || '1').trim();
     const rule = document.getElementById('gen-dorm-rule')?.value || 'odd-top';
 
-    const cleanRoomName = roomName.toUpperCase();
-    const cleanCatName = catName;
-
-    const existing = window.roomDefinitions.find(r => r.name.toUpperCase() === cleanRoomName);
+    const existing = window.roomDefinitions.find(r => r.name.toUpperCase() === roomName);
     if (existing) {
-        existing.category = cleanCatName;
+        existing.category = catName;
         existing.count = bedCount;
         existing.floor = floor;
         existing.rule = rule;
@@ -484,11 +456,11 @@ window.executeBatchDormGenerate = () => {
     } else {
         window.roomDefinitions.push({
             id: 'room_' + Math.random().toString(36).substr(2, 7),
-            name: cleanRoomName,
-            category: cleanCatName,
+            name: roomName,
+            category: catName,
             count: bedCount,
-            floor: floor,
-            rule: rule,
+            floor,
+            rule,
             isDorm: true
         });
     }
@@ -500,14 +472,12 @@ window.executeBatchDormGenerate = () => {
 
 window.executeBatchRoomGenerate = () => {
     const prefix = document.getElementById('gen-room-prefix')?.value || 'ROOM ';
-    const catName = document.getElementById('gen-room-cat')?.value.trim() || 'Deluxe King Room';
+    const catName = (document.getElementById('gen-room-cat')?.value || 'Deluxe King Room').trim();
     const startNum = parseInt(document.getElementById('gen-room-start')?.value, 10) || 1;
     const endNum = parseInt(document.getElementById('gen-room-end')?.value, 10) || 4;
-    const floor = document.getElementById('gen-room-floor')?.value.trim() || '1';
+    const floor = (document.getElementById('gen-room-floor')?.value || '1').trim();
 
-    if (startNum > endNum) {
-        return window.customAlert("Validation Error", "Start number must be less than or equal to End number.");
-    }
+    if (startNum > endNum) return window.customAlert("Validation Error", "Start number must be <= End number.");
 
     for (let i = startNum; i <= endNum; i++) {
         const fullRoomName = `${prefix}${i}`;
@@ -523,7 +493,7 @@ window.executeBatchRoomGenerate = () => {
                 name: fullRoomName,
                 category: catName,
                 count: 1,
-                floor: floor,
+                floor,
                 rule: 'private',
                 isDorm: false
             });
@@ -618,11 +588,43 @@ window.renderRoomDefinitionsTable = () => {
         return;
     }
 
-    tbody.innerHTML = window.roomDefinitions.map((def, idx) => `
+    const catList = document.getElementById('setup-category-datalist');
+    const existingCats = Array.from(new Set((window.roomDefinitions || []).map(r => r.category).filter(Boolean)));
+    if (catList) catList.innerHTML = existingCats.map(c => `<option value="${c}"></option>`).join('');
+
+    let html = '';
+    let lastCategory = null;
+
+    window.roomDefinitions.forEach((def, idx) => {
+        const currentCat = def.category || 'Standard Room';
+        if (currentCat !== lastCategory) {
+            lastCategory = currentCat;
+            const catRooms = window.roomDefinitions.filter(r => (r.category || 'Standard Room') === currentCat);
+            const totalBeds = catRooms.reduce((sum, r) => sum + (parseInt(r.count, 10) || 1), 0);
+
+            html += `
+            <tr class="bg-slate-800 text-white border-y-2 border-slate-900 sticky z-10 shadow-xs">
+                <td colspan="7" class="p-1.5 px-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="folder" size="13" class="text-indigo-400"></i>
+                            <span class="font-black text-xs uppercase tracking-wider text-slate-100">${currentCat}</span>
+                            <span class="bg-slate-700 text-slate-300 text-[9.5px] font-bold px-2 py-0.5 rounded border border-slate-600">
+                                ${catRooms.length} Rooms • ${totalBeds} Units
+                            </span>
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+        }
+
+        html += `
         <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100" data-room-idx="${idx}">
-            <td class="p-1.5 text-center font-mono font-bold text-slate-500 text-[10px]">${idx + 1}</td>
+            <td class="p-1.5 text-center font-mono font-bold text-slate-500 text-[10px] whitespace-nowrap">
+                <span class="w-4 text-center text-slate-600 font-black">${idx + 1}</span>
+            </td>
             <td class="p-1.5"><input type="text" class="table-input font-bold" value="${def.name || ''}" onchange="window.roomDefinitions[${idx}].name = this.value; window.compileRoomsFromDefinitions();"></td>
-            <td class="p-1.5"><input type="text" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.roomDefinitions[${idx}].category = this.value; window.compileRoomsFromDefinitions();"></td>
+            <td class="p-1.5"><input type="text" list="setup-category-datalist" class="table-input font-bold text-indigo-700" value="${def.category || ''}" onchange="window.roomDefinitions[${idx}].category = this.value; window.compileRoomsFromDefinitions();"></td>
             <td class="p-1.5 text-center"><input type="number" min="1" max="60" class="table-input font-black text-center !w-16 mx-auto" value="${def.count || 1}" onchange="window.roomDefinitions[${idx}].count = parseInt(this.value,10)||1; window.compileRoomsFromDefinitions();"></td>
             <td class="p-1.5"><input type="text" class="table-input text-center !w-20" value="${def.floor || '1'}" onchange="window.roomDefinitions[${idx}].floor = this.value; window.compileRoomsFromDefinitions();"></td>
             <td class="p-1.5">
@@ -636,15 +638,15 @@ window.renderRoomDefinitionsTable = () => {
             <td class="p-1.5 text-center">
                 <button type="button" onclick="window.roomDefinitions.splice(${idx}, 1); window.compileRoomsFromDefinitions(); window.renderRoomDefinitionsTable();" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" size="13"></i></button>
             </td>
-        </tr>
-    `).join('');
+        </tr>`;
+    });
+    tbody.innerHTML = html;
     if (window.lucide) window.lucide.createIcons();
 };
 
 window.renderBedPreviewDrawer = () => {
     const container = document.getElementById('bed-preview-groups');
     if (!container) return;
-
     const grouped = {};
     (window.compiledRooms || []).forEach(r => {
         const p = r.parentRoom || r.id;
@@ -683,14 +685,72 @@ window.addBlankRoomDef = () => {
     window.renderRoomDefinitionsTable();
 };
 
-// --- CHANNEX REST INTEGRATION & RATE PLAN CREATOR ---
+// --- CATEGORY REORDERING ENGINE ---
+window.openReorderCategoriesModal = () => {
+    const defs = window.roomDefinitions || [];
+    const counts = {};
+    const categories = [];
+
+    defs.forEach(d => {
+        const c = d.category || 'Standard Room';
+        if (!counts[c]) { counts[c] = { rooms: 0, beds: 0 }; categories.push(c); }
+        counts[c].rooms++;
+        counts[c].beds += parseInt(d.count, 10) || 1;
+    });
+
+    window._tempCategoryOrder = [...categories];
+    window._tempCategoryCounts = counts;
+
+    const listEl = document.getElementById('reorder-cat-list');
+    if (listEl) {
+        listEl.innerHTML = categories.map((cat, idx) => `
+            <div class="flex items-center justify-between p-2 rounded bg-white border border-slate-200 shadow-2xs">
+                <span class="font-black text-slate-800 text-xs">${idx + 1}. ${cat}</span>
+                <div class="flex items-center gap-1">
+                    <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, -1)" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"><i data-lucide="chevron-up" size="14"></i></button>
+                    <button type="button" onclick="window.shiftCategoryOrderItem(${idx}, 1)" class="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"><i data-lucide="chevron-down" size="14"></i></button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    const modal = document.getElementById('reorder-categories-modal');
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.closeReorderCategoriesModal = () => {
+    const modal = document.getElementById('reorder-categories-modal');
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+};
+
+window.shiftCategoryOrderItem = (idx, direction) => {
+    const target = idx + direction;
+    if (target < 0 || target >= window._tempCategoryOrder.length) return;
+    const temp = window._tempCategoryOrder[idx];
+    window._tempCategoryOrder[idx] = window._tempCategoryOrder[target];
+    window._tempCategoryOrder[target] = temp;
+    window.openReorderCategoriesModal();
+};
+
+window.applyReorderedCategories = () => {
+    const order = window._tempCategoryOrder || [];
+    const defs = window.roomDefinitions || [];
+    const reordered = [];
+    order.forEach(c => {
+        reordered.push(...defs.filter(d => (d.category || 'Standard Room') === c));
+    });
+    window.roomDefinitions = reordered;
+    window.compileRoomsFromDefinitions();
+    window.renderRoomDefinitionsTable();
+    window.closeReorderCategoriesModal();
+};
+
+// --- CHANNEX INTEGRATION & RATE PLAN CREATOR ---
 window.fetchChannexData = async () => {
     const apiKey = document.getElementById('chan-api-key')?.value.trim();
     const propId = document.getElementById('chan-prop-id')?.value.trim();
-
-    if (!apiKey || !propId) {
-        return window.customAlert("Credentials Required", "Enter both your Channex API Key and Channex Property ID.");
-    }
+    if (!apiKey || !propId) return window.customAlert("Credentials Required", "Enter both your Channex API Key and Property ID.");
 
     try {
         const propRes = await fetch(`https://app.channex.io/api/v1/properties/${propId}`, {
@@ -711,21 +771,15 @@ window.fetchChannexData = async () => {
         const cleanRatePlans = optJson.data || [];
 
         window.channexConfig = { apiKey, propId, rateMultiplier: 100 };
-        window.channexRooms = channexRooms;
-        window.channexRatePlans = cleanRatePlans;
-
-        window.channexMap = channexRooms.map(cr => {
-            const crTitle = cr.attributes?.title || '';
-            const existing = (window.channexMap || []).find(m => m.channexId === cr.id);
-            let matchedCat = existing?.pmsCategory || '';
-
-            if (!matchedCat) {
-                const pmsCats = [...new Set((window.roomDefinitions || []).map(r => r.category))];
-                matchedCat = pmsCats.find(c => c.toLowerCase() === crTitle.toLowerCase() || crTitle.toLowerCase().includes(c.toLowerCase())) || pmsCats[0] || '';
-            }
-
-            return { channexId: cr.id, channexTitle: crTitle, pmsCategory: matchedCat };
-        });
+        window.channexRateMap = cleanRatePlans.map(item => ({
+            ratePlanId: item.id,
+            ratePlanTitle: item.attributes?.title || '',
+            pmsCategory: (window.roomDefinitions[0]?.category || 'Standard Room'),
+            channel: /bdc|booking/i.test(item.attributes?.title) ? 'Booking.com' : 'Default',
+            policy: /ref/i.test(item.attributes?.title) ? 'ref' : 'non-ref',
+            product: 'std',
+            rateSource: 'std'
+        }));
 
         window.renderUnifiedMappingCards();
         window.customAlert("Channex Connected", `Fetched ${channexRooms.length} Room Types and ${cleanRatePlans.length} Rate Plans.`);
@@ -767,7 +821,6 @@ window.toggleAllTargetRooms = (checked) => {
     document.querySelectorAll('.crp-cat-box').forEach(cb => cb.checked = !!checked);
 };
 
-// Exact Channex REST endpoint invocation
 window.executeCreateAndPushRatePlan = async () => {
     const title = document.getElementById('crp-title')?.value.trim();
     const channel = document.getElementById('crp-channel')?.value || 'DEFAULT';
@@ -781,7 +834,6 @@ window.executeCreateAndPushRatePlan = async () => {
     const propId = window.channexConfig?.propId || document.getElementById('chan-prop-id')?.value.trim();
 
     let pushedCount = 0;
-
     for (const cat of selectedCats) {
         const mappedRoom = (window.channexMap || []).find(m => m.pmsCategory === cat);
         const roomId = mappedRoom?.channexId;
@@ -818,7 +870,6 @@ window.executeCreateAndPushRatePlan = async () => {
                 console.warn(`Could not push to Channex for ${cat}:`, err);
             }
         } else {
-            // Local fallback
             const localId = 'plan_' + Math.random().toString(36).substr(2, 9);
             window.channexRateMap.push({
                 ratePlanId: localId,
@@ -883,7 +934,9 @@ window.renderPricingStepRules = () => {
     if (privSelect) { privSelect.innerHTML = opts; privSelect.value = window.pricingRules.anchorPrivate || cats.find(c => !c.toLowerCase().includes('dorm')) || cats[0] || ''; }
 
     const stdRefInput = document.getElementById('rule-std-ref');
+    const evtRefInput = document.getElementById('rule-evt-ref');
     if (stdRefInput) stdRefInput.value = window.pricingRules.stdRefVal || 25;
+    if (evtRefInput) evtRefInput.value = window.pricingRules.evtRefVal || 25;
 
     window.renderRelationships();
     window.renderChannelRulesList();
@@ -975,6 +1028,26 @@ window.addVerifiedChannelRule = () => {
     }
 };
 
+window.toggleEventSettings = (enabled) => {
+    const panel = document.getElementById('event-curve-panel');
+    if (panel) panel.classList.toggle('hidden', !enabled);
+    document.querySelectorAll('.evt-col-header, .evt-col-cell, #evt-ref-row').forEach(el => {
+        el.style.display = enabled ? '' : 'none';
+    });
+};
+
+window.cycleRatesSpan = () => {
+    window.ratesSpan = (window.ratesSpan === 2) ? 3 : 2;
+    const pill = document.getElementById('rates-span-pill');
+    if (pill) pill.innerText = `±${window.ratesSpan} Days`;
+};
+
+window.cycleRestrSpan = () => {
+    window.restrSpan = (window.restrSpan === 6) ? 7 : (window.restrSpan === 7 ? 2 : 6);
+    const pill = document.getElementById('restr-span-pill');
+    if (pill) pill.innerText = `±${window.restrSpan} Days`;
+};
+
 window.renderReviewLaunchStep = () => {
     const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
     setTxt('rev-prop-name', document.getElementById('prop-name')?.value || window.activePropertyId);
@@ -998,7 +1071,7 @@ window.loadPropertyFromDatabase = async (propId) => {
 
     try {
         const propDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
-        if (!propDoc.exists()) throw new Error(`Property ${propId} not found in database.`);
+        if (!propDoc.exists()) throw new Error(`Property ${propId} not found.`);
 
         const pData = propDoc.data() || {};
         window.currentPropertyConfig = pData;
@@ -1022,6 +1095,9 @@ window.loadPropertyFromDatabase = async (propId) => {
         window.addonsList = pData.addons || [];
         window.renderAddonsTable();
 
+        window.paymentMethods = pData.paymentMethods || [];
+        window.renderPaymentMethodsTable();
+
         window.roomDefinitions = pData.roomDefinitions || [];
         window.compiledRooms = pData.rooms || [];
         if (window.roomDefinitions.length === 0 && window.compiledRooms.length > 0) {
@@ -1034,7 +1110,6 @@ window.loadPropertyFromDatabase = async (propId) => {
         window.channexConfig = pData.channex || {};
         setVal('chan-api-key', window.channexConfig.apiKey || '');
         setVal('chan-prop-id', window.channexConfig.propId || '');
-        window.channexMap = pData.channexMap || [];
         window.channexRateMap = pData.channexRateMap || [];
 
         const pPricingDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`));
@@ -1044,7 +1119,7 @@ window.loadPropertyFromDatabase = async (propId) => {
             window.pricingRules = { ...window.pricingRules, ...(pDataPricing.pricingRules || {}) };
         }
 
-        if (statusText) statusText.innerText = `Active: ${pData.name || propId}`;
+        if (statusText) statusText.innerText = "Ready";
     } catch (err) {
         console.error("Load error:", err);
         if (statusText) statusText.innerText = `Error: ${err.message}`;
@@ -1077,10 +1152,11 @@ window.savePropertyToDatabase = async (showModal = true) => {
             email: getVal('prop-email'),
             phone: getVal('prop-phone'),
             website: getVal('prop-website'),
-            logoUrl: DEFAULT_WW_ICON,
-            bannerUrl: DEFAULT_WW_ICON,
-            iconUrl: DEFAULT_WW_ICON,
+            logoUrl: getVal('prop-logo-url') || DEFAULT_WW_ICON,
+            bannerUrl: getVal('prop-banner-url') || DEFAULT_WW_ICON,
+            iconUrl: getVal('prop-icon-url') || DEFAULT_WW_ICON,
             addons: window.addonsList || [],
+            paymentMethods: window.paymentMethods || [],
             roomDefinitions: window.roomDefinitions || [],
             rooms: window.compiledRooms || [],
             channex: {
@@ -1088,9 +1164,7 @@ window.savePropertyToDatabase = async (showModal = true) => {
                 propId: getVal('chan-prop-id') || window.channexConfig.propId || '',
                 rateMultiplier: 100
             },
-            channexMap: window.channexMap || [],
             channexRateMap: window.channexRateMap || [],
-            enableEventRates: false,
             updatedAt: new Date().toISOString()
         };
 
@@ -1107,11 +1181,11 @@ window.savePropertyToDatabase = async (showModal = true) => {
             updatedAt: new Date().toISOString()
         }), { merge: true });
 
-        if (statusText) statusText.innerText = `Saved ${name}!`;
+        if (statusText) statusText.innerText = "Saved!";
         if (showModal) window.customAlert("Success", `Configuration for "${name}" (${short}) saved.`);
     } catch (err) {
         console.error("Save error:", err);
-        if (statusText) statusText.innerText = "Error saving property!";
+        if (statusText) statusText.innerText = "Save Failed";
         window.customAlert("Save Error", err.message);
     }
 };
@@ -1123,7 +1197,7 @@ window.switchSetupProperty = async (propId) => {
     window.jumpStep(1);
 };
 
-// --- INITIALIZER WITH STATE CHECK ---
+// --- INITIALIZER ---
 async function initSetupEngine() {
     try {
         await signInAnonymously(auth);
