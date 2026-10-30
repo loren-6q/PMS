@@ -1,0 +1,62 @@
+├── index.html                (Portal Landing Hub: PMS, CM, Setup, Scan, TM30)
+├── pms.html                  (Main Front Desk Frame)
+├── cm.html                   (Channel Manager & Rates Matrix Frame)
+├── setup.html                (Property Wizard & Room Builder Frame)
+├── scan.html                 (Mobile Passport Scanner)
+├── tm30.html                 (Thai Immigration Batch Dispatcher)
+├── book.html                 (Guest-Facing Public Booking Engine)
+├── style.css                 (Single Source of Truth for 100% of Styles)
+├── roadmap.json              (The Immutable System Contract & Function Registry)
+│
+├── core/
+│   ├── config.js             (Firebase configuration, App ID, environment flags)
+│   ├── auth.js               (Auth state, anonymous bypass, login state)
+│   ├── dates.js              (Zero-drift UTC parseYMD, getLocalYMD, month arrays)
+│   ├── money.js              (Currency rounding, getPaid, getDue, getComm)
+│   ├── occupancy.js          (The Occupancy Law: PMS_STATUS, isOccupyingBooking)
+│   ├── properties.js         (Canonical property IDs, display keys, switcher state)
+│   └── ui-dialogs.js         (Unified customAlert, showToast, confirmModal)
+│
+├── channex.js - single file combining:
+│   ├── client.js             (HTTP request wrapper, credentials, 429 Retry-After)
+│   ├── limiter.js            (Paced 18 calls/min token bucket outbox limiter)
+│   ├── compressor.js         (Contiguous date-range compression algorithm)
+│   └── sync.js               (pushToChannexAPI delta/full dispatcher, saveAndSync)
+│
+├── parser/
+│   ├── parser-engine.js      (Master extractor router & normalizer)
+│   ├── ota-hostelworld.js    (Hostelworld clipboard regex engine)
+│   ├── ota-booking.js        (Booking.com extranet & email regex engine)
+│   ├── ota-agoda.js          (Agoda YCS & email regex engine)
+│   ├── ota-expedia.js        (Expedia Partner Central regex engine)
+│   └── ota-airbnb.js         (Airbnb confirmation & reservation list regex engine)
+│
+├── pms/
+│   ├── pms-init.js           (PMS boot, realtime snapshots, nav links)
+│   ├── pms-calendar-grid.js  (Grid DOM rendering, sticky room sidebar, cell clicks)
+│   ├── pms-calendar-bars.js  (Reservation bar positions, alert styling, mouse events)
+│   ├── pms-calendar-tape.js  (Timeline shifting, jump-to-month, zoom toggle)
+│   ├── pms-folio-modal.js    (Guest modal lifecycle, form population, room assign)
+│   ├── pms-folio-ledger.js   (Financial calculations, payment rows, bad CC toggle)
+│   ├── pms-folio-actions.js  (Split stay, merge bookings, duplicate, delete)
+│   ├── pms-folio-invoice.js  (Printable HTML guest folio invoice generator)
+│   ├── pms-dashboard.js      (Today snapshot: arrivals, departures, stayovers, alerts)
+│   ├── pms-database.js       (Tabular ledger view, multi-column sort, multi-filters)
+│   └── pms-bulk-import.js    (Rescued spreadsheet/CSV parser modal)
+│
+├── cm/
+│   ├── cm-init.js            (CM boot, matrix loaders, save indicator)
+│   ├── cm-matrix-grid.js     (Calendar rate grid renderer, cell price edits, views)
+│   ├── cm-ripple.js          (Bidirectional relational pricing propagation engine)
+│   ├── cm-bulk-drawer.js     (Fast bulk update drawer: range, anchors vs all)
+│   ├── cm-curve-tuner.js     (Peak event pricing curve adjuster & shoulder math)
+│   ├── cm-promos.js          (Margin-preserving OTA promo & deal calculator)
+│   └── cm-auditor.js         (Discrepancy checker & missing booking auditor)
+│
+└── setup/
+    ├── setup-wizard.js       (5-step stepper navigation, verification & launch)
+    ├── setup-profile.js      (Property info, timezone, currency, logo uploaders)
+    ├── setup-rooms.js        (Room compiler, canonical № IDs, drag-and-drop sort)
+    ├── setup-deactivation.js (Booking audit, relocation wizard, deactivation guard)
+    ├── setup-mapping.js      (Channex room type & primary rate plan mapper)
+    └── setup-pricing.js      (Rate plan presets, baseline prices, FMP schedule)
