@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>W&W Staging Environment Sandbox</title>
+    <script type="module">
+        import { app, auth, db } from './core/config.js';
+        import { auditDatabaseRoomFormats } from './core/audit-rooms.js';
+        
+        // Expose to console for manual testing
+        window.auditDatabaseRoomFormats = auditDatabaseRoomFormats;
+        
+        console.log("%c[Staging] Environment Booted.", "color: #10b981; font-weight: bold;");
+        console.log("Firebase App ID:", app.options.appId);
+        console.log("Type `auditDatabaseRoomFormats()` in the console to test the DB.");
+    </script>
+</head>
+<body style="font-family: sans-serif; padding: 2rem; background: #0f172a; color: #f8fafc;">
+    <h2>Wild & Wandering Staging Sandbox</h2>
+    <p>Open Developer Tools (F12) -> Console to run tests.</p>
+</body>
+</html>
