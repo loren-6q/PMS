@@ -1,0 +1,271 @@
+<!-- ==========================================================================
+     tm30.html - Thai Immigration TM30 Queue & Batch XLSX Generator
+     Wild & Wandering Property Management System
+     ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>W&W | TM30 Immigration Queue</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body class="bg-slate-100 p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
+    <div id="toast-container" class="fixed top-4 right-4 z-[999] flex flex-col gap-2 pointer-events-none"></div>
+
+    <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+        <!-- TOP NAVBAR -->
+        <header class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-2 shrink-0 z-50 unselectable w-full">
+            <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+                <a href="pms.html" class="flex flex-col min-w-0 mr-1 hover:brightness-110 transition-all cursor-pointer">
+                    <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="W&W" class="h-8 sm:h-10 object-contain">
+                </a>
+
+                <h1 class="text-base sm:text-lg font-black uppercase tracking-tight text-slate-800 flex items-center gap-1.5">
+                    <i data-lucide="id-card" size="18" class="text-emerald-600"></i> TM30 Queue
+                </h1>
+
+                <!-- Dynamic Property Switcher -->
+                <div class="flex items-center bg-slate-100 rounded px-2 py-0.5 border border-slate-300 shadow-inner ml-1">
+                    <span class="text-[10px] font-black uppercase text-slate-500 mr-1 hidden sm:inline">Property:</span>
+                    <select id="property-filter" onchange="window.setPropFilter(this.value)" class="bg-white font-black text-xs uppercase text-emerald-700 outline-none cursor-pointer border border-slate-300 rounded px-2 py-0.5">
+                        <option value="ALL">ALL PROPERTIES</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-1 sm:gap-1.5 ml-auto">
+                <input type="text" id="global-search" oninput="window.applyFilters()" placeholder="Search guest / ID..." class="bg-slate-50 border border-slate-300 text-xs font-bold rounded px-2 py-1 w-28 sm:w-36 outline-none focus:bg-white">
+
+                <button onclick="window.exportToExcel()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase rounded flex items-center gap-1 shadow-xs cursor-pointer">
+                    <i data-lucide="file-spreadsheet" size="14"></i> XLS
+                </button>
+                <button onclick="window.markAllAsFiled()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase rounded flex items-center gap-1 shadow-xs cursor-pointer">
+                    <i data-lucide="check-square" size="14"></i> Clear
+                </button>
+                <a href="pms.html" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs uppercase rounded flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="layout-grid" size="13"></i> PMS
+                </a>
+            </div>
+        </header>
+
+        <!-- MAIN TABLE -->
+        <main class="flex-1 flex flex-col min-h-0 bg-white border border-slate-300 sm:rounded-lg shadow-xs overflow-hidden">
+            <div class="flex-1 overflow-auto bg-slate-50">
+                <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
+                    <thead class="sticky top-0 z-10 bg-slate-200 border-b border-slate-300 shadow-xs text-slate-700 uppercase tracking-wider text-[10px] font-black">
+                        <tr>
+                            <th class="py-2 px-2.5 border-r border-slate-300">Property</th>
+                            <th class="py-2 px-2.5 border-r border-slate-300">Guest Name</th>
+                            <th class="py-2 px-2.5 border-r border-slate-300 text-center">Sex</th>
+                            <th class="py-2 px-2.5 border-r border-slate-300 font-mono">Passport No.</th>
+                            <th class="py-2 px-2.5 border-r border-slate-300">Nationality</th>
+                            <th class="py-2 px-2.5 border-r border-slate-300">DOB</th>
+                            <th class="py-2 px-2.5 border-r border-slate-300">Checkout Date</th>
+                            <th class="py-2 px-2.5 border-r border-slate-300 text-center">PMS Match</th>
+                            <th class="py-2 px-2.5 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="divide-y divide-slate-100 bg-white">
+                        <tr>
+                            <td colspan="9" class="text-center py-12 text-slate-400 font-bold uppercase tracking-widest">
+                                Loading TM30 submissions...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <footer class="bg-slate-100 p-1.5 border-t border-slate-300 flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase px-3">
+                <span id="status-footer">Queue Connected</span>
+                <span id="status-count">0 Guests</span>
+            </footer>
+        </main>
+    </div>
+
+    <script type="module">
+        import { db, appId } from './core/config.js';
+        import { collection, onSnapshot, doc, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { loadPropertiesCatalog, toDisplayPropKey } from './core/properties.js';
+        import { showToast } from './core/ui-dialogs.js';
+
+        let currentSubmissionsList = [];
+        let pmsBookings = [];
+        let currentPropFilter = 'ALL';
+        let searchTerm = '';
+
+        async function initTm30() {
+            try {
+                const props = await loadPropertiesCatalog();
+                const filterSelect = document.getElementById('property-filter');
+                if (filterSelect && props.length > 0) {
+                    filterSelect.innerHTML = `<option value="ALL">ALL PROPERTIES</option>` + 
+                        props.map(p => `<option value="${p.id}">${p.short}</option>`).join('');
+                }
+
+                // Attach Realtime Submissions Listener
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'submissions'), (snapshot) => {
+                    currentSubmissionsList = snapshot.docs
+                        .map(d => ({ id: d.id, ...d.data() }))
+                        .filter(g => g.status !== 'completed');
+                    renderTable();
+                });
+
+                // Realtime PMS Bookings for Match Verification
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => {
+                    pmsBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    renderTable();
+                });
+
+            } catch (err) {
+                console.error("[TM30 Init Error]:", err);
+            }
+        }
+
+        export function renderTable() {
+            const tbody = document.getElementById('table-body');
+            const countEl = document.getElementById('status-count');
+            if (!tbody) return;
+
+            let list = currentSubmissionsList.filter(g => {
+                if (currentPropFilter === 'ALL') return true;
+                return (g.property || '').toLowerCase() === currentPropFilter.toLowerCase();
+            });
+
+            if (searchTerm) {
+                list = list.filter(g =>
+                    (g.firstName || '').toLowerCase().includes(searchTerm) ||
+                    (g.lastName || '').toLowerCase().includes(searchTerm) ||
+                    (g.passportNumber || '').toLowerCase().includes(searchTerm)
+                );
+            }
+
+            if (countEl) countEl.innerText = `${list.length} Guest${list.length !== 1 ? 's' : ''}`;
+
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-12 text-slate-400 font-bold uppercase">Queue is clear. No pending passports.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = '';
+            list.forEach(guest => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors text-xs text-slate-700";
+
+                const propKey = toDisplayPropKey(guest.property);
+                const dob = (guest.dobDay && guest.dobMonth && guest.dobYear)
+                    ? `${guest.dobDay}/${guest.dobMonth}/${guest.dobYear}`
+                    : '--';
+
+                const isPmsMatched = pmsBookings.some(b => 
+                    b.notes && guest.passportNumber && b.notes.includes(guest.passportNumber)
+                );
+
+                tr.innerHTML = `
+                    <td class="p-2 border-r border-slate-200 font-black text-indigo-700">${propKey}</td>
+                    <td class="p-2 border-r border-slate-200 font-black text-slate-800">${guest.lastName || ''}, ${guest.firstName || ''}</td>
+                    <td class="p-2 border-r border-slate-200 text-center font-bold">${guest.gender || 'M'}</td>
+                    <td class="p-2 border-r border-slate-200 font-mono font-bold">${guest.passportNumber || '--'}</td>
+                    <td class="p-2 border-r border-slate-200 font-bold text-purple-700">${guest.nationality || '--'}</td>
+                    <td class="p-2 border-r border-slate-200 font-mono">${dob}</td>
+                    <td class="p-2 border-r border-slate-200 font-mono">${guest.checkoutDate || '--'}</td>
+                    <td class="p-2 border-r border-slate-200 text-center">
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
+                            isPmsMatched ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'
+                        }">${isPmsMatched ? 'MATCHED' : 'PENDING'}</span>
+                    </td>
+                    <td class="p-2 text-center">
+                        <button onclick="window.deleteSubmission('${guest.id}')" class="text-slate-400 hover:text-rose-600 cursor-pointer">
+                            <i data-lucide="trash-2" size="13"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        window.setPropFilter = (val) => {
+            currentPropFilter = val;
+            renderTable();
+        };
+
+        window.applyFilters = () => {
+            searchTerm = (document.getElementById('global-search')?.value || '').toLowerCase().trim();
+            renderTable();
+        };
+
+        window.deleteSubmission = async (id) => {
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'submissions', id));
+                showToast("Deleted", "Guest removed from TM30 queue.");
+            } catch (err) {
+                showToast("Error", err.message, "error");
+            }
+        };
+
+        window.markAllAsFiled = async () => {
+            const batch = writeBatch(db);
+            currentSubmissionsList.forEach(g => {
+                const dRef = doc(db, 'artifacts', appId, 'public', 'data', 'submissions', g.id);
+                batch.update(dRef, { status: 'completed' });
+            });
+
+            try {
+                await batch.commit();
+                showToast("Queue Cleared", "Moved all active guests to archive.");
+            } catch (err) {
+                showToast("Batch Error", err.message, "error");
+            }
+        };
+
+        window.exportToExcel = () => {
+            if (currentSubmissionsList.length === 0) {
+                return showToast("Notice", "Queue is empty. Nothing to export.");
+            }
+
+            const headerRow = [
+                "ชื่อ\nFirst Name *",
+                "ชื่อกลาง\nMiddle Name",
+                "นามสกุล\nLast Name",
+                "เพศ\nGender *",
+                "เลขหนังสือเดินทาง\nPassport No. *",
+                "สัญชาติ\nNationality *",
+                "วัน เดือน ปี เกิด\nBirth Date\nDD/MM/YYYY",
+                "วันที่แจ้งออกจากที่พัก\nCheck-out Date\nDD/MM/YYYY",
+                "เบอร์โทรศัพท์\nPhone No."
+            ];
+
+            const dataRows = currentSubmissionsList.map(g => [
+                g.firstName || '',
+                g.middleName || '',
+                g.lastName || '',
+                g.gender || 'M',
+                g.passportNumber || '',
+                g.nationality || '',
+                (g.dobDay && g.dobMonth && g.dobYear) ? `${g.dobDay}/${g.dobMonth}/${g.dobYear}` : '',
+                g.checkoutDate || '',
+                g.phoneNo || ''
+            ]);
+
+            const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "TM30_Guests");
+
+            const today = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `TM30_Export_${today}.xlsx`);
+            showToast("Exported", `Generated official immigration spreadsheet.`);
+        };
+
+        document.addEventListener('DOMContentLoaded', initTm30);
+    </script>
+</body>
+</html>
