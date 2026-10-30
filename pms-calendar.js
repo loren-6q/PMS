@@ -9,6 +9,7 @@
 
     const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
+    // SVG icon suite for reservation bars
     window.SVGS = window.SVGS || {
         upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
         upPaid: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#4ade80" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -49,19 +50,19 @@
     const getSearchTerm = () => (window.getSearchTerm ? window.getSearchTerm() : window.searchTerm) || "";
     const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
-    // Zero-drift UTC-noon parser
-    window.parseYMD = str => {
+    // Zero-drift UTC-noon date math
+    window.parseYMD = window.parseYMD || (str => {
         if (!str) return 0;
         const clean = String(str).split('T')[0].trim();
         const parts = clean.split('-').map(Number);
         if (parts.length < 3 || isNaN(parts[0])) return 0;
         return Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-    };
+    });
 
-    window.getLocalYMD = d => {
+    window.getLocalYMD = window.getLocalYMD || (d => {
         const dt = new Date(d);
         return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-    };
+    });
 
     const getDayIndex = str => {
         const t = window.parseYMD(str);
@@ -197,14 +198,21 @@
         const sL = $(`state-${grp}`);
         const aR = $$(`.avail-row-${grp}`);
         if (!h) return;
+
+        // Dedicated Unassigned Tray Accordion Toggle
+        if (grp === 'unassigned-unconfirmed') {
+            window.isUnassignedTrayOpen = !window.isUnassignedTrayOpen;
+            rws.forEach(r => {
+                r.style.display = window.isUnassignedTrayOpen ? 'grid' : 'none';
+            });
+            h.style.transform = window.isUnassignedTrayOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+            return;
+        }
+
         let cS = stateIdx;
         if (cS === -1) {
-            if (grp === 'unassigned-unconfirmed') {
-                cS = h.style.transform.includes('180deg') ? 0 : 3;
-            } else {
-                const txt = sL ? sL.innerText : 'ALL';
-                cS = txt === 'ALL' ? 1 : (txt === 'OCC' ? 2 : (txt === 'EMP' ? 3 : 0));
-            }
+            const txt = sL ? sL.innerText : 'ALL';
+            cS = txt === 'ALL' ? 1 : (txt === 'OCC' ? 2 : (txt === 'EMP' ? 3 : 0));
         }
         const vM = {
             0: { lbl: 'ALL', showOcc: true, showEmp: true, showAvail: false, rot: '0deg' },
@@ -217,7 +225,7 @@
         h.style.transform = `rotate(${s.rot})`;
         if (aR) aR.forEach(r => { r.style.display = s.showAvail ? 'grid' : 'none'; });
         rws.forEach(r => {
-            if (grp === 'unassigned-unconfirmed' || r.classList.contains('sub-header-row')) {
+            if (r.classList.contains('sub-header-row')) {
                 r.style.display = (cS === 3) ? 'none' : 'grid';
                 return;
             }
@@ -235,54 +243,81 @@
         if (fStr === '2' || fStr === 'up' || fStr === 'upstairs' || fStr === 'floor-up') {
             return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0" title="Upstairs"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
         }
+        if (fStr === '3' || fStr === 'double') {
+            return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0" title="Double Floor"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></svg>`;
+        }
         return '';
     };
 
     const getBunkIcon = b => {
         if (!b) return '';
         const bStr = String(b).toLowerCase().trim();
-        if (bStr === 'bottom' || bStr === 'bot' || bStr.includes('btm') || bStr.includes('bottom')) {
+        if (bStr === 'bottom' || bStr === 'bot' || bStr === 'bunk-bottom' || bStr.includes('btm') || bStr.includes('bottom')) {
             return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Bottom Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
         }
-        if (bStr === 'top' || bStr.includes('top')) {
+        if (bStr === 'top' || bStr === 'bunk-top' || bStr.includes('top')) {
             return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
         }
         return '';
     };
 
-    const formatBedDisplayLabel = (rId) => {
-        if (!rId) return '';
-        const m = String(rId).match(/№\s*(\d+)/i);
-        if (m) return `№ ${m[1]}`;
-        const m2 = String(rId).match(/[A-Za-z0-9]+[_\-\s]+(\d+)$/);
-        if (m2) return `№ ${m2[1].padStart(2, '0')}`;
-        const m3 = String(rId).match(/^([A-Za-z]+)(\d+)$/);
-        if (m3) return `№ ${m3[2].padStart(2, '0')}`;
-        return rId;
-    };
-
     const classifyRoomForCalendar = r => {
         const cat = (r.category || r.type || '').toLowerCase();
         const bunk = (r.bunk || r.bed || '').toLowerCase();
-        const isPrivate = bunk.includes('private') || cat.includes('private') || r.rule === 'private' || r.isDorm === false;
-        const isDorm = !isPrivate;
+        
+        const isPrivate = bunk.includes('private') || 
+                          cat.includes('private') || 
+                          r.rule === 'private' || 
+                          r.isDorm === false;
+
+        const isDorm = !isPrivate && (
+            r.isDorm === true ||
+            (r.rule && r.rule !== 'private') ||
+            cat.includes('dorm') ||
+            bunk.includes('top') ||
+            bunk.includes('bottom') ||
+            bunk.includes('bot') ||
+            (r.parentRoom && r.parentRoom !== r.id)
+        );
 
         let baseRoom = '';
         if (isDorm) {
-            if (r.parentRoom) baseRoom = r.parentRoom;
-            else if (r.id.includes('№')) baseRoom = r.id.split('№')[0].trim();
-            else if (r.id.includes('-')) baseRoom = r.id.split('-')[0].trim();
-            else baseRoom = r.id.replace(/\d+$/, '').trim();
+            if (r.parentRoom && r.parentRoom !== r.id) {
+                baseRoom = r.parentRoom;
+            } else if ((r.id || '').includes('№')) {
+                baseRoom = r.id.split('№')[0].trim();
+            } else if ((r.id || '').includes('-')) {
+                baseRoom = r.id.split('-')[0].trim();
+            } else {
+                baseRoom = (r.id || '').replace(/\d+$/, '').trim();
+            }
         }
+
         return { isDorm, baseRoom };
     };
 
-    const matchesRoom = (bookingRoom, catalogRoomId) => {
-        if (!bookingRoom || !catalogRoomId) return false;
-        if (bookingRoom === catalogRoomId) return true;
-        const bClean = String(bookingRoom).replace(/[№#\-_:\s]/g, '').toUpperCase();
-        const cClean = String(catalogRoomId).replace(/[№#\-_:\s]/g, '').toUpperCase();
-        return bClean === cClean;
+    // Sidebar bed row formatter: displays clean "№ 01", "№ 02" under dorm header
+    const formatBedDisplayLabel = id => {
+        if (!id) return '';
+        const str = String(id).trim();
+        if (str.includes('№')) {
+            const numPart = str.split('№')[1].trim();
+            return `№ ${numPart}`;
+        }
+        const m = str.match(/[_\-\s]+(\d+)$/);
+        if (m) return `№ ${m[1].padStart(2, '0')}`;
+        const mLetter = str.match(/^[A-Za-z]+(\d+)$/);
+        if (mLetter) return `№ ${mLetter[1].padStart(2, '0')}`;
+        return str;
+    };
+
+    // 1-to-1 exact string matcher with backwards-compatible normalization fallback
+    const matchesRoom = (assignedRoom, targetRoomId) => {
+        if (!assignedRoom || !targetRoomId) return false;
+        if (String(assignedRoom).trim() === String(targetRoomId).trim()) return true;
+        const cleanA = String(assignedRoom).replace(/[№#\-_:\s]/g, '').toUpperCase();
+        const cleanB = String(targetRoomId).replace(/[№#\-_:\s]/g, '').toUpperCase();
+        return cleanA === cleanB;
     };
 
     window.render = () => {
@@ -323,7 +358,8 @@
         body.innerHTML = '';
 
         const days = Array.from({ length: dShow }, (_, i) => new Date(vS.getFullYear(), vS.getMonth(), vS.getDate() + i, 12, 0, 0));
-        let cMon = -1, cSpan = 0;
+        let cMon = -1;
+        let cSpan = 0;
         days.forEach((d, i) => {
             if (d.getMonth() !== cMon) {
                 if (cMon !== -1) {
@@ -358,7 +394,10 @@
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
             if (sProp !== curProp) return false;
             if (s.status === 'cancelled') {
-                return !!(searchTerm && (((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) || (s.bookId || '').toUpperCase().includes(searchTerm)));
+                if (searchTerm && (((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) || (s.bookId || '').toUpperCase().includes(searchTerm))) {
+                    return true;
+                }
+                return false;
             }
             return true;
         });
@@ -368,50 +407,54 @@
         const tRows = [];
         const uConf = [];
 
-        // Catch Unassigned Bookings
+        // Catch Unassigned & Unconfirmed Bookings
         actStaff.forEach(s => {
             if (['cancelled', 'noshow'].includes(s.status)) return;
-            const rList = getRooms(s);
-            const hasRoom = rList.length > 0 && rList.some(rName => hotelRooms.some(hr => matchesRoom(rName, hr.id)));
-            if (!hasRoom && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC) {
+            const rList = getRooms(s).filter(Boolean);
+            const isUnassigned = rList.length === 0 || rList[0] === "" || ['unconfirmed', 'charged', 'vol'].includes(s.status) || !rList.some(rName => hotelRooms.some(hr => matchesRoom(rName, hr.id)));
+            if (isUnassigned && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC) {
                 uConf.push(s);
             }
         });
+
+        if (window.isUnassignedTrayOpen === undefined) {
+            window.isUnassignedTrayOpen = true;
+        }
 
         if (uConf.length > 0) {
             tRows.push({ isDivider: true, label: "UNASSIGNED / UNCONFIRMED", isUnconfirmedZone: true });
             const rows = [];
             uConf.forEach(s => {
-                let placed = false;
+                let p = false;
                 for (let r of rows) {
                     if (!r.some(e => window.parseYMD(s.checkIn) < window.parseYMD(e.checkOut) && window.parseYMD(e.checkIn) < window.parseYMD(s.checkOut))) {
                         r.push(s);
-                        placed = true;
+                        p = true;
                         break;
                     }
                 }
-                if (!placed) rows.push([s]);
+                if (!p) rows.push([s]);
             });
             rows.forEach((r, idx) => tRows.push({ isUnassigned: true, label: `U-${idx + 1}`, bookings: r }));
         }
 
-        // Visible rooms: active rooms always show, inactive rooms only if they have bookings in view
-        const visibleRooms = hotelRooms.filter(r => {
-            if (!r.inactive) return true;
+        // Active rooms always render; Inactive rooms only render if bookings exist in view window
+        const activeHotelRooms = hotelRooms.filter(r => !r.inactive);
+        const archivedHotelRooms = hotelRooms.filter(r => {
+            if (!r.inactive) return false;
             return actStaff.some(s => {
                 if (['cancelled', 'noshow'].includes(s.status)) return false;
-                const inMs = window.parseYMD(s.checkIn), outMs = window.parseYMD(s.checkOut);
+                const inMs = window.parseYMD(s.checkIn);
+                const outMs = window.parseYMD(s.checkOut);
                 if (inMs > veUTC || outMs < vsUTC) return false;
-                return getRooms(s).some(rm => matchesRoom(rm, r.id));
+                const rList = getRooms(s);
+                return rList.some(rm => matchesRoom(rm, r.id));
             });
         });
 
-        const activeRooms = visibleRooms.filter(r => !r.inactive);
-        const archivedRooms = visibleRooms.filter(r => !!r.inactive);
-
-        // Group active rooms strictly by category so banners never duplicate
+        // Group active rooms by category so room types never split
         const categoriesMap = new Map();
-        activeRooms.forEach(r => {
+        activeHotelRooms.forEach(r => {
             const cat = r.category || r.type || 'ROOMS';
             if (!categoriesMap.has(cat)) categoriesMap.set(cat, []);
             categoriesMap.get(cat).push(r);
@@ -424,9 +467,10 @@
             roomList.forEach(r => {
                 const { isDorm, baseRoom } = classifyRoomForCalendar(r);
 
-                const isAssigned = s => {
+                const isAssignedToThisRoom = s => {
                     if (['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status)) return false;
-                    return getRooms(s).some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
+                    const rList = getRooms(s);
+                    return rList.some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
                 };
 
                 if (isDorm) {
@@ -434,6 +478,7 @@
                         tRows.push({ isSubHeader: true, label: baseRoom, floor: r.floor });
                         lastBaseRoom = baseRoom;
                     }
+
                     tRows.push({
                         isRoom: true,
                         isBed: true,
@@ -443,7 +488,7 @@
                         bed: r.bed || r.bunk || '',
                         floor: '',
                         icon: r.icon || r.bunk || '',
-                        bookings: actStaff.filter(isAssigned)
+                        bookings: actStaff.filter(isAssignedToThisRoom)
                     });
                 } else {
                     lastBaseRoom = null;
@@ -456,22 +501,26 @@
                         bed: r.bed || r.bunk || '',
                         floor: r.floor,
                         icon: r.icon || r.bunk || '',
-                        bookings: actStaff.filter(isAssigned)
+                        bookings: actStaff.filter(isAssignedToThisRoom)
                     });
                 }
             });
         });
 
-        // Archived historical rooms at bottom
-        if (archivedRooms.length > 0) {
+        // Render Inactive Historical Rooms at Bottom (Archived Zone)
+        if (archivedHotelRooms.length > 0) {
             tRows.push({ isDivider: true, label: "ARCHIVED / CLOSED ROOMS (PAST DATA)", isArchivedZone: true });
-            archivedRooms.forEach(r => {
-                const isAssigned = s => getRooms(s).some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
+            archivedHotelRooms.forEach(r => {
+                const isAssigned = s => {
+                    const rList = getRooms(s);
+                    return rList.some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
+                };
+
                 tRows.push({
                     isRoom: true,
                     isArchived: true,
                     id: r.id,
-                    displayId: `[ARCHIVED] ${r.id}`,
+                    displayId: `[CLOSED] ${r.id}`,
                     type: r.type,
                     bed: r.bed || '',
                     floor: r.floor,
@@ -480,7 +529,6 @@
             });
         }
 
-        // Render to DOM
         const tt = $('custom-tooltip');
         let cGrp = '';
 
@@ -493,15 +541,17 @@
                 hRow.dataset.group = cGrp;
 
                 if (rD.isUnconfirmedZone) {
-                    hRow.innerHTML = `<div class="unassigned-header bg-amber-200 hover:bg-amber-300 text-slate-800 p-0.5 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-md w-full" onclick="window.toggleGroup('${cGrp}')"><span>${rD.label}</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div>`;
+                    hRow.innerHTML = `<div class="unassigned-header bg-amber-200 hover:bg-amber-300 text-slate-800 p-0.5 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-md" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span>${rD.label}</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}" style="transform: ${window.isUnassignedTrayOpen ? 'rotate(0deg)' : 'rotate(180deg)'};"></i></div>`;
                     body.appendChild(hRow);
                     return;
                 }
 
-                hRow.innerHTML = `<div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-full" onclick="window.toggleGroup('${cGrp}')"><span class="truncate pr-1">${rD.label}</span><div class="flex items-center gap-1 shrink-0"><span id="state-${cGrp}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div></div>`;
+                // Spanning Category Divider across entire calendar grid (Original design)
+                hRow.innerHTML = `<div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span class="truncate pr-1">${rD.label}</span><div class="flex items-center gap-1 shrink-0"><span id="state-${cGrp}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div></div>`;
                 body.appendChild(hRow);
 
-                const tRIds = hotelRooms.filter(hr => (hr.category || hr.type) === rD.label).map(hr => hr.id);
+                // Dynamic Availability summary row for this category
+                const tRIds = hotelRooms.filter(hr => (hr.category || hr.type) === rD.label && !hr.inactive).map(hr => hr.id);
                 const cap = tRIds.length;
                 const aRow = document.createElement('div');
                 aRow.className = `timeline-grid avail-row-${cGrp} h-[20px]`;
@@ -515,13 +565,20 @@
                         if (['unconfirmed', 'charged', 'cancelled', 'noshow', 'vol'].includes(s.status)) return;
                         if (dT >= window.parseYMD(s.checkIn) && dT < window.parseYMD(s.checkOut)) {
                             getRooms(s).forEach(r => {
-                                if (r && tRIds.some(tId => matchesRoom(r, tId))) occ.add(r);
+                                const uiR = window.dbToUiRoom ? window.dbToUiRoom(r) : r;
+                                if (r && (tRIds.some(tId => matchesRoom(r, tId)) || tRIds.some(tId => matchesRoom(uiR, tId)))) occ.add(uiR || r);
                             });
                         }
                     });
                     const av = cap - occ.size;
                     const pct = cap > 0 ? av / cap : 0;
-                    let cCls = (av === cap) ? 'bg-[#4ade80] text-black' : (pct >= 0.75) ? 'bg-black text-[#4ade80]' : (pct >= 0.5) ? 'bg-black text-white' : (pct >= 0.25) ? 'bg-[#7f1d1d] text-white' : (av > 0) ? 'bg-[#dc2626] text-white' : 'bg-[#ef4444] text-black font-black';
+                    let cCls = '';
+                    if (av === cap) cCls = 'bg-[#4ade80] text-black';
+                    else if (pct >= 0.75) cCls = 'bg-black text-[#4ade80]';
+                    else if (pct >= 0.50) cCls = 'bg-black text-white';
+                    else if (pct >= 0.25) cCls = 'bg-[#7f1d1d] text-white';
+                    else if (av > 0) cCls = 'bg-[#dc2626] text-white';
+                    else cCls = 'bg-[#ef4444] text-black font-black';
                     cHtml += `<div class="flex items-center justify-center border-r border-slate-800 text-[10px] font-black ${cCls}">${av}</div>`;
                 }
                 aRow.innerHTML = cHtml;
@@ -532,24 +589,50 @@
             if (rD.isSubHeader) {
                 const sRow = document.createElement('div');
                 sRow.className = `timeline-grid group-${cGrp} sub-header-row h-[22px]`;
-                sRow.innerHTML = `<div class="bg-slate-200 border-y border-slate-300 flex items-center px-2 sticky left-0 z-20 shadow-sm unselectable w-full"><div class="flex items-center gap-1 sticky left-0 bg-slate-200 pr-2"><span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">${rD.label}</span>${getFloorIcon(rD.floor)}</div></div>`;
+                const cleanSubLabel = rD.label || '';
+                sRow.innerHTML = `
+                    <div class="bg-slate-200 border-y border-slate-300 flex items-center px-2 sticky left-0 z-20 shadow-sm unselectable" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;">
+                        <div class="flex items-center gap-1 sticky left-0 bg-slate-200 pr-2">
+                            <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">${cleanSubLabel}</span>
+                            ${getFloorIcon(rD.floor)}
+                        </div>
+                    </div>`;
                 body.appendChild(sRow);
                 return;
             }
 
             const row = document.createElement('div');
-            row.className = `timeline-grid bed-row group-${cGrp}`;
+            row.className = `timeline-grid bed-row group-${cGrp} ${rD.isArchived ? 'opacity-60 bg-slate-100' : ''}`;
             if (cGrp === 'unassigned-unconfirmed') {
-                row.style.display = window.isUnassignedTrayOpen ? 'grid' : 'none';
+                const hasMatch = searchTerm && rD.bookings && rD.bookings.some(s =>
+                    ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) ||
+                    (s.bookId || '').toUpperCase().includes(searchTerm)
+                );
+                row.style.display = (window.isUnassignedTrayOpen || hasMatch) ? 'grid' : 'none';
             }
 
             let hHtml = '';
             if (rD.isUnassigned) {
                 hHtml = `<span class="text-[11px] font-black text-amber-700">${rD.label}</span>`;
             } else if (rD.isBed) {
-                hHtml = `<div class="flex items-center justify-between px-1 w-full gap-1 pl-3"><div class="flex items-center gap-0.5 shrink-0"><span class="text-[12px] font-bold text-slate-600">${rD.displayId}</span>${getBunkIcon(rD.icon)}</div><span class="text-[9px] font-bold text-slate-500 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' ? '' : (rD.bed || '')}</span></div>`;
+                hHtml = `
+                    <div class="flex items-center justify-between px-1 w-full gap-1 pl-3">
+                        <div class="flex items-center gap-0.5 shrink-0">
+                            <span class="text-[12px] font-bold text-slate-600">${rD.displayId}</span>
+                            ${getBunkIcon(rD.icon)}
+                        </div>
+                        <span class="text-[9px] font-bold text-slate-500 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' ? '' : (rD.bed || '')}</span>
+                    </div>`;
             } else {
-                hHtml = `<div class="flex items-center justify-between px-1 w-full gap-1"><div class="flex items-center gap-0.5 shrink-0"><span class="text-[13px] font-black text-slate-700">${rD.displayId}</span>${getFloorIcon(rD.floor)}${getBunkIcon(rD.icon)}</div><span class="text-[10px] font-bold text-slate-600 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' || (rD.bed || '').toUpperCase() === 'PRIVATE' ? '' : (rD.bed || '')}</span></div>`;
+                hHtml = `
+                    <div class="flex items-center justify-between px-1 w-full gap-1">
+                        <div class="flex items-center gap-0.5 shrink-0">
+                            <span class="text-[13px] font-black text-slate-700">${rD.displayId}</span>
+                            ${getFloorIcon(rD.floor)}
+                            ${getBunkIcon(rD.icon)}
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-600 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' || (rD.bed || '').toUpperCase() === 'PRIVATE' ? '' : (rD.bed || '')}</span>
+                    </div>`;
             }
 
             row.innerHTML = `<div class="border-r border-slate-400 ${rD.isUnassigned ? 'bg-amber-100' : 'bg-slate-50'} flex items-center justify-center uppercase overflow-hidden shrink-0 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.05)] unselectable w-[var(--sidebar-w)]">${hHtml}</div>`;
@@ -566,29 +649,35 @@
                 }
                 c.className = `day-column ${fmpShade} ${iT ? 'day-today' : ''} ${rD.isUnassigned ? 'bg-amber-50/50' : ''}`;
                 c.dataset.colIndex = i;
+                c.dataset.dateNum = days[i].getDate(); // Restores watermark date inside cell
                 c.dataset.dateIso = window.getLocalYMD(days[i]);
                 c.dataset.roomId = rD.isUnassigned ? "" : (rD.id || "");
                 row.appendChild(c);
             }
 
+            // Render reservation bars
             rD.bookings.forEach(s => {
                 const eS = getDayIndex(s.checkIn) + 0.3;
                 const eE = getDayIndex(s.checkOut) + 0.25;
                 if (eS >= dShow || eE <= 0) return;
                 const due = window.getDue ? window.getDue(s) : 0;
+                const owes = due > 0;
                 let bSty = 'border border-black/10';
+                let isA = false;
 
                 if (s.status === 'future' || s.status === 'new') {
-                    if (s.checkIn === todayStr) bSty += ' checkin-today';
-                    else if (s.checkIn <= yStr) bSty += ' late-checkin';
+                    if (s.checkIn === todayStr) { bSty += ' checkin-today'; isA = true; }
+                    else if (s.checkIn <= yStr) { bSty += ' late-checkin'; isA = true; }
                 } else if (s.status === 'here') {
-                    if (s.checkOut === todayStr) bSty += ' overdue-checkout-today';
-                    else if (s.checkOut <= yStr) bSty += ' overdue-checkout-past';
+                    if (s.checkOut === todayStr) { bSty += ' overdue-checkout-today'; isA = true; }
+                    else if (s.checkOut <= yStr) { bSty += ' overdue-checkout-past'; isA = true; }
                 }
 
-                if (s.status === 'new') bSty += ' status-new-pulse';
-                else if (s.badCC) bSty = '!border-red-500 !border-dashed !border-[3px]';
-                else if (due > 0) bSty = '!border-red-500 !border-[3px]';
+                if (s.status === 'new') { bSty += ' status-new-pulse'; isA = true; }
+                if (!isA) {
+                    if (s.badCC) bSty = '!border-red-500 !border-dashed !border-[3px]';
+                    else if (owes) bSty = '!border-red-500 !border-[3px]';
+                }
 
                 const srcC = {
                     'booking.com': { bg: 'bg-[#003580]', text: 'B' },
@@ -718,6 +807,6 @@
         });
     } else {
         window.mountLegendSvgs();
-        window.render();
+        setTimeout(() => window.render(), 0);
     }
 })();
