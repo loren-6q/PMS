@@ -1,9 +1,9 @@
 // ==========================================================================
-// pms/pms-calendar-bars.js - Reservation Bar Placement, Styling & Badges
+// pms/pms-calendar-bars.js - Reservation Bar Placement, Tooltips & Badges
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { parseYMD } from '../core/dates.js';
 import { getDue } from '../core/money.js';
 
 export const SVGS = {
@@ -85,8 +85,52 @@ export function renderReservationBar(booking, daysToShow, getDayIndexFn, todaySt
     </div>`;
 
     bar.innerHTML = html;
+
+    // Hover Tooltip
+    const tooltip = document.getElementById('custom-tooltip');
+    let tags = [];
+    if (booking.refundability === 'ref') tags.push('Refundable');
+    if (booking.upgrade === 'free') tags.push('Free Upgrade');
+    if (booking.upgrade === 'paid') tags.push('Paid Upgrade');
+    if (booking.extended) tags.push('Extended');
+    if (booking.emailConfirm) tags.push('Conf Sent');
+    if (booking.linkedId) tags.push(`Linked: ${booking.linkedId}`);
+
+    const ttHtml = `
+        <div class="font-black text-[15px] text-blue-300 leading-tight mb-1">${booking.firstName || ''} ${booking.lastName || 'Guest'}</div>
+        <div>Total: ฿${Number(booking.totalPrice || 0).toFixed(2)} | <span class="${due > 0 ? 'text-red-400 font-black' : 'text-green-400'}">Due: ฿${due.toFixed(2)} ${booking.badCC ? '(*BAD CC*)' : ''}</span></div>
+        <div class="text-slate-300 mt-1">${booking.checkIn?.substr(5) || ''} &rarr; ${booking.checkOut?.substr(5) || ''} (${booking.pax || 1} PAX)</div>
+        <div class="text-slate-300 mt-0.5">Room: ${(booking.rooms || [booking.room]).filter(Boolean).join(', ') || 'Unassigned'}</div>
+        <div class="text-slate-300 mt-0.5">Source: ${(booking.source || 'other').toUpperCase()}</div>
+        ${tags.length ? `<div class="mt-1 pt-1 border-t border-slate-600 text-yellow-200 text-[10px] uppercase font-bold">${tags.join(' • ')}</div>` : ''}
+    `;
+
+    bar.onmouseenter = () => {
+        if (booking.linkedId) {
+            document.querySelectorAll('.linked-' + booking.linkedId).forEach(el => el.classList.add('link-glow'));
+        }
+        if (tooltip) {
+            tooltip.innerHTML = ttHtml;
+            tooltip.style.display = 'block';
+        }
+    };
+
+    bar.onmousemove = (e) => {
+        if (!tooltip) return;
+        tooltip.style.left = (e.clientX + 220 > window.innerWidth ? e.clientX - 230 : e.clientX + 15) + 'px';
+        tooltip.style.top = (e.clientY + 150 > window.innerHeight ? e.clientY - 160 : e.clientY + 15) + 'px';
+    };
+
+    bar.onmouseleave = () => {
+        if (booking.linkedId) {
+            document.querySelectorAll('.linked-' + booking.linkedId).forEach(el => el.classList.remove('link-glow'));
+        }
+        if (tooltip) tooltip.style.display = 'none';
+    };
+
     bar.onclick = (e) => {
         e.stopPropagation();
+        if (tooltip) tooltip.style.display = 'none';
         if (typeof onEditCallback === 'function') onEditCallback(booking.id);
     };
 
