@@ -6,8 +6,10 @@
 import { db, appId } from '../core/config.js';
 import { doc, setDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { isOccupyingBooking } from '../core/occupancy.js';
 import { customAlert } from '../core/ui-dialogs.js';
-import { activeExtraCharges, closeGuestModal } from './pms-folio-modal.js';
+import { activeExtraCharges } from './pms-folio-ledger.js';
+import { closeGuestModal } from './pms-folio-modal.js';
 
 export async function saveBooking() {
     const btn = document.getElementById('save-guest-btn');
@@ -23,16 +25,61 @@ export async function saveBooking() {
 
         const id = document.getElementById('guest-id')?.value || ('bk_' + Date.now());
         const propId = window.currentPropertyId || 'swims_resort';
+        const bookId = document.getElementById('booking-id')?.value.trim() || '';
+        const linkCode = document.getElementById('link-code')?.value.trim().toUpperCase() || '';
+        const stat = document.getElementById('guest-status-hidden')?.value || 'future';
 
         const rList = Array.from(document.querySelectorAll('.assigned-room-select') || [])
             .map(s => s.value)
             .filter(Boolean);
+
+        // 1. DUPLICATE BOOKING ID GUARD
+        if (bookId) {
+            const dupe = (window.staff || []).find(s => {
+                if (s.id === id || s.status === 'cancelled') return false;
+                const sProp = (s.property || 'swims_resort').toLowerCase();
+                if (sProp !== propId.toLowerCase()) return false;
+                return s.bookId && String(s.bookId).trim() === bookId;
+            });
+
+            if (dupe) {
+                throw new Error(`Duplicate Blocked: Booking ID "${bookId}" already exists for ${dupe.firstName || ''} ${dupe.lastName || 'Guest'}.`);
+            }
+        }
+
+        // 2. ROOM OVERLAP COLLISION GUARD
+        if (isOccupyingBooking(stat, rList.length > 0)) {
+            const sU = parseYMD(cIn);
+            const eU = parseYMD(cOut);
+
+            for (let room of rList) {
+                const conflict = (window.staff || []).find(s => {
+                    if (s.id === id || ['cancelled', 'noshow', 'unconfirmed', 'charged', 'vol'].includes(s.status)) return false;
+                    const sProp = (s.property || 'swims_resort').toLowerCase();
+                    if (sProp !== propId.toLowerCase()) return false;
+
+                    if (sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) {
+                        const srList = Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []);
+                        return srList.includes(room);
+                    }
+                    return false;
+                });
+
+                if (conflict) {
+                    throw new Error(`Room Collision: Room "${room}" is already occupied by ${conflict.firstName || ''} ${conflict.lastName || 'Guest'} during these dates.`);
+                }
+            }
+        }
 
         const payments = Array.from(document.querySelectorAll('.payment-row') || []).map(row => ({
             date: row.querySelector('.pay-date')?.value || getLocalYMD(new Date()),
             amt: parseFloat(row.querySelector('.pay-amt')?.value) || 0,
             method: row.querySelector('.pay-method')?.value || 'cash'
         }));
+
+        const existingBooking = (window.staff || []).find(b => b.id === id);
+        const now = new Date().toISOString();
+        const userEmail = window.currentUserEmail || 'admin';
 
         const bookingPayload = {
             id,
@@ -50,16 +97,21 @@ export async function saveBooking() {
             rooms: rList,
             totalPrice: parseFloat(document.getElementById('total-price')?.value) || 0,
             netPrice: parseFloat(document.getElementById('net-price')?.value) || 0,
+            netOverride: document.getElementById('net-price')?.dataset.override === 'true',
+            badCC: document.getElementById('bad-cc-box')?.dataset.bad === 'true',
             notes: document.getElementById('guest-notes')?.value || '',
             source: document.getElementById('booking-source')?.value || 'direct',
             bookDate: document.getElementById('booking-date')?.value || getLocalYMD(new Date()),
-            bookId: document.getElementById('booking-id')?.value.trim() || '',
-            linkedId: document.getElementById('link-code')?.value.trim().toUpperCase() || '',
-            status: document.getElementById('guest-status-hidden')?.value || 'future',
-            badCC: document.getElementById('bad-cc-box')?.dataset.bad === 'true',
+            bookId: bookId,
+            linkedId: linkCode,
+            status: stat,
             payments,
             extraCharges: activeExtraCharges || [],
-            updatedAt: new Date().toISOString()
+            createdAt: existingBooking?.createdAt || now,
+            createdBy: existingBooking?.createdBy || userEmail,
+            lastEditedAt: now,
+            lastEditedBy: userEmail,
+            auditLog: Array.isArray(existingBooking?.auditLog) ? existingBooking.auditLog : []
         };
 
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'staff', id);
@@ -185,6 +237,77 @@ export async function confirmSplit() {
     }
 }
 
+export function requestMerge() {
+    const id = document.getElementById('guest-id')?.value;
+    if (!id) return;
+
+    const cur = (window.staff || []).find(b => b.id === id);
+    if (!cur) return;
+
+    const modal = document.getElementById('merge-modal');
+    const sel = document.getElementById('merge-target');
+    if (!modal || !sel) return;
+
+    const candidates = (window.staff || []).filter(b => 
+        b.id !== id && b.status !== 'cancelled' && b.status !== 'noshow'
+    );
+
+    sel.innerHTML = `<option value="">-- SELECT BOOKING TO ABSORB --</option>` +
+        candidates.map(c => `
+            <option value="${c.id}">${c.lastName || 'Guest'}, ${c.firstName || ''} (${c.checkIn} to ${c.checkOut}) [${c.bookId || c.id}]</option>
+        `).join('');
+
+    modal.classList.add('active');
+    modal.style.display = 'flex';
+}
+
+export async function confirmMerge() {
+    const id = document.getElementById('guest-id')?.value;
+    const targetId = document.getElementById('merge-target')?.value;
+    if (!id || !targetId) return;
+
+    const primary = (window.staff || []).find(b => b.id === id);
+    const absorbed = (window.staff || []).find(b => b.id === targetId);
+    if (!primary || !absorbed) return;
+
+    try {
+        const combinedPayments = [...(primary.payments || []), ...(absorbed.payments || [])];
+        const combinedTotal = Number(((primary.totalPrice || 0) + (absorbed.totalPrice || 0)).toFixed(2));
+        const combinedNet = Number(((primary.netPrice || 0) + (absorbed.netPrice || 0)).toFixed(2));
+
+        const earliestIn = primary.checkIn < absorbed.checkIn ? primary.checkIn : absorbed.checkIn;
+        const latestOut = primary.checkOut > absorbed.checkOut ? primary.checkOut : absorbed.checkOut;
+
+        const mergeNotes = `\n\n[MERGED WITH BOOKING ${absorbed.bookId || absorbed.id} ON ${new Date().toLocaleDateString('en-GB')}]\n` +
+            `• Absorbed Dates: ${absorbed.checkIn} to ${absorbed.checkOut}\n` +
+            `• Absorbed Total: ฿${absorbed.totalPrice || 0}\n` +
+            (absorbed.notes || '');
+
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
+            checkIn: earliestIn,
+            checkOut: latestOut,
+            totalPrice: combinedTotal,
+            netPrice: combinedNet,
+            payments: combinedPayments,
+            notes: (primary.notes || '') + mergeNotes,
+            updatedAt: new Date().toISOString()
+        });
+
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', targetId));
+
+        const modal = document.getElementById('merge-modal');
+        if (modal) {
+            modal.classList.remove('active');
+            modal.style.display = 'none';
+        }
+        closeGuestModal();
+        customAlert("Merge Complete", `Bookings merged into ${primary.bookId || id}.`);
+
+    } catch (err) {
+        customAlert("Merge Failed", err.message);
+    }
+}
+
 if (typeof window !== 'undefined') {
     window.saveBooking = saveBooking;
     window.saveGuest = saveBooking;
@@ -192,4 +315,6 @@ if (typeof window !== 'undefined') {
     window.requestDuplicate = requestDuplicate;
     window.requestSplit = requestSplit;
     window.confirmSplit = confirmSplit;
+    window.requestMerge = requestMerge;
+    window.confirmMerge = confirmMerge;
 }
