@@ -8,6 +8,7 @@
  * ONLY Occupying statuses deduct from physical inventory.
  * Non-occupying statuses NEVER reduce live availability or trigger Channex deductions.
  */
+
 export const PMS_STATUS = {
     OCCUPYING: ['here', 'future', 'new'],
     NON_OCCUPYING: ['cancelled', 'noshow', 'unconfirmed', 'charged', 'tocharge', 'vol', 'blocked'],
@@ -30,10 +31,10 @@ export const STATUS_CYCLE = [
 ];
 
 /**
- * Single Source of Truth for space occupancy.
+ * Single Source of Truth for space occupancy across Calendar, Rate Matrix, and Channex.
  * @param {string} status - Reservation status string
- * @param {boolean} hasAssignedRoom - Whether physical room ID is assigned
- * @returns {boolean} True if booking physically occupies space
+ * @param {boolean} hasAssignedRoom - Whether a physical room is assigned
+ * @returns {boolean} True if booking physically occupies inventory
  */
 export function isOccupyingBooking(status, hasAssignedRoom = false) {
     if (!status) return false;
@@ -45,7 +46,7 @@ export function isOccupyingBooking(status, hasAssignedRoom = false) {
     // Special bookings only occupy if a room is assigned
     if (s === PMS_STATUS.SPECIAL) return !!hasAssignedRoom;
     
-    // 'here', 'future', 'new' occupy
+    // 'here', 'future', 'new', 'left' occupy live inventory
     return PMS_STATUS.OCCUPYING.includes(s) || s === 'left';
 }
 
