@@ -273,14 +273,21 @@
         return { isDorm, baseRoom };
     };
 
-    // Format-agnostic room matcher: matches "Dorm A № 01", "A01", "A-01", "A-1", and "B01"
-    const normMatch = (a, b) => {
-        if (!a || !b) return false;
-        const cleanA = String(a).replace(/[№#\-_:\s]/g, '').toUpperCase().trim();
-        const cleanB = String(b).replace(/[№#\-_:\s]/g, '').toUpperCase().trim();
-        if (cleanA === cleanB) return true;
-        const stripZero = s => s.replace(/^([A-Z]+)0*(\d+)$/, '$1$2');
-        return stripZero(cleanA) === stripZero(cleanB);
+    // Canonical Dorm Bed Number Extractor: "Dorm A № 01" -> "№ 01", "C301 № 02" -> "№ 02"
+    const formatBedDisplayLabel = id => {
+        if (!id) return '';
+        const str = String(id).trim();
+        if (str.includes('№')) {
+            const numPart = str.split('№')[1].trim();
+            return `№ ${numPart}`;
+        }
+        return str;
+    };
+
+    // Strict Exact String Equality: No regex, no runtime character manipulation
+    const matchesRoom = (assignedRoom, targetRoomId) => {
+        if (!assignedRoom || !targetRoomId) return false;
+        return String(assignedRoom).trim() === String(targetRoomId).trim();
     };
 
     window.render = () => {
@@ -403,14 +410,13 @@
         const activeHotelRooms = hotelRooms.filter(r => !r.inactive);
         const archivedHotelRooms = hotelRooms.filter(r => {
             if (!r.inactive) return false;
-            const targetHId = String(r.id || '').toUpperCase().trim();
             return actStaff.some(s => {
                 if (['cancelled', 'noshow'].includes(s.status)) return false;
                 const inMs = parseYMD(s.checkIn);
                 const outMs = parseYMD(s.checkOut);
                 if (inMs > veUTC || outMs < vsUTC) return false;
-                const rList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
-                return rList.some(rm => normMatch(rm, targetHId));
+                const rList = getRooms(s);
+                return rList.some(rm => matchesRoom(rm, r.id));
             });
         });
 
@@ -422,12 +428,11 @@
             }
 
             const { isDorm, baseRoom } = classifyRoomForCalendar(r);
-            const targetHId = String(r.id || '').toUpperCase().trim();
 
             const isAssignedToThisRoom = (s) => {
                 if (['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status)) return false;
-                const rList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
-                return rList.some(rm => normMatch(rm, targetHId)) && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+                const rList = getRooms(s);
+                return rList.some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
             };
 
             if (isDorm) {
@@ -441,13 +446,8 @@
                     tRows.push({ isSubHeader: true, label: baseRoom, floor: r.floor });
                 }
 
-                // Concise display on sidebar bed row: № 01 instead of repeating Dorm A
-                let bedLabel = r.id || '';
-                if (bedLabel.includes('№')) {
-                    bedLabel = '№ ' + bedLabel.split('№')[1].trim();
-                } else if (baseRoom && bedLabel.startsWith(baseRoom)) {
-                    bedLabel = bedLabel.replace(baseRoom, '').trim();
-                }
+                // Clean sidebar bed row label: strictly "№ 01", "№ 02" under dorm header
+                const bedLabel = formatBedDisplayLabel(r.id);
 
                 tRows.push({
                     isRoom: true, 
@@ -479,10 +479,9 @@
         if (archivedHotelRooms.length > 0) {
             tRows.push({ isDivider: true, label: "ARCHIVED / CLOSED ROOMS (PAST DATA)", isArchivedZone: true });
             archivedHotelRooms.forEach(r => {
-                const targetHId = String(r.id || '').toUpperCase().trim();
                 const isAssigned = (s) => {
-                    const rList = getRooms(s).map(rm => String(rm || '').toUpperCase().trim());
-                    return rList.some(rm => normMatch(rm, targetHId)) && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+                    const rList = getRooms(s);
+                    return rList.some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
                 };
 
                 tRows.push({
@@ -515,20 +514,19 @@
                 );
 
                 if (rD.isUnconfirmedZone) {
-                    const rotStyle = hasSearchMatchInUnassigned ? 'transform: rotate(0deg);' : (isDCol ? 'transform: rotate(180deg);' : '');
-                    hRow.innerHTML = `<div class="unassigned-header bg-amber-200 hover:bg-amber-300 text-slate-800 p-0.5 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-md" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span>${rD.label}</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}" style="${rotStyle}"></i></div>`;
+                    const rotClass = hasSearchMatchInUnassigned ? 'chevron-open' : (isDCol ? 'chevron-up-closed' : '');
+                    hRow.innerHTML = `<div class="unassigned-header bg-amber-200 hover:bg-amber-300 text-slate-800 p-0.5 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-md timeline-span-full" onclick="window.toggleGroup('${cGrp}')"><span>${rD.label}</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px] ${rotClass}" id="icon-${cGrp}"></i></div>`;
                     body.appendChild(hRow);
                     return;
                 } else {
-                    hRow.innerHTML = `<div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-[var(--sidebar-w)]" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;" onclick="window.toggleGroup('${cGrp}')"><span class="truncate pr-1">${rD.label}</span><div class="flex items-center gap-1 shrink-0"><span id="state-${cGrp}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div></div>`;
+                    hRow.innerHTML = `<div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.1)] sidebar-col timeline-span-full" onclick="window.toggleGroup('${cGrp}')"><span class="truncate pr-1">${rD.label}</span><div class="flex items-center gap-1 shrink-0"><span id="state-${cGrp}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div></div>`;
                     body.appendChild(hRow);
 
                     // Dynamic Availability summary row for this category
                     const tRIds = hotelRooms.filter(hr => hr.type === rD.label && !hr.inactive).map(hr => hr.id);
                     const cap = tRIds.length;
                     const aRow = document.createElement('div');
-                    aRow.className = `timeline-grid avail-row-${cGrp} h-[20px]`;
-                    aRow.style.display = 'none';
+                    aRow.className = `timeline-grid avail-row-${cGrp} h-[20px] drawer-closed`;
 
                     let cHtml = `<div class="bg-slate-900 border-r border-slate-700 flex items-center justify-end pr-2 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-[var(--sidebar-w)] text-[9px] text-slate-400 font-black uppercase tracking-widest unselectable">AVAIL &rarr;</div>`;
                     for (let i = 0; i < dShow; i++) {
@@ -565,7 +563,7 @@
                 sRow.className = `timeline-grid group-${cGrp} sub-header-row h-[22px]`;
                 const cleanSubLabel = rD.label || '';
                 sRow.innerHTML = `
-                    <div class="bg-slate-200 border-y border-slate-300 flex items-center px-2 sticky left-0 z-20 shadow-sm unselectable" style="grid-column: 1 / -1; width: fit-content; min-width: 100vw; height: 100%;">
+                    <div class="bg-slate-200 border-y border-slate-300 flex items-center px-2 sticky left-0 z-20 shadow-sm unselectable timeline-span-full">
                         <div class="flex items-center gap-1 sticky left-0 bg-slate-200 pr-2">
                             <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">${cleanSubLabel}</span>
                             ${getFloorIcon(rD.floor)}
