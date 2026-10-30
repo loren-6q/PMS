@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "system": "Wild & Wandering PMS & Channel Manager Engine",
+  "version": "2.0.0",
+  "principles": {
+    "zero_shims": "NEVER write fuzzy regex shims or name aliases. If a function name changes, refactor the caller, never write a fallback wrapper.",
+    "immutable_room_ids": "Private rooms are raw user strings. Dorm beds are strictly '[Dorm Name] № [01..NN]'. No code may add 'C' prefixes or strip '0' prefixes.",
+    "occupancy_law": "ONLY ['here', 'future', 'new', 'special' (with assigned room)] occupy live space. ['cancelled', 'noshow', 'unconfirmed', 'charged', 'tocharge', 'vol'] NEVER occupy space.",
+    "channex_freeze": "channex.js is certified under strict rate limits (<= 18 ARI calls/min) and 2-call 500-day sync. Its implementation is read-only and frozen.",
+    "parser_strategy": "Manual clipboard parsing is owned exclusively by parser/. Each OTA has an isolated adapter. Automated Channex webhooks go directly to Cloud Functions."
+  },
+  "modules": {
+    "core/config.js": {
+      "exports": ["firebaseConfig", "appId", "app", "auth", "db", "storage", "functions", "IS_STAGING"],
+      "prohibited": ["DOM manipulation", "Business logic", "Date calculations"]
+    },
+    "core/dates.js": {
+      "exports": ["parseYMD(input: string|Date): number", "getLocalYMD(d?: Date|string): string", "mNames: string[]", "getDaysDifference(s: string, e: string): number", "addDaysYMD(s: string, days: number): string"],
+      "prohibited": ["Local time shifts", "Direct String.split('-') in UI components without parseYMD"]
+    },
+    "core/occupancy.js": {
+      "exports": ["PMS_STATUS", "STATUS_CYCLE", "isOccupyingBooking(status: string, hasAssignedRoom?: boolean): boolean"],
+      "prohibited": ["Hardcoded status arrays in calendar or inventory loops"]
+    },
+    "core/properties.js": {
+      "exports": ["DEFAULT_PROP_MAP", "DEFAULT_PROP_REVERSE_MAP", "toCanonicalPropId(raw: string): string", "toDisplayPropKey(id: string): string", "normalizeRoomId(id: string): string", "safeUpdateUrlParam(param: string, val: string): void"],
+      "prohibited": ["Mutating room IDs e.g. adding 'C' or zero-padding single-digit privates"]
+    },
+    "core/money.js": {
+      "exports": ["roundCurrency(val: number, cur?: string): number", "formatCurrency(val: number, cur?: string): string", "getPaid(booking: object): number", "getDue(booking: object): number", "getComm(booking: object): number"],
+      "prohibited": ["Raw unrounded floating-point calculations in financial views"]
+    },
+    "core/ui-dialogs.js": {
+      "exports": ["customAlert(title: string, message: string, isConfirm?: boolean, onConfirm?: Function): void", "closeAlert(): void", "showToast(title: string, msg: string, type?: 'success'|'error'): void"],
+      "prohibited": ["Calling native window.alert or window.confirm in production UI"]
+    },
+    "channex.js": {
+      "exports": ["ChannexRateLimiter", "ChannexClient", "compressDateEntries(entries: object[]): object[]", "getNetAvailabilityForDate(cat: string, date: string, cap: number): number", "pushToChannexAPI(btn: HTMLElement, mode?: 'delta'|'full'): Promise<void>", "saveAndSync(btn: HTMLElement, mode?: 'delta'|'full'): Promise<void>"],
+      "prohibited": ["Modifying API endpoints", "Altering rate limits > 18/min", "Removing exponential backoff"]
+    },
+    "parser/parser-engine.js": {
+      "exports": ["extractBookingData(rawText: string): { s: object, summary: string }", "processAndImportClipboard(rawText?: string): void"],
+      "prohibited": ["Direct DOM input reads inside individual OTA adapters"]
+    }
+  }
+}
