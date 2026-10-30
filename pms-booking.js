@@ -1,5 +1,6 @@
 // ==========================================================================
-// pms-booking.js - PMS Booking & Reservation Modal Controller
+// pms-booking.js - PMS Reservation Modal, Guest Folio & OTA Extract Engine
+// Wild & Wandering Property Management System
 // ==========================================================================
 
 (function() {
@@ -12,7 +13,7 @@
     const getStaff = () => window.staff || [];
     const getHotelRooms = () => window.hotelRooms || [];
     
-    // Core property ID accessor utilizing pms-core.js
+    // Core property ID accessor
     const getPropId = () => {
         const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
         return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
@@ -143,7 +144,7 @@
             const hotelRooms = getHotelRooms();
             const totalCapacityByType = {};
             hotelRooms.forEach(hr => {
-                if (hr && hr.type) {
+                if (hr && hr.type && !hr.inactive) {
                     totalCapacityByType[hr.type] = (totalCapacityByType[hr.type] || 0) + 1;
                 }
             });
@@ -167,8 +168,7 @@
                 const typesToDeduct = [];
                 if (!isUnassigned) {
                     rList.forEach(rid => {
-                        const normR = window.normalizeRoomId ? window.normalizeRoomId(rid, canonProp) : rid;
-                        const hrDef = hotelRooms.find(hr => hr.id === rid || hr.id === normR);
+                        const hrDef = hotelRooms.find(hr => hr.id === rid);
                         if (hrDef && hrDef.type) typesToDeduct.push(hrDef.type);
                     });
                 } else if (s.bookedType) {
@@ -329,11 +329,7 @@
 
             if (sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) {
                 rList.forEach(r => {
-                    if (r) {
-                        const normR = window.normalizeRoomId ? window.normalizeRoomId(r, curProp) : r;
-                        occ.add(normR);
-                        occ.add(r);
-                    }
+                    if (r) occ.add(r);
                 });
             }
         });
@@ -344,15 +340,12 @@
         const cI = $('check-in')?.value, cO = $('check-out')?.value, cId = $('guest-id')?.value;
         if (!cI || !cO) return;
         const occ = getOccupiedRooms(cI, cO, cId);
-        const curProp = getPropId();
 
         $$('.assigned-room-select').forEach(sel => {
             const cur = sel.value;
             Array.from(sel.options).forEach(opt => {
                 if (!opt.value) return;
-                const normOpt = window.normalizeRoomId ? window.normalizeRoomId(opt.value, curProp) : opt.value;
-                
-                if (occ.has(opt.value) || occ.has(normOpt)) {
+                if (occ.has(opt.value)) {
                     opt.disabled = true;
                     if (!opt.text.includes('(OCCUPIED)')) {
                         opt.text = opt.text + ' (OCCUPIED)';
@@ -369,18 +362,8 @@
     window.resolvePmsRoomType = (rawType = '') => {
         if (!rawType) return '';
         const rawLower = rawType.toLowerCase().trim();
-        const propOtaMap = window.propertyOtaMap || [];
         const hotelRooms = getHotelRooms();
         const roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
-
-        if (propOtaMap.length > 0) {
-            const sortedMap = [...propOtaMap].sort((a, b) => (b.otaName || '').length - (a.otaName || '').length);
-            const otaMatch = sortedMap.find(m => {
-                const kw = (m.otaName || '').toLowerCase().split(/\s+/).filter(Boolean);
-                return kw.length > 0 && kw.every(k => rawLower.includes(k));
-            });
-            if (otaMatch && otaMatch.pmsCategory) return otaMatch.pmsCategory;
-        }
 
         const direct = roomTypes.find(t => t.toLowerCase() === rawLower);
         if (direct) return direct;
@@ -422,12 +405,12 @@
         const candIdx = hotelRooms.findIndex(r => r.id === candidateId);
         if (anchorIdx === -1 || candIdx === -1) return 999;
 
-        const anchorBase = anchorId.replace(/\d+$/, '').replace(/-.*$/, '').toUpperCase();
-        const candBase = candidateId.replace(/\d+$/, '').replace(/-.*$/, '').toUpperCase();
+        const anchorBase = anchorId.split('№')[0].trim().toUpperCase();
+        const candBase = candidateId.split('№')[0].trim().toUpperCase();
 
         if (anchorBase && anchorBase === candBase) {
-            const anchorNum = parseInt(anchorId.match(/\d+$/)?.[0] || '0');
-            const candNum = parseInt(candidateId.match(/\d+$/)?.[0] || '0');
+            const anchorNum = parseInt(anchorId.match(/\d+$/)?.[0] || '0', 10);
+            const candNum = parseInt(candidateId.match(/\d+$/)?.[0] || '0', 10);
             return Math.abs(anchorNum - candNum);
         }
         return 100 + Math.abs(anchorIdx - candIdx);
@@ -437,10 +420,9 @@
         const cI = $('check-in')?.value, cO = $('check-out')?.value, cId = $('guest-id')?.value;
         if (!cI || !cO) return "";
         const occ = getOccupiedRooms(cI, cO, cId);
-        const curProp = getPropId();
 
         const assignedNow = Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean);
-        const assignedSet = new Set(assignedNow.map(r => window.normalizeRoomId ? window.normalizeRoomId(r, curProp) : r));
+        const assignedSet = new Set(assignedNow);
         const hotelRooms = getHotelRooms();
 
         let targetType = null;
@@ -459,9 +441,8 @@
         if (!targetType) return "";
 
         let freeInType = hotelRooms.filter(r => {
-            if (r.type !== targetType) return false;
-            const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
-            return !occ.has(r.id) && !occ.has(normR) && !assignedSet.has(normR);
+            if (r.inactive || r.type !== targetType) return false;
+            return !occ.has(r.id) && !assignedSet.has(r.id);
         });
 
         if (freeInType.length === 0) return "";
@@ -474,15 +455,13 @@
     };
 
     // ----------------------------------------------------------------------
-    // IMMUNE ROOM DROPDOWN & PRESERVATION (PREVENTS SILENT DELETION)
+    // IMMUNE ROOM DROPDOWN WITH ARROWS (↑ / ↓) & PRESERVATION
     // ----------------------------------------------------------------------
     window.addRoomSelect = (val = "", isManualAdd = false) => {
-        // If called without arguments (e.g. staff clicked "+ ADD"), set isManualAdd to true
         if (arguments.length === 0) isManualAdd = true;
 
         const c = $('assigned-rooms-container');
         if (!c) return;
-        const curProp = getPropId();
         const w = document.createElement('div');
         const sel = document.createElement('select');
         w.className = "flex items-stretch gap-1 w-full";
@@ -491,7 +470,7 @@
         sel.onchange = window.updateAvailableRooms;
 
         let cg = '', og = null;
-        getHotelRooms().forEach(r => {
+        getHotelRooms().filter(r => !r.inactive).forEach(r => {
             if (r.type !== cg) {
                 og = document.createElement('optgroup');
                 og.label = `--- ${r.type.toUpperCase()} ---`;
@@ -505,10 +484,9 @@
             og.appendChild(opt);
         });
 
-        // 1. Dropdown Immunity: If the booking references a legacy/unmatched room, never drop to blank
+        // Dropdown Immunity: If the booking references a legacy/unmatched room, preserve it
         if (val) {
-            const normVal = window.normalizeRoomId ? window.normalizeRoomId(val, curProp) : val.toUpperCase().trim();
-            const exists = Array.from(sel.options).some(o => o.value === val || (window.normalizeRoomId && window.normalizeRoomId(o.value, curProp) === normVal));
+            const exists = Array.from(sel.options).some(o => o.value === val);
             if (!exists) {
                 const legacyOpt = document.createElement('option');
                 legacyOpt.value = val;
@@ -516,7 +494,6 @@
                 sel.appendChild(legacyOpt);
             }
         } else if (isManualAdd) {
-            // Suggest next vacant room ONLY when user explicitly clicked "+ ADD"
             const suggested = window.suggestAvailableRoom($('booked-type')?.value);
             if (suggested) val = suggested;
         }
@@ -527,7 +504,6 @@
         del.className = "w-6 flex justify-center items-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 flex-shrink-0 shadow-sm transition-colors cursor-pointer";
         del.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>`;
         
-        // 2. Auto-Revert to Unassigned: Never allow zero room slots
         del.onclick = () => {
             w.remove();
             if (c.children.length === 0) {
@@ -554,7 +530,7 @@
 
     window.cycleMulti = (el, labels, classes) => {
         if (!el) return;
-        let cur = parseInt(el.dataset.state || 0);
+        let cur = parseInt(el.dataset.state || 0, 10);
         cur = (cur + 1) % labels.length;
         setMulti(el.id, cur, labels, classes);
     };
@@ -599,9 +575,7 @@
             const rStr = rList.join(',') || 'Unassigned';
             const dateStr = formatCompactDate(leg.checkIn, leg.checkOut);
 
-            if (idx > 0) {
-                html += `<span class="text-slate-600 font-black text-xs select-none">|</span>`;
-            }
+            if (idx > 0) html += `<span class="text-slate-600 font-black text-xs select-none">|</span>`;
 
             html += `
                 <button type="button" onclick="window.editStaff('${leg.id}')" class="px-2 py-0.5 rounded text-xs font-black uppercase transition-colors cursor-pointer flex items-center gap-1 shrink-0 ${isCurrent ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}" title="Switch to Leg ${idx + 1}">
@@ -648,7 +622,6 @@
             if (el) el.value = val || "";
         });
 
-        // Average Rate Visual Flag (Subtle color & tooltip on total price input)
         const totPriceEl = $('total-price');
         if (totPriceEl) {
             if (s.isAverageRate) {
@@ -675,7 +648,6 @@
         if ($('net-price')) $('net-price').dataset.override = s.netOverride ? 'true' : 'false';
         if ($('assigned-rooms-container')) $('assigned-rooms-container').innerHTML = '';
         
-        // Pass false so opening an unassigned booking NEVER picks an arbitrary room
         const rL = getRooms(s).length ? getRooms(s) : (isN ? [] : [""]);
         if (rL.length > 0) { 
             rL.forEach(r => window.addRoomSelect(r, false)); 
@@ -702,7 +674,6 @@
         if ($('ext-days')) $('ext-days').value = 1;
         if ($('ext-avg-rate')) { $('ext-avg-rate').value = ''; $('ext-avg-rate').classList.remove('text-pink-600', 'bg-pink-100'); }
         if ($('ext-price')) $('ext-price').value = '';
-        if ($('btn-check-bdc')) { $('btn-check-bdc').classList.replace('bg-pink-500', 'bg-slate-200'); $('btn-check-bdc').classList.replace('text-white', 'text-slate-700'); $('btn-check-bdc').classList.remove('animate-pulse'); }
 
         if (window.updateHeaderName) window.updateHeaderName();
         if (window.checkEmailProxy) window.checkEmailProxy(s.email || "");
@@ -815,8 +786,7 @@
             const container = $('split-room-dropdown-container');
             if (!container) return;
             const occ = getOccupiedRooms(splitStart, splitEnd, id);
-            const hotelRooms = getHotelRooms();
-            const curProp = getPropId();
+            const hotelRooms = getHotelRooms().filter(r => !r.inactive);
 
             let optHtml = `<label class="field-label text-left mb-1">Destination Room for Leg 2</label>
                 <select id="split-room-target" class="input-base !text-xs !p-2 uppercase cursor-pointer">
@@ -829,8 +799,7 @@
                     optHtml += `<optgroup label="--- ${r.type.toUpperCase()} ---">`;
                     cg = r.type;
                 }
-                const normR = window.normalizeRoomId ? window.normalizeRoomId(r.id, curProp) : r.id;
-                const isOccupied = occ.has(r.id) || occ.has(normR);
+                const isOccupied = occ.has(r.id);
                 const bunkArrow = (r.bunk === 'top' || r.bed === 'top') ? ' ↑' : ((r.bunk === 'bottom' || r.bunk === 'bot' || r.bed === 'bottom' || r.bed === 'bot') ? ' ↓' : '');
                 optHtml += `<option value="${r.id}" ${isOccupied ? 'disabled class="text-slate-400"' : 'class="font-bold"'}>${r.id}${bunkArrow}${isOccupied ? ' (OCCUPIED)' : ''}</option>`;
             });
@@ -880,7 +849,7 @@
         if (!leg2Room) {
             const occ = getOccupiedRooms(splitDate, s.checkOut, id);
             const hotelRooms = getHotelRooms();
-            const freeRoom = hotelRooms.find(r => r.type === (s.bookedType || '') && !occ.has(r.id));
+            const freeRoom = hotelRooms.find(r => !r.inactive && r.type === (s.bookedType || '') && !occ.has(r.id));
             leg2Room = freeRoom ? freeRoom.id : (s.rooms?.[0] || "");
         }
 
@@ -1072,13 +1041,13 @@
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
             return sProp === curProp && s.bookId && s.bookId.startsWith(pCode);
         }).sort((a, b) => {
-            const numA = parseInt(a.bookId.replace(pCode, '')) || 0;
-            const numB = parseInt(b.bookId.replace(pCode, '')) || 0;
+            const numA = parseInt(a.bookId.replace(pCode, ''), 10) || 0;
+            const numB = parseInt(b.bookId.replace(pCode, ''), 10) || 0;
             return numB - numA;
         });
         let nextNum = 1;
         if (directBookings.length > 0) {
-            nextNum = (parseInt(directBookings[0].bookId.replace(pCode, '')) || 0) + 1;
+            nextNum = (parseInt(directBookings[0].bookId.replace(pCode, ''), 10) || 0) + 1;
         }
         if ($('booking-id')) $('booking-id').value = `${pCode}${String(nextNum).padStart(5, '0')}`;
         if ($('booking-date')) $('booking-date').value = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
@@ -1132,7 +1101,6 @@
             }
 
             const rL = Array.from($$('.assigned-room-select') || []).map(sel => sel.value).filter(Boolean);
-            const dbRL = rL.map(window.uiToDbRoom || (r => r));
             const stat = $('guest-status-hidden')?.value || 'future';
 
             const isOccStatus = window.isOccupyingBooking ? window.isOccupyingBooking(stat) : (stat !== 'cancelled');
@@ -1141,8 +1109,7 @@
                 const occupiedNow = getOccupiedRooms(cI, cO, id);
                 const parseYMD = window.parseYMD || (s => Date.parse(s));
                 for (let r of rL) {
-                    const normR = window.normalizeRoomId ? window.normalizeRoomId(r, curProp) : r;
-                    if (occupiedNow.has(r) || occupiedNow.has(normR)) {
+                    if (occupiedNow.has(r)) {
                         const conflictBooking = getStaff().find(s => {
                             if (s.id === id) return false;
                             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
@@ -1150,7 +1117,7 @@
                             const isOcc = window.isOccupyingBooking ? window.isOccupyingBooking(s.status) : (s.status !== 'cancelled');
                             if (!isOcc) return false;
                             if (parseYMD(cI) >= parseYMD(s.checkOut) || parseYMD(cO) <= parseYMD(s.checkIn)) return false;
-                            return getRooms(s).map(rm => window.normalizeRoomId ? window.normalizeRoomId(rm, curProp) : rm).includes(normR);
+                            return getRooms(s).includes(r);
                         });
                         if (sB) { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; }
                         if (window.lucide) window.lucide.createIcons();
@@ -1170,11 +1137,11 @@
                 lastName: $('last-name')?.value.trim().toUpperCase() || '',
                 status: stat,
                 bookedType: $('booked-type')?.value || '',
-                room: dbRL[0] || "",
-                rooms: dbRL,
+                room: rL[0] || "",
+                rooms: rL,
                 checkIn: cI,
                 checkOut: cO,
-                pax: parseInt($('pax-count')?.value) || 1,
+                pax: parseInt($('pax-count')?.value, 10) || 1,
                 country: $('guest-country')?.value || '',
                 phone: $('phone')?.value || '',
                 email: $('email')?.value || '',
@@ -1193,12 +1160,12 @@
                 })),
                 extraCharges: window.activeExtraCharges || [],
                 emailConfirm: parseInt($('email-confirm-btn')?.dataset?.state || 0, 10),
-                emailPrePost: parseInt($('email-prepost-btn')?.dataset?.state || 0) > 0 ? (parseInt($('email-prepost-btn')?.dataset?.state) === 1 ? 'sent' : 'confirmed') : false,
-                emailSpecial: parseInt($('email-special-btn')?.dataset?.state || 0) === 1,
-                refundability: parseInt($('refund-btn')?.dataset?.state || 0) === 1 ? 'non-ref' : (parseInt($('refund-btn')?.dataset?.state || 0) === 2 ? 'ref' : 'unknown'),
-                upgrade: parseInt($('upgrade-btn')?.dataset?.state || 0) > 0 ? (parseInt($('upgrade-btn')?.dataset?.state) === 1 ? 'free' : 'paid') : 'none',
-                rating: parseInt($('rating-btn')?.dataset?.state || 0) > 0 ? (parseInt($('rating-btn')?.dataset?.state) === 1 ? 'good' : 'bad') : 'none',
-                extended: parseInt($('ext-btn')?.dataset?.state || 0) === 1,
+                emailPrePost: parseInt($('email-prepost-btn')?.dataset?.state || 0, 10) > 0 ? (parseInt($('email-prepost-btn')?.dataset?.state, 10) === 1 ? 'sent' : 'confirmed') : false,
+                emailSpecial: parseInt($('email-special-btn')?.dataset?.state || 0, 10) === 1,
+                refundability: parseInt($('refund-btn')?.dataset?.state || 0, 10) === 1 ? 'non-ref' : (parseInt($('refund-btn')?.dataset?.state || 0, 10) === 2 ? 'ref' : 'unknown'),
+                upgrade: parseInt($('upgrade-btn')?.dataset?.state || 0, 10) > 0 ? (parseInt($('upgrade-btn')?.dataset?.state, 10) === 1 ? 'free' : 'paid') : 'none',
+                rating: parseInt($('rating-btn')?.dataset?.state || 0, 10) > 0 ? (parseInt($('rating-btn')?.dataset?.state, 10) === 1 ? 'good' : 'bad') : 'none',
+                extended: parseInt($('ext-btn')?.dataset?.state || 0, 10) === 1,
                 notes: $('guest-notes')?.value || '',
                 createdAt: ext?.createdAt || now,
                 createdBy: ext?.createdBy || userEmail,
@@ -1243,14 +1210,13 @@
     };
 
     // ----------------------------------------------------------------------
-    // UNIVERSAL OTA EMAIL & TEXT PARSER (BOOKING.COM, AGODA, HW, AIRBNB)
+    // UNIVERSAL OTA EMAIL & TEXT PARSER
     // ----------------------------------------------------------------------
     window.parseOtaEmailText = (rawText) => {
         if (!rawText || typeof rawText !== 'string') return null;
         const text = rawText.trim();
         const lower = text.toLowerCase();
 
-        // 1. Detect Channel / Source
         let source = 'direct';
         if (lower.includes('booking.com') || lower.includes('guest.booking.com')) source = 'booking.com';
         else if (lower.includes('agoda') || lower.includes('prudential tower')) source = 'agoda';
@@ -1258,7 +1224,6 @@
         else if (lower.includes('airbnb')) source = 'airbnb';
         else if (lower.includes('expedia')) source = 'expedia';
 
-        // 2. Extract Booking ID / Reference
         let bookId = '';
         const bdcMatch = text.match(/(?:booking number|reservation number|book id)[:\s#]*(\d{9,12})/i) || text.match(/\b(\d{10})\b/);
         const agodaMatch = text.match(/(?:booking id|reference number|agoda booking id)[:\s#]*(\d{8,12})/i);
@@ -1273,7 +1238,6 @@
         else if (bdcMatch) bookId = bdcMatch[1];
         else if (genericMatch) bookId = genericMatch[1];
 
-        // 3. Extract Guest Name
         let firstName = '', lastName = '';
         const nameMatch = text.match(/(?:guest name|primary guest|lead guest|booked by|guest)[:\s]+([^\n\r,]+)/i);
         if (nameMatch) {
@@ -1287,7 +1251,6 @@
             }
         }
 
-        // 4. Date Normalizer Helper
         const parseAnyDateToYMD = (dStr) => {
             if (!dStr) return '';
             const clean = dStr.replace(/^[a-zA-Z]+,?\s*/, '').trim();
@@ -1309,14 +1272,12 @@
             return '';
         };
 
-        // 5. Extract Dates
         let checkIn = '', checkOut = '';
         const inMatch = text.match(/(?:check-in|check in|arrival|arriving|from)[:\s]+([^\n\r,]+)/i);
         const outMatch = text.match(/(?:check-out|check out|departure|departing|to)[:\s]+([^\n\r,]+)/i);
         if (inMatch) checkIn = parseAnyDateToYMD(inMatch[1]);
         if (outMatch) checkOut = parseAnyDateToYMD(outMatch[1]);
 
-        // Fallback Date Extractor: Find consecutive YYYY-MM-DD or date strings
         if (!checkIn || !checkOut) {
             const allDates = [...text.matchAll(/\b(202\d-\d{2}-\d{2})\b/g)].map(m => m[1]);
             if (allDates.length >= 2) {
@@ -1325,33 +1286,24 @@
             }
         }
 
-        // 6. Extract Financials (Total, Commission / KP)
         let totalPrice = 0;
         let depositPaid = 0;
         const totalMatch = text.match(/(?:total price|total amount|total payable|total cost|total|amount due)[:\s]+(?:thb|฿|\$|eur)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
-        if (totalMatch) {
-            totalPrice = parseFloat(totalMatch[1].replace(/,/g, '')) || 0;
-        }
+        if (totalMatch) totalPrice = parseFloat(totalMatch[1].replace(/,/g, '')) || 0;
 
         const depositMatch = text.match(/(?:deposit paid|deposit|commission)[:\s]+(?:thb|฿|\$)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
-        if (depositMatch) {
-            depositPaid = parseFloat(depositMatch[1].replace(/,/g, '')) || 0;
-        }
+        if (depositMatch) depositPaid = parseFloat(depositMatch[1].replace(/,/g, '')) || 0;
 
         let netPrice = totalPrice > 0 ? (depositPaid > 0 ? totalPrice - depositPaid : Number((totalPrice * 0.82).toFixed(2))) : 0;
 
-        // 7. Extract Pax & Room Type
         let pax = 1;
         const paxMatch = text.match(/(?:number of guests|guests|adults|pax)[:\s]+(\d+)/i);
         if (paxMatch) pax = parseInt(paxMatch[1], 10) || 1;
 
         let bookedType = '';
         const roomMatch = text.match(/(?:room type|room category|room|accommodates)[:\s]+([^\n\r]+)/i);
-        if (roomMatch) {
-            bookedType = (window.resolvePmsRoomType ? window.resolvePmsRoomType(roomMatch[1].trim()) : roomMatch[1].trim());
-        }
+        if (roomMatch) bookedType = (window.resolvePmsRoomType ? window.resolvePmsRoomType(roomMatch[1].trim()) : roomMatch[1].trim());
 
-        // 8. Contact Info (Email, Phone, Country)
         const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
         const email = emailMatch ? emailMatch[1] : '';
 
@@ -1383,35 +1335,35 @@
             phone,
             status: 'future',
             payments,
-            notes: `[IMPORTED VIA PARSER - ${source.toUpperCase()}]\n${text.slice(0, 300)}...`
+            notes: `[IMPORTED VIA EXTRACT - ${source.toUpperCase()}]\n${text.slice(0, 300)}...`
         };
     };
 
     // ----------------------------------------------------------------------
-    // MODAL LIFECYCLE & AUTO-INJECTOR
+    // EXTRACT MODAL LIFECYCLE & BUTTON CONTROLLER
     // ----------------------------------------------------------------------
-    const ensureEmailModalMounted = () => {
-        let m = $('email-modal') || $('import-modal');
+    const ensureExtractModalMounted = () => {
+        let m = $('extract-modal') || $('email-modal');
         if (m) return m;
 
         m = document.createElement('div');
-        m.id = 'email-modal';
+        m.id = 'extract-modal';
         m.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-3 hidden";
         m.innerHTML = `
             <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full border-2 border-slate-800 overflow-hidden flex flex-col">
                 <div class="bg-slate-900 text-white p-3 font-black uppercase text-xs flex items-center justify-between">
-                    <span class="flex items-center gap-1.5"><i data-lucide="mail-plus" size="15" class="text-indigo-400"></i> Import OTA Reservation</span>
-                    <button type="button" onclick="window.closeEmailModal()" class="text-slate-400 hover:text-white cursor-pointer font-bold text-lg leading-none">&times;</button>
+                    <span class="flex items-center gap-1.5"><i data-lucide="mail-plus" size="15" class="text-indigo-400"></i> EXTRACT OTA RESERVATION</span>
+                    <button type="button" onclick="window.closeExtractModal()" class="text-slate-400 hover:text-white cursor-pointer font-bold text-lg leading-none">&times;</button>
                 </div>
                 <div class="p-3 space-y-2 text-xs">
-                    <p class="font-bold text-slate-600 text-[11px]">Paste OTA confirmation text (Booking.com, Agoda, Hostelworld, Airbnb) below to instantly import:</p>
-                    <textarea id="email-paste" class="w-full h-44 border border-slate-300 rounded p-2 text-xs font-mono bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none" placeholder="Paste booking confirmation email or extranet text here..."></textarea>
+                    <p class="font-bold text-slate-600 text-[11px]">Paste OTA confirmation text (Booking.com, Agoda, Hostelworld, Airbnb) below to instantly extract:</p>
+                    <textarea id="extract-paste" class="w-full h-44 border border-slate-300 rounded p-2 text-xs font-mono bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none" placeholder="Paste booking confirmation email or extranet text here..."></textarea>
                     <div class="flex items-center justify-between pt-2 border-t border-slate-200">
-                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Auto-detects BDC • HW • Agoda</span>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Auto-detects BDC • HW • Agoda • Airbnb</span>
                         <div class="flex gap-2">
-                            <button type="button" onclick="window.closeEmailModal()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black rounded uppercase text-xs cursor-pointer">Cancel</button>
-                            <button type="button" id="btn-modal-parse" onclick="window.parseAndImport()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded uppercase text-xs shadow cursor-pointer flex items-center gap-1">
-                                <i data-lucide="check" size="14"></i> Parse & Import
+                            <button type="button" onclick="window.closeExtractModal()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black rounded uppercase text-xs cursor-pointer">Cancel</button>
+                            <button type="button" id="btn-modal-extract" onclick="window.processExtract()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded uppercase text-xs shadow cursor-pointer flex items-center gap-1">
+                                <i data-lucide="check" size="14"></i> EXTRACT & POPULATE
                             </button>
                         </div>
                     </div>
@@ -1423,32 +1375,34 @@
         return m;
     };
 
-    window.openEmailModal = () => {
-        const m = ensureEmailModalMounted();
+    window.openExtractModal = () => {
+        const m = ensureExtractModalMounted();
         m.classList.remove('hidden');
         m.style.display = 'flex';
-        const ta = m.querySelector('textarea') || $('email-paste');
+        const ta = m.querySelector('textarea') || $('extract-paste') || $('email-paste');
         if (ta) {
             ta.value = '';
             setTimeout(() => ta.focus(), 50);
         }
     };
-    window.openImportModal = window.openEmailModal;
+    window.openEmailModal = window.openExtractModal;
+    window.openImportModal = window.openExtractModal;
 
-    window.closeEmailModal = () => {
-        const m = $('email-modal') || $('import-modal');
+    window.closeExtractModal = () => {
+        const m = $('extract-modal') || $('email-modal') || $('import-modal');
         if (m) {
             m.classList.add('hidden');
             m.style.display = 'none';
         }
     };
-    window.closeImportModal = window.closeEmailModal;
+    window.closeEmailModal = window.closeExtractModal;
+    window.closeImportModal = window.closeExtractModal;
 
-    window.parseAndImport = (rawText = null) => {
+    window.processExtract = (rawText = null) => {
         let text = rawText;
         if (!text) {
-            const m = $('email-modal') || $('import-modal');
-            const ta = m ? m.querySelector('textarea') : $('email-paste');
+            const m = $('extract-modal') || $('email-modal') || $('import-modal');
+            const ta = m ? m.querySelector('textarea') : ($('extract-paste') || $('email-paste'));
             text = ta ? ta.value.trim() : '';
         }
 
@@ -1461,10 +1415,9 @@
             return window.showAlert ? window.showAlert("Could not extract booking details from the text.") : alert("Could not extract booking details.");
         }
 
-        window.closeEmailModal();
+        window.closeExtractModal();
         window.populateStaffForm(parsed);
 
-        // Auto-suggest next vacant room for this category so staff can check them in immediately
         const suggested = window.suggestAvailableRoom(parsed.bookedType);
         if (suggested && $('assigned-rooms-container')) {
             $('assigned-rooms-container').innerHTML = '';
@@ -1472,37 +1425,45 @@
         }
 
         if (window.showAlert) {
-            window.showAlert(`Parsed: ${parsed.firstName} ${parsed.lastName} (${parsed.bookId || 'New'})\nDates: ${parsed.checkIn} → ${parsed.checkOut}\nReview room and click SAVE to check-in.`);
+            window.showAlert(`Extracted: ${parsed.firstName} ${parsed.lastName} (${parsed.bookId || 'New'})\nDates: ${parsed.checkIn} → ${parsed.checkOut}\nAssigned Room: ${suggested || 'Unassigned'}\nClick SAVE to confirm.`);
         }
     };
-    window.parseEmail = window.parseAndImport;
+    window.parseAndImport = window.processExtract;
+    window.parseEmail = window.processExtract;
 
-    // Auto-bind any buttons on the page labeled "Import" or "Parse"
-    const bindAllImportButtons = () => {
+    const bindExtractNavbarBtn = () => {
         const allButtons = Array.from(document.querySelectorAll('button'));
         allButtons.forEach(btn => {
             const txt = (btn.innerText || '').toUpperCase();
             const id = (btn.id || '').toLowerCase();
-            const isImportBtn = id.includes('import') || txt.includes('IMPORT') || txt.includes('PARSE');
-            if (isImportBtn) {
+            const isMatch = id.includes('extract') || id.includes('import') || txt.includes('EXTRACT') || txt.includes('IMPORT');
+            if (isMatch) {
+                btn.innerText = 'EXTRACT';
                 btn.disabled = false;
                 btn.style.pointerEvents = 'auto';
                 btn.style.cursor = 'pointer';
                 btn.classList.remove('pointer-events-none', 'opacity-50');
 
-                if (!btn.closest('#email-modal') && !btn.closest('#import-modal')) {
+                if (!btn.closest('#extract-modal') && !btn.closest('#email-modal')) {
                     btn.onclick = (e) => {
                         e.preventDefault();
-                        window.openEmailModal();
+                        window.openExtractModal();
                     };
                 }
             }
         });
     };
 
+    window.addEventListener('keydown', e => {
+        if (e.altKey && (e.key === 'e' || e.key === 'E')) {
+            e.preventDefault();
+            window.openExtractModal();
+        }
+    });
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bindAllImportButtons);
+        document.addEventListener('DOMContentLoaded', bindExtractNavbarBtn);
     } else {
-        setTimeout(bindAllImportButtons, 100);
+        setTimeout(bindExtractNavbarBtn, 100);
     }
 })();
