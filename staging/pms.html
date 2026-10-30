@@ -1,0 +1,345 @@
+<!-- ==========================================================================
+     pms.html - Front Desk Property Management System (PMS)
+     Wild & Wandering Property Management System
+     ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>W&W Front Desk PMS</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body class="bg-slate-100 p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
+    <!-- Boot Loading Overlay -->
+    <div id="boot-loader" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4">
+            <span id="sync-status">Connecting to PMS Database...</span>
+        </div>
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="custom-alert" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 text-center">
+            <div id="modal-title" class="bg-slate-900 p-2 text-white font-bold uppercase text-xs tracking-widest">Notification</div>
+            <div class="p-6">
+                <p id="custom-alert-msg" class="font-black text-slate-700 leading-tight text-sm whitespace-pre-wrap mb-6"></p>
+                <div class="flex gap-2 justify-center">
+                    <button id="custom-alert-cancel" onclick="document.getElementById('custom-alert').classList.remove('active')" class="hidden px-5 py-2 rounded font-black text-xs uppercase bg-slate-200 text-slate-700 cursor-pointer">Cancel</button>
+                    <button id="custom-alert-confirm" onclick="document.getElementById('custom-alert').classList.remove('active')" class="px-8 py-2 rounded font-black text-xs uppercase bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer">Okay</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+        <!-- TOP NAVBAR -->
+        <header class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50 unselectable w-full">
+            <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+                <a href="index.html" class="flex flex-col min-w-0 mr-1 hover:brightness-110 transition-all cursor-pointer">
+                    <img id="main-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="W&W" class="h-8 sm:h-10 object-contain">
+                </a>
+                
+                <div class="flex bg-slate-100 rounded p-0.5 items-center gap-0.5 border border-slate-200">
+                    <button id="tab-dash" onclick="window.switchTab('dashboard')" class="tab-btn" title="Dashboard"><i data-lucide="camera" size="14"></i> <span class="hidden md:inline">Dashboard</span></button>
+                    <button id="tab-cal" onclick="window.switchTab('calendar')" class="tab-btn active" title="Calendar"><i data-lucide="calendar-days" size="14"></i> <span class="hidden md:inline">Calendar</span></button>
+                    <button id="tab-db" onclick="window.switchTab('database')" class="tab-btn" title="Database"><i data-lucide="table" size="14"></i> <span class="hidden md:inline">Database</span></button>
+                </div>
+
+                <select id="main-property-switcher" onchange="window.location.search = '?p=' + this.value" class="bg-slate-50 text-indigo-700 font-black uppercase text-xs rounded px-2 py-1 border border-slate-300 outline-none cursor-pointer">
+                </select>
+            </div>
+
+            <!-- Date Controls for Calendar -->
+            <div id="context-tools-cal" class="flex items-center gap-1 shrink-1 min-w-0">
+                <div class="flex items-center bg-slate-100 p-0.5 rounded border border-slate-200">
+                    <button onclick="window.prevPeriod()" class="p-1 hover:bg-white rounded cursor-pointer"><i data-lucide="chevron-left" size="14"></i></button>
+                    <select id="jump-month-select" class="bg-transparent font-black text-indigo-700 outline-none text-xs cursor-pointer w-24 text-center px-1" onchange="window.jumpToMonth(this.value)"></select>
+                    <button onclick="window.nextPeriod()" class="p-1 hover:bg-white rounded cursor-pointer"><i data-lucide="chevron-right" size="14"></i></button>
+                </div>
+                <button onclick="window.goToday()" class="px-2.5 py-1 bg-white border border-slate-300 rounded font-black text-xs uppercase hover:bg-slate-50 cursor-pointer shadow-2xs">Today</button>
+            </div>
+
+            <!-- Utilities: Search, Import, Tools Menu -->
+            <div class="flex items-center gap-1.5 shrink-0 ml-auto">
+                <div class="relative flex items-center">
+                    <i data-lucide="search" size="13" class="absolute left-2 text-slate-400"></i>
+                    <input type="text" id="guest-search" placeholder="FIND GUEST / ID..." oninput="window.handleSearch(this.value)" class="pl-6 pr-2 py-1 w-28 sm:w-36 bg-slate-50 border border-slate-300 rounded font-bold text-xs uppercase outline-none focus:bg-white focus:ring-1 focus:ring-indigo-500">
+                </div>
+
+                <button onclick="window.openEmailParserModal()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase rounded shadow-xs flex items-center gap-1 cursor-pointer transition-colors" title="Import OTA confirmation email or text">
+                    <i data-lucide="file-input" size="14"></i>
+                    <span class="hidden sm:inline">Import</span>
+                </button>
+
+                <a href="cm.html" class="p-1.5 text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 rounded shadow-2xs" title="Open Channel Manager"><i data-lucide="zap" size="14"></i></a>
+                <a href="setup.html" class="p-1.5 text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 rounded shadow-2xs" title="Open Setup Wizard"><i data-lucide="settings" size="14"></i></a>
+            </div>
+        </header>
+
+        <!-- VIEW 1: DASHBOARD -->
+        <div id="dashboard-view" class="flex-1 flex flex-col min-h-0 bg-slate-100 overflow-y-auto hidden gap-2 p-2">
+            <div class="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                <h2 class="font-black text-slate-800 uppercase tracking-widest text-sm flex items-center gap-2">
+                    <i data-lucide="layout-dashboard" class="text-indigo-600"></i> Operational Snapshot <span id="dash-date-display" class="text-xs font-mono font-bold text-slate-400">--</span>
+                </h2>
+                <button onclick="window.renderDashboard()" class="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"><i data-lucide="refresh-cw" size="14"></i></button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 pb-4">
+                <div class="dash-card">
+                    <div class="dash-title"><span>Arrivals</span> <span id="dash-arr-count" class="bg-emerald-100 text-emerald-800 px-1.5 rounded">0</span></div>
+                    <div id="dash-arr-list" class="space-y-1"></div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-title"><span>Departures</span> <span id="dash-dep-count" class="bg-rose-100 text-rose-800 px-1.5 rounded">0</span></div>
+                    <div id="dash-dep-list" class="space-y-1"></div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-title"><span>Stay-Overs</span> <span id="dash-stay-count" class="bg-indigo-100 text-indigo-800 px-1.5 rounded">0</span></div>
+                    <div id="dash-stay-list" class="space-y-1"></div>
+                </div>
+                <div class="dash-card border-orange-200 bg-orange-50/40">
+                    <div class="dash-title text-orange-800 border-orange-200"><span>Action Items</span></div>
+                    <div id="dash-act-list" class="space-y-1"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: CALENDAR -->
+        <div id="calendar-view" class="flex-1 flex flex-col min-h-0 unselectable">
+            <div id="calendar-scroll-container" class="flex-1 bg-white sm:rounded shadow-2xs border border-slate-300 overflow-auto relative overscroll-none">
+                <div id="calendar-header-months" class="timeline-grid sticky top-0 z-[60] bg-slate-800 border-b border-slate-700 h-[26px]"></div>
+                <div id="calendar-header-days" class="timeline-grid sticky top-[26px] z-[50] bg-slate-100 border-b border-slate-400 h-[28px]"></div>
+                <div id="timeline-body" class="relative pb-2"></div>
+            </div>
+        </div>
+
+        <!-- VIEW 3: DATABASE TABLE -->
+        <div id="database-view" class="flex-1 flex flex-col min-h-0 bg-white sm:rounded border border-slate-300 overflow-hidden hidden">
+            <!-- Filter Toolbar -->
+            <div class="p-2 bg-slate-100 border-b border-slate-200 flex flex-wrap gap-2 items-center text-xs unselectable shrink-0">
+                <input type="text" id="db-filter-name" placeholder="GUEST / ID..." oninput="window.renderDatabase()" class="input-base !w-32 bg-white">
+                
+                <select id="db-filter-preset" onchange="window.applyDbPreset(this.value)" class="input-base !w-32 bg-white cursor-pointer">
+                    <option value="all">ALL DATES</option>
+                    <option value="today">TODAY</option>
+                    <option value="tomorrow">TOMORROW</option>
+                    <option value="this_week">THIS WEEK</option>
+                    <option value="this_month">THIS MONTH</option>
+                </select>
+
+                <div class="flex items-center gap-1">
+                    <input type="date" id="db-filter-start" onchange="window.renderDatabase()" class="input-base !w-28 bg-white">
+                    <span class="text-slate-400 font-bold">to</span>
+                    <input type="date" id="db-filter-end" onchange="window.renderDatabase()" class="input-base !w-28 bg-white">
+                </div>
+
+                <select id="db-filter-due" onchange="window.renderDatabase()" class="input-base !w-28 bg-white cursor-pointer">
+                    <option value="">ALL BALANCES</option>
+                    <option value="zero">PAID / ZERO DUE</option>
+                    <option value="owes">OWES BALANCE</option>
+                </select>
+
+                <button onclick="window.bulkDelete()" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase rounded cursor-pointer ml-auto shadow-2xs">
+                    Delete Filtered
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-auto">
+                <table class="w-full text-left border-collapse min-w-[900px] text-xs">
+                    <thead class="bg-slate-200 sticky top-0 z-10 border-b border-slate-300 text-[10px] font-black text-slate-700 uppercase tracking-wider unselectable">
+                        <tr>
+                            <th class="p-2 border-r border-slate-300 cursor-pointer" onclick="window.sortDatabase('name')">Guest Name / ID</th>
+                            <th class="p-2 border-r border-slate-300 cursor-pointer" onclick="window.sortDatabase('source')">Source</th>
+                            <th class="p-2 border-r border-slate-300 cursor-pointer" onclick="window.sortDatabase('checkIn')">Dates</th>
+                            <th class="p-2 border-r border-slate-300 cursor-pointer" onclick="window.sortDatabase('room')">Room</th>
+                            <th class="p-2 border-r border-slate-300 text-right cursor-pointer" onclick="window.sortDatabase('totalPrice')">Total</th>
+                            <th class="p-2 border-r border-slate-300 text-right cursor-pointer" onclick="window.sortDatabase('paid')">Paid</th>
+                            <th class="p-2 border-r border-slate-300 text-right cursor-pointer" onclick="window.sortDatabase('due')">Due</th>
+                            <th class="p-2 text-center cursor-pointer" onclick="window.sortDatabase('status')">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="database-body" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 1: GUEST FOLIO -->
+    <div id="guest-modal" class="modal-overlay">
+        <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800">
+            <div id="modal-header-btn" class="bg-slate-900 p-2.5 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable">
+                <div class="flex items-center gap-2 pointer-events-none">
+                    <i data-lucide="user" size="16"></i>
+                    <h3 id="modal-guest-name-display" class="text-sm font-black uppercase tracking-tight">NEW BOOKING</h3>
+                </div>
+                <button type="button" onclick="window.closeGuestModal()" class="p-1 hover:bg-rose-600 rounded cursor-pointer leading-none">&times;</button>
+            </div>
+
+            <form id="guest-form" class="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar text-xs">
+                <input type="hidden" id="guest-id">
+                <input type="hidden" id="guest-status-hidden" value="future">
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="field-label">First Name</label><input type="text" id="first-name" class="input-base uppercase" oninput="window.updateHeaderName()"></div>
+                    <div><label class="field-label">Last Name</label><input type="text" id="last-name" class="input-base uppercase" oninput="window.updateHeaderName()"></div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="field-label">Phone</label><input type="text" id="phone" class="input-base"></div>
+                    <div><label class="field-label">Country</label><input type="text" id="guest-country" class="input-base"></div>
+                </div>
+
+                <div><label class="field-label">Email</label><input type="text" id="email" class="input-base"></div>
+
+                <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-200">
+                    <div><label class="field-label">Check-in</label><input type="date" id="check-in" class="input-base"></div>
+                    <div><label class="field-label">Check-out</label><input type="date" id="check-out" class="input-base"></div>
+                    <div>
+                        <label class="field-label">Status</label>
+                        <button type="button" id="status-cycle-btn" onclick="window.cycleStatus()" class="w-full py-1 text-[10px] font-black uppercase rounded shadow-2xs cursor-pointer border"></button>
+                    </div>
+                </div>
+
+                <div><label class="field-label">Booked Type</label><input type="text" id="booked-type" class="input-base"></div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-0.5">
+                        <label class="field-label text-indigo-700">Assigned Rooms / Beds</label>
+                        <button type="button" onclick="window.addRoomSelect()" class="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">+ ADD</button>
+                    </div>
+                    <div id="assigned-rooms-container" class="space-y-1"></div>
+                </div>
+
+                <!-- Financial Balance Strip -->
+                <div class="bg-slate-100 p-2 rounded border border-slate-200 space-y-2 mt-2">
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <div class="flex items-center gap-1">
+                                <label class="field-label">Total Price</label>
+                                <button type="button" onclick="window.openAddChargeModal()" class="text-[9px] font-black text-indigo-600 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-200 cursor-pointer">+ ADD ฿</button>
+                            </div>
+                            <div class="flex items-center text-sm font-black">฿<input type="number" step="any" id="total-price" value="0" class="w-20 ml-1 bg-transparent outline-none font-black text-sm" oninput="window.calcFinancials()"></div>
+                        </div>
+                        <div class="text-right">
+                            <label class="field-label text-slate-400">Paid</label>
+                            <span id="display-paid" class="text-xs font-black text-emerald-600 font-mono">฿0</span>
+                        </div>
+                        <div class="text-right">
+                            <label class="field-label text-rose-500">Balance Due</label>
+                            <span id="display-due" class="text-sm font-black text-rose-600 font-mono">฿0</span>
+                        </div>
+                    </div>
+
+                    <div id="extra-charges-wrapper" class="hidden border-t border-slate-200 pt-1 space-y-1">
+                        <div class="flex justify-between text-[9px] font-black uppercase text-amber-800">
+                            <span>Add-ons</span><span id="extra-charges-total">+฿0</span>
+                        </div>
+                        <div id="extra-charges-list" class="space-y-1"></div>
+                    </div>
+
+                    <div id="payments-list" class="space-y-1 border-t border-slate-200 pt-1"></div>
+                    <button type="button" onclick="window.addPaymentRow()" class="w-full py-1 border border-dashed border-slate-300 rounded font-black text-[10px] text-slate-600 uppercase hover:bg-white cursor-pointer">+ Add Payment</button>
+                </div>
+
+                <div>
+                    <label class="field-label">Notes</label>
+                    <textarea id="guest-notes" rows="2" class="input-base resize-none"></textarea>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div><label class="field-label">Source</label><input type="text" id="booking-source" class="input-base uppercase"></div>
+                    <div><label class="field-label">Booking Date</label><input type="date" id="booking-date" class="input-base"></div>
+                    <div><label class="field-label">OTA Book ID</label><input type="text" id="booking-id" class="input-base"></div>
+                </div>
+            </form>
+
+            <div class="bg-slate-100 p-2 flex justify-between items-center border-t border-slate-200 rounded-b-lg">
+                <div class="flex items-center gap-1">
+                    <button type="button" onclick="window.requestDelete()" class="btn-tool bg-rose-600 text-white" title="Delete"><i data-lucide="trash-2" size="13"></i></button>
+                    <button type="button" onclick="window.requestDuplicate()" class="btn-tool bg-indigo-50 text-indigo-700 border border-indigo-200" title="Duplicate"><i data-lucide="copy" size="13"></i></button>
+                    <button type="button" onclick="window.requestSplit()" class="btn-tool bg-amber-50 text-amber-800 border border-amber-200" title="Split Stay"><i data-lucide="scissors" size="13"></i></button>
+                    <button type="button" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-50 text-emerald-800 border border-emerald-200" title="Print Invoice"><i data-lucide="receipt" size="13"></i></button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="window.closeGuestModal()" class="px-3 py-1 bg-slate-200 text-slate-700 font-black rounded uppercase text-xs cursor-pointer">Cancel</button>
+                    <button type="button" onclick="window.saveBooking()" id="save-guest-btn" class="px-5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded uppercase text-xs shadow-xs cursor-pointer">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: IMPORT OTA CONFIRMATION TEXT -->
+    <div id="email-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span>Import OTA Confirmation Email / Extranet Text</span>
+                <button type="button" onclick="document.getElementById('email-modal').classList.remove('active')" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
+            </div>
+            <div class="p-3 text-xs space-y-2">
+                <textarea id="email-textarea" rows="8" class="input-base font-mono text-[11px] whitespace-pre" placeholder="Paste Booking.com, Hostelworld, Agoda, Expedia, or Airbnb confirmation text here..."></textarea>
+            </div>
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="document.getElementById('email-modal').classList.remove('active')" class="px-3 py-1 bg-slate-200 text-slate-700 font-black uppercase rounded cursor-pointer">Cancel</button>
+                <button type="button" onclick="window.parseEmail()" class="px-4 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase rounded shadow-xs cursor-pointer">Extract & Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: SPLIT STAY -->
+    <div id="split-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-xs w-full overflow-hidden border-2 border-slate-800 text-center">
+            <div class="bg-slate-900 p-2.5 text-white font-bold uppercase text-xs">Split Stay</div>
+            <div class="p-4 space-y-3 text-xs">
+                <p class="font-bold text-slate-600">Select the date to split this stay into two linked segments:</p>
+                <input type="date" id="split-date" class="input-base text-center font-bold">
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="document.getElementById('split-modal').classList.remove('active')" class="px-3 py-1 bg-slate-200 text-slate-700 font-bold rounded uppercase">Cancel</button>
+                    <button type="button" onclick="window.confirmSplit()" class="px-4 py-1 bg-amber-600 text-white font-black rounded uppercase shadow-xs">Split</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: ADD-ON CHARGE -->
+    <div id="charge-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-xs w-full overflow-hidden border-2 border-slate-800 text-left">
+            <div class="bg-slate-900 p-2.5 text-white font-bold uppercase text-xs flex justify-between">
+                <span>Add Extra Charge</span>
+                <button type="button" onclick="document.getElementById('charge-modal').classList.remove('active')" class="text-slate-400">&times;</button>
+            </div>
+            <div class="p-3 space-y-2 text-xs">
+                <div>
+                    <label class="field-label">Description</label>
+                    <input type="text" id="charge-desc" placeholder="e.g. Ferry Ticket, Laundry..." class="input-base uppercase font-bold">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="field-label">Amount (฿)</label>
+                        <input type="number" step="any" id="charge-amount" class="input-base font-black text-emerald-700">
+                    </div>
+                    <div>
+                        <label class="field-label">Date</label>
+                        <input type="date" id="charge-date" class="input-base">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="document.getElementById('charge-modal').classList.remove('active')" class="px-3 py-1 bg-slate-200 text-slate-700 font-bold rounded uppercase">Cancel</button>
+                    <button type="button" onclick="window.confirmAddCharge()" class="px-4 py-1 bg-emerald-600 text-white font-black rounded uppercase shadow-xs">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Module Bootstrapper Entry Point -->
+    <script type="module" src="./pms/pms-init.js"></script>
+</body>
+</html>
