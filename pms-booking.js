@@ -1,5 +1,5 @@
 // ==========================================================================
-// pms-booking.js - PMS Reservation Modal, Guest Folio & OTA Extract Engine
+// pms-booking.js - PMS Reservation Modal, Guest Folio & OTA Import Engine
 // Wild & Wandering Property Management System
 // ==========================================================================
 
@@ -488,7 +488,6 @@
             og.appendChild(opt);
         });
 
-        // Dropdown Immunity: If the booking references a legacy/unmatched room, preserve it
         if (val) {
             const exists = Array.from(sel.options).some(o => o.value === val);
             if (!exists) {
@@ -1360,10 +1359,10 @@
     };
 
     // ----------------------------------------------------------------------
-    // EXTRACT MODAL LIFECYCLE & BUTTON CONTROLLER
+    // EXTRACT / IMPORT MODAL LIFECYCLE & BUTTON CONTROLLER
     // ----------------------------------------------------------------------
     const ensureExtractModalMounted = () => {
-        let m = $('extract-modal') || $('email-modal');
+        let m = $('extract-modal') || $('email-modal') || $('import-modal');
         if (m) return m;
 
         m = document.createElement('div');
@@ -1371,19 +1370,19 @@
         m.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-3 hidden";
         m.innerHTML = `
             <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full border-2 border-slate-800 overflow-hidden flex flex-col">
-                <div class="bg-slate-900 text-white p-3 font-black uppercase text-xs flex items-center justify-between">
-                    <span class="flex items-center gap-1.5"><i data-lucide="mail-plus" size="15" class="text-indigo-400"></i> EXTRACT OTA RESERVATION</span>
-                    <button type="button" onclick="window.closeExtractModal()" class="text-slate-400 hover:text-white cursor-pointer font-bold text-lg leading-none">&times;</button>
+                <div class="bg-emerald-700 text-white p-3 font-black uppercase text-xs flex items-center justify-between shadow-xs">
+                    <span class="flex items-center gap-1.5"><i data-lucide="file-input" size="15" class="text-emerald-200"></i> IMPORT OTA RESERVATION</span>
+                    <button type="button" onclick="window.closeExtractModal()" class="text-emerald-200 hover:text-white cursor-pointer font-bold text-lg leading-none">&times;</button>
                 </div>
                 <div class="p-3 space-y-2 text-xs">
-                    <p class="font-bold text-slate-600 text-[11px]">Paste OTA confirmation text (Booking.com, Agoda, Hostelworld, Airbnb) below to instantly extract:</p>
-                    <textarea id="extract-paste" class="w-full h-44 border border-slate-300 rounded p-2 text-xs font-mono bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none" placeholder="Paste booking confirmation email or extranet text here..."></textarea>
+                    <p class="font-bold text-slate-600 text-[11px]">Paste OTA confirmation text (Booking.com, Agoda, Hostelworld, Airbnb) below to instantly import:</p>
+                    <textarea id="extract-paste" class="w-full h-44 border border-slate-300 rounded p-2 text-xs font-mono bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none resize-none" placeholder="Paste booking confirmation email or extranet text here..."></textarea>
                     <div class="flex items-center justify-between pt-2 border-t border-slate-200">
                         <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Auto-detects BDC • HW • Agoda • Airbnb</span>
                         <div class="flex gap-2">
                             <button type="button" onclick="window.closeExtractModal()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black rounded uppercase text-xs cursor-pointer">Cancel</button>
-                            <button type="button" id="btn-modal-extract" onclick="window.processExtract()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded uppercase text-xs shadow cursor-pointer flex items-center gap-1">
-                                <i data-lucide="check" size="14"></i> EXTRACT & POPULATE
+                            <button type="button" id="btn-modal-extract" onclick="window.processExtract()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded uppercase text-xs shadow-md cursor-pointer flex items-center gap-1.5 transition-colors">
+                                <i data-lucide="check" size="14"></i> IMPORT BOOKING
                             </button>
                         </div>
                     </div>
@@ -1406,13 +1405,15 @@
             setTimeout(() => ta.focus(), 50);
         }
 
-        // Guarantee submit button inside modal is always unlocked and bound to processExtract
+        // Guarantee submit button inside modal is styled in active emerald green and bound to processExtract
         const submitBtn = m.querySelector('#btn-modal-extract') || m.querySelector('button[onclick*="processExtract"]') || m.querySelector('button[onclick*="parse"]');
         if (submitBtn) {
+            submitBtn.innerText = 'IMPORT BOOKING';
             submitBtn.disabled = false;
             submitBtn.removeAttribute('disabled');
             submitBtn.style.pointerEvents = 'auto';
             submitBtn.style.cursor = 'pointer';
+            submitBtn.className = "px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded uppercase text-xs shadow-md cursor-pointer flex items-center gap-1.5 transition-colors";
             submitBtn.onclick = (e) => {
                 if (e) e.preventDefault();
                 window.processExtract();
@@ -1459,26 +1460,32 @@
         }
 
         if (window.showAlert) {
-            window.showAlert(`Extracted: ${parsed.firstName} ${parsed.lastName} (${parsed.bookId || 'New'})\nDates: ${parsed.checkIn} → ${parsed.checkOut}\nAssigned Room: ${suggested || 'Unassigned'}\nClick SAVE to confirm.`);
+            window.showAlert(`Imported: ${parsed.firstName} ${parsed.lastName} (${parsed.bookId || 'New'})\nDates: ${parsed.checkIn} → ${parsed.checkOut}\nAssigned Room: ${suggested || 'Unassigned'}\nClick SAVE to confirm.`);
         }
     };
     window.parseAndImport = window.processExtract;
     window.parseEmail = window.processExtract;
 
-    // Scoped Navbar Binding: Targets strictly header/nav elements, never touches modal buttons
+    // Scoped Navbar Binding: Formats navbar button as a vibrant emerald green "Import" button
     const bindExtractNavbarBtn = () => {
-        const headerButtons = Array.from(document.querySelectorAll('header button, header a, nav button, nav a, #btn-extract'));
+        const headerButtons = Array.from(document.querySelectorAll('header button, header a, nav button, nav a, #btn-extract, #btn-import'));
         headerButtons.forEach(btn => {
             const txt = (btn.innerText || btn.textContent || '').trim().toUpperCase();
             const id = (btn.id || '').toLowerCase();
-            const isMatch = id.includes('extract') || id.includes('import') || txt.includes('EXTRACT') || txt.includes('IMPORT');
+            const isMatch = id.includes('extract') || id.includes('import') || txt.includes('EXTRACT') || txt.includes('IMPORT') || txt.includes('PARSE');
             
             if (isMatch) {
-                btn.innerText = 'EXTRACT';
+                btn.innerText = 'Import';
                 btn.disabled = false;
                 btn.removeAttribute('disabled');
                 btn.style.pointerEvents = 'auto';
                 btn.style.cursor = 'pointer';
+                btn.style.opacity = '1';
+                
+                // Set to bold emerald green styling
+                btn.className = "px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase rounded shadow-xs flex items-center gap-1 transition-colors cursor-pointer";
+                btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="inline shrink-0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> <span>Import</span>`;
+
                 btn.onclick = (e) => {
                     if (e) e.preventDefault();
                     window.openExtractModal();
@@ -1488,7 +1495,7 @@
     };
 
     window.addEventListener('keydown', e => {
-        if (e.altKey && (e.key === 'e' || e.key === 'E')) {
+        if (e.altKey && (e.key === 'e' || e.key === 'E' || e.key === 'i' || e.key === 'I')) {
             e.preventDefault();
             window.openExtractModal();
         }
