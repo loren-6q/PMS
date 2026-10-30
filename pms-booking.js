@@ -1241,4 +1241,268 @@
             if (window.lucide) window.lucide.createIcons();
         }
     };
+
+    // ----------------------------------------------------------------------
+    // UNIVERSAL OTA EMAIL & TEXT PARSER (BOOKING.COM, AGODA, HW, AIRBNB)
+    // ----------------------------------------------------------------------
+    window.parseOtaEmailText = (rawText) => {
+        if (!rawText || typeof rawText !== 'string') return null;
+        const text = rawText.trim();
+        const lower = text.toLowerCase();
+
+        // 1. Detect Channel / Source
+        let source = 'direct';
+        if (lower.includes('booking.com') || lower.includes('guest.booking.com')) source = 'booking.com';
+        else if (lower.includes('agoda') || lower.includes('prudential tower')) source = 'agoda';
+        else if (lower.includes('hostelworld') || lower.includes('hostelbookers')) source = 'hostelworld';
+        else if (lower.includes('airbnb')) source = 'airbnb';
+        else if (lower.includes('expedia')) source = 'expedia';
+
+        // 2. Extract Booking ID / Reference
+        let bookId = '';
+        const bdcMatch = text.match(/(?:booking number|reservation number|book id)[:\s#]*(\d{9,12})/i) || text.match(/\b(\d{10})\b/);
+        const agodaMatch = text.match(/(?:booking id|reference number|agoda booking id)[:\s#]*(\d{8,12})/i);
+        const hwMatch = text.match(/(?:reference|ref|reference number)[:\s#]*([A-Z0-9\-]{5,15})/i);
+        const airbnbMatch = text.match(/(?:confirmation code|reservation code)[:\s#]*([A-Z0-9]{6,12})/i);
+        const genericMatch = text.match(/(?:reference|booking id|ref)[:\s#]*([A-Za-z0-9\-_]+)/i);
+
+        if (source === 'booking.com' && bdcMatch) bookId = bdcMatch[1];
+        else if (source === 'agoda' && agodaMatch) bookId = agodaMatch[1];
+        else if (source === 'hostelworld' && hwMatch) bookId = hwMatch[1];
+        else if (source === 'airbnb' && airbnbMatch) bookId = airbnbMatch[1];
+        else if (bdcMatch) bookId = bdcMatch[1];
+        else if (genericMatch) bookId = genericMatch[1];
+
+        // 3. Extract Guest Name
+        let firstName = '', lastName = '';
+        const nameMatch = text.match(/(?:guest name|primary guest|lead guest|booked by|guest)[:\s]+([^\n\r,]+)/i);
+        if (nameMatch) {
+            const rawName = nameMatch[1].replace(/^(mr\.|mrs\.|ms\.|dr\.)\s+/i, '').trim();
+            const parts = rawName.split(/\s+/).filter(Boolean);
+            if (parts.length > 1) {
+                firstName = parts[0];
+                lastName = parts.slice(1).join(' ');
+            } else {
+                lastName = rawName;
+            }
+        }
+
+        // 4. Date Normalizer Helper
+        const parseAnyDateToYMD = (dStr) => {
+            if (!dStr) return '';
+            const clean = dStr.replace(/^[a-zA-Z]+,?\s*/, '').trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+            const parsed = Date.parse(clean);
+            if (!isNaN(parsed)) {
+                return new Date(parsed).toISOString().split('T')[0];
+            }
+            const dmy = clean.match(/^(\d{1,2})[\/\-\s]+([A-Za-z]+|\d{1,2})[\/\-\s]+(\d{4})/);
+            if (dmy) {
+                const day = dmy[1].padStart(2, '0');
+                let month = dmy[2];
+                const year = dmy[3];
+                const mIdx = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(month.toLowerCase().slice(0, 3));
+                if (mIdx > -1) month = String(mIdx + 1).padStart(2, '0');
+                else month = month.padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+            return '';
+        };
+
+        // 5. Extract Dates
+        let checkIn = '', checkOut = '';
+        const inMatch = text.match(/(?:check-in|check in|arrival|arriving|from)[:\s]+([^\n\r,]+)/i);
+        const outMatch = text.match(/(?:check-out|check out|departure|departing|to)[:\s]+([^\n\r,]+)/i);
+        if (inMatch) checkIn = parseAnyDateToYMD(inMatch[1]);
+        if (outMatch) checkOut = parseAnyDateToYMD(outMatch[1]);
+
+        // Fallback Date Extractor: Find consecutive YYYY-MM-DD or date strings
+        if (!checkIn || !checkOut) {
+            const allDates = [...text.matchAll(/\b(202\d-\d{2}-\d{2})\b/g)].map(m => m[1]);
+            if (allDates.length >= 2) {
+                checkIn = allDates[0];
+                checkOut = allDates[1];
+            }
+        }
+
+        // 6. Extract Financials (Total, Commission / KP)
+        let totalPrice = 0;
+        let depositPaid = 0;
+        const totalMatch = text.match(/(?:total price|total amount|total payable|total cost|total|amount due)[:\s]+(?:thb|฿|\$|eur)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+        if (totalMatch) {
+            totalPrice = parseFloat(totalMatch[1].replace(/,/g, '')) || 0;
+        }
+
+        const depositMatch = text.match(/(?:deposit paid|deposit|commission)[:\s]+(?:thb|฿|\$)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+        if (depositMatch) {
+            depositPaid = parseFloat(depositMatch[1].replace(/,/g, '')) || 0;
+        }
+
+        let netPrice = totalPrice > 0 ? (depositPaid > 0 ? totalPrice - depositPaid : Number((totalPrice * 0.82).toFixed(2))) : 0;
+
+        // 7. Extract Pax & Room Type
+        let pax = 1;
+        const paxMatch = text.match(/(?:number of guests|guests|adults|pax)[:\s]+(\d+)/i);
+        if (paxMatch) pax = parseInt(paxMatch[1], 10) || 1;
+
+        let bookedType = '';
+        const roomMatch = text.match(/(?:room type|room category|room|accommodates)[:\s]+([^\n\r]+)/i);
+        if (roomMatch) {
+            bookedType = (window.resolvePmsRoomType ? window.resolvePmsRoomType(roomMatch[1].trim()) : roomMatch[1].trim());
+        }
+
+        // 8. Contact Info (Email, Phone, Country)
+        const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+        const email = emailMatch ? emailMatch[1] : '';
+
+        const phoneMatch = text.match(/(?:phone|telephone|mobile|tel)[:\s]+([+\d\s\-()]{7,22})/i);
+        const phone = phoneMatch ? phoneMatch[1].trim() : '';
+
+        const payments = [];
+        if (depositPaid > 0) {
+            const payKey = source === 'hostelworld' ? 'hw-kp' : (source === 'booking.com' ? 'bdc-kp' : 'agoda-kp');
+            payments.push({
+                date: window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0],
+                amt: depositPaid,
+                method: payKey
+            });
+        }
+
+        return {
+            firstName: firstName.toUpperCase(),
+            lastName: lastName.toUpperCase(),
+            bookId,
+            source,
+            checkIn: checkIn || (window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0]),
+            checkOut: checkOut || (window.getLocalYMD ? window.getLocalYMD(new Date(Date.now() + 86400000)) : new Date(Date.now() + 86400000).toISOString().split('T')[0]),
+            totalPrice,
+            netPrice,
+            pax,
+            bookedType,
+            email,
+            phone,
+            status: 'future',
+            payments,
+            notes: `[IMPORTED VIA PARSER - ${source.toUpperCase()}]\n${text.slice(0, 300)}...`
+        };
+    };
+
+    // ----------------------------------------------------------------------
+    // MODAL LIFECYCLE & AUTO-INJECTOR
+    // ----------------------------------------------------------------------
+    const ensureEmailModalMounted = () => {
+        let m = $('email-modal') || $('import-modal');
+        if (m) return m;
+
+        m = document.createElement('div');
+        m.id = 'email-modal';
+        m.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-3 hidden";
+        m.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full border-2 border-slate-800 overflow-hidden flex flex-col">
+                <div class="bg-slate-900 text-white p-3 font-black uppercase text-xs flex items-center justify-between">
+                    <span class="flex items-center gap-1.5"><i data-lucide="mail-plus" size="15" class="text-indigo-400"></i> Import OTA Reservation</span>
+                    <button type="button" onclick="window.closeEmailModal()" class="text-slate-400 hover:text-white cursor-pointer font-bold text-lg leading-none">&times;</button>
+                </div>
+                <div class="p-3 space-y-2 text-xs">
+                    <p class="font-bold text-slate-600 text-[11px]">Paste OTA confirmation text (Booking.com, Agoda, Hostelworld, Airbnb) below to instantly import:</p>
+                    <textarea id="email-paste" class="w-full h-44 border border-slate-300 rounded p-2 text-xs font-mono bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none" placeholder="Paste booking confirmation email or extranet text here..."></textarea>
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Auto-detects BDC • HW • Agoda</span>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="window.closeEmailModal()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black rounded uppercase text-xs cursor-pointer">Cancel</button>
+                            <button type="button" id="btn-modal-parse" onclick="window.parseAndImport()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded uppercase text-xs shadow cursor-pointer flex items-center gap-1">
+                                <i data-lucide="check" size="14"></i> Parse & Import
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(m);
+        if (window.lucide) window.lucide.createIcons();
+        return m;
+    };
+
+    window.openEmailModal = () => {
+        const m = ensureEmailModalMounted();
+        m.classList.remove('hidden');
+        m.style.display = 'flex';
+        const ta = m.querySelector('textarea') || $('email-paste');
+        if (ta) {
+            ta.value = '';
+            setTimeout(() => ta.focus(), 50);
+        }
+    };
+    window.openImportModal = window.openEmailModal;
+
+    window.closeEmailModal = () => {
+        const m = $('email-modal') || $('import-modal');
+        if (m) {
+            m.classList.add('hidden');
+            m.style.display = 'none';
+        }
+    };
+    window.closeImportModal = window.closeEmailModal;
+
+    window.parseAndImport = (rawText = null) => {
+        let text = rawText;
+        if (!text) {
+            const m = $('email-modal') || $('import-modal');
+            const ta = m ? m.querySelector('textarea') : $('email-paste');
+            text = ta ? ta.value.trim() : '';
+        }
+
+        if (!text) {
+            return window.showAlert ? window.showAlert("Please paste booking confirmation text first.") : alert("Please paste text first.");
+        }
+
+        const parsed = window.parseOtaEmailText(text);
+        if (!parsed) {
+            return window.showAlert ? window.showAlert("Could not extract booking details from the text.") : alert("Could not extract booking details.");
+        }
+
+        window.closeEmailModal();
+        window.populateStaffForm(parsed);
+
+        // Auto-suggest next vacant room for this category so staff can check them in immediately
+        const suggested = window.suggestAvailableRoom(parsed.bookedType);
+        if (suggested && $('assigned-rooms-container')) {
+            $('assigned-rooms-container').innerHTML = '';
+            window.addRoomSelect(suggested, false);
+        }
+
+        if (window.showAlert) {
+            window.showAlert(`Parsed: ${parsed.firstName} ${parsed.lastName} (${parsed.bookId || 'New'})\nDates: ${parsed.checkIn} → ${parsed.checkOut}\nReview room and click SAVE to check-in.`);
+        }
+    };
+    window.parseEmail = window.parseAndImport;
+
+    // Auto-bind any buttons on the page labeled "Import" or "Parse"
+    const bindAllImportButtons = () => {
+        const allButtons = Array.from(document.querySelectorAll('button'));
+        allButtons.forEach(btn => {
+            const txt = (btn.innerText || '').toUpperCase();
+            const id = (btn.id || '').toLowerCase();
+            const isImportBtn = id.includes('import') || txt.includes('IMPORT') || txt.includes('PARSE');
+            if (isImportBtn) {
+                btn.disabled = false;
+                btn.style.pointerEvents = 'auto';
+                btn.style.cursor = 'pointer';
+                btn.classList.remove('pointer-events-none', 'opacity-50');
+
+                if (!btn.closest('#email-modal') && !btn.closest('#import-modal')) {
+                    btn.onclick = (e) => {
+                        e.preventDefault();
+                        window.openEmailModal();
+                    };
+                }
+            }
+        });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindAllImportButtons);
+    } else {
+        setTimeout(bindAllImportButtons, 100);
+    }
 })();
