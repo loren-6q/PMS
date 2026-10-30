@@ -1,9 +1,8 @@
 // ==========================================================================
-// pms/pms-calendar-grid.js - DOM Timeline Grid & Structural Row Constructor
+// pms/pms-calendar-grid.js - Category Dividers, Folding, Availability & Beds
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { viewStart, getDaysToShow } from './pms-calendar-tape.js';
 import { parseYMD, getLocalYMD, mNames } from '../core/dates.js';
 
 export function formatBedDisplayLabel(id) {
@@ -82,4 +81,63 @@ export function buildHeaderGrids(monthsContainer, daysContainer, daysArray, toda
             </div>
         `;
     });
+}
+
+export function toggleGroup(grp, stateIdx = -1) {
+    const icon = document.getElementById(`icon-${grp}`);
+    const rows = document.querySelectorAll(`.group-${grp}`);
+    const stateLabel = document.getElementById(`state-${grp}`);
+    const availRows = document.querySelectorAll(`.avail-row-${grp}`);
+    if (!icon) return;
+
+    if (grp === 'unassigned-tray') {
+        window.isUnassignedTrayOpen = !window.isUnassignedTrayOpen;
+        rows.forEach(r => r.style.display = window.isUnassignedTrayOpen ? 'grid' : 'none');
+        icon.style.transform = window.isUnassignedTrayOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+        return;
+    }
+
+    let cS = stateIdx;
+    if (cS === -1) {
+        const txt = stateLabel ? stateLabel.innerText : 'ALL';
+        cS = txt === 'ALL' ? 1 : (txt === 'OCC' ? 2 : (txt === 'EMP' ? 3 : 0));
+    }
+
+    const stateMap = {
+        0: { lbl: 'ALL', showOcc: true, showEmp: true, showAvail: false, rot: '0deg' },
+        1: { lbl: 'OCC', showOcc: true, showEmp: false, showAvail: false, rot: '-90deg' },
+        2: { lbl: 'EMP', showOcc: false, showEmp: true, showAvail: false, rot: '90deg' },
+        3: { lbl: 'HID', showOcc: false, showEmp: false, showAvail: true, rot: '180deg' }
+    };
+
+    const s = stateMap[cS];
+    if (stateLabel) stateLabel.innerText = s.lbl;
+    icon.style.transform = `rotate(${s.rot})`;
+
+    if (availRows) {
+        availRows.forEach(r => r.style.display = s.showAvail ? 'grid' : 'none');
+    }
+
+    rows.forEach(r => {
+        if (r.classList.contains('sub-header-row')) {
+            r.style.display = (cS === 3) ? 'none' : 'grid';
+            return;
+        }
+        const isEmpty = r.querySelectorAll('.staff-bar').length === 0;
+        r.style.display = (isEmpty ? s.showEmp : s.showOcc) ? 'grid' : 'none';
+    });
+}
+
+export function toggleAllGroups() {
+    window.masterGroupState = ((window.masterGroupState || 0) + 1) % 4;
+    const groups = new Set();
+    document.querySelectorAll('.group-header').forEach(el => {
+        if (el.dataset.group) groups.add(el.dataset.group);
+    });
+    groups.forEach(grp => toggleGroup(grp, window.masterGroupState));
+}
+
+if (typeof window !== 'undefined') {
+    window.toggleGroup = toggleGroup;
+    window.toggleAllGroups = toggleAllGroups;
 }
