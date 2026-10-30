@@ -1,0 +1,615 @@
+<!-- ==========================================================================
+     scan.html - Mobile Passport Scanner & Rapid Check-In
+     Wild & Wandering Property Management System
+     ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>W&W | Mobile Passport Scanner</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="./style.css">
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-bounce:active {
+            transform: scale(0.97);
+        }
+        select option {
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-3 sm:p-5 max-w-lg mx-auto select-none">
+    <!-- Native Camera & Gallery Pickers -->
+    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="window.handleImageSelected(event)">
+    <input type="file" id="gallery-input" accept="image/*" class="hidden" onchange="window.handleImageSelected(event)">
+
+    <!-- Top Status Bar & Property Selector -->
+    <header class="flex flex-col gap-2 bg-slate-800/90 border border-slate-700/80 px-3 py-2.5 rounded-xl shadow-lg shrink-0">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div id="conn-indicator" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" title="Connecting..."></div>
+                <a href="pms.html" class="flex items-center gap-1.5 hover:opacity-85 transition-opacity">
+                    <img src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="W&W" class="h-6 w-auto object-contain">
+                    <span class="font-black tracking-wider text-sm text-slate-100 uppercase">Scanner</span>
+                </a>
+            </div>
+            
+            <div class="flex items-center gap-1.5">
+                <select id="property-select" onchange="window.handlePropertyChange(this.value)" class="bg-slate-900 border border-slate-600 text-emerald-400 text-xs font-black uppercase rounded-lg px-2.5 py-1.5 outline-none cursor-pointer">
+                    <option value="">Loading...</option>
+                </select>
+                <a href="tm30.html" class="text-[10px] font-bold text-slate-400 hover:text-slate-200 uppercase bg-slate-700/60 px-2 py-1.5 rounded-lg border border-slate-600/50">TM30 &rarr;</a>
+            </div>
+        </div>
+
+        <!-- Mode Toggle: Single vs ⚡ Rush Mode -->
+        <div class="grid grid-cols-2 gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-700/80 text-xs font-black uppercase">
+            <button type="button" id="tab-single-mode" onclick="window.setScannerMode('single')" class="py-1.5 rounded-lg text-center transition-all bg-indigo-600 text-white shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                <i data-lucide="scan" class="w-3.5 h-3.5"></i> Single Scan
+            </button>
+            <button type="button" id="tab-rush-mode" onclick="window.setScannerMode('rush')" class="py-1.5 rounded-lg text-center transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer">
+                <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i> ⚡ Rush Mode
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Scanner Workflow -->
+    <main class="flex-1 flex flex-col justify-start my-3 gap-3">
+        <!-- VIEW 1: SINGLE SCAN WORKFLOW -->
+        <div id="single-view-container" class="flex flex-col gap-3">
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 shadow-md space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="block text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        Room / Bed Assignment
+                    </label>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <div class="relative flex-1">
+                        <i data-lucide="tag" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                        <select id="room-select" onchange="window.handleRoomSelected(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-8 py-2.5 text-sm font-black uppercase text-amber-300 outline-none focus:border-indigo-500 cursor-pointer appearance-none truncate">
+                            <option value="">-- NO ROOM / UNASSIGNED --</option>
+                        </select>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none"></i>
+                    </div>
+
+                    <button type="button" onclick="window.clearRoomSelection()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 p-2.5 rounded-xl border border-slate-600/50 btn-bounce cursor-pointer" title="Clear Room">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <!-- Custom Tag Input -->
+                <div id="custom-room-wrap" class="hidden pt-1">
+                    <input type="text" id="custom-room-input" placeholder="Type custom tag (e.g. Tent, Staff, Villa)..." class="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-xs font-black uppercase text-amber-200 placeholder-slate-500 outline-none focus:border-amber-400">
+                </div>
+
+                <!-- In-House Occupant Pill -->
+                <div id="matched-guest-pill" class="hidden bg-indigo-950/70 border border-indigo-600/50 rounded-xl px-3 py-2 flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-1.5 truncate">
+                        <i data-lucide="user" class="w-3.5 h-3.5 text-indigo-400 shrink-0"></i>
+                        <span id="matched-guest-name" class="font-black text-slate-100 uppercase truncate">Guest</span>
+                    </div>
+                    <span id="matched-guest-checkout" class="text-[10px] font-bold text-indigo-300 shrink-0">Out: --</span>
+                </div>
+            </div>
+
+            <!-- Single Camera Trigger Zone -->
+            <div id="capture-zone" class="bg-slate-800/80 border-2 border-dashed border-slate-600 hover:border-indigo-500 rounded-2xl p-5 flex flex-col items-center justify-center text-center shadow-lg transition-colors cursor-pointer min-h-[190px] relative overflow-hidden" onclick="window.triggerCamera()">
+                <div id="empty-state" class="flex flex-col items-center gap-2 py-3">
+                    <div class="w-14 h-14 rounded-full bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center shadow-inner">
+                        <i data-lucide="camera" class="w-7 h-7"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black uppercase tracking-wide text-slate-100">Tap to Snap Passport</h3>
+                        <p class="text-xs font-bold text-slate-400 mt-0.5">Captures MRZ & sends to AI reader</p>
+                    </div>
+                    <div class="pt-1">
+                        <button type="button" onclick="event.stopPropagation(); window.triggerGallery(event)" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 underline uppercase tracking-wider py-1 px-2 cursor-pointer">
+                            or pick from gallery
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preview & Active OCR Loading State -->
+                <div id="preview-state" class="hidden absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-2">
+                    <img id="preview-img" src="" alt="Passport Preview" class="w-full h-full object-contain rounded-xl opacity-75">
+                    <div id="processing-badge" class="absolute bg-slate-900/95 border border-indigo-500/50 px-4 py-3 rounded-xl flex flex-col items-center gap-1.5 shadow-2xl backdrop-blur-md max-w-[85%] text-center">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-indigo-400"></i>
+                            <span id="processing-text" class="text-xs font-black uppercase tracking-widest text-slate-100">Reading Passport (AI)...</span>
+                        </div>
+                        <span id="processing-timer" class="text-[10px] font-bold text-indigo-300">0s elapsed</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Extracted Data Verification Card -->
+            <div id="review-card" class="hidden bg-slate-800 border border-slate-700 rounded-2xl p-3.5 shadow-xl space-y-2.5">
+                <div class="flex items-center justify-between border-b border-slate-700/80 pb-2">
+                    <div class="flex items-center gap-1.5">
+                        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+                        <span class="text-xs font-black uppercase tracking-wider text-slate-200">Verify Extracted Details</span>
+                    </div>
+                    <button type="button" onclick="window.retakePhoto()" class="text-[10px] font-black uppercase text-slate-400 hover:text-slate-200 bg-slate-700/60 px-2 py-1 rounded border border-slate-600/50 cursor-pointer">
+                        Retake
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">First Name</label>
+                        <input type="text" id="f-name" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-slate-100 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Last Name</label>
+                        <input type="text" id="l-name" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-slate-100 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Passport Number</label>
+                        <input type="text" id="f-passport" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-mono font-bold uppercase text-amber-300 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Nationality (3-Letter)</label>
+                        <input type="text" id="f-nat" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-bold uppercase text-purple-300 outline-none text-center">
+                    </div>
+                    <div class="col-span-2 grid grid-cols-4 gap-1.5">
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Day</label>
+                            <input type="text" id="f-dob-day" placeholder="DD" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Month</label>
+                            <input type="text" id="f-dob-month" placeholder="MM" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Year</label>
+                            <input type="text" id="f-dob-year" placeholder="YYYY" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 mb-0.5">Sex</label>
+                            <input type="text" id="f-gender" placeholder="M/F" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1 py-1.5 font-bold text-center text-slate-100 outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" id="submit-btn" onclick="window.saveToFirestoreQueue()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-sm uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 btn-bounce cursor-pointer transition-colors">
+                    <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+                    <span>Push to TM30 Queue</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- VIEW 2: ⚡ RUSH MODE WORKFLOW -->
+        <div id="rush-view-container" class="hidden flex flex-col gap-3">
+            <div class="grid grid-cols-2 gap-2">
+                <input type="file" id="rush-camera-input" accept="image/*" capture="environment" class="hidden" onchange="window.handleRushImageCaptured(event)">
+                <input type="file" id="rush-batch-input" accept="image/*" multiple class="hidden" onchange="window.handleBatchSelected(event)">
+
+                <button type="button" onclick="document.getElementById('rush-camera-input').click()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black p-4 rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1.5 btn-bounce cursor-pointer border border-amber-400">
+                    <i data-lucide="camera" class="w-7 h-7"></i>
+                    <span class="text-sm uppercase tracking-wide">Rapid Snap</span>
+                    <span class="text-[10px] opacity-80 font-bold uppercase">Snap & Next (Zero Delay)</span>
+                </button>
+
+                <button type="button" onclick="document.getElementById('rush-batch-input').click()" class="bg-slate-800 hover:bg-slate-700 text-white font-black p-4 rounded-2xl shadow-xl flex flex-col items-center justify-center gap-1.5 btn-bounce cursor-pointer border border-slate-600">
+                    <i data-lucide="images" class="w-7 h-7 text-indigo-400"></i>
+                    <span class="text-sm uppercase tracking-wide">Batch Gallery</span>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase">Select Multiple Photos</span>
+                </button>
+            </div>
+
+            <!-- Worker Queue Status -->
+            <div class="bg-slate-800/80 border border-slate-700 px-3.5 py-2 rounded-xl flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="cpu" class="w-4 h-4 text-amber-400"></i>
+                    <span id="rush-status-text" class="font-black uppercase text-slate-200 text-[11px]">Worker Idle</span>
+                </div>
+                <span id="rush-queue-counter" class="text-[10px] font-bold text-slate-400 uppercase">0 in background</span>
+            </div>
+
+            <!-- Staging Grid -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between px-1">
+                    <span class="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                        Post-Rush Assignment Tray
+                    </span>
+                    <span id="rush-total-counter" class="text-[10px] font-bold text-amber-400 uppercase">0 Passports</span>
+                </div>
+
+                <div id="rush-cards-grid" class="flex flex-col gap-2 max-h-[62vh] overflow-y-auto no-scrollbar pb-6"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Hidden Downscaling Canvas -->
+    <canvas id="downscale-canvas" class="hidden"></canvas>
+
+    <script type="module">
+        import { db, storage, functions, appId } from './core/config.js';
+        import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { ref as storageRef, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+        import { httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
+        import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey, normalizeRoomId } from './core/properties.js';
+        import { getLocalYMD } from './core/dates.js';
+        import { showToast, customAlert } from './core/ui-dialogs.js';
+
+        let currentCompressedBase64 = null;
+        let uploadedPhotoUrl = null;
+        let timerInterval = null;
+
+        let activePropertyRooms = [];
+        let inHouseBookings = [];
+        let rushSubmissions = [];
+
+        const localRushQueue = [];
+        let isWorkerActive = false;
+
+        window.setScannerMode = (mode) => {
+            const singleBtn = document.getElementById('tab-single-mode');
+            const rushBtn = document.getElementById('tab-rush-mode');
+            const singleView = document.getElementById('single-view-container');
+            const rushView = document.getElementById('rush-view-container');
+
+            if (mode === 'rush') {
+                singleBtn.className = "py-1.5 rounded-lg text-center transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer";
+                rushBtn.className = "py-1.5 rounded-lg text-center transition-all bg-amber-500 text-slate-950 font-black shadow-md flex items-center justify-center gap-1.5 cursor-pointer";
+                singleView.classList.add('hidden');
+                rushView.classList.remove('hidden');
+                renderRushCardsGrid();
+            } else {
+                rushBtn.className = "py-1.5 rounded-lg text-center transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer";
+                singleBtn.className = "py-1.5 rounded-lg text-center transition-all bg-indigo-600 text-white shadow-md flex items-center justify-center gap-1.5 cursor-pointer";
+                rushView.classList.add('hidden');
+                singleView.classList.remove('hidden');
+            }
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        async function initScanner() {
+            try {
+                const props = await loadPropertiesCatalog();
+                const urlParams = new URLSearchParams(window.location.search);
+                const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || props[0]?.id || 'swims_resort';
+                const currentProp = toCanonicalPropId(pParam);
+
+                const select = document.getElementById('property-select');
+                if (select && props.length > 0) {
+                    select.innerHTML = props.map(p => 
+                        `<option value="${p.id}" ${p.id === currentProp ? 'selected' : ''}>${p.short}</option>`
+                    ).join('');
+                }
+
+                await loadPropertyInventory(currentProp);
+                listenToRushSubmissions();
+
+                const ind = document.getElementById('conn-indicator');
+                if (ind) {
+                    ind.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+                    ind.title = "Connected";
+                }
+            } catch (err) {
+                console.error("[Scanner Init Error]:", err);
+            }
+        }
+
+        async function loadPropertyInventory(propId) {
+            window.currentPropertyId = propId;
+            const props = window.activePropertiesList || [];
+            const activeProp = props.find(p => p.id === propId) || props[0];
+
+            activePropertyRooms = (activeProp?.rooms || []).filter(r => !r.inactive);
+
+            const todayStr = getLocalYMD(new Date());
+            const staffSnap = await getDocs(query(
+                collection(db, 'artifacts', appId, 'public', 'data', 'staff'),
+                where("property", "==", propId)
+            ));
+
+            inHouseBookings = [];
+            staffSnap.forEach(d => {
+                const b = d.data();
+                if (!['cancelled', 'noshow'].includes(b.status)) {
+                    inHouseBookings.push({ id: d.id, ...b });
+                }
+            });
+
+            populateRoomDropdown(todayStr);
+            renderRushCardsGrid();
+        }
+
+        function populateRoomDropdown(targetDateStr) {
+            const select = document.getElementById('room-select');
+            if (!select) return;
+
+            let html = `
+                <option value="">-- NO ROOM / UNASSIGNED --</option>
+                <option value="CUSTOM">➕ Type Custom Tag...</option>
+            `;
+
+            activePropertyRooms.forEach(r => {
+                const rid = normalizeRoomId(r.id);
+                const occupant = inHouseBookings.find(b => {
+                    const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
+                    const matches = rList.some(rm => normalizeRoomId(rm) === rid);
+                    if (!matches) return false;
+                    return (!b.checkIn || b.checkIn <= targetDateStr) && (!b.checkOut || b.checkOut >= targetDateStr);
+                });
+
+                if (occupant) {
+                    const lName = (occupant.lastName || 'Guest').toUpperCase();
+                    html += `<option value="${rid}" class="text-emerald-400 font-bold">🟢 ${rid} — ${lName}</option>`;
+                } else {
+                    html += `<option value="${rid}">${rid}</option>`;
+                }
+            });
+
+            select.innerHTML = html;
+        }
+
+        window.handlePropertyChange = async (newProp) => {
+            localStorage.setItem('last_prop', newProp);
+            await loadPropertyInventory(newProp);
+            listenToRushSubmissions();
+        };
+
+        window.handleRoomSelected = (val) => {
+            const customWrap = document.getElementById('custom-room-wrap');
+            const pill = document.getElementById('matched-guest-pill');
+            const nameEl = document.getElementById('matched-guest-name');
+            const outEl = document.getElementById('matched-guest-checkout');
+
+            if (val === 'CUSTOM') {
+                customWrap.classList.remove('hidden');
+                pill.classList.add('hidden');
+                return;
+            }
+
+            customWrap.classList.add('hidden');
+            if (!val) {
+                pill.classList.add('hidden');
+                return;
+            }
+
+            const todayStr = getLocalYMD(new Date());
+            const occupant = inHouseBookings.find(b => {
+                const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
+                return rList.some(r => normalizeRoomId(r) === val) && (!b.checkIn || b.checkIn <= todayStr) && (!b.checkOut || b.checkOut >= todayStr);
+            });
+
+            if (occupant) {
+                nameEl.innerText = `${occupant.lastName || 'GUEST'}, ${occupant.firstName || ''}`;
+                outEl.innerText = `Out: ${occupant.checkOut || '--'}`;
+                pill.classList.remove('hidden');
+            } else {
+                pill.classList.add('hidden');
+            }
+        };
+
+        window.clearRoomSelection = () => {
+            const sel = document.getElementById('room-select');
+            if (sel) sel.value = '';
+            window.handleRoomSelected('');
+        };
+
+        let unsubsRush = null;
+        function listenToRushSubmissions() {
+            if (unsubsRush) unsubsRush();
+            const curProp = window.currentPropertyId || 'swims_resort';
+
+            const q = query(
+                collection(db, 'artifacts', appId, 'public', 'data', 'submissions'),
+                where("property", "==", curProp)
+            );
+
+            unsubsRush = onSnapshot(q, (snapshot) => {
+                rushSubmissions = snapshot.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter(g => g.status !== 'completed');
+
+                rushSubmissions.sort((a, b) => {
+                    const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                    const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                    return tB - tA;
+                });
+
+                renderRushCardsGrid();
+            });
+        }
+
+        function renderRushCardsGrid() {
+            const grid = document.getElementById('rush-cards-grid');
+            const totalCounter = document.getElementById('rush-total-counter');
+            if (!grid) return;
+
+            if (rushSubmissions.length === 0) {
+                grid.innerHTML = `<div class="text-center py-10 text-slate-500 font-bold uppercase text-xs">No pending rush passports.</div>`;
+                if (totalCounter) totalCounter.innerText = "0 Passports";
+                return;
+            }
+
+            if (totalCounter) totalCounter.innerText = `${rushSubmissions.length} Passports`;
+
+            let html = '';
+            rushSubmissions.forEach(sub => {
+                const assignedRoom = normalizeRoomId(sub.roomNumber || '');
+                const hasRoom = !!assignedRoom;
+                const thumb = sub.photoUrl || (sub.photoBase64 ? `data:image/jpeg;base64,${sub.photoBase64}` : '');
+                const nameDisplay = (sub.firstName || sub.lastName) ? `${sub.lastName || ''}, ${sub.firstName || ''}` : 'Reading Passport...';
+
+                let roomOptionsHtml = `<option value="">-- UNASSIGNED --</option>`;
+                activePropertyRooms.forEach(r => {
+                    const rid = normalizeRoomId(r.id);
+                    const isSel = assignedRoom === rid ? 'selected' : '';
+                    roomOptionsHtml += `<option value="${rid}" ${isSel}>${rid}</option>`;
+                });
+
+                html += `
+                    <div class="bg-slate-800 border ${hasRoom ? 'border-emerald-500/60' : 'border-amber-500/50'} rounded-2xl p-2.5 shadow-md flex items-center gap-3">
+                        <div class="w-14 h-14 rounded-xl bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center">
+                            ${thumb ? `<img src="${thumb}" class="w-full h-full object-cover">` : `<i data-lucide="image" class="w-6 h-6 text-slate-500"></i>`}
+                        </div>
+                        <div class="flex-1 min-w-0 flex flex-col gap-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-black text-xs uppercase text-slate-100 truncate">${nameDisplay}</span>
+                                <span class="text-[9px] font-black px-1.5 py-0.2 rounded border uppercase ${hasRoom ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500' : 'bg-amber-500/20 text-amber-300 border-amber-500'}">${hasRoom ? assignedRoom : 'NO ROOM'}</span>
+                            </div>
+                            <div class="text-[10px] font-mono text-slate-400 truncate">ID: ${sub.passportNumber || '--'} • NAT: ${sub.nationality || '--'}</div>
+                            <select onchange="window.assignRoomToRushCard('${sub.id}', this.value)" class="w-full bg-slate-900 border ${hasRoom ? 'border-emerald-600' : 'border-amber-500/80'} text-amber-300 text-xs font-black uppercase rounded-lg px-2 py-1 outline-none">
+                                ${roomOptionsHtml}
+                            </select>
+                        </div>
+                    </div>
+                `;
+            });
+
+            grid.innerHTML = html;
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        window.assignRoomToRushCard = async (subId, chosenRoom) => {
+            const cleanRoom = normalizeRoomId(chosenRoom);
+            try {
+                const subRef = doc(db, 'artifacts', appId, 'public', 'data', 'submissions', subId);
+                await updateDoc(subRef, { roomNumber: cleanRoom });
+                showToast("Updated", `Assigned ${cleanRoom || 'Unassigned'}`);
+            } catch (err) {
+                showToast("Update Error", err.message, "error");
+            }
+        };
+
+        window.triggerCamera = () => document.getElementById('camera-input').click();
+        window.triggerGallery = (e) => { if (e) e.stopPropagation(); document.getElementById('gallery-input').click(); };
+
+        window.retakePhoto = () => {
+            if (timerInterval) clearInterval(timerInterval);
+            document.getElementById('review-card').classList.add('hidden');
+            document.getElementById('preview-state').classList.add('hidden');
+            document.getElementById('empty-state').classList.remove('hidden');
+            currentCompressedBase64 = null;
+        };
+
+        window.handleImageSelected = async (event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('preview-state').classList.remove('hidden');
+            document.getElementById('processing-badge').classList.remove('hidden');
+
+            let sec = 0;
+            const timerEl = document.getElementById('processing-timer');
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => { sec++; if (timerEl) timerEl.innerText = `${sec}s elapsed`; }, 1000);
+
+            try {
+                currentCompressedBase64 = await resizeImage(file, 1400);
+                document.getElementById('preview-img').src = `data:image/jpeg;base64,${currentCompressedBase64}`;
+
+                const parseFn = httpsCallable(functions, 'parsePassportScan', { timeout: 30000 });
+                const ocrResult = await parseFn({ imageBase64: currentCompressedBase64 });
+                const guestData = ocrResult?.data?.data || {};
+
+                clearInterval(timerInterval);
+                document.getElementById('processing-badge').classList.add('hidden');
+                document.getElementById('review-card').classList.remove('hidden');
+
+                document.getElementById('f-name').value = guestData.firstName || '';
+                document.getElementById('l-name').value = guestData.lastName || '';
+                document.getElementById('f-passport').value = guestData.passportNumber || '';
+                document.getElementById('f-nat').value = guestData.nationality || '';
+                document.getElementById('f-dob-day').value = guestData.dobDay || '';
+                document.getElementById('f-dob-month').value = guestData.dobMonth || '';
+                document.getElementById('f-dob-year').value = guestData.dobYear || '';
+                document.getElementById('f-gender').value = guestData.gender || 'M';
+
+            } catch (err) {
+                clearInterval(timerInterval);
+                document.getElementById('processing-badge').classList.add('hidden');
+                document.getElementById('review-card').classList.remove('hidden');
+                showToast("Manual Entry", "AI reader timed out. Please enter details manually.", "error");
+            }
+        };
+
+        window.saveToFirestoreQueue = async () => {
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+
+            try {
+                const roomVal = document.getElementById('room-select')?.value;
+                const roomNumber = roomVal === 'CUSTOM'
+                    ? (document.getElementById('custom-room-input')?.value || '').trim().toUpperCase()
+                    : normalizeRoomId(roomVal || '');
+
+                const payload = {
+                    property: window.currentPropertyId || 'swims_resort',
+                    roomNumber,
+                    firstName: document.getElementById('f-name')?.value.trim().toUpperCase() || '',
+                    lastName: document.getElementById('l-name')?.value.trim().toUpperCase() || 'GUEST',
+                    passportNumber: document.getElementById('f-passport')?.value.trim().toUpperCase() || '',
+                    nationality: document.getElementById('f-nat')?.value.trim().toUpperCase() || '',
+                    dobDay: document.getElementById('f-dob-day')?.value || '',
+                    dobMonth: document.getElementById('f-dob-month')?.value || '',
+                    dobYear: document.getElementById('f-dob-year')?.value || '',
+                    gender: document.getElementById('f-gender')?.value || 'M',
+                    status: 'processing',
+                    source: 'MOBILE_SCANNER',
+                    createdAt: serverTimestamp()
+                };
+
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'submissions'), payload);
+                showToast("Pushed", `${payload.lastName} sent to TM30 Queue.`);
+                window.retakePhoto();
+                window.clearRoomSelection();
+            } catch (err) {
+                showToast("Save Error", err.message, "error");
+            } finally {
+                btn.disabled = false;
+            }
+        };
+
+        function resizeImage(file, maxDimension) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let { width, height } = img;
+                        if (width > maxDimension || height > maxDimension) {
+                            if (width > height) {
+                                height = Math.round((height * maxDimension) / width);
+                                width = maxDimension;
+                            } else {
+                                width = Math.round((width * maxDimension) / height);
+                                height = maxDimension;
+                            }
+                        }
+                        const canvas = document.getElementById('downscale-canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.82).split(',')[1]);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', initScanner);
+    </script>
+</body>
+</html>
