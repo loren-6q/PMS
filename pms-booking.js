@@ -71,7 +71,11 @@
         try {
             const db = getDb();
             const appId = getAppId();
-            const { doc, getDoc } = getFs();
+            let fsModule = window.fs;
+            if (!fsModule || !fsModule.getDoc) {
+                fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+            }
+            const { doc, getDoc } = fsModule;
             if (db && getDoc) {
                 const propSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', canonPropId));
                 if (propSnap.exists()) {
@@ -724,7 +728,11 @@
         window.showAlert(`Permanently delete booking for ${name} (${s?.bookId || id})?`, true, async () => {
             const db = getDb();
             const appId = getAppId();
-            const { doc, deleteDoc } = getFs();
+            let fsModule = window.fs;
+            if (!fsModule || !fsModule.deleteDoc) {
+                fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+            }
+            const { doc, deleteDoc } = fsModule;
             try {
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id));
                 if (window.triggerAutoSync && s) {
@@ -841,7 +849,11 @@
 
         const db = getDb();
         const appId = getAppId();
-        const { doc, setDoc, updateDoc } = getFs();
+        let fsModule = window.fs;
+        if (!fsModule || !fsModule.setDoc) {
+            fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+        }
+        const { doc, setDoc, updateDoc } = fsModule;
         const newLegId = Math.random().toString(36).substr(2, 9);
         const curProp = getPropId();
 
@@ -980,7 +992,11 @@
 
         const db = getDb();
         const appId = getAppId();
-        const { doc, updateDoc, deleteDoc } = getFs();
+        let fsModule = window.fs;
+        if (!fsModule || !fsModule.updateDoc) {
+            fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+        }
+        const { doc, updateDoc, deleteDoc } = fsModule;
 
         try {
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
@@ -1179,11 +1195,15 @@
 
             const db = getDb();
             const appId = getAppId();
-            const { doc, setDoc } = getFs();
+            
+            // Robust Firestore fallback: guarantees doc and setDoc exist
+            let fsModule = window.fs;
+            if (!fsModule || !fsModule.setDoc) {
+                fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+            }
+            const { doc, setDoc } = fsModule;
 
-            const savePromise = setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), ent);
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 15000));
-            await Promise.race([savePromise, timeoutPromise]);
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), ent);
 
             const hotelRooms = getHotelRooms();
             const bookingRoomTypes = Array.from(new Set([
@@ -1202,7 +1222,7 @@
             if (!keepOpen) window.closeGuestModal();
         } catch (err) {
             console.error("Save Error:", err);
-            window.showAlert("Save process timed out or encountered an error. Please verify your connection.\n\nError: " + err.message);
+            window.showAlert("Save encountered an error. Please verify your connection.\n\nError: " + err.message);
         } finally {
             if (sB) { sB.disabled = false; sB.innerHTML = '<i data-lucide="save" size="14" class="shrink-0"></i> Save'; }
             if (window.lucide) window.lucide.createIcons();
@@ -1379,10 +1399,24 @@
         const m = ensureExtractModalMounted();
         m.classList.remove('hidden');
         m.style.display = 'flex';
+        
         const ta = m.querySelector('textarea') || $('extract-paste') || $('email-paste');
         if (ta) {
             ta.value = '';
             setTimeout(() => ta.focus(), 50);
+        }
+
+        // Guarantee submit button inside modal is always unlocked and bound to processExtract
+        const submitBtn = m.querySelector('#btn-modal-extract') || m.querySelector('button[onclick*="processExtract"]') || m.querySelector('button[onclick*="parse"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.removeAttribute('disabled');
+            submitBtn.style.pointerEvents = 'auto';
+            submitBtn.style.cursor = 'pointer';
+            submitBtn.onclick = (e) => {
+                if (e) e.preventDefault();
+                window.processExtract();
+            };
         }
     };
     window.openEmailModal = window.openExtractModal;
@@ -1431,24 +1465,20 @@
     window.parseAndImport = window.processExtract;
     window.parseEmail = window.processExtract;
 
+    // Scoped Navbar Binding: Targets strictly header/nav elements, never touches modal buttons
     const bindExtractNavbarBtn = () => {
-        const candidates = Array.from(document.querySelectorAll('button, a, div[role="button"], input[type="button"]'));
-        candidates.forEach(btn => {
-            const txt = (btn.innerText || btn.textContent || btn.value || '').trim().toUpperCase();
+        const headerButtons = Array.from(document.querySelectorAll('header button, header a, nav button, nav a, #btn-extract'));
+        headerButtons.forEach(btn => {
+            const txt = (btn.innerText || btn.textContent || '').trim().toUpperCase();
             const id = (btn.id || '').toLowerCase();
-            const isMatch = id.includes('extract') || id.includes('import') || txt.includes('EXTRACT') || txt.includes('IMPORT') || txt.includes('PARSE');
+            const isMatch = id.includes('extract') || id.includes('import') || txt.includes('EXTRACT') || txt.includes('IMPORT');
             
-            if (isMatch && !btn.closest('#extract-modal') && !btn.closest('#email-modal') && !btn.closest('#guest-modal')) {
-                if (btn.tagName === 'INPUT') btn.value = 'EXTRACT';
-                else btn.innerText = 'EXTRACT';
-
+            if (isMatch) {
+                btn.innerText = 'EXTRACT';
                 btn.disabled = false;
                 btn.removeAttribute('disabled');
                 btn.style.pointerEvents = 'auto';
                 btn.style.cursor = 'pointer';
-                btn.style.opacity = '1';
-                btn.classList.remove('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
-
                 btn.onclick = (e) => {
                     if (e) e.preventDefault();
                     window.openExtractModal();
@@ -1464,14 +1494,9 @@
         }
     });
 
-    // Run immediately and poll for 3 seconds to override any late-rendering script
-    bindExtractNavbarBtn();
-    const pollInterval = setInterval(bindExtractNavbarBtn, 300);
-    setTimeout(() => clearInterval(pollInterval), 3000);
-
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindExtractNavbarBtn);
     } else {
-        setTimeout(bindExtractNavbarBtn, 100);
+        bindExtractNavbarBtn();
     }
 })();
