@@ -1432,24 +1432,27 @@
     window.parseEmail = window.processExtract;
 
     const bindExtractNavbarBtn = () => {
-        const allButtons = Array.from(document.querySelectorAll('button'));
-        allButtons.forEach(btn => {
-            const txt = (btn.innerText || '').toUpperCase();
+        const candidates = Array.from(document.querySelectorAll('button, a, div[role="button"], input[type="button"]'));
+        candidates.forEach(btn => {
+            const txt = (btn.innerText || btn.textContent || btn.value || '').trim().toUpperCase();
             const id = (btn.id || '').toLowerCase();
-            const isMatch = id.includes('extract') || id.includes('import') || txt.includes('EXTRACT') || txt.includes('IMPORT');
-            if (isMatch) {
-                btn.innerText = 'EXTRACT';
+            const isMatch = id.includes('extract') || id.includes('import') || txt.includes('EXTRACT') || txt.includes('IMPORT') || txt.includes('PARSE');
+            
+            if (isMatch && !btn.closest('#extract-modal') && !btn.closest('#email-modal') && !btn.closest('#guest-modal')) {
+                if (btn.tagName === 'INPUT') btn.value = 'EXTRACT';
+                else btn.innerText = 'EXTRACT';
+
                 btn.disabled = false;
+                btn.removeAttribute('disabled');
                 btn.style.pointerEvents = 'auto';
                 btn.style.cursor = 'pointer';
-                btn.classList.remove('pointer-events-none', 'opacity-50');
+                btn.style.opacity = '1';
+                btn.classList.remove('pointer-events-none', 'opacity-50', 'cursor-not-allowed');
 
-                if (!btn.closest('#extract-modal') && !btn.closest('#email-modal')) {
-                    btn.onclick = (e) => {
-                        e.preventDefault();
-                        window.openExtractModal();
-                    };
-                }
+                btn.onclick = (e) => {
+                    if (e) e.preventDefault();
+                    window.openExtractModal();
+                };
             }
         });
     };
@@ -1460,6 +1463,11 @@
             window.openExtractModal();
         }
     });
+
+    // Run immediately and poll for 3 seconds to override any late-rendering script
+    bindExtractNavbarBtn();
+    const pollInterval = setInterval(bindExtractNavbarBtn, 300);
+    setTimeout(() => clearInterval(pollInterval), 3000);
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindExtractNavbarBtn);
