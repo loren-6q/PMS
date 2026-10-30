@@ -1,0 +1,228 @@
+<!-- ==========================================================================
+     cm.html - Operations Rate Matrix & Channel Manager
+     Wild & Wandering Property Management System
+     ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>W&W Channel Manager</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden bg-slate-100 font-sans">
+    <!-- Loading Overlay -->
+    <div id="loader" class="loading-overlay">
+        <div class="spinner"></div>
+        <div id="sync-status" class="mt-4 font-black text-indigo-800 uppercase tracking-widest text-xs">INITIALIZING ENGINE...</div>
+    </div>
+    
+    <!-- Custom In-App Alert Dialog -->
+    <div id="custom-alert" class="alert-modal-overlay">
+        <div class="bg-white p-5 rounded-xl shadow-xl max-w-sm w-full text-center border-2 border-slate-800">
+            <p id="custom-alert-msg" class="font-black text-slate-700 mb-5 text-xs sm:text-sm whitespace-pre-wrap"></p>
+            <div class="flex gap-2 justify-center">
+                <button id="custom-alert-cancel" onclick="document.getElementById('custom-alert').classList.remove('active')" class="hidden px-4 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-black uppercase text-xs">Cancel</button>
+                <button id="custom-alert-confirm" onclick="document.getElementById('custom-alert').classList.remove('active')" class="px-6 py-1.5 bg-indigo-600 text-white rounded-lg font-black uppercase text-xs">Okay</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+        <!-- TOP NAVBAR -->
+        <header class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-2 shrink-0 z-50 unselectable w-full">
+            <div class="flex items-center gap-2 shrink-0 min-w-0">
+                <a href="index.html" class="flex flex-col min-w-0 mr-1 hover:brightness-110 transition-all cursor-pointer">
+                    <img id="cm-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="W&W" class="h-7 sm:h-9 object-contain">
+                </a>
+                <h1 class="font-black uppercase tracking-widest text-xs sm:text-sm text-slate-800 flex items-center gap-1.5">
+                    <i data-lucide="zap" class="text-indigo-600" size="16"></i> CHANNEL MGR
+                </h1>
+            </div>
+            
+            <div class="flex items-center gap-1.5 ml-auto">
+                <div id="save-indicator" class="text-[9.5px] font-black uppercase tracking-widest transition-all mr-1 opacity-0 text-emerald-600">PRICING SAVED</div>
+
+                <!-- SAVE & SYNC -->
+                <button id="btn-save-sync" onclick="window.saveAndSync(this, 'delta');" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 cursor-pointer">
+                    <i data-lucide="zap" size="13"></i> SAVE & SYNC
+                </button>
+                
+                <button onclick="window.saveAndSync(this, 'full')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-xs flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="cloud-upload" size="13"></i> FULL SYNC
+                </button>
+
+                <a href="pms.html" class="px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors">
+                    <i data-lucide="layout-grid" size="13" class="inline text-indigo-600 mr-0.5"></i> PMS
+                </a>
+            </div>
+        </header>
+
+        <!-- MAIN OPERATIONAL WORKSPACE -->
+        <main class="flex-1 flex flex-col min-h-0 bg-slate-100 sm:rounded-lg overflow-hidden border-y sm:border border-slate-300 shadow-xs relative z-0">
+            <!-- TABS -->
+            <div class="flex px-2 pt-1.5 bg-slate-200 border-b border-slate-300 shrink-0 gap-1 overflow-x-auto no-scrollbar shadow-inner unselectable">
+                <button onclick="window.switchTab('grid')" id="tab-grid" class="tab-btn active">
+                    <i data-lucide="calendar" size="14"></i> Calendar Matrix
+                </button>
+                <button onclick="window.switchTab('promos')" id="tab-promos" class="tab-btn">
+                    <i data-lucide="tags" size="14" class="text-pink-600"></i> Deals & Promos
+                </button>
+                <button onclick="window.switchTab('manual')" id="tab-manual" class="tab-btn">
+                    <i data-lucide="refresh-cw" size="14" class="text-emerald-600"></i> OTA Sync & Auditor
+                </button>
+            </div>
+
+            <!-- VIEW 1: CALENDAR MATRIX -->
+            <div id="view-grid" class="flex-1 flex flex-col min-h-0 relative">
+                <!-- Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-1.5 px-2 py-1.5 bg-white border-b border-slate-200 shrink-0 shadow-xs z-30 text-xs">
+                    <div class="flex items-center gap-1">
+                        <button onclick="window.shiftTape(-7)" class="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"><i data-lucide="chevron-left" size="15"></i></button>
+                        <input type="date" id="tape-start" class="input-base !w-auto cursor-pointer !py-0.5 !px-1.5 font-black bg-slate-100" onchange="window.renderRateMatrix()">
+                        <button onclick="window.shiftTape(7)" class="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"><i data-lucide="chevron-right" size="15"></i></button>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="window.toggleQuickBulk()" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded font-black text-xs uppercase flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="layers" size="12"></i> BULK
+                        </button>
+                    </div>
+                </div>
+
+                <!-- QUICK BULK DRAWER -->
+                <div id="quick-bulk-panel" class="hidden bg-slate-900 border-b border-slate-800 p-2 shrink-0 shadow-xl flex-col gap-2 z-30 text-slate-200">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-black uppercase text-amber-400">Range:</span>
+                            <input type="date" id="qb-start" class="input-base !py-0.5 !px-1.5 !text-xs w-28 bg-slate-800 text-white border-slate-700">
+                            <input type="date" id="qb-end" class="input-base !py-0.5 !px-1.5 !text-xs w-28 bg-slate-800 text-white border-slate-700">
+                            <button onclick="window.applyBulkGrid(false)" class="bg-indigo-600 text-white px-3 py-0.5 rounded font-black text-xs uppercase cursor-pointer">Apply</button>
+                            <button onclick="window.applyBulkGrid(true)" class="bg-rose-900 text-rose-300 border border-rose-700 px-2.5 py-0.5 rounded font-black text-xs uppercase cursor-pointer">Clear</button>
+                        </div>
+                        <button onclick="window.toggleQuickBulk(true)" class="text-slate-400 hover:text-white">&times;</button>
+                    </div>
+                    <div class="overflow-auto max-h-48 border border-slate-700 rounded">
+                        <table class="w-full text-left text-xs whitespace-nowrap">
+                            <thead class="bg-slate-950 text-white text-[9px] uppercase font-black">
+                                <tr>
+                                    <th class="p-1.5">Room</th>
+                                    <th class="p-1.5 text-center">Rate (฿)</th>
+                                    <th class="p-1.5 text-center">Min Stay</th>
+                                    <th class="p-1.5 text-center">Max Stay</th>
+                                </tr>
+                            </thead>
+                            <tbody id="qb-grid-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- MAIN TABLE -->
+                <div class="flex-1 overflow-auto bg-slate-200 relative z-10 pt-[2px]" id="grid-container">
+                    <table class="rate-grid-table" id="rate-table">
+                        <thead id="grid-head"></thead>
+                        <tbody id="grid-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- VIEW 2: PROMOTIONS & DEALS -->
+            <div id="view-promos" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
+                <div class="max-w-4xl mx-auto space-y-4">
+                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-xs">
+                        <div class="flex justify-between items-center border-b border-slate-200 pb-2 mb-3">
+                            <h2 class="text-xs sm:text-sm font-black uppercase text-slate-800 flex items-center gap-1.5">
+                                <i data-lucide="tags" class="text-pink-600"></i> OTA Promotions & Deals
+                            </h2>
+                            <button onclick="window.openAddPromoModal()" class="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white rounded font-black text-xs uppercase cursor-pointer">+ Add Promo</button>
+                        </div>
+                        <div class="overflow-x-auto border border-slate-200 rounded bg-slate-50">
+                            <table class="w-full text-left text-xs whitespace-nowrap">
+                                <thead class="bg-slate-800 text-white text-[9px] uppercase font-black">
+                                    <tr>
+                                        <th class="p-2">Channel</th>
+                                        <th class="p-2">Campaign</th>
+                                        <th class="p-2 text-center">Discount</th>
+                                        <th class="p-2 text-center text-pink-300">Markup Required</th>
+                                        <th class="p-2">Scope</th>
+                                        <th class="p-2 text-center">Status</th>
+                                        <th class="p-2 text-center">Del</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="promo-table-body" class="bg-white font-bold"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 3: OTA AUDITOR & LIVE AVAILABILITY -->
+            <div id="view-manual" class="hidden flex-1 flex flex-col p-2 sm:p-3 gap-2 bg-white min-h-0 overflow-y-auto">
+                <div class="flex items-center justify-between pb-1 border-b border-slate-200">
+                    <h2 class="text-xs sm:text-sm font-black uppercase text-slate-800 flex items-center gap-1.5">
+                        <i data-lucide="refresh-cw" size="15" class="text-emerald-600"></i> OTA Missing Booking Auditor
+                    </h2>
+                </div>
+                <textarea id="audit-text" class="w-full h-20 bg-slate-50 border border-slate-300 rounded p-2 text-xs font-mono outline-none resize-none" placeholder="Paste extranet list data here..." oninput="window.checkMissing()"></textarea>
+                <div id="audit-result"></div>
+
+                <div class="mt-2 border-t border-slate-200 pt-2 flex justify-between items-center">
+                    <span class="text-xs font-black uppercase text-slate-700">Live Inventory Sync</span>
+                    <button onclick="window.markSynced()" class="px-3 py-1 bg-indigo-600 text-white rounded font-black text-xs uppercase cursor-pointer">Mark Synced</button>
+                </div>
+                <div class="flex-1 overflow-auto border border-slate-200 rounded">
+                    <table class="w-full text-left text-xs" id="sync-table">
+                        <tbody id="sync-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: ADD PROMO -->
+    <div id="promo-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full border-2 border-slate-800 flex flex-col overflow-hidden text-xs">
+            <div class="bg-slate-900 p-2.5 text-white font-bold uppercase flex justify-between items-center">
+                <span>Add OTA Promotion</span>
+                <button type="button" onclick="document.getElementById('promo-modal').classList.remove('active')" class="text-slate-400">&times;</button>
+            </div>
+            <div class="p-3 space-y-2">
+                <input type="hidden" id="promo-rule-id">
+                <div>
+                    <label class="field-label">Channel</label>
+                    <select id="promo-channel" class="input-base">
+                        <option value="Booking.com">Booking.com</option>
+                        <option value="ALL">All Channels</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label">Campaign Name</label>
+                    <input type="text" id="promo-name" placeholder="e.g. Genius 15%" class="input-base uppercase font-bold">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="field-label">Discount (%)</label>
+                        <input type="number" id="promo-discount-pct" value="15" oninput="window.updatePromoModalMath()" class="input-base font-black text-pink-600">
+                    </div>
+                    <div>
+                        <label class="field-label">Markup Required</label>
+                        <input type="text" id="promo-calculated-markup" readonly class="input-base bg-slate-100 font-black text-emerald-700 text-center">
+                    </div>
+                </div>
+                <div class="pt-2 flex justify-end gap-2 border-t border-slate-200">
+                    <button type="button" onclick="document.getElementById('promo-modal').classList.remove('active')" class="px-3 py-1 bg-slate-200 rounded font-bold uppercase">Cancel</button>
+                    <button type="button" onclick="window.savePromoRule()" class="px-4 py-1 bg-pink-600 text-white rounded font-black uppercase shadow-xs">Save Promo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./cm/cm-init.js"></script>
+</body>
+</html>
