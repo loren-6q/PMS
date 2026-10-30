@@ -1,5 +1,6 @@
 // ==========================================================================
 // pms-calendar.js - PMS Calendar Timeline & Grid Engine
+// Wild & Wandering Property Management System
 // ==========================================================================
 
 (function() {
@@ -8,7 +9,6 @@
 
     const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
-    // SVG icon suite for reservation bars
     window.SVGS = window.SVGS || {
         upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
         upPaid: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#4ade80" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -49,10 +49,26 @@
     const getSearchTerm = () => (window.getSearchTerm ? window.getSearchTerm() : window.searchTerm) || "";
     const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
+    // Zero-drift UTC-noon parser
+    window.parseYMD = str => {
+        if (!str) return 0;
+        const clean = String(str).split('T')[0].trim();
+        const parts = clean.split('-').map(Number);
+        if (parts.length < 3 || isNaN(parts[0])) return 0;
+        return Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+    };
+
+    window.getLocalYMD = d => {
+        const dt = new Date(d);
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    };
+
     const getDayIndex = str => {
-        const t = window.parseYMD ? window.parseYMD(str) : 0;
+        const t = window.parseYMD(str);
+        if (!t) return -1;
         const vS = window.viewStart || new Date();
-        return t ? Math.round((t - Date.UTC(vS.getFullYear(), vS.getMonth(), vS.getDate())) / 86400000) : -1;
+        const vSTime = Date.UTC(vS.getFullYear(), vS.getMonth(), vS.getDate(), 12, 0, 0);
+        return Math.round((t - vSTime) / 86400000);
     };
 
     window.prevPeriod = () => {
@@ -156,7 +172,8 @@
             const idx = (window.searchMatchIndex || 0) % m.length;
             const targetBooking = m[idx];
             if (targetBooking.checkIn) {
-                const d = new Date(targetBooking.checkIn + "T12:00:00");
+                const parts = targetBooking.checkIn.split('-');
+                const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
                 d.setDate(d.getDate() - 3);
                 window.viewStart = d;
             }
@@ -200,11 +217,7 @@
         h.style.transform = `rotate(${s.rot})`;
         if (aR) aR.forEach(r => { r.style.display = s.showAvail ? 'grid' : 'none'; });
         rws.forEach(r => {
-            if (grp === 'unassigned-unconfirmed') {
-                r.style.display = (cS === 3) ? 'none' : 'grid';
-                return;
-            }
-            if (r.classList.contains('sub-header-row')) {
+            if (grp === 'unassigned-unconfirmed' || r.classList.contains('sub-header-row')) {
                 r.style.display = (cS === 3) ? 'none' : 'grid';
                 return;
             }
@@ -222,72 +235,54 @@
         if (fStr === '2' || fStr === 'up' || fStr === 'upstairs' || fStr === 'floor-up') {
             return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0" title="Upstairs"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
         }
-        if (fStr === '3' || fStr === 'double') {
-            return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0" title="Double Floor"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></svg>`;
-        }
         return '';
     };
 
     const getBunkIcon = b => {
         if (!b) return '';
         const bStr = String(b).toLowerCase().trim();
-        if (bStr === 'bottom' || bStr === 'bot' || bStr === 'bunk-bottom' || bStr.includes('btm') || bStr.includes('bottom')) {
+        if (bStr === 'bottom' || bStr === 'bot' || bStr.includes('btm') || bStr.includes('bottom')) {
             return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Bottom Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
         }
-        if (bStr === 'top' || bStr === 'bunk-top' || bStr.includes('top')) {
+        if (bStr === 'top' || bStr.includes('top')) {
             return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
         }
         return '';
     };
 
+    const formatBedDisplayLabel = (rId) => {
+        if (!rId) return '';
+        const m = String(rId).match(/№\s*(\d+)/i);
+        if (m) return `№ ${m[1]}`;
+        const m2 = String(rId).match(/[A-Za-z0-9]+[_\-\s]+(\d+)$/);
+        if (m2) return `№ ${m2[1].padStart(2, '0')}`;
+        const m3 = String(rId).match(/^([A-Za-z]+)(\d+)$/);
+        if (m3) return `№ ${m3[2].padStart(2, '0')}`;
+        return rId;
+    };
+
     const classifyRoomForCalendar = r => {
         const cat = (r.category || r.type || '').toLowerCase();
         const bunk = (r.bunk || r.bed || '').toLowerCase();
-        
-        const isPrivate = bunk.includes('private') || 
-                          cat.includes('private') || 
-                          r.rule === 'private' || 
-                          r.isDorm === false;
-
-        const isDorm = !isPrivate && (
-            r.isDorm === true ||
-            (r.rule && r.rule !== 'private') ||
-            cat.includes('dorm') ||
-            bunk.includes('top') ||
-            bunk.includes('bottom') ||
-            bunk.includes('bot') ||
-            (r.parentRoom && r.parentRoom !== r.id)
-        );
+        const isPrivate = bunk.includes('private') || cat.includes('private') || r.rule === 'private' || r.isDorm === false;
+        const isDorm = !isPrivate;
 
         let baseRoom = '';
         if (isDorm) {
-            if (r.parentRoom && r.parentRoom !== r.id) {
-                baseRoom = r.parentRoom;
-            } else if ((r.id || '').includes('№')) {
-                baseRoom = r.id.split('№')[0].trim();
-            } else if ((r.id || '').includes('-')) {
-                baseRoom = r.id.split('-')[0].trim();
-            }
+            if (r.parentRoom) baseRoom = r.parentRoom;
+            else if (r.id.includes('№')) baseRoom = r.id.split('№')[0].trim();
+            else if (r.id.includes('-')) baseRoom = r.id.split('-')[0].trim();
+            else baseRoom = r.id.replace(/\d+$/, '').trim();
         }
-
         return { isDorm, baseRoom };
     };
 
-    // Canonical Dorm Bed Number Extractor: "Dorm A № 01" -> "№ 01", "C301 № 02" -> "№ 02"
-    const formatBedDisplayLabel = id => {
-        if (!id) return '';
-        const str = String(id).trim();
-        if (str.includes('№')) {
-            const numPart = str.split('№')[1].trim();
-            return `№ ${numPart}`;
-        }
-        return str;
-    };
-
-    // Strict Exact String Equality: No regex, no runtime character manipulation
-    const matchesRoom = (assignedRoom, targetRoomId) => {
-        if (!assignedRoom || !targetRoomId) return false;
-        return String(assignedRoom).trim() === String(targetRoomId).trim();
+    const matchesRoom = (bookingRoom, catalogRoomId) => {
+        if (!bookingRoom || !catalogRoomId) return false;
+        if (bookingRoom === catalogRoomId) return true;
+        const bClean = String(bookingRoom).replace(/[№#\-_:\s]/g, '').toUpperCase();
+        const cClean = String(catalogRoomId).replace(/[№#\-_:\s]/g, '').toUpperCase();
+        return bClean === cClean;
     };
 
     window.render = () => {
@@ -328,8 +323,7 @@
         body.innerHTML = '';
 
         const days = Array.from({ length: dShow }, (_, i) => new Date(vS.getFullYear(), vS.getMonth(), vS.getDate() + i, 12, 0, 0));
-        let cMon = -1;
-        let cSpan = 0;
+        let cMon = -1, cSpan = 0;
         days.forEach((d, i) => {
             if (d.getMonth() !== cMon) {
                 if (cMon !== -1) {
@@ -345,15 +339,13 @@
             }
         });
 
-        const getYmd = window.getLocalYMD || (d => new Date(d).toISOString().split('T')[0]);
-        const parseYMD = window.parseYMD || (str => Date.parse(str));
-        const todayStr = getYmd(new Date());
+        const todayStr = window.getLocalYMD(new Date());
         const yD = new Date();
         yD.setDate(new Date().getDate() - 1);
-        const yStr = getYmd(yD);
+        const yStr = window.getLocalYMD(yD);
 
         days.forEach(d => {
-            const iT = getYmd(d) === todayStr;
+            const iT = window.getLocalYMD(d) === todayStr;
             dGrid.innerHTML += `<div class="flex flex-col items-center justify-center border-r border-slate-400 ${iT ? 'bg-blue-100' : ''}"><div class="text-[10px] font-black text-slate-500 uppercase leading-none">${d.toLocaleDateString('en-US', { weekday: 'short' })}</div><div class="text-[16px] font-black ${iT ? 'text-blue-600' : 'text-slate-800'} leading-tight">${d.getDate()}</div></div>`;
         });
 
@@ -366,25 +358,22 @@
             const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
             if (sProp !== curProp) return false;
             if (s.status === 'cancelled') {
-                if (searchTerm && (((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) || (s.bookId || '').toUpperCase().includes(searchTerm))) {
-                    return true;
-                }
-                return false;
+                return !!(searchTerm && (((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) || (s.bookId || '').toUpperCase().includes(searchTerm)));
             }
             return true;
         });
 
-        const vsUTC = parseYMD(getYmd(vS));
+        const vsUTC = window.parseYMD(window.getLocalYMD(vS));
         const veUTC = vsUTC + dShow * 86400000;
         const tRows = [];
         const uConf = [];
 
-        // Route unassigned / unconfirmed bookings
+        // Catch Unassigned Bookings
         actStaff.forEach(s => {
-            if (s.status === 'cancelled') return;
-            const rList = getRooms(s).filter(Boolean);
-            const isUnassigned = rList.length === 0 || rList[0] === "" || ['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status);
-            if (isUnassigned && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC) {
+            if (['cancelled', 'noshow'].includes(s.status)) return;
+            const rList = getRooms(s);
+            const hasRoom = rList.length > 0 && rList.some(rName => hotelRooms.some(hr => matchesRoom(rName, hr.id)));
+            if (!hasRoom && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC) {
                 uConf.push(s);
             }
         });
@@ -393,102 +382,96 @@
             tRows.push({ isDivider: true, label: "UNASSIGNED / UNCONFIRMED", isUnconfirmedZone: true });
             const rows = [];
             uConf.forEach(s => {
-                let p = false;
+                let placed = false;
                 for (let r of rows) {
-                    if (!r.some(e => parseYMD(s.checkIn) < parseYMD(e.checkOut) && parseYMD(e.checkIn) < parseYMD(s.checkOut))) {
+                    if (!r.some(e => window.parseYMD(s.checkIn) < window.parseYMD(e.checkOut) && window.parseYMD(e.checkIn) < window.parseYMD(s.checkOut))) {
                         r.push(s);
-                        p = true;
+                        placed = true;
                         break;
                     }
                 }
-                if (!p) rows.push([s]);
+                if (!placed) rows.push([s]);
             });
             rows.forEach((r, idx) => tRows.push({ isUnassigned: true, label: `U-${idx + 1}`, bookings: r }));
         }
 
-        // Active rooms always render; Inactive rooms only render if bookings exist in view window
-        const activeHotelRooms = hotelRooms.filter(r => !r.inactive);
-        const archivedHotelRooms = hotelRooms.filter(r => {
-            if (!r.inactive) return false;
+        // Visible rooms: active rooms always show, inactive rooms only if they have bookings in view
+        const visibleRooms = hotelRooms.filter(r => {
+            if (!r.inactive) return true;
             return actStaff.some(s => {
                 if (['cancelled', 'noshow'].includes(s.status)) return false;
-                const inMs = parseYMD(s.checkIn);
-                const outMs = parseYMD(s.checkOut);
+                const inMs = window.parseYMD(s.checkIn), outMs = window.parseYMD(s.checkOut);
                 if (inMs > veUTC || outMs < vsUTC) return false;
-                const rList = getRooms(s);
-                return rList.some(rm => matchesRoom(rm, r.id));
+                return getRooms(s).some(rm => matchesRoom(rm, r.id));
             });
         });
 
-        // Render Active Hotel Rooms
-        activeHotelRooms.forEach((r, idx, arr) => {
-            if (!r.type || !r.id) return;
-            if (r.type !== (idx > 0 && arr[idx - 1] ? arr[idx - 1].type : null)) {
-                tRows.push({ isDivider: true, label: r.type });
-            }
+        const activeRooms = visibleRooms.filter(r => !r.inactive);
+        const archivedRooms = visibleRooms.filter(r => !!r.inactive);
 
-            const { isDorm, baseRoom } = classifyRoomForCalendar(r);
-
-            const isAssignedToThisRoom = (s) => {
-                if (['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status)) return false;
-                const rList = getRooms(s);
-                return rList.some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
-            };
-
-            if (isDorm) {
-                const prevRoom = idx > 0 ? arr[idx - 1] : null;
-                const prevClassification = prevRoom ? classifyRoomForCalendar(prevRoom) : null;
-                const prevBaseRoom = (prevClassification && prevClassification.isDorm && prevRoom.type === r.type) 
-                    ? prevClassification.baseRoom 
-                    : null;
-
-                if (baseRoom && baseRoom !== prevBaseRoom) {
-                    tRows.push({ isSubHeader: true, label: baseRoom, floor: r.floor });
-                }
-
-                // Clean sidebar bed row label: strictly "№ 01", "№ 02" under dorm header
-                const bedLabel = formatBedDisplayLabel(r.id);
-
-                tRows.push({
-                    isRoom: true, 
-                    isBed: true, 
-                    id: r.id, 
-                    displayId: bedLabel, 
-                    type: r.type, 
-                    bed: r.bed || r.bunk || '', 
-                    floor: '', 
-                    icon: r.icon || r.bunk || '',
-                    bookings: actStaff.filter(isAssignedToThisRoom)
-                });
-            } else {
-                tRows.push({
-                    isRoom: true, 
-                    isPrivate: true, 
-                    id: r.id, 
-                    displayId: r.id, 
-                    type: r.type, 
-                    bed: r.bed || r.bunk || '', 
-                    floor: r.floor, 
-                    icon: r.icon || r.bunk || '',
-                    bookings: actStaff.filter(isAssignedToThisRoom)
-                });
-            }
+        // Group active rooms strictly by category so banners never duplicate
+        const categoriesMap = new Map();
+        activeRooms.forEach(r => {
+            const cat = r.category || r.type || 'ROOMS';
+            if (!categoriesMap.has(cat)) categoriesMap.set(cat, []);
+            categoriesMap.get(cat).push(r);
         });
 
-        // Render Inactive Historical Rooms at Bottom (Archived Zone)
-        if (archivedHotelRooms.length > 0) {
-            tRows.push({ isDivider: true, label: "ARCHIVED / CLOSED ROOMS (PAST DATA)", isArchivedZone: true });
-            archivedHotelRooms.forEach(r => {
-                const isAssigned = (s) => {
-                    const rList = getRooms(s);
-                    return rList.some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
+        categoriesMap.forEach((roomList, catName) => {
+            tRows.push({ isDivider: true, label: catName });
+
+            let lastBaseRoom = null;
+            roomList.forEach(r => {
+                const { isDorm, baseRoom } = classifyRoomForCalendar(r);
+
+                const isAssigned = s => {
+                    if (['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status)) return false;
+                    return getRooms(s).some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
                 };
 
+                if (isDorm) {
+                    if (baseRoom && baseRoom !== lastBaseRoom) {
+                        tRows.push({ isSubHeader: true, label: baseRoom, floor: r.floor });
+                        lastBaseRoom = baseRoom;
+                    }
+                    tRows.push({
+                        isRoom: true,
+                        isBed: true,
+                        id: r.id,
+                        displayId: formatBedDisplayLabel(r.id),
+                        type: catName,
+                        bed: r.bed || r.bunk || '',
+                        floor: '',
+                        icon: r.icon || r.bunk || '',
+                        bookings: actStaff.filter(isAssigned)
+                    });
+                } else {
+                    lastBaseRoom = null;
+                    tRows.push({
+                        isRoom: true,
+                        isPrivate: true,
+                        id: r.id,
+                        displayId: r.name || r.id,
+                        type: catName,
+                        bed: r.bed || r.bunk || '',
+                        floor: r.floor,
+                        icon: r.icon || r.bunk || '',
+                        bookings: actStaff.filter(isAssigned)
+                    });
+                }
+            });
+        });
+
+        // Archived historical rooms at bottom
+        if (archivedRooms.length > 0) {
+            tRows.push({ isDivider: true, label: "ARCHIVED / CLOSED ROOMS (PAST DATA)", isArchivedZone: true });
+            archivedRooms.forEach(r => {
+                const isAssigned = s => getRooms(s).some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
                 tRows.push({
                     isRoom: true,
                     isArchived: true,
                     id: r.id,
-                    displayId: `[CLOSED] ${r.id}`,
+                    displayId: `[ARCHIVED] ${r.id}`,
                     type: r.type,
                     bed: r.bed || '',
                     floor: r.floor,
@@ -497,6 +480,7 @@
             });
         }
 
+        // Render to DOM
         const tt = $('custom-tooltip');
         let cGrp = '';
 
@@ -508,111 +492,71 @@
                 hRow.className = `timeline-grid ${rD.isUnconfirmedZone ? 'mt-4' : ''} cursor-pointer transition-colors unselectable group-header`;
                 hRow.dataset.group = cGrp;
 
-                const hasSearchMatchInUnassigned = isDCol && searchTerm && uConf.some(s =>
-                    ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) ||
-                    (s.bookId || '').toUpperCase().includes(searchTerm)
-                );
-
                 if (rD.isUnconfirmedZone) {
-                    const rotClass = hasSearchMatchInUnassigned ? 'chevron-open' : (isDCol ? 'chevron-up-closed' : '');
-                    hRow.innerHTML = `<div class="unassigned-header bg-amber-200 hover:bg-amber-300 text-slate-800 p-0.5 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-md timeline-span-full" onclick="window.toggleGroup('${cGrp}')"><span>${rD.label}</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px] ${rotClass}" id="icon-${cGrp}"></i></div>`;
+                    hRow.innerHTML = `<div class="unassigned-header bg-amber-200 hover:bg-amber-300 text-slate-800 p-0.5 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-md w-full" onclick="window.toggleGroup('${cGrp}')"><span>${rD.label}</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div>`;
                     body.appendChild(hRow);
-                    return;
-                } else {
-                    hRow.innerHTML = `<div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.1)] sidebar-col timeline-span-full" onclick="window.toggleGroup('${cGrp}')"><span class="truncate pr-1">${rD.label}</span><div class="flex items-center gap-1 shrink-0"><span id="state-${cGrp}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div></div>`;
-                    body.appendChild(hRow);
-
-                    // Dynamic Availability summary row for this category
-                    const tRIds = hotelRooms.filter(hr => hr.type === rD.label && !hr.inactive).map(hr => hr.id);
-                    const cap = tRIds.length;
-                    const aRow = document.createElement('div');
-                    aRow.className = `timeline-grid avail-row-${cGrp} h-[20px] drawer-closed`;
-
-                    let cHtml = `<div class="bg-slate-900 border-r border-slate-700 flex items-center justify-end pr-2 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-[var(--sidebar-w)] text-[9px] text-slate-400 font-black uppercase tracking-widest unselectable">AVAIL &rarr;</div>`;
-                    for (let i = 0; i < dShow; i++) {
-                        const dT = days[i].getTime();
-                        const occ = new Set();
-                        actStaff.forEach(s => {
-                            if (['unconfirmed', 'charged', 'cancelled', 'noshow', 'vol'].includes(s.status)) return;
-                            if (dT >= parseYMD(s.checkIn) && dT < parseYMD(s.checkOut)) {
-                                getRooms(s).forEach(r => {
-                                    const uiR = window.dbToUiRoom ? window.dbToUiRoom(r) : r;
-                                    if (r && (tRIds.includes(r) || tRIds.includes(uiR))) occ.add(uiR || r);
-                                });
-                            }
-                        });
-                        const av = cap - occ.size;
-                        const pct = cap > 0 ? av / cap : 0;
-                        let cCls = '';
-                        if (av === cap) cCls = 'bg-[#4ade80] text-black';
-                        else if (pct >= 0.75) cCls = 'bg-black text-[#4ade80]';
-                        else if (pct >= 0.50) cCls = 'bg-black text-white';
-                        else if (pct >= 0.25) cCls = 'bg-[#7f1d1d] text-white';
-                        else if (av > 0) cCls = 'bg-[#dc2626] text-white';
-                        else cCls = 'bg-[#ef4444] text-black font-black';
-                        cHtml += `<div class="flex items-center justify-center border-r border-slate-800 text-[10px] font-black ${cCls}">${av}</div>`;
-                    }
-                    aRow.innerHTML = cHtml;
-                    body.appendChild(aRow);
                     return;
                 }
+
+                hRow.innerHTML = `<div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-full" onclick="window.toggleGroup('${cGrp}')"><span class="truncate pr-1">${rD.label}</span><div class="flex items-center gap-1 shrink-0"><span id="state-${cGrp}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span><i data-lucide="chevron-up" class="transition-transform duration-200 !w-[13px] !h-[13px]" id="icon-${cGrp}"></i></div></div>`;
+                body.appendChild(hRow);
+
+                const tRIds = hotelRooms.filter(hr => (hr.category || hr.type) === rD.label).map(hr => hr.id);
+                const cap = tRIds.length;
+                const aRow = document.createElement('div');
+                aRow.className = `timeline-grid avail-row-${cGrp} h-[20px]`;
+                aRow.style.display = 'none';
+
+                let cHtml = `<div class="bg-slate-900 border-r border-slate-700 flex items-center justify-end pr-2 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)] w-[var(--sidebar-w)] text-[9px] text-slate-400 font-black uppercase tracking-widest unselectable">AVAIL &rarr;</div>`;
+                for (let i = 0; i < dShow; i++) {
+                    const dT = days[i].getTime();
+                    const occ = new Set();
+                    actStaff.forEach(s => {
+                        if (['unconfirmed', 'charged', 'cancelled', 'noshow', 'vol'].includes(s.status)) return;
+                        if (dT >= window.parseYMD(s.checkIn) && dT < window.parseYMD(s.checkOut)) {
+                            getRooms(s).forEach(r => {
+                                if (r && tRIds.some(tId => matchesRoom(r, tId))) occ.add(r);
+                            });
+                        }
+                    });
+                    const av = cap - occ.size;
+                    const pct = cap > 0 ? av / cap : 0;
+                    let cCls = (av === cap) ? 'bg-[#4ade80] text-black' : (pct >= 0.75) ? 'bg-black text-[#4ade80]' : (pct >= 0.5) ? 'bg-black text-white' : (pct >= 0.25) ? 'bg-[#7f1d1d] text-white' : (av > 0) ? 'bg-[#dc2626] text-white' : 'bg-[#ef4444] text-black font-black';
+                    cHtml += `<div class="flex items-center justify-center border-r border-slate-800 text-[10px] font-black ${cCls}">${av}</div>`;
+                }
+                aRow.innerHTML = cHtml;
+                body.appendChild(aRow);
+                return;
             }
 
             if (rD.isSubHeader) {
                 const sRow = document.createElement('div');
                 sRow.className = `timeline-grid group-${cGrp} sub-header-row h-[22px]`;
-                const cleanSubLabel = rD.label || '';
-                sRow.innerHTML = `
-                    <div class="bg-slate-200 border-y border-slate-300 flex items-center px-2 sticky left-0 z-20 shadow-sm unselectable timeline-span-full">
-                        <div class="flex items-center gap-1 sticky left-0 bg-slate-200 pr-2">
-                            <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">${cleanSubLabel}</span>
-                            ${getFloorIcon(rD.floor)}
-                        </div>
-                    </div>`;
+                sRow.innerHTML = `<div class="bg-slate-200 border-y border-slate-300 flex items-center px-2 sticky left-0 z-20 shadow-sm unselectable w-full"><div class="flex items-center gap-1 sticky left-0 bg-slate-200 pr-2"><span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">${rD.label}</span>${getFloorIcon(rD.floor)}</div></div>`;
                 body.appendChild(sRow);
                 return;
             }
 
             const row = document.createElement('div');
-            row.className = `timeline-grid bed-row group-${cGrp} ${rD.isArchived ? 'opacity-60 bg-slate-100' : ''}`;
+            row.className = `timeline-grid bed-row group-${cGrp}`;
             if (cGrp === 'unassigned-unconfirmed') {
-                const hasMatch = searchTerm && rD.bookings && rD.bookings.some(s =>
-                    ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) ||
-                    (s.bookId || '').toUpperCase().includes(searchTerm)
-                );
-                const isTrayOpen = window.isUnassignedTrayOpen;
-                row.style.display = (hasMatch || isTrayOpen) ? 'grid' : 'none';
+                row.style.display = window.isUnassignedTrayOpen ? 'grid' : 'none';
             }
 
             let hHtml = '';
             if (rD.isUnassigned) {
                 hHtml = `<span class="text-[11px] font-black text-amber-700">${rD.label}</span>`;
             } else if (rD.isBed) {
-                hHtml = `
-                    <div class="flex items-center justify-between px-1 w-full gap-1 pl-3">
-                        <div class="flex items-center gap-0.5 shrink-0">
-                            <span class="text-[12px] font-bold text-slate-600">${rD.displayId}</span>
-                            ${getBunkIcon(rD.icon)}
-                        </div>
-                        <span class="text-[9px] font-bold text-slate-500 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' ? '' : (rD.bed || '')}</span>
-                    </div>`;
+                hHtml = `<div class="flex items-center justify-between px-1 w-full gap-1 pl-3"><div class="flex items-center gap-0.5 shrink-0"><span class="text-[12px] font-bold text-slate-600">${rD.displayId}</span>${getBunkIcon(rD.icon)}</div><span class="text-[9px] font-bold text-slate-500 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' ? '' : (rD.bed || '')}</span></div>`;
             } else {
-                hHtml = `
-                    <div class="flex items-center justify-between px-1 w-full gap-1">
-                        <div class="flex items-center gap-0.5 shrink-0">
-                            <span class="text-[13px] font-black text-slate-700">${rD.displayId}</span>
-                            ${getFloorIcon(rD.floor)}
-                            ${getBunkIcon(rD.icon)}
-                        </div>
-                        <span class="text-[10px] font-bold text-slate-600 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' || (rD.bed || '').toUpperCase() === 'PRIVATE' ? '' : (rD.bed || '')}</span>
-                    </div>`;
+                hHtml = `<div class="flex items-center justify-between px-1 w-full gap-1"><div class="flex items-center gap-0.5 shrink-0"><span class="text-[13px] font-black text-slate-700">${rD.displayId}</span>${getFloorIcon(rD.floor)}${getBunkIcon(rD.icon)}</div><span class="text-[10px] font-bold text-slate-600 tracking-tighter truncate">${(rD.bed || '').toUpperCase() === 'SINGLE' || (rD.bed || '').toUpperCase() === 'PRIVATE' ? '' : (rD.bed || '')}</span></div>`;
             }
 
             row.innerHTML = `<div class="border-r border-slate-400 ${rD.isUnassigned ? 'bg-amber-100' : 'bg-slate-50'} flex items-center justify-center uppercase overflow-hidden shrink-0 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.05)] unselectable w-[var(--sidebar-w)]">${hHtml}</div>`;
 
             for (let i = 0; i < dShow; i++) {
                 const c = document.createElement('div');
-                const iT = getYmd(days[i]) === todayStr;
+                const iT = window.getLocalYMD(days[i]) === todayStr;
                 let fmpShade = '';
                 const dMs = days[i].getTime();
                 for (let f of fmpDates) {
@@ -622,35 +566,29 @@
                 }
                 c.className = `day-column ${fmpShade} ${iT ? 'day-today' : ''} ${rD.isUnassigned ? 'bg-amber-50/50' : ''}`;
                 c.dataset.colIndex = i;
-                c.dataset.dateNum = days[i].getDate();
-                c.dataset.dateIso = getYmd(days[i]);
+                c.dataset.dateIso = window.getLocalYMD(days[i]);
                 c.dataset.roomId = rD.isUnassigned ? "" : (rD.id || "");
                 row.appendChild(c);
             }
 
-            // Render reservation bars
             rD.bookings.forEach(s => {
                 const eS = getDayIndex(s.checkIn) + 0.3;
                 const eE = getDayIndex(s.checkOut) + 0.25;
                 if (eS >= dShow || eE <= 0) return;
                 const due = window.getDue ? window.getDue(s) : 0;
-                const owes = due > 0;
                 let bSty = 'border border-black/10';
-                let isA = false;
 
                 if (s.status === 'future' || s.status === 'new') {
-                    if (s.checkIn === todayStr) { bSty += ' checkin-today'; isA = true; }
-                    else if (s.checkIn <= yStr) { bSty += ' late-checkin'; isA = true; }
+                    if (s.checkIn === todayStr) bSty += ' checkin-today';
+                    else if (s.checkIn <= yStr) bSty += ' late-checkin';
                 } else if (s.status === 'here') {
-                    if (s.checkOut === todayStr) { bSty += ' overdue-checkout-today'; isA = true; }
-                    else if (s.checkOut <= yStr) { bSty += ' overdue-checkout-past'; isA = true; }
+                    if (s.checkOut === todayStr) bSty += ' overdue-checkout-today';
+                    else if (s.checkOut <= yStr) bSty += ' overdue-checkout-past';
                 }
 
-                if (s.status === 'new') { bSty += ' status-new-pulse'; isA = true; }
-                if (!isA) {
-                    if (s.badCC) bSty = '!border-red-500 !border-dashed !border-[3px]';
-                    else if (owes) bSty = '!border-red-500 !border-[3px]';
-                }
+                if (s.status === 'new') bSty += ' status-new-pulse';
+                else if (s.badCC) bSty = '!border-red-500 !border-dashed !border-[3px]';
+                else if (due > 0) bSty = '!border-red-500 !border-[3px]';
 
                 const srcC = {
                     'booking.com': { bg: 'bg-[#003580]', text: 'B' },
@@ -676,7 +614,7 @@
 
                 let bHtml = `<div class="bar-sticky-content gap-0.5">`;
                 if (s.linkedId) bHtml += `<div class="w-4 h-4 shrink-0 mr-0.5">${window.SVGS.link}</div>`;
-                bHtml += `<span class="${s.refundability === 'ref' && parseYMD(s.checkIn) - Date.now() > 7 * 86400000 ? 'italic font-black' : 'font-bold'} truncate text-[11px]" style="letter-spacing:-0.3px;">${s.lastName}</span>`;
+                bHtml += `<span class="${s.refundability === 'ref' && window.parseYMD(s.checkIn) - Date.now() > 7 * 86400000 ? 'italic font-black' : 'font-bold'} truncate text-[11px]" style="letter-spacing:-0.3px;">${s.lastName}</span>`;
                 if (s.pax > 1) bHtml += `<span class="text-[8px] opacity-60 leading-none self-start mt-0.5 ml-0.5">x${s.pax}</span>`;
                 if (s.upgrade === 'free') bHtml += `<div class="w-3.5 h-4 shrink-0 ml-0.5">${window.SVGS.upFree}</div>`;
                 else if (s.upgrade === 'paid') bHtml += `<div class="w-3.5 h-4 shrink-0 ml-0.5">${window.SVGS.upPaid}</div>`;
@@ -780,6 +718,6 @@
         });
     } else {
         window.mountLegendSvgs();
-        setTimeout(() => window.render(), 0);
+        window.render();
     }
 })();
