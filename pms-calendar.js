@@ -34,6 +34,7 @@
         { val: 'special', bg: '#fef08a', txt: '#1e293b' },
         { val: 'blocked', bg: '#475569', txt: '#fff' },
         { val: 'charged', bg: '#0f172a', txt: '#fbbf24' },
+        { val: 'tocharge', bg: '#f97316', txt: '#fff' },
         { val: 'vol', bg: '#fbcfe8', txt: '#831843' },
         { val: 'unconfirmed', bg: '#f3e8ff', txt: '#581c87' }
     ];
@@ -407,11 +408,15 @@
         const tRows = [];
         const uConf = [];
 
-        // Catch Unassigned & Unconfirmed Bookings
+        // Catch Unassigned & Non-Occupying Bookings
+        // Only cancelled is excluded. noshow, tocharge, charged, unconfirmed, vol, and roomless stay in the tray
         actStaff.forEach(s => {
-            if (['cancelled', 'noshow'].includes(s.status)) return;
+            if (s.status === 'cancelled') return;
             const rList = getRooms(s).filter(Boolean);
-            const isUnassigned = rList.length === 0 || rList[0] === "" || ['unconfirmed', 'charged', 'vol'].includes(s.status) || !rList.some(rName => hotelRooms.some(hr => matchesRoom(rName, hr.id)));
+            const isUnassignedStatus = ['unconfirmed', 'charged', 'tocharge', 'noshow', 'vol'].includes(s.status);
+            const hasAssignedRoom = rList.length > 0 && rList[0] !== "" && rList.some(rName => hotelRooms.some(hr => matchesRoom(rName, hr.id)));
+            const isUnassigned = isUnassignedStatus || !hasAssignedRoom;
+
             if (isUnassigned && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC) {
                 uConf.push(s);
             }
@@ -468,7 +473,7 @@
                 const { isDorm, baseRoom } = classifyRoomForCalendar(r);
 
                 const isAssignedToThisRoom = s => {
-                    if (['unconfirmed', 'charged', 'noshow', 'vol'].includes(s.status)) return false;
+                    if (['unconfirmed', 'charged', 'tocharge', 'noshow', 'vol'].includes(s.status)) return false;
                     const rList = getRooms(s);
                     return rList.some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
                 };
