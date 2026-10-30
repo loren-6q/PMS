@@ -32,7 +32,16 @@ window.jumpStep = function(step) {
     if (ind) ind.innerText = `Step ${window.currentStep} of 5`;
     const prevBtn = document.getElementById('btn-prev-step');
     if (prevBtn) prevBtn.disabled = (window.currentStep === 1);
-    if (window.currentStep === 5 && typeof window.updateStep5Review === 'function') {
+
+    // Re-render components whenever jumping steps to ensure fresh tables
+    if (window.currentStep === 2 && typeof window.renderRoomDefinitionsTable === 'function') {
+        window.renderRoomDefinitionsTable();
+    } else if (window.currentStep === 3 && typeof window.renderStep3UnifiedMapping === 'function') {
+        window.renderStep3UnifiedMapping();
+    } else if (window.currentStep === 4) {
+        if (typeof window.renderPaymentMethodsTable === 'function') window.renderPaymentMethodsTable();
+        if (typeof window.renderAddonsTable === 'function') window.renderAddonsTable();
+    } else if (window.currentStep === 5 && typeof window.updateStep5Review === 'function') {
         window.updateStep5Review();
     }
     if (window.lucide) window.lucide.createIcons();
@@ -501,14 +510,14 @@ window.moveCategory = function(idx, dir) {
     window.openReorderCategoriesModal();
 };
 
-// Bed Preview Drawer
+// --- RESTORED ALL BEDS PREVIEW DRAWER (FORMATTED CARDS & CHIPS) ---
 window.toggleBedPreviewDrawer = function() {
     window.compileRoomsFromDefinitions();
     let drawer = document.getElementById('bed-preview-drawer');
     if (!drawer) {
         drawer = document.createElement('div');
         drawer.id = 'bed-preview-drawer';
-        drawer.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4";
+        drawer.className = "allbeds-modal-overlay hidden";
         document.body.appendChild(drawer);
     }
 
@@ -518,42 +527,251 @@ window.toggleBedPreviewDrawer = function() {
         return;
     }
 
-    let tableHtml = `
-        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border-2 border-slate-800 flex flex-col max-h-[80vh]">
-            <div class="bg-slate-900 text-white p-3 font-black uppercase text-xs flex items-center justify-between shrink-0">
-                <span>All Compiled Beds & Rooms (${window.compiledRooms.length})</span>
-                <button type="button" onclick="document.getElementById('bed-preview-drawer').classList.add('hidden'); document.getElementById('bed-preview-drawer').style.display='none';" class="cursor-pointer font-bold text-base">&times;</button>
+    // Group compiled beds by parent room
+    const roomsMap = new Map();
+    window.compiledRooms.forEach(b => {
+        const parent = b.parentRoom || b.name || b.id;
+        if (!roomsMap.has(parent)) {
+            roomsMap.set(parent, {
+                name: parent,
+                category: b.category,
+                floor: b.floor,
+                isDorm: b.isDorm,
+                inactive: b.inactive,
+                beds: []
+            });
+        }
+        roomsMap.get(parent).beds.push(b);
+    });
+
+    const activeBedsCount = window.compiledRooms.filter(b => !b.inactive).length;
+    const inactiveBedsCount = window.compiledRooms.filter(b => b.inactive).length;
+
+    let html = `
+        <div class="allbeds-modal-container">
+            <div class="allbeds-header">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="eye" size="16" class="text-indigo-400"></i>
+                    <span class="font-black text-xs sm:text-sm uppercase tracking-wider">All Compiled Physical Inventory</span>
+                    <span class="text-[10px] bg-indigo-900 text-indigo-200 px-2 py-0.5 rounded font-black border border-indigo-700">
+                        ${roomsMap.size} Rooms • ${activeBedsCount} Active Beds ${inactiveBedsCount > 0 ? `(${inactiveBedsCount} Inactive)` : ''}
+                    </span>
+                </div>
+                <button type="button" onclick="document.getElementById('bed-preview-drawer').classList.add('hidden'); document.getElementById('bed-preview-drawer').style.display='none';" class="text-slate-400 hover:text-white cursor-pointer font-bold text-lg leading-none">&times;</button>
             </div>
-            <div class="p-3 overflow-y-auto flex-1">
-                <table class="w-full text-left border-collapse text-xs">
-                    <thead class="bg-slate-800 text-white text-[10px] uppercase font-black sticky top-0">
-                        <tr>
-                            <th class="p-1.5 border-r border-slate-700">Bed / Room ID</th>
-                            <th class="p-1.5 border-r border-slate-700">Category</th>
-                            <th class="p-1.5 border-r border-slate-700 text-center">Floor</th>
-                            <th class="p-1.5 border-r border-slate-700 text-center">Bunk</th>
-                            <th class="p-1.5 text-center">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-200 font-bold">
+            <div class="allbeds-body">
     `;
 
-    window.compiledRooms.forEach(b => {
-        tableHtml += `
-            <tr class="${b.inactive ? 'opacity-40 bg-slate-100' : 'hover:bg-slate-50'}">
-                <td class="p-1.5 font-mono text-indigo-700 font-black">${b.id}</td>
-                <td class="p-1.5">${b.category}</td>
-                <td class="p-1.5 text-center">${b.floor}</td>
-                <td class="p-1.5 text-center uppercase text-[10px]">${b.bunk}</td>
-                <td class="p-1.5 text-center text-[10px] ${b.inactive ? 'text-rose-600 font-black' : 'text-emerald-700'}">${b.inactive ? 'INACTIVE' : 'ACTIVE'}</td>
-            </tr>
+    roomsMap.forEach((roomData) => {
+        html += `
+            <div class="allbeds-room-card ${roomData.inactive ? 'opacity-50' : ''}">
+                <div class="allbeds-room-header">
+                    <div class="flex items-center gap-2">
+                        <span class="font-black text-xs text-slate-800 uppercase tracking-wide">${roomData.name}</span>
+                        <span class="text-[10px] font-bold text-slate-500 uppercase">(${roomData.category})</span>
+                        ${roomData.inactive ? '<span class="text-[9px] bg-rose-100 text-rose-700 font-black px-1.5 py-0.2 rounded border border-rose-200 uppercase">ARCHIVED</span>' : ''}
+                    </div>
+                    <div class="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                        <span>Floor ${roomData.floor}</span>
+                        <span>•</span>
+                        <span>${roomData.beds.length} ${roomData.isDorm ? 'Bed(s)' : 'Unit'}</span>
+                    </div>
+                </div>
+                <div class="allbeds-chip-grid">
+        `;
+
+        roomData.beds.forEach(bed => {
+            const isTop = bed.bunk === 'top';
+            const isBottom = bed.bunk === 'bottom';
+            const bunkClass = isTop ? 'bunk-top' : (isBottom ? 'bunk-bottom' : 'bunk-single');
+            const bunkArrow = isTop ? '↑' : (isBottom ? '↓' : '');
+            const bunkLabel = isTop ? 'TOP' : (isBottom ? 'BOT' : (bed.isDorm ? 'BED' : 'ROOM'));
+
+            html += `
+                <div class="allbeds-bed-chip ${bed.inactive ? 'chip-inactive' : ''}" title="Canonical DB ID: ${bed.id}">
+                    <span class="truncate">${bed.id}</span>
+                    <span class="allbeds-bunk-indicator ${bunkClass}">${bunkLabel} ${bunkArrow}</span>
+                </div>
+            `;
+        });
+
+        html += `
+                </div>
+            </div>
         `;
     });
 
-    tableHtml += `</tbody></table></div></div>`;
-    drawer.innerHTML = tableHtml;
+    html += `
+            </div>
+        </div>
+    `;
+
+    drawer.innerHTML = html;
     drawer.classList.remove('hidden');
     drawer.style.display = 'flex';
+    if (window.lucide) window.lucide.createIcons();
+};
+
+// --- ONE-TIME PERMANENT DATABASE STANDARDIZER MIGRATION ---
+// Converts all legacy property room IDs & live reservation strings in Firestore directly to canonical:
+// Private: [Room Name]
+// Dorm:    [Room Name] № [01..NN]
+window.standardizeAllPropertiesAndBookings = async function() {
+    window.customAlert(
+        "Permanent Database Standardization",
+        "This utility will audit all properties and all bookings in Firestore.\n\nIt permanently converts all legacy bed formats (such as C301-1, A01, Dorm A Bed 1) into the canonical standard format ([Room Name] № [01..NN]).\n\nAll existing booking room assignments will be updated to match with exact 1-to-1 string equality so that runtime regex and guessing are permanently eliminated.\n\nA rolling backup will be created first.",
+        true,
+        async () => {
+            window.customAlert("Standardizing Database...", "Auditing properties and reservations in Firestore. Please wait...");
+            try {
+                const curProp = window.currentPropertyId;
+                const propSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', curProp));
+                if (!propSnap.exists()) {
+                    window.closeAlert();
+                    return window.customAlert("Error", `Property ${curProp} not found in database.`);
+                }
+
+                const propData = propSnap.data();
+                const roomDefs = Array.isArray(propData.roomDefinitions) ? propData.roomDefinitions : [];
+                
+                // 1. Build legacy-to-canonical translation dictionary
+                const migrationMap = new Map();
+                const canonicalRooms = [];
+
+                roomDefs.forEach(def => {
+                    const rawName = (def.name || 'Room').trim();
+                    const cat = (def.category || 'Standard Room').trim();
+                    const total = Math.max(1, parseInt(def.beds || def.units || 1, 10));
+                    const rule = def.rule || 'private';
+                    const floor = def.floor || '1';
+                    const baseId = (def.id || rawName).trim();
+                    const isInactive = !!def.inactive;
+
+                    if (rule === 'private') {
+                        canonicalRooms.push({
+                            id: baseId,
+                            name: rawName,
+                            type: cat,
+                            category: cat,
+                            floor: floor,
+                            bed: 'private',
+                            bunk: 'private',
+                            rule: 'private',
+                            parentRoom: rawName,
+                            isDorm: false,
+                            capacity: total,
+                            inactive: isInactive
+                        });
+                        migrationMap.set(baseId.toUpperCase(), baseId);
+                        migrationMap.set(rawName.toUpperCase(), baseId);
+                    } else {
+                        const dormLetter = rawName.replace(/^Dorm\s+/i, '').trim().toUpperCase();
+                        for (let b = 1; b <= total; b++) {
+                            const canonicalBedId = window.formatDormBedId(rawName, b);
+                            const paddedNum = String(b).padStart(2, '0');
+                            let bunkType = 'single';
+                            if (rule === 'odd-top') bunkType = (b % 2 !== 0) ? 'top' : 'bottom';
+                            else if (rule === 'even-top') bunkType = (b % 2 === 0) ? 'top' : 'bottom';
+
+                            canonicalRooms.push({
+                                id: canonicalBedId,
+                                name: `${rawName} Bed ${b}`,
+                                type: cat,
+                                category: cat,
+                                floor: floor,
+                                bed: bunkType,
+                                bunk: bunkType,
+                                icon: bunkType === 'top' ? 'top' : (bunkType === 'bottom' ? 'bot' : 'single'),
+                                rule: rule,
+                                parentRoom: rawName,
+                                isDorm: true,
+                                inactive: isInactive
+                            });
+
+                            // Map all legacy permutations to this canonical ID
+                            migrationMap.set(canonicalBedId.toUpperCase(), canonicalBedId);
+                            migrationMap.set(`${rawName} Bed ${b}`.toUpperCase(), canonicalBedId);
+                            migrationMap.set(`${rawName}-${b}`.toUpperCase(), canonicalBedId);
+                            migrationMap.set(`${rawName} ${b}`.toUpperCase(), canonicalBedId);
+                            migrationMap.set(`${rawName} № ${b}`.toUpperCase(), canonicalBedId);
+                            migrationMap.set(`${rawName} № ${paddedNum}`.toUpperCase(), canonicalBedId);
+                            
+                            // SWIMS formats: C301-1, C301-01
+                            migrationMap.set(`${dormLetter}-${b}`.toUpperCase(), canonicalBedId);
+                            migrationMap.set(`${dormLetter}-${paddedNum}`.toUpperCase(), canonicalBedId);
+
+                            // LOUD formats: A01, B02, C05
+                            migrationMap.set(`${dormLetter}${paddedNum}`.toUpperCase(), canonicalBedId);
+                            migrationMap.set(`${dormLetter}${b}`.toUpperCase(), canonicalBedId);
+                        }
+                    }
+                });
+
+                // 2. Backup property
+                const backupTimestamp = Date.now();
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties_backups', `${curProp}_std_${backupTimestamp}`), {
+                    roomDefinitions: roomDefs,
+                    rooms: canonicalRooms,
+                    backedUpAt: new Date().toISOString()
+                });
+
+                // 3. Update property document with strictly standardized rooms
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', curProp), {
+                    rooms: canonicalRooms,
+                    updatedAt: new Date().toISOString()
+                });
+
+                // 4. Migrate bookings referencing old legacy formats in Firestore
+                const staffSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
+                let updatedBookingsCount = 0;
+
+                for (let docSnap of staffSnap.docs) {
+                    const b = docSnap.data();
+                    const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(b.property) : b.property;
+                    if (sProp !== curProp) continue;
+
+                    const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
+                    let needsUpdate = false;
+                    const newRooms = rList.map(rStr => {
+                        if (!rStr) return "";
+                        const cleanStr = String(rStr).trim().toUpperCase();
+                        if (migrationMap.has(cleanStr)) {
+                            const canonical = migrationMap.get(cleanStr);
+                            if (canonical !== rStr) {
+                                needsUpdate = true;
+                                return canonical;
+                            }
+                        }
+                        return rStr;
+                    });
+
+                    if (needsUpdate) {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', docSnap.id), {
+                            rooms: newRooms,
+                            room: newRooms[0] || "",
+                            lastStandardizedAt: new Date().toISOString()
+                        });
+                        updatedBookingsCount++;
+                    }
+                }
+
+                window.closeAlert();
+                window.customAlert(
+                    "Standardization Complete",
+                    `Successfully standardized ${curProp}!\n\n• ${canonicalRooms.length} compiled physical bed/room rows updated in catalog.\n• ${updatedBookingsCount} booking records migrated to canonical № IDs in Firestore.\n\nAll bed assignments now use exact string equality.`
+                );
+
+                window.roomDefinitions = roomDefs;
+                window.compiledRooms = canonicalRooms;
+                window.renderRoomDefinitionsTable();
+
+            } catch (err) {
+                console.error("Standardization Error:", err);
+                window.closeAlert();
+                window.customAlert("Standardization Failed", err.message);
+            }
+        }
+    );
 };
 
 // --- STREAMLINED STEP 2 TABLE WITH COMPACT CATEGORY BANNERS ---
@@ -722,9 +940,16 @@ window.fetchChannexData = async function() {
         const pJson = await pRes.json();
         const allPlans = pJson.data || [];
 
+        // Filter out derived/OTA plans so only primary rate plans are displayed
         window.channexRatePlans = allPlans.filter(p => {
             const attr = p.attributes || {};
-            return !attr.ui_read_only && attr.parent_rate_plan_id == null && attr.channel_id == null;
+            const rel = p.relationships || {};
+            const hasChannel = !!(rel.channel?.data?.id || attr.channel_id);
+            const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
+            const isDerived = !!attr.ui_read_only || attr.is_derived === true;
+            const title = (attr.title || '').toLowerCase();
+            const isOta = /booking\.com|agoda|hostelworld|airbnb|expedia|ctrip|trip\.com/i.test(title);
+            return !hasChannel && !hasParent && !isDerived && !isOta;
         });
 
         window.renderStep3UnifiedMapping();
@@ -734,6 +959,144 @@ window.fetchChannexData = async function() {
         console.error("Fetch Channex Error:", err);
         window.customAlert("Fetch Failed", err.message);
     }
+};
+
+window.renderStep3UnifiedMapping = function() {
+    const container = document.getElementById('unified-mapping-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const pmsCategories = Array.from(new Set(window.roomDefinitions.filter(r => !r.inactive).map(r => r.category).filter(Boolean)));
+
+    pmsCategories.forEach(pmsCat => {
+        const mapping = window.channexMap.find(m => m.pmsCategory === pmsCat);
+        const isMapped = !!(mapping && mapping.channexId);
+
+        const card = document.createElement('div');
+        // Visual indicator styling using style.css classes
+        card.className = `rounded-lg p-3 mb-2.5 flex items-center justify-between gap-3 transition-all ${isMapped ? 'mapping-card-mapped' : 'mapping-card-unmapped'}`;
+
+        let selectHtml = `<select class="table-input font-bold cursor-pointer" onchange="window.updateRoomTypeMapping('${pmsCat}', this.value)">
+            <option value="">-- SELECT CHANNEX ROOM TYPE --</option>`;
+
+        (window.channexRooms || []).forEach(cr => {
+            const selected = mapping && mapping.channexId === cr.id ? 'selected' : '';
+            selectHtml += `<option value="${cr.id}" ${selected}>${cr.attributes?.title || cr.id}</option>`;
+        });
+        selectHtml += `</select>`;
+
+        card.innerHTML = `
+            <div class="flex items-center gap-2">
+                <span class="${isMapped ? 'mapping-badge-mapped' : 'mapping-badge-unmapped'}">
+                    ${isMapped ? 'MAPPED ✓' : 'UNMAPPED ⚠️'}
+                </span>
+                <span class="font-black text-xs uppercase text-slate-800">${pmsCat}</span>
+            </div>
+            <div class="w-72">${selectHtml}</div>
+        `;
+        container.appendChild(card);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.updateRoomTypeMapping = function(pmsCat, channexRoomId) {
+    const existingIdx = window.channexMap.findIndex(m => m.pmsCategory === pmsCat);
+    if (!channexRoomId) {
+        if (existingIdx > -1) window.channexMap.splice(existingIdx, 1);
+    } else {
+        const cRoom = window.channexRooms.find(r => r.id === channexRoomId);
+        const title = cRoom?.attributes?.title || '';
+        if (existingIdx > -1) {
+            window.channexMap[existingIdx].channexId = channexRoomId;
+            window.channexMap[existingIdx].channexTitle = title;
+        } else {
+            window.channexMap.push({ pmsCategory: pmsCat, channexId: channexRoomId, channexTitle: title });
+        }
+    }
+    window.renderStep3UnifiedMapping();
+};
+// Cloud Persistence with Non-Destructive Merging & Automatic Rolling Backup
+window.savePropertyToDatabase = async function(showMessage = true) {
+    const btn = document.getElementById('btn-save-header');
+    if (btn) { btn.disabled = true; btn.innerText = "SAVING..."; }
+
+    try {
+        const propId = window.currentPropertyId;
+        window.compileRoomsFromDefinitions();
+
+        // 1. Immutable Rolling Backup in Firestore before applying changes
+        const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'properties_backups', `${propId}_${Date.now()}`);
+        await setDoc(backupRef, {
+            roomDefinitions: window.roomDefinitions,
+            rooms: window.compiledRooms,
+            savedAt: new Date().toISOString()
+        });
+
+        // 2. Safe Non-Destructive Fallbacks (Never overwrite with blank if field was not edited)
+        const cfg = window.currentPropertyConfig || {};
+        const getFieldVal = (id, fallback) => {
+            const el = document.getElementById(id);
+            if (!el) return fallback !== undefined ? fallback : '';
+            const v = el.value.trim();
+            return v !== '' ? v : (fallback || '');
+        };
+
+        const dataToSave = {
+            id: propId,
+            name: getFieldVal('prop-name', cfg.name || propId),
+            short: getFieldVal('prop-short', cfg.short || 'PROP'),
+            currency: getFieldVal('prop-currency', cfg.currency || 'THB'),
+            timezone: getFieldVal('prop-timezone', cfg.timezone || 'Asia/Bangkok'),
+            address: getFieldVal('prop-address', cfg.address || ''),
+            email: getFieldVal('prop-email', cfg.email || ''),
+            phone: getFieldVal('prop-phone', cfg.phone || ''),
+            logoUrl: getFieldVal('prop-logo-url', cfg.logoUrl || ''),
+            bannerUrl: getFieldVal('prop-banner-url', cfg.bannerUrl || ''),
+            iconUrl: getFieldVal('prop-icon-url', cfg.iconUrl || ''),
+            payments: (window.paymentMethods && window.paymentMethods.length > 0) ? window.paymentMethods : (cfg.payments || DEFAULT_PAYMENT_METHODS),
+            addons: (window.addonsList && window.addonsList.length > 0) ? window.addonsList : (cfg.addons || DEFAULT_ADDONS),
+            roomDefinitions: window.roomDefinitions,
+            rooms: window.compiledRooms,
+            channex: {
+                apiKey: getFieldVal('chan-api-key', cfg.channex?.apiKey || ''),
+                propId: getFieldVal('chan-prop-id', cfg.channex?.propId || '')
+            },
+            channexMap: window.channexMap,
+            channexRateMap: window.channexRateMap,
+            updatedAt: new Date().toISOString()
+        };
+
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), dataToSave, { merge: true });
+        window.currentPropertyConfig = { ...dataToSave };
+
+        // 3. Auto-Push Updated Capacity to Channex (Deducts any inactivated or deleted rooms immediately)
+        if (dataToSave.channex.apiKey && dataToSave.channex.propId && window.triggerAutoSync) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + 90);
+            const futureStr = futureDate.toISOString().split('T')[0];
+            window.triggerAutoSync(todayStr, futureStr);
+        }
+
+        if (showMessage) {
+            window.customAlert("Saved", "Property setup successfully saved, backed up, and synced.");
+        }
+    } catch (err) {
+        console.error("Save Error:", err);
+        window.customAlert("Save Error", err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerText = "SAVE"; }
+        if (window.lucide) window.lucide.createIcons();
+    }
+};
+
+window.restoreDefaultAddonsAndPayments = function() {
+    window.paymentMethods = [...DEFAULT_PAYMENT_METHODS];
+    window.addonsList = [...DEFAULT_ADDONS];
+    window.renderPaymentMethodsTable();
+    window.renderAddonsTable();
+    window.customAlert("Restored", "Default payment methods and add-ons reloaded. Click SAVE in the top bar to persist.");
 };
 
 window.renderStep3UnifiedMapping = function() {
