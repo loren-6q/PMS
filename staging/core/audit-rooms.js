@@ -3,47 +3,150 @@
 // Wild & Wandering Property Management System
 // 
 // RULES:
-// 1. SWIMS: Only rooms C301-C304 with suffixes -1, -2, -3, -4 are dorms.
-//    Target: "Room C301 № 01" to "Room C304 № 04" (or "C301 № 01").
+// 1. SWIMS: Only rooms C301-C304 (or 301-304) with -1, -2, -3, -4 are dorms.
+//    Target: "C301 № 01" through "C304 № 04".
 //    All other rooms (A, B, C1xx, C2xx, C305-C311, D) are PRIVATES.
 // 2. LOUD: Dorm beds (A01, B02, Dorm A Bed 1, etc.) -> "Dorm A № 01".
 // ==========================================================================
 
 import { db, appId } from './config.js';
-import { collection, getDocs, doc, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, getDocs, doc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 /**
- * Normalizes legacy dorm strings to canonical № format.
- * Returns null if the room is a private room or already canonical.
+ * Checks if a room assignment string is a legacy dorm bed format.
+ * If yes, returns the standardized canonical string.
+ * If already compliant or a private room, returns null.
  */
 export function getCanonicalDormId(rawRoom, property = 'swims_resort') {
     if (!rawRoom) return null;
     const r = String(rawRoom).trim();
     const prop = String(property).toLowerCase();
 
-    // --- SWIMS RESORT DORMS ---
+    // 1. SWIMS RESORT
     if (prop.includes('swims')) {
-        // Already canonical: e.g. "C301 № 01" or "Room C301 № 01"
-        if (/^(:?Room\s*)?C?30[1-4]\s*№\s*\d{2}$/i.test(r)) {
-            return null; // Already compliant
+        // Already canonical: e.g. "C301 № 01" or "301 № 01"
+        if (/^C?30[1-4]\s*№\s*\d{2}$/i.test(r)) {
+            return null;
         }
 
-        // Legacy formats: C301-1, C301-01, 301-1, Room 301-1, C301_1
-        const swimsDormMatch = r.match(/^(?:Room\s*)?C?(30[1-4])[-_\s]+(\d{1,2})$/i);
-        if (swimsDormMatch) {
-            const roomNum = swimsDormMatch[1]; // "301"
-            const bedNum = String(swimsDormMatch[2]).padStart(2, '0'); // "01"
-            return `C\${roomNum} № ${bedNum}`; }  // Has № but single-digit: e.g. "C301 № 1" const unpaddedMatch = r.match(/^(?:Room\s*)?C?(30[1-4])\s*№\s*(\d)$/i); if (unpaddedMatch) { return `C${unpaddedMatch[1]} № 0${unpaddedMatch[2]}`; }  // All other rooms at SWIMS (A01-A12, B01-B22, C101, C2xx, C305-C311, D01-D11) are PRIVATES. return null; }  // --- LOUD SAMUI DORMS --- if (prop.includes('loud')) { // Already canonical: e.g. "Dorm A № 01" if (/^Dorm\s+[A-Z]\s+№\s+\d{2}$/i.test(r)) { return null; }  // Legacy format 1: "A01", "B04", "C10" const letterNumMatch = r.match(/^([A-Za-z])(\d{1,2})$/); if (letterNumMatch) { const letter = letterNumMatch[1].toUpperCase(); const bedNum = String(letterNumMatch[2]).padStart(2, '0'); return `Dorm ${letter} № ${bedNum}`; }  // Legacy format 2: "Dorm A Bed 1", "Dorm B-2", "Dorm A 1" const dormWordMatch = r.match(/^Dorm\s*([A-Za-z])(?:[-_\s]+(?:Bed\s*)?(\d{1,2}))$/i); if (dormWordMatch) { const letter = dormWordMatch[1].toUpperCase(); const bedNum = String(dormWordMatch[2]).padStart(2, '0'); return `Dorm ${letter} № ${bedNum}`; }  // Legacy format 3: "A-1", "B-02" const dashMatch = r.match(/^([A-Za-z])[-_](\d{1,2})$/); if (dashMatch) { const letter = dashMatch[1].toUpperCase(); const bedNum = String(dashMatch[2]).padStart(2, '0'); return `Dorm ${letter} № ${bedNum}`; }  return null; }  return null; }  /** * READ-ONLY AUDIT: Scans Firestore and shows bookings that need dorm migration. */ export async function auditDatabaseRoomFormats(propertyFilter = null) { console.log("\%c[DB Room Auditor] Scanning reservations in Firestore...", "color: #3b82f6; font-weight: bold; font-size: 13px;");  try { const staffSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff')); const totalBookings = staffSnap.docs.length;  let compliantCount = 0; let unassignedCount = 0; const migrationList = [];  staffSnap.docs.forEach(docSnap => { const b = docSnap.data(); const bProp = (b.property \vert{}\vert{} 'swims_resort').toLowerCase();  if (propertyFilter && !bProp.includes(propertyFilter.toLowerCase())) { return; }  const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);  if (rList.length === 0 \vert{}\vert{} rList.every(r => !r \vert{}\vert{} r.trim() === "")) { unassignedCount++; return; }  rList.forEach(rawRoom => { if (!rawRoom \vert{}\vert{} rawRoom.trim() === "") return; const canonicalDorm = getCanonicalDormId(rawRoom, bProp);  if (canonicalDorm) { migrationList.push({ docId: docSnap.id, bookingId: b.bookId \vert{}\vert{} docSnap.id, guest: `${b.firstName || ''} ${b.lastName \vert{}\vert{} ''}`.trim() \vert{}\vert{} 'Guest', property: bProp.toUpperCase(), currentRoom: rawRoom, newCanonicalRoom: canonicalDorm, dates: `${b.checkIn || '?'} → ${b.checkOut \vert{}\vert{} '?'}` }); } else { compliantCount++; } }); });  console.log(`\%c[Audit Summary] ${totalBookings} Total Bookings Inspected:`, "font-weight: bold; font-size: 13px;");
-        console.log(`✓ Compliant assignments (Privates & Canonical Dorms): \${compliantCount}`);
-        console.log(`ℹ Unassigned slots (Tray): \${unassignedCount}`);
-        console.log(`⚠ Dorm beds ready for migration: \${migrationList.length}`);
+        // SWIMS Dorms: C301-C304 (or 301-304) with -1, -2, -3, -4
+        // Matches: "C301-1", "301-1", "C301 - 1", "C301-01", "302_2"
+        const swimsMatch = r.match(/^C?(30[1-4])\s*[-_]\s*(\d{1,2})$/i);
+        if (swimsMatch) {
+            const roomNum = swimsMatch[1];
+            const bedNum = String(swimsMatch[2]).padStart(2, '0');
+            return `C${roomNum} № ${bedNum}`;
+        }
+
+        // Single digit unpadded №: "C301 № 1" -> "C301 № 01"
+        const unpaddedMatch = r.match(/^C?(30[1-4])\s*№\s*(\d)$/i);
+        if (unpaddedMatch) {
+            return `C${unpaddedMatch[1]} № 0${unpaddedMatch[2]}`;
+        }
+
+        // Everything else at SWIMS (A, B, C1xx, C2xx, C305-C311, D) is PRIVATE.
+        return null;
+    }
+
+    // 2. LOUD SAMUI
+    if (prop.includes('loud')) {
+        // Already canonical: e.g. "Dorm A № 01"
+        if (/^Dorm\s+[A-Za-z]\s+№\s+\d{2}$/i.test(r)) {
+            return null;
+        }
+
+        // Legacy format 1: "A01", "B04", "C12", "A1"
+        const letterNumMatch = r.match(/^([A-Za-z])(\d{1,2})$/);
+        if (letterNumMatch) {
+            const letter = letterNumMatch[1].toUpperCase();
+            const bedNum = String(letterNumMatch[2]).padStart(2, '0');
+            return `Dorm ${letter} № ${bedNum}`;
+        }
+
+        // Legacy format 2: "Dorm A Bed 1", "Dorm B-2", "Dorm A 1", "Dorm A-01"
+        const dormWordMatch = r.match(/^Dorm\s*([A-Za-z])(?:[-_\s]+(?:Bed\s*)?(\d{1,2}))$/i);
+        if (dormWordMatch) {
+            const letter = dormWordMatch[1].toUpperCase();
+            const bedNum = String(dormWordMatch[2]).padStart(2, '0');
+            return `Dorm ${letter} № ${bedNum}`;
+        }
+
+        // Legacy format 3: "A-1", "B-02"
+        const dashMatch = r.match(/^([A-Za-z])[-_](\d{1,2})$/);
+        if (dashMatch) {
+            const letter = dashMatch[1].toUpperCase();
+            const bedNum = String(dashMatch[2]).padStart(2, '0');
+            return `Dorm ${letter} № ${bedNum}`;
+        }
+
+        return null;
+    }
+
+    return null;
+}
+
+/**
+ * Read-Only Audit of bookings in Firestore.
+ */
+export async function auditDatabaseRoomFormats(propertyFilter = null) {
+    console.log("%c[DB Room Auditor] Inspecting reservations in Firestore...", "color: #3b82f6; font-weight: bold; font-size: 13px;");
+    
+    try {
+        const staffSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
+        const totalBookings = staffSnap.docs.length;
+        
+        let compliantCount = 0;
+        let unassignedCount = 0;
+        const migrationList = [];
+
+        for (const docSnap of staffSnap.docs) {
+            const b = docSnap.data();
+            const bProp = (b.property || 'swims_resort').toLowerCase();
+            
+            if (propertyFilter && !bProp.includes(propertyFilter.toLowerCase())) {
+                continue;
+            }
+
+            const rList = Array.isArray(b.rooms) && b.rooms.length > 0 
+                ? b.rooms 
+                : (b.room ? [b.room] : []);
+
+            if (rList.length === 0 || rList.every(r => !r || String(r).trim() === "")) {
+                unassignedCount++;
+                continue;
+            }
+
+            for (const rawRoom of rList) {
+                if (!rawRoom || String(rawRoom).trim() === "") continue;
+                const canonicalDorm = getCanonicalDormId(rawRoom, bProp);
+
+                if (canonicalDorm) {
+                    migrationList.push({
+                        docId: docSnap.id,
+                        bookingId: b.bookId || docSnap.id,
+                        guest: `${b.firstName || ''} ${b.lastName || ''}`.trim() || 'Guest',
+                        property: bProp.toUpperCase(),
+                        currentRoom: rawRoom,
+                        newCanonicalRoom: canonicalDorm,
+                        dates: `${b.checkIn || '?'} → ${b.checkOut || '?'}`
+                    });
+                } else {
+                    compliantCount++;
+                }
+            }
+        }
+
+        console.log(`%c[Audit Summary] ${totalBookings} Total Bookings Inspected:`, "font-weight: bold; font-size: 13px;");
+        console.log(`✓ Compliant assignments (All Privates & Canonical Dorms): ${compliantCount}`);
+        console.log(`ℹ Unassigned slots (Waitlist/Tray): ${unassignedCount}`);
+        console.log(`⚠ Dorm beds ready for migration: ${migrationList.length}`);
 
         if (migrationList.length > 0) {
-            console.warn(`Preview of dorm beds ready to update (first 25 of \${migrationList.length}):`);
+            console.warn(`Preview of dorm beds ready to standardize (first 25 of ${migrationList.length}):`);
             console.table(migrationList.slice(0, 25));
             console.log("%cTo migrate these in the database, run: %cmigrateDatabaseRoomFormats(false)", "color: #64748b;", "color: #10b981; font-weight: bold;");
         } else {
-            console.log("%c✓ All dorm and private room assignments are 100% compliant!", "color: #10b981; font-weight: bold;");
+            console.log("%c✓ 100% of dorm beds and private rooms are compliant!", "color: #10b981; font-weight: bold;");
         }
 
         return { compliantCount, unassignedCount, migrationCount: migrationList.length, migrationList };
@@ -54,8 +157,8 @@ export function getCanonicalDormId(rawRoom, property = 'swims_resort') {
 }
 
 /**
- * ONE-CLICK MIGRATOR: Updates legacy dorm strings in Firestore to canonical '№ 01'.
- * @param {boolean} dryRun - If true, previews changes without writing to Firestore.
+ * Updates legacy dorm strings in Firestore to canonical '№ 01'.
+ * Set dryRun = false to perform live writes.
  */
 export async function migrateDatabaseRoomFormats(dryRun = true) {
     if (dryRun) {
@@ -63,14 +166,17 @@ export async function migrateDatabaseRoomFormats(dryRun = true) {
         return auditDatabaseRoomFormats();
     }
 
-    const confirmed = window.confirm("Are you sure you want to standardize all legacy dorm bed numbers in Firestore? A rolling backup will be created first.");
-    if (!confirmed) return console.log("Migration cancelled by user.");
+    const confirmed = window.confirm("Are you sure you want to standardize all legacy dorm bed numbers in Firestore?");
+    if (!confirmed) {
+        console.log("Migration cancelled by user.");
+        return;
+    }
 
     console.log("%c[MIGRATION ACTIVE] Standardizing dorm numbers...", "color: #3b82f6; font-weight: bold;");
 
     try {
         const staffSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
-        const batchSize = 400; // Firestore batch limit is 500
+        const batchSize = 400;
         let currentBatch = writeBatch(db);
         let batchOpCount = 0;
         let totalUpdated = 0;
@@ -105,7 +211,16 @@ export async function migrateDatabaseRoomFormats(dryRun = true) {
                     await currentBatch.commit();
                     currentBatch = writeBatch(db);
                     batchOpCount = 0;
-                    console.log(`... committed ${totalUpdated} updates`); } } }  if (batchOpCount > 0) { await currentBatch.commit(); }  console.log(`\%c✓ SUCCESS: Migrated ${totalUpdated} booking records to canonical '№' format!`, "color: #10b981; font-weight: bold; font-size: 14px;");
+                    console.log(`... committed ${totalUpdated} updates`);
+                }
+            }
+        }
+
+        if (batchOpCount > 0) {
+            await currentBatch.commit();
+        }
+
+        console.log(`%c✓ SUCCESS: Migrated ${totalUpdated} booking records to canonical '№' format!`, "color: #10b981; font-weight: bold; font-size: 14px;");
         return auditDatabaseRoomFormats();
 
     } catch (err) {
@@ -113,7 +228,6 @@ export async function migrateDatabaseRoomFormats(dryRun = true) {
     }
 }
 
-// Window Bridge for DevTools console execution
 if (typeof window !== 'undefined') {
     window.auditDatabaseRoomFormats = auditDatabaseRoomFormats;
     window.migrateDatabaseRoomFormats = migrateDatabaseRoomFormats;
