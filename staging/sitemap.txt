@@ -54,9 +54,8 @@
 │   └── cm-auditor.js         (Discrepancy checker & missing booking auditor)
 │
 └── setup/
-    ├── setup-wizard.js       (5-step stepper navigation, verification & launch)
-    ├── setup-profile.js      (Property info, timezone, currency, logo uploaders)
-    ├── setup-rooms.js        (Room compiler, canonical № IDs, drag-and-drop sort)
-    ├── setup-deactivation.js (Booking audit, relocation wizard, deactivation guard)
-    ├── setup-mapping.js      (Channex room type & primary rate plan mapper)
-    └── setup-pricing.js      (Rate plan presets, baseline prices, FMP schedule)
+    ├── setup-wizard.js       (The Orchestrator: 5-step stepper, validation, Firestore save/load)
+    ├── setup-profile.js      (Step 1: General info, currency, logos, payments & add-ons)
+    ├── setup-rooms.js        (Step 2: Room compiler, canonical № IDs, drag-sort, relocation & deactivation)
+    ├── setup-mapping.js      (Step 3: Channex room types & primary rate plan mapping/creation)
+    └── setup-pricing.js      (Step 4: Base rate anchors, channel multipliers, refundable markups, event curve)
