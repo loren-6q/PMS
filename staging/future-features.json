@@ -1,0 +1,35 @@
+{
+  "system": "Wild & Wandering PMS Backlog & Feature Registry",
+  "version": "1.0.0",
+  "lastUpdated": "2026-11-01",
+  "features": [
+    {
+      "id": "FEAT-001",
+      "category": "PMS Folio & Status",
+      "title": "Smart Status Validation Warnings on Save",
+      "description": "Trigger non-blocking confirmation dialogs when status conflicts with dates: 'HERE' but check-in is in the future; 'FUTURE' but check-in is in the past; 'TOCHARGE' but balance due is 0.",
+      "status": "planned"
+    },
+    {
+      "id": "FEAT-002",
+      "category": "PMS Folio Actions",
+      "title": "Consecutive Stay Back-to-Back Auto-Merge Detector",
+      "description": "Detect when a guest has two back-to-back reservations (Leg 1 check-out == Leg 2 check-in) and present a one-click 'Merge Consecutive Bookings' prompt in the folio header.",
+      "status": "planned"
+    },
+    {
+      "id": "FEAT-003",
+      "category": "Accounting & Ledger",
+      "title": "Itemized Nightly Rate Ledger Breakdown",
+      "description": "Expand the Total Price input into an optional day-by-day rate table showing the exact rate applied for each night (standard rate, weekend markup, FMP peak rate).",
+      "status": "planned"
+    },
+    {
+      "id": "FEAT-004",
+      "category": "Operations",
+      "title": "Housekeeping & Bed Cleanliness State Matrix",
+      "description": "Add clean/dirty/inspected toggle states to bed rows on the calendar grid, updating automatically when a booking status cycles to 'LEFT'.",
+      "status": "planned"
+    }
+  ]
+}
