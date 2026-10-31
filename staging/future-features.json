@@ -1,6 +1,6 @@
 {
   "system": "Wild & Wandering PMS Backlog & Feature Registry",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "lastUpdated": "2026-11-01",
   "features": [
     {
@@ -50,6 +50,13 @@
       "category": "Guest Communications",
       "title": "Smart Email Communication Engine",
       "description": "Convert manual email status pills (SENT, FMP?, SPECIAL) into an integrated templating engine that generates personalized confirmation emails based on dates, source OTA, and room type.",
+      "status": "planned"
+    },
+    {
+      "id": "FEAT-008",
+      "category": "Guest CRM & Identity",
+      "title": "Human-Supervised Universal Guest CRM & Multi-Identity Ledger",
+      "description": "Dynamic guest profile aggregator with human-in-the-loop verification: 1) Suggests potential duplicate/returning guest profiles using Levenshtein distance on names, phone digits, or passport numbers; 2) Front desk staff must explicitly approve or reject suggested associations; 3) Approved profiles store historical multi-identity aliases (newest email/phone/passport first without deleting older records); 4) Allows manual linking/unlinking of missed past bookings; 5) Generates consolidated multi-stay annual statements.",
       "status": "planned"
     }
   ]
