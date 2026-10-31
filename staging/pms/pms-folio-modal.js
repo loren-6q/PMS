@@ -13,6 +13,7 @@ import {
     calcFinancials 
 } from './pms-folio-ledger.js';
 
+// --- 1. Modal Drag Controller ---
 let isDragging = false;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
@@ -23,7 +24,7 @@ export function initModalDrag() {
     if (!modalContent || !headerBtn) return;
 
     headerBtn.onmousedown = (e) => {
-        if (e.target.closest('button, input, select, textarea, i')) return;
+        if (e.target.closest('button, input, select, textarea, i, .multi-state-btn')) return;
         isDragging = true;
         const rect = modalContent.getBoundingClientRect();
         if (modalContent.style.position !== 'fixed') {
@@ -51,6 +52,7 @@ export function initModalDrag() {
     });
 }
 
+// --- 2. Modal Open, Close & Title Sync ---
 export function openGuestModal(booking = null) {
     const modal = document.getElementById('guest-modal');
     if (!modal) return;
@@ -58,7 +60,9 @@ export function openGuestModal(booking = null) {
     populateFolioForm(booking || {});
     modal.classList.add('active');
     modal.style.display = 'flex';
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
 }
 
 export function closeGuestModal() {
@@ -76,6 +80,7 @@ export function updateHeaderName() {
     if (disp) disp.innerText = `${fn} ${ln}`.trim() || "NEW BOOKING";
 }
 
+// --- 3. Status Cycler & Multi-State Pills ---
 export function cycleStatus() {
     const sBtn = document.getElementById('status-cycle-btn');
     if (!sBtn) return;
@@ -110,6 +115,7 @@ export function cycleMultiState(el, labels, classes) {
     setMultiState(el.id, cur, labels, classes);
 }
 
+// --- 4. Nights Math & Date Picker Nudging ---
 export function calcNights() {
     const cI = document.getElementById('check-in')?.value;
     const cO = document.getElementById('check-out')?.value;
@@ -118,13 +124,21 @@ export function calcNights() {
     return Math.max(1, Math.round(ms / 86400000));
 }
 
-export function updateNightsDisplay() {
-    const n = calcNights();
+export function updateNightsDisplay(forcedNights = null) {
+    const n = forcedNights !== null ? forcedNights : calcNights();
     const disp = document.getElementById('booking-nights-display');
     if (disp) {
         disp.dataset.nights = n;
         disp.innerText = `${n} Nt${n > 1 ? 's' : ''}`;
     }
+    return n;
+}
+
+export function getStoredNights() {
+    const disp = document.getElementById('booking-nights-display');
+    const n = parseInt(disp?.dataset?.nights, 10);
+    if (!isNaN(n) && n >= 1) return n;
+    return calcNights();
 }
 
 export function nudgeDate(type, deltaDays) {
@@ -148,8 +162,43 @@ export function nudgeDate(type, deltaDays) {
 
     updateNightsDisplay();
     updateAvailableRooms();
+    if (typeof window.calcExtension === 'function') window.calcExtension();
 }
 
+export function handleCheckInPicker(newCheckIn) {
+    if (!newCheckIn) return;
+    const lockedNights = getStoredNights();
+    const d = new Date(newCheckIn + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() + lockedNights);
+    const outEl = document.getElementById('check-out');
+    if (outEl) outEl.value = d.toISOString().split('T')[0];
+    updateNightsDisplay(lockedNights);
+    updateAvailableRooms();
+    if (typeof window.calcExtension === 'function') window.calcExtension();
+}
+
+export function handleCheckOutPicker(newCheckOut) {
+    if (!newCheckOut) return;
+    const lockedNights = getStoredNights();
+    const d = new Date(newCheckOut + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() - lockedNights);
+    const inEl = document.getElementById('check-in');
+    if (inEl) inEl.value = d.toISOString().split('T')[0];
+    updateNightsDisplay(lockedNights);
+    updateAvailableRooms();
+    if (typeof window.calcExtension === 'function') window.calcExtension();
+}
+
+export function adjustPax(delta) {
+    const el = document.getElementById('pax-count');
+    if (!el) return;
+    let val = Math.max(1, (parseInt(el.value, 10) || 1) + delta);
+    el.value = val;
+    calcFinancials();
+    if (typeof window.calcExtension === 'function') window.calcExtension();
+}
+
+// --- 5. Room Dropdown Generator with Collision Guards ---
 export function updateAvailableRooms() {
     const cI = document.getElementById('check-in')?.value;
     const cO = document.getElementById('check-out')?.value;
@@ -212,17 +261,18 @@ export function addRoomSelect(initialVal = "") {
         }
         const opt = document.createElement('option');
         opt.value = r.id;
-        const bunkArrow = (r.bunk === 'top' || r.bed === 'top') ? ' ↑' : ((r.bunk === 'bottom' || r.bed === 'bottom') ? ' ↓' : '');
+        const bunkArrow = (r.bunk === 'top' || r.bed === 'top') ? ' ↑' : ((r.bunk === 'bottom' || r.bunk === 'bot' || r.bed === 'bottom' || r.bed === 'bot') ? ' ↓' : '');
         opt.innerText = `${r.id}${bunkArrow}`;
         if (optGroup) optGroup.appendChild(opt);
     });
 
+    // Preserve original/legacy room assignment if not in active room list
     if (initialVal) {
         const exists = Array.from(sel.options).some(o => o.value === initialVal);
         if (!exists) {
             const preserved = document.createElement('option');
             preserved.value = initialVal;
-            preserved.innerText = `${initialVal} (Preserved)`;
+            preserved.innerText = `⚠️ ${initialVal} (Preserved)`;
             sel.appendChild(preserved);
         }
     }
@@ -245,6 +295,65 @@ export function addRoomSelect(initialVal = "") {
     updateAvailableRooms();
 }
 
+// --- 6. Itinerary Stripe (Linked Booking Switcher) ---
+export function renderItineraryStripe(s) {
+    const stripe = document.getElementById('itinerary-stripe');
+    if (!stripe) return;
+    if (!s || !s.linkedId) {
+        stripe.classList.add('hidden');
+        stripe.innerHTML = '';
+        return;
+    }
+
+    const curProp = window.currentPropertyId || 'swims_resort';
+    const legs = (window.staff || []).filter(x => {
+        const xProp = (x.property || 'swims_resort').toLowerCase();
+        return xProp === curProp.toLowerCase() && x.linkedId === s.linkedId && x.status !== 'cancelled' && x.status !== 'noshow';
+    }).sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+
+    if (legs.length <= 1) {
+        stripe.classList.add('hidden');
+        stripe.innerHTML = '';
+        return;
+    }
+
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const formatCompactDate = (dIn, dOut) => {
+        if (!dIn || !dOut) return '--';
+        const iD = new Date(dIn + "T12:00:00Z"), oD = new Date(dOut + "T12:00:00Z");
+        const iM = months[iD.getUTCMonth()], oM = months[oD.getUTCMonth()];
+        const iDay = String(iD.getUTCDate()).padStart(2, '0');
+        const oDay = String(oD.getUTCDate()).padStart(2, '0');
+        return iM === oM ? `${iDay}-${oDay}${iM}` : `${iDay}${iM}-${oDay}${oM}`;
+    };
+
+    let html = `<div class="flex items-center gap-1.5 flex-wrap">`;
+    html += `<i data-lucide="link" class="!w-3.5 !h-3.5 text-slate-400 shrink-0 mr-0.5"></i>`;
+
+    legs.forEach((leg, idx) => {
+        const isCurrent = leg.id === s.id;
+        const rList = Array.isArray(leg.rooms) && leg.rooms.length ? leg.rooms : (leg.room ? [leg.room] : []);
+        const rStr = rList.filter(Boolean).join(',') || 'Unassigned';
+        const dateStr = formatCompactDate(leg.checkIn, leg.checkOut);
+
+        if (idx > 0) html += `<span class="text-slate-600 font-black text-xs select-none">|</span>`;
+
+        html += `
+            <button type="button" onclick="window.editStaff('${leg.id}')" class="px-2 py-0.5 rounded text-xs font-black uppercase transition-colors cursor-pointer flex items-center gap-1 shrink-0 ${isCurrent ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-400' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}" title="Switch to Leg ${idx + 1}">
+                ${isCurrent ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>' : ''}
+                <span>${dateStr} ${rStr}</span>
+            </button>
+        `;
+    });
+
+    html += `</div>`;
+    stripe.innerHTML = html;
+    stripe.classList.remove('hidden');
+    stripe.style.display = 'flex';
+    if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
+}
+
+// --- 7. Master Form Populator ---
 export function populateFolioForm(b = {}) {
     const isNew = !b.id;
     const form = document.getElementById('guest-form');
@@ -323,6 +432,9 @@ export function populateFolioForm(b = {}) {
     setMultiState('rating-btn', !b.rating || b.rating === 'none' ? 0 : (b.rating === 'good' ? 1 : 2), ['FEEDBACK: --', 'FEEDBACK: ✔ GOOD', 'FEEDBACK: ❌ BAD'], ['text-slate-400', 'bg-green-100 text-green-700 border-green-400', 'bg-red-100 text-red-700 border-red-400']);
     setMultiState('ext-btn', b.extended ? 1 : 0, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400']);
 
+    // Itinerary Stripe
+    renderItineraryStripe(b);
+
     updateHeaderName();
     updateNightsDisplay();
     calcFinancials();
@@ -333,9 +445,12 @@ export function populateFolioForm(b = {}) {
         if (el) el.style.visibility = isNew ? 'hidden' : 'visible';
     });
 
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
 }
 
+// --- 8. Window Global Bridge ---
 if (typeof window !== 'undefined') {
     window.openGuestModal = openGuestModal;
     window.closeGuestModal = closeGuestModal;
@@ -345,7 +460,12 @@ if (typeof window !== 'undefined') {
     window.nudgeDate = nudgeDate;
     window.calcNights = calcNights;
     window.updateNightsDisplay = updateNightsDisplay;
+    window.handleCheckInPicker = handleCheckInPicker;
+    window.handleCheckOutPicker = handleCheckOutPicker;
+    window.adjustPax = adjustPax;
     window.addRoomSelect = addRoomSelect;
+    window.updateAvailableRooms = updateAvailableRooms;
+    window.renderItineraryStripe = renderItineraryStripe;
     window.populateFolioForm = populateFolioForm;
     window.populateStaffForm = populateFolioForm;
 }
