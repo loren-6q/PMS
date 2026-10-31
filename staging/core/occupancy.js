@@ -6,7 +6,7 @@
 // --- 1. Status Classifications & High-Contrast Palette ---
 export const PMS_STATUS = {
     OCCUPYING: ['here', 'future', 'new', 'blocked'],
-    NON_OCCUPYING: ['cancelled', 'noshow', 'unconfirmed', 'charged', 'tocharge', 'vol', 'left'],
+    NON_OCCUPYING: ['cancelled', 'noshow', 'unconfirmed', 'charged', 'tocharge', 'vol', 'left', 'early'],
     SPECIAL: 'special'
 };
 
@@ -15,6 +15,7 @@ export const STATUS_CYCLE = [
     { val: 'future', bg: '#7fc6f5', txt: '#1e293b', label: 'FUTURE' },
     { val: 'here', bg: '#dcfce7', txt: '#14532d', label: 'HERE' },
     { val: 'left', bg: '#aba39d', txt: '#1e293b', label: 'LEFT' },
+    { val: 'early', bg: '#f97316', txt: '#ffffff', label: 'EARLY OUT' },
     { val: 'cancelled', bg: '#1e293b', txt: '#fca5a5', label: 'CANCELLED' },
     { val: 'noshow', bg: '#94a3b8', txt: '#334155', label: 'NO-SHOW' },
     { val: 'special', bg: '#fef08a', txt: '#1e293b', label: 'SPECIAL' },
