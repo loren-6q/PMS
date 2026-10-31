@@ -1,345 +1,577 @@
 <!-- ==========================================================================
      pms.html - Front Desk Property Management System (PMS)
      Wild & Wandering Property Management System
+     Hosted at: https://loren-6q.github.io/PMS/pms.html
      ========================================================================== -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>W&W Front Desk PMS</title>
+    <title>Wild & Wandering PMS</title>
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        window.addEventListener('error', function(e) {
+            console.error("PMS Unmasked Error:", {
+                message: e.message,
+                filename: e.filename,
+                lineno: e.lineno,
+                colno: e.colno,
+                error: e.error
+            });
+        }, true);
+    </script>
+    <!-- Core PMS Scripts -->
+    <script src="./pms/pms-folio.js"></script>
+    <script src="./pms/pms-tm30.js"></script>
+    <script src="./pms/pms-db.js"></script>
+    <script src="./pms/pms-calendar.js"></script>
+    <script src="./pms/pms-booking.js"></script>
+    <script src="./parser/parser-engine.js" type="module"></script>
+    <script src="./pms/pms-engine.js" type="module"></script>
     <link rel="stylesheet" href="./style.css">
 </head>
 
 <body class="bg-slate-100 p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
-    <!-- Boot Loading Overlay -->
-    <div id="boot-loader" class="loading-overlay">
-        <div class="spinner"></div>
-        <div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4">
-            <span id="sync-status">Connecting to PMS Database...</span>
-        </div>
-    </div>
-
-    <!-- Alert Modal -->
-    <div id="custom-alert" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 text-center">
-            <div id="modal-title" class="bg-slate-900 p-2 text-white font-bold uppercase text-xs tracking-widest">Notification</div>
-            <div class="p-6">
-                <p id="custom-alert-msg" class="font-black text-slate-700 leading-tight text-sm whitespace-pre-wrap mb-6"></p>
-                <div class="flex gap-2 justify-center">
-                    <button id="custom-alert-cancel" onclick="document.getElementById('custom-alert').classList.remove('active')" class="hidden px-5 py-2 rounded font-black text-xs uppercase bg-slate-200 text-slate-700 cursor-pointer">Cancel</button>
-                    <button id="custom-alert-confirm" onclick="document.getElementById('custom-alert').classList.remove('active')" class="px-8 py-2 rounded font-black text-xs uppercase bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer">Okay</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div id="boot-loader" class="loading-overlay"><div class="spinner"></div><div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4"><span id="sync-status">Authenticating...</span></div></div>
 
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
         <!-- TOP NAVBAR -->
-        <header class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50 unselectable w-full">
+        <div class="bg-white px-1 sm:px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50 unselectable w-full">
+            
             <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
-                <a href="index.html" class="flex flex-col min-w-0 mr-1 hover:brightness-110 transition-all cursor-pointer">
-                    <img id="main-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="W&W" class="h-8 sm:h-10 object-contain">
+                <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
+                    <img id="main-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
                 </a>
                 
-                <div class="flex bg-slate-100 rounded p-0.5 items-center gap-0.5 border border-slate-200">
-                    <button id="tab-dash" onclick="window.switchTab('dashboard')" class="tab-btn" title="Dashboard"><i data-lucide="camera" size="14"></i> <span class="hidden md:inline">Dashboard</span></button>
-                    <button id="tab-cal" onclick="window.switchTab('calendar')" class="tab-btn active" title="Calendar"><i data-lucide="calendar-days" size="14"></i> <span class="hidden md:inline">Calendar</span></button>
-                    <button id="tab-db" onclick="window.switchTab('database')" class="tab-btn" title="Database"><i data-lucide="table" size="14"></i> <span class="hidden md:inline">Database</span></button>
+                <div class="flex bg-slate-100 rounded sm:rounded-lg p-0.5 sm:p-1 items-center gap-0.5 shrink-0 border border-slate-200">
+                    <button id="tab-dash" onclick="window.switchTab('dashboard')" class="tab-btn !p-1 sm:!p-2" title="Dashboard"><i data-lucide="camera" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                    <button id="tab-cal" onclick="window.switchTab('calendar')" class="tab-btn active !p-1 sm:!p-2" title="Calendar"><i data-lucide="calendar-days" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                    <button id="tab-db" onclick="window.switchTab('database')" class="tab-btn !p-1 sm:!p-2" title="Database"><i data-lucide="table" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
                 </div>
-
-                <select id="main-property-switcher" onchange="window.location.search = '?p=' + this.value" class="bg-slate-50 text-indigo-700 font-black uppercase text-xs rounded px-2 py-1 border border-slate-300 outline-none cursor-pointer">
-                </select>
             </div>
 
-            <!-- Date Controls for Calendar -->
-            <div id="context-tools-cal" class="flex items-center gap-1 shrink-1 min-w-0">
-                <div class="flex items-center bg-slate-100 p-0.5 rounded border border-slate-200">
-                    <button onclick="window.prevPeriod()" class="p-1 hover:bg-white rounded cursor-pointer"><i data-lucide="chevron-left" size="14"></i></button>
-                    <select id="jump-month-select" class="bg-transparent font-black text-indigo-700 outline-none text-xs cursor-pointer w-24 text-center px-1" onchange="window.jumpToMonth(this.value)"></select>
-                    <button onclick="window.nextPeriod()" class="p-1 hover:bg-white rounded cursor-pointer"><i data-lucide="chevron-right" size="14"></i></button>
+            <div id="context-tools-cal" class="flex items-center gap-1 sm:gap-1 shrink-1 transition-opacity min-w-0">
+                <div class="flex items-center bg-slate-100 p-0 sm:p-0.5 rounded border border-slate-200 shrink-1 min-w-0">
+                    <button onclick="window.prevPeriod()" class="p-0.5 sm:p-1 hover:bg-white rounded cursor-pointer shrink-0"><i data-lucide="chevron-left" class="!w-3 !h-3 sm:!w-4 sm:!h-4"></i></button>
+                    <select id="jump-month-select" class="bg-transparent font-black text-blue-600 outline-none text-[9px] sm:text-xs cursor-pointer w-[60px] sm:w-[100px] text-center px-0 shrink-1 min-w-0" onchange="window.jumpToMonth(this.value)"></select>
+                    <button onclick="window.nextPeriod()" class="p-0.5 sm:p-1 hover:bg-white rounded cursor-pointer shrink-0"><i data-lucide="chevron-right" class="!w-3 !h-3 sm:!w-4 sm:!h-4"></i></button>
                 </div>
-                <button onclick="window.goToday()" class="px-2.5 py-1 bg-white border border-slate-300 rounded font-black text-xs uppercase hover:bg-slate-50 cursor-pointer shadow-2xs">Today</button>
+                <button onclick="window.goToday()" class="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-white border border-slate-300 rounded font-bold text-[9px] sm:text-xs uppercase hover:bg-slate-50 shrink-0 h-[22px] sm:h-[28px] cursor-pointer shadow-sm">Today</button>
             </div>
 
-            <!-- Utilities: Search, Import, Tools Menu -->
-            <div class="flex items-center gap-1.5 shrink-0 ml-auto">
-                <div class="relative flex items-center">
-                    <i data-lucide="search" size="13" class="absolute left-2 text-slate-400"></i>
-                    <input type="text" id="guest-search" placeholder="FIND GUEST / ID..." oninput="window.handleSearch(this.value)" class="pl-6 pr-2 py-1 w-28 sm:w-36 bg-slate-50 border border-slate-300 rounded font-bold text-xs uppercase outline-none focus:bg-white focus:ring-1 focus:ring-indigo-500">
+            <div class="flex items-center gap-0.5 sm:gap-2 shrink-0 ml-auto relative min-w-0">
+                <div id="search-jump-btn" onclick="window.jumpToSearchMatch()" class="hidden items-center bg-orange-100 text-orange-700 px-1 sm:px-2 py-0.5 sm:py-1 rounded font-black text-[9px] sm:text-xs uppercase cursor-pointer hover:bg-orange-200 shrink-0 border border-orange-300">
+                    <span id="match-counter">Match?</span>
                 </div>
 
-                <button onclick="window.openEmailParserModal()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase rounded shadow-xs flex items-center gap-1 cursor-pointer transition-colors" title="Import OTA confirmation email or text">
-                    <i data-lucide="file-input" size="14"></i>
-                    <span class="hidden sm:inline">Import</span>
-                </button>
+                <button onclick="window.toggleSearchMode()" class="p-1 sm:hidden text-slate-500 hover:text-blue-600 bg-slate-100 rounded shrink-0 cursor-pointer"><i data-lucide="search" class="!w-4 !h-4"></i></button>
 
-                <a href="cm.html" class="p-1.5 text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 rounded shadow-2xs" title="Open Channel Manager"><i data-lucide="zap" size="14"></i></a>
-                <a href="setup.html" class="p-1.5 text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 rounded shadow-2xs" title="Open Setup Wizard"><i data-lucide="settings" size="14"></i></a>
+                <div id="search-container" class="hidden sm:flex absolute sm:relative right-0 top-10 sm:top-auto bg-slate-800 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none shadow-2xl sm:shadow-none border sm:border-none border-slate-700 sm:border-transparent z-[100] sm:z-auto w-[220px] sm:w-28 md:w-36 shrink-0 group">
+                    <i data-lucide="search" class="absolute left-4 sm:left-2 top-3 sm:top-1.5 text-slate-400 !w-3 !h-3 sm:!w-[14px] sm:!h-[14px] hidden sm:block"></i>
+                    <input type="text" id="guest-search" placeholder="FIND GUEST / ID..." oninput="window.handleSearch(this.value)" class="pl-2 sm:pl-7 pr-7 py-1.5 sm:py-1 w-full bg-white border border-slate-300 rounded font-black text-[10px] sm:text-xs uppercase outline-none focus:ring-2 focus:ring-blue-500 shadow-inner sm:shadow-none">
+                    <button onclick="window.clearSearchAndClose()" class="absolute right-4 sm:right-2 top-3 sm:top-1.5 text-slate-400 hover:text-slate-600 cursor-pointer"><i data-lucide="x" class="!w-3 !h-3 sm:!w-[14px] sm:!h-[14px]"></i></button>
+                </div>
+                
+                <div class="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-0 sm:ml-1">
+                    <button onclick="window.openEmailParserModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-purple-600 bg-white border border-slate-200 hover:bg-purple-50 rounded shadow-sm transition-colors cursor-pointer" title="Import Booking"><i data-lucide="mail-plus" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                    <a href="scan.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-amber-600 bg-white border border-slate-200 hover:bg-amber-50 rounded shadow-sm transition-colors cursor-pointer" title="Mobile Passport Scanner"><i data-lucide="scan" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
+                    <button onclick="window.openPriceCheckModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-pink-600 bg-white border border-slate-200 hover:bg-pink-50 rounded shadow-sm transition-colors cursor-pointer" title="Price Check"><i data-lucide="tag" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                    <a href="sync.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-blue-600 bg-white border border-slate-200 hover:bg-blue-50 rounded shadow-sm transition-colors cursor-pointer" title="OTA Sync"><i data-lucide="refresh-cw" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
+                    <a href="tm30.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-emerald-600 bg-white border border-slate-200 hover:bg-emerald-50 rounded shadow-sm transition-colors cursor-pointer" title="TM30 Dashboard"><i data-lucide="id-card" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
+
+                    <div class="relative multi-select-container shrink-0 ml-0 sm:ml-1">
+                        <button onclick="window.toggleMultiSelect('app-menu-dropdown', this)" class="bg-slate-900 text-white p-1 sm:p-1.5 rounded shadow-md hover:bg-slate-800 transition-colors flex items-center justify-center cursor-pointer">
+                            <i data-lucide="menu" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i>
+                        </button>
+                        <div id="app-menu-dropdown" class="multi-select-dropdown absolute mt-1 w-56 bg-white border border-slate-300 rounded-lg shadow-2xl z-50 hidden right-0 left-auto text-slate-800 whitespace-normal overflow-hidden">
+                            <div class="p-3 border-b border-slate-200 bg-slate-50">
+                                <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Active Property</label>
+                                <select id="main-property-switcher" onchange="window.handlePropertySwitch(this.value)" class="w-full bg-white text-slate-800 font-black uppercase text-xs rounded px-2 py-1.5 outline-none cursor-pointer border border-slate-300 shadow-sm focus:ring-2 focus:ring-blue-500">
+                                </select>
+                            </div>
+                            <div class="py-1">
+                                <a href="index.html" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="layout-grid" size="14" class="text-sky-600"></i> App Portal</a>
+                                <a href="loud_csv_importer.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="sheet" size="14" class="text-indigo-600"></i> Bulk Import</a>
+                                <a href="accounting.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="dollar-sign" size="14" class="text-green-600"></i> Accounting</a>
+                                <a href="cm.html" target="_blank" id="channex-sync-btn" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-blue-700 hidden"><i data-lucide="zap" size="14" class="text-blue-600"></i> Channel Manager</a>
+                                <div class="border-t border-slate-100 my-1"></div>
+                                <a href="setup.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-slate-600"><i data-lucide="settings" size="14" class="text-purple-600"></i> Settings</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </header>
+        </div>
 
-        <!-- VIEW 1: DASHBOARD -->
-        <div id="dashboard-view" class="flex-1 flex flex-col min-h-0 bg-slate-100 overflow-y-auto hidden gap-2 p-2">
-            <div class="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                <h2 class="font-black text-slate-800 uppercase tracking-widest text-sm flex items-center gap-2">
-                    <i data-lucide="layout-dashboard" class="text-indigo-600"></i> Operational Snapshot <span id="dash-date-display" class="text-xs font-mono font-bold text-slate-400">--</span>
-                </h2>
-                <button onclick="window.renderDashboard()" class="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"><i data-lucide="refresh-cw" size="14"></i></button>
+        <!-- DASHBOARD VIEW -->
+        <div id="dashboard-view" class="flex-1 flex flex-col min-h-0 bg-slate-100 overflow-y-auto hidden gap-2 p-0 sm:p-2">
+            <div class="flex items-center justify-between bg-white p-2 rounded-lg shadow-sm border border-slate-200 shrink-0">
+                <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg flex items-center gap-2"><i data-lucide="layout-dashboard" class="text-blue-600"></i> Today's Snapshot <span id="dash-date-display" class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded ml-2">--</span></h2>
+                <div class="flex items-center gap-2">
+                    <button onclick="window.globalPassportSync()" class="text-[10px] font-black uppercase bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-200 hover:bg-purple-200 transition-colors flex items-center gap-1 shadow-sm cursor-pointer"><i data-lucide="scan-line" size="12"></i> Global Sync</button>
+                    <button onclick="window.renderDashboard()" class="p-1 hover:bg-slate-100 rounded text-slate-500 cursor-pointer"><i data-lucide="refresh-cw" size="16"></i></button>
+                </div>
             </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 pb-4">
-                <div class="dash-card">
-                    <div class="dash-title"><span>Arrivals</span> <span id="dash-arr-count" class="bg-emerald-100 text-emerald-800 px-1.5 rounded">0</span></div>
-                    <div id="dash-arr-list" class="space-y-1"></div>
-                </div>
-                <div class="dash-card">
-                    <div class="dash-title"><span>Departures</span> <span id="dash-dep-count" class="bg-rose-100 text-rose-800 px-1.5 rounded">0</span></div>
-                    <div id="dash-dep-list" class="space-y-1"></div>
-                </div>
-                <div class="dash-card">
-                    <div class="dash-title"><span>Stay-Overs</span> <span id="dash-stay-count" class="bg-indigo-100 text-indigo-800 px-1.5 rounded">0</span></div>
-                    <div id="dash-stay-list" class="space-y-1"></div>
-                </div>
-                <div class="dash-card border-orange-200 bg-orange-50/40">
-                    <div class="dash-title text-orange-800 border-orange-200"><span>Action Items</span></div>
-                    <div id="dash-act-list" class="space-y-1"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-start pb-4">
+                <div class="dash-card"><div class="dash-title flex justify-between"><span><i data-lucide="log-in" size="12" class="inline text-green-500 mb-0.5"></i> Arrivals</span> <span id="dash-arr-count" class="bg-green-100 text-green-700 px-1.5 rounded">0</span></div><div id="dash-arr-list" class="space-y-1 text-xs"></div></div>
+                <div class="dash-card"><div class="dash-title flex justify-between"><span><i data-lucide="log-out" size="12" class="inline text-red-500 mb-0.5"></i> Departures</span> <span id="dash-dep-count" class="bg-red-100 text-red-700 px-1.5 rounded">0</span></div><div id="dash-dep-list" class="space-y-1 text-xs"></div></div>
+                <div class="dash-card"><div class="dash-title flex justify-between"><span><i data-lucide="home" size="12" class="inline text-blue-500 mb-0.5"></i> Stay-Overs</span> <span id="dash-stay-count" class="bg-blue-100 text-blue-700 px-1.5 rounded">0</span></div><div id="dash-stay-list" class="space-y-1 text-xs"></div></div>
+                <div class="flex flex-col gap-2">
+                    <div class="dash-card bg-indigo-50 border-indigo-200">
+                        <div class="dash-title flex justify-between text-indigo-700 border-indigo-200"><span><i data-lucide="tags" size="12" class="inline mb-0.5"></i> Today's Rates</span><button onclick="window.openPriceCheckModal()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer border border-indigo-700 flex items-center gap-1 transition-colors"><i data-lucide="calculator" size="10"></i> CHECK</button></div>
+                        <div id="dash-rates-list" class="text-[11px] font-black space-y-0.5 text-indigo-900 mt-1 flex flex-col"></div>
+                        <div class="mt-2 pt-2 border-t border-indigo-100 flex flex-col gap-1 shrink-0"><textarea id="rates-textarea" rows="2" class="input-base font-mono text-[9px] whitespace-pre !p-1 bg-white border-indigo-200" placeholder="Paste BDC search text here to update..."></textarea><button onclick="window.parseBdcPublicRates()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer w-full uppercase font-black transition-colors">UPDATE DAILY RATES</button></div>
+                    </div>
+                    <div class="dash-card border-orange-200 bg-orange-50/30"><div class="dash-title flex justify-between text-orange-600 border-orange-200"><span><i data-lucide="alert-triangle" size="12" class="inline mb-0.5"></i> Action Items</span></div><div id="dash-act-list" class="space-y-1 text-xs max-h-[160px] overflow-y-auto no-scrollbar"></div></div>
                 </div>
             </div>
         </div>
 
-        <!-- VIEW 2: CALENDAR -->
+        <!-- CALENDAR VIEW -->
         <div id="calendar-view" class="flex-1 flex flex-col min-h-0 unselectable">
-            <div id="calendar-scroll-container" class="flex-1 bg-white sm:rounded shadow-2xs border border-slate-300 overflow-auto relative overscroll-none">
-                <div id="calendar-header-months" class="timeline-grid sticky top-0 z-[60] bg-slate-800 border-b border-slate-700 h-[26px]"></div>
-                <div id="calendar-header-days" class="timeline-grid sticky top-[26px] z-[50] bg-slate-100 border-b border-slate-400 h-[28px]"></div>
+            <div id="calendar-scroll-container" class="flex-1 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-auto relative overscroll-none">
+                <div id="calendar-header-months" class="timeline-grid sticky top-0 z-[60] bg-slate-800 shadow-sm border-b border-slate-700 h-[26px] box-border"></div>
+                <div id="calendar-header-days" class="timeline-grid sticky top-[26px] z-[50] bg-slate-100 shadow-sm border-b border-slate-400 h-[28px] box-border"></div>
                 <div id="timeline-body" class="relative pb-2"></div>
             </div>
-        </div>
 
-        <!-- VIEW 3: DATABASE TABLE -->
-        <div id="database-view" class="flex-1 flex flex-col min-h-0 bg-white sm:rounded border border-slate-300 overflow-hidden hidden">
-            <!-- Filter Toolbar -->
-            <div class="p-2 bg-slate-100 border-b border-slate-200 flex flex-wrap gap-2 items-center text-xs unselectable shrink-0">
-                <input type="text" id="db-filter-name" placeholder="GUEST / ID..." oninput="window.renderDatabase()" class="input-base !w-32 bg-white">
-                
-                <select id="db-filter-preset" onchange="window.applyDbPreset(this.value)" class="input-base !w-32 bg-white cursor-pointer">
-                    <option value="all">ALL DATES</option>
-                    <option value="today">TODAY</option>
-                    <option value="tomorrow">TOMORROW</option>
-                    <option value="this_week">THIS WEEK</option>
-                    <option value="this_month">THIS MONTH</option>
-                </select>
+            <!-- COLLAPSIBLE LEGEND DRAWER (MANAGED BY pms-calendar.js) -->
+            <div id="legend-toggle-bar" onclick="window.toggleLegendDrawer()" class="bg-slate-900 text-white px-3 py-1.5 flex items-center justify-between cursor-pointer border-t border-slate-700 text-[10px] font-black uppercase tracking-wider shrink-0 select-none shadow-md z-40 hover:bg-slate-800 transition-colors">
+                <div class="flex items-center gap-1.5">
+                    <i data-lucide="info" size="13" class="text-blue-400"></i>
+                    <span>PMS Legend & Key</span>
+                </div>
+                <div class="flex items-center gap-1 text-[9px] text-slate-300 font-bold">
+                    <span id="legend-toggle-label">Show Key</span>
+                    <i data-lucide="chevron-up" id="legend-toggle-chevron" size="14" class="transition-transform duration-200"></i>
+                </div>
+            </div>
 
-                <div class="flex items-center gap-1">
-                    <input type="date" id="db-filter-start" onchange="window.renderDatabase()" class="input-base !w-28 bg-white">
-                    <span class="text-slate-400 font-bold">to</span>
-                    <input type="date" id="db-filter-end" onchange="window.renderDatabase()" class="input-base !w-28 bg-white">
+            <footer id="calendar-legend" class="mt-0 bg-white p-1.5 sm:p-2 sm:rounded-b-lg border-x border-b border-slate-200 flex flex-col gap-y-1.5 shrink-0 text-[10px] md:text-[11px] select-text cursor-default shadow-lg max-h-[50vh] overflow-y-auto" style="display: none;">
+                <!-- ROW 1: 11 Status Cycles -->
+                <div class="flex items-center gap-1.5 flex-wrap justify-center select-text">
+                    <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-1">Status:</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#ec4899; color:#fff;">NEW</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#7fc6f5; color:#1e293b;">FUTURE</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#dcfce7; color:#14532d;">HERE</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#aba39d; color:#1e293b;">LEFT</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs line-through select-text" style="background:#e5e7eb; color:#1e293b;">CANCELLED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#e5e7eb; color:#64748b;">NO-SHOW</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#fef08a; color:#1e293b;">SPECIAL</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#475569; color:#fff;">BLOCKED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#0f172a; color:#fbbf24;">CHARGED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#fbcfe8; color:#831843;">VOL</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#f3e8ff; color:#581c87;">UNCONFIRMED</span>
                 </div>
 
-                <select id="db-filter-due" onchange="window.renderDatabase()" class="input-base !w-28 bg-white cursor-pointer">
-                    <option value="">ALL BALANCES</option>
-                    <option value="zero">PAID / ZERO DUE</option>
-                    <option value="owes">OWES BALANCE</option>
-                </select>
+                <!-- ROW 2: Bar Border States & Keyframe Alerts -->
+                <div class="flex items-center gap-x-2.5 gap-y-1.5 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-700 select-text">
+                    <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-0.5">Alerts:</span>
+                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-red-500 cursor-help" title="Owes Balance (solid red border)">OWES</div>
+                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-dashed border-red-500 cursor-help" title="Bad Credit Card (dashed red border)">BAD CC</div>
+                    <div class="h-3 w-[1px] bg-slate-200 hidden sm:block"></div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase checkin-today cursor-help" title="Check-in Today">Arrive Today</div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase late-checkin cursor-help" title="Should have checked in already">LATE</div>
+                    <div class="h-3 w-[1px] bg-slate-200 hidden sm:block"></div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-today cursor-help" title="Check-out Today">Depart Today</div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-past cursor-help" title="Overdue Departure (Guest still marked 'here' past checkout date)">Late Out</div>
+                </div>
 
-                <button onclick="window.bulkDelete()" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase rounded cursor-pointer ml-auto shadow-2xs">
-                    Delete Filtered
-                </button>
+                <!-- ROW 3: OTA Channels -->
+                <div class="flex items-center gap-x-3 gap-y-1 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-600 select-text">
+                    <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-0.5">Channels:</span>
+                    <div class="flex items-center gap-1" title="Booking.com"><div class="bg-[#003580] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">B</div><span class="text-slate-700">BDC</span></div>
+                    <div class="flex items-center gap-1" title="Hostelworld"><div class="bg-[#F15A24] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">H</div><span class="text-slate-700">HW</span></div>
+                    <div class="flex items-center gap-1" title="Agoda"><div class="bg-[#87B2D6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div><span class="text-slate-700">Agoda</span></div>
+                    <div class="flex items-center gap-1" title="Airbnb"><div class="bg-[#FF5A5F] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div><span class="text-slate-700">Airbnb</span></div>
+                    <div class="flex items-center gap-1" title="Expedia"><div class="bg-[#facc15] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]"><span class="text-[#003580]">E</span></div><span class="text-slate-700">Expedia</span></div>
+                    <div class="flex items-center gap-1" title="Ctrip / Trip.com"><div class="bg-[#3b82f6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">T</div><span class="text-slate-700">Ctrip</span></div>
+                    <div class="flex items-center gap-1" title="Direct Booking"><div class="bg-emerald-500 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">D</div><span class="text-slate-700">Direct</span></div>
+                    <div class="flex items-center gap-1" title="Walk-in Guest"><div class="bg-slate-600 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">W</div><span class="text-slate-700">Walk-in</span></div>
+                    <div class="flex items-center gap-1" title="Other Source"><div class="bg-slate-700 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">?</div><span class="text-slate-700">Other</span></div>
+                </div>
+
+                <!-- ROW 4: Stay Details, Upgrades, Feedback, and Mail Lifecycle -->
+                <div class="flex items-center gap-x-3 gap-y-1.5 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-600 select-text">
+                    <div class="flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 cursor-help" title="Italics = Refundable ; Not Italics = Non-Refundable">
+                        <span class="italic font-black text-slate-800 text-[10px]">Refundable ital.</span>
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 cursor-help" title="Stay has been extended">
+                        <span id="leg-svg-ext" class="w-4 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Extended</span>
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 cursor-help" title="Linked booking - multiple rooms, room change, etc.">
+                        <span id="leg-svg-link" class="w-4 h-4 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Linked</span>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Upgrade:</span>
+                        <div class="flex items-center gap-1" title="Free Upgrade">
+                            <span id="leg-svg-upFree" class="w-3.5 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Free</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Paid Upgrade">
+                            <span id="leg-svg-upPaid" class="w-3.5 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Paid</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Feedback:</span>
+                        <div class="flex items-center gap-1" title="Good Guest Feedback">
+                            <span id="leg-svg-fbGood" class="w-4 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Good</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Bad / Warning Feedback">
+                            <span id="leg-svg-fbBad" class="w-4 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Bad</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Mail:</span>
+                        <div class="flex items-center gap-1" title="Booking confirmation sent">
+                            <span id="leg-svg-mailConf" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">SENT</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Booking confirmation sent (Non-FMP / standard)">
+                            <span id="leg-svg-mailNotFmp" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">NOT FMP</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="FMP date check email sent (Arriving/departing near Full Moon Party)">
+                            <span id="leg-svg-mailPre" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">FMP?</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Guest confirmed non-FMP attendance or updated dates">
+                            <span id="leg-svg-mailPreConf" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">CONF.</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Special instructions email sent">
+                            <span id="leg-svg-mailSpec" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">SPECIAL</span>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </div>
+
+        <!-- DATABASE VIEW -->
+        <div id="database-view" class="flex-1 flex flex-col min-h-0 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-hidden hidden">
+            <div class="p-2 bg-slate-100 border-b border-slate-300 flex flex-wrap gap-2 items-center text-xs unselectable shrink-0">
+                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-room-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-36 cursor-pointer"><span id="db-room-label" class="truncate">ALL ROOMS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-room-dropdown" class="multi-select-dropdown absolute mt-1 w-48 bg-white border border-slate-300 rounded shadow-lg z-50 hidden"></div></div>
+                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-source-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-source-label" class="truncate">ALL SOURCES</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-source-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"></div></div>
+                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-status-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-status-label" class="truncate">ALL STATUS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-status-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"></div></div>
+                <div class="flex items-center gap-1"><select id="db-filter-preset" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none cursor-pointer text-slate-700" onchange="window.applyDbPreset(this.value)"><option value="custom">CUSTOM DATES</option><option value="today">TODAY</option><option value="tomorrow">TOMORROW</option><option value="this_week">THIS WEEK</option><option value="next_week">NEXT WEEK</option><option value="this_month">THIS MONTH</option><option value="next_month">NEXT MONTH</option></select><input type="date" id="db-filter-start" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none" onchange="window.renderDatabase(); $('db-filter-preset').value='custom';"><span class="font-bold text-slate-400">to</span><input type="date" id="db-filter-end" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none" onchange="window.renderDatabase(); $('db-filter-preset').value='custom';"></div>
+                <input type="text" id="db-filter-name" placeholder="GUEST / ID..." class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none focus:ring-2 focus:ring-blue-500 uppercase w-32" oninput="window.renderDatabase()">
+                <div class="flex items-center gap-1 border border-slate-300 bg-white rounded px-1"><span class="text-slate-400 font-black pl-1">฿</span><input type="number" id="db-filter-min" placeholder="MIN" class="w-16 py-1 font-bold outline-none text-center" oninput="window.renderDatabase()"><span class="text-slate-300">-</span><input type="number" id="db-filter-max" placeholder="MAX" class="w-16 py-1 font-bold outline-none text-center" oninput="window.renderDatabase()"></div>
+                <select id="db-filter-due" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 outline-none cursor-pointer" onchange="window.renderDatabase()"><option value="">ALL BALANCES</option><option value="zero">PAID / ZERO DUE</option><option value="owes">OWES BALANCE</option></select>
             </div>
 
-            <div class="flex-1 overflow-auto">
-                <table class="w-full text-left border-collapse min-w-[900px] text-xs">
-                    <thead class="bg-slate-200 sticky top-0 z-10 border-b border-slate-300 text-[10px] font-black text-slate-700 uppercase tracking-wider unselectable">
-                        <tr>
-                            <th class="p-2 border-r border-slate-300 cursor-pointer" onclick="window.sortDatabase('name')">Guest Name / ID</th>
-                            <th class="p-2 border-r border-slate-300 cursor-pointer" onclick="window.sortDatabase('source')">Source</th>
-                            <th class="p-2 border-r border-slate-300 cursor-pointer" onclick="window.sortDatabase('checkIn')">Dates</th>
-                            <th class="p-2 border-r border-slate-300 cursor-pointer" onclick="window.sortDatabase('room')">Room</th>
-                            <th class="p-2 border-r border-slate-300 text-right cursor-pointer" onclick="window.sortDatabase('totalPrice')">Total</th>
-                            <th class="p-2 border-r border-slate-300 text-right cursor-pointer" onclick="window.sortDatabase('paid')">Paid</th>
-                            <th class="p-2 border-r border-slate-300 text-right cursor-pointer" onclick="window.sortDatabase('due')">Due</th>
-                            <th class="p-2 text-center cursor-pointer" onclick="window.sortDatabase('status')">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="database-body" class="divide-y divide-slate-100"></tbody>
-                </table>
-            </div>
+            <div class="p-2 bg-slate-100 border-b border-slate-300 flex justify-between items-center shrink-0 unselectable"><h2 class="font-black text-slate-700 uppercase tracking-widest text-sm">Database Editor</h2><button id="admin-bulk-delete" onclick="window.bulkDelete()" class="hidden btn-action bg-orange-600 whitespace-nowrap"><i data-lucide="list-x" size="14"></i> Delete Visible</button></div>
+            <div class="flex-1 overflow-auto"><table class="w-full text-left border-collapse min-w-[900px]"><thead class="bg-slate-200 sticky top-0 z-10 shadow-sm border-b border-slate-300 text-xs font-black text-slate-600 uppercase tracking-wider unselectable"><tr><th class="p-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('name')">Name / ID <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('source')">Source <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('checkIn')">Dates <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 w-[120px]" onclick="window.sortDatabase('room')">Room <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 text-right cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('totalPrice')">Total <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 text-right cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('paid')">Paid <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 text-right cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('due')">Due <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('status')">Status <i data-lucide="arrow-up-down" size="10" class="inline"></i></th></tr></thead><tbody id="database-body" class="text-xs"></tbody></table></div>
         </div>
     </div>
 
-    <!-- MODAL 1: GUEST FOLIO -->
+    <!-- GUEST MODAL -->
     <div id="guest-modal" class="modal-overlay">
         <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800">
-            <div id="modal-header-btn" class="bg-slate-900 p-2.5 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable">
+            <div id="modal-header-btn" class="bg-slate-900 p-2 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable" onmousedown="window.startDrag(event)">
                 <div class="flex items-center gap-2 pointer-events-none">
-                    <i data-lucide="user" size="16"></i>
-                    <h3 id="modal-guest-name-display" class="text-sm font-black uppercase tracking-tight">NEW BOOKING</h3>
+                    <i data-lucide="user" size="18"></i>
+                    <h3 id="modal-guest-name-display" class="text-lg font-black uppercase tracking-tighter leading-none">NEW BOOKING</h3>
                 </div>
-                <button type="button" onclick="window.closeGuestModal()" class="p-1 hover:bg-rose-600 rounded cursor-pointer leading-none">&times;</button>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="event.stopPropagation(); window.closeGuestModal()" class="p-1 hover:bg-red-500 rounded cursor-pointer"><i data-lucide="x" size="20"></i></button>
+                </div>
             </div>
 
-            <form id="guest-form" class="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar text-xs">
-                <input type="hidden" id="guest-id">
-                <input type="hidden" id="guest-status-hidden" value="future">
+            <div id="itinerary-stripe" class="hidden bg-slate-900 border-b border-slate-700 px-2 py-1 text-white flex items-center justify-between gap-1 overflow-x-auto no-scrollbar unselectable text-xs"></div>
 
-                <div class="grid grid-cols-2 gap-2">
-                    <div><label class="field-label">First Name</label><input type="text" id="first-name" class="input-base uppercase" oninput="window.updateHeaderName()"></div>
-                    <div><label class="field-label">Last Name</label><input type="text" id="last-name" class="input-base uppercase" oninput="window.updateHeaderName()"></div>
+            <form id="guest-form" class="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 no-scrollbar relative">
+                <input type="hidden" id="guest-id"> <input type="hidden" id="created-at"> <input type="hidden" id="created-by"> <input type="hidden" id="guest-status-hidden">
+                
+                <div class="section-header rounded-t-md mt-1" onclick="window.toggleSection('guest-profile-section', 'profile-chevron')">
+                    <span>Guest Details</span>
+                    <i data-lucide="chevron-down" id="profile-chevron" size="14" class="transition-transform duration-200"></i>
+                </div>
+                
+                <div id="guest-profile-section" class="bg-slate-50 p-1.5 border-x border-b border-slate-200 rounded-b-md space-y-1.5 mt-0 block">
+                    <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">First Name</label><input type="text" id="first-name" class="input-base uppercase" oninput="window.updateHeaderName()"></div><div><label class="field-label">Last Name</label><input type="text" id="last-name" required class="input-base uppercase" oninput="window.updateHeaderName()"></div></div>
+                    <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">Phone</label><input type="text" id="phone" class="input-base"></div><div><label class="field-label">Country</label><input type="text" id="guest-country" class="input-base" list="country-list" placeholder="Type country..."><datalist id="country-list"></datalist></div></div>
+                    <div><label class="field-label">Email</label><input type="text" id="email" class="input-base" oninput="window.checkEmailProxy(this.value)"></div>
+                    <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200 mt-1 unselectable overflow-x-auto no-scrollbar"><div id="email-confirm-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['CONFIRM: --', 'SENT: FMP', 'SENT: NOT FMP'], ['text-slate-400 border-slate-300', 'bg-blue-100 text-blue-700 border-blue-400', 'bg-slate-200 text-slate-700 border-slate-400'])">CONFIRM: --</div><div id="email-prepost-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['PRE/POST: --', 'PRE/POST: SENT', 'PRE/POST: CONF'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400'])">PRE/POST: --</div><div id="email-special-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['SPECIAL: --', 'SPECIAL: SENT'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400'])">SPECIAL: --</div></div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-2">
-                    <div><label class="field-label">Phone</label><input type="text" id="phone" class="input-base"></div>
-                    <div><label class="field-label">Country</label><input type="text" id="guest-country" class="input-base"></div>
-                </div>
-
-                <div><label class="field-label">Email</label><input type="text" id="email" class="input-base"></div>
-
-                <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-200">
-                    <div><label class="field-label">Check-in</label><input type="date" id="check-in" class="input-base"></div>
-                    <div><label class="field-label">Check-out</label><input type="date" id="check-out" class="input-base"></div>
-                    <div>
-                        <label class="field-label">Status</label>
-                        <button type="button" id="status-cycle-btn" onclick="window.cycleStatus()" class="w-full py-1 text-[10px] font-black uppercase rounded shadow-2xs cursor-pointer border"></button>
-                    </div>
-                </div>
-
-                <div><label class="field-label">Booked Type</label><input type="text" id="booked-type" class="input-base"></div>
-
-                <div>
-                    <div class="flex justify-between items-center mb-0.5">
-                        <label class="field-label text-indigo-700">Assigned Rooms / Beds</label>
-                        <button type="button" onclick="window.addRoomSelect()" class="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">+ ADD</button>
-                    </div>
-                    <div id="assigned-rooms-container" class="space-y-1"></div>
-                </div>
-
-                <!-- Financial Balance Strip -->
-                <div class="bg-slate-100 p-2 rounded border border-slate-200 space-y-2 mt-2">
-                    <div class="flex justify-between items-end">
-                        <div>
-                            <div class="flex items-center gap-1">
-                                <label class="field-label">Total Price</label>
-                                <button type="button" onclick="window.openAddChargeModal()" class="text-[9px] font-black text-indigo-600 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-200 cursor-pointer">+ ADD ฿</button>
+                <div class="bg-slate-50 p-1.5 rounded-md border border-slate-200 space-y-1.5">
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-[130px] shrink-0">
+                            <label class="field-label text-center mb-0.5">IN</label>
+                            <div class="flex items-stretch bg-white border border-slate-300 rounded overflow-hidden shadow-sm h-[28px]">
+                                <button type="button" onclick="window.nudgeDate('in', -1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-r border-slate-200 cursor-pointer transition-colors" title="Earlier arrival (-1d)">◀</button>
+                                <input type="date" id="check-in" required class="w-full text-[11px] font-black px-0 text-center bg-transparent border-none outline-none cursor-pointer" onchange="window.handleCheckInPicker(this.value)">
+                                <button type="button" onclick="window.nudgeDate('in', 1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-l border-slate-200 cursor-pointer transition-colors" title="Later arrival (+1d)">▶</button>
                             </div>
-                            <div class="flex items-center text-sm font-black">฿<input type="number" step="any" id="total-price" value="0" class="w-20 ml-1 bg-transparent outline-none font-black text-sm" oninput="window.calcFinancials()"></div>
                         </div>
-                        <div class="text-right">
-                            <label class="field-label text-slate-400">Paid</label>
-                            <span id="display-paid" class="text-xs font-black text-emerald-600 font-mono">฿0</span>
+
+                        <div class="w-[130px] shrink-0">
+                            <label class="field-label text-center mb-0.5">OUT</label>
+                            <div class="flex items-stretch bg-white border border-slate-300 rounded overflow-hidden shadow-sm h-[28px]">
+                                <button type="button" onclick="window.nudgeDate('out', -1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-r border-slate-200 cursor-pointer transition-colors" title="Earlier departure (-1d)">◀</button>
+                                <input type="date" id="check-out" required class="w-full text-[11px] font-black px-0 text-center bg-transparent border-none outline-none cursor-pointer" onchange="window.handleCheckOutPicker(this.value)">
+                                <button type="button" onclick="window.nudgeDate('out', 1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-l border-slate-200 cursor-pointer transition-colors" title="Later departure (+1d)">▶</button>
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <label class="field-label text-rose-500">Balance Due</label>
-                            <span id="display-due" class="text-sm font-black text-rose-600 font-mono">฿0</span>
+
+                        <div class="flex-1 min-w-0 flex flex-col items-center">
+                            <label class="field-label text-center mb-0.5">#NTS</label>
+                            <div id="booking-nights-display" class="w-full h-[28px] bg-indigo-50 border border-indigo-200 rounded font-black text-xs text-indigo-700 flex items-center justify-center shadow-sm select-none tracking-wide" title="Stay Duration">1 Nt</div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200">
+                        <button type="button" id="tm30-sync-btn" onclick="window.syncTM30()" class="w-full h-[28px] bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300 rounded text-[9px] sm:text-[10px] font-black uppercase flex items-center justify-center gap-1 transition-colors cursor-pointer truncate px-1 shadow-sm" title="Scan Passports">
+                            <i data-lucide="scan-face" size="13" class="shrink-0"></i>
+                            <span class="truncate">TM30 SYNC</span>
+                        </button>
+
+                        <div class="w-full h-[28px] bg-white border border-slate-300 rounded shadow-sm flex items-center justify-between px-0.5 text-[10px] font-black text-slate-600 select-none" title="PAX">
+                            <button type="button" onclick="window.adjustPax(-1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer hover:bg-slate-100 rounded-l">◀</button>
+                            <div class="flex items-center gap-0.5">
+                                <i data-lucide="users" size="11" class="text-slate-400 shrink-0"></i>
+                                <input type="number" id="pax-count" value="1" min="1" class="w-6 text-center text-xs font-black border-none outline-none p-0 bg-transparent" oninput="window.calcFinancials(); if(window.calcExtension) window.calcExtension();">
+                                <span class="text-[8px] sm:text-[9px] uppercase font-black text-slate-400">PAX</span>
+                            </div>
+                            <button type="button" onclick="window.adjustPax(1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer hover:bg-slate-100 rounded-r">▶</button>
+                        </div>
+
+                        <button type="button" id="status-cycle-btn" onclick="window.cycleStatus()" class="w-full h-[28px] rounded text-[10px] font-black uppercase text-center shadow-sm cursor-pointer border unselectable transition-colors truncate px-1"></button>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                    <div><label class="field-label">Booked Type</label><input type="text" id="booked-type" class="input-base" placeholder="--"></div>
+                    <div>
+                        <div class="flex justify-between items-end mb-1">
+                            <label class="field-label text-blue-600 mb-0">Assigned Rooms</label>
+                            <button type="button" onclick="window.addRoomSelect()" class="text-[9px] font-black uppercase text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded hover:bg-blue-200 border border-blue-200 shadow-sm transition-colors cursor-pointer">+ ADD</button>
+                        </div>
+                        <div id="assigned-rooms-container" class="max-h-[110px] overflow-y-auto no-scrollbar border border-slate-200 rounded p-1 bg-slate-50 flex flex-col gap-1 w-full shadow-inner"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-1 pb-1 unselectable">
+                    <div id="refund-btn" class="multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border border-slate-300 text-slate-400" data-state="0" onclick="window.cycleMulti(this, ['REFUNDABILITY: ?', 'NON-REFUNDABLE', 'REFUNDABLE'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400'])">REFUNDABILITY: ?</div>
+                    <div id="upgrade-btn" class="multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border border-slate-300 text-slate-400" data-state="0" onclick="window.cycleMulti(this, ['NO UPGRADE', 'FREE UPGRADE', 'PAID UPGRADE'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400', 'bg-green-100 text-green-700 border-green-400'])">NO UPGRADE</div>
+                    <div id="rating-btn" class="multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border border-slate-300 text-slate-400" data-state="0" onclick="window.cycleMulti(this, ['FEEDBACK: --', 'FEEDBACK: ✔ GOOD', 'FEEDBACK: ❌ BAD'], ['text-slate-400', 'bg-green-100 text-green-700 border-green-400', 'bg-red-100 text-red-700 border-red-400'])">FEEDBACK: --</div>
+                    <div id="ext-btn" class="multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border border-slate-300 text-slate-400" data-state="0" onclick="window.cycleMulti(this, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400'])">NOT EXTENDED</div>
+                </div>
+
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('ext-section', 'ext-chevron')"><span class="text-blue-700"><i data-lucide="calendar-plus" size="14" class="inline mb-0.5 mr-1"></i>Extend Stay</span><i data-lucide="chevron-down" id="ext-chevron" size="14" class="transition-transform duration-200" style="transform: rotate(-90deg);"></i></div>
+                <div id="ext-section" class="bg-blue-50/50 p-1.5 border-x border-b border-blue-200 rounded-b-md mt-0 hidden" style="display: none;">
+                    <div class="flex gap-1.5 items-end"><div class="w-16"><label class="field-label">Days</label><input type="number" id="ext-days" value="1" min="1" class="input-base text-center" oninput="if(window.calcExtension) window.calcExtension()"></div><div class="w-24"><label class="field-label text-slate-400 text-[10px]">Avg Daily ฿</label><input type="text" id="ext-avg-rate" class="input-base text-slate-500" readonly></div><div class="flex-1"><label class="field-label text-blue-600">Ext. Price ฿</label><input type="number" id="ext-price" class="input-base text-blue-700"></div></div>
+                    <div class="flex gap-1.5 mt-1.5"><button type="button" id="btn-check-bdc" onclick="window.checkBdcPrice()" class="flex-1 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-black uppercase rounded border border-slate-300 flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"><i data-lucide="external-link" size="12"></i> Check Rate</button><button type="button" onclick="window.confirmExtension()" class="flex-1 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded shadow-sm flex items-center justify-center gap-1 transition-colors cursor-pointer"><i data-lucide="plus-circle" size="12"></i> Add Extension</button></div>
+                </div>
+
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('fin-section', 'fin-chevron')"><span>Payments</span><i data-lucide="chevron-down" id="fin-chevron" size="14" class="transition-transform duration-200"></i></div>
+                <div id="fin-section" class="bg-slate-100 p-1.5 border-x border-b border-slate-200 rounded-b-md mt-0 block">
+                    <div class="flex justify-between items-end border-b-2 border-slate-200 pb-1 mb-1">
+                        <div class="flex gap-2 items-end">
+                            <div>
+                                <div class="flex items-center justify-between"><label class="field-label">Total Price</label><button type="button" onclick="window.openChargeModal()" class="text-[9px] font-black text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-1 py-0.5 rounded cursor-pointer ml-1.5 shadow-sm transition-colors border border-blue-200">+ ADD ฿</button></div>
+                                <div class="flex items-center text-lg font-black">฿<input type="number" id="total-price" value="0" step="0.01" class="w-20 p-0 ml-1 border-none bg-transparent outline-none focus:ring-0 text-lg font-black" oninput="if(window.calcFinancials) window.calcFinancials(); if(window.calcExtension) window.calcExtension();"></div>
+                            </div>
+                            <div class="mb-0.5"><label class="field-label text-[9px] text-slate-400 cursor-pointer hover:text-blue-500" onclick="$('net-price').focus()">Net Est.</label><div class="flex items-center text-xs font-bold text-slate-500">฿<input type="number" id="net-price" value="0" step="0.01" class="w-14 p-0 ml-0.5 border-none bg-transparent outline-none focus:ring-0 text-xs font-bold text-slate-500 transition-all focus:bg-white focus:border focus:border-blue-300 focus:rounded px-1" oninput="if(window.overrideNet) window.overrideNet()"></div></div>
+                        </div>
+                        <div class="flex gap-3 text-right items-center">
+                            <div><label class="field-label">Paid</label><div class="font-black text-lg text-green-600 leading-none" id="display-paid">฿0</div></div>
+                            <div><label class="field-label !text-red-500">Due</label><div class="font-black text-red-600 text-xl leading-none transition-all" id="display-due">฿0</div></div>
+                            <div class="flex flex-col items-center justify-center ml-1 border-l border-slate-300 pl-1.5 cursor-pointer unselectable" onclick="window.toggleBadCC()"><span class="text-[9px] font-black leading-none text-slate-400">BAD</span><span class="text-[9px] font-black leading-none text-slate-400">CC</span><div id="bad-cc-box" class="w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center"></div></div>
                         </div>
                     </div>
 
-                    <div id="extra-charges-wrapper" class="hidden border-t border-slate-200 pt-1 space-y-1">
-                        <div class="flex justify-between text-[9px] font-black uppercase text-amber-800">
-                            <span>Add-ons</span><span id="extra-charges-total">+฿0</span>
+                    <div id="extra-charges-wrapper" class="hidden mb-1.5 p-1 bg-amber-50/70 border border-amber-200 rounded">
+                        <div class="flex justify-between items-center text-[9px] font-black uppercase text-amber-800 mb-1 px-1 border-b border-amber-200 pb-0.5">
+                            <span>Itemized Add-ons / Services</span>
+                            <span id="extra-charges-total" class="text-amber-900">+฿0</span>
                         </div>
                         <div id="extra-charges-list" class="space-y-1"></div>
                     </div>
 
-                    <div id="payments-list" class="space-y-1 border-t border-slate-200 pt-1"></div>
-                    <button type="button" onclick="window.addPaymentRow()" class="w-full py-1 border border-dashed border-slate-300 rounded font-black text-[10px] text-slate-600 uppercase hover:bg-white cursor-pointer">+ Add Payment</button>
+                    <div id="payments-list" class="space-y-1 mb-1.5"></div>
+                    <button type="button" onclick="window.addPaymentRow()" class="w-full py-1 border-2 border-dashed border-slate-300 rounded text-xs font-black text-slate-500 hover:bg-slate-200 uppercase unselectable transition-colors cursor-pointer">+ ADD PAYMENT</button>
                 </div>
 
-                <div>
-                    <label class="field-label">Notes</label>
-                    <textarea id="guest-notes" rows="2" class="input-base resize-none"></textarea>
-                </div>
-
-                <div class="grid grid-cols-3 gap-2">
-                    <div><label class="field-label">Source</label><input type="text" id="booking-source" class="input-base uppercase"></div>
-                    <div><label class="field-label">Booking Date</label><input type="date" id="booking-date" class="input-base"></div>
-                    <div><label class="field-label">OTA Book ID</label><input type="text" id="booking-id" class="input-base"></div>
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('meta-section', 'meta-chevron')"><span>More</span><i data-lucide="chevron-down" id="meta-chevron" size="14" class="transition-transform duration-200"></i></div>
+                <div id="meta-section" class="bg-slate-50 p-1.5 border-x border-b border-slate-200 rounded-b-md mt-0 block">
+                    <label class="field-label mb-0 border-b border-slate-200 pb-1">Guest Notes</label>
+                    <textarea id="guest-notes" class="smart-notes w-full bg-white border border-slate-300 font-bold text-xs p-1.5 mb-1.5 rounded outline-none focus:ring-2 focus:ring-blue-500 mt-1" placeholder="NOTES..."></textarea>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <div class="flex flex-col"><label class="field-label">Source</label><select id="booking-source" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none uppercase cursor-pointer" onchange="if(window.calcFinancials) window.calcFinancials()"><option value="direct">DIRECT</option><option value="booking.com">BOOKING.COM</option><option value="agoda">AGODA</option><option value="hostelworld">HOSTELWORLD</option><option value="airbnb">AIRBNB</option><option value="expedia">EXPEDIA</option><option value="ctrip">CTRIP</option><option value="walk-in">WALK-IN</option><option value="other">OTHER</option></select></div>
+                        <div class="flex flex-col"><label class="field-label">Book Date</label><input type="date" id="booking-date" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none"></div>
+                        <div class="flex flex-col"><label class="field-label">Book ID</label><input type="text" id="booking-id" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none" placeholder="ID..."></div>
+                        <div class="flex flex-col col-span-3 mt-0.5 pt-1 border-t border-slate-200"><label class="field-label text-[9px] text-amber-600">Link Code</label><input type="text" id="link-code" class="w-24 text-xs font-black bg-amber-50 border border-amber-200 text-amber-700 rounded px-1 outline-none uppercase text-center" placeholder="----"></div>
+                    </div>
                 </div>
             </form>
-
-            <div class="bg-slate-100 p-2 flex justify-between items-center border-t border-slate-200 rounded-b-lg">
-                <div class="flex items-center gap-1">
-                    <button type="button" onclick="window.requestDelete()" class="btn-tool bg-rose-600 text-white" title="Delete"><i data-lucide="trash-2" size="13"></i></button>
-                    <button type="button" onclick="window.requestDuplicate()" class="btn-tool bg-indigo-50 text-indigo-700 border border-indigo-200" title="Duplicate"><i data-lucide="copy" size="13"></i></button>
-                    <button type="button" onclick="window.requestSplit()" class="btn-tool bg-amber-50 text-amber-800 border border-amber-200" title="Split Stay"><i data-lucide="scissors" size="13"></i></button>
-                    <button type="button" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-50 text-emerald-800 border border-emerald-200" title="Print Invoice"><i data-lucide="receipt" size="13"></i></button>
+            
+            <div class="bg-slate-100 p-2 flex gap-2 justify-between items-center border-t border-slate-300 rounded-b-lg unselectable">
+                <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" id="delete-btn" title="Delete" onclick="window.requestDelete()" class="btn-tool bg-red-600 text-white hover:bg-red-700"><i data-lucide="trash-2" size="14" class="shrink-0"></i></button>
+                    <button type="button" id="split-btn" title="Split" onclick="window.requestSplit()" class="btn-tool bg-orange-100 text-orange-700 hover:bg-orange-200"><i data-lucide="scissors" size="14" class="shrink-0"></i></button>
+                    <button type="button" id="merge-btn" title="Merge" onclick="window.requestMerge()" class="btn-tool bg-indigo-100 text-indigo-700 hover:bg-indigo-200"><i data-lucide="merge" size="14" class="shrink-0"></i></button>
+                    <button type="button" id="dup-btn" title="Duplicate" onclick="window.requestDuplicate()" class="btn-tool bg-blue-100 text-blue-700 hover:bg-blue-200"><i data-lucide="copy" size="14" class="shrink-0"></i></button>
+                    <button type="button" id="hist-btn" title="History" onclick="window.showAuditHistory()" class="btn-tool bg-slate-200 text-slate-700 hover:bg-slate-300"><i data-lucide="clock" size="14" class="shrink-0"></i></button>
+                    <!-- Quick Invoice / Receipt Button -->
+                    <button type="button" id="invoice-btn" title="Print Invoice" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-100 text-emerald-800 hover:bg-emerald-200 cursor-pointer"><i data-lucide="receipt" size="14" class="shrink-0"></i></button>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button type="button" onclick="window.closeGuestModal()" class="px-3 py-1 bg-slate-200 text-slate-700 font-black rounded uppercase text-xs cursor-pointer">Cancel</button>
-                    <button type="button" onclick="window.saveBooking()" id="save-guest-btn" class="px-5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded uppercase text-xs shadow-xs cursor-pointer">Save</button>
+                    <button type="button" onclick="window.closeGuestModal()" class="px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-200 text-xs font-black uppercase transition-colors cursor-pointer">Cancel</button>
+                    <button type="button" onclick="window.saveGuest()" id="save-guest-btn" class="px-5 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase shadow-sm transition-colors flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="check" size="14"></i>
+                        <span>SAVE</span>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MODAL 2: IMPORT OTA CONFIRMATION TEXT -->
-    <div id="email-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col">
-            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
-                <span>Import OTA Confirmation Email / Extranet Text</span>
-                <button type="button" onclick="document.getElementById('email-modal').classList.remove('active')" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
-            </div>
-            <div class="p-3 text-xs space-y-2">
-                <textarea id="email-textarea" rows="8" class="input-base font-mono text-[11px] whitespace-pre" placeholder="Paste Booking.com, Hostelworld, Agoda, Expedia, or Airbnb confirmation text here..."></textarea>
-            </div>
-            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
-                <button type="button" onclick="document.getElementById('email-modal').classList.remove('active')" class="px-3 py-1 bg-slate-200 text-slate-700 font-black uppercase rounded cursor-pointer">Cancel</button>
-                <button type="button" onclick="window.parseEmail()" class="px-4 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase rounded shadow-xs cursor-pointer">Extract & Import</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL 3: SPLIT STAY -->
-    <div id="split-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-xs w-full overflow-hidden border-2 border-slate-800 text-center">
-            <div class="bg-slate-900 p-2.5 text-white font-bold uppercase text-xs">Split Stay</div>
-            <div class="p-4 space-y-3 text-xs">
-                <p class="font-bold text-slate-600">Select the date to split this stay into two linked segments:</p>
-                <input type="date" id="split-date" class="input-base text-center font-bold">
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" onclick="document.getElementById('split-modal').classList.remove('active')" class="px-3 py-1 bg-slate-200 text-slate-700 font-bold rounded uppercase">Cancel</button>
-                    <button type="button" onclick="window.confirmSplit()" class="px-4 py-1 bg-amber-600 text-white font-black rounded uppercase shadow-xs">Split</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL 4: ADD-ON CHARGE -->
+    <!-- UTILITY MODALS -->
+    <!-- 1. Extra Charges Modal -->
     <div id="charge-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-xs w-full overflow-hidden border-2 border-slate-800 text-left">
-            <div class="bg-slate-900 p-2.5 text-white font-bold uppercase text-xs flex justify-between">
-                <span>Add Extra Charge</span>
-                <button type="button" onclick="document.getElementById('charge-modal').classList.remove('active')" class="text-slate-400">&times;</button>
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span>Add Extra Charge / Item</span>
+                <button type="button" onclick="window.closeModal('charge-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
             </div>
             <div class="p-3 space-y-2 text-xs">
                 <div>
-                    <label class="field-label">Description</label>
-                    <input type="text" id="charge-desc" placeholder="e.g. Ferry Ticket, Laundry..." class="input-base uppercase font-bold">
+                    <label class="field-label">Description / Item</label>
+                    <input type="text" id="charge-desc" placeholder="e.g. Ferry Ticket, Laundry..." class="input-base font-bold uppercase">
                 </div>
+                <div class="flex flex-wrap gap-1" id="charge-presets-container"></div>
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label class="field-label">Amount (฿)</label>
-                        <input type="number" step="any" id="charge-amount" class="input-base font-black text-emerald-700">
+                        <input type="number" id="charge-amount" step="any" placeholder="0" class="input-base font-black text-emerald-700">
                     </div>
                     <div>
                         <label class="field-label">Date</label>
-                        <input type="date" id="charge-date" class="input-base">
+                        <input type="date" id="charge-date" class="input-base font-bold">
                     </div>
                 </div>
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" onclick="document.getElementById('charge-modal').classList.remove('active')" class="px-3 py-1 bg-slate-200 text-slate-700 font-bold rounded uppercase">Cancel</button>
-                    <button type="button" onclick="window.confirmAddCharge()" class="px-4 py-1 bg-emerald-600 text-white font-black rounded uppercase shadow-xs">Add</button>
+            </div>
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="window.closeModal('charge-modal')" class="btn-modal bg-slate-200 text-slate-700 text-xs !py-1 !px-3">Cancel</button>
+                <button type="button" onclick="window.confirmAddCharge()" class="btn-modal bg-emerald-600 text-white text-xs !py-1 !px-4 shadow-sm">Add Charge</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Email Parser Import Modal -->
+    <div id="email-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span>Import Booking Email / Text</span>
+                <button type="button" onclick="window.closeModal('email-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
+            </div>
+            <div class="p-3 text-xs space-y-2">
+                <textarea id="email-textarea" rows="8" class="input-base font-mono text-[11px] whitespace-pre" placeholder="Paste booking confirmation email or text here..."></textarea>
+            </div>
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="window.closeModal('email-modal')" class="btn-modal bg-slate-200 text-slate-700 text-xs !py-1 !px-3">Cancel</button>
+                <button type="button" onclick="if(window.parseEmailBooking) window.parseEmailBooking(); else if(window.parseEmail) window.parseEmail();" class="btn-modal bg-purple-600 text-white text-xs !py-1 !px-4 shadow-sm">Parse & Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Price Check Modal -->
+    <div id="price-check-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-xs w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span>Price Check (BDC)</span>
+                <button type="button" onclick="window.closeModal('price-check-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
+            </div>
+            <div class="p-3 text-xs space-y-2">
+                <div>
+                    <label class="field-label">Check-in</label>
+                    <input type="date" id="pc-checkin" class="input-base font-bold">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="field-label">Nights</label>
+                        <input type="number" id="pc-nights" value="1" min="1" class="input-base text-center font-bold">
+                    </div>
+                    <div>
+                        <label class="field-label">PAX</label>
+                        <input type="number" id="pc-pax" value="1" min="1" class="input-base text-center font-bold">
+                    </div>
+                </div>
+            </div>
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="window.closeModal('price-check-modal')" class="btn-modal bg-slate-200 text-slate-700 text-xs !py-1 !px-3">Cancel</button>
+                <button type="button" onclick="window.runPriceCheck()" class="btn-modal bg-indigo-600 text-white text-xs !py-1 !px-4 shadow-sm">Check BDC</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Alert Modal -->
+    <div id="alert-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm" id="alert-header-title">Attention</div>
+            <div class="p-6 text-center">
+                <p id="alert-message" class="font-black text-slate-700 leading-tight text-md mb-6 whitespace-pre-line"></p>
+                <div class="flex gap-2 justify-center">
+                    <button id="alert-cancel" onclick="window.closeAlert()" class="btn-modal bg-slate-200 text-slate-700 px-6 hidden">Cancel</button>
+                    <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Module Bootstrapper Entry Point -->
-    <script type="module" src="./pms/pms-init.js"></script>
+    <!-- 5. Split Modal -->
+    <div id="split-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Split Booking</div>
+            <div class="p-6 text-center">
+                <p class="font-black text-slate-700 leading-tight text-md mb-4">Split this booking into two segments?</p>
+                <div class="flex gap-2 justify-center">
+                    <button onclick="window.closeModal('split-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button>
+                    <button type="button" onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10">Split</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Merge Modal -->
+    <div id="merge-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Merge Bookings</div>
+            <div class="p-6 text-center">
+                <p class="font-black text-slate-700 leading-tight text-md mb-4">Select a booking to absorb.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Absorbed booking will be deleted!</span></p>
+                <select id="merge-target" class="input-base !text-sm !p-2 mb-6 cursor-pointer"></select>
+                <div class="flex gap-2 justify-center">
+                    <button onclick="window.closeModal('merge-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button>
+                    <button id="merge-confirm-btn" onclick="window.confirmMerge()" class="btn-modal bg-indigo-600 text-white px-10">Merge</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-tooltip"></div>
 </body>
 </html>
