@@ -1,0 +1,1571 @@
+<!-- ==========================================================================
+     pms.html - Front Desk Property Management System (PMS)
+     Wild & Wandering Property Management System
+     Hosted at: https://loren-6q.github.io/PMS/pms.html
+     ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wild & Wandering PMS</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        window.addEventListener('error', function(e) {
+            console.error("PMS Unmasked Error:", {
+                message: e.message,
+                filename: e.filename,
+                lineno: e.lineno,
+                colno: e.colno,
+                error: e.error
+            });
+        }, true);
+    </script>
+    <!-- Core External PMS Modules -->
+    <script src="https://loren-6q.github.io/PMS/pms-core.js" crossorigin="anonymous"></script>
+    <script src="https://loren-6q.github.io/PMS/pms-folio.js" crossorigin="anonymous"></script>
+    <script src="https://loren-6q.github.io/PMS/pms-tm30.js" crossorigin="anonymous"></script>
+    <script src="https://loren-6q.github.io/PMS/pms-db.js" crossorigin="anonymous"></script>
+    <script src="https://loren-6q.github.io/PMS/pms-calendar.js" crossorigin="anonymous"></script>
+    <script src="https://loren-6q.github.io/PMS/pms-booking.js" crossorigin="anonymous"></script>
+    <script src="https://loren-6q.github.io/PMS/parser.js" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
+</head>
+
+<body class="bg-slate-100 p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
+    <div id="boot-loader" class="loading-overlay"><div class="spinner"></div><div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4"><span id="sync-status">Authenticating...</span></div></div>
+
+    <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+        <!-- TOP NAVBAR -->
+        <div class="bg-white px-1 sm:px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50 unselectable w-full">
+            
+            <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+                <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
+                    <img id="main-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
+                </a>
+                
+                <div class="flex bg-slate-100 rounded sm:rounded-lg p-0.5 sm:p-1 items-center gap-0.5 shrink-0 border border-slate-200">
+                    <button id="tab-dash" onclick="window.switchTab('dashboard')" class="tab-btn !p-1 sm:!p-2" title="Dashboard"><i data-lucide="camera" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                    <button id="tab-cal" onclick="window.switchTab('calendar')" class="tab-btn active !p-1 sm:!p-2" title="Calendar"><i data-lucide="calendar-days" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                    <button id="tab-db" onclick="window.switchTab('database')" class="tab-btn !p-1 sm:!p-2" title="Database"><i data-lucide="table" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                </div>
+            </div>
+
+            <div id="context-tools-cal" class="flex items-center gap-1 sm:gap-1 shrink-1 transition-opacity min-w-0">
+                <div class="flex items-center bg-slate-100 p-0 sm:p-0.5 rounded border border-slate-200 shrink-1 min-w-0">
+                    <button onclick="window.prevPeriod()" class="p-0.5 sm:p-1 hover:bg-white rounded cursor-pointer shrink-0"><i data-lucide="chevron-left" class="!w-3 !h-3 sm:!w-4 sm:!h-4"></i></button>
+                    <select id="jump-month-select" class="bg-transparent font-black text-blue-600 outline-none text-[9px] sm:text-xs cursor-pointer w-[60px] sm:w-[100px] text-center px-0 shrink-1 min-w-0" onchange="window.jumpToMonth(this.value)"></select>
+                    <button onclick="window.nextPeriod()" class="p-0.5 sm:p-1 hover:bg-white rounded cursor-pointer shrink-0"><i data-lucide="chevron-right" class="!w-3 !h-3 sm:!w-4 sm:!h-4"></i></button>
+                </div>
+                <button onclick="window.goToday()" class="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-white border border-slate-300 rounded font-bold text-[9px] sm:text-xs uppercase hover:bg-slate-50 shrink-0 h-[22px] sm:h-[28px] cursor-pointer shadow-sm">Today</button>
+            </div>
+
+            <div class="flex items-center gap-0.5 sm:gap-2 shrink-0 ml-auto relative min-w-0">
+                <div id="search-jump-btn" onclick="window.jumpToSearchMatch()" class="hidden items-center bg-orange-100 text-orange-700 px-1 sm:px-2 py-0.5 sm:py-1 rounded font-black text-[9px] sm:text-xs uppercase cursor-pointer hover:bg-orange-200 shrink-0 border border-orange-300">
+                    <span id="match-counter">Match?</span>
+                </div>
+
+                <button onclick="window.toggleSearchMode()" class="p-1 sm:hidden text-slate-500 hover:text-blue-600 bg-slate-100 rounded shrink-0 cursor-pointer"><i data-lucide="search" class="!w-4 !h-4"></i></button>
+
+                <div id="search-container" class="hidden sm:flex absolute sm:relative right-0 top-10 sm:top-auto bg-slate-800 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none shadow-2xl sm:shadow-none border sm:border-none border-slate-700 sm:border-transparent z-[100] sm:z-auto w-[220px] sm:w-28 md:w-36 shrink-0 group">
+                    <i data-lucide="search" class="absolute left-4 sm:left-2 top-3 sm:top-1.5 text-slate-400 !w-3 !h-3 sm:!w-[14px] sm:!h-[14px] hidden sm:block"></i>
+                    <input type="text" id="guest-search" placeholder="FIND GUEST / ID..." oninput="window.handleSearch(this.value)" class="pl-2 sm:pl-7 pr-7 py-1.5 sm:py-1 w-full bg-white border border-slate-300 rounded font-black text-[10px] sm:text-xs uppercase outline-none focus:ring-2 focus:ring-blue-500 shadow-inner sm:shadow-none">
+                    <button onclick="window.clearSearchAndClose()" class="absolute right-4 sm:right-2 top-3 sm:top-1.5 text-slate-400 hover:text-slate-600 cursor-pointer"><i data-lucide="x" class="!w-3 !h-3 sm:!w-[14px] sm:!h-[14px]"></i></button>
+                </div>
+                
+                <div class="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-0 sm:ml-1">
+                    <button onclick="window.openEmailParserModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-purple-600 bg-white border border-slate-200 hover:bg-purple-50 rounded shadow-sm transition-colors cursor-pointer" title="Import Booking"><i data-lucide="mail-plus" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                    <a href="scan.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-amber-600 bg-white border border-slate-200 hover:bg-amber-50 rounded shadow-sm transition-colors cursor-pointer" title="Mobile Passport Scanner"><i data-lucide="scan" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
+                    <button onclick="window.openPriceCheckModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-pink-600 bg-white border border-slate-200 hover:bg-pink-50 rounded shadow-sm transition-colors cursor-pointer" title="Price Check"><i data-lucide="tag" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                    <a href="sync.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-blue-600 bg-white border border-slate-200 hover:bg-blue-50 rounded shadow-sm transition-colors cursor-pointer" title="OTA Sync"><i data-lucide="refresh-cw" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
+                    <a href="tm30.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-emerald-600 bg-white border border-slate-200 hover:bg-emerald-50 rounded shadow-sm transition-colors cursor-pointer" title="TM30 Dashboard"><i data-lucide="id-card" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
+
+                    <div class="relative multi-select-container shrink-0 ml-0 sm:ml-1">
+                        <button onclick="window.toggleMultiSelect('app-menu-dropdown', this)" class="bg-slate-900 text-white p-1 sm:p-1.5 rounded shadow-md hover:bg-slate-800 transition-colors flex items-center justify-center cursor-pointer">
+                            <i data-lucide="menu" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i>
+                        </button>
+                        <div id="app-menu-dropdown" class="multi-select-dropdown absolute mt-1 w-56 bg-white border border-slate-300 rounded-lg shadow-2xl z-50 hidden right-0 left-auto text-slate-800 whitespace-normal overflow-hidden">
+                            <div class="p-3 border-b border-slate-200 bg-slate-50">
+                                <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Active Property</label>
+                                <select id="main-property-switcher" onchange="window.handlePropertySwitch(this.value)" class="w-full bg-white text-slate-800 font-black uppercase text-xs rounded px-2 py-1.5 outline-none cursor-pointer border border-slate-300 shadow-sm focus:ring-2 focus:ring-blue-500">
+                                </select>
+                            </div>
+                            <div class="py-1">
+                                <a href="index.html" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="layout-grid" size="14" class="text-sky-600"></i> App Portal</a>
+                                <a href="loud_csv_importer.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="sheet" size="14" class="text-indigo-600"></i> Bulk Import</a>
+                                <a href="accounting.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black"><i data-lucide="dollar-sign" size="14" class="text-green-600"></i> Accounting</a>
+                                <a href="channelmanager.html" target="_blank" id="channex-sync-btn" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-blue-700 hidden"><i data-lucide="zap" size="14" class="text-blue-600"></i> Channel Manager</a>
+                                <div class="border-t border-slate-100 my-1"></div>
+                                <a href="settings.html" target="_blank" class="flex items-center gap-3 px-4 py-2 hover:bg-slate-100 text-xs font-black text-slate-600"><i data-lucide="settings" size="14" class="text-purple-600"></i> Settings</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD VIEW -->
+        <div id="dashboard-view" class="flex-1 flex flex-col min-h-0 bg-slate-100 overflow-y-auto hidden gap-2 p-0 sm:p-2">
+            <div class="flex items-center justify-between bg-white p-2 rounded-lg shadow-sm border border-slate-200 shrink-0">
+                <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg flex items-center gap-2"><i data-lucide="layout-dashboard" class="text-blue-600"></i> Today's Snapshot <span id="dash-date-display" class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded ml-2">--</span></h2>
+                <div class="flex items-center gap-2">
+                    <button onclick="window.globalPassportSync()" class="text-[10px] font-black uppercase bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-200 hover:bg-purple-200 transition-colors flex items-center gap-1 shadow-sm cursor-pointer"><i data-lucide="scan-line" size="12"></i> Global Sync</button>
+                    <button onclick="window.renderDashboard()" class="p-1 hover:bg-slate-100 rounded text-slate-500 cursor-pointer"><i data-lucide="refresh-cw" size="16"></i></button>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-start pb-4">
+                <div class="dash-card"><div class="dash-title flex justify-between"><span><i data-lucide="log-in" size="12" class="inline text-green-500 mb-0.5"></i> Arrivals</span> <span id="dash-arr-count" class="bg-green-100 text-green-700 px-1.5 rounded">0</span></div><div id="dash-arr-list" class="space-y-1 text-xs"></div></div>
+                <div class="dash-card"><div class="dash-title flex justify-between"><span><i data-lucide="log-out" size="12" class="inline text-red-500 mb-0.5"></i> Departures</span> <span id="dash-dep-count" class="bg-red-100 text-red-700 px-1.5 rounded">0</span></div><div id="dash-dep-list" class="space-y-1 text-xs"></div></div>
+                <div class="dash-card"><div class="dash-title flex justify-between"><span><i data-lucide="home" size="12" class="inline text-blue-500 mb-0.5"></i> Stay-Overs</span> <span id="dash-stay-count" class="bg-blue-100 text-blue-700 px-1.5 rounded">0</span></div><div id="dash-stay-list" class="space-y-1 text-xs"></div></div>
+                <div class="flex flex-col gap-2">
+                    <div class="dash-card bg-indigo-50 border-indigo-200">
+                        <div class="dash-title flex justify-between text-indigo-700 border-indigo-200"><span><i data-lucide="tags" size="12" class="inline mb-0.5"></i> Today's Rates</span><button onclick="window.openPriceCheckModal()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer border border-indigo-700 flex items-center gap-1 transition-colors"><i data-lucide="calculator" size="10"></i> CHECK</button></div>
+                        <div id="dash-rates-list" class="text-[11px] font-black space-y-0.5 text-indigo-900 mt-1 flex flex-col"></div>
+                        <div class="mt-2 pt-2 border-t border-indigo-100 flex flex-col gap-1 shrink-0"><textarea id="rates-textarea" rows="2" class="input-base font-mono text-[9px] whitespace-pre !p-1 bg-white border-indigo-200" placeholder="Paste BDC search text here to update..."></textarea><button onclick="window.parseBdcPublicRates()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer w-full uppercase font-black transition-colors">UPDATE DAILY RATES</button></div>
+                    </div>
+                    <div class="dash-card border-orange-200 bg-orange-50/30"><div class="dash-title flex justify-between text-orange-600 border-orange-200"><span><i data-lucide="alert-triangle" size="12" class="inline mb-0.5"></i> Action Items</span></div><div id="dash-act-list" class="space-y-1 text-xs max-h-[160px] overflow-y-auto no-scrollbar"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CALENDAR VIEW -->
+        <div id="calendar-view" class="flex-1 flex flex-col min-h-0 unselectable">
+            <div id="calendar-scroll-container" class="flex-1 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-auto relative overscroll-none">
+                <div id="calendar-header-months" class="timeline-grid sticky top-0 z-[60] bg-slate-800 shadow-sm border-b border-slate-700 h-[26px] box-border"></div>
+                <div id="calendar-header-days" class="timeline-grid sticky top-[26px] z-[50] bg-slate-100 shadow-sm border-b border-slate-400 h-[28px] box-border"></div>
+                <div id="timeline-body" class="relative pb-2"></div>
+            </div>
+
+            <!-- COLLAPSIBLE LEGEND DRAWER (MANAGED BY pms-calendar.js) -->
+            <div id="legend-toggle-bar" onclick="window.toggleLegendDrawer()" class="bg-slate-900 text-white px-3 py-1.5 flex items-center justify-between cursor-pointer border-t border-slate-700 text-[10px] font-black uppercase tracking-wider shrink-0 select-none shadow-md z-40 hover:bg-slate-800 transition-colors">
+                <div class="flex items-center gap-1.5">
+                    <i data-lucide="info" size="13" class="text-blue-400"></i>
+                    <span>PMS Legend & Key</span>
+                </div>
+                <div class="flex items-center gap-1 text-[9px] text-slate-300 font-bold">
+                    <span id="legend-toggle-label">Show Key</span>
+                    <i data-lucide="chevron-up" id="legend-toggle-chevron" size="14" class="transition-transform duration-200"></i>
+                </div>
+            </div>
+
+            <footer id="calendar-legend" class="mt-0 bg-white p-1.5 sm:p-2 sm:rounded-b-lg border-x border-b border-slate-200 flex flex-col gap-y-1.5 shrink-0 text-[10px] md:text-[11px] select-text cursor-default shadow-lg max-h-[50vh] overflow-y-auto" style="display: none;">
+                <!-- ROW 1: 11 Status Cycles -->
+                <div class="flex items-center gap-1.5 flex-wrap justify-center select-text">
+                    <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-1">Status:</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#ec4899; color:#fff;">NEW</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#7fc6f5; color:#1e293b;">FUTURE</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#dcfce7; color:#14532d;">HERE</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#aba39d; color:#1e293b;">LEFT</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs line-through select-text" style="background:#e5e7eb; color:#1e293b;">CANCELLED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#e5e7eb; color:#64748b;">NO-SHOW</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#fef08a; color:#1e293b;">SPECIAL</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#475569; color:#fff;">BLOCKED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#0f172a; color:#fbbf24;">CHARGED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#fbcfe8; color:#831843;">VOL</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#f3e8ff; color:#581c87;">UNCONFIRMED</span>
+                </div>
+
+                <!-- ROW 2: Bar Border States & Keyframe Alerts -->
+                <div class="flex items-center gap-x-2.5 gap-y-1.5 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-700 select-text">
+                    <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-0.5">Alerts:</span>
+                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-red-500 cursor-help" title="Owes Balance (solid red border)">OWES</div>
+                    <div class="h-4 px-2 rounded flex items-center justify-center text-[9px] font-black text-red-600 bg-red-50 border-[3px] border-dashed border-red-500 cursor-help" title="Bad Credit Card (dashed red border)">BAD CC</div>
+                    <div class="h-3 w-[1px] bg-slate-200 hidden sm:block"></div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase checkin-today cursor-help" title="Check-in Today">Arrive Today</div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase late-checkin cursor-help" title="Should have checked in already">LATE</div>
+                    <div class="h-3 w-[1px] bg-slate-200 hidden sm:block"></div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-today cursor-help" title="Check-out Today">Depart Today</div>
+                    <div class="h-4 px-1.5 rounded flex items-center justify-center text-[9px] font-black uppercase overdue-checkout-past cursor-help" title="Overdue Departure (Guest still marked 'here' past checkout date)">Late Out</div>
+                </div>
+
+                <!-- ROW 3: OTA Channels -->
+                <div class="flex items-center gap-x-3 gap-y-1 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-600 select-text">
+                    <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-0.5">Channels:</span>
+                    <div class="flex items-center gap-1" title="Booking.com"><div class="bg-[#003580] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">B</div><span class="text-slate-700">BDC</span></div>
+                    <div class="flex items-center gap-1" title="Hostelworld"><div class="bg-[#F15A24] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">H</div><span class="text-slate-700">HW</span></div>
+                    <div class="flex items-center gap-1" title="Agoda"><div class="bg-[#87B2D6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div><span class="text-slate-700">Agoda</span></div>
+                    <div class="flex items-center gap-1" title="Airbnb"><div class="bg-[#FF5A5F] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">A</div><span class="text-slate-700">Airbnb</span></div>
+                    <div class="flex items-center gap-1" title="Expedia"><div class="bg-[#facc15] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]"><span class="text-[#003580]">E</span></div><span class="text-slate-700">Expedia</span></div>
+                    <div class="flex items-center gap-1" title="Ctrip / Trip.com"><div class="bg-[#3b82f6] text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">T</div><span class="text-slate-700">Ctrip</span></div>
+                    <div class="flex items-center gap-1" title="Direct Booking"><div class="bg-emerald-500 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">D</div><span class="text-slate-700">Direct</span></div>
+                    <div class="flex items-center gap-1" title="Walk-in Guest"><div class="bg-slate-600 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">W</div><span class="text-slate-700">Walk-in</span></div>
+                    <div class="flex items-center gap-1" title="Other Source"><div class="bg-slate-700 text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">?</div><span class="text-slate-700">Other</span></div>
+                </div>
+
+                <!-- ROW 4: Stay Details, Upgrades, Feedback, and Mail Lifecycle -->
+                <div class="flex items-center gap-x-3 gap-y-1.5 flex-wrap justify-center border-t border-slate-100 pt-1 text-[10px] font-bold text-slate-600 select-text">
+                    <div class="flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 cursor-help" title="Italics = Refundable ; Not Italics = Non-Refundable">
+                        <span class="italic font-black text-slate-800 text-[10px]">Refundable ital.</span>
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 cursor-help" title="Stay has been extended">
+                        <span id="leg-svg-ext" class="w-4 h-3.5 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Extended</span>
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 cursor-help" title="Linked booking - multiple rooms, room change, etc.">
+                        <span id="leg-svg-link" class="w-4 h-4 inline-block shrink-0"></span>
+                        <span class="text-slate-700">Linked</span>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Upgrade:</span>
+                        <div class="flex items-center gap-1" title="Free Upgrade">
+                            <span id="leg-svg-upFree" class="w-3.5 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Free</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Paid Upgrade">
+                            <span id="leg-svg-upPaid" class="w-3.5 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Paid</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Feedback:</span>
+                        <div class="flex items-center gap-1" title="Good Guest Feedback">
+                            <span id="leg-svg-fbGood" class="w-4 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Good</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Bad / Warning Feedback">
+                            <span id="leg-svg-fbBad" class="w-4 h-4 inline-block shrink-0"></span>
+                            <span class="text-slate-700">Bad</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Mail:</span>
+                        <div class="flex items-center gap-1" title="Booking confirmation sent">
+                            <span id="leg-svg-mailConf" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">SENT</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Booking confirmation sent (Non-FMP / standard)">
+                            <span id="leg-svg-mailNotFmp" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">NOT FMP</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="FMP date check email sent (Arriving/departing near Full Moon Party)">
+                            <span id="leg-svg-mailPre" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">FMP?</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Guest confirmed non-FMP attendance or updated dates">
+                            <span id="leg-svg-mailPreConf" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">CONF.</span>
+                        </div>
+                        <span class="text-slate-300">|</span>
+                        <div class="flex items-center gap-1" title="Special instructions email sent">
+                            <span id="leg-svg-mailSpec" class="w-4 h-3.5 inline-block shrink-0"></span>
+                            <span class="text-slate-700">SPECIAL</span>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </div>
+
+        <!-- DATABASE VIEW -->
+        <div id="database-view" class="flex-1 flex flex-col min-h-0 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-hidden hidden">
+            <div class="p-2 bg-slate-100 border-b border-slate-300 flex flex-wrap gap-2 items-center text-xs unselectable shrink-0">
+                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-room-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-36 cursor-pointer"><span id="db-room-label" class="truncate">ALL ROOMS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-room-dropdown" class="multi-select-dropdown absolute mt-1 w-48 bg-white border border-slate-300 rounded shadow-lg z-50 hidden"></div></div>
+                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-source-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-source-label" class="truncate">ALL SOURCES</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-source-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"></div></div>
+                <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-status-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-32 cursor-pointer"><span id="db-status-label" class="truncate">ALL STATUS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-status-dropdown" class="multi-select-dropdown absolute mt-1 w-40 bg-white border border-slate-300 rounded shadow-lg z-50 hidden p-1"></div></div>
+                <div class="flex items-center gap-1"><select id="db-filter-preset" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none cursor-pointer text-slate-700" onchange="window.applyDbPreset(this.value)"><option value="custom">CUSTOM DATES</option><option value="today">TODAY</option><option value="tomorrow">TOMORROW</option><option value="this_week">THIS WEEK</option><option value="next_week">NEXT WEEK</option><option value="this_month">THIS MONTH</option><option value="next_month">NEXT MONTH</option></select><input type="date" id="db-filter-start" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none" onchange="window.renderDatabase(); $('db-filter-preset').value='custom';"><span class="font-bold text-slate-400">to</span><input type="date" id="db-filter-end" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none" onchange="window.renderDatabase(); $('db-filter-preset').value='custom';"></div>
+                <input type="text" id="db-filter-name" placeholder="GUEST / ID..." class="bg-white border border-slate-300 px-2 py-1 rounded font-bold outline-none focus:ring-2 focus:ring-blue-500 uppercase w-32" oninput="window.renderDatabase()">
+                <div class="flex items-center gap-1 border border-slate-300 bg-white rounded px-1"><span class="text-slate-400 font-black pl-1">฿</span><input type="number" id="db-filter-min" placeholder="MIN" class="w-16 py-1 font-bold outline-none text-center" oninput="window.renderDatabase()"><span class="text-slate-300">-</span><input type="number" id="db-filter-max" placeholder="MAX" class="w-16 py-1 font-bold outline-none text-center" oninput="window.renderDatabase()"></div>
+                <select id="db-filter-due" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 outline-none cursor-pointer" onchange="window.renderDatabase()"><option value="">ALL BALANCES</option><option value="zero">PAID / ZERO DUE</option><option value="owes">OWES BALANCE</option></select>
+            </div>
+
+            <div class="p-2 bg-slate-100 border-b border-slate-300 flex justify-between items-center shrink-0 unselectable"><h2 class="font-black text-slate-700 uppercase tracking-widest text-sm">Database Editor</h2><button id="admin-bulk-delete" onclick="window.bulkDelete()" class="hidden btn-action bg-orange-600 whitespace-nowrap"><i data-lucide="list-x" size="14"></i> Delete Visible</button></div>
+            <div class="flex-1 overflow-auto"><table class="w-full text-left border-collapse min-w-[900px]"><thead class="bg-slate-200 sticky top-0 z-10 shadow-sm border-b border-slate-300 text-xs font-black text-slate-600 uppercase tracking-wider unselectable"><tr><th class="p-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('name')">Name / ID <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('source')">Source <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('checkIn')">Dates <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 w-[120px]" onclick="window.sortDatabase('room')">Room <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 text-right cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('totalPrice')">Total <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 text-right cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('paid')">Paid <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 border-r border-slate-300 text-right cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('due')">Due <i data-lucide="arrow-up-down" size="10" class="inline"></i></th><th class="p-2 cursor-pointer hover:bg-slate-300" onclick="window.sortDatabase('status')">Status <i data-lucide="arrow-up-down" size="10" class="inline"></i></th></tr></thead><tbody id="database-body" class="text-xs"></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- GUEST MODAL -->
+    <div id="guest-modal" class="modal-overlay">
+        <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800">
+            <div id="modal-header-btn" class="bg-slate-900 p-2 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable" onmousedown="window.startDrag(event)">
+                <div class="flex items-center gap-2 pointer-events-none">
+                    <i data-lucide="user" size="18"></i>
+                    <h3 id="modal-guest-name-display" class="text-lg font-black uppercase tracking-tighter leading-none">NEW BOOKING</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="event.stopPropagation(); window.closeGuestModal()" class="p-1 hover:bg-red-500 rounded cursor-pointer"><i data-lucide="x" size="20"></i></button>
+                </div>
+            </div>
+
+            <div id="itinerary-stripe" class="hidden bg-slate-900 border-b border-slate-700 px-2 py-1 text-white flex items-center justify-between gap-1 overflow-x-auto no-scrollbar unselectable text-xs"></div>
+
+            <form id="guest-form" class="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 no-scrollbar relative">
+                <input type="hidden" id="guest-id"> <input type="hidden" id="created-at"> <input type="hidden" id="created-by"> <input type="hidden" id="guest-status-hidden">
+                
+                <div class="section-header rounded-t-md mt-1" onclick="window.toggleSection('guest-profile-section', 'profile-chevron')">
+                    <span>Guest Details</span>
+                    <i data-lucide="chevron-down" id="profile-chevron" size="14" class="transition-transform duration-200"></i>
+                </div>
+                
+                <div id="guest-profile-section" class="bg-slate-50 p-1.5 border-x border-b border-slate-200 rounded-b-md space-y-1.5 mt-0 block">
+                    <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">First Name</label><input type="text" id="first-name" class="input-base uppercase" oninput="window.updateHeaderName()"></div><div><label class="field-label">Last Name</label><input type="text" id="last-name" required class="input-base uppercase" oninput="window.updateHeaderName()"></div></div>
+                    <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">Phone</label><input type="text" id="phone" class="input-base"></div><div><label class="field-label">Country</label><input type="text" id="guest-country" class="input-base" list="country-list" placeholder="Type country..."><datalist id="country-list"></datalist></div></div>
+                    <div><label class="field-label">Email</label><input type="text" id="email" class="input-base" oninput="window.checkEmailProxy(this.value)"></div>
+                    <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200 mt-1 unselectable overflow-x-auto no-scrollbar"><div id="email-confirm-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['CONFIRM: --', 'SENT: FMP', 'SENT: NOT FMP'], ['text-slate-400 border-slate-300', 'bg-blue-100 text-blue-700 border-blue-400', 'bg-slate-200 text-slate-700 border-slate-400'])">CONFIRM: --</div><div id="email-prepost-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['PRE/POST: --', 'PRE/POST: SENT', 'PRE/POST: CONF'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400'])">PRE/POST: --</div><div id="email-special-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['SPECIAL: --', 'SPECIAL: SENT'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400'])">SPECIAL: --</div></div>
+                </div>
+
+                <div class="bg-slate-50 p-1.5 rounded-md border border-slate-200 space-y-1.5">
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-[130px] shrink-0">
+                            <label class="field-label text-center mb-0.5">IN</label>
+                            <div class="flex items-stretch bg-white border border-slate-300 rounded overflow-hidden shadow-sm h-[28px]">
+                                <button type="button" onclick="window.nudgeDate('in', -1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-r border-slate-200 cursor-pointer transition-colors" title="Earlier arrival (-1d)">◀</button>
+                                <input type="date" id="check-in" required class="w-full text-[11px] font-black px-0 text-center bg-transparent border-none outline-none cursor-pointer" onchange="window.handleCheckInPicker(this.value)">
+                                <button type="button" onclick="window.nudgeDate('in', 1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-l border-slate-200 cursor-pointer transition-colors" title="Later arrival (+1d)">▶</button>
+                            </div>
+                        </div>
+
+                        <div class="w-[130px] shrink-0">
+                            <label class="field-label text-center mb-0.5">OUT</label>
+                            <div class="flex items-stretch bg-white border border-slate-300 rounded overflow-hidden shadow-sm h-[28px]">
+                                <button type="button" onclick="window.nudgeDate('out', -1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-r border-slate-200 cursor-pointer transition-colors" title="Earlier departure (-1d)">◀</button>
+                                <input type="date" id="check-out" required class="w-full text-[11px] font-black px-0 text-center bg-transparent border-none outline-none cursor-pointer" onchange="window.handleCheckOutPicker(this.value)">
+                                <button type="button" onclick="window.nudgeDate('out', 1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-l border-slate-200 cursor-pointer transition-colors" title="Later departure (+1d)">▶</button>
+                            </div>
+                        </div>
+
+                        <div class="flex-1 min-w-0 flex flex-col items-center">
+                            <label class="field-label text-center mb-0.5">#NTS</label>
+                            <div id="booking-nights-display" class="w-full h-[28px] bg-indigo-50 border border-indigo-200 rounded font-black text-xs text-indigo-700 flex items-center justify-center shadow-sm select-none tracking-wide" title="Stay Duration">1 Nt</div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200">
+                        <button type="button" id="tm30-sync-btn" onclick="window.syncTM30()" class="w-full h-[28px] bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300 rounded text-[9px] sm:text-[10px] font-black uppercase flex items-center justify-center gap-1 transition-colors cursor-pointer truncate px-1 shadow-sm" title="Scan Passports">
+                            <i data-lucide="scan-face" size="13" class="shrink-0"></i>
+                            <span class="truncate">TM30 SYNC</span>
+                        </button>
+
+                        <div class="w-full h-[28px] bg-white border border-slate-300 rounded shadow-sm flex items-center justify-between px-0.5 text-[10px] font-black text-slate-600 select-none" title="PAX">
+                            <button type="button" onclick="window.adjustPax(-1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer hover:bg-slate-100 rounded-l">◀</button>
+                            <div class="flex items-center gap-0.5">
+                                <i data-lucide="users" size="11" class="text-slate-400 shrink-0"></i>
+                                <input type="number" id="pax-count" value="1" min="1" class="w-6 text-center text-xs font-black border-none outline-none p-0 bg-transparent" oninput="window.calcFinancials(); if(window.calcExtension) window.calcExtension();">
+                                <span class="text-[8px] sm:text-[9px] uppercase font-black text-slate-400">PAX</span>
+                            </div>
+                            <button type="button" onclick="window.adjustPax(1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer hover:bg-slate-100 rounded-r">▶</button>
+                        </div>
+
+                        <button type="button" id="status-cycle-btn" onclick="window.cycleStatus()" class="w-full h-[28px] rounded text-[10px] font-black uppercase text-center shadow-sm cursor-pointer border unselectable transition-colors truncate px-1"></button>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                    <div><label class="field-label">Booked Type</label><input type="text" id="booked-type" class="input-base" placeholder="--"></div>
+                    <div>
+                        <div class="flex justify-between items-end mb-1">
+                            <label class="field-label text-blue-600 mb-0">Assigned Rooms</label>
+                            <button type="button" onclick="window.addRoomSelect()" class="text-[9px] font-black uppercase text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded hover:bg-blue-200 border border-blue-200 shadow-sm transition-colors cursor-pointer">+ ADD</button>
+                        </div>
+                        <div id="assigned-rooms-container" class="max-h-[110px] overflow-y-auto no-scrollbar border border-slate-200 rounded p-1 bg-slate-50 flex flex-col gap-1 w-full shadow-inner"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-1 pb-1 unselectable">
+                    <div id="refund-btn" class="multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border border-slate-300 text-slate-400" data-state="0" onclick="window.cycleMulti(this, ['REFUNDABILITY: ?', 'NON-REFUNDABLE', 'REFUNDABLE'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400'])">REFUNDABILITY: ?</div>
+                    <div id="upgrade-btn" class="multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border border-slate-300 text-slate-400" data-state="0" onclick="window.cycleMulti(this, ['NO UPGRADE', 'FREE UPGRADE', 'PAID UPGRADE'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400', 'bg-green-100 text-green-700 border-green-400'])">NO UPGRADE</div>
+                    <div id="rating-btn" class="multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border border-slate-300 text-slate-400" data-state="0" onclick="window.cycleMulti(this, ['FEEDBACK: --', 'FEEDBACK: ✔ GOOD', 'FEEDBACK: ❌ BAD'], ['text-slate-400', 'bg-green-100 text-green-700 border-green-400', 'bg-red-100 text-red-700 border-red-400'])">FEEDBACK: --</div>
+                    <div id="ext-btn" class="multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border border-slate-300 text-slate-400" data-state="0" onclick="window.cycleMulti(this, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400'])">NOT EXTENDED</div>
+                </div>
+
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('ext-section', 'ext-chevron')"><span class="text-blue-700"><i data-lucide="calendar-plus" size="14" class="inline mb-0.5 mr-1"></i>Extend Stay</span><i data-lucide="chevron-down" id="ext-chevron" size="14" class="transition-transform duration-200" style="transform: rotate(-90deg);"></i></div>
+                <div id="ext-section" class="bg-blue-50/50 p-1.5 border-x border-b border-blue-200 rounded-b-md mt-0 hidden" style="display: none;">
+                    <div class="flex gap-1.5 items-end"><div class="w-16"><label class="field-label">Days</label><input type="number" id="ext-days" value="1" min="1" class="input-base text-center" oninput="if(window.calcExtension) window.calcExtension()"></div><div class="w-24"><label class="field-label text-slate-400 text-[10px]">Avg Daily ฿</label><input type="text" id="ext-avg-rate" class="input-base text-slate-500" readonly></div><div class="flex-1"><label class="field-label text-blue-600">Ext. Price ฿</label><input type="number" id="ext-price" class="input-base text-blue-700"></div></div>
+                    <div class="flex gap-1.5 mt-1.5"><button type="button" id="btn-check-bdc" onclick="window.checkBdcPrice()" class="flex-1 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-black uppercase rounded border border-slate-300 flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"><i data-lucide="external-link" size="12"></i> Check Rate</button><button type="button" onclick="window.confirmExtension()" class="flex-1 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded shadow-sm flex items-center justify-center gap-1 transition-colors cursor-pointer"><i data-lucide="plus-circle" size="12"></i> Add Extension</button></div>
+                </div>
+
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('fin-section', 'fin-chevron')"><span>Payments</span><i data-lucide="chevron-down" id="fin-chevron" size="14" class="transition-transform duration-200"></i></div>
+                <div id="fin-section" class="bg-slate-100 p-1.5 border-x border-b border-slate-200 rounded-b-md mt-0 block">
+                    <div class="flex justify-between items-end border-b-2 border-slate-200 pb-1 mb-1">
+                        <div class="flex gap-2 items-end">
+                            <div>
+                                <div class="flex items-center justify-between"><label class="field-label">Total Price</label><button type="button" onclick="window.openChargeModal()" class="text-[9px] font-black text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-1 py-0.5 rounded cursor-pointer ml-1.5 shadow-sm transition-colors border border-blue-200">+ ADD ฿</button></div>
+                                <div class="flex items-center text-lg font-black">฿<input type="number" id="total-price" value="0" step="0.01" class="w-20 p-0 ml-1 border-none bg-transparent outline-none focus:ring-0 text-lg font-black" oninput="if(window.calcFinancials) window.calcFinancials(); if(window.calcExtension) window.calcExtension();"></div>
+                            </div>
+                            <div class="mb-0.5"><label class="field-label text-[9px] text-slate-400 cursor-pointer hover:text-blue-500" onclick="$('net-price').focus()">Net Est.</label><div class="flex items-center text-xs font-bold text-slate-500">฿<input type="number" id="net-price" value="0" step="0.01" class="w-14 p-0 ml-0.5 border-none bg-transparent outline-none focus:ring-0 text-xs font-bold text-slate-500 transition-all focus:bg-white focus:border focus:border-blue-300 focus:rounded px-1" oninput="if(window.overrideNet) window.overrideNet()"></div></div>
+                        </div>
+                        <div class="flex gap-3 text-right items-center">
+                            <div><label class="field-label">Paid</label><div class="font-black text-lg text-green-600 leading-none" id="display-paid">฿0</div></div>
+                            <div><label class="field-label !text-red-500">Due</label><div class="font-black text-red-600 text-xl leading-none transition-all" id="display-due">฿0</div></div>
+                            <div class="flex flex-col items-center justify-center ml-1 border-l border-slate-300 pl-1.5 cursor-pointer unselectable" onclick="window.toggleBadCC()"><span class="text-[9px] font-black leading-none text-slate-400">BAD</span><span class="text-[9px] font-black leading-none text-slate-400">CC</span><div id="bad-cc-box" class="w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center"></div></div>
+                        </div>
+                    </div>
+
+                    <div id="extra-charges-wrapper" class="hidden mb-1.5 p-1 bg-amber-50/70 border border-amber-200 rounded">
+                        <div class="flex justify-between items-center text-[9px] font-black uppercase text-amber-800 mb-1 px-1 border-b border-amber-200 pb-0.5">
+                            <span>Itemized Add-ons / Services</span>
+                            <span id="extra-charges-total" class="text-amber-900">+฿0</span>
+                        </div>
+                        <div id="extra-charges-list" class="space-y-1"></div>
+                    </div>
+
+                    <div id="payments-list" class="space-y-1 mb-1.5"></div>
+                    <button type="button" onclick="window.addPaymentRow()" class="w-full py-1 border-2 border-dashed border-slate-300 rounded text-xs font-black text-slate-500 hover:bg-slate-200 uppercase unselectable transition-colors cursor-pointer">+ ADD PAYMENT</button>
+                </div>
+
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('meta-section', 'meta-chevron')"><span>More</span><i data-lucide="chevron-down" id="meta-chevron" size="14" class="transition-transform duration-200"></i></div>
+                <div id="meta-section" class="bg-slate-50 p-1.5 border-x border-b border-slate-200 rounded-b-md mt-0 block">
+                    <label class="field-label mb-0 border-b border-slate-200 pb-1">Guest Notes</label>
+                    <textarea id="guest-notes" class="smart-notes w-full bg-white border border-slate-300 font-bold text-xs p-1.5 mb-1.5 rounded outline-none focus:ring-2 focus:ring-blue-500 mt-1" placeholder="NOTES..."></textarea>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <div class="flex flex-col"><label class="field-label">Source</label><select id="booking-source" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none uppercase cursor-pointer" onchange="if(window.calcFinancials) window.calcFinancials()"><option value="direct">DIRECT</option><option value="booking.com">BOOKING.COM</option><option value="agoda">AGODA</option><option value="hostelworld">HOSTELWORLD</option><option value="airbnb">AIRBNB</option><option value="expedia">EXPEDIA</option><option value="ctrip">CTRIP</option><option value="walk-in">WALK-IN</option><option value="other">OTHER</option></select></div>
+                        <div class="flex flex-col"><label class="field-label">Book Date</label><input type="date" id="booking-date" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none"></div>
+                        <div class="flex flex-col"><label class="field-label">Book ID</label><input type="text" id="booking-id" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none" placeholder="ID..."></div>
+                        <div class="flex flex-col col-span-3 mt-0.5 pt-1 border-t border-slate-200"><label class="field-label text-[9px] text-amber-600">Link Code</label><input type="text" id="link-code" class="w-24 text-xs font-black bg-amber-50 border border-amber-200 text-amber-700 rounded px-1 outline-none uppercase text-center" placeholder="----"></div>
+                    </div>
+                </div>
+            </form>
+            
+            <div class="bg-slate-100 p-2 flex gap-2 justify-between items-center border-t border-slate-300 rounded-b-lg unselectable">
+                <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" id="delete-btn" title="Delete" onclick="window.requestDelete()" class="btn-tool bg-red-600 text-white hover:bg-red-700"><i data-lucide="trash-2" size="14" class="shrink-0"></i></button>
+                    <button type="button" id="split-btn" title="Split" onclick="window.requestSplit()" class="btn-tool bg-orange-100 text-orange-700 hover:bg-orange-200"><i data-lucide="scissors" size="14" class="shrink-0"></i></button>
+                    <button type="button" id="merge-btn" title="Merge" onclick="window.requestMerge()" class="btn-tool bg-indigo-100 text-indigo-700 hover:bg-indigo-200"><i data-lucide="merge" size="14" class="shrink-0"></i></button>
+                    <button type="button" id="dup-btn" title="Duplicate" onclick="window.requestDuplicate()" class="btn-tool bg-blue-100 text-blue-700 hover:bg-blue-200"><i data-lucide="copy" size="14" class="shrink-0"></i></button>
+                    <button type="button" id="hist-btn" title="History" onclick="window.showAuditHistory()" class="btn-tool bg-slate-200 text-slate-700 hover:bg-slate-300"><i data-lucide="clock" size="14" class="shrink-0"></i></button>
+                    <!-- Quick Invoice / Receipt Button -->
+                    <button type="button" id="invoice-btn" title="Print Invoice" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-100 text-emerald-800 hover:bg-emerald-200 cursor-pointer"><i data-lucide="receipt" size="14" class="shrink-0"></i></button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="window.closeGuestModal()" class="px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-200 text-xs font-black uppercase transition-colors cursor-pointer">Cancel</button>
+                    <button type="button" onclick="window.saveGuest()" id="save-guest-btn" class="px-5 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase shadow-sm transition-colors flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="check" size="14"></i>
+                        <span>SAVE</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- UTILITY MODALS -->
+    <!-- 1. Extra Charges Modal -->
+    <div id="charge-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span>Add Extra Charge / Item</span>
+                <button type="button" onclick="window.closeModal('charge-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
+            </div>
+            <div class="p-3 space-y-2 text-xs">
+                <div>
+                    <label class="field-label">Description / Item</label>
+                    <input type="text" id="charge-desc" placeholder="e.g. Ferry Ticket, Laundry..." class="input-base font-bold uppercase">
+                </div>
+                <div class="flex flex-wrap gap-1" id="charge-presets-container"></div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="field-label">Amount (฿)</label>
+                        <input type="number" id="charge-amount" step="any" placeholder="0" class="input-base font-black text-emerald-700">
+                    </div>
+                    <div>
+                        <label class="field-label">Date</label>
+                        <input type="date" id="charge-date" class="input-base font-bold">
+                    </div>
+                </div>
+            </div>
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="window.closeModal('charge-modal')" class="btn-modal bg-slate-200 text-slate-700 text-xs !py-1 !px-3">Cancel</button>
+                <button type="button" onclick="window.confirmAddCharge()" class="btn-modal bg-emerald-600 text-white text-xs !py-1 !px-4 shadow-sm">Add Charge</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Email Parser Import Modal -->
+    <div id="email-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm">
+                <span>Data Import</span><button type="button" onclick="window.closeModal('email-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button>
+            </div>
+            <div class="p-4 flex flex-col gap-3">
+                <p class="text-xs font-bold text-slate-500 leading-tight">Paste a confirmation email from Booking.com, Airbnb, or Hostelworld. Or paste a chunk of your Airbnb upcoming reservations list.</p>
+                <div class="flex flex-col">
+                    <label class="label-base hidden">Select Source Format</label>
+                    <select id="import-format-select" class="input-base cursor-pointer !text-sm !p-2 hidden">
+                        <option value="auto">Auto-Detect / Select Source</option>
+                        <option value="bdc-extranet">Booking.com (Extranet Dashboard)</option>
+                        <option value="airbnb-email">Airbnb (Confirmation / List)</option>
+                        <option value="hw-web">Hostelworld (Web Dashboard)</option>
+                    </select>
+                </div>
+                <textarea id="email-textarea" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2" placeholder="Paste text here..."></textarea>
+                <div class="flex gap-2 justify-end mt-2">
+                    <button onclick="window.closeModal('email-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button>
+                    <button onclick="if(window.parseEmail) window.parseEmail();" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1">Extract</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Price Check Modal -->
+    <div id="price-check-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-xs w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span>Price Check (BDC)</span>
+                <button type="button" onclick="window.closeModal('price-check-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
+            </div>
+            <div class="p-3 text-xs space-y-2">
+                <div>
+                    <label class="field-label">Check-in</label>
+                    <input type="date" id="pc-checkin" class="input-base font-bold">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="field-label">Nights</label>
+                        <input type="number" id="pc-nights" value="1" min="1" class="input-base text-center font-bold">
+                    </div>
+                    <div>
+                        <label class="field-label">PAX</label>
+                        <input type="number" id="pc-pax" value="1" min="1" class="input-base text-center font-bold">
+                    </div>
+                </div>
+            </div>
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="window.closeModal('price-check-modal')" class="btn-modal bg-slate-200 text-slate-700 text-xs !py-1 !px-3">Cancel</button>
+                <button type="button" onclick="window.runPriceCheck()" class="btn-modal bg-indigo-600 text-white text-xs !py-1 !px-4 shadow-sm">Check BDC</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Alert Modal -->
+    <div id="alert-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm" id="alert-header-title">Attention</div>
+            <div class="p-6 text-center">
+                <p id="alert-message" class="font-black text-slate-700 leading-tight text-md mb-6 whitespace-pre-line"></p>
+                <div class="flex gap-2 justify-center">
+                    <button id="alert-cancel" onclick="window.closeAlert()" class="btn-modal bg-slate-200 text-slate-700 px-6 hidden">Cancel</button>
+                    <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Split Modal -->
+    <div id="split-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Split Booking</div>
+            <div class="p-6 text-center">
+                <p class="font-black text-slate-700 leading-tight text-md mb-4">Split this booking into two segments?</p>
+                <div class="flex gap-2 justify-center">
+                    <button onclick="window.closeModal('split-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button>
+                    <button type="button" onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10">Split</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Merge Modal -->
+    <div id="merge-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Merge Bookings</div>
+            <div class="p-6 text-center">
+                <p class="font-black text-slate-700 leading-tight text-md mb-4">Select a booking to absorb.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Absorbed booking will be deleted!</span></p>
+                <select id="merge-target" class="input-base !text-sm !p-2 mb-6 cursor-pointer"></select>
+                <div class="flex gap-2 justify-center">
+                    <button onclick="window.closeModal('merge-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button>
+                    <button id="merge-confirm-btn" onclick="window.confirmMerge()" class="btn-modal bg-indigo-600 text-white px-10">Merge</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-tooltip"></div>
+
+    <!-- MAIN APP CONTROLLER -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, query, where, getDocs, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
+
+        const $ = id => document.getElementById(id), $$ = s => document.querySelectorAll(s);
+        const REQUIRE_LOGIN = false;
+        const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
+
+        const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
+        const appId = 'hotel-pms-v1';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const functions = getFunctions(app, 'asia-southeast1');
+
+        let PROP_MAP = {};
+        let PROP_REVERSE_MAP = {};
+
+        let initialP = null;
+        try { initialP = new URLSearchParams(window.location.search).get('p')?.toUpperCase(); } catch (e) {}
+        let storedProp = null;
+        try { storedProp = localStorage.getItem('last_prop'); } catch (e) {}
+
+        let currentPropertyId = storedProp || 'swims_resort';
+
+        let currentUserRole = null, currentUserEmail = 'unknown';
+        let staff = [], dailyRates = {};
+        let viewStart = new Date();
+        viewStart.setDate(viewStart.getDate() - 3);
+        viewStart.setHours(12, 0, 0, 0);
+
+        let hotelRooms = [], roomTypes = [], fmpDates = [];
+        window.activeExtraCharges = [];
+        window.viewStart = viewStart;
+
+        // Dynamic Favicon Switcher
+        window.updateFavicon = (iconUrl) => {
+            const url = iconUrl || DEFAULT_WW_ICON;
+            let link = document.querySelector("link[rel*='icon']");
+            if (!link) {
+                link = document.createElement('link');
+                link.rel = 'icon';
+                document.head.appendChild(link);
+            }
+            link.type = 'image/png';
+            link.href = url;
+            const appleLink = document.querySelector("link[rel='apple-touch-icon']");
+            if (appleLink) appleLink.href = url;
+        };
+
+        const parseYMD = str => { if (!str || typeof str !== 'string') return 0; const p = str.split('-'); return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); };
+        const getLocalYMD = d => {
+            if (!d) d = new Date();
+            if (typeof d === 'string') {
+                const trimmed = d.trim();
+                if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+                const parsed = new Date(trimmed.includes('T') ? trimmed : trimmed + 'T12:00:00Z');
+                d = isNaN(parsed.getTime()) ? new Date() : parsed;
+            } else if (typeof d === 'number') d = new Date(d);
+            if (!(d instanceof Date) || isNaN(d.getTime())) d = new Date();
+            try {
+                const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+                return isNaN(o.getTime()) ? new Date().toISOString().split('T')[0] : o.toISOString().split('T')[0];
+            } catch (e) {
+                return new Date().toISOString().split('T')[0];
+            }
+        };
+
+        const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
+
+        // Universal Tokenized Room Matcher (100% data-driven, zero property-specific assumptions)
+        const tokenizeRoom = str => {
+            if (!str) return [];
+            return (String(str).toUpperCase().replace(/^ROOM\s+/, '').match(/[A-Z]+|\d+/g) || []).map(t => {
+                const n = parseInt(t, 10);
+                return isNaN(n) ? t : n; // Numbers normalized as integers: '01' -> 1, '1' -> 1, '001' -> 1
+            });
+        };
+        const tokensMatch = (t1, t2) => {
+            if (!t1.length || !t2.length || t1.length !== t2.length) return false;
+            return t1.every((v, i) => v === t2[i]);
+        };
+
+        const dbToUiRoom = rid => {
+            if (!rid) return rid;
+            const nid = String(rid).toUpperCase().trim();
+            const exactMatch = hotelRooms.find(r => r.id === nid || r.id === rid || String(r.id).toUpperCase() === nid);
+            if (exactMatch) return exactMatch.id;
+
+            const targetTokens = tokenizeRoom(rid);
+            if (targetTokens.length > 0) {
+                const tokenMatch = hotelRooms.find(r => tokensMatch(tokenizeRoom(r.id), targetTokens));
+                if (tokenMatch) return tokenMatch.id;
+            }
+
+            return rid;
+        };
+
+        const uiToDbRoom = rid => dbToUiRoom(rid);
+
+        window.db = db;
+        window.appId = appId;
+        window.fs = { collection, doc, query, where, getDocs, updateDoc, setDoc, deleteDoc };
+        window.parseYMD = parseYMD;
+        window.getLocalYMD = getLocalYMD;
+        window.fmpDates = fmpDates;
+        window.getRooms = getRooms;
+        window.uiToDbRoom = uiToDbRoom;
+        window.dbToUiRoom = dbToUiRoom;
+        window.getCurrentPropertyId = () => currentPropertyId;
+        window.getHotelRooms = () => hotelRooms;
+        window.getStaff = () => staff;
+        window.getPaid = s => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
+        window.getDue = s => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
+
+        window.closeGuestModal = () => {
+            const m = $('guest-modal');
+            if (m) {
+                m.classList.remove('active');
+                m.style.display = 'none';
+            }
+        };
+
+        // Native Auto-Revert to Unassigned when clearing all room assignments
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = $('assigned-rooms-container');
+            if (container) {
+                container.addEventListener('click', e => {
+                    const btn = e.target.closest('button');
+                    if (!btn) return;
+                    setTimeout(() => {
+                        const selects = container.querySelectorAll('.assigned-room-select');
+                        if (selects.length === 0 && window.addRoomSelect) {
+                            window.addRoomSelect("");
+                        }
+                    }, 50);
+                });
+            }
+        });
+
+        window.generateAuditDiff = (oldRec, newRec) => {
+            if (!oldRec) return "Created new booking.";
+            let changes = [];
+            if (oldRec.status !== newRec.status) changes.push(`Status: ${oldRec.status} -> ${newRec.status}`);
+            if (oldRec.checkIn !== newRec.checkIn) changes.push(`In: ${oldRec.checkIn} -> ${newRec.checkIn}`);
+            if (oldRec.checkOut !== newRec.checkOut) changes.push(`Out: ${oldRec.checkOut} -> ${newRec.checkOut}`);
+            if (oldRec.rooms?.join(',') !== newRec.rooms?.join(',')) changes.push(`Rooms: ${oldRec.rooms?.join(',')} -> ${newRec.rooms?.join(',')}`);
+            if (oldRec.totalPrice != newRec.totalPrice) changes.push(`Price: ${oldRec.totalPrice} -> ${newRec.totalPrice}`);
+            if ((oldRec.payments || []).length !== (newRec.payments || []).length) changes.push(`Payments: ${(oldRec.payments || []).length} -> ${(newRec.payments || []).length}`);
+            if ((oldRec.extraCharges || []).length !== (newRec.extraCharges || []).length) changes.push(`Charges: ${(oldRec.extraCharges || []).length} -> ${(newRec.extraCharges || []).length}`);
+            if (oldRec.notes !== newRec.notes) changes.push(`Notes modified.`);
+            return changes.length > 0 ? changes.join(' | ') : "Saved without major changes.";
+        };
+
+        window.updateNavLinks = shortKey => {
+            const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || '';
+            document.querySelectorAll('a[href*=".html"]').forEach(a => {
+                const href = a.getAttribute('href');
+                if (!href) return;
+                const [base] = href.split('?');
+                a.setAttribute('href', key ? `${base}?p=${key}` : base);
+            });
+        };
+
+        window.syncPropertyUrl = propId => {
+            const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || '';
+            try {
+                if (window.location.protocol !== 'blob:' && shortKey) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('p', shortKey);
+                    window.history.replaceState({}, '', url.toString());
+                }
+            } catch (e) {}
+            window.updateNavLinks(shortKey);
+        };
+
+        window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypes = null) => {
+            if (window.channexConfig && window.channexConfig.apiKey) {
+                try {
+                    const syncFn = httpsCallable(functions, 'channexDeltaSync');
+                    const cIn = overrideIn || $('check-in')?.value || getLocalYMD(new Date());
+                    const cOut = overrideOut || $('check-out')?.value || cIn;
+                    let rTypes = roomTypes;
+                    if (!rTypes || rTypes.length === 0) {
+                        const rL = Array.from($$('.assigned-room-select') || []).map(sel => sel.value).filter(Boolean);
+                        const bType = $('booked-type')?.value;
+                        const types = new Set();
+                        rL.forEach(rid => {
+                            const hr = hotelRooms.find(r => r.id === rid || r.id === uiToDbRoom(rid) || r.id === dbToUiRoom(rid));
+                            if (hr && hr.type) types.add(hr.type);
+                        });
+                        if (bType) types.add(bType);
+                        rTypes = Array.from(types);
+                    }
+                    syncFn({ propId: currentPropertyId, checkIn: cIn, checkOut: cOut, roomTypes: rTypes });
+                } catch (e) { console.warn("Delta Sync Failed:", e); }
+            }
+        };
+
+        const loadPropertyConfig = async () => {
+            try {
+                const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
+                const propsSnap = await getDocs(propsRef);
+                const propsList = [];
+                propsSnap.forEach(docSnap => propsList.push({ id: docSnap.id, ...docSnap.data() }));
+
+                PROP_MAP = {};
+                PROP_REVERSE_MAP = {};
+                propsList.forEach(p => {
+                    const short = (p.short || p.shortCode || p.id).toUpperCase();
+                    PROP_MAP[short] = p.id;
+                    PROP_REVERSE_MAP[p.id] = short;
+                });
+                window.PROP_MAP = PROP_MAP;
+                window.PROP_REVERSE_MAP = PROP_REVERSE_MAP;
+
+                // Only consume initialP once on boot; clear so property switches are not reverted
+                if (initialP && PROP_MAP[initialP]) {
+                    currentPropertyId = PROP_MAP[initialP];
+                    initialP = null;
+                }
+
+                const switcher = $('main-property-switcher');
+                if (switcher && propsList.length > 0) {
+                    switcher.innerHTML = propsList.map(p => `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`).join('');
+                    if (!propsList.find(p => p.id === currentPropertyId)) {
+                        currentPropertyId = propsList[0].id;
+                    }
+                    switcher.value = currentPropertyId;
+                }
+
+                window.syncPropertyUrl(currentPropertyId);
+                const propToLoad = propsList.find(p => p.id === currentPropertyId);
+                if (propToLoad) {
+                    window.currentPropertyConfig = propToLoad;
+                    document.title = propToLoad.name || 'Wild & Wandering PMS';
+
+                    // Use ICON first for tiny top-left thumbnail and favicon
+                    const activeIcon = propToLoad.iconUrl || propToLoad.logoUrl || DEFAULT_WW_ICON;
+                    const logoEl = $('main-brand-logo');
+                    if (logoEl) logoEl.src = activeIcon;
+                    window.updateFavicon(activeIcon);
+
+                    hotelRooms = (propToLoad.rooms || []).map(r => ({
+                        ...r,
+                        category: r.category || r.type || 'Standard',
+                        type: r.type || r.category || 'Standard'
+                    }));
+                    fmpDates = propToLoad.events || [];
+                    window.hotelRooms = hotelRooms;
+                    window.fmpDates = fmpDates;
+                    window.propertyOtaMap = propToLoad.otaMap || [];
+                    window.channexConfig = propToLoad.channex || {};
+
+                    const cxBtn = $('channex-sync-btn');
+                    if (cxBtn) {
+                        if (window.channexConfig.apiKey && window.channexConfig.propId) cxBtn.classList.remove('hidden');
+                        else cxBtn.classList.add('hidden');
+                    }
+                }
+
+                roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
+                window.roomTypes = roomTypes;
+
+                if (staff && staff.length > 0) {
+                    staff.forEach(s => {
+                        const rList = getRooms(s).map(dbToUiRoom);
+                        s.room = rList[0] || "";
+                        s.rooms = rList;
+                    });
+                }
+
+                const drop = $('db-room-dropdown');
+                if (drop) {
+                    drop.innerHTML = '';
+                    roomTypes.forEach(t => drop.innerHTML += `<label><input type="checkbox" value="${t}" onchange="window.updateMultiLabel('db-room-dropdown', 'db-room-label', 'ALL ROOMS'); window.renderDatabase();" class="mr-2"> ${t}</label>`);
+                    drop.innerHTML += `<label class="text-amber-400 font-black"><input type="checkbox" value="UNASSIGNED" onchange="window.updateMultiLabel('db-room-dropdown', 'db-room-label', 'ALL ROOMS'); window.renderDatabase();" class="mr-2"> UNASSIGNED</label>`;
+                }
+            } catch (e) { console.error("Failed to load config", e); }
+        };
+
+        window.handlePropertySwitch = async propId => {
+            if (!propId || propId === currentPropertyId) return;
+            initialP = null; // Clear query override so switcher sticks
+            $('boot-loader').style.display = 'flex';
+            $('sync-status').innerText = 'Switching Property...';
+            currentPropertyId = propId;
+            try { localStorage.setItem('last_prop', propId); } catch (e) {}
+            window.syncPropertyUrl(propId);
+            await loadPropertyConfig();
+            if (staff && staff.length > 0) {
+                staff.forEach(s => {
+                    const rList = getRooms(s).map(dbToUiRoom);
+                    s.room = rList[0] || "";
+                    s.rooms = rList;
+                });
+            }
+            if (window.render) window.render();
+            if (window.renderDashboard) window.renderDashboard();
+            if (window.renderDatabase) window.renderDatabase();
+            $('boot-loader').style.display = 'none';
+        };
+
+        window.renderDashboard = () => {
+            const todayStr = getLocalYMD(new Date());
+            $('dash-date-display').innerText = todayStr;
+            const arr = [], dep = [], stay = [], act = [];
+
+            const sortedStaff = [...staff].filter(x => x.property === currentPropertyId).sort((a, b) => {
+                let ra = a.rooms?.[0] || a.room || 'ZZZ';
+                let rb = b.rooms?.[0] || b.room || 'ZZZ';
+                return ra.localeCompare(rb);
+            });
+
+            sortedStaff.forEach(s => {
+                if (s.status === 'cancelled' || s.status === 'noshow') return;
+                const cIn = s.checkIn, cOut = s.checkOut, due = window.getDue(s);
+                let assigned = getRooms(s).filter(Boolean).join(',') || 'Unassigned';
+                const name = `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Unknown';
+                const sBadge = `<span class="px-1 py-0.5 text-[8px] rounded text-white status-${s.status}">${s.status.toUpperCase()}</span>`;
+                const dueBadge = due > 0 ? `<span class="text-red-500 font-black">฿${due}</span>` : `<span class="text-green-500">฿0</span>`;
+                const item = `<div class="flex items-center py-1 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm w-[72px] text-slate-700 shrink-0">${assigned}</span><div class="flex-1 truncate leading-tight"><span class="font-black text-xs text-slate-700">${name}</span> <span class="text-[9px] text-slate-500 font-bold ml-1">${sBadge}</span></div><div class="shrink-0 ml-1">${dueBadge}</div></div>`;
+
+                if (cIn === todayStr && s.status !== 'unconfirmed' && s.status !== 'new') arr.push(item);
+                if (cOut === todayStr && s.status !== 'unconfirmed' && s.status !== 'new') {
+                    dep.push(item);
+                    if (due > 0 && s.status !== 'charged' && !s.alertDismissed) {
+                        act.push(`<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">Out: ${cOut}</span> <span class="text-[10px] text-red-600 font-bold uppercase ml-1">OWES ฿${due}</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0" title="Dismiss"><i data-lucide="check" size="14"></i></button></div>`);
+                    }
+                }
+                if (cIn < todayStr && cOut > todayStr && s.status !== 'unconfirmed' && s.status !== 'new') stay.push(item);
+                if ((s.status === 'unconfirmed' || s.status === 'new') && !s.alertDismissed) {
+                    let colorC = s.status === 'new' ? 'text-pink-600' : 'text-purple-600';
+                    act.push(`<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">In: ${cIn}</span> <span class="text-[10px] ${colorC} font-black uppercase ml-1">${s.status.toUpperCase()}</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0" title="Dismiss"><i data-lucide="check" size="14"></i></button></div>`);
+                }
+                if (s.badCC && !s.alertDismissed && s.status !== 'left') {
+                    act.push(`<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">In: ${cIn}</span> <span class="text-[10px] bg-red-500 text-white px-1 rounded uppercase font-bold ml-1">BAD CC</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0" title="Dismiss"><i data-lucide="check" size="14"></i></button></div>`);
+                }
+            });
+
+            $('dash-arr-count').innerText = arr.length; $('dash-arr-list').innerHTML = arr.length ? arr.join('') : '<div class="text-slate-400 italic text-center py-2">No arrivals</div>';
+            $('dash-dep-count').innerText = dep.length; $('dash-dep-list').innerHTML = dep.length ? dep.join('') : '<div class="text-slate-400 italic text-center py-2">No departures</div>';
+            $('dash-stay-count').innerText = stay.length; $('dash-stay-list').innerHTML = stay.length ? stay.join('') : '<div class="text-slate-400 italic text-center py-2">No stay-overs</div>';
+            $('dash-act-list').innerHTML = act.length ? act.join('') : '<div class="text-green-500 font-black text-center py-2"><i data-lucide="check-circle" size="14" class="inline"></i> All clear!</div>';
+
+            let rHtml = '';
+            roomTypes.forEach(t => { if (dailyRates[t]) rHtml += `<div class="flex justify-between py-1 border-b border-indigo-100 last:border-0"><span class="truncate pr-2">${t}</span><span>฿${dailyRates[t]}</span></div>`; });
+            $('dash-rates-list').innerHTML = rHtml || '<span class="text-slate-400 italic text-center mt-4">No rates loaded for today.</span>';
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.dismissAlert = async id => {
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), { alertDismissed: true }, { merge: true });
+                let s = staff.find(x => x.id === id);
+                if (s) s.alertDismissed = true;
+                window.renderDashboard();
+            } catch (e) {}
+        };
+
+        window.switchTab = t => {
+            $('dashboard-view').style.display = t === 'dashboard' ? 'flex' : 'none';
+            $('calendar-view').style.display = t === 'calendar' ? 'flex' : 'none';
+            $('database-view').style.display = t === 'database' ? 'flex' : 'none';
+            $('tab-dash').classList.toggle('active', t === 'dashboard');
+            $('tab-cal').classList.toggle('active', t === 'calendar');
+            $('tab-db').classList.toggle('active', t === 'database');
+
+            const ctxCal = $('context-tools-cal');
+            if (ctxCal) {
+                if (t === 'calendar') { ctxCal.style.display = 'flex'; setTimeout(() => ctxCal.style.opacity = '1', 50); }
+                else { ctxCal.style.opacity = '0'; setTimeout(() => ctxCal.style.display = 'none', 200); }
+            }
+
+            if (t === 'database') {
+                const navSearchVal = $('guest-search')?.value.trim() || window.searchTerm || '';
+                const dbNameInput = $('db-filter-name');
+                if (dbNameInput && navSearchVal) dbNameInput.value = navSearchVal;
+            }
+
+            if (t === 'calendar' && window.render) window.render();
+            if (t === 'database' && window.renderDatabase) window.renderDatabase();
+            if (t === 'dashboard') window.renderDashboard();
+        };
+
+        window.openEmailParserModal = () => { 
+            $('email-textarea').value = ''; 
+            $('email-modal').style.display = 'flex'; 
+            setTimeout(() => $('email-textarea').focus(), 50); 
+        };
+        
+        window.autoSuggestRoom = (bt, nt, cin, cout) => {
+            if (!cin || !cout || !bt) return;
+            const sU = parseYMD(cin), eU = parseYMD(cout), occ = new Set();
+            staff.forEach(s => {
+                if(['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(s.status)) return;
+                if(sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) {
+                    (s.rooms?.length ? s.rooms : [s.room]).forEach(r => { if(r) occ.add(r); });
+                }
+            });
+
+            let av = hotelRooms.filter(r => !occ.has(r.id));
+            let aRId = [];
+
+            bt.split(' + ').forEach(part => {
+                let pT = null;
+                if (/DORMITORY|4-BED|DORM/i.test(part)) pT = "Standard Quad Dorm";
+                else if (/TRIPLE/i.test(part) && /BUNK/i.test(part)) pT = "Partial Oceanview Triple (Bunk+Twin)";
+                else if (/TRIPLE/i.test(part)) pT = "Partial Oceanview Triple (King+Twin)";
+                else if (/SIDE SEA VIEW/i.test(part) || (/PARTIAL/i.test(part) && !/TWIN|TRIPLE/i.test(part))) pT = "Partial Oceanview King Room";
+                else if (/PARTIAL SEA VIEW/i.test(part) || (/PARTIAL/i.test(part) && /TWIN/i.test(part))) pT = "Partial Oceanview Twin Room";
+                else if (/DELUXE TWIN/i.test(part) || (/OCEANVIEW/i.test(part) && /TWIN/i.test(part))) pT = "Oceanview Twin Room";
+                else if (/DELUXE DOUBLE/i.test(part) || (/OCEANVIEW/i.test(part) && !/TWIN/i.test(part))) pT = "Oceanview King Room";
+                else if (/TWIN ROOM WITH BALCONY/i.test(part) || (/GARDEN/i.test(part) && /TWIN/i.test(part))) pT = "Gardenview Twin Room";
+                else if (/KING ROOM WITH BALCONY/i.test(part) || (/GARDEN/i.test(part) && !/TWIN/i.test(part))) pT = "Gardenview King Room";
+                else if (/OCEANFRONT/i.test(part)) pT = /TWIN/i.test(part) ? "Oceanfront Twin" : "Oceanfront King";
+                else if (/BUNGALOW/i.test(part)) pT = "BUNGALOWS";
+
+                let pB = null;
+                if (/1 EXTRA-LARGE DOUBLE BED|1 EXTRA-LARGE|1 DOUBLE|1 KING|LARGE DOUBLE|1 BED|ONE BED/i.test(nt) || /KING|DOUBLE(?!\sTWIN)/i.test(part)) pB = "KING";
+                else if (/TWIN|SEPARATE|2 SINGLE|TWO SINGLE|2 BEDS|SINGLES/i.test(nt) || (/TWIN/i.test(part) && !/DOUBLE/i.test(part))) pB = "TWIN";
+                else if (/BUNK/i.test(nt)) pB = "BUNK+T";
+
+                let m = (pT && pB) ? av.find(r => r.type === pT && r.bed && r.bed.includes(pB)) : null;
+                if (!m && pT) m = av.find(r => r.type === pT);
+
+                if (m) {
+                    aRId.push(m.id);
+                    av = av.filter(r => r.id !== m.id);
+                }
+            });
+
+            if (aRId.length > 0) {
+                const s = $$('.assigned-room-select');
+                aRId.forEach((id, i) => { if (s[i]) s[i].value = id; });
+                if(window.updateAvailableRooms) window.updateAvailableRooms();
+            }
+        };
+
+        window.parseEmail = () => {
+            const txt = $('email-textarea').value; 
+            if(!txt || txt.trim() === '') return; 
+            
+            let f = $('import-format-select').value;
+            const tLow = txt.toLowerCase();
+            if (tLow.includes('339615-') || tLow.includes('hostelworld.com')) f = 'hw-web';
+            else if (tLow.includes('airbnb') || tLow.includes('reservation confirmed') || tLow.includes('sunset beach resort')) f = 'airbnb-email';
+            else if (tLow.includes('booking.com') || tLow.includes('commission and charges')) f = 'bdc-extranet';
+
+            const ex = (reg, src = txt) => { const m = src.match(reg); return m ? m[1].trim() : ''; };
+            const cM = s => Number(parseFloat((s||'').replace(/[^0-9.-]+/g,"")).toFixed(2)) || 0;
+            
+            const fD = dS => {
+                if(!dS) return '';
+                let clean = dS.replace(/´/g, '').replace(/'/g, '').replace(/,/g, '').replace(/(st|nd|rd|th)\b/gi, '').trim();
+                const mths = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+                let parts = clean.split(/\s+/);
+                let d=1, m='01', y=new Date().getFullYear();
+                parts.forEach(p => {
+                    let l = p.toLowerCase().substring(0,3);
+                    if(mths[l]) m = mths[l];
+                    else if(/^\d{1,2}$/.test(p)) d = parseInt(p);
+                    else if(/^\d{2}$/.test(p) && p.length===2) y = 2000 + parseInt(p);
+                    else if(/^\d{4}$/.test(p)) y = parseInt(p);
+                });
+                return `${y}-${m}-${String(d).padStart(2,'0')}`;
+            };
+
+            let src = '', gN = '', cI = '', cO = '', pax = 1, ph = '', em = '', tot = 0, comm = 0, bId = '', notes = '', bT = '', bD = '', cCode = '', ref = 0, pUp = 0, pSt = 'future', hBdcP = false, un = 1;
+
+            if (f === 'hw-web' || f === 'hw-email') {
+                src = 'hostelworld';
+                let lines = txt.split(/[\n\r]+/).map(x => x.trim()).filter(Boolean);
+                
+                let refIdx = lines.findIndex(l => l.includes('339615-'));
+                if (refIdx > -1) {
+                    bId = lines[refIdx].match(/(339615-\d+)/)[1];
+                    gN = lines[refIdx + 1];
+                    cCode = lines[refIdx + 2];
+                    
+                    for (let i = refIdx + 3; i < refIdx + 8; i++) {
+                        if (!lines[i] || lines[i] === 'Booked' || lines[i].includes('Night')) break;
+                        if (lines[i].includes('@') && !em) em = lines[i];
+                        else if (/^[\d\+\s]+$/.test(lines[i]) && lines[i].length >= 8 && !lines[i].includes('-')) ph = lines[i];
+                    }
+                }
+                
+                let nIdx = lines.findIndex(l => l.endsWith('Night') || l.endsWith('Nights'));
+                let nights = 1;
+                if (nIdx > -1) {
+                    nights = parseInt(lines[nIdx]) || 1;
+                    let possiblePax = parseInt(lines[nIdx - 1]);
+                    if (!isNaN(possiblePax) && possiblePax > 0 && possiblePax < 50) pax = possiblePax;
+                }
+                
+                let bIdx = lines.findIndex(l => l === 'Booked');
+                if (bIdx > -1) bD = fD(lines[bIdx + 1]);
+                
+                let aIdx = lines.findIndex(l => l === 'Arriving');
+                if (aIdx > -1) {
+                    cI = fD(lines[aIdx + 1]);
+                    if (cI && nights) {
+                        let d = new Date(cI + "T12:00:00Z");
+                        d.setUTCDate(d.getUTCDate() + nights);
+                        cO = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+                    }
+                }
+                
+                let subIdx = lines.findIndex(l => l === 'Subtotal');
+                if (subIdx > -1) tot = cM(lines[subIdx + 1]);
+                
+                let depIdx = lines.findIndex(l => l === 'Hostelworld Deposit');
+                if (depIdx > -1) comm = cM(lines[depIdx + 1]);
+                
+                let rDetIdx = lines.findIndex(l => l === 'Room Details');
+                if (rDetIdx > -1) {
+                    for (let i = rDetIdx; i < lines.length; i++) {
+                        if (lines[i].includes('Dorm') || lines[i].includes('Room') || lines[i].includes('Bungalow') || lines[i].includes('Bed')) {
+                            bT = lines[i].replace(/Non-refundable/i, '').replace(/Promo/i, '').trim();
+                            break;
+                        }
+                    }
+                }
+                
+                let isNonRef = tLow.includes('non-refundable');
+                let daysOut = 999;
+                if (cI && bD) daysOut = (parseYMD(cI) - parseYMD(bD)) / 86400000;
+                if (isNonRef || daysOut < 7) ref = 1; else ref = 2;
+
+            } else if (f === 'bdc-extranet') {
+                src = tLow.includes('prudential tower') ? 'agoda' : 'booking.com'; 
+                let l = txt.split(/[\n\r]+/).map(x => x.trim().replace(/\xa0/g, ' ')).filter(Boolean);
+                let gL = kws => { 
+                    let i = l.findIndex(x => kws.some(k => x.toLowerCase() === k.toLowerCase() || x.toLowerCase().startsWith(k.toLowerCase()))); 
+                    if (i > -1) { 
+                        let m = kws.find(k => l[i].toLowerCase().startsWith(k.toLowerCase())); 
+                        let rem = l[i].substring(m.length).trim(); 
+                        return rem ? rem : (i + 1 < l.length ? l[i + 1] : ""); 
+                    } 
+                    return ""; 
+                };
+                
+                cI = fD(gL(['Check-in'])); 
+                cO = fD(gL(['Check-out'])); 
+                bD = fD(gL(['Received', 'Booked on']));
+                bId = gL(['Booking number:']); 
+                pax = parseInt(gL(['Total guests:'])) || 1; 
+                tot = cM(gL(['Total price'])); 
+                comm = cM(gL(['Commission and charges:']));
+                
+                let gIdx = l.findIndex(x => x.toLowerCase().startsWith('guest name:'));
+                if (gIdx > -1) { 
+                    let rem = l[gIdx].substring('guest name:'.length).trim(); 
+                    if (rem) { 
+                        gN = rem; 
+                        em = ex(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/, l[gIdx]); 
+                        ph = ex(/(\+[\d\s]+)/, l[gIdx]); 
+                        let ccM = l[gIdx].replace(em, '').replace(ph, '').match(/\s+([a-zA-Z]{2})$/); 
+                        if (ccM) cCode = ccM[1].toUpperCase(); 
+                        gN = gN.replace(em, '').replace(ph, '').replace(/\s+[a-zA-Z]{2}$/, '').trim(); 
+                    } else { 
+                        gN = l[gIdx + 1]; 
+                        for (let i = gIdx + 2; i < gIdx + 6; i++) { 
+                            if (!l[i] || l[i].includes('Preferred language') || l[i].includes('Channel:')) break; 
+                            if (l[i].length === 2 && !cCode) cCode = l[i].toUpperCase(); 
+                            else if (l[i].includes('@') && !em) em = l[i]; 
+                            else if (l[i].includes('+') && !ph) ph = l[i]; 
+                        } 
+                    } 
+                }
+                
+                un = parseInt(gL(['Total units', 'Total rooms:'])) || 1;
+                
+                let bTypes = [];
+                for (let i = 0; i < l.length; i++) {
+                    if (/^\s*(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat),?\s+(?:[A-Za-z]{3}\s+\d{1,2}|\d{1,2}\s+[A-Za-z]{3})/i.test(l[i])) {
+                        if (i >= 2 && /(?:THB|฿|\$|€|£|[A-Z]{3})[\s]*[\d,.]+/i.test(l[i-1])) {
+                            let rLine = l[i-2].replace(/^\d+\s*(?:x\s*)?/, '').trim();
+                            bTypes.push(rLine);
+                        }
+                    }
+                }
+                
+                if (bTypes.length === 0) {
+                    let bTypeIdx = l.findIndex((x, i) => /^\s*(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat),?\s+(?:[A-Za-z]{3}\s+\d{1,2}|\d{1,2}\s+[A-Za-z]{3})/i.test(x) && i >= 2 && /(?:THB|฿|\$|€|£|[A-Z]{3})[\s]*[\d,.]+/i.test(l[i-1])); 
+                    if(bTypeIdx > -1) bTypeIdx -= 2;
+                    if (bTypeIdx === -1) { 
+                        let pIdx = l.findIndex(x => x.toLowerCase().endsWith('cancellation policy.') || x.toLowerCase().includes('bank transfer payout')); 
+                        if (pIdx > -1 && pIdx + 1 < l.length) bTypeIdx = pIdx + 1; 
+                    }
+                    if (bTypeIdx > -1) { bTypes.push(l[bTypeIdx].trim()); }
+                }
+                
+                bT = bTypes.join(' + '); 
+                if (bTypes.length > un) un = bTypes.length;
+
+                if (txt.toLowerCase().includes('free upgrade')) pUp = 1; 
+                if (/\b(?:status:\s*canceled|status:\s*cancelled|booking canceled|booking cancelled)\b/i.test(txt)) pSt = 'cancelled';
+                let lTxt = txt.toLowerCase(); 
+                if (lTxt.includes('free of charge until') || lTxt.includes('free cancellation')) { ref = 2; } 
+                else if (lTxt.includes('cancel at any time') || lTxt.includes('cancel anytime') || lTxt.includes('non-refundable') || lTxt.includes('non refundable') || lTxt.includes('charged the total price')) { ref = 1; }
+                
+                let aN = []; 
+                l.forEach(x => { 
+                    if (x.toUpperCase().includes('BED PREFERENCE:') || x.toUpperCase().includes('BED-PREFERENCE REQUEST:')) aN.push(x.replace(/Reply$/i, '').trim()); 
+                });
+                
+                let cIdx = l.findIndex(x => x.toLowerCase() === 'conversation with guest' || x.toLowerCase() === 'conversation with guest');
+                if (cIdx > -1) { 
+                    let mLines = []; 
+                    for (let i = cIdx + 1; i < l.length; i++) { 
+                        let lLow = l[i].toLowerCase(); 
+                        if (lLow.includes('protect your account security') || lLow === 'images' || lLow === 'templates' || lLow.includes('important information about this guest') || lLow === 'cancellation' || lLow === 'no messages' || lLow.includes('conversations with your guests will appear')) break; 
+                        if (/^(?:Today|Yesterday|[A-Za-z]+,?\s*\d{1,2}\s*[A-Za-z]*),\s*\d{1,2}:\d{2}/i.test(l[i]) || /^\d{1,2}:\d{2}$/.test(l[i]) || lLow === 'reply') continue; 
+                        
+                        if (
+                            lLow.includes('having a fantastic experience') ||
+                            lLow.includes('hook you up for an extra night') ||
+                            lLow.includes('sent automatically based on your messaging preferences') ||
+                            lLow.includes('hate finding out weeks later') ||
+                            lLow.includes('the swims team') ||
+                            lLow.includes('inform us of any special needs') ||
+                            lLow.includes('swims! a social beach resort') ||
+                            lLow.includes('automatically translated')
+                        ) {
+                            continue;
+                        }
+                        
+                        if (l[i].trim()) mLines.push(l[i].trim()); 
+                    } 
+                    if (mLines.length > 0) aN.push("GUEST MSG:\n" + mLines.join("\n")); 
+                }
+                
+                notes = aN.join('\n\n'); 
+                if (txt.includes('Payment is facilitated') || txt.includes('Booking.com will collect') || txt.includes('Payment is facilitated through')) hBdcP = true;
+            }
+            else if (f === 'airbnb-email') {
+                src = 'airbnb'; 
+                const ab = txt.split(/[\n\r]+/).map(x => x.trim()).filter(Boolean);
+                
+                let sunsetIdx = ab.findIndex(l => l.toLowerCase().includes('sunset'));
+                if (sunsetIdx > 0 && /^([a-zA-Z]{3})\s\d+/.test(ab[sunsetIdx - 2])) {
+                    gN = ab[sunsetIdx - 1].split(/['’]s group/i)[0].trim();
+                    bT = ab[sunsetIdx];
+                    let dateLine = ab[sunsetIdx - 2]; 
+                    let dMatch = dateLine.match(/([a-zA-Z]{3}\s\d+)[^\dA-Za-z]+(?:([a-zA-Z]{3})\s)?(\d+)/i);
+                    if (dMatch) {
+                        let d1 = dMatch[1];
+                        let m2 = dMatch[2] || d1.split(' ')[0];
+                        let d2 = dMatch[3];
+                        cI = fD(d1);
+                        cO = fD(`${m2} ${d2}`);
+                    }
+                } else {
+                    let nIdx = ab.findIndex(x => x.includes('Identity verified') || x.includes('reviews'));
+                    if (nIdx > 0) {
+                        gN = ab[nIdx - 1];
+                        let cLine = ab[nIdx + 1];
+                        if (cLine && !cLine.includes('Hello') && !cLine.includes('Hi') && !cLine.includes('Automatically')) {
+                            let parts = cLine.split(',');
+                            cCode = parts[parts.length - 1].trim();
+                        }
+                    } else { 
+                        gN = ex(/Reservation confirmed - (.*?)\s+arrives/i); 
+                    }
+                    
+                    cI = fD(ex(/Check-in[\s\S]*?([A-Za-z]{3},\s*[A-Za-z]{3}\s*\d+(?:,\s*\d{4})?)/i)); 
+                    cO = fD(ex(/Checkout[\s\S]*?([A-Za-z]{3},\s*[A-Za-z]{3}\s*\d+(?:,\s*\d{4})?)/i));
+                    bId = ex(/Confirmation code[\s\S]*?([A-Z0-9]+)/i); 
+                    bD = fD(ex(/Airbnb[\s\S]*?([A-Za-z]{3},\s*[A-Za-z]{3}\s*\d+(?:,\s*\d{4})?)/i)); 
+                    pax = parseInt(ex(/Guests[\s\S]*?(\d+)/i)) || 1;
+                    tot = cM(ex(/Total\s*(?:\([A-Z]+\))?[\s\S]{0,30}?(?:THB|฿|\$|€|£|[A-Z]{3})\s*([\d,.]+)/i));
+                    comm = cM(ex(/Host service fee[\s\S]*?(?:฿|THB)\s*([\d,.]+)/i));
+                    bT = ex(/([^\n]+?)\s*Room\s*Check-in/i);
+                    
+                    let msgIdx = ab.findIndex(x => x.toLowerCase().includes('message from'));
+                    if (msgIdx > -1) {
+                        let msg = [];
+                        for (let i = msgIdx + 1; i < ab.length; i++) {
+                            if (ab[i].includes('Automatically translated') || ab[i].includes('Hosting requirements') || ab[i].includes('View itinerary')) break;
+                            if (ab[i].trim()) msg.push(ab[i]);
+                        }
+                        if (msg.length > 0) notes = "GUEST MSG:\n" + msg.join("\n");
+                    }
+                }
+            }
+
+            $('email-modal').style.display = 'none';
+
+            let lN = gN.trim(), fN = ""; 
+            if(gN.includes(',')) { 
+                const p = gN.split(','); 
+                lN = p[0].trim(); 
+                fN = p.slice(1).join(',').trim(); 
+            } else { 
+                const p = gN.split(' '); 
+                fN = p[0].trim(); 
+                lN = p.length>1 ? p.slice(1).join(' ').trim() : ""; 
+            }
+            
+            let pC = cCode || ""; 
+            if (cCode.length === 2) { 
+                try { 
+                    pC = new Intl.DisplayNames(['en'], {type: 'region'}).of(cCode.toUpperCase()); 
+                } catch(e) { 
+                    pC = cCode.toUpperCase(); 
+                } 
+            } else if (cCode.length > 2) {
+                pC = cCode.charAt(0).toUpperCase() + cCode.slice(1).toLowerCase();
+            }
+
+            let existing = null;
+            if (bId) {
+                existing = staff.find(s => s.bookId === bId);
+            } else if (src === 'airbnb') {
+                existing = staff.find(s => s.source === 'airbnb' && s.status !== 'cancelled' && s.status !== 'noshow' && ((s.firstName + ' ' + s.lastName).includes(fN) || (s.firstName + ' ' + s.lastName).includes(lN)));
+            }
+
+            if(window.populateStaffForm) window.populateStaffForm(existing || {});
+
+            [ 
+                ['first-name', fN.toUpperCase()], 
+                ['last-name', lN.toUpperCase()], 
+                ['check-in', cI], 
+                ['check-out', cO], 
+                ['pax-count', pax], 
+                ['booking-source', src || 'other'], 
+                ['booking-date', bD], 
+                ['booking-id', bId], 
+                ['booked-type', (bT || "").toUpperCase()], 
+                ['phone', ph || (existing ? existing.phone : '')], 
+                ['email', em || (existing ? existing.email : '')], 
+                ['guest-country', pC || (existing ? existing.country : '')], 
+                ['total-price', tot > 0 ? tot.toFixed(2) : (existing ? Number(existing.totalPrice).toFixed(2) : 0)], 
+                ['net-price', tot > 0 ? Math.max(0, tot - comm).toFixed(2) : (existing ? Number(existing.netPrice).toFixed(2) : 0)]
+            ].forEach(([id, val]) => { 
+                const el = $(id); 
+                if(el && val !== "" && val !== 0) el.value = val; 
+            });
+            
+            if (pSt === 'future' && !existing) pSt = 'new';
+            let finalStat = existing ? existing.status : pSt;
+            
+            let statHdn = $('guest-status-hidden');
+            if(statHdn) statHdn.value = finalStat;
+            
+            let sBtn = $('status-cycle-btn');
+            if(sBtn) {
+                // Ensure STATUS_CYCLE array mapping matches whatever was originally provided
+                const STATUS_CYCLE = [
+                    { val: 'new', bg: '#ec4899', txt: '#fff' },
+                    { val: 'future', bg: '#7fc6f5', txt: '#1e293b' },
+                    { val: 'here', bg: '#059669', txt: '#fff' },
+                    { val: 'left', bg: '#aba39d', txt: '#1e293b' },
+                    { val: 'unconfirmed', bg: '#8b5cf6', txt: '#fff' },
+                    { val: 'noshow', bg: '#000', txt: '#fff' },
+                    { val: 'cancelled', bg: '#94a3b8', txt: '#1e293b' },
+                    { val: 'charged', bg: '#0f172a', txt: '#fbbf24' },
+                    { val: 'special', bg: '#fde047', txt: '#1e293b' },
+                    { val: 'blocked', bg: '#475569', txt: '#fff' },
+                    { val: 'vol', bg: '#fbcfe8', txt: '#831843' }
+                ];
+                let sObj = STATUS_CYCLE.find(x => x.val === finalStat) || STATUS_CYCLE[1];
+                sBtn.dataset.value = sObj.val;
+                sBtn.innerText = sObj.val;
+                sBtn.style.background = sObj.bg;
+                sBtn.style.color = sObj.txt;
+            }
+            
+            let autoNotes = `[ORIGINAL OTA IMPORT: ฿${tot} from ${cI} to ${cO}]`;
+            let nEl = $('guest-notes'); 
+            if (nEl) {
+                if (existing && existing.notes && !existing.notes.includes(notes)) {
+                    nEl.value = existing.notes + "\n\n" + notes; 
+                } else {
+                    nEl.value = (autoNotes + "\n" + notes).trim(); 
+                }
+            }
+
+            if(window.setMulti) window.setMulti('refund-btn', ref, ['REFUNDABILITY: ?', 'NON-REFUNDABLE', 'REFUNDABLE'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400']);
+            if (pUp > 0 && window.setMulti) window.setMulti('upgrade-btn', pUp, ['NO UPGRADE', 'FREE UPGRADE', 'PAID UPGRADE'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400', 'bg-orange-100 text-orange-700 border-orange-400']);
+            
+            if (!existing) {
+                if (comm > 0 && window.addPaymentRow) { 
+                    let kpM = 'other'; 
+                    if (src === 'booking.com') kpM = 'bdc-kp'; 
+                    if (src === 'agoda') kpM = 'agoda-kp'; 
+                    if (src === 'airbnb') kpM = 'airbnb-kp'; 
+                    if (src === 'hostelworld') kpM = 'hw-kp'; 
+                    window.addPaymentRow(cI || getLocalYMD(new Date()), comm.toFixed(2), kpM); 
+                }
+                if ((hBdcP || src === 'airbnb') && (tot - comm) > 0 && window.addPaymentRow) { 
+                    let payM = src === 'agoda' ? 'agoda-pay' : (src === 'airbnb' ? 'airbnb-pay' : 'bdc-pay'); 
+                    window.addPaymentRow(cI || getLocalYMD(new Date()), (tot - comm).toFixed(2), payM); 
+                }
+                if($('assigned-rooms-container')) $('assigned-rooms-container').innerHTML = ''; 
+                for(let k=0; k < Math.max(1, un); k++) {
+                    if(window.addRoomSelect) window.addRoomSelect("");
+                }
+                window.autoSuggestRoom((bT || "").toUpperCase(), notes.toUpperCase(), cI, cO);
+            }
+
+            if(window.updateHeaderName) window.updateHeaderName(); 
+            if(window.calcFinancials) window.calcFinancials(); 
+            if(window.updateAvailableRooms) window.updateAvailableRooms(); 
+            
+            if (cI) { 
+                const d = new Date(cI + "T12:00:00"); 
+                d.setDate(d.getDate() - 7); 
+                viewStart = d; 
+                if(window.render) window.render(); 
+            } 
+            if($('guest-modal')) $('guest-modal').style.display = 'flex';
+            if (existing && window.showAlert) setTimeout(() => window.showAlert("Update Detected!\n\nThis booking already exists in the PMS. We have loaded their current data and updated the fields from this email."), 200);
+        };
+
+        const init = async () => {
+            const processSnapshot = snap => {
+                staff = snap.docs.map(d => ({ id: d.id, ...d.data() })).map(s => {
+                    const rList = getRooms(s).map(dbToUiRoom);
+                    s.room = rList[0] || "";
+                    s.rooms = rList;
+                    if (window.healHostelworldDeposit) window.healHostelworldDeposit(s, db, appId);
+                    return s;
+                });
+                window.staff = staff;
+
+                const base = ["France", "Germany", "United Kingdom", "United States", "Australia", "Netherlands", "Israel", "Spain", "Italy", "Switzerland", "Canada", "Sweden", "Denmark", "Russia", "Thailand", "Belgium", "Austria", "Ireland", "Norway", "Finland", "Brazil", "Argentina", "South Korea", "Japan", "China", "India", "Mexico", "New Zealand", "South Africa", "Portugal", "Greece"];
+                const COUNTRY_CANONICAL = {
+                    'US': 'United States', 'USA': 'United States', 'UNITED STATES': 'United States',
+                    'UK': 'United Kingdom', 'GB': 'United Kingdom', 'UNITED KINGDOM': 'United Kingdom',
+                    'DE': 'Germany', 'GERMAN': 'Germany', 'GERMANY': 'Germany',
+                    'FR': 'France', 'FRENCH': 'France', 'FRANCE': 'France',
+                    'IL': 'Israel', 'ISRAEL': 'Israel',
+                    'AU': 'Australia', 'AUSTRALIA': 'Australia',
+                    'NL': 'Netherlands', 'NETHERLANDS': 'Netherlands',
+                    'ES': 'Spain', 'SPAIN': 'Spain',
+                    'IT': 'Italy', 'ITALY': 'Italy',
+                    'CH': 'Switzerland', 'SWITZERLAND': 'Switzerland',
+                    'CA': 'Canada', 'CANADA': 'Canada',
+                    'SE': 'Sweden', 'SWEDEN': 'Sweden',
+                    'DK': 'Denmark', 'DENMARK': 'Denmark',
+                    'RU': 'Russia', 'RUSSIA': 'Russia',
+                    'TH': 'Thailand', 'THAILAND': 'Thailand',
+                    'KR': 'South Korea', 'SOUTH KOREA': 'South Korea', 'SOUHT KOREA': 'South Korea',
+                    'ALGERIA': 'Algeria', 'ALGERIENNE': 'Algeria',
+                    'TR': 'Turkey', 'TURKEY': 'Turkey',
+                    'NZ': 'New Zealand', 'NEW ZEALAND': 'New Zealand',
+                    'HK': 'Hong Kong', 'HONG KONG': 'Hong Kong',
+                    'BY': 'Belarus', 'BELARUS': 'Belarus'
+                };
+
+                const cleanCountries = new Set(base);
+                staff.forEach(s => {
+                    if (!s.country) return;
+                    const raw = s.country.trim();
+                    if (!raw || raw.toLowerCase().includes('folio') || raw.toLowerCase().includes('invoice') || raw.length < 2) return;
+                    const lookup = raw.toUpperCase();
+                    if (COUNTRY_CANONICAL[lookup]) {
+                        cleanCountries.add(COUNTRY_CANONICAL[lookup]);
+                    } else if (raw.length > 2 && /^[A-Za-z\s\-]+$/.test(raw)) {
+                        const formatted = raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                        cleanCountries.add(formatted);
+                    }
+                });
+
+                const dl = $('country-list');
+                if (dl) dl.innerHTML = [...cleanCountries].sort().map(c => `<option value="${c}"></option>`).join('');
+
+                if ($('calendar-view')?.style.display !== 'none' && window.render) window.render();
+                if ($('dashboard-view')?.style.display === 'flex') window.renderDashboard();
+                if ($('database-view')?.style.display === 'flex' && window.renderDatabase) window.renderDatabase();
+
+                setTimeout(() => { if (window.runDiscrepancyAudit) window.runDiscrepancyAudit(); }, 200);
+
+                const editId = new URLSearchParams(window.location.search).get('edit');
+                if (editId) { window.editStaff(editId); try { window.history.replaceState({}, document.title, window.location.pathname); } catch (e) {} }
+            };
+
+            const bypassLogin = async () => {
+                const safetyTimer = setTimeout(() => {
+                    const bl = $('boot-loader');
+                    if (bl && bl.style.display !== 'none') bl.style.display = 'none';
+                }, 3500);
+
+                try {
+                    if (typeof window.__initial_auth_token !== 'undefined') {
+                        try { await signInWithCustomToken(auth, window.__initial_auth_token); }
+                        catch (tokenErr) { await signInAnonymously(auth); }
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    currentUserRole = 'admin';
+                    currentUserEmail = 'admin';
+                    window.currentUserRole = currentUserRole;
+                    window.currentUserEmail = currentUserEmail;
+                    $$('.admin-only').forEach(el => el.classList.remove('hidden'));
+                    await loadPropertyConfig();
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
+                        window.showAlert("Database Permission Denied.");
+                    });
+                } catch (e) {
+                    console.error("Auth bypass error:", e);
+                    $('sync-status').innerText = "Auth Error";
+                } finally {
+                    clearTimeout(safetyTimer);
+                    const bl = $('boot-loader');
+                    if (bl) bl.style.display = 'none';
+                }
+            };
+
+            if (typeof window.__initial_auth_token !== 'undefined' || !REQUIRE_LOGIN) {
+                bypassLogin();
+            } else {
+                onAuthStateChanged(auth, async user => {
+                    if (user) {
+                        currentUserRole = 'admin';
+                        currentUserEmail = (user.email || 'admin@test.local').toLowerCase();
+                        window.currentUserRole = currentUserRole;
+                        window.currentUserEmail = currentUserEmail;
+                        $('boot-loader').style.display = 'none';
+                        await loadPropertyConfig();
+                        onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
+                            window.showAlert("Database Permission Denied.");
+                            $('boot-loader').style.display = 'none';
+                        });
+                    } else {
+                        window.location.href = 'index.html';
+                    }
+                });
+            }
+
+            const tBodyEl = $('timeline-body');
+            tBodyEl.addEventListener('mouseover', e => {
+                const col = e.target.closest('.day-column');
+                if (col && col.dataset.colIndex !== undefined) {
+                    const idx = col.dataset.colIndex;
+                    $$(`[data-col-index="${idx}"]`).forEach(el => el.classList.add('hover-col'));
+                }
+            });
+
+            tBodyEl.addEventListener('mouseout', e => {
+                const col = e.target.closest('.day-column');
+                if (col && col.dataset.colIndex !== undefined) {
+                    const idx = col.dataset.colIndex;
+                    $$(`[data-col-index="${idx}"]`).forEach(el => el.classList.remove('hover-col'));
+                }
+            });
+
+            tBodyEl.addEventListener('click', e => {
+                const col = e.target.closest('.day-column');
+                if (!col) return;
+                const dStr = col.dataset.dateIso;
+                const rId = col.dataset.roomId || "";
+                if (!dStr) return;
+
+                const modal = $('guest-modal');
+                const isModalOpen = modal && (modal.classList.contains('active') || window.getComputedStyle(modal).display !== 'none');
+                if (isModalOpen) {
+                    if (rId) {
+                        const curSelects = Array.from($$('.assigned-room-select'));
+                        const emptySelect = curSelects.find(s => !s.value);
+                        if (emptySelect) emptySelect.value = rId;
+                        else if (!curSelects.some(s => s.value === rId)) window.addRoomSelect(rId);
+                        if (window.updateAvailableRooms) window.updateAvailableRooms();
+                    }
+                    return;
+                }
+                if (window.quickAdd) window.quickAdd(rId, new Date(dStr + "T12:00:00Z"));
+            });
+
+            window.addEventListener('resize', () => {
+                if ($('calendar-view')?.style.display !== 'none' && window.render) window.render();
+            });
+            window.updateNavLinks();
+            if (window.lucide) window.lucide.createIcons();
+            if (window.mountLegendSvgs) window.mountLegendSvgs();
+        };
+
+        init();
+    </script>
+</body>
+</html>
