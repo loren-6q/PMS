@@ -30,6 +30,27 @@
       "title": "Housekeeping & Bed Cleanliness State Matrix",
       "description": "Add clean/dirty/inspected toggle states to bed rows on the calendar grid, updating automatically when a booking status cycles to 'LEFT'.",
       "status": "planned"
+    },
+    {
+      "id": "FEAT-005",
+      "category": "Setup Wizard & Events",
+      "title": "Configurable Event Shoulder Ranges",
+      "description": "Allow properties in Setup Wizard Step 4 to configure custom event shoulder ranges (±1, ±2, or ±3 days) for timeline highlight shading and pricing curves.",
+      "status": "planned"
+    },
+    {
+      "id": "FEAT-006",
+      "category": "Inventory & Operations",
+      "title": "Seasonal Dorm Capacity Switcher",
+      "description": "One-click toggle in Setup Wizard to deactivate upper dorm bunks for low-season (e.g. 8-bed to 6-bed), reducing OTA Channex availability automatically while keeping historical bookings safely mapped.",
+      "status": "planned"
+    },
+    {
+      "id": "FEAT-007",
+      "category": "Guest Communications",
+      "title": "Smart Email Communication Engine",
+      "description": "Convert manual email status pills (SENT, FMP?, SPECIAL) into an integrated templating engine that generates personalized confirmation emails based on dates, source OTA, and room type.",
+      "status": "planned"
     }
   ]
 }
