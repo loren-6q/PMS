@@ -1,55 +1,43 @@
 // ==========================================================================
-// core/occupancy.js - The Immutable Occupancy Law
+// core/occupancy.js - The Immutable Occupancy Law & Status Palette
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-/**
- * Universal Status Definitions
- * ONLY Occupying statuses deduct from physical inventory.
- * Non-occupying statuses NEVER reduce live availability or trigger Channex deductions.
- */
-
+// --- 1. Status Classifications & High-Contrast Palette ---
 export const PMS_STATUS = {
-    OCCUPYING: ['here', 'future', 'new'],
-    NON_OCCUPYING: ['cancelled', 'noshow', 'unconfirmed', 'charged', 'tocharge', 'vol', 'blocked'],
+    OCCUPYING: ['here', 'future', 'new', 'blocked'],
+    NON_OCCUPYING: ['cancelled', 'noshow', 'unconfirmed', 'charged', 'tocharge', 'vol', 'left'],
     SPECIAL: 'special'
 };
 
 export const STATUS_CYCLE = [
     { val: 'new', bg: '#ec4899', txt: '#ffffff', label: 'NEW' },
-    { val: 'future', bg: '#7fc6f5', txt: '#1e293b', label: 'CONFIRMED' },
-    { val: 'here', bg: '#dcfce7', txt: '#14532d', label: 'CHECKED IN' },
-    { val: 'left', bg: '#aba39d', txt: '#1e293b', label: 'CHECKED OUT' },
-    { val: 'cancelled', bg: '#c3c5c9', txt: '#64748b', label: 'CANCELLED' },
-    { val: 'noshow', bg: '#e5e7eb', txt: '#64748b', label: 'NO SHOW' },
+    { val: 'future', bg: '#7fc6f5', txt: '#1e293b', label: 'FUTURE' },
+    { val: 'here', bg: '#dcfce7', txt: '#14532d', label: 'HERE' },
+    { val: 'left', bg: '#aba39d', txt: '#1e293b', label: 'LEFT' },
+    { val: 'cancelled', bg: '#1e293b', txt: '#fca5a5', label: 'CANCELLED' },
+    { val: 'noshow', bg: '#94a3b8', txt: '#334155', label: 'NO-SHOW' },
     { val: 'special', bg: '#fef08a', txt: '#1e293b', label: 'SPECIAL' },
-    { val: 'blocked', bg: '#475569', txt: '#ffffff', label: 'MAINTENANCE' },
-    { val: 'tocharge', bg: '#ea580c', txt: '#ffffff', label: 'TO CHARGE' },
-    { val: 'charged', bg: '#0f172a', txt: '#fbbf24', label: 'CHARGED' },
-    { val: 'vol', bg: '#fbcfe8', txt: '#831843', label: 'VOLUNTEER' },
-    { val: 'unconfirmed', bg: '#f3e8ff', txt: '#581c87', label: 'UNCONFIRMED' }
+    { val: 'blocked', bg: '#b45309', txt: '#fef3c7', label: 'BLOCKED' },
+    { val: 'charged', bg: '#1e3a8a', txt: '#38bdf8', label: 'CHARGED' },
+    { val: 'tocharge', bg: '#ea580c', txt: '#ffffff', label: 'TO-CHARGE' },
+    { val: 'vol', bg: '#fbcfe8', txt: '#831843', label: 'VOL' },
+    { val: 'unconfirmed', bg: '#7e22ce', txt: '#ffffff', label: 'UNCONFIRMED' }
 ];
 
-/**
- * Single Source of Truth for space occupancy across Calendar, Rate Matrix, and Channex.
- * @param {string} status - Reservation status string
- * @param {boolean} hasAssignedRoom - Whether a physical room is assigned
- * @returns {boolean} True if booking physically occupies inventory
- */
+// --- 2. Live Inventory Occupancy Law Evaluator ---
 export function isOccupyingBooking(status, hasAssignedRoom = false) {
     if (!status) return false;
     const s = String(status).trim().toLowerCase();
-    
-    // Explicit non-occupying statuses
-    if (PMS_STATUS.NON_OCCUPYING.includes(s)) return false;
-    
-    // Special bookings only occupy if a room is assigned
-    if (s === PMS_STATUS.SPECIAL) return !!hasAssignedRoom;
-    
-    // 'here', 'future', 'new', 'left' occupy live inventory
-    return PMS_STATUS.OCCUPYING.includes(s) || s === 'left';
+
+    if (s === PMS_STATUS.SPECIAL) {
+        return !!hasAssignedRoom;
+    }
+
+    return PMS_STATUS.OCCUPYING.includes(s);
 }
 
+// --- 3. Window Global Bridge ---
 if (typeof window !== 'undefined') {
     window.PMS_STATUS = PMS_STATUS;
     window.STATUS_CYCLE = STATUS_CYCLE;
