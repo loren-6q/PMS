@@ -198,7 +198,7 @@ export function adjustPax(delta) {
     if (typeof window.calcExtension === 'function') window.calcExtension();
 }
 
-// --- 5. Room Dropdown Generator with Collision Guards ---
+// --- 5. Room Dropdown Generator with Parent Dorm Grouping & Collision Guards ---
 export function updateAvailableRooms() {
     const cI = document.getElementById('check-in')?.value;
     const cO = document.getElementById('check-out')?.value;
@@ -250,23 +250,40 @@ export function addRoomSelect(initialVal = "") {
     sel.innerHTML = `<option value="">-- UNASSIGNED --</option>`;
     sel.onchange = updateAvailableRooms;
 
-    let currentGroup = '', optGroup = null;
+    // Group active rooms by Parent Room / Dorm Name
+    const roomGroups = new Map();
     (window.hotelRooms || []).filter(r => !r.inactive).forEach(r => {
-        const cat = r.category || r.type || 'Standard';
-        if (cat !== currentGroup) {
-            optGroup = document.createElement('optgroup');
-            optGroup.label = `--- ${cat.toUpperCase()} ---`;
-            sel.appendChild(optGroup);
-            currentGroup = cat;
+        let parentName = r.parentRoom;
+        if (!parentName) {
+            parentName = r.id.includes('№') ? r.id.split('№')[0].trim() : (r.category || r.type || 'Rooms');
         }
-        const opt = document.createElement('option');
-        opt.value = r.id;
-        const bunkArrow = (r.bunk === 'top' || r.bed === 'top') ? ' ↑' : ((r.bunk === 'bottom' || r.bunk === 'bot' || r.bed === 'bottom' || r.bed === 'bot') ? ' ↓' : '');
-        opt.innerText = `${r.id}${bunkArrow}`;
-        if (optGroup) optGroup.appendChild(opt);
+        if (!roomGroups.has(parentName)) roomGroups.set(parentName, []);
+        roomGroups.get(parentName).push(r);
     });
 
-    // Preserve original/legacy room assignment if not in active room list
+    // Build hierarchical optgroups with concise bed labels
+    roomGroups.forEach((beds, parentTitle) => {
+        const optGroup = document.createElement('optgroup');
+        optGroup.label = `--- ${parentTitle.toUpperCase()} ---`;
+
+        beds.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.id; // Exact canonical value saved to Firestore
+            
+            // Concise label prevents horizontal clipping on small screens
+            const displayLabel = r.id.includes('№') ? `№ ${r.id.split('№')[1].trim()}` : r.id;
+            const bunkArrow = (r.bunk === 'top' || r.bed === 'top') 
+                ? ' ↑' 
+                : ((r.bunk === 'bottom' || r.bunk === 'bot' || r.bed === 'bottom' || r.bed === 'bot') ? ' ↓' : '');
+            
+            opt.innerText = `${displayLabel}${bunkArrow}`;
+            optGroup.appendChild(opt);
+        });
+
+        sel.appendChild(optGroup);
+    });
+
+    // Safety Fallback: Preserve original assignment if room was archived or modified
     if (initialVal) {
         const exists = Array.from(sel.options).some(o => o.value === initialVal);
         if (!exists) {
