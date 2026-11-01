@@ -1,78 +1,143 @@
 // ==========================================================================
-// parser/ota-hostelworld.js - Hostelworld Extranet & Email Extraction Adapter
+// parser/ota-hostelworld.js - Hostelworld Extranet & Email Parser
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-export function parseHostelworld(lines, normalizedText, parseOtaDate, safeLocalYmd) {
-    const s = { source: 'hostelworld', pax: 1, payments: [], units: 1, rooms: [] };
-    
-    const refIdx = lines.findIndex(l => l === 'Reference' || l.includes('Reference'));
-    if (refIdx > -1) {
-        s.bookId = lines[refIdx + 1];
-        const nameParts = (lines[refIdx + 2] || '').split(' ');
-        s.firstName = nameParts[0] || '';
-        s.lastName = nameParts.slice(1).join(' ');
-        s.country = lines[refIdx + 3];
-        
-        const l4 = lines[refIdx + 4] || '', l5 = lines[refIdx + 5] || '';
-        if (l4.includes('@')) s.email = l4; else if (l5.includes('@')) s.email = l5;
-        
-        const p4 = l4.replace(/[\s+]/g, ''), p5 = l5.replace(/[\s+]/g, '');
-        if (p4.length >= 8 && !isNaN(p4)) s.phone = l4; else if (p5.length >= 8 && !isNaN(p5)) s.phone = l5;
-    }
-    
-    const bookedIdx = lines.findIndex(l => l === 'Booked' || l === 'Booking Date');
-    if (bookedIdx > -1) s.bookDate = parseOtaDate(lines[bookedIdx + 1]);
-    
-    const arrIdx = lines.findIndex(l => l === 'Arriving');
-    if (arrIdx > -1) s.checkIn = parseOtaDate(lines[arrIdx + 1]);
-    
-    const hwDenseRegex = /^(\d{1,2}[a-z]{0,2}\s+[a-zA-Z]{3}\s+[`'´]?\d{2,4})(.*?)(\d{1,2})\s*(THB|USD|EUR|GBP|AUD)\s*([\d,.]+)$/i;
-    for (let i = 0; i < lines.length; i++) {
-        const m = lines[i].match(hwDenseRegex);
-        if (m) {
-            if (!s.checkIn) s.checkIn = parseOtaDate(m[1]);
-            let roomStr = m[2].trim();
-            if (roomStr.toLowerCase().includes('non-refundable') || roomStr.toLowerCase().includes('non refundable')) {
-                s.refundability = 'non-ref';
-                roomStr = roomStr.replace(/non-?refundable/gi, '').replace(/-\s*$/, '').trim();
-            }
-            s.bookedType = roomStr;
-            const paxStr = m[3];
-            const paxVal = parseInt(paxStr.length > 1 ? paxStr.charAt(0) : paxStr); 
-            if (!isNaN(paxVal) && paxVal > 0) s.pax = paxVal;
-            break;
-        }
+import { parseFlexibleDate } from './parser-engine.js';
+
+export function parseHostelworld(rawText) {
+    if (!rawText) return null;
+    const text = rawText.replace(/\r/g, '');
+
+    // 1. Signature Check
+    const isHw = /hostelworld/i.test(text) || /reference\s*number[\s:#]*[0-9]{4,8}-[0-9]{4,8}/i.test(text);
+    if (!isHw) return null;
+
+    // 2. Reference ID
+    const idMatch = text.match(/(?:reference\s*number|reference|ref)[\s:#]*([0-9\-]+)/i);
+    const bookId = idMatch ? idMatch[1].trim() : '';
+
+    // 3. Guest Name
+    let firstName = '';
+    let lastName = 'GUEST';
+    const nameMatch = text.match(/(?:lead\s*guest|guest\s*name|name)[\s:#]*([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i);
+    if (nameMatch) {
+        const full = nameMatch[1].trim().replace(/\s+/g, ' ');
+        const parts = full.split(' ');
+        firstName = parts[0] || '';
+        lastName = parts.slice(1).join(' ') || 'GUEST';
     }
 
-    const hwBedMatch = normalizedText.match(/(?:No\.?\s*of\s*Beds?|Beds?|Persons?)\s*:?\s*(\d+)/i);
-    if (hwBedMatch) {
-        const bNum = parseInt(hwBedMatch[1], 10);
-        if (bNum > 0) s.units = bNum;
+    // 4. Country / Nationality (Crucial for TM30)
+    let country = '';
+    const countryMatch = text.match(/(?:nationality|country|citizen)[\s:#]*([A-Za-z\s\-]+)(?:\n|$)/i);
+    if (countryMatch) {
+        country = countryMatch[1].trim().toUpperCase();
     }
 
-    const nightMatch = normalizedText.match(/(\d+)\s*Nights?/i);
-    if (nightMatch && s.checkIn) {
-        const nights = parseInt(nightMatch[1]) || 1;
-        const p = s.checkIn.split('-');
-        if (p.length === 3) {
-            const d = new Date(Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])));
-            d.setUTCDate(d.getUTCDate() + nights);
-            s.checkOut = d.toISOString().split('T')[0];
-        }
-    }
-    
-    const subIdx = lines.findIndex(l => l.includes('Subtotal') || l === 'Total');
-    if (subIdx > -1 && lines.length > subIdx + 1) {
-        const amtStr = lines[subIdx + 1] || lines[subIdx];
-        s.totalPrice = parseFloat(amtStr.replace(/[^\d.]/g, ''));
-    }
-    
-    const depIdx = lines.findIndex(l => l.includes('Hostelworld Deposit') || l.includes('Deposit'));
-    if (depIdx > -1 && lines.length > depIdx + 1) {
-        const depositAmt = parseFloat((lines[depIdx + 1] || lines[depIdx]).replace(/[^\d.]/g, ''));
-        if (!isNaN(depositAmt)) s.payments.push({ date: s.checkIn || safeLocalYmd(), amt: depositAmt, method: 'hw-kp' });
+    // 5. Dates
+    let checkIn = '';
+    let checkOut = '';
+    const inMatch = text.match(/(?:arriving|arrival|check-in)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i) ||
+                    text.match(/arriving[\s:#]*([0-9]{1,2}\s+[A-Za-z]{3}\s+[0-9]{4})/i);
+    const outMatch = text.match(/(?:departing|departure|check-out)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i) ||
+                     text.match(/departing[\s:#]*([0-9]{1,2}\s+[A-Za-z]{3}\s+[0-9]{4})/i);
+
+    if (inMatch) checkIn = parseFlexibleDate(inMatch[1]);
+    if (outMatch) checkOut = parseFlexibleDate(outMatch[1]);
+
+    // 6. Booking Date
+    let bookDate = '';
+    const bookDateMatch = text.match(/(?:booked\s*on|booking\s*date)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i);
+    if (bookDateMatch) bookDate = parseFlexibleDate(bookDateMatch[1]);
+
+    // 7. Unit Count & Pax
+    let pax = 1;
+    let unitCount = 1;
+
+    const paxMatch = text.match(/(\d+)\s*(?:person|people|guest|pax)/i) ||
+                     text.match(/(?:persons|number\s*of\s*guests|guests)[\s:#]*(\d+)/i);
+    if (paxMatch) pax = parseInt(paxMatch[1], 10) || 1;
+
+    const unitMatch = text.match(/(\d+)\s*(?:bed|beds|dorm\s*bed|room|rooms)\b/i);
+    if (unitMatch) {
+        unitCount = parseInt(unitMatch[1], 10) || 1;
+    } else {
+        unitCount = pax;
     }
 
-    return s;
+    // 8. Total Price & Deposit Split
+    let totalPrice = 0;
+    let depositAmt = 0;
+
+    const totalMatch = text.match(/(?:total\s*price|total\s*cost|total|amount)[\s:#]*(?:[A-Z]{3}|฿|\$|€|£)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+    if (totalMatch) {
+        totalPrice = parseFloat(totalMatch[1].replace(/,/g, '')) || 0;
+    }
+
+    const depositMatch = text.match(/(?:deposit\s*paid|deposit)[\s:#]*(?:[A-Z]{3}|฿|\$|€|£)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+    if (depositMatch) {
+        depositAmt = parseFloat(depositMatch[1].replace(/,/g, '')) || 0;
+    }
+
+    // In Hostelworld, Net Revenue is Total Price minus HW commission deposit
+    const explicitNet = totalPrice > 0 ? Number((totalPrice - depositAmt).toFixed(2)) : null;
+
+    // 9. Unit / Room Category
+    let bookedType = '';
+    const roomMatch = text.match(/(?:room\s*type|dorm\s*bed|bed|room)[\s:#]*([^\n\r]+)/i);
+    if (roomMatch) {
+        bookedType = roomMatch[1].trim();
+    }
+
+    // 10. Payment Entries (Hostelworld logs deposit as hw-kp)
+    const payments = [];
+    if (depositAmt > 0 && checkIn) {
+        payments.push({
+            date: checkIn,
+            amt: depositAmt,
+            method: 'hw-kp'
+        });
+    }
+
+    // 11. Contact Details
+    let phone = '';
+    let email = '';
+    const phoneMatch = text.match(/(?:phone|tel)[\s:#]*([+\d\s\-\(\)]{8,20})/i);
+    const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    if (phoneMatch) phone = phoneMatch[1].trim();
+    if (emailMatch) email = emailMatch[1].trim();
+
+    const noteLines = [
+        `[HOSTELWORLD CONFIRMATION]`,
+        `• Ref: ${bookId}`,
+        `• Units: ${unitCount} | Pax: ${pax}`,
+        `• Deposit: ฿${depositAmt} (HW-KP)`,
+        `• Balance Due on Arrival: ฿${Number((totalPrice - depositAmt).toFixed(2))}`
+    ];
+    if (country) noteLines.push(`• Nationality: ${country}`);
+
+    return {
+        source: 'hostelworld',
+        bookId,
+        firstName: firstName.toUpperCase(),
+        lastName: lastName.toUpperCase(),
+        country,
+        pax,
+        unitCount,
+        checkIn,
+        checkOut,
+        bookDate,
+        totalPrice,
+        netPrice: explicitNet,
+        netVerified: explicitNet !== null,
+        bookedType,
+        phone,
+        email,
+        isProxyEmail: false,
+        refundability: 'non-ref',
+        payments,
+        status: 'future',
+        notes: noteLines.join('\n')
+    };
 }
