@@ -8,19 +8,28 @@ import { viewStart, getDaysToShow, populateMonthSelect } from './pms-calendar-ta
 import { renderReservationBar } from './pms-calendar-bars.js';
 import { openGuestModal } from './pms-folio-modal.js';
 
-// --- 1. Bed Display & Architecture Formatters ---
+// --- 1. Bed & Room Display Formatters ---
 export function formatBedDisplayLabel(id) {
     if (!id) return '';
     const str = String(id).trim();
     if (str.includes('№')) {
-        const numPart = str.split('№')[1].trim();
-        return `№ ${numPart}`;
+        const parts = str.split('№');
+        return {
+            roomName: parts[0].trim(),
+            bedNum: `№ ${parts[1].trim()}`
+        };
     }
-    const m = str.match(/[_\-\s]+(\d+)$/);
-    if (m) return `№ ${m[1].padStart(2, '0')}`;
-    const mLetter = str.match(/^[A-Za-z]+(\d+)$/);
-    if (mLetter) return `№ ${mLetter[1].padStart(2, '0')}`;
-    return str;
+    const m = str.match(/^(.*?)[\s\-_]+(\d+)\$/);
+    if (m) {
+        return {
+            roomName: m[1].trim(),
+            bedNum: `№ ${m[2].padStart(2, '0')}`
+        };
+    }
+    return {
+        roomName: str,
+        bedNum: ''
+    };
 }
 
 export function classifyRoomForCalendar(r) {
@@ -185,7 +194,28 @@ export function toggleAllGroups() {
     groups.forEach(grp => toggleGroup(grp, window.masterGroupState));
 }
 
-// --- 5. Master Calendar Assembly Engine ---
+// --- 5. Legend Drawer Controller ---
+export function toggleLegendDrawer() {
+    const legend = document.getElementById('calendar-legend');
+    const chevron = document.getElementById('legend-toggle-chevron');
+    const label = document.getElementById('legend-toggle-label');
+    if (!legend) return;
+
+    const isHidden = legend.style.display === 'none' || legend.classList.contains('hidden');
+    if (isHidden) {
+        legend.style.display = 'flex';
+        legend.classList.remove('hidden');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+        if (label) label.innerText = 'Hide Key';
+    } else {
+        legend.style.display = 'none';
+        legend.classList.add('hidden');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+        if (label) label.innerText = 'Show Key';
+    }
+}
+
+// --- 6. Master Calendar Assembly Engine ---
 export function renderCalendar() {
     const monthsContainer = document.getElementById('calendar-header-months');
     const daysContainer = document.getElementById('calendar-header-days');
@@ -223,10 +253,11 @@ export function renderCalendar() {
         return b.property === curProp && b.status !== 'cancelled';
     });
 
-    // 1. Unassigned Tray
+    // 1. Unassigned Tray: Render if ANY unassigned booking exists
     const unassignedList = propBookings.filter(b => {
         const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
-        return rList.length === 0 || rList[0] === "" || ['unconfirmed', 'charged'].includes(b.status);
+        const hasValidRoom = rList.some(r => r && r.trim() !== "");
+        return !hasValidRoom || ['unconfirmed', 'charged'].includes(b.status);
     });
 
     if (unassignedList.length > 0) {
@@ -272,13 +303,13 @@ export function renderCalendar() {
     categoriesMap.forEach((roomList, catName) => {
         const grpKey = catName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
 
-        // Category Header Row
+        // Category Spanning Header Row
         const hRow = document.createElement('div');
         hRow.className = "timeline-grid cursor-pointer unselectable group-header";
         hRow.dataset.group = grpKey;
         hRow.innerHTML = `
             <div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 shadow-xs" style="grid-column: 1 / -1; min-width: 100vw;" onclick="window.toggleGroup('${grpKey}')">
-                <span class="truncate pr-1">${catName}</span>
+                <span class="truncate pr-1">${catName} (${roomList.length})</span>
                 <div class="flex items-center gap-1 shrink-0">
                     <span id="state-${grpKey}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span>
                     <i data-lucide="chevron-up" id="icon-${grpKey}" size="13"></i>
@@ -291,16 +322,19 @@ export function renderCalendar() {
         const aRow = renderCategoryAvailabilityRow(catName, grpKey, roomList, daysArray, propBookings, daysToShow);
         body.appendChild(aRow);
 
-        // Bed Rows
+        // Bed Rows: Displays Room Name + Bed Label
         roomList.forEach(room => {
             const row = document.createElement('div');
             row.className = `timeline-grid bed-row relative group-${grpKey}`;
             
-            const displayLabel = formatBedDisplayLabel(room.id);
+            const parsed = formatBedDisplayLabel(room.id);
+            const rName = room.parentRoom || room.roomName || parsed.roomName || room.id;
+            const bNum = parsed.bedNum || room.bed || '';
+
             row.innerHTML = `
                 <div class="border-r border-slate-400 bg-slate-50 flex items-center justify-between px-2 uppercase font-black text-xs text-slate-700 sticky left-0 z-20 shadow-xs w-[var(--sidebar-w)]">
-                    <span class="truncate" title="${room.id}">${displayLabel || room.id}</span>
-                    <span class="text-[9px] font-bold text-slate-400">${room.bed || ''}</span>
+                    <span class="truncate font-black text-slate-800 text-[11px]" title="${room.id}">${rName}</span>
+                    <span class="text-[10px] font-black text-indigo-600 ml-1 shrink-0 font-mono">${bNum}</span>
                 </div>
             `;
 
@@ -341,11 +375,12 @@ export function renderCalendar() {
     }
 }
 
-// --- 6. Window Global Bridge ---
+// --- 7. Window Global Bridge ---
 if (typeof window !== 'undefined') {
     window.renderCalendar = renderCalendar;
     window.toggleGroup = toggleGroup;
     window.toggleAllGroups = toggleAllGroups;
+    window.toggleLegendDrawer = toggleLegendDrawer;
     window.formatBedDisplayLabel = formatBedDisplayLabel;
     window.classifyRoomForCalendar = classifyRoomForCalendar;
 }
