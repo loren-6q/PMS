@@ -9,8 +9,10 @@
 import { db, appId } from '../core/config.js';
 import { doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { customAlert } from '../core/ui-dialogs.js';
-import { getLocalYMD } from '../core/dates.js';
+import { getLocalYMD, parseYMD } from '../core/dates.js';
+import { toCanonicalPropId } from '../core/properties.js';
 
+// --- 1. Importer Modal Lifecycle ---
 export function openBulkImporter() {
     let modal = document.getElementById('bulk-import-modal');
     if (!modal) {
@@ -40,10 +42,17 @@ export function openBulkImporter() {
     modal.style.display = 'flex';
 }
 
+// --- 2. Spreadsheet Ingestion & Normalizer ---
 export async function processSpreadsheetPaste() {
     const rawText = document.getElementById('bulk-paste-text')?.value.trim();
     const logEl = document.getElementById('bulk-import-log');
     if (!rawText) return customAlert("Input Required", "Paste rows including headers into the box first.");
+
+    const curPropRaw = window.currentPropertyId;
+    if (!curPropRaw) {
+        return customAlert("No Property", "No active property selected. Cannot import reservations.");
+    }
+    const curProp = toCanonicalPropId(curPropRaw);
 
     const delim = rawText.includes('\t') ? '\t' : ',';
     const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -59,60 +68,120 @@ export async function processSpreadsheetPaste() {
     };
 
     const idx = {
-        name: getIdx(['guest name', 'guest', 'name']),
-        in: getIdx(['check-in', 'arrival', 'in']),
-        out: getIdx(['check-out', 'departure', 'out']),
-        bookId: getIdx(['reservation number', 'booking id', 'reference', 'book number']),
-        room: getIdx(['room', 'unit', 'bed']),
-        total: getIdx(['total', 'price', 'amount']),
-        source: getIdx(['source', 'channel'])
+        name: getIdx(['guest name', 'guest', 'name', 'customer']),
+        in: getIdx(['check-in', 'arrival', 'in', 'start']),
+        out: getIdx(['check-out', 'departure', 'out', 'end']),
+        bookId: getIdx(['reservation number', 'booking id', 'reference', 'book number', 'conf']),
+        room: getIdx(['room', 'unit', 'bed', 'dorm']),
+        total: getIdx(['total', 'price', 'amount', 'rate']),
+        source: getIdx(['source', 'channel', 'ota'])
     };
 
     if (idx.name === -1 || idx.in === -1) {
         return customAlert("Headers Missing", "Could not locate 'Guest Name' and 'Check-in' column headers.");
     }
 
+    // Helper: Normalize date strings (supports YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY)
+    const normalizeDate = (dStr) => {
+        if (!dStr) return '';
+        const clean = dStr.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+        const slashParts = clean.split(/[\/\-\.]/);
+        if (slashParts.length === 3) {
+            // If year is first: YYYY/MM/DD
+            if (slashParts[0].length === 4) {
+                return `${slashParts[0]}-${slashParts[1].padStart(2, '0')}-${slashParts[2].padStart(2, '0')}`;
+            }
+            // Assume DD/MM/YYYY
+            return `${slashParts[2]}-${slashParts[1].padStart(2, '0')}-${slashParts[0].padStart(2, '0')}`;
+        }
+        return clean;
+    };
+
     let successCount = 0;
-    const curProp = window.currentPropertyId || 'swims_resort';
+    let skippedCount = 0;
+    const activeRooms = (window.hotelRooms || []).map(r => r.id);
+    const affectedCategories = new Set();
+    let earliestIn = '9999-99-99';
+    let latestOut = '0000-00-00';
 
     for (let i = 1; i < lines.length; i++) {
         const cells = lines[i].split(delim).map(c => c.trim().replace(/^"|"$/g, ''));
-        const name = cells[idx.name] || 'Guest';
-        const checkIn = cells[idx.in] || '';
-        const checkOut = idx.out > -1 ? cells[idx.out] : '';
+        const fullName = cells[idx.name] || 'Guest';
+        const rawIn = cells[idx.in] || '';
+        const rawOut = idx.out > -1 ? cells[idx.out] : '';
+        const checkIn = normalizeDate(rawIn);
+        let checkOut = normalizeDate(rawOut);
+
+        // Fallback: If checkout missing or invalid, default to 1 night
+        if (!checkOut || checkOut <= checkIn) {
+            const inT = parseYMD(checkIn);
+            if (!isNaN(inT)) {
+                checkOut = getLocalYMD(new Date(inT + 86400000));
+            } else {
+                skippedCount++;
+                continue;
+            }
+        }
+
         const bookId = idx.bookId > -1 ? cells[idx.bookId] : '';
-        const room = idx.room > -1 ? cells[idx.room].toUpperCase() : '';
+        let room = idx.room > -1 ? cells[idx.room].toUpperCase() : '';
+        
+        // If assigned room doesn't exist in active inventory, route to Unassigned Tray
+        if (room && !activeRooms.includes(room)) {
+            room = ""; // Moves to unassigned tray to prevent orphaned invisible booking
+        }
+
         const total = idx.total > -1 ? parseFloat(cells[idx.total].replace(/[^0-9.]/g, '')) || 0 : 0;
         const source = idx.source > -1 ? cells[idx.source].toLowerCase() : 'direct';
 
-        if (!checkIn) continue;
+        const nameParts = fullName.split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || 'GUEST';
 
-        const id = 'bk_' + Math.random().toString(36).substr(2, 9);
+        const id = 'bk_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         const booking = {
             id,
             property: curProp,
-            firstName: name.split(' ')[0] || '',
-            lastName: name.split(' ').slice(1).join(' ') || 'GUEST',
+            firstName,
+            lastName,
             checkIn,
             checkOut,
-            room,
+            room: room || '',
             rooms: room ? [room] : [],
             totalPrice: total,
+            netPrice: Number((total * 0.82).toFixed(2)),
             bookId,
             source,
             status: 'future',
+            payments: [],
+            extraCharges: [],
             createdAt: new Date().toISOString()
         };
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), booking);
         successCount++;
+
+        if (checkIn < earliestIn) earliestIn = checkIn;
+        if (checkOut > latestOut) latestOut = checkOut;
+        if (room) {
+            const hr = (window.hotelRooms || []).find(r => r.id === room);
+            if (hr?.category) affectedCategories.add(hr.category);
+        }
     }
 
-    if (logEl) logEl.innerText = `✓ Successfully imported ${successCount} booking records into ${curProp.toUpperCase()}!`;
+    // Trigger Channex Auto-Sync across affected ranges
+    if (successCount > 0 && typeof window.triggerAutoSync === 'function') {
+        window.triggerAutoSync(earliestIn, latestOut, Array.from(affectedCategories));
+    }
+
+    if (logEl) {
+        logEl.innerText = `✓ Imported ${successCount} booking(s) into ${curProp.toUpperCase()}.${skippedCount ? ` (${skippedCount} skipped due to bad dates)` : ''}`;
+    }
     customAlert("Import Complete", `Loaded ${successCount} reservations.`);
 }
 
-// Hotkey listener: Ctrl + Alt + B opens bulk importer
+// --- 3. Global Hotkey & Window Bridge ---
 window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 'b' || e.key === 'B')) {
         e.preventDefault();
