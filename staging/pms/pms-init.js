@@ -1,31 +1,44 @@
 // ==========================================================================
-// pms/pms-init.js - Front Desk PMS Core Frame Bootstrapper & Lifecycle
+// pms/pms-init.js - Front Desk PMS Core Frame Bootstrapper & Conductor
 // Wild & Wandering Property Management System
 // ==========================================================================
 
 import { app, auth, db, appId, IS_STAGING } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { collection, onSnapshot, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { parseYMD, getLocalYMD } from '../core/dates.js';
 import { loadPropertiesCatalog, toCanonicalPropId } from '../core/properties.js';
 
-import { viewStart, getDaysToShow, populateMonthSelect } from './pms-calendar-tape.js';
-import { buildHeaderGrids, toggleGroup, toggleAllGroups } from './pms-calendar-grid.js';
+import { viewStart, getDaysToShow, populateMonthSelect, scrollToToday } from './pms-calendar-tape.js';
+import { 
+    buildHeaderGrids, 
+    renderCategoryAvailabilityRow, 
+    toggleGroup, 
+    toggleAllGroups, 
+    formatBedDisplayLabel, 
+    classifyRoomForCalendar 
+} from './pms-calendar-grid.js';
 import { renderReservationBar } from './pms-calendar-bars.js';
 import { openGuestModal, initModalDrag } from './pms-folio-modal.js';
 import { renderDashboard } from './pms-dashboard.js';
 import { renderDatabaseTable } from './pms-database.js';
+import { switchTab, initTabRouting, initKeyboardShortcuts } from './pms-ui-tabs.js';
+import { processAndImportClipboard } from '../parser/parser-engine.js';
+
+// Folio Submodule Registrations
 import './pms-folio-actions.js';
 import './pms-folio-ledger.js';
 import './pms-folio-invoice.js';
 import './pms-bulk-import.js';
-import { processAndImportClipboard } from '../parser/parser-engine.js';
+import './pms-tm30.js';
 
-export let currentPropertyId = 'swims_resort';
+// --- 1. Master Application State ---
+export let currentPropertyId = null;
 export let staffBookings = [];
 export let hotelRooms = [];
 export let searchTerm = '';
 
+// --- 2. Master App Bootstrapper ---
 export async function initPms() {
     const loader = document.getElementById('boot-loader');
     if (loader) loader.style.display = 'flex';
@@ -35,16 +48,34 @@ export async function initPms() {
 
         const props = await loadPropertiesCatalog();
         const urlParams = new URLSearchParams(window.location.search);
-        const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || 'swims_resort';
-        currentPropertyId = toCanonicalPropId(pParam);
+        
+        // Zero-Hardcoding: Resolve strictly from URL, LocalStorage, or the first configured property catalog entry
+        const rawProp = urlParams.get('p') || localStorage.getItem('last_prop') || (props.length > 0 ? props[0].id : null);
+        
+        if (!rawProp) {
+            if (loader) loader.style.display = 'none';
+            console.warn("[PMS]: No property catalog found. Please configure a property in Setup.");
+            return;
+        }
 
+        currentPropertyId = toCanonicalPropId(rawProp);
         window.currentPropertyId = currentPropertyId;
+        localStorage.setItem('last_prop', currentPropertyId);
 
+        // Populate Top Navbar Property Switcher
         const switcher = document.getElementById('main-property-switcher');
         if (switcher && props.length > 0) {
             switcher.innerHTML = props.map(p => 
-                `<option value="${p.id}" ${p.id === currentPropertyId ? 'selected' : ''}>${p.name.toUpperCase()}</option>`
+                `<option value="${p.id}" ${p.id === currentPropertyId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`
             ).join('');
+
+            switcher.onchange = (e) => {
+                const nextProp = e.target.value;
+                localStorage.setItem('last_prop', nextProp);
+                const u = new URL(window.location.href);
+                u.searchParams.set('p', nextProp);
+                window.location.href = u.toString();
+            };
         }
 
         const activeProp = props.find(p => p.id === currentPropertyId) || props[0];
@@ -53,8 +84,10 @@ export async function initPms() {
         window.currentPropertyConfig = activeProp;
 
         initModalDrag();
+        initTabRouting();
+        initKeyboardShortcuts();
 
-        // Attach Realtime Reservation Listener
+        // Attach Realtime Firestore Reservations Listener
         onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => {
             staffBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             window.staff = staffBookings;
@@ -75,6 +108,7 @@ export async function initPms() {
     }
 }
 
+// --- 3. Calendar & Timeline Orchestrator ---
 export function renderCalendar() {
     const monthsContainer = document.getElementById('calendar-header-months');
     const daysContainer = document.getElementById('calendar-header-days');
@@ -108,11 +142,11 @@ export function renderCalendar() {
     };
 
     const propBookings = staffBookings.filter(b => {
-        const p = (b.property || 'swims_resort').toLowerCase();
-        return p === currentPropertyId.toLowerCase() && b.status !== 'cancelled';
+        const p = toCanonicalPropId(b.property);
+        return p === currentPropertyId && b.status !== 'cancelled';
     });
 
-    // 1. Unassigned Tray Bookings
+    // 1. Unassigned Tray
     const unassignedList = propBookings.filter(b => {
         const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
         return rList.length === 0 || rList[0] === "" || ['unconfirmed', 'charged'].includes(b.status);
@@ -142,14 +176,14 @@ export function renderCalendar() {
         }
 
         unassignedList.forEach(b => {
-            const bar = renderReservationBar(b, daysToShow, getDayIndex, todayStr, yesterdayStr, openGuestModal);
+            const bar = renderReservationBar(b, daysToShow, getDayIndex, todayStr, yesterdayStr, openGuestModal, searchTerm);
             if (bar) trayRow.appendChild(bar);
         });
 
         body.appendChild(trayRow);
     }
 
-    // 2. Physical Rooms Grouped by Category with Collapsible Headers & Live Availability
+    // 2. Physical Rooms Grouped by Category with Thermal Availability
     const categoriesMap = new Map();
     hotelRooms.forEach(r => {
         const cat = r.category || r.type || 'Standard';
@@ -160,7 +194,7 @@ export function renderCalendar() {
     categoriesMap.forEach((roomList, catName) => {
         const grpKey = catName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
 
-        // Category Spanning Header
+        // Category Header Row
         const hRow = document.createElement('div');
         hRow.className = "timeline-grid cursor-pointer unselectable group-header";
         hRow.dataset.group = grpKey;
@@ -175,28 +209,8 @@ export function renderCalendar() {
         `;
         body.appendChild(hRow);
 
-        // Dynamic Availability Row
-        const catRoomIds = roomList.map(r => r.id);
-        const capacity = catRoomIds.length;
-        const aRow = document.createElement('div');
-        aRow.className = `timeline-grid avail-row-${grpKey} h-[20px]`;
-        aRow.style.display = 'none';
-
-        let availCells = `<div class="bg-slate-900 border-r border-slate-700 flex items-center justify-end pr-2 sticky left-0 z-20 text-[9px] text-slate-400 font-black uppercase tracking-widest unselectable w-[var(--sidebar-w)]">AVAIL &rarr;</div>`;
-        for (let i = 0; i < daysToShow; i++) {
-            const dMs = daysArray[i].getTime();
-            const occ = new Set();
-            propBookings.forEach(b => {
-                if (['cancelled', 'noshow', 'unconfirmed', 'charged', 'vol'].includes(b.status)) return;
-                if (dMs >= parseYMD(b.checkIn) && dMs < parseYMD(b.checkOut)) {
-                    const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
-                    rList.forEach(r => { if (catRoomIds.includes(r)) occ.add(r); });
-                }
-            });
-            const freeCount = capacity - occ.size;
-            availCells += `<div class="flex items-center justify-center border-r border-slate-800 text-[10px] font-black ${freeCount <= 0 ? 'bg-red-600 text-white' : 'bg-slate-800 text-emerald-400'}">${freeCount}</div>`;
-        }
-        aRow.innerHTML = availCells;
+        // Thermal Availability Summary Row (via pms-calendar-grid.js)
+        const aRow = renderCategoryAvailabilityRow(catName, grpKey, roomList, daysArray, propBookings, daysToShow);
         body.appendChild(aRow);
 
         // Bed / Room Rows
@@ -204,9 +218,10 @@ export function renderCalendar() {
             const row = document.createElement('div');
             row.className = `timeline-grid bed-row relative group-${grpKey}`;
             
+            const displayLabel = formatBedDisplayLabel(room.id);
             row.innerHTML = `
                 <div class="border-r border-slate-400 bg-slate-50 flex items-center justify-between px-2 uppercase font-black text-xs text-slate-700 sticky left-0 z-20 shadow-xs w-[var(--sidebar-w)]">
-                    <span class="truncate">${room.id}</span>
+                    <span class="truncate" title="${room.id}">${displayLabel || room.id}</span>
                     <span class="text-[9px] font-bold text-slate-400">${room.bed || ''}</span>
                 </div>
             `;
@@ -216,6 +231,8 @@ export function renderCalendar() {
                 const dIso = getLocalYMD(daysArray[i]);
                 col.className = `day-column ${dIso === todayStr ? 'day-today' : ''}`;
                 col.dataset.dateIso = dIso;
+                col.dataset.dateNum = daysArray[i].getDate(); // Date watermark for style.css
+
                 col.onclick = () => {
                     openGuestModal({
                         checkIn: dIso,
@@ -233,7 +250,7 @@ export function renderCalendar() {
             });
 
             roomBookings.forEach(b => {
-                const bar = renderReservationBar(b, daysToShow, getDayIndex, todayStr, yesterdayStr, openGuestModal);
+                const bar = renderReservationBar(b, daysToShow, getDayIndex, todayStr, yesterdayStr, openGuestModal, searchTerm);
                 if (bar) row.appendChild(bar);
             });
 
@@ -241,31 +258,21 @@ export function renderCalendar() {
         });
     });
 
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
 }
 
-export function switchTab(tab) {
-    ['calendar', 'dashboard', 'database'].forEach(t => {
-        const view = document.getElementById(`${t}-view`);
-        const btn = document.getElementById(`tab-${t === 'calendar' ? 'cal' : (t === 'dashboard' ? 'dash' : 'db')}`);
-        if (view) view.classList.toggle('hidden', t !== tab);
-        if (btn) btn.classList.toggle('active', t === tab);
-    });
-
-    if (tab === 'calendar') renderCalendar();
-    else if (tab === 'dashboard') renderDashboard(staffBookings, currentPropertyId, openGuestModal);
-    else if (tab === 'database') renderDatabaseTable();
-}
-
+// --- 4. Search Handler ---
 export function handleSearch(term) {
     searchTerm = (term || '').trim().toUpperCase();
     renderCalendar();
     renderDatabaseTable();
 }
 
+// --- 5. Window Global Bridge ---
 if (typeof window !== 'undefined') {
     window.renderCalendar = renderCalendar;
-    window.switchTab = switchTab;
     window.handleSearch = handleSearch;
     window.editStaff = (id) => {
         const b = (staffBookings || []).find(x => x.id === id);
@@ -281,4 +288,9 @@ if (typeof window !== 'undefined') {
     };
 }
 
-document.addEventListener('DOMContentLoaded', initPms);
+// Bootstrap on DOM ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPms);
+} else {
+    initPms();
+}
