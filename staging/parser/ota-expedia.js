@@ -1,78 +1,141 @@
 // ==========================================================================
-// parser/ota-expedia.js - Expedia Partner Central Extraction Adapter
+// parser/ota-expedia.js - Expedia Partner Central Parser
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-export function parseExpedia(lines, normalizedText, parseOtaDate, safeLocalYmd) {
-    const s = { source: 'expedia', pax: 1, payments: [], units: 1, rooms: [] };
-    const flatRaw = normalizedText.replace(/\s+/g, ' ');
+import { parseFlexibleDate } from './parser-engine.js';
 
-    const idMatch = normalizedText.match(/Reservation\s*ID\s*:?\s*(\d{8,14})/i) || flatRaw.match(/Reservation\s*ID\s*:?\s*(\d{8,14})/i);
-    if (idMatch) s.bookId = idMatch[1];
+export function parseExpedia(rawText) {
+    if (!rawText) return null;
+    const text = rawText.replace(/\r/g, '');
 
-    const guestMatch = normalizedText.match(/Guest\s*:\s*([A-Za-z\u00C0-\u024F\s\-'\.]+?)(?:Booked\s*on|Guest\s*Email|Room\s*Type|\n|$)/i);
-    if (guestMatch) {
-        const rawName = guestMatch[1].replace(/^(?:mr\.|mrs\.|ms\.|miss|dr\.)\s+/i, '').trim();
-        const parts = rawName.split(/\s+/).filter(Boolean);
-        if (parts.length > 1) {
-            s.firstName = parts.slice(0, -1).join(' ').toUpperCase();
-            s.lastName = parts[parts.length - 1].toUpperCase();
-        } else if (parts.length === 1) {
-            s.lastName = parts[0].toUpperCase();
-        }
+    // 1. Signature Check
+    const isExpedia = /expedia/i.test(text) || /itinerary\s*#?[\s:#]*[0-9]{10,16}/i.test(text);
+    if (!isExpedia) return null;
+
+    // 2. Itinerary ID
+    const idMatch = text.match(/(?:itinerary\s*#?|booking\s*id)[\s:#]*([0-9]{10,16})/i);
+    const bookId = idMatch ? idMatch[1].trim() : '';
+
+    // 3. Guest Name
+    let firstName = '';
+    let lastName = 'GUEST';
+    const nameMatch = text.match(/(?:primary\s*guest|guest\s*name|guest)[\s:#]*([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i);
+    if (nameMatch) {
+        const full = nameMatch[1].trim().replace(/\s+/g, ' ');
+        const parts = full.split(' ');
+        firstName = parts[0] || '';
+        lastName = parts.slice(1).join(' ') || 'GUEST';
     }
 
-    const emailMatch = normalizedText.match(/Guest\s*Email\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
-    if (emailMatch) s.email = emailMatch[1].trim();
-
-    const bdMatch = normalizedText.match(/Booked\s*on\s*:?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i);
-    if (bdMatch) s.bookDate = parseOtaDate(bdMatch[1]);
-    if (!s.bookDate) s.bookDate = safeLocalYmd();
-
-    const rtMatch = normalizedText.match(/Room\s*Type\s*Name\s*:?\s*([\s\S]+?)(?:Pricing\s*Model|Payment\s*Instructions|Check-In|Rate\s*Code|Daily\s*Base\s*Rate|\n|$)/i);
-    if (rtMatch) s.bookedType = rtMatch[1].replace(/\r?\n/g, ' ').trim();
-
-    const expRooms = normalizedText.match(/(?:Number\s*of\s*Rooms|Rooms?)\s*:?\s*(\d+)/i);
-    if (expRooms) s.units = parseInt(expRooms[1], 10) || 1;
-
-    const mPattern = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
-    const dateSectionRegex = new RegExp(`Check-In[\\s\\S]{0,120}?Check-Out[\\s\\S]{0,120}?(${mPattern}\\s+\\d{1,2},?\\s+\\d{4})\\s*(${mPattern}\\s+\\d{1,2},?\\s+\\d{4})(\\d{1,3})?`, 'i');
-    
-    const datesSection = normalizedText.match(dateSectionRegex);
-    if (datesSection) {
-        s.checkIn = parseOtaDate(datesSection[1]);
-        s.checkOut = parseOtaDate(datesSection[2]);
-        if (datesSection[3]) {
-            const paxDigit = datesSection[3].charAt(0);
-            const pVal = parseInt(paxDigit);
-            if (!isNaN(pVal) && pVal > 0) s.pax = pVal;
-        }
+    // 4. Country / Nationality
+    let country = '';
+    const countryMatch = text.match(/(?:country|nationality|residence)[\s:#]*([A-Za-z\s\-]+)(?:\n|$)/i);
+    if (countryMatch) {
+        country = countryMatch[1].trim().toUpperCase();
     }
 
-    const paxMatch = normalizedText.match(/Adults\s*:?\s*(\d+)/i) || flatRaw.match(/(\d+)\s*Adult/i);
-    if (paxMatch && (!s.pax || s.pax === 1)) s.pax = Math.max(1, parseInt(paxMatch[1]) || 1);
+    // 5. Dates
+    let checkIn = '';
+    let checkOut = '';
+    const inMatch = text.match(/(?:check-in|arrival)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i);
+    const outMatch = text.match(/(?:check-out|departure)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i);
+    if (inMatch) checkIn = parseFlexibleDate(inMatch[1]);
+    if (outMatch) checkOut = parseFlexibleDate(outMatch[1]);
 
-    const totalMatch = normalizedText.match(/Total\s*Booking\s*Amount\s*:?\s*([\d,]+(?:\.\d+)?)/i) || flatRaw.match(/Total\s*(?:Booking\s*Amount|Amount)?[^\d]*([\d,]+(?:\.\d+)?)\s*(?:THB|USD|EUR|GBP|฿|\$)/i);
-    const netMatch = normalizedText.match(/Amount\s*to\s*Charge\s*Expedia\s*Group\s*:?\s*([\d,]+(?:\.\d+)?)/i) || flatRaw.match(/Charge\s*Expedia\s*Group[^\d]*([\d,]+(?:\.\d+)?)/i);
+    // 6. Booking Date
+    let bookDate = '';
+    const bookDateMatch = text.match(/(?:booked\s*on|booking\s*date)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i);
+    if (bookDateMatch) bookDate = parseFlexibleDate(bookDateMatch[1]);
 
-    const totalAmt = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, '')) : 0;
-    const netAmt = netMatch ? parseFloat(netMatch[1].replace(/,/g, '')) : 0;
+    // 7. Unit Count & Pax
+    let pax = 1;
+    let unitCount = 1;
 
-    if (totalAmt > 0) {
-        s.totalPrice = totalAmt;
-        s.netPrice = netAmt > 0 ? netAmt : Number((totalAmt * 0.82).toFixed(2));
-    } else if (netAmt > 0) {
-        s.netPrice = netAmt;
-        s.totalPrice = Number((netAmt / 0.82).toFixed(2));
+    const paxMatch = text.match(/(\d+)\s*(?:adult|guest|person)/i) ||
+                     text.match(/(?:guests|adults)[\s:#]*(\d+)/i);
+    if (paxMatch) pax = parseInt(paxMatch[1], 10) || 1;
+
+    const unitMatch = text.match(/(\d+)\s*(?:room|rooms|unit|units)\b/i);
+    if (unitMatch) unitCount = parseInt(unitMatch[1], 10) || 1;
+
+    // 8. Total Price & Net Revenue
+    let totalPrice = 0;
+    let explicitNet = null;
+
+    const priceMatch = text.match(/(?:total\s*booking\s*amount|total\s*price|total)[\s:#]*(?:[A-Z]{3}|฿|\$|€|£)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+    if (priceMatch) {
+        totalPrice = parseFloat(priceMatch[1].replace(/,/g, '')) || 0;
     }
 
-    const isExpediaCollect = normalizedText.toLowerCase().includes('expedia collects payment') || normalizedText.toLowerCase().includes('guest has pre-paid');
-    if (isExpediaCollect && s.totalPrice > 0) {
-        const payDate = s.checkIn || s.bookDate || safeLocalYmd();
-        const commission = Number((s.totalPrice - (s.netPrice || s.totalPrice)).toFixed(2));
-        if (commission > 0) s.payments.push({ date: payDate, amt: commission, method: 'expedia-kp' });
-        if (s.netPrice > 0) s.payments.push({ date: payDate, amt: Number(s.netPrice.toFixed(2)), method: 'expedia-pay' });
+    const netMatch = text.match(/(?:net\s*rate|hotel\s*payout|expedia\s*collect)[\s:#]*(?:[A-Z]{3}|฿|\$|€|£)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+    if (netMatch) {
+        explicitNet = parseFloat(netMatch[1].replace(/,/g, ''));
     }
 
-    return s;
+    // 9. Unit Type
+    let bookedType = '';
+    const roomMatch = text.match(/(?:room\s*type|room)[\s:#]*([^\n\r]+)/i);
+    if (roomMatch) {
+        bookedType = roomMatch[1].trim();
+    }
+
+    // 10. Refundability Policy
+    let refundability = 'unknown';
+    if (/non-refundable|non\s*refundable/i.test(text)) {
+        refundability = 'non-ref';
+    } else if (/free\s*cancellation/i.test(text)) {
+        refundability = 'ref';
+    }
+
+    // 11. Payments (Expedia Collect vs Hotel Collect)
+    const payments = [];
+    const isExpediaCollect = /expedia\s*collect/i.test(text);
+    if (isExpediaCollect && totalPrice > 0 && checkIn) {
+        payments.push({
+            date: checkIn,
+            amt: explicitNet || totalPrice,
+            method: 'expedia-pay'
+        });
+    }
+
+    // 12. Contact Details
+    let phone = '';
+    let email = '';
+    const phoneMatch = text.match(/(?:phone|tel)[\s:#]*([+\d\s\-\(\)]{8,20})/i);
+    const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    if (phoneMatch) phone = phoneMatch[1].trim();
+    if (emailMatch) email = emailMatch[1].trim();
+
+    const noteLines = [
+        `[EXPEDIA CONFIRMATION]`,
+        `• Itinerary: ${bookId}`,
+        `• Units: ${unitCount} | Pax: ${pax}`,
+        `• Policy: ${refundability.toUpperCase()}`
+    ];
+    if (country) noteLines.push(`• Nationality: ${country}`);
+
+    return {
+        source: 'expedia',
+        bookId,
+        firstName: firstName.toUpperCase(),
+        lastName: lastName.toUpperCase(),
+        country,
+        pax,
+        unitCount,
+        checkIn,
+        checkOut,
+        bookDate,
+        totalPrice,
+        netPrice: explicitNet,
+        netVerified: explicitNet !== null,
+        bookedType,
+        phone,
+        email,
+        isProxyEmail: false,
+        refundability,
+        payments,
+        status: 'future',
+        notes: noteLines.join('\n')
+    };
 }
