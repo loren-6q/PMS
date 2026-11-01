@@ -1,187 +1,179 @@
 // ==========================================================================
-// pms/pms-calendar-bars.js - Reservation Bar Placement, Tooltips & Badges
+// pms/pms-calendar-bars.js - Reservation Bar Renderer & Tooltip Engine
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { parseYMD } from '../core/dates.js';
+import { parseYMD, getLocalYMD, diffDays } from '../core/dates.js';
 import { getDue } from '../core/money.js';
 
-// --- 1. Master SVG Icon Suite ---
-export const SVGS = {
-    upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
-    upPaid: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#4ade80" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
-    ext: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M4 12h12v-5l8 8-8 8v-5H4z" fill="#3b82f6" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
-    link: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" fill="none" stroke="#64748b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    mailConf: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><rect x="1" y="4" width="22" height="16" rx="2" fill="#fff" stroke="#000" stroke-width="2"/><path d="M1 6l11 8 11-8" fill="none" stroke="#000" stroke-width="2"/></svg>`,
-    mailNotFmp: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><rect x="1" y="4" width="22" height="16" rx="2" fill="#94a3b8" stroke="#334155" stroke-width="2"/><path d="M1 6l11 8 11-8" fill="none" stroke="#334155" stroke-width="2"/></svg>`,
-    mailPre: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><rect x="1" y="4" width="22" height="16" rx="2" fill="#f87171" stroke="#000" stroke-width="2"/><path d="M1 6l11 8 11-8" fill="none" stroke="#000" stroke-width="2"/></svg>`,
-    mailPreConf: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><rect x="1" y="4" width="22" height="16" rx="2" fill="#4ade80" stroke="#000" stroke-width="2"/><path d="M1 6l11 8 11-8" fill="none" stroke="#000" stroke-width="2"/></svg>`,
-    mailSpec: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><rect x="1" y="4" width="22" height="16" rx="2" fill="#facc15" stroke="#000" stroke-width="2"/><path d="M1 6l11 8 11-8" fill="none" stroke="#000" stroke-width="2"/></svg>`,
-    fbGood: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M3 12l5 5L21 4" fill="none" stroke="#22c55e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12l5 5L21 4" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg>`,
-    fbBad: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg>`
+// OTA Channel Styling Badges
+const CHANNEL_BADGES = {
+    'booking.com': { bg: '#003580', txt: '#fff', char: 'B' },
+    'hostelworld': { bg: '#F15A24', txt: '#fff', char: 'H' },
+    'agoda': { bg: '#87B2D6', txt: '#fff', char: 'A' },
+    'airbnb': { bg: '#FF5A5F', txt: '#fff', char: 'A' },
+    'expedia': { bg: '#facc15', txt: '#003580', char: 'E' },
+    'ctrip': { bg: '#3b82f6', txt: '#fff', char: 'T' },
+    'direct': { bg: '#10b981', txt: '#fff', char: 'D' },
+    'walk-in': { bg: '#475569', txt: '#fff', char: 'W' }
 };
 
-// --- 2. OTA Channel Badges ---
-export const CHANNEL_BADGES = {
-    'booking.com': { bg: 'bg-[#003580]', text: 'B' },
-    'agoda': { bg: 'bg-[#87B2D6]', text: 'A' },
-    'hostelworld': { bg: 'bg-[#F15A24]', text: 'H' },
-    'airbnb': { bg: 'bg-[#FF5A5F]', text: 'A' },
-    'direct': { bg: 'bg-emerald-500', text: 'D' },
-    'expedia': { bg: 'bg-[#facc15]', text: '<span class="text-[#003580]">E</span>' },
-    'ctrip': { bg: 'bg-[#3b82f6]', text: 'T' },
-    'walk-in': { bg: 'bg-slate-600', text: 'W' },
-    'walkin': { bg: 'bg-slate-600', text: 'W' }
-};
+export function renderReservationBar(booking, daysToShow, getDayIndexFn, todayStr, yesterdayStr, onOpenModalFn, searchTerm = '') {
+    const sIdx = getDayIndexFn(booking.checkIn);
+    const eIdx = getDayIndexFn(booking.checkOut);
 
-// --- 3. Reservation Bar DOM Construction & Event Binding ---
-export function renderReservationBar(booking, daysToShow, getDayIndexFn, todayStr, yesterdayStr, onEditCallback, searchTerm = '') {
-    const eS = getDayIndexFn(booking.checkIn) + 0.3;
-    const eE = getDayIndexFn(booking.checkOut) + 0.25;
-    if (eS >= daysToShow || eE <= 0) return null;
+    // If reservation is completely outside visible viewport
+    if (eIdx <= 0 || sIdx >= daysToShow) return null;
 
-    const due = getDue(booking);
-    const owes = due > 0;
-    let borderStyle = 'border border-black/10';
-
-    // Arrival, departure, and new reservation pulse animations
-    if (booking.status === 'future' || booking.status === 'new') {
-        if (booking.checkIn === todayStr) {
-            borderStyle += ' checkin-today';
-        } else if (booking.checkIn <= yesterdayStr) {
-            borderStyle += ' late-checkin';
-        }
-    } else if (booking.status === 'here') {
-        if (booking.checkOut === todayStr) {
-            borderStyle += ' overdue-checkout-today';
-        } else if (booking.checkOut <= yesterdayStr) {
-            borderStyle += ' overdue-checkout-past';
-        }
-    }
-
-    if (booking.status === 'new') {
-        borderStyle += ' status-new-pulse';
-    }
-
-    // Financial alert borders layer alongside animations without canceling them
-    if (booking.badCC) {
-        borderStyle += ' !border-red-500 !border-dashed !border-[3px]';
-    } else if (owes) {
-        borderStyle += ' !border-red-500 !border-[3px]';
-    }
-
-    const chBadge = CHANNEL_BADGES[booking.source?.toLowerCase()] || { bg: 'bg-slate-700', text: '?' };
+    const visibleStart = Math.max(0, sIdx);
+    const visibleEnd = Math.min(daysToShow, eIdx);
+    const span = Math.max(1, visibleEnd - visibleStart);
 
     const bar = document.createElement('div');
-    bar.className = `unselectable staff-bar status-${booking.status} ${borderStyle} ${booking.linkedId ? 'linked-' + booking.linkedId : ''}`;
-    bar.style.left = `calc(var(--sidebar-w) + (100% - var(--sidebar-w)) * ${Math.max(0, eS) / daysToShow})`;
-    bar.style.width = `calc((100% - var(--sidebar-w)) * ${(Math.min(daysToShow, eE) - Math.max(0, eS)) / daysToShow})`;
+    bar.className = 'staff-bar cursor-pointer select-none';
+    bar.dataset.bookingId = booking.id;
 
-    // Live search dimming: 30% opacity keeps calendar structure visible while highlighting matches
-    if (searchTerm) {
+    // Grid positioning across the CSS timeline columns
+    // Column 1 is sidebar; calendar day columns start at 2
+    bar.style.gridColumn = `${visibleStart + 2} / span ${span}`;
+
+    // Apply Status Background Color
+    const status = (booking.status || 'future').toLowerCase();
+    bar.classList.add(`status-${status}`);
+
+    // Alert Border Styling: Bad CC vs Owes Balance
+    const dueAmount = getDue(booking);
+    if (booking.isBadCC) {
+        bar.classList.add('border-bad-cc');
+    } else if (dueAmount > 0.05 && !['cancelled', 'noshow', 'charged'].includes(status)) {
+        bar.classList.add('border-owes-money');
+    }
+
+    // Departure & Arrival Alert Badges
+    if (booking.checkIn === todayStr && status === 'future') {
+        bar.classList.add('alert-checkin-today');
+    } else if (booking.checkIn <= yesterdayStr && status === 'future') {
+        bar.classList.add('alert-late-checkin');
+    } else if (booking.checkOut === todayStr && status === 'here') {
+        bar.classList.add('alert-checkout-today');
+    } else if (booking.checkOut <= yesterdayStr && status === 'here') {
+        bar.classList.add('alert-overdue-departure');
+    }
+
+    // Search Matching Highlight & Dimming
+    if (searchTerm && searchTerm.length > 0) {
         const fullName = `${booking.firstName || ''} ${booking.lastName || ''}`.toUpperCase();
-        const bId = (booking.bookId || '').toUpperCase();
-        if (!fullName.includes(searchTerm) && !bId.includes(searchTerm)) {
-            bar.style.opacity = "0.3";
+        const bookId = (booking.bookId || '').toUpperCase();
+        if (fullName.includes(searchTerm) || bookId.includes(searchTerm)) {
+            bar.classList.add('search-match-highlight');
+        } else {
+            bar.classList.add('search-dimmed');
         }
     }
 
-    // Configurable refundability cutoff window (defaults to 7 days if not set in property profile)
-    const refCutoffDays = (typeof window !== 'undefined' && window.currentPropertyConfig?.refundCutoffDays !== undefined)
-        ? Number(window.currentPropertyConfig.refundCutoffDays)
-        : 7;
-    const isRefundable = booking.refundability === 'ref' && (parseYMD(booking.checkIn) - Date.now() > refCutoffDays * 86400000);
+    // OTA Channel Badge
+    const srcKey = (booking.source || 'direct').toLowerCase();
+    const ch = CHANNEL_BADGES[srcKey] || { bg: '#64748b', txt: '#fff', char: '?' };
+    const badgeHtml = `<span class="ota-icon shrink-0" style="background:${ch.bg}; color:${ch.txt};" title="${srcKey.toUpperCase()}">${ch.char}</span>`;
 
-    let html = `<div class="bar-sticky-content gap-0.5">`;
-    if (booking.linkedId) html += `<div class="w-4 h-4 shrink-0 mr-0.5">${SVGS.link}</div>`;
-    html += `<span class="${isRefundable ? 'italic font-black' : 'font-bold'} truncate text-[11px]" style="letter-spacing:-0.3px;">${booking.lastName || 'Guest'}</span>`;
-    if (booking.pax > 1) html += `<span class="text-[8px] opacity-60 leading-none self-start mt-0.5 ml-0.5">x${booking.pax}</span>`;
-
-    if (booking.upgrade === 'free') html += `<div class="w-3.5 h-4 shrink-0 ml-0.5">${SVGS.upFree}</div>`;
-    else if (booking.upgrade === 'paid') html += `<div class="w-3.5 h-4 shrink-0 ml-0.5">${SVGS.upPaid}</div>`;
-
-    if (booking.extended) html += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${SVGS.ext}</div>`;
-    if (booking.rating === 'good') html += `<div class="w-4 h-4 shrink-0 ml-0.5">${SVGS.fbGood}</div>`;
-    else if (booking.rating === 'bad') html += `<div class="w-4 h-4 shrink-0 ml-0.5">${SVGS.fbBad}</div>`;
-
-    if (booking.emailSpecial) html += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${SVGS.mailSpec}</div>`;
-    else if (booking.emailPrePost === 'confirmed') html += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${SVGS.mailPreConf}</div>`;
-    else if (booking.emailPrePost === 'sent' || booking.emailPrePost === true) html += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${SVGS.mailPre}</div>`;
-    else if (booking.emailConfirm === 2 || booking.emailConfirm === 'not_fmp') html += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${SVGS.mailNotFmp}</div>`;
-    else if (booking.emailConfirm) html += `<div class="w-4 h-3.5 shrink-0 ml-0.5">${SVGS.mailConf}</div>`;
-
-    html += `
-        <div class="ml-1 ${chBadge.bg} text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">
-            ${chBadge.text}
+    const guestDisplayName = `${booking.lastName || 'GUEST'}, ${booking.firstName ? booking.firstName[0] : ''}`.trim();
+    bar.innerHTML = `
+        <div class="flex items-center gap-1 overflow-hidden w-full h-full px-1">
+            ${badgeHtml}
+            <span class="truncate font-black text-[11px] leading-tight ${booking.isRefundable ? 'italic' : ''}">${guestDisplayName}</span>
         </div>
-        <div class="w-2 shrink-0"></div>
-    </div>`;
-
-    bar.innerHTML = html;
-
-    // --- 4. Interactive Hover Tooltip & Multi-Room Linking ---
-    const tooltip = document.getElementById('custom-tooltip');
-    let tags = [];
-    if (booking.refundability === 'ref') tags.push('Refundable');
-    if (booking.upgrade === 'free') tags.push('Free Upgrade');
-    if (booking.upgrade === 'paid') tags.push('Paid Upgrade');
-    if (booking.extended) tags.push('Extended');
-    if (booking.emailConfirm === 2 || booking.emailConfirm === 'not_fmp') tags.push('Conf Sent (Not FMP)');
-    else if (booking.emailConfirm) tags.push('Conf Sent');
-    if (booking.emailPrePost) tags.push(`Pre/Post ${booking.emailPrePost}`);
-    if (booking.emailSpecial) tags.push('Special Sent');
-    if (booking.linkedId) tags.push(`Linked: ${booking.linkedId}`);
-
-    const rList = Array.isArray(booking.rooms) && booking.rooms.length ? booking.rooms : (booking.room ? [booking.room] : []);
-    const roomStr = rList.filter(Boolean).join(', ') || 'Unassigned';
-
-    let ttHtml = `
-        <div class="font-black text-[15px] text-blue-300 leading-tight mb-1">${booking.firstName || ''} ${booking.lastName || 'Guest'}</div>
-        <div>Total: ฿${Number(booking.totalPrice || 0).toFixed(2)} | <span class="${due > 0 ? 'text-red-400 font-black' : 'text-green-400 font-bold'}">Due: ฿${due.toFixed(2)} ${booking.badCC ? '(*BAD CC*)' : ''}</span></div>
-        <div class="text-slate-300 mt-1">${booking.checkIn ? booking.checkIn.substr(5) : ''} &rarr; ${booking.checkOut ? booking.checkOut.substr(5) : ''} (${booking.pax || 1} PAX)</div>
-        <div class="text-slate-300 mt-0.5">Rooms: ${roomStr}</div>
     `;
 
-    if (booking.bookedType) ttHtml += `<div class="text-slate-300 mt-0.5">Booked: ${booking.bookedType}</div>`;
-    ttHtml += `<div class="text-slate-300 mt-0.5">Src: ${(booking.source || 'other').toUpperCase()}</div>`;
-    if (tags.length > 0) ttHtml += `<div class="mt-1 pt-1 border-t border-slate-600 text-yellow-200 text-[10px] uppercase font-bold max-w-[200px] leading-tight">${tags.join(' • ')}</div>`;
-    if (booking.phone || booking.email) ttHtml += `<div class="mt-1 pt-1 border-t border-slate-600 text-slate-400 text-[10px] leading-tight">${booking.phone || ''}<br>${booking.email || ''}</div>`;
+    // Tooltip Events (Decoupled with Fixed Viewport Anchoring)
+    bar.onmouseenter = (e) => showBarTooltip(e, booking);
+    bar.onmousemove = (e) => positionBarTooltip(e);
+    bar.onmouseleave = () => hideBarTooltip();
 
-    bar.onmouseenter = () => {
-        if (booking.linkedId) {
-            document.querySelectorAll('.linked-' + booking.linkedId).forEach(el => el.classList.add('link-glow'));
-        }
-        if (tooltip) {
-            tooltip.innerHTML = ttHtml;
-            tooltip.style.display = 'block';
-        }
-    };
-
-    bar.onmousemove = (e) => {
-        if (!tooltip) return;
-        tooltip.style.left = (e.clientX + 235 > window.innerWidth ? e.clientX - 235 : e.clientX + 15) + 'px';
-        tooltip.style.top = (e.clientY + 165 > window.innerHeight ? e.clientY - 165 : e.clientY + 15) + 'px';
-    };
-
-    bar.onmouseleave = () => {
-        if (booking.linkedId) {
-            document.querySelectorAll('.linked-' + booking.linkedId).forEach(el => el.classList.remove('link-glow'));
-        }
-        if (tooltip) tooltip.style.display = 'none';
-    };
-
+    // Click: Open Folio Modal
     bar.onclick = (e) => {
         e.stopPropagation();
-        if (tooltip) tooltip.style.display = 'none';
-        if (typeof onEditCallback === 'function') onEditCallback(booking.id);
+        hideBarTooltip();
+        if (typeof onOpenModalFn === 'function') {
+            onOpenModalFn(booking);
+        }
     };
 
     return bar;
 }
 
-// --- 5. Window Global Bridge ---
-if (typeof window !== 'undefined') {
-    window.SVGS = SVGS;
-    window.CHANNEL_BADGES = CHANNEL_BADGES;
-    window.renderReservationBar = renderReservationBar;
+// --- Tooltip Controller (Fixes Screen Freakout / Flicker Loop) ---
+let tooltipEl = null;
+
+function getTooltipElement() {
+    if (!tooltipEl) {
+        tooltipEl = document.getElementById('custom-tooltip');
+        if (!tooltipEl) {
+            tooltipEl = document.createElement('div');
+            tooltipEl.id = 'custom-tooltip';
+            document.body.appendChild(tooltipEl);
+        }
+        tooltipEl.style.cssText = `
+            position: fixed !important;
+            pointer-events: none !important;
+            z-index: 999999 !important;
+            display: none;
+            background: #0f172a;
+            color: #ffffff;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            line-height: 1.4;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+            border: 1px solid #334155;
+            max-width: 280px;
+        `;
+    }
+    return tooltipEl;
+}
+
+export function showBarTooltip(e, b) {
+    const el = getTooltipElement();
+    const nights = diffDays(b.checkIn, b.checkOut);
+    const due = getDue(b);
+
+    el.innerHTML = `
+        <div class="font-black text-xs text-white uppercase border-b border-slate-700 pb-1 mb-1 flex justify-between items-center">
+            <span>${b.firstName || ''} ${b.lastName || 'Guest'}</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-slate-800 text-slate-300">${b.source || 'Direct'}</span>
+        </div>
+        <div class="space-y-0.5 text-[10px] text-slate-300 font-medium">
+            <div>Dates: <b>${b.checkIn} &rarr; ${b.checkOut}</b> (${nights} nt)</div>
+            <div>Room: <b>${Array.isArray(b.rooms) ? b.rooms.join(', ') : (b.room || 'Unassigned')}</b></div>
+            <div>Balance Due: <b class="${due > 0 ? 'text-rose-400' : 'text-emerald-400'} font-bold">฿${due.toFixed(2)}</b></div>
+            ${b.bookId ? `<div class="text-[9px] text-slate-400 font-mono">ID: ${b.bookId}</div>` : ''}
+        </div>
+    `;
+
+    el.style.display = 'block';
+    positionBarTooltip(e);
+}
+
+export function positionBarTooltip(e) {
+    if (!tooltipEl || tooltipEl.style.display === 'none') return;
+    const offset = 14;
+    let x = e.clientX + offset;
+    let y = e.clientY + offset;
+
+    // Prevent viewport overflow
+    const rect = tooltipEl.getBoundingClientRect();
+    if (x + rect.width > window.innerWidth - 10) {
+        x = e.clientX - rect.width - offset;
+    }
+    if (y + rect.height > window.innerHeight - 10) {
+        y = e.clientY - rect.height - offset;
+    }
+
+    tooltipEl.style.left = `${Math.max(10, x)}px`;
+    tooltipEl.style.top = `${Math.max(10, y)}px`;
+}
+
+export function hideBarTooltip() {
+    if (tooltipEl) {
+        tooltipEl.style.display = 'none';
+    }
 }
