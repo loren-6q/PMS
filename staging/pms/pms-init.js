@@ -10,7 +10,7 @@ import { collection, onSnapshot, getDocs } from "https://www.gstatic.com/firebas
 // View & Component Engines
 import { renderCalendar } from './pms-calendar-grid.js';
 import { renderDashboard } from './pms-dashboard.js';
-import { renderDatabaseTable } from './pms-database.js';
+import * as dbModule from './pms-database.js';
 import { openGuestModal, initModalDrag } from './pms-folio-modal.js';
 import { scrollToToday } from './pms-calendar-tape.js';
 
@@ -26,15 +26,43 @@ export let hotelRooms = [];
 export let searchTerm = '';
 export let activeTab = 'calendar';
 
+function updateSyncStatus(msg) {
+    const el = document.getElementById('sync-status');
+    if (el) el.innerText = msg;
+}
+
+function hideBootLoader() {
+    const loader = document.getElementById('boot-loader');
+    if (loader) {
+        loader.classList.add('hidden');
+        loader.style.display = 'none';
+    }
+}
+
+// Helper: Safely call database renderer regardless of export naming
+function safeRenderDatabase() {
+    if (typeof dbModule.renderDatabase === 'function') {
+        dbModule.renderDatabase();
+    } else if (typeof dbModule.renderDatabaseTable === 'function') {
+        dbModule.renderDatabaseTable();
+    } else if (typeof window.renderDatabase === 'function') {
+        window.renderDatabase();
+    }
+}
+
 // --- 2. Master App Bootstrapper ---
 export async function initPms() {
-    const loader = document.getElementById('boot-loader');
-    if (loader) loader.style.display = 'flex';
+    // Fail-safe: Never let loader freeze for more than 5 seconds
+    const safetyTimer = setTimeout(() => {
+        console.warn("[PMS]: Bootloader safety timeout reached. Forcing loader dismissal.");
+        hideBootLoader();
+    }, 5000);
 
     try {
+        updateSyncStatus("Connecting to Database...");
         await signInAnonymously(auth);
 
-        // Fetch configured properties from database
+        updateSyncStatus("Loading Properties...");
         const propsSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
         const props = propsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -42,7 +70,7 @@ export async function initPms() {
         const urlProp = urlParams.get('p');
         const storedProp = localStorage.getItem('currentPropertyId');
 
-        // Zero-Hardcoding Property Resolution
+        // Property Resolution
         if (urlProp && props.some(p => p.id === urlProp)) {
             currentPropertyId = urlProp;
         } else if (storedProp && props.some(p => p.id === storedProp)) {
@@ -54,8 +82,9 @@ export async function initPms() {
         }
 
         if (!currentPropertyId) {
-            if (loader) loader.style.display = 'none';
-            alert("No Property Found: Please set up a property in the Setup Wizard first.");
+            clearTimeout(safetyTimer);
+            hideBootLoader();
+            alert("No Property Found: Please set up a property in Setup first.");
             return;
         }
 
@@ -85,47 +114,50 @@ export async function initPms() {
 
         initModalDrag();
 
-        // Attach Realtime Reservation Listener
+        updateSyncStatus("Syncing Reservations...");
+
+        // Realtime Reservation Listener
         onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => {
             staffBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             window.staff = staffBookings;
 
-            // Trigger active view render
             if (activeTab === 'calendar') renderCalendar();
             else if (activeTab === 'dashboard') renderDashboard(staffBookings, currentPropertyId, openGuestModal);
-            else if (activeTab === 'database') renderDatabaseTable();
+            else if (activeTab === 'database') safeRenderDatabase();
 
-            if (loader) loader.style.display = 'none';
+            clearTimeout(safetyTimer);
+            hideBootLoader();
         }, (err) => {
             console.error("[PMS Realtime Snapshot Error]:", err);
-            if (loader) loader.style.display = 'none';
+            clearTimeout(safetyTimer);
+            hideBootLoader();
         });
 
-        // Initialize active tab from URL hash or default to calendar
         const hash = (window.location.hash || '').replace('#', '').toLowerCase();
         switchTab(['calendar', 'dashboard', 'database'].includes(hash) ? hash : 'calendar');
 
     } catch (err) {
         console.error("[PMS Initialization Failed]:", err);
-        if (loader) loader.style.display = 'none';
+        clearTimeout(safetyTimer);
+        hideBootLoader();
     }
 }
 
-// --- 3. View Switcher (Nav Links) ---
+// --- 3. View Switcher ---
 export function switchTab(tabId) {
     activeTab = tabId;
     window.location.hash = tabId;
 
     const views = {
-        calendar: document.getElementById('tab-content-calendar') || document.getElementById('calendar-view'),
-        dashboard: document.getElementById('tab-content-dashboard') || document.getElementById('dashboard-view'),
-        database: document.getElementById('tab-content-database') || document.getElementById('database-view')
+        calendar: document.getElementById('calendar-view'),
+        dashboard: document.getElementById('dashboard-view'),
+        database: document.getElementById('database-view')
     };
 
     const buttons = {
-        calendar: document.getElementById('nav-tab-calendar') || document.getElementById('tab-cal'),
-        dashboard: document.getElementById('nav-tab-dashboard') || document.getElementById('tab-dash'),
-        database: document.getElementById('nav-tab-database') || document.getElementById('tab-db')
+        calendar: document.getElementById('tab-cal'),
+        dashboard: document.getElementById('tab-dash'),
+        database: document.getElementById('tab-db')
     };
 
     Object.keys(views).forEach(key => {
@@ -155,7 +187,7 @@ export function switchTab(tabId) {
     } else if (tabId === 'dashboard') {
         renderDashboard(staffBookings, currentPropertyId, openGuestModal);
     } else if (tabId === 'database') {
-        renderDatabaseTable();
+        safeRenderDatabase();
     }
 
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
@@ -168,7 +200,7 @@ export function handleSearch(term) {
     searchTerm = (term || '').trim().toUpperCase();
     window.searchTerm = searchTerm;
     if (activeTab === 'calendar') renderCalendar();
-    else if (activeTab === 'database') renderDatabaseTable();
+    else if (activeTab === 'database') safeRenderDatabase();
 }
 
 // --- 5. Window Global Bridge ---
@@ -182,7 +214,6 @@ if (typeof window !== 'undefined') {
     };
 }
 
-// Bootstrap on DOM ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initPms);
 } else {
