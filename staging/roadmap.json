@@ -1,209 +1,367 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "system": "Wild & Wandering PMS & Channel Manager Engine",
-  "version": "2.1.0",
-  "architecture": {
-    "module_type": "ES_MODULES",
-    "directory_root": "staging/",
-    "css_rule": "100% of styles reside in style.css. Inline <style> blocks are prohibited.",
-    "channex_rule": "channex.js is certified under strict rate limits (<= 18 ARI calls/min). Its implementation is read-only.",
-    "zero_shim_rule": "NEVER write fuzzy regex fallbacks or name shims. Fix caller signatures directly."
-  },
+  "system": "Wild & Wandering PMS Architecture Contract",
+  "version": "2.0.0",
+  "lastAudited": "2026-11-02",
+  "designPrinciple": "1-File / 1-Domain Strict Responsibility Matrix. Zero Hardcoding. Single Source of Truth.",
   "modules": {
-    "core/config.js": {
-      "purpose": "Firebase App, Firestore, Auth, Storage, Functions instances and Staging detection.",
-      "exports": ["firebaseConfig", "appId", "app", "auth", "db", "storage", "functions", "IS_STAGING"]
+    "core": {
+      "core/config.js": {
+        "responsibility": "Firebase SDK initialization, project configuration, and environment flags.",
+        "exports": ["app", "auth", "db", "appId", "IS_STAGING"]
+      },
+      "core/auth.js": {
+        "responsibility": "Authentication state listener, anonymous bypass, and user session management.",
+        "functions": [
+          "initAuth()",
+          "getCurrentUser()",
+          "signInAnonymously()",
+          "signOutUser()"
+        ]
+      },
+      "core/dates.js": {
+        "responsibility": "Zero-drift UTC day parsing, local YMD formatters, date arithmetic, and calendar labels.",
+        "functions": [
+          "parseYMD(dStr)",
+          "getLocalYMD(d)",
+          "diffDays(startStr, endStr)",
+          "addDays(dStr, count)",
+          "formatDisplayDate(dStr, formatStr)"
+        ],
+        "constants": ["mNames", "dNames"]
+      },
+      "core/money.js": {
+        "responsibility": "Financial rounding, currency symbol resolution, VAT splits, PAX division, and balance math.",
+        "functions": [
+          "roundCurrency(amount)",
+          "formatCurrency(amount, currencyCode)",
+          "getPaid(booking)",
+          "getDue(booking)",
+          "getCurrencySymbol(currencyCode)",
+          "calculateVatSplit(grossAmount, vatPercentage)",
+          "calculatePaxSplit(totalAmount, paxCount)"
+        ]
+      },
+      "core/occupancy.js": {
+        "responsibility": "The Occupancy Law: collision detection rules, status lifecycle cycles, and occupancy classification.",
+        "functions": [
+          "isOccupyingBooking(status, hasRoomAssigned)",
+          "getBookingDurationNights(checkIn, checkOut)"
+        ],
+        "constants": ["STATUS_CYCLE", "PMS_STATUS"]
+      },
+      "core/properties.js": {
+        "responsibility": "Canonical property ID normalization, property catalog loading/saving, and active profile resolution.",
+        "functions": [
+          "loadPropertiesCatalog()",
+          "savePropertiesCatalog(catalogData)",
+          "toCanonicalPropId(rawId)",
+          "getActivePropertyConfig(propertyId)"
+        ]
+      },
+      "core/ui-dialogs.js": {
+        "responsibility": "Unified alert modals, non-blocking toast notifications, and interactive confirmation popups.",
+        "functions": [
+          "customAlert(title, message, isConfirm, onConfirmCallback)",
+          "showToast(message, type, durationMs)"
+        ]
+      },
+      "core/audit-rooms.js": {
+        "responsibility": "Inventory structural integrity auditing, orphan reservation recovery, and capacity mismatch reconciliation.",
+        "functions": [
+          "auditRoomIntegrity(hotelRooms, staffBookings)",
+          "reconcileOrphanedBookings(staffBookings, hotelRooms)",
+          "validateRoomCapacity(roomDefinition)"
+        ]
+      }
     },
-    "core/dates.js": {
-      "purpose": "Strict zero-drift UTC-noon date math and string converters.",
-      "exports": [
-        "parseYMD(input: string|number|Date): number",
-        "getLocalYMD(d?: Date|string|number): string",
-        "mNames: string[]",
-        "getDaysDifference(startYMD: string, endYMD: string): number",
-        "addDaysYMD(startYMD: string, days: number): string"
-      ]
+    "channex": {
+      "channex.js": {
+        "responsibility": "Two-way Channex API integration: rate limiting (18 req/min), contiguous date range compression, and outbox ARI dispatching[cite: 1].",
+        "functions": [
+          "initChannexClient(apiKey, environment)",
+          "sendChannexRequest(endpoint, method, payload)",
+          "queueAriUpdate(propertyId, updatesArray)",
+          "flushOutboxLimiter()",
+          "compressContiguousDates(dateUpdatesList)",
+          "triggerAutoSync(checkIn, checkOut, affectedCategories, ratePlanId, excludeBookingId)"
+        ]
+      }
     },
-    "core/occupancy.js": {
-      "purpose": "Universal status color definitions and the immutable space occupancy evaluator.",
-      "exports": [
-        "PMS_STATUS: object",
-        "STATUS_CYCLE: object[]",
-        "isOccupyingBooking(status: string, hasAssignedRoom?: boolean): boolean"
-      ]
+    "parser": {
+      "parser/parser-engine.js": {
+        "responsibility": "Master clipboard/text extraction router, universal date normalizer, and fallback estimator.",
+        "functions": [
+          "parseFlexibleDate(rawStr)",
+          "parseOtaClipboardText(rawText)",
+          "processAndImportClipboard()",
+          "processManualPaste()"
+        ]
+      },
+      "parser/room-assigner.js": {
+        "responsibility": "Intelligent room assignment: category matching, zero-overlap verification, Event Tetris turnaround grouping, and dorm clustering.",
+        "functions": [
+          "suggestRoomsForBooking(bookingParams)"
+        ]
+      },
+      "parser/ota-booking.js": {
+        "responsibility": "Booking.com extranet and email regex extractor: guest, dates, bookDate, units, explicit net, BDC proxy tagging, and special requests.",
+        "functions": [
+          "parseBookingCom(rawText)"
+        ]
+      },
+      "parser/ota-agoda.js": {
+        "responsibility": "Agoda YCS and confirmation parser: guest, nationality, dates, net payout, UPC prepaid markers, and special requests.",
+        "functions": [
+          "parseAgoda(rawText)"
+        ]
+      },
+      "parser/ota-hostelworld.js": {
+        "responsibility": "Hostelworld parser: reference IDs, guest nationality, unit/bed count, deposit (HW-KP), and arrival balance due.",
+        "functions": [
+          "parseHostelworld(rawText)"
+        ]
+      },
+      "parser/ota-airbnb.js": {
+        "responsibility": "Airbnb parser: reservation code, guest count, 100% prepaid payout classification, and contact restriction flags.",
+        "functions": [
+          "parseAirbnb(rawText)"
+        ]
+      },
+      "parser/ota-expedia.js": {
+        "responsibility": "Expedia Partner Central parser: itinerary IDs, guest nationality, unit count, and Expedia Collect vs Hotel Collect net extraction.",
+        "functions": [
+          "parseExpedia(rawText)"
+        ]
+      }
     },
-    "core/properties.js": {
-      "purpose": "Database-driven multi-property catalog loader, dynamic alias resolver, and immutable room normalizer.",
-      "exports": [
-        "loadPropertiesCatalog(): Promise<object[]>",
-        "toCanonicalPropId(raw: string): string",
-        "toDisplayPropKey(canonicalId: string): string",
-        "normalizeRoomId(rawRoomId: string): string",
-        "safeUpdateUrlParam(name: string, val: string): void"
-      ]
+    "pms": {
+      "pms/pms-init.js": {
+        "responsibility": "PMS frame bootstrapper, zero-hardcoded property resolution, realtime Firestore snapshots, view switcher, and search[cite: 3].",
+        "functions": [
+          "initPms()",
+          "switchTab(tabId)",
+          "handleSearch(searchTerm)"
+        ]
+      },
+      "pms/pms-calendar-grid.js": {
+        "responsibility": "Master calendar assembly, sticky room sidebar, header date grids, thermal availability calculation, and category collapse toggles.",
+        "functions": [
+          "renderCalendar()",
+          "buildHeaderGrids(monthsContainer, daysContainer, daysArray, todayStr)",
+          "renderCategoryAvailabilityRow(catName, grpKey, roomList, daysArray, propBookings, daysToShow)",
+          "toggleGroup(grpKey, stateIdx)",
+          "toggleAllGroups()",
+          "formatBedDisplayLabel(roomId)",
+          "classifyRoomForCalendar(roomDefinition)"
+        ]
+      },
+      "pms/pms-calendar-bars.js": {
+        "responsibility": "Reservation bar DOM rendering, CSS pixel positioning, multi-night width math, OTA channel icons, and interactive hover tooltips.",
+        "functions": [
+          "renderReservationBar(booking, daysToShow, getDayIndexFn, todayStr, yesterdayStr, onOpenModalFn, searchTerm)",
+          "formatBarTooltip(booking, nightsCount, dueAmount)"
+        ]
+      },
+      "pms/pms-calendar-tape.js": {
+        "responsibility": "Timeline horizontal navigation, today centering, jump-month selector synchronization, and day-column width zoom toggle[cite: 2].",
+        "functions": [
+          "getDaysToShow()",
+          "syncMonthSelectWithView()",
+          "shiftTape(days, onUpdateCallback)",
+          "prevPeriod(onUpdateCallback)",
+          "nextPeriod(onUpdateCallback)",
+          "goToday(onUpdateCallback)",
+          "jumpToMonth(monthYMD, onUpdateCallback)",
+          "toggleZoom(calendarContainerEl, onUpdateCallback)",
+          "populateMonthSelect(selectEl)",
+          "scrollToToday()"
+        ]
+      },
+      "pms/pms-folio-modal.js": {
+        "responsibility": "Guest folio modal lifecycle, form data binding, room select populator, status cycling, date nudging, and dialog dragging.",
+        "functions": [
+          "openGuestModal(booking)",
+          "closeGuestModal()",
+          "initModalDrag()",
+          "populateFolioForm(booking)",
+          "cycleStatus()",
+          "toggleMultiStatePill(btnId, statesArray)",
+          "shiftStayDates(dayDelta)"
+        ]
+      },
+      "pms/pms-folio-ledger.js": {
+        "responsibility": "Ledger financial calculations, payment rows, bad CC toggling, itemized extra charges, stay extensions, and dynamic rate checking.",
+        "functions": [
+          "toggleBadCC()",
+          "calcFinancials()",
+          "overrideNet()",
+          "addPaymentRow(date, amt, method, locked)",
+          "unlockPaymentRow(rowId)",
+          "removePaymentRow(rowId)",
+          "openAddChargeModal()",
+          "applyChargePreset(desc, price)",
+          "confirmAddCharge()",
+          "renderExtraCharges()",
+          "removeCharge(chargeId)",
+          "calcExtension()",
+          "checkExtensionRate()",
+          "confirmExtension()"
+        ]
+      },
+      "pms/pms-folio-actions.js": {
+        "responsibility": "Reservation mutations: save with overlap collision guards, contiguous merges, true nightly rate splits, and early checkout reversals.",
+        "functions": [
+          "saveBooking()",
+          "requestDelete()",
+          "requestDuplicate()",
+          "requestSplit()",
+          "confirmSplit()",
+          "requestMerge()",
+          "confirmMerge()",
+          "executeEarlyCheckout(targetDepartureDate, actionType, refundAmt)",
+          "undoEarlyCheckout()"
+        ]
+      },
+      "pms/pms-folio-invoice.js": {
+        "responsibility": "Dynamic, printable branded HTML/PDF guest folio invoice generator with classified OTA vs direct payments and add-on items.",
+        "functions": [
+          "generateGuestInvoice(booking)"
+        ]
+      },
+      "pms/pms-dashboard.js": {
+        "responsibility": "Operational daily overview: arrivals, departures, stayovers, live rates card, event package pricing, and overdue departure alerts.",
+        "functions": [
+          "renderDashboard(staffList, currentPropertyId, onEditBooking)",
+          "renderTodayRatesCard(todayStr)",
+          "dismissDashboardAlert(bookingId)"
+        ]
+      },
+      "pms/pms-database.js": {
+        "responsibility": "Tabular guest database ledger: multi-column sorting, category-aware room filters, date presets, search, and bulk deletion.",
+        "functions": [
+          "initDatabaseFilters()",
+          "toggleMultiSelect(dropdownId, triggerBtn)",
+          "updateMultiLabel(dropdownId, labelId, defaultText)",
+          "getMultiValues(dropdownId)",
+          "applyDbPreset(presetVal)",
+          "getFilteredBookings(staffList, currentPropertyId)",
+          "renderDatabaseTable()",
+          "sortDatabase(sortKey)",
+          "bulkDeleteVisible()"
+        ]
+      },
+      "pms/pms-tm30.js": {
+        "responsibility": "Thai Immigration Section 38 batch reporting engine: foreigner filtering, missing passport auditing, CSV generation, and filing logs.",
+        "functions": [
+          "isForeignGuest(guest, hostCountry)",
+          "compileTm30Records(staffList, currentPropertyId, targetDate)",
+          "renderTm30Table()",
+          "exportTm30Csv()",
+          "markSelectedAsReported()"
+        ]
+      }
     },
-    "core/money.js": {
-      "purpose": "Multi-currency rounding, precision resolvers, and ledger financial aggregators.",
-      "exports": [
-        "getCurrencyDecimals(code?: string): number",
-        "getCurrencySymbol(code?: string): string",
-        "roundCurrency(val: number|string, currency?: string): number",
-        "formatCurrency(val: number|string, currency?: string, includeSymbol?: boolean): string",
-        "getPaid(booking: object): number",
-        "getDue(booking: object, currency?: string): number",
-        "getComm(booking: object): number"
-      ]
+    "cm": {
+      "cm/cm-init.js": {
+        "responsibility": "Channel Manager bootstrapper, pricing matrix loader, channel connection status, and dirty state save indicators.",
+        "functions": [
+          "initChannelManager()",
+          "switchCmView(viewMode)",
+          "triggerSaveStatus(statusState)"
+        ]
+      },
+      "cm/cm-matrix-grid.js": {
+        "responsibility": "Interactive rates and restrictions calendar grid: cell price inline editing, rate plan expansion, and thermal occupancy scales.",
+        "functions": [
+          "renderPricingMatrix(timelineData, roomTypes, ratePlans)",
+          "handleCellEdit(dateStr, planId, newPrice)",
+          "applyMatrixColorScale(occupancyPercentage)"
+        ]
+      },
+      "cm/cm-ripple.js": {
+        "responsibility": "Bidirectional relational pricing propagation engine: calculates linked rate plans from base anchors using multipliers and offsets.",
+        "functions": [
+          "calculateDerivedRate(baseRate, ruleConfig)",
+          "propagateRateRipple(anchorPlanId, newBaseRate, timelineDate)",
+          "validateRatePlanChains(ratePlansList)"
+        ]
+      },
+      "cm/cm-bulk-drawer.js": {
+        "responsibility": "Fast bulk rate & restriction update drawer: custom date ranges, day-of-week filters, absolute vs percentage adjustments.",
+        "functions": [
+          "openBulkDrawer(selectedRange)",
+          "closeBulkDrawer()",
+          "executeBulkUpdate(bulkPayload)"
+        ]
+      },
+      "cm/cm-curve-tuner.js": {
+        "responsibility": "Peak event pricing curve adjuster: multiplier calculation, event shoulder taper math, and dynamic minimum stay enforcement.",
+        "functions": [
+          "calculateEventMultiplier(peakDate, targetDate, curveConfig)",
+          "applyShoulderCurve(baseRate, daysFromPeak, curveConfig)",
+          "previewCurveTuning(eventConfig)"
+        ]
+      },
+      "cm/cm-promos.js": {
+        "responsibility": "Margin-preserving OTA promotional discount calculator: models channel take rates against discounts to protect floor margins.",
+        "functions": [
+          "calculateMarginPreservingPromo(baseRate, promoPercentage, channelCommission)",
+          "simulateOtaDealImpact(dealConfig, historicalVolume)"
+        ]
+      },
+      "cm/cm-auditor.js": {
+        "responsibility": "Discrepancy checker: cross-references PMS reservations against Channex logs to catch unrecorded OTA bookings or rate mismatches.",
+        "functions": [
+          "runDiscrepancyAudit(pmsBookings, channexLogs)",
+          "detectRateMismatches(bookingRecord, matrixTimeline)",
+          "generateAuditReport(auditResults)"
+        ]
+      }
     },
-    "core/ui-dialogs.js": {
-      "purpose": "Standard alert dialogs, confirmation prompts, and toast notifications.",
-      "exports": [
-        "customAlert(title: string, message: string, isConfirm?: boolean, onConfirm?: Function): void",
-        "closeAlert(): void",
-        "showToast(title: string, message: string, type?: 'success'|'error'): void"
-      ]
-    },
-    "core/audit-rooms.js": {
-      "purpose": "Read-only inspection tool for auditing room string compliance across live reservations.",
-      "exports": ["auditDatabaseRoomFormats(propertyFilter?: string): Promise<object>"]
-    },
-    "channex.js": {
-      "purpose": "Official certified transmission driver. Token bucket outbox, range compressor, and sync dispatcher.",
-      "exports": [
-        "ChannexRateLimiter",
-        "ChannexClient",
-        "compressDateEntries(entries: object[]): object[]",
-        "getPeakCategoryCapacity(cat: string): number",
-        "getNetAvailabilityForDate(cat: string, dStr: string, peakCap: number): number",
-        "pushToChannexAPI(btn?: HTMLElement, mode?: 'delta'|'full'): Promise<void>",
-        "saveAndSync(btn?: HTMLElement, mode?: 'delta'|'full'): Promise<void>"
-      ]
-    },
-    "parser/parser-engine.js": {
-      "purpose": "Clipboard routing engine. Directs raw text to OTA-specific adapters and formats JSON.",
-      "exports": [
-        "extractBookingData(rawText: string): { s: object, summary: string }",
-        "processAndImportClipboard(rawText?: string): Promise<void>"
-      ]
-    },
-    "parser/ota-hostelworld.js": {
-      "purpose": "Hostelworld web dashboard and confirmation text regex extractor.",
-      "exports": ["parseHostelworld(raw: string): object"]
-    },
-    "parser/ota-booking.js": {
-      "purpose": "Booking.com extranet and email confirmation extractor.",
-      "exports": ["parseBookingCom(raw: string): object"]
-    },
-    "parser/ota-agoda.js": {
-      "purpose": "Agoda YCS and email confirmation extractor.",
-      "exports": ["parseAgoda(raw: string): object"]
-    },
-    "parser/ota-expedia.js": {
-      "purpose": "Expedia Partner Central reservation extractor.",
-      "exports": ["parseExpedia(raw: string): object"]
-    },
-    "parser/ota-airbnb.js": {
-      "purpose": "Airbnb reservation confirmation and list extractor.",
-      "exports": ["parseAirbnb(raw: string): object"]
-    },
-    "pms/pms-init.js": {
-      "purpose": "PMS frame bootstrapper, Firestore listeners for reservations, and nav synchronizers.",
-      "exports": ["initPms(): Promise<void>", "switchTab(tabName: string): void"]
-    },
-    "pms/pms-calendar-grid.js": {
-      "purpose": "Calendar DOM grid constructor, sticky room sidebar, and interactive day-column clicks.",
-      "exports": ["renderCalendar(): void", "formatBedDisplayLabel(id: string): string"]
-    },
-    "pms/pms-calendar-bars.js": {
-      "purpose": "Reservation bar placement, hover tooltips, pulse animations, and booking click hooks.",
-      "exports": ["renderBars(): void", "getBarColor(status: string): string"]
-    },
-    "pms/pms-calendar-tape.js": {
-      "purpose": "Timeline date navigation, week nudging, jump-to-month, and zoom modes.",
-      "exports": ["prevPeriod(): void", "nextPeriod(): void", "goToday(): void", "jumpToMonth(val: string): void", "toggleZoom(): void"]
-    },
-    "pms/pms-folio-modal.js": {
-      "purpose": "Guest folio lifecycle, modal drag controllers, form population, and room selects.",
-      "exports": ["openGuestModal(booking?: object): void", "closeGuestModal(): void", "populateFolioForm(booking: object): void", "addRoomSelect(initialVal?: string): void"]
-    },
-    "pms/pms-folio-ledger.js": {
-      "purpose": "Folio financial calculations, payment rows, bad CC flag, and itemized add-on charges.",
-      "exports": ["calcFinancials(): void", "addPaymentRow(date?: string, amt?: number, method?: string): void", "openAddChargeModal(): void", "confirmAddCharge(): void"]
-    },
-    "pms/pms-folio-actions.js": {
-      "purpose": "Booking mutations: save validation, delete, duplicate, split stay, and merge stays.",
-      "exports": ["saveBooking(): Promise<void>", "requestDelete(): void", "requestDuplicate(): void", "requestSplit(): void", "confirmSplit(): Promise<void>", "requestMerge(): void", "confirmMerge(): Promise<void>"]
-    },
-    "pms/pms-folio-invoice.js": {
-      "purpose": "Printable, branded guest invoice and folio receipt generator.",
-      "exports": ["generateGuestInvoice(booking?: object): void"]
-    },
-    "pms/pms-dashboard.js": {
-      "purpose": "Today snapshot view: arrivals, departures, stayovers, rate glance, and action items.",
-      "exports": ["renderDashboard(): void", "dismissDashboardAlert(id: string): Promise<void>"]
-    },
-    "pms/pms-database.js": {
-      "purpose": "Tabular guest database ledger, multi-column sorting, and multi-select filter dropdowns.",
-      "exports": ["renderDatabaseTable(): void", "sortDatabase(column: string): void", "bulkDeleteVisible(): Promise<void>"]
-    },
-    "pms/pms-bulk-import.js": {
-      "purpose": "Unattached console/hotkey tool for pasting tab-delimited Excel/Sheets booking lists.",
-      "exports": ["openBulkImporter(): void", "processSpreadsheetPaste(text: string): Promise<void>"]
-    },
-    "cm/cm-init.js": {
-      "purpose": "Channel Manager initialization, matrix cloud loaders, and save indicator state.",
-      "exports": ["initCm(): Promise<void>", "updateSaveIndicator(): void", "markUnsavedChanges(): void"]
-    },
-    "cm/cm-matrix-grid.js": {
-      "purpose": "Universal rate matrix grid renderer, cell price inputs, view density, and depth toggles.",
-      "exports": ["renderRateMatrix(): void", "handleCellPriceChange(date: string, room: string, val: string): void", "setViewDensity(density: string): void", "setDrillLevel(depth: string): void"]
-    },
-    "cm/cm-ripple.js": {
-      "purpose": "Bidirectional relational pricing propagation and rule calculations.",
-      "exports": ["rippleDay(dateStr: string, anchorRoom: string, force?: boolean): void", "applyMath(base: number, type: string, mod: number, isReverse?: boolean): number"]
-    },
-    "cm/cm-bulk-drawer.js": {
-      "purpose": "Quick bulk update drawer for applying rate ranges and restrictions across dates.",
-      "exports": ["toggleQuickBulk(forceClose?: boolean): void", "applyBulkGrid(isClear?: boolean): void"]
-    },
-    "cm/cm-curve-tuner.js": {
-      "purpose": "Event curve tuner drawer for managing peak ±2D rate curves and shoulder ratios.",
-      "exports": ["toggleCurveTuner(forceClose?: boolean, targetDate?: string): void", "applyCurveTuner(): void", "recalcCurveTunerShoulders(): void"]
-    },
-    "cm/cm-promos.js": {
-      "purpose": "OTA margin preservation promo rule table and markup calculations.",
-      "exports": ["renderPromoRulesTable(): void", "openAddPromoModal(): void", "savePromoRule(): Promise<void>", "togglePromoActive(id: string, active: boolean): Promise<void>"]
-    },
-    "cm/cm-auditor.js": {
-      "purpose": "Missing extranet reservation checker and live availability discrepancy table.",
-      "exports": ["checkMissingExtranetBookings(): void", "renderDiscrepancyGrid(): void", "markAllSyncedBaseline(): Promise<void>"]
-    },
-    "setup/setup-wizard.js": {
-      "purpose": "5-step onboarding wizard navigation, stepper pills, and deployment review.",
-      "exports": ["initSetupWizard(): Promise<void>", "jumpStep(stepNumber: number): void", "saveSetupToDatabase(notify?: boolean): Promise<void>"]
-    },
-    "setup/setup-profile.js": {
-      "purpose": "Property profile, address, timezone, base currency, and branding image uploaders.",
-      "exports": ["renderPropertyProfile(): void", "handleImageUpload(event: Event, type: string): Promise<void>"]
-    },
-    "setup/setup-rooms.js": {
-      "purpose": "Room definition table, canonical bed ID compiler, and drag-and-drop sort reordering.",
-      "exports": ["renderRoomDefinitionsTable(): void", "formatDormBedId(parentRoom: string, bedNum: number): string", "compileRoomsFromDefinitions(): object[]", "autoSortRooms(): void"]
-    },
-    "setup/setup-deactivation.js": {
-      "purpose": "Reservation audit guard, active booking relocation modal, and room deactivation.",
-      "exports": ["auditRoomForDeactivation(roomIndex: number): Promise<void>", "executeRelocationAndClose(roomName: string): Promise<void>"]
-    },
-    "setup/setup-mapping.js": {
-      "purpose": "Channex credential validation, room type mapping, and primary rate plan creator.",
-      "exports": ["fetchChannexInventory(): Promise<void>", "renderUnifiedMappingCards(): void", "createAndPushRatePlan(): Promise<void>"]
-    },
-    "setup/setup-payments.js": {
-      "purpose": "Payment method catalogue and OTA commission withholding rules configuration.",
-      "exports": ["renderPaymentMethodsTable(): void", "addPaymentMethodRow(): void"]
-    },
-    "setup/setup-addons.js": {
-      "purpose": "Folio add-on services catalogue and standard guest charge presets.",
-      "exports": ["renderAddonsTable(): void", "addAddonRow(): void"]
+    "setup": {
+      "setup/setup-wizard.js": {
+        "responsibility": "The Setup Orchestrator: 5-step onboarding stepper, step validation guards, Firestore configuration persistence, and navigation.",
+        "functions": [
+          "initSetupWizard()",
+          "goToStep(stepNumber)",
+          "saveWizardProgress(stepData)",
+          "completeSetup()"
+        ]
+      },
+      "setup/setup-profile.js": {
+        "responsibility": "Step 1: Property profile, legal business entity, display currency, branding assets, tax/VAT rates, and default channel commissions.",
+        "functions": [
+          "renderStep1Profile()",
+          "validateProfileStep()",
+          "exportProfileData()"
+        ]
+      },
+      "setup/setup-rooms.js": {
+        "responsibility": "Step 2: Physical inventory builder: rooms, dorms, bed numbering (№), parent-child relationships, drag-sorting, and rank assignment.",
+        "functions": [
+          "renderStep2Rooms()",
+          "addRoomDefinition(roomData)",
+          "removeRoomDefinition(roomId)",
+          "reorderRooms(orderedIdList)",
+          "toggleRoomActive(roomId)"
+        ]
+      },
+      "setup/setup-mapping.js": {
+        "responsibility": "Step 3: Channex channel and room-type mapper: pulls live OTA inventory IDs and binds them to PMS physical categories.",
+        "functions": [
+          "renderStep3Mapping()",
+          "fetchChannexRoomTypes(propertyId)",
+          "bindChannexMapping(pmsCategoryId, channexTypeId)"
+        ]
+      },
+      "setup/setup-pricing.js": {
+        "responsibility": "Step 4: Rate plan architectures, standard anchors, channel markups, non-refundable discount spreads, and event peak calendars.",
+        "functions": [
+          "renderStep4Pricing()",
+          "configureAnchorRates(anchorData)",
+          "configureEventCurves(eventData)"
+        ]
+      }
     }
   }
 }
