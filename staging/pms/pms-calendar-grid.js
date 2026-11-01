@@ -1,11 +1,14 @@
 // ==========================================================================
-// pms/pms-calendar-grid.js - Category Dividers, Folding, Availability & Beds
+// pms/pms-calendar-grid.js - Category Dividers, Availability & Master Grid
 // Wild & Wandering Property Management System
 // ==========================================================================
 
 import { parseYMD, getLocalYMD, mNames } from '../core/dates.js';
+import { viewStart, getDaysToShow, populateMonthSelect } from './pms-calendar-tape.js';
+import { renderReservationBar } from './pms-calendar-bars.js';
+import { openGuestModal } from './pms-folio-modal.js';
 
-// --- 1. Bed Display & Architecture Icon Formatters ---
+// --- 1. Bed Display & Architecture Formatters ---
 export function formatBedDisplayLabel(id) {
     if (!id) return '';
     const str = String(id).trim();
@@ -18,33 +21,6 @@ export function formatBedDisplayLabel(id) {
     const mLetter = str.match(/^[A-Za-z]+(\d+)$/);
     if (mLetter) return `№ ${mLetter[1].padStart(2, '0')}`;
     return str;
-}
-
-export function getFloorIcon(floor) {
-    if (!floor) return '';
-    const f = String(floor).toLowerCase().trim();
-    if (f === '1' || f === 'down' || f === 'downstairs' || f === 'floor-down') {
-        return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0" title="Downstairs"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
-    }
-    if (f === '2' || f === 'up' || f === 'upstairs' || f === 'floor-up') {
-        return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0" title="Upstairs"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
-    }
-    if (f === '3' || f === 'double') {
-        return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-500 shrink-0" title="Double Floor"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></svg>`;
-    }
-    return '';
-}
-
-export function getBunkIcon(bunk) {
-    if (!bunk) return '';
-    const b = String(bunk).toLowerCase().trim();
-    if (b === 'bottom' || b === 'bot' || b === 'bunk-bottom' || b.includes('btm') || b.includes('bottom')) {
-        return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Bottom Bunk"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`;
-    }
-    if (b === 'top' || b === 'bunk-top' || b.includes('top')) {
-        return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500 shrink-0" title="Top Bunk"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`;
-    }
-    return '';
 }
 
 export function classifyRoomForCalendar(r) {
@@ -80,8 +56,8 @@ export function buildHeaderGrids(monthsContainer, daysContainer, daysArray, toda
         <div class="p-1 text-[12px] font-black text-slate-500 uppercase flex items-center justify-between border-r border-slate-400 bg-slate-100 h-full sticky left-0 z-[50] w-[var(--sidebar-w)]">
             <span>ROOM</span>
             <div class="flex items-center gap-1">
-                <button onclick="window.toggleAllGroups()" class="hover:text-blue-500 transition-colors bg-slate-200 hover:bg-slate-300 p-0.5 rounded shadow-xs cursor-pointer" title="Master Toggle"><i data-lucide="layers" class="!w-[13px] !h-[13px]"></i></button>
-                <button onclick="window.toggleZoom()" class="hover:text-blue-500 transition-colors bg-slate-200 hover:bg-slate-300 p-0.5 rounded shadow-xs cursor-pointer" title="Toggle Zoom"><i data-lucide="zoom-in" class="!w-[13px] !h-[13px]"></i></button>
+                <button type="button" onclick="window.toggleAllGroups()" class="hover:text-blue-500 transition-colors bg-slate-200 hover:bg-slate-300 p-0.5 rounded shadow-xs cursor-pointer" title="Master Toggle"><i data-lucide="layers" class="!w-[13px] !h-[13px]"></i></button>
+                <button type="button" onclick="window.toggleZoom()" class="hover:text-blue-500 transition-colors bg-slate-200 hover:bg-slate-300 p-0.5 rounded shadow-xs cursor-pointer" title="Toggle Zoom"><i data-lucide="zoom-in" id="zoom-toggle-icon" class="!w-[13px] !h-[13px]"></i></button>
             </div>
         </div>
     `;
@@ -112,7 +88,7 @@ export function buildHeaderGrids(monthsContainer, daysContainer, daysArray, toda
     });
 }
 
-// --- 3. Dynamic Category Availability Calculation & Thermal Tiers ---
+// --- 3. Thermal Availability Calculation ---
 export function renderCategoryAvailabilityRow(catName, grpKey, roomList, daysArray, bookings, daysToShow) {
     const tRIds = roomList.map(hr => hr.id);
     const cap = tRIds.length;
@@ -162,7 +138,7 @@ export function toggleGroup(grp, stateIdx = -1) {
     const availRows = document.querySelectorAll(`.avail-row-${grp}`);
     if (!icon) return;
 
-    if (grp === 'unassigned-unconfirmed' || grp === 'unassigned-tray') {
+    if (grp === 'unassigned-tray') {
         window.isUnassignedTrayOpen = !window.isUnassignedTrayOpen;
         rows.forEach(r => {
             r.style.display = window.isUnassignedTrayOpen ? 'grid' : 'none';
@@ -195,10 +171,6 @@ export function toggleGroup(grp, stateIdx = -1) {
     }
 
     rows.forEach(r => {
-        if (r.classList.contains('sub-header-row')) {
-            r.style.display = (cS === 3) ? 'none' : 'grid';
-            return;
-        }
         const isEmpty = r.querySelectorAll('.staff-bar').length === 0;
         r.style.display = (isEmpty ? s.showEmp : s.showOcc) ? 'grid' : 'none';
     });
@@ -213,45 +185,167 @@ export function toggleAllGroups() {
     groups.forEach(grp => toggleGroup(grp, window.masterGroupState));
 }
 
-export function toggleLegendDrawer() {
-    const leg = document.getElementById('calendar-legend');
-    const chevron = document.getElementById('legend-toggle-chevron');
-    const label = document.getElementById('legend-toggle-label');
-    if (!leg) return;
+// --- 5. Master Calendar Assembly Engine ---
+export function renderCalendar() {
+    const monthsContainer = document.getElementById('calendar-header-months');
+    const daysContainer = document.getElementById('calendar-header-days');
+    const body = document.getElementById('timeline-body');
+    const monthSelect = document.getElementById('jump-month-select');
 
-    const isHidden = (leg.style.display === 'none' || leg.classList.contains('hidden'));
-    if (isHidden) {
-        leg.style.display = 'flex';
-        leg.classList.remove('hidden');
-        if (chevron) chevron.style.transform = 'rotate(180deg)';
-        if (label) label.innerText = 'Hide Key';
-    } else {
-        leg.style.display = 'none';
-        leg.classList.add('hidden');
-        if (chevron) chevron.style.transform = 'rotate(0deg)';
-        if (label) label.innerText = 'Show Key';
-    }
-    if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
-}
+    if (!monthsContainer || !daysContainer || !body) return;
 
-export function mountLegendSvgs(svgSuite) {
-    const keys = ['upFree', 'upPaid', 'ext', 'link', 'mailConf', 'mailNotFmp', 'mailPre', 'mailPreConf', 'mailSpec', 'fbGood', 'fbBad'];
-    keys.forEach(k => {
-        const el = document.getElementById('leg-svg-' + k);
-        if (el && svgSuite && svgSuite[k]) {
-            el.innerHTML = svgSuite[k];
-        }
+    populateMonthSelect(monthSelect);
+
+    const daysToShow = getDaysToShow();
+    document.documentElement.style.setProperty('--days', daysToShow);
+
+    const todayStr = getLocalYMD(new Date());
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = getLocalYMD(yesterday);
+
+    const daysArray = Array.from({ length: daysToShow }, (_, i) => {
+        return new Date(viewStart.getFullYear(), viewStart.getMonth(), viewStart.getDate() + i, 12, 0, 0);
     });
+
+    buildHeaderGrids(monthsContainer, daysContainer, daysArray, todayStr);
+    body.innerHTML = '';
+
+    const getDayIndex = (dStr) => {
+        const t = parseYMD(dStr);
+        if (!t) return -1;
+        const sTime = Date.UTC(viewStart.getFullYear(), viewStart.getMonth(), viewStart.getDate(), 12, 0, 0);
+        return Math.round((t - sTime) / 86400000);
+    };
+
+    const curProp = window.currentPropertyId;
+    const propBookings = (window.staff || []).filter(b => {
+        return b.property === curProp && b.status !== 'cancelled';
+    });
+
+    // 1. Unassigned Tray
+    const unassignedList = propBookings.filter(b => {
+        const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
+        return rList.length === 0 || rList[0] === "" || ['unconfirmed', 'charged'].includes(b.status);
+    });
+
+    if (unassignedList.length > 0) {
+        const trayHeader = document.createElement('div');
+        trayHeader.className = "timeline-grid mt-2 group-header cursor-pointer";
+        trayHeader.dataset.group = "unassigned-tray";
+        trayHeader.onclick = () => toggleGroup('unassigned-tray');
+        trayHeader.innerHTML = `
+            <div class="unassigned-header bg-amber-200 text-slate-800 p-1 text-[10px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30" style="grid-column: 1 / -1; min-width: 100vw;">
+                <span>UNASSIGNED TRAY (${unassignedList.length})</span>
+                <i data-lucide="chevron-up" id="icon-unassigned-tray" size="13"></i>
+            </div>
+        `;
+        body.appendChild(trayHeader);
+
+        const trayRow = document.createElement('div');
+        trayRow.className = "timeline-grid bed-row bg-amber-50/40 relative group-unassigned-tray";
+        trayRow.innerHTML = `<div class="border-r border-slate-400 bg-amber-100 flex items-center justify-center font-black text-[10px] text-amber-800 uppercase sticky left-0 z-20 w-[var(--sidebar-w)]">TRAY</div>`;
+
+        for (let i = 0; i < daysToShow; i++) {
+            const col = document.createElement('div');
+            col.className = "day-column";
+            trayRow.appendChild(col);
+        }
+
+        unassignedList.forEach(b => {
+            const bar = renderReservationBar(b, daysToShow, getDayIndex, todayStr, yesterdayStr, openGuestModal, window.searchTerm || '');
+            if (bar) trayRow.appendChild(bar);
+        });
+
+        body.appendChild(trayRow);
+    }
+
+    // 2. Physical Rooms Grouped by Category
+    const hotelRooms = window.hotelRooms || [];
+    const categoriesMap = new Map();
+    hotelRooms.filter(r => !r.inactive).forEach(r => {
+        const cat = r.category || r.type || 'Standard';
+        if (!categoriesMap.has(cat)) categoriesMap.set(cat, []);
+        categoriesMap.get(cat).push(r);
+    });
+
+    categoriesMap.forEach((roomList, catName) => {
+        const grpKey = catName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+
+        // Category Header Row
+        const hRow = document.createElement('div');
+        hRow.className = "timeline-grid cursor-pointer unselectable group-header";
+        hRow.dataset.group = grpKey;
+        hRow.innerHTML = `
+            <div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 shadow-xs" style="grid-column: 1 / -1; min-width: 100vw;" onclick="window.toggleGroup('${grpKey}')">
+                <span class="truncate pr-1">${catName}</span>
+                <div class="flex items-center gap-1 shrink-0">
+                    <span id="state-${grpKey}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span>
+                    <i data-lucide="chevron-up" id="icon-${grpKey}" size="13"></i>
+                </div>
+            </div>
+        `;
+        body.appendChild(hRow);
+
+        // Availability Row
+        const aRow = renderCategoryAvailabilityRow(catName, grpKey, roomList, daysArray, propBookings, daysToShow);
+        body.appendChild(aRow);
+
+        // Bed Rows
+        roomList.forEach(room => {
+            const row = document.createElement('div');
+            row.className = `timeline-grid bed-row relative group-${grpKey}`;
+            
+            const displayLabel = formatBedDisplayLabel(room.id);
+            row.innerHTML = `
+                <div class="border-r border-slate-400 bg-slate-50 flex items-center justify-between px-2 uppercase font-black text-xs text-slate-700 sticky left-0 z-20 shadow-xs w-[var(--sidebar-w)]">
+                    <span class="truncate" title="${room.id}">${displayLabel || room.id}</span>
+                    <span class="text-[9px] font-bold text-slate-400">${room.bed || ''}</span>
+                </div>
+            `;
+
+            for (let i = 0; i < daysToShow; i++) {
+                const col = document.createElement('div');
+                const dIso = getLocalYMD(daysArray[i]);
+                col.className = `day-column ${dIso === todayStr ? 'day-today' : ''}`;
+                col.dataset.dateIso = dIso;
+                col.dataset.dateNum = daysArray[i].getDate();
+
+                col.onclick = () => {
+                    openGuestModal({
+                        checkIn: dIso,
+                        checkOut: getLocalYMD(new Date(daysArray[i].getTime() + 86400000)),
+                        room: room.id,
+                        rooms: [room.id]
+                    });
+                };
+                row.appendChild(col);
+            }
+
+            const roomBookings = propBookings.filter(b => {
+                const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
+                return rList.includes(room.id);
+            });
+
+            roomBookings.forEach(b => {
+                const bar = renderReservationBar(b, daysToShow, getDayIndex, todayStr, yesterdayStr, openGuestModal, window.searchTerm || '');
+                if (bar) row.appendChild(bar);
+            });
+
+            body.appendChild(row);
+        });
+    });
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
 }
 
-// --- 5. Window Global Bridge ---
+// --- 6. Window Global Bridge ---
 if (typeof window !== 'undefined') {
+    window.renderCalendar = renderCalendar;
     window.toggleGroup = toggleGroup;
     window.toggleAllGroups = toggleAllGroups;
-    window.toggleLegendDrawer = toggleLegendDrawer;
-    window.toggleMobileLegend = toggleLegendDrawer;
-    window.mountLegendSvgs = () => mountLegendSvgs(window.SVGS);
     window.formatBedDisplayLabel = formatBedDisplayLabel;
     window.classifyRoomForCalendar = classifyRoomForCalendar;
-    window.renderCategoryAvailabilityRow = renderCategoryAvailabilityRow;
 }
