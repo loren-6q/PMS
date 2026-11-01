@@ -18,6 +18,8 @@ import { scrollToToday } from './pms-calendar-tape.js';
 import './pms-folio-actions.js';
 import './pms-folio-ledger.js';
 import './pms-folio-invoice.js';
+import './pms-tm30.js';
+import { processAndImportClipboard, processManualPaste } from '../parser/parser-engine.js';
 
 // --- 1. Master Application State ---
 export let currentPropertyId = null;
@@ -25,6 +27,8 @@ export let staffBookings = [];
 export let hotelRooms = [];
 export let searchTerm = '';
 export let activeTab = 'calendar';
+export let matchedSearchIds = [];
+export let currentSearchMatchIndex = 0;
 
 function updateSyncStatus(msg) {
     const el = document.getElementById('sync-status');
@@ -39,7 +43,6 @@ function hideBootLoader() {
     }
 }
 
-// Helper: Safely call database renderer regardless of export naming
 function safeRenderDatabase() {
     if (typeof dbModule.renderDatabase === 'function') {
         dbModule.renderDatabase();
@@ -52,9 +55,8 @@ function safeRenderDatabase() {
 
 // --- 2. Master App Bootstrapper ---
 export async function initPms() {
-    // Fail-safe: Never let loader freeze for more than 5 seconds
     const safetyTimer = setTimeout(() => {
-        console.warn("[PMS]: Bootloader safety timeout reached. Forcing loader dismissal.");
+        console.warn("[PMS]: Bootloader safety timeout reached. Dismissing loader.");
         hideBootLoader();
     }, 5000);
 
@@ -70,7 +72,7 @@ export async function initPms() {
         const urlProp = urlParams.get('p');
         const storedProp = localStorage.getItem('currentPropertyId');
 
-        // Property Resolution
+        // Resolve active property
         if (urlProp && props.some(p => p.id === urlProp)) {
             currentPropertyId = urlProp;
         } else if (storedProp && props.some(p => p.id === storedProp)) {
@@ -78,23 +80,18 @@ export async function initPms() {
         } else if (props.length > 0) {
             currentPropertyId = props[0].id;
         } else {
-            currentPropertyId = null;
-        }
-
-        if (!currentPropertyId) {
-            clearTimeout(safetyTimer);
-            hideBootLoader();
-            alert("No Property Found: Please set up a property in Setup first.");
-            return;
+            // Fallback: If properties collection is empty on first boot, accept URL or default
+            currentPropertyId = urlProp || storedProp || 'loud_samui';
         }
 
         window.currentPropertyId = currentPropertyId;
         localStorage.setItem('currentPropertyId', currentPropertyId);
 
-        // Populate Property Switcher in Navbar
+        // Populate Main Navbar Property Switcher Dropdown
         const switcher = document.getElementById('main-property-switcher');
-        if (switcher && props.length > 0) {
-            switcher.innerHTML = props.map(p => 
+        if (switcher) {
+            const list = props.length > 0 ? props : [{ id: currentPropertyId, name: currentPropertyId.replace('_', ' ').toUpperCase() }];
+            switcher.innerHTML = list.map(p => 
                 `<option value="${p.id}" ${p.id === currentPropertyId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`
             ).join('');
 
@@ -107,8 +104,8 @@ export async function initPms() {
             };
         }
 
-        const activeProp = props.find(p => p.id === currentPropertyId) || props[0];
-        hotelRooms = activeProp?.rooms || [];
+        const activeProp = props.find(p => p.id === currentPropertyId) || { id: currentPropertyId, rooms: [] };
+        hotelRooms = activeProp.rooms || [];
         window.hotelRooms = hotelRooms;
         window.currentPropertyConfig = activeProp;
 
@@ -116,7 +113,7 @@ export async function initPms() {
 
         updateSyncStatus("Syncing Reservations...");
 
-        // Realtime Reservation Listener
+        // Realtime Firestore Listener
         onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => {
             staffBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             window.staff = staffBookings;
@@ -134,7 +131,7 @@ export async function initPms() {
         });
 
         const hash = (window.location.hash || '').replace('#', '').toLowerCase();
-        switchTab(['calendar', 'dashboard', 'database'].includes(hash) ? hash : 'calendar');
+        switchTab(['calendar', 'dashboard', 'database', 'tm30'].includes(hash) ? hash : 'calendar');
 
     } catch (err) {
         console.error("[PMS Initialization Failed]:", err);
@@ -151,13 +148,15 @@ export function switchTab(tabId) {
     const views = {
         calendar: document.getElementById('calendar-view'),
         dashboard: document.getElementById('dashboard-view'),
-        database: document.getElementById('database-view')
+        database: document.getElementById('database-view'),
+        tm30: document.getElementById('tab-content-tm30')
     };
 
     const buttons = {
         calendar: document.getElementById('tab-cal'),
         dashboard: document.getElementById('tab-dash'),
-        database: document.getElementById('tab-db')
+        database: document.getElementById('tab-db'),
+        tm30: document.getElementById('nav-tab-tm30')
     };
 
     Object.keys(views).forEach(key => {
@@ -188,6 +187,8 @@ export function switchTab(tabId) {
         renderDashboard(staffBookings, currentPropertyId, openGuestModal);
     } else if (tabId === 'database') {
         safeRenderDatabase();
+    } else if (tabId === 'tm30' && typeof window.renderTm30Table === 'function') {
+        window.renderTm30Table();
     }
 
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
@@ -195,12 +196,85 @@ export function switchTab(tabId) {
     }
 }
 
-// --- 4. Global Search Handler ---
+// --- 4. Global Search & Jump Match Pill Engine ---
 export function handleSearch(term) {
     searchTerm = (term || '').trim().toUpperCase();
     window.searchTerm = searchTerm;
-    if (activeTab === 'calendar') renderCalendar();
-    else if (activeTab === 'database') safeRenderDatabase();
+
+    const jumpBtn = document.getElementById('search-jump-btn');
+    const matchCounter = document.getElementById('match-counter');
+
+    if (!searchTerm) {
+        matchedSearchIds = [];
+        currentSearchMatchIndex = 0;
+        if (jumpBtn) jumpBtn.classList.add('hidden');
+        renderCalendar();
+        safeRenderDatabase();
+        return;
+    }
+
+    // Filter matching bookings
+    const curProp = window.currentPropertyId;
+    const matches = (window.staff || []).filter(b => {
+        if (b.property !== curProp || b.status === 'cancelled') return false;
+        const fn = (b.firstName || '').toUpperCase();
+        const ln = (b.lastName || '').toUpperCase();
+        const ref = (b.bookId || '').toUpperCase();
+        const id = (b.id || '').toUpperCase();
+        return fn.includes(searchTerm) || ln.includes(searchTerm) || ref.includes(searchTerm) || id.includes(searchTerm);
+    });
+
+    matchedSearchIds = matches.map(m => m.id);
+    currentSearchMatchIndex = 0;
+
+    if (jumpBtn && matchCounter) {
+        if (matchedSearchIds.length > 0) {
+            matchCounter.innerText = `${matchedSearchIds.length} Match${matchedSearchIds.length === 1 ? '' : 'es'}`;
+            jumpBtn.classList.remove('hidden');
+            jumpBtn.style.display = 'flex';
+        } else {
+            matchCounter.innerText = '0 Matches';
+            jumpBtn.classList.remove('hidden');
+            jumpBtn.style.display = 'flex';
+        }
+    }
+
+    renderCalendar();
+    safeRenderDatabase();
+}
+
+export function jumpToSearchMatch() {
+    if (matchedSearchIds.length === 0) return;
+    const targetId = matchedSearchIds[currentSearchMatchIndex];
+    currentSearchMatchIndex = (currentSearchMatchIndex + 1) % matchedSearchIds.length;
+
+    // Scroll to matching reservation bar
+    const bar = document.querySelector(`.staff-bar[data-booking-id="${targetId}"]`);
+    const container = document.getElementById('calendar-scroll-container');
+    if (bar && container) {
+        const offset = bar.offsetLeft;
+        container.scrollTo({
+            left: Math.max(0, offset - (container.clientWidth / 2)),
+            behavior: 'smooth'
+        });
+        bar.style.transform = 'scale(1.08)';
+        bar.style.boxShadow = '0 0 15px rgba(234, 88, 12, 0.8)';
+        setTimeout(() => {
+            bar.style.transform = '';
+            bar.style.boxShadow = '';
+        }, 1200);
+    }
+
+    const matchCounter = document.getElementById('match-counter');
+    if (matchCounter) {
+        matchCounter.innerText = `Match ${currentSearchMatchIndex === 0 ? matchedSearchIds.length : currentSearchMatchIndex}/${matchedSearchIds.length}`;
+    }
+}
+
+export function clearSearchAndClose() {
+    const input = document.getElementById('guest-search');
+    if (input) input.value = '';
+    handleSearch('');
 }
 
 // --- 5. Window Global Bridge ---
@@ -208,9 +282,34 @@ if (typeof window !== 'undefined') {
     window.renderCalendar = renderCalendar;
     window.switchTab = switchTab;
     window.handleSearch = handleSearch;
+    window.jumpToSearchMatch = jumpToSearchMatch;
+    window.clearSearchAndClose = clearSearchAndClose;
+    window.toggleSearchMode = () => {
+        const sc = document.getElementById('search-container');
+        if (sc) sc.classList.toggle('hidden');
+    };
+    window.openEmailParserModal = () => {
+        const m = document.getElementById('email-modal');
+        if (m) {
+            m.classList.add('active');
+            m.style.display = 'flex';
+        }
+    };
+    window.parseEmailBooking = () => processManualPaste();
+    window.processManualPaste = processManualPaste;
     window.editStaff = (id) => {
         const b = (staffBookings || []).find(x => x.id === id);
         if (b) openGuestModal(b);
+    };
+    window.saveGuest = () => {
+        if (typeof window.saveBooking === 'function') window.saveBooking();
+    };
+    window.closeModal = (id) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('active');
+            el.style.display = 'none';
+        }
     };
 }
 
