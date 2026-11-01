@@ -14,18 +14,30 @@
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script>
+<script>
+        // Visible Boot Diagnostic: Renders module crashes directly on the loading screen
         window.addEventListener('error', function(e) {
-            console.error("PMS Unmasked Error:", {
-                message: e.message,
-                filename: e.filename,
-                lineno: e.lineno,
-                colno: e.colno,
-                error: e.error
-            });
+            console.error("PMS Unmasked Error:", e);
+            const statusEl = document.getElementById('sync-status');
+            const loader = document.getElementById('boot-loader');
+            if (statusEl) {
+                statusEl.innerHTML = `
+                    <div class="bg-rose-950/90 border border-rose-500 text-rose-200 p-4 rounded-lg shadow-2xl max-w-lg mx-auto text-left font-mono">
+                        <div class="text-rose-400 font-black text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                            <span>⚠ System Boot Failure</span>
+                        </div>
+                        <div class="text-xs text-white font-bold whitespace-pre-wrap break-all">${e.message || 'Script execution failed'}</div>
+                        ${e.filename ? `<div class="text-[10px] text-slate-400 mt-2 border-t border-rose-900/60 pt-1.5 break-all">${e.filename.split('/').pop()}:${e.lineno}:${e.colno}</div>` : ''}
+                    </div>
+                `;
+            }
+            if (loader) {
+                const spinner = loader.querySelector('.spinner');
+                if (spinner) spinner.style.display = 'none';
+            }
         }, true);
     </script>
-    
+     
     <!-- Unified Stylesheet -->
     <link rel="stylesheet" href="./style.css">
 
