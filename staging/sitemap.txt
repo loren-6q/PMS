@@ -22,6 +22,7 @@
 │
 ├── parser/
 │   ├── parser-engine.js       (Master extractor router & normalizer)
+│   ├── room-assigner.js       (Intelligent auto-assigner, event tetris & dorm clustering)
 │   ├── ota-hostelworld.js     (Hostelworld clipboard regex engine)
 │   ├── ota-booking.js         (Booking.com extranet & email regex engine)
 │   ├── ota-agoda.js           (Agoda YCS & email regex engine)
