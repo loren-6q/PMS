@@ -1,83 +1,151 @@
 // ==========================================================================
-// parser/ota-agoda.js - Agoda YCS & Partner Central Extraction Adapter
+// parser/ota-agoda.js - Agoda YCS & Confirmation Parser
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-export function parseAgoda(lines, normalizedText, parseOtaDate, safeLocalYmd) {
-    const s = { source: 'agoda', pax: 1, payments: [], units: 1, rooms: [] };
-    const flatRaw = normalizedText.replace(/\s+/g, ' ');
+import { parseFlexibleDate } from './parser-engine.js';
 
-    const bIdMatch = normalizedText.match(/(?:Booking\s*ID|Booking\s*Reference(?:\s*No\.?)?|Reference\s*ID)\s*:?\s*(\d{7,15})/i) || flatRaw.match(/Booking\s*ID\s*(\d{7,15})/i);
-    if (bIdMatch) s.bookId = bIdMatch[1];
+export function parseAgoda(rawText) {
+    if (!rawText) return null;
+    const text = rawText.replace(/\r/g, '');
 
-    const nameMatch = normalizedText.match(/Customer\s*First\s*Name\s*:?\s*([A-Za-z\u00C0-\u024F\s\-'\.]+?)\s*Customer\s*Last\s*Name\s*:?\s*([A-Za-z\u00C0-\u024F\s\-'\.]+?)(?:Country\s*of\s*Residence|Check-in|Other\s*Guests|\n|City|$)/i);
+    // 1. Signature Check
+    const isAgoda = /agoda/i.test(text) || /ycs/i.test(text);
+    if (!isAgoda) return null;
+
+    // 2. Booking Reference ID
+    const idMatch = text.match(/(?:booking\s*id|reference\s*no|reference)[\s:#]*([0-9]{7,12})/i) ||
+                    text.match(/\b([0-9]{8,10})\b/);
+    const bookId = idMatch ? idMatch[1].trim() : '';
+
+    // 3. Guest Name
+    let firstName = '';
+    let lastName = 'GUEST';
+    const nameMatch = text.match(/(?:lead\s*guest|guest\s*name|customer\s*name|guest)[\s:#]*([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i);
     if (nameMatch) {
-        s.firstName = nameMatch[1].trim();
-        s.lastName = nameMatch[2].trim();
+        const full = nameMatch[1].trim().replace(/\s+/g, ' ');
+        const parts = full.split(' ');
+        firstName = parts[0] || '';
+        lastName = parts.slice(1).join(' ') || 'GUEST';
+    }
+
+    // 4. Country / Nationality
+    let country = '';
+    const countryMatch = text.match(/(?:country|nationality|country\/territory\s*of\s*residence|residence)[\s:#]*([A-Za-z\s\-]+)(?:\n|$)/i);
+    if (countryMatch) {
+        country = countryMatch[1].trim().toUpperCase();
+    }
+
+    // 5. Dates
+    let checkIn = '';
+    let checkOut = '';
+    const inMatch = text.match(/(?:check-in|arrival|check\s*in)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i) ||
+                    text.match(/arrival[\s:#]*([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{1,2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{2,4})/i);
+    const outMatch = text.match(/(?:check-out|departure|check\s*out)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i) ||
+                     text.match(/departure[\s:#]*([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{1,2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{2,4})/i);
+
+    if (inMatch) checkIn = parseFlexibleDate(inMatch[1]);
+    if (outMatch) checkOut = parseFlexibleDate(outMatch[1]);
+
+    // 6. Booking Date
+    let bookDate = '';
+    const bookDateMatch = text.match(/(?:booked\s*on|booking\s*date)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i);
+    if (bookDateMatch) bookDate = parseFlexibleDate(bookDateMatch[1]);
+
+    // 7. Unit Count & Headcount (Pax)
+    let pax = 1;
+    let unitCount = 1;
+
+    const paxMatch = text.match(/(\d+)\s*(?:adult|guest|person|pax)/i) ||
+                     text.match(/(?:number\s*of\s*guests|no\.\s*of\s*guests|guests|adults)[\s:#]*(\d+)/i);
+    if (paxMatch) pax = parseInt(paxMatch[1], 10) || 1;
+
+    const unitMatch = text.match(/(\d+)\s*(?:x|bed|beds|room|rooms|unit|units)\b/i) ||
+                      text.match(/(?:no\.\s*of\s*rooms|rooms|units)[\s:#]*(\d+)/i);
+    if (unitMatch) {
+        unitCount = parseInt(unitMatch[1], 10) || 1;
     } else {
-        const altName = normalizedText.match(/\[RmNo\.1\]\s*([A-Za-z\u00C0-\u024F\s\-'\.]+?)(?:Room\s*Type|\n|\[RmNo|$)/i) || normalizedText.match(/Guest\s+([A-Za-z\u00C0-\u024F\s\-'\.]+?)\s+is\s+present/i);
-        if (altName) {
-            const parts = altName[1].trim().split(/\s+/).filter(Boolean);
-            if (parts.length > 1) {
-                s.firstName = parts.slice(0, -1).join(' ');
-                s.lastName = parts[parts.length - 1];
-            } else {
-                s.lastName = parts[0] || '';
-            }
-        }
+        unitCount = pax;
     }
 
-    const countryMatch = normalizedText.match(/Country\s*of\s*Residence\s*:?\s*([A-Za-z\s]+?)(?:Check-in|Check-out|City|Other\s*Guests|Room\s*Type|\n|$)/i);
-    if (countryMatch) s.country = countryMatch[1].trim();
+    // 8. Total Price & Net Rate Payout Extraction
+    let totalPrice = 0;
+    let explicitNet = null;
 
-    const ciMatch = normalizedText.match(/Check-in\s*(?:Date)?\s*:?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i);
-    if (ciMatch) s.checkIn = parseOtaDate(ciMatch[1]);
-
-    const coMatch = normalizedText.match(/Check-out\s*(?:Date)?\s*:?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i);
-    if (coMatch) s.checkOut = parseOtaDate(coMatch[1]);
-
-    const bdMatch = normalizedText.match(/agoda\.com\s*<no-reply@agoda\.com>[\s\S]{0,120}?(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)?,?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i) || normalizedText.match(/Booked\s*on\s*:?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})/i);
-    if (bdMatch) s.bookDate = parseOtaDate(bdMatch[1]);
-    if (!s.bookDate) s.bookDate = safeLocalYmd();
-
-    const paxMatch = normalizedText.match(/(\d+)\s*Adult/i);
-    if (paxMatch) {
-        const pStr = paxMatch[1];
-        s.pax = parseInt(pStr.length > 1 ? pStr.slice(-1) : pStr) || 1;
+    const totalMatch = text.match(/(?:total\s*(?:rate|price|amount)|customer\s*price)[\s:#]*(?:[A-Z]{3}|฿|\$|€|£)?\s*([0-9,]+(?:\.[0-9]{2})?)/i) ||
+                       text.match(/(?:[A-Z]{3}|฿|\$|€|£)\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+    if (totalMatch) {
+        totalPrice = parseFloat(totalMatch[1].replace(/,/g, '')) || 0;
     }
 
-    const agodaRooms = normalizedText.match(/(?:No\.\s*of\s*Rooms|Number\s*of\s*Rooms|Rooms?)\s*:?\s*(\d+)/i);
-    if (agodaRooms) s.units = parseInt(agodaRooms[1], 10) || 1;
-
-    const rtMatch = normalizedText.match(/No\.\s*of\s*Extra\s*Bed\s*([\s\S]+?)(?:\(null\))?\s*\d*\s*\d+\s*Adult/i) || normalizedText.match(/Room\s*Type\s*:?\s*([\s\S]+?)(?:\(null\))?\s*(?:No\.\s*of\s*Rooms|Occupancy|\d+\s*Adult)/i);
-    if (rtMatch) {
-        s.bookedType = rtMatch[1].replace(/\(null\)/gi, '').replace(/No\.\s*of\s*Rooms|Occupancy|No\.\s*of\s*Extra\s*Bed/gi, '').replace(/\r?\n/g, ' ').trim();
-    } else {
-        const rtLine = lines.findIndex(l => l.match(/(?:Room Type|Room Category|Room|Booked Room)/i));
-        if (rtLine > -1 && lines.length > rtLine + 1) s.bookedType = lines[rtLine + 1].replace(/\(null\)/gi, '').trim();
+    const netMatch = text.match(/(?:net\s*rate|net\s*amount|property\s*payout|agoda\s*collect)[\s:#]*(?:[A-Z]{3}|฿|\$|€|£)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+    if (netMatch) {
+        explicitNet = parseFloat(netMatch[1].replace(/,/g, ''));
     }
 
-    const sellMatch = normalizedText.match(/Reference\s*sell\s*rate[^\d]*([\d,]+(?:\.\d+)?)/i) || normalizedText.match(/Total\s*(?:Price|Amount)?[^\d]*([\d,]+(?:\.\d+)?)/i);
-    const netMatch = normalizedText.match(/Net\s*rate[^\d]*([\d,]+(?:\.\d+)?)/i) || normalizedText.match(/Hotel\s*Payout[^\d]*([\d,]+(?:\.\d+)?)/i);
-
-    const totalAmt = sellMatch ? parseFloat(sellMatch[1].replace(/,/g, '')) : 0;
-    const netAmt = netMatch ? parseFloat(netMatch[1].replace(/,/g, '')) : 0;
-
-    if (totalAmt > 0) {
-        s.totalPrice = totalAmt;
-        s.netPrice = netAmt > 0 ? netAmt : Number((totalAmt * 0.815).toFixed(2));
-    } else if (netAmt > 0) {
-        s.netPrice = netAmt;
-        s.totalPrice = Number((netAmt / 0.815).toFixed(2));
+    // 9. Unit / Room Category
+    let bookedType = '';
+    const roomMatch = text.match(/(?:room\s*type|room|benefit)[\s:#]*([^\n\r]+)/i);
+    if (roomMatch) {
+        bookedType = roomMatch[1].trim();
     }
 
-    if (s.totalPrice > 0) {
-        const payDate = s.checkIn || s.bookDate || safeLocalYmd();
-        const commission = Number((s.totalPrice - (s.netPrice || s.totalPrice)).toFixed(2));
-
-        if (commission > 0) s.payments.push({ date: payDate, amt: commission, method: 'agoda-kp' });
-        if (s.netPrice > 0) s.payments.push({ date: payDate, amt: Number(s.netPrice.toFixed(2)), method: 'agoda-pay' });
+    // 10. Refundability Policy
+    let refundability = 'unknown';
+    if (/non-refundable|non\s*refundable/i.test(text)) {
+        refundability = 'non-ref';
+    } else if (/free\s*cancellation/i.test(text)) {
+        refundability = 'ref';
     }
 
-    return s;
+    // 11. Payments (Agoda Collect / UPC)
+    const payments = [];
+    const isAgodaCollect = /agoda\s*collect/i.test(text) || /electronic\s*card/i.test(text) || /upc/i.test(text);
+    if (isAgodaCollect && totalPrice > 0 && checkIn) {
+        payments.push({
+            date: checkIn,
+            amt: explicitNet || totalPrice,
+            method: 'agoda-pay'
+        });
+    }
+
+    // 12. Contact Details
+    let phone = '';
+    let email = '';
+    const phoneMatch = text.match(/(?:phone|tel|mobile)[\s:#]*([+\d\s\-\(\)]{8,20})/i);
+    const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    if (phoneMatch) phone = phoneMatch[1].trim();
+    if (emailMatch) email = emailMatch[1].trim();
+
+    const noteLines = [
+        `[AGODA CONFIRMATION]`,
+        `• Booking ID: ${bookId}`,
+        `• Units: ${unitCount} | Pax: ${pax}`,
+        `• Policy: ${refundability.toUpperCase()}`
+    ];
+    if (country) noteLines.push(`• Nationality: ${country}`);
+
+    return {
+        source: 'agoda',
+        bookId,
+        firstName: firstName.toUpperCase(),
+        lastName: lastName.toUpperCase(),
+        country,
+        pax,
+        unitCount,
+        checkIn,
+        checkOut,
+        bookDate,
+        totalPrice,
+        netPrice: explicitNet,
+        netVerified: explicitNet !== null,
+        bookedType,
+        phone,
+        email,
+        isProxyEmail: false,
+        refundability,
+        payments,
+        status: 'future',
+        notes: noteLines.join('\n')
+    };
 }
