@@ -492,6 +492,119 @@ export const confirmMerge = async () => {
     }
 };
 
+// ----------------------------------------------------------------------
+// EARLY CHECKOUT & REVERSAL ENGINE
+// ----------------------------------------------------------------------
+export const requestEarlyCheckout = () => {
+    const id = $('guest-id')?.value;
+    if (!id) return;
+    const s = getStaff().find(x => x.id === id);
+    if (!s) return;
+
+    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+    if (s.checkOut <= todayStr) {
+        return window.showAlert ? window.showAlert("Guest is already scheduled to depart today or earlier.") : null;
+    }
+
+    const parseFn = window.parseYMD || (str => Date.parse(str));
+    const totalNights = Math.max(1, Math.round((parseFn(s.checkOut) - parseFn(s.checkIn)) / 86400000));
+    const stayedNights = Math.max(1, Math.round((parseFn(todayStr) - parseFn(s.checkIn)) / 86400000));
+    const unstayedNights = Math.max(0, totalNights - stayedNights);
+
+    const nightlyRate = s.totalPrice / totalNights;
+    const unstayedAmount = Number((nightlyRate * unstayedNights).toFixed(2));
+
+    window.showAlert(
+        `EARLY CHECKOUT CONFIRMATION\n\n` +
+        `Scheduled Out: ${s.checkOut}\n` +
+        `New Departure: ${todayStr} (${unstayedNights} unstayed nt${unstayedNights === 1 ? '' : 's'})\n` +
+        `Unstayed Value: ฿${unstayedAmount.toLocaleString()}\n\n` +
+        `Check out guest today and release bed inventory?`,
+        true,
+        async () => {
+            const db = getDb();
+            const appId = getAppId();
+            let fsModule = window.fs;
+            if (!fsModule || !fsModule.updateDoc) {
+                fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+            }
+            const { doc, updateDoc } = fsModule;
+
+            const earlySnapshot = {
+                originalCheckOut: s.checkOut,
+                departureDate: todayStr,
+                unstayedNights: unstayedNights,
+                unstayedAmount: unstayedAmount,
+                ts: new Date().toISOString()
+            };
+
+            const noteMsg = `\n[EARLY CHECKOUT on ${todayStr}] Departed ${unstayedNights} nt(s) early. Original checkout: ${s.checkOut}. Released value: ฿${unstayedAmount}.`;
+
+            try {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
+                    checkOut: todayStr,
+                    status: 'early',
+                    earlyCheckout: earlySnapshot,
+                    notes: ((s.notes || '') + noteMsg).trim(),
+                    lastEditedAt: new Date().toISOString()
+                });
+
+                if (window.triggerAutoSync) {
+                    const hotelRooms = getHotelRooms();
+                    const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
+                    window.triggerAutoSync(todayStr, s.checkOut, types);
+                }
+
+                if (window.closeGuestModal) window.closeGuestModal();
+                if (window.showAlert) window.showAlert(`Guest checked out early.\nBed released from ${todayStr} to ${s.checkOut}.`);
+            } catch (err) {
+                console.error("Early Checkout Error:", err);
+                if (window.showAlert) window.showAlert("Error processing early checkout: " + err.message);
+            }
+        }
+    );
+};
+
+export const undoEarlyCheckout = async () => {
+    const id = $('guest-id')?.value;
+    if (!id) return;
+    const s = getStaff().find(x => x.id === id);
+    if (!s || !s.earlyCheckout) return;
+
+    const originalOut = s.earlyCheckout.originalCheckOut;
+    const rL = s.rooms || [s.room];
+
+    // Bed collision guard: verify bed wasn't re-booked while released
+    const occ = window.getOccupiedRooms ? window.getOccupiedRooms(s.checkOut, originalOut, id) : new Set();
+    for (let r of rL) {
+        if (occ.has(r)) {
+            return window.showAlert ? window.showAlert(`COLLISION DETECTED:\n\nCannot revert early checkout. Room ${r} has already been assigned to another guest between ${s.checkOut} and ${originalOut}.`) : null;
+        }
+    }
+
+    const db = getDb();
+    const appId = getAppId();
+    let fsModule = window.fs;
+    if (!fsModule || !fsModule.updateDoc) {
+        fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+    }
+    const { doc, updateDoc } = fsModule;
+
+    try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
+            checkOut: originalOut,
+            status: 'here',
+            earlyCheckout: null,
+            lastEditedAt: new Date().toISOString()
+        });
+
+        if (window.closeGuestModal) window.closeGuestModal();
+        if (window.showAlert) window.showAlert(`Early checkout reverted. Stay restored to ${originalOut}.`);
+    } catch (err) {
+        console.error("Undo Early Checkout Error:", err);
+    }
+};
+
 window.saveBooking = saveBooking;
 window.requestDelete = requestDelete;
 window.requestDuplicate = requestDuplicate;
@@ -500,3 +613,10 @@ window.confirmSplit = confirmSplit;
 window.requestMerge = requestMerge;
 window.confirmMerge = confirmMerge;
 window.populateSplitRoomDropdown = populateSplitRoomDropdown;
+window.requestEarlyCheckout = requestEarlyCheckout;
+window.undoEarlyCheckout = undoEarlyCheckout;
+
+
+
+
+
