@@ -5,8 +5,14 @@
 
 import { parseYMD } from '../pms/pms-init.js';
 
+// --- DOM Selector Helper ---
 const $$ = s => document.querySelectorAll(s);
 
+// --------------------------------------------------------------------------
+// 1. AUTOMATIC ROOM & BED SUGGESTION CONTROLLER
+// --------------------------------------------------------------------------
+
+// --- Automatically Suggest & Match Unassigned Rooms Based on Booked Type ---
 export const autoSuggestRoom = (bt, nt, cin, cout) => {
     if (!cin || !cout || !bt) return;
     const staff = window.staff || [];
@@ -58,5 +64,9 @@ export const autoSuggestRoom = (bt, nt, cin, cout) => {
         if (window.updateAvailableRooms) window.updateAvailableRooms();
     }
 };
+
+// --------------------------------------------------------------------------
+// 2. GLOBAL WINDOW EXPORTS
+// --------------------------------------------------------------------------
 
 window.autoSuggestRoom = autoSuggestRoom;
