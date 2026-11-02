@@ -1,9 +1,14 @@
+// ==========================================================================
+// pms/pms-init.js - Core Bootloader, Firebase Realtime Sync & Navigation
+// Wild & Wandering Property Management System
+// ==========================================================================
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, query, where, getDocs, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 
-// Load all PMS domain modules into browser context
+// --- Load All PMS Domain Modules into Browser Context ---
 import './pms-calendar-tape.js';
 import './pms-calendar-bars.js';
 import './pms-calendar-grid.js';
@@ -17,13 +22,18 @@ import './pms-tm30.js';
 import '../parser/parser-engine.js';
 import '../parser/room-assigner.js';
 
-// Embedded zero-drift date parsers from monolith (Immune to 404)
+// --------------------------------------------------------------------------
+// 1. EMBEDDED ZERO-DRIFT DATE PARSERS
+// --------------------------------------------------------------------------
+
+// --- String Date Parser (Zero-Drift UTC Noon Timestamp) ---
 export const parseYMD = str => { 
     if (!str || typeof str !== 'string') return 0; 
     const p = str.split('-'); 
     return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10), 12, 0, 0); 
 };
 
+// --- Local Date String Normalizer (YYYY-MM-DD) ---
 export const getLocalYMD = d => {
     if (!d) d = new Date();
     if (typeof d === 'string') {
@@ -40,11 +50,20 @@ export const getLocalYMD = d => {
         return new Date().toISOString().split('T')[0];
     }
 };
+
+// --------------------------------------------------------------------------
+// 2. CONFIGURATION, DOM SELECTORS & FIREBASE INITIALIZATION
+// --------------------------------------------------------------------------
+
+// --- DOM Selector Helpers ---
 export const $ = id => document.getElementById(id);
 export const $$ = s => document.querySelectorAll(s);
+
+// --- Global Flags & Asset Constants ---
 export const REQUIRE_LOGIN = false;
 export const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
+// --- Firebase Configuration & App Instances ---
 export const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
 export const appId = 'hotel-pms-v1';
 export const app = initializeApp(firebaseConfig);
@@ -52,6 +71,7 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app, 'asia-southeast1');
 
+// --- Property Key Maps & Initial Route Resolvers ---
 export let PROP_MAP = {};
 export let PROP_REVERSE_MAP = {};
 
@@ -62,6 +82,7 @@ try { storedProp = localStorage.getItem('last_prop'); } catch (e) {}
 
 export let currentPropertyId = storedProp || 'swims_resort';
 
+// --- Session, User & Calendar Viewport State ---
 export let currentUserRole = null, currentUserEmail = 'unknown';
 export let staff = [], dailyRates = {};
 export let viewStart = new Date();
@@ -72,7 +93,11 @@ export let hotelRooms = [], roomTypes = [], fmpDates = [];
 window.activeExtraCharges = [];
 window.viewStart = viewStart;
 
-// Dynamic Favicon Switcher
+// --------------------------------------------------------------------------
+// 3. UI, FAVICON & ROOM TOKENIZATION HELPERS
+// --------------------------------------------------------------------------
+
+// --- Dynamic Browser Favicon Switcher ---
 window.updateFavicon = (iconUrl) => {
     const url = iconUrl || DEFAULT_WW_ICON;
     let link = document.querySelector("link[rel*='icon']");
@@ -87,9 +112,10 @@ window.updateFavicon = (iconUrl) => {
     if (appleLink) appleLink.href = url;
 };
 
+// --- Booking Room List Resolver Helper ---
 export const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
-// Universal Tokenized Room Matcher
+// --- Split Room String into Alphanumeric Token Array ---
 export const tokenizeRoom = str => {
     if (!str) return [];
     return (String(str).toUpperCase().replace(/^ROOM\s+/, '').match(/[A-Z]+|\d+/g) || []).map(t => {
@@ -97,11 +123,14 @@ export const tokenizeRoom = str => {
         return isNaN(n) ? t : n;
     });
 };
+
+// --- Array Token Match Evaluator ---
 export const tokensMatch = (t1, t2) => {
     if (!t1.length || !t2.length || t1.length !== t2.length) return false;
     return t1.every((v, i) => v === t2[i]);
 };
 
+// --- Database ID to UI Canonical Room Identifier Resolver ---
 export const dbToUiRoom = rid => {
     if (!rid) return rid;
     const nid = String(rid).toUpperCase().trim();
@@ -117,7 +146,12 @@ export const dbToUiRoom = rid => {
     return rid;
 };
 
+// --- UI to Database Room Identifier Alias ---
 export const uiToDbRoom = rid => dbToUiRoom(rid);
+
+// --------------------------------------------------------------------------
+// 4. GLOBAL CONTEXT & COMPATIBILITY BRIDGES
+// --------------------------------------------------------------------------
 
 window.db = db;
 window.appId = appId;
@@ -132,12 +166,13 @@ window.getCurrentPropertyId = () => currentPropertyId;
 window.getHotelRooms = () => hotelRooms;
 window.getStaff = () => staff;
 
-
-// --- Property & Navigation Conductor Functions ---
-
+// --- Total Payments Paid Calculator ---
 window.getPaid = s => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
+
+// --- Outstanding Folio Balance Due Calculator ---
 window.getDue = s => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
 
+// --- Close Main Guest Modal ---
 window.closeGuestModal = () => {
     const m = $('guest-modal');
     if (m) {
@@ -146,7 +181,7 @@ window.closeGuestModal = () => {
     }
 };
 
-// Native Auto-Revert to Unassigned when clearing all room assignments
+// --- Auto-Revert to Empty Room Selector Listener ---
 document.addEventListener('DOMContentLoaded', () => {
     const container = $('assigned-rooms-container');
     if (container) {
@@ -163,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// --- Audit Trail Difference Description Generator ---
 window.generateAuditDiff = (oldRec, newRec) => {
     if (!oldRec) return "Created new booking.";
     let changes = [];
@@ -177,6 +213,7 @@ window.generateAuditDiff = (oldRec, newRec) => {
     return changes.length > 0 ? changes.join(' | ') : "Saved without major changes.";
 };
 
+// --- Top Navbar Property Parameter Link Rewriter ---
 window.updateNavLinks = shortKey => {
     const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || '';
     document.querySelectorAll('a[href*=".html"]').forEach(a => {
@@ -187,6 +224,7 @@ window.updateNavLinks = shortKey => {
     });
 };
 
+// --- Sync Browser URL with Selected Property Param ---
 window.syncPropertyUrl = propId => {
     const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || '';
     try {
@@ -199,6 +237,7 @@ window.syncPropertyUrl = propId => {
     window.updateNavLinks(shortKey);
 };
 
+// --- Trigger Background Channex Cloud Function Delta Sync ---
 window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypes = null) => {
     if (window.channexConfig && window.channexConfig.apiKey) {
         try {
@@ -222,6 +261,11 @@ window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypes
     }
 };
 
+// --------------------------------------------------------------------------
+// 5. PROPERTY CONFIGURATION & SWITCHER CONTROLLERS
+// --------------------------------------------------------------------------
+
+// --- Load Active Property Metadata, Rooms & Dropdowns ---
 export const loadPropertyConfig = async () => {
     try {
         const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
@@ -302,6 +346,7 @@ export const loadPropertyConfig = async () => {
     } catch (e) { console.error("Failed to load config", e); }
 };
 
+// --- Active Property Switch Handler ---
 window.handlePropertySwitch = async propId => {
     if (!propId || propId === currentPropertyId) return;
     initialP = null;
@@ -324,6 +369,7 @@ window.handlePropertySwitch = async propId => {
     $('boot-loader').style.display = 'none';
 };
 
+// --- Main Navigation Tab Switcher (Dashboard / Calendar / Database) ---
 window.switchTab = t => {
     $('dashboard-view').style.display = t === 'dashboard' ? 'flex' : 'none';
     $('calendar-view').style.display = t === 'calendar' ? 'flex' : 'none';
@@ -349,17 +395,20 @@ window.switchTab = t => {
     if (t === 'dashboard' && window.renderDashboard) window.renderDashboard();
 };
 
+// --- Open Email Parser Modal (Direct Trigger) ---
 window.openEmailParserModal = () => { 
     $('email-textarea').value = ''; 
     $('email-modal').style.display = 'flex'; 
     setTimeout(() => $('email-textarea').focus(), 50); 
 };
 
+// --------------------------------------------------------------------------
+// 6. CORE BOOTSTRAPPER, AUTHENTICATION & EVENT LISTENERS
+// --------------------------------------------------------------------------
 
-
-// --- Core Bootstrapper & DOM Listeners (from Monolith init()) ---
-
+// --- Master Initialization Bootstrapper ---
 export const init = async () => {
+    // --- Firestore Staff Snapshot Ingestion Handler ---
     const processSnapshot = snap => {
         staff = snap.docs.map(d => ({ id: d.id, ...d.data() })).map(s => {
             const rList = getRooms(s).map(dbToUiRoom);
@@ -425,6 +474,7 @@ export const init = async () => {
         }
     };
 
+    // --- Anonymous / Custom Token Authentication Bypass ---
     const bypassLogin = async () => {
         const safetyTimer = setTimeout(() => {
             const bl = $('boot-loader');
@@ -478,6 +528,7 @@ export const init = async () => {
         });
     }
 
+    // --- Timeline Body Hover Column & Cell Click Delegation ---
     const tBodyEl = $('timeline-body');
     if (tBodyEl) {
         tBodyEl.addEventListener('mouseover', e => {
@@ -519,6 +570,7 @@ export const init = async () => {
         });
     }
 
+    // --- Responsive Window Resize & Post-Boot UI Initializers ---
     window.addEventListener('resize', () => {
         if ($('calendar-view')?.style.display !== 'none' && window.render) window.render();
     });
@@ -527,9 +579,9 @@ export const init = async () => {
     if (window.mountLegendSvgs) window.mountLegendSvgs();
 };
 
+// --- DOM Lifecycle Auto-Boot Trigger ---
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
 }
-
