@@ -3,11 +3,14 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+// --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
+// --- Fallback Branding Asset Constant ---
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
+// --- Date Parsing & Conversion Resolvers ---
 const getParseYMD = () => window.parseYMD || (str => {
     if (!str || typeof str !== 'string') return 0;
     const p = str.split('-');
@@ -20,9 +23,11 @@ const getLocalYMD = () => window.getLocalYMD || (d => {
     return o.toISOString().split('T')[0];
 });
 
-// ----------------------------------------------------------------------
-// 3. FINANCIALS, PAYMENTS & BAD CC CONTROLLER
-// ----------------------------------------------------------------------
+// --------------------------------------------------------------------------
+// 1. FINANCIAL CALCULATIONS, NET OVERRIDE & CREDIT CARD STATUS
+// --------------------------------------------------------------------------
+
+// --- Toggle Bad Credit Card Flag & Visual Badge ---
 export const toggleBadCC = () => {
     const b = $('bad-cc-box');
     if (!b) return;
@@ -39,6 +44,7 @@ export const toggleBadCC = () => {
     }
 };
 
+// --- Recalculate Folio Balance, Payments Due & Net Prices ---
 export const calcFinancials = () => {
     const tot = Number($('total-price')?.value) || 0;
     let pd = 0, cD = 0;
@@ -86,12 +92,19 @@ export const calcFinancials = () => {
     }
 };
 
+// --- Flag Net Revenue as Manually Overridden ---
 export const overrideNet = () => {
     const nEl = $('net-price');
     if (nEl) nEl.dataset.override = 'true';
 };
 
+// --------------------------------------------------------------------------
+// 2. PAYMENT TRANSACTION ROW CONTROLLERS
+// --------------------------------------------------------------------------
+
 let pCount = 0;
+
+// --- Append New Payment Transaction Row ---
 export const addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
     const id = `pay-${pCount++}`;
     const div = document.createElement('div');
@@ -127,6 +140,7 @@ export const addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --- Unlock Saved Payment Row for Editing ---
 export const unlockPayment = id => {
     const r = $(id);
     if (!r) return;
@@ -136,6 +150,7 @@ export const unlockPayment = id => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --- Remove Payment Transaction Row ---
 export const removePaymentRow = id => {
     if (window.showAlert) {
         window.showAlert("Delete this payment entry?", true, () => {
@@ -150,9 +165,11 @@ export const removePaymentRow = id => {
     }
 };
 
-// ----------------------------------------------------------------------
-// 4. DYNAMIC FOLIO ADD-ONS CATALOGUE & ITEM CHARGES
-// ----------------------------------------------------------------------
+// --------------------------------------------------------------------------
+// 3. DYNAMIC FOLIO ADD-ONS & EXTRA CHARGES
+// --------------------------------------------------------------------------
+
+// --- Open Extra Charge Ingestion Modal ---
 export const openChargeModal = () => {
     const dEl = $('charge-desc');
     const aEl = $('charge-amount');
@@ -190,6 +207,7 @@ export const openChargeModal = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --- Populate Modal from Add-on Preset Pill ---
 export const applyChargePreset = (desc, amt) => {
     const dEl = $('charge-desc');
     const aEl = $('charge-amount');
@@ -200,6 +218,7 @@ export const applyChargePreset = (desc, amt) => {
     }
 };
 
+// --- Confirm & Apply Extra Charge to Folio ---
 export const confirmAddCharge = () => {
     const desc = $('charge-desc')?.value.trim();
     const amt = parseFloat($('charge-amount')?.value);
@@ -228,6 +247,7 @@ export const confirmAddCharge = () => {
     if (window.closeModal) window.closeModal('charge-modal');
 };
 
+// --- Remove Extra Charge Entry from Folio ---
 export const removeCharge = chargeId => {
     if (!Array.isArray(window.activeExtraCharges)) return;
     const idx = window.activeExtraCharges.findIndex(c => c.id === chargeId);
@@ -241,6 +261,7 @@ export const removeCharge = chargeId => {
     }
 };
 
+// --- Render Extra Charges List in Folio Modal ---
 export const renderExtraCharges = () => {
     const wrapper = $('extra-charges-wrapper');
     const list = $('extra-charges-list');
@@ -279,9 +300,11 @@ export const renderExtraCharges = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-// ----------------------------------------------------------------------
-// 5. EXTENSIONS & RATE CHECK CONTROLLER
-// ----------------------------------------------------------------------
+// --------------------------------------------------------------------------
+// 4. STAY EXTENSIONS & RATE CHECK ENGINES
+// --------------------------------------------------------------------------
+
+// --- Calculate Extension Pricing & FMP Detection ---
 export const calcExtension = () => {
     const cI = $('check-in')?.value, cO = $('check-out')?.value;
     const parseFn = getParseYMD();
@@ -337,6 +360,7 @@ export const calcExtension = () => {
     }
 };
 
+// --- Open Booking.com Live Price Comparison in New Window ---
 export const checkBdcPrice = () => {
     const cO = $('check-out')?.value;
     if (!cO) return window.showAlert ? window.showAlert("Please set a check-out date first.") : null;
@@ -349,6 +373,7 @@ export const checkBdcPrice = () => {
     window.open(`${bdcUrl}?checkin=${cO}&checkout=${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}&group_adults=${pax}&group_children=0&no_rooms=${roomCount}`, '_blank');
 };
 
+// --- Commit Stay Extension & Update Total Price ---
 export const confirmExtension = async () => {
     const cO = $('check-out')?.value;
     if (!cO) return window.showAlert ? window.showAlert("Please set a check-out date first.") : null;
@@ -382,6 +407,7 @@ export const confirmExtension = async () => {
     if (window.showAlert) window.showAlert(`Booking extended by ${days} day(s).\n\nCheckout is now ${nCo}.\nAdded ฿${aP} to Total Price.`);
 };
 
+// --- Open Standalone Price Check Modal ---
 export const openPriceCheckModal = () => {
     const d = new Date();
     d.setHours(12, 0, 0, 0);
@@ -392,6 +418,7 @@ export const openPriceCheckModal = () => {
     if (m) m.style.display = 'flex';
 };
 
+// --- Execute Standalone OTA Price Check Query ---
 export const runPriceCheck = () => {
     const cI = $('pc-checkin')?.value;
     const n = parseInt($('pc-nights')?.value) || 1;
@@ -405,6 +432,10 @@ export const runPriceCheck = () => {
     window.open(`${bdcUrl}?checkin=${cI}&checkout=${cO}&group_adults=${p}&group_children=0&no_rooms=1`, '_blank');
     if (window.closeModal) window.closeModal('price-check-modal');
 };
+
+// --------------------------------------------------------------------------
+// 5. GLOBAL WINDOW EXPORTS
+// --------------------------------------------------------------------------
 
 window.toggleBadCC = toggleBadCC;
 window.calcFinancials = calcFinancials;
