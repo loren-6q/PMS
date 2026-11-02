@@ -6,11 +6,14 @@
 import { mNames } from './pms-calendar-tape.js';
 import { SVGS, renderReservationBar } from './pms-calendar-bars.js';
 
+// --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
+// --- Master Group Accordion State ---
 window.masterState = 0;
 
+// --- State & Config Accessors ---
 const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
 const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
 const getPropId = () => {
@@ -21,6 +24,11 @@ const getFmpDates = () => window.fmpDates || [];
 const getSearchTerm = () => (window.getSearchTerm ? window.getSearchTerm() : window.searchTerm) || "";
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
+// --------------------------------------------------------------------------
+// 1. TIMELINE GROUPING & CATEGORY ACCORDION CONTROLLERS
+// --------------------------------------------------------------------------
+
+// --- Master Toggle All Room Categories ---
 export const toggleAllGroups = () => {
     window.masterState = ((window.masterState || 0) + 1) % 4;
     const g = new Set();
@@ -28,6 +36,7 @@ export const toggleAllGroups = () => {
     g.forEach(grp => window.toggleGroup(grp, window.masterState));
 };
 
+// --- Category Accordion State Switcher ---
 export const toggleGroup = (grp, stateIdx = -1) => {
     const h = $(`icon-${grp}`);
     const rws = $$(`.group-${grp}`);
@@ -70,6 +79,11 @@ export const toggleGroup = (grp, stateIdx = -1) => {
     });
 };
 
+// --------------------------------------------------------------------------
+// 2. ROOM CLASSIFICATION, LABELS & ICON FORMATTERS
+// --------------------------------------------------------------------------
+
+// --- Room Floor Indicator Icon Generator ---
 export const getFloorIcon = f => {
     if (!f) return '';
     const fStr = String(f).toLowerCase().trim();
@@ -85,6 +99,7 @@ export const getFloorIcon = f => {
     return '';
 };
 
+// --- Bunk Tier Direction Indicator Icon Generator ---
 export const getBunkIcon = b => {
     if (!b) return '';
     const bStr = String(b).toLowerCase().trim();
@@ -97,6 +112,7 @@ export const getBunkIcon = b => {
     return '';
 };
 
+// --- Classify Room Category for Calendar Hierarchy ---
 export const classifyRoomForCalendar = r => {
     const cat = (r.category || r.type || '').toLowerCase();
     const bunk = (r.bunk || r.bed || '').toLowerCase();
@@ -132,6 +148,7 @@ export const classifyRoomForCalendar = r => {
     return { isDorm, baseRoom };
 };
 
+// --- Format Bed Display Identifier for Sidebar ---
 export const formatBedDisplayLabel = id => {
     if (!id) return '';
     const str = String(id).trim();
@@ -146,6 +163,7 @@ export const formatBedDisplayLabel = id => {
     return str;
 };
 
+// --- Universal Room Matcher with Normalization Fallback ---
 export const matchesRoom = (assignedRoom, targetRoomId) => {
     if (!assignedRoom || !targetRoomId) return false;
     if (String(assignedRoom).trim() === String(targetRoomId).trim()) return true;
@@ -154,6 +172,11 @@ export const matchesRoom = (assignedRoom, targetRoomId) => {
     return cleanA === cleanB;
 };
 
+// --------------------------------------------------------------------------
+// 3. MASTER CALENDAR ASSEMBLY & TIMELINE GRID RENDERER
+// --------------------------------------------------------------------------
+
+// --- Master Calendar Timeline Grid Assembler ---
 export const render = () => {
     if (!window.viewStart) {
         window.viewStart = new Date();
@@ -502,6 +525,11 @@ export const render = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --------------------------------------------------------------------------
+// 4. CALENDAR LEGEND DRAWER & VECTOR KEY CONTROLLERS
+// --------------------------------------------------------------------------
+
+// --- Toggle Collapsible Bottom Legend Drawer ---
 export const toggleLegendDrawer = () => {
     const leg = document.getElementById('calendar-legend');
     const chevron = document.getElementById('legend-toggle-chevron');
@@ -522,6 +550,7 @@ export const toggleLegendDrawer = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --- Mount SVG Icons into Legend Drawer Elements ---
 export const mountLegendSvgs = () => {
     if (!SVGS) return false;
     const keys = ['upFree', 'upPaid', 'ext', 'link', 'mailConf', 'mailNotFmp', 'mailPre', 'mailPreConf', 'mailSpec', 'fbGood', 'fbBad'];
@@ -533,6 +562,10 @@ export const mountLegendSvgs = () => {
     });
     return true;
 };
+
+// --------------------------------------------------------------------------
+// 5. GLOBAL WINDOW EXPORTS & AUTO-BOOTSTRAPPER
+// --------------------------------------------------------------------------
 
 window.render = render;
 window.toggleAllGroups = toggleAllGroups;
