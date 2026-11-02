@@ -1,5 +1,5 @@
 // ==========================================================================
-// pms/pms-calendar-grid.js - Category Dividers, Availability & Master Grid
+// pms/pms-calendar-grid.js - Dorm Rooms Hierarchy, Bed Grid & Availability
 // Wild & Wandering Property Management System
 // ==========================================================================
 
@@ -8,55 +8,48 @@ import { viewStart, getDaysToShow, populateMonthSelect } from './pms-calendar-ta
 import { renderReservationBar } from './pms-calendar-bars.js';
 import { openGuestModal } from './pms-folio-modal.js';
 
-// --- 1. Bed & Room Display Formatters ---
-export function formatBedDisplayLabel(id) {
-    if (!id) return '';
-    const str = String(id).trim();
-    if (str.includes('№')) {
-        const parts = str.split('№');
-        return {
-            roomName: parts[0].trim(),
-            bedNum: `№ ${parts[1].trim()}`
-        };
-    }
-    const m = str.match(/^(.*?)[\s\-_]+(\d+)\$/);
-    if (m) {
-        return {
-            roomName: m[1].trim(),
-            bedNum: `№ ${m[2].padStart(2, '0')}`
-        };
-    }
-    return {
-        roomName: str,
-        bedNum: ''
-    };
-}
+// --- 1. Bed & Dorm Room Label Formatter (Sub-10 Character Law) ---
+export function formatBedDisplayLabel(room) {
+    const rawId = String(room.id || '').trim();
+    let parentName = room.parentRoom || '';
+    let bedNum = String(room.bed || '').trim();
 
-export function classifyRoomForCalendar(r) {
-    const isPrivate = (r.rule === 'private') || (r.isDorm === false);
-    const isDorm = !isPrivate && (
-        r.isDorm === true ||
-        (r.rule && r.rule !== 'private') ||
-        (r.category || r.type || '').toLowerCase().includes('dorm') ||
-        (r.parentRoom && r.parentRoom !== r.id) ||
-        (r.id || '').includes('№')
-    );
-
-    let baseRoom = '';
-    if (isDorm) {
-        if (r.parentRoom && r.parentRoom !== r.id) {
-            baseRoom = r.parentRoom;
-        } else if ((r.id || '').includes('№')) {
-            baseRoom = r.id.split('№')[0].trim();
+    if (!parentName && rawId.includes('№')) {
+        const parts = rawId.split('№');
+        parentName = parts[0].trim();
+        bedNum = parts[1].trim();
+    } else if (!parentName) {
+        const match = rawId.match(/^(.*?)[\s\-_]+(\d+)$/);
+        if (match) {
+            parentName = match[1].trim();
+            bedNum = match[2].trim();
         } else {
-            baseRoom = r.id.trim();
+            parentName = rawId;
         }
     }
 
-    return { isDorm, baseRoom };
+    if (bedNum && !bedNum.startsWith('№')) {
+        bedNum = `№ ${bedNum.padStart(2, '0')}`;
+    }
+
+    // THE 10-CHARACTER RULE:
+    // If room name < 10 characters: Display NAME № [Bed]
+    // If >= 10 characters: Display only № [Bed] (Header above shows full name)
+    let displayString = '';
+    if (parentName.length > 0 && parentName.length < 10) {
+        displayString = `${parentName} ${bedNum}`.trim();
+    } else {
+        displayString = bedNum || parentName;
+    }
+
+    return {
+        parentName: parentName || 'DORM',
+        bedNum: bedNum,
+        displayString: displayString
+    };
 }
 
-// --- 2. Header Months & Days Grid Builder ---
+// --- 2. Calendar Header Grids ---
 export function buildHeaderGrids(monthsContainer, daysContainer, daysArray, todayStr) {
     if (!monthsContainer || !daysContainer) return;
 
@@ -98,7 +91,7 @@ export function buildHeaderGrids(monthsContainer, daysContainer, daysArray, toda
 }
 
 // --- 3. Thermal Availability Calculation ---
-export function renderCategoryAvailabilityRow(catName, grpKey, roomList, daysArray, bookings, daysToShow) {
+export function renderCategoryAvailabilityRow(groupName, grpKey, roomList, daysArray, bookings, daysToShow) {
     const tRIds = roomList.map(hr => hr.id);
     const cap = tRIds.length;
     const aRow = document.createElement('div');
@@ -139,7 +132,7 @@ export function renderCategoryAvailabilityRow(catName, grpKey, roomList, daysArr
     return aRow;
 }
 
-// --- 4. Collapsible Category & Accordion Controllers ---
+// --- 4. Group Toggles ---
 export function toggleGroup(grp, stateIdx = -1) {
     const icon = document.getElementById(`icon-${grp}`);
     const rows = document.querySelectorAll(`.group-${grp}`);
@@ -215,7 +208,7 @@ export function toggleLegendDrawer() {
     }
 }
 
-// --- 6. Master Calendar Assembly Engine ---
+// --- 6. Master Calendar Assembly Engine (True Dorm Room Nesting) ---
 export function renderCalendar() {
     const monthsContainer = document.getElementById('calendar-header-months');
     const daysContainer = document.getElementById('calendar-header-days');
@@ -253,7 +246,7 @@ export function renderCalendar() {
         return b.property === curProp && b.status !== 'cancelled';
     });
 
-    // 1. Unassigned Tray: Render if ANY unassigned booking exists
+    // 1. UNASSIGNED TRAY
     const unassignedList = propBookings.filter(b => {
         const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
         const hasValidRoom = rList.some(r => r && r.trim() !== "");
@@ -291,25 +284,30 @@ export function renderCalendar() {
         body.appendChild(trayRow);
     }
 
-    // 2. Physical Rooms Grouped by Category
+    // 2. PHYSICAL ROOMS: Group strictly by DORM ROOM (Parent Room), NOT global category!
     const hotelRooms = window.hotelRooms || [];
-    const categoriesMap = new Map();
+    const dormRoomsMap = new Map();
+
     hotelRooms.filter(r => !r.inactive).forEach(r => {
-        const cat = r.category || r.type || 'Standard';
-        if (!categoriesMap.has(cat)) categoriesMap.set(cat, []);
-        categoriesMap.get(cat).push(r);
+        const parsed = formatBedDisplayLabel(r);
+        const parentRoomName = r.parentRoom || parsed.parentName || r.category || 'Standard';
+
+        if (!dormRoomsMap.has(parentRoomName)) {
+            dormRoomsMap.set(parentRoomName, []);
+        }
+        dormRoomsMap.get(parentRoomName).push(r);
     });
 
-    categoriesMap.forEach((roomList, catName) => {
-        const grpKey = catName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+    dormRoomsMap.forEach((bedsList, dormRoomName) => {
+        const grpKey = dormRoomName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
 
-        // Category Spanning Header Row
+        // SPANNING DORM ROOM HEADER ROW
         const hRow = document.createElement('div');
         hRow.className = "timeline-grid cursor-pointer unselectable group-header";
         hRow.dataset.group = grpKey;
         hRow.innerHTML = `
             <div class="bg-slate-800 hover:bg-slate-700 text-white border-t border-slate-600 p-0.5 text-[11px] font-black uppercase flex items-center justify-between px-2 sticky left-0 z-30 shadow-xs" style="grid-column: 1 / -1; min-width: 100vw;" onclick="window.toggleGroup('${grpKey}')">
-                <span class="truncate pr-1">${catName} (${roomList.length})</span>
+                <span class="truncate pr-1">${dormRoomName} (${bedsList.length} ${bedsList.length === 1 ? 'Unit' : 'Beds'})</span>
                 <div class="flex items-center gap-1 shrink-0">
                     <span id="state-${grpKey}" class="text-[8px] bg-slate-600 px-1 rounded text-slate-300">ALL</span>
                     <i data-lucide="chevron-up" id="icon-${grpKey}" size="13"></i>
@@ -318,23 +316,20 @@ export function renderCalendar() {
         `;
         body.appendChild(hRow);
 
-        // Availability Row
-        const aRow = renderCategoryAvailabilityRow(catName, grpKey, roomList, daysArray, propBookings, daysToShow);
+        // Dorm Room Thermal Availability Row
+        const aRow = renderCategoryAvailabilityRow(dormRoomName, grpKey, bedsList, daysArray, propBookings, daysToShow);
         body.appendChild(aRow);
 
-        // Bed Rows: Displays Room Name + Bed Label
-        roomList.forEach(room => {
+        // INDIVIDUAL BED ROWS UNDER THIS DORM ROOM
+        bedsList.forEach(bedRoom => {
             const row = document.createElement('div');
             row.className = `timeline-grid bed-row relative group-${grpKey}`;
             
-            const parsed = formatBedDisplayLabel(room.id);
-            const rName = room.parentRoom || room.roomName || parsed.roomName || room.id;
-            const bNum = parsed.bedNum || room.bed || '';
+            const parsed = formatBedDisplayLabel(bedRoom);
 
             row.innerHTML = `
                 <div class="border-r border-slate-400 bg-slate-50 flex items-center justify-between px-2 uppercase font-black text-xs text-slate-700 sticky left-0 z-20 shadow-xs w-[var(--sidebar-w)]">
-                    <span class="truncate font-black text-slate-800 text-[11px]" title="${room.id}">${rName}</span>
-                    <span class="text-[10px] font-black text-indigo-600 ml-1 shrink-0 font-mono">${bNum}</span>
+                    <span class="truncate font-black text-slate-800 text-[11px]" title="${bedRoom.id}">${parsed.displayString}</span>
                 </div>
             `;
 
@@ -349,8 +344,8 @@ export function renderCalendar() {
                     openGuestModal({
                         checkIn: dIso,
                         checkOut: getLocalYMD(new Date(daysArray[i].getTime() + 86400000)),
-                        room: room.id,
-                        rooms: [room.id]
+                        room: bedRoom.id,
+                        rooms: [bedRoom.id]
                     });
                 };
                 row.appendChild(col);
@@ -358,7 +353,7 @@ export function renderCalendar() {
 
             const roomBookings = propBookings.filter(b => {
                 const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
-                return rList.includes(room.id);
+                return rList.includes(bedRoom.id);
             });
 
             roomBookings.forEach(b => {
@@ -382,5 +377,4 @@ if (typeof window !== 'undefined') {
     window.toggleAllGroups = toggleAllGroups;
     window.toggleLegendDrawer = toggleLegendDrawer;
     window.formatBedDisplayLabel = formatBedDisplayLabel;
-    window.classifyRoomForCalendar = classifyRoomForCalendar;
 }
