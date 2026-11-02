@@ -3,9 +3,11 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+// --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
+// --- State, Accessor & Config Resolvers ---
 const getStaffList = () => window.staff || (window.getStaff ? window.getStaff() : []);
 const getHotelRoomsList = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
 const getPropId = () => {
@@ -20,9 +22,15 @@ const getLocalYMD = () => window.getLocalYMD || (d => {
     return o.toISOString().split('T')[0];
 });
 
+// --- Table Sorting State Variables ---
 let dbSortKey = "checkIn";
 let dbSortAsc = false;
 
+// --------------------------------------------------------------------------
+// 1. MULTI-SELECT DROPDOWN FILTER CONTROLLERS
+// --------------------------------------------------------------------------
+
+// --- Floating Multi-Select Dropdown Toggle & Positioner ---
 export const toggleMultiSelect = (id, btn) => {
     if (window.event) window.event.stopPropagation();
     const d = $(id);
@@ -46,6 +54,7 @@ export const toggleMultiSelect = (id, btn) => {
     }
 };
 
+// --- Multi-Select Trigger Button Label Updater ---
 export const updateMultiLabel = (dId, lId, def) => {
     const c = $$(`#${dId} input[type="checkbox"]:checked`);
     const l = $(lId);
@@ -54,8 +63,10 @@ export const updateMultiLabel = (dId, lId, def) => {
     }
 };
 
+// --- Get Array of Checked Values from Multi-Select ---
 export const getMultiValues = id => Array.from($(id)?.querySelectorAll('input[type="checkbox"]:checked') || []).map(cb => cb.value);
 
+// --- Global Click Listener to Dismiss Floating Dropdowns ---
 document.addEventListener('click', e => {
     if (!e.target.closest('.multi-select-container') && !e.target.closest('.multi-select-dropdown')) {
         $$('.multi-select-dropdown').forEach(d => {
@@ -65,6 +76,11 @@ document.addEventListener('click', e => {
     }
 });
 
+// --------------------------------------------------------------------------
+// 2. DATE FILTERING, PRESETS & FORMATTERS
+// --------------------------------------------------------------------------
+
+// --- Quick Date Range Presets (Today, Tomorrow, Weeks, Months) ---
 export const applyDbPreset = val => {
     const today = new Date();
     const ymdFn = getLocalYMD();
@@ -108,6 +124,7 @@ export const applyDbPreset = val => {
     renderDatabase();
 };
 
+// --- Format Check-in / Check-out as Compact Date String ---
 export const formatDbDate = (dIn, dOut) => {
     if (!dIn || !dOut) return '';
     let iD = new Date(dIn + "T12:00:00Z"), oD = new Date(dOut + "T12:00:00Z");
@@ -116,6 +133,11 @@ export const formatDbDate = (dIn, dOut) => {
     return iM === oM ? `${iM}/${iDay}-${oDay}` : `${iM}/${iDay}-${oM}/${oDay}`;
 };
 
+// --------------------------------------------------------------------------
+// 3. RECORD FILTERING & MULTI-COLUMN SORTING ENGINE
+// --------------------------------------------------------------------------
+
+// --- Core Database Multi-Criteria Filter & Sort Engine ---
 export const getFilteredBookings = (v = 'db', sKey = dbSortKey, sAsc = dbSortAsc) => {
     const nF = ($(`${v}-filter-name`)?.value || '').trim().toUpperCase();
     const sF = getMultiValues(`${v}-source-dropdown`) || [];
@@ -191,6 +213,21 @@ export const getFilteredBookings = (v = 'db', sKey = dbSortKey, sAsc = dbSortAsc
     });
 };
 
+// --- Column Header Sorter & View Refresher ---
+export const sortDatabase = k => {
+    if (dbSortKey === k) dbSortAsc = !dbSortAsc;
+    else {
+        dbSortKey = k;
+        dbSortAsc = true;
+    }
+    renderDatabase();
+};
+
+// --------------------------------------------------------------------------
+// 4. DATABASE TABLE RENDERING & BULK ACTIONS
+// --------------------------------------------------------------------------
+
+// --- Render Filtered Database Table View ---
 export const renderDatabase = () => {
     const body = $('database-body');
     if (!body) return;
@@ -225,15 +262,7 @@ export const renderDatabase = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-export const sortDatabase = k => {
-    if (dbSortKey === k) dbSortAsc = !dbSortAsc;
-    else {
-        dbSortKey = k;
-        dbSortAsc = true;
-    }
-    renderDatabase();
-};
-
+// --- Bulk Delete Visible Database Records ---
 export const bulkDelete = () => {
     const rows = $$('#database-body tr');
     if (rows.length === 0) return window.showAlert ? window.showAlert("Nothing to delete.") : null;
@@ -256,6 +285,10 @@ export const bulkDelete = () => {
         }
     });
 };
+
+// --------------------------------------------------------------------------
+// 5. GLOBAL WINDOW EXPORTS
+// --------------------------------------------------------------------------
 
 window.toggleMultiSelect = toggleMultiSelect;
 window.updateMultiLabel = updateMultiLabel;
