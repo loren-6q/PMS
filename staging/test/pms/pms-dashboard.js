@@ -7,8 +7,14 @@ import { doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-
 import { db, appId } from './pms-init.js';
 import { getLocalYMD } from '../core/dates.js';
 
+// --- DOM Selector Helper ---
 const $ = id => document.getElementById(id);
 
+// --------------------------------------------------------------------------
+// 1. DAILY OVERVIEW & OPERATIONS DASHBOARD RENDERER
+// --------------------------------------------------------------------------
+
+// --- Master Daily Operations Dashboard Renderer ---
 export const renderDashboard = () => {
     const todayStr = getLocalYMD(new Date());
     const dateEl = $('dash-date-display');
@@ -69,6 +75,11 @@ export const renderDashboard = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --------------------------------------------------------------------------
+// 2. OPERATIONAL ALERTS & DISMISSAL ACTIONS
+// --------------------------------------------------------------------------
+
+// --- Dismiss Operational Dashboard Alert ---
 export const dismissAlert = async id => {
     try {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), { alertDismissed: true }, { merge: true });
@@ -80,6 +91,10 @@ export const dismissAlert = async id => {
         console.error("Failed to dismiss alert:", e);
     }
 };
+
+// --------------------------------------------------------------------------
+// 3. GLOBAL WINDOW EXPORTS
+// --------------------------------------------------------------------------
 
 window.renderDashboard = renderDashboard;
 window.dismissAlert = dismissAlert;
