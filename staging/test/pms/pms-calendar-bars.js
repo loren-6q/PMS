@@ -4,10 +4,17 @@
 // ==========================================================================
 
 import { getDayIndex } from './pms-calendar-tape.js';
+import { STATUS_CYCLE } from '../core/occupancy.js';
 
+// --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
+// --------------------------------------------------------------------------
+// 1. RESERVATION BAR SVG ICONS & OCCUPANCY ASSETS
+// --------------------------------------------------------------------------
+
+// --- Reservation Bar Vector Icon Suite ---
 export const SVGS = {
     upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
     upPaid: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#4ade80" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -22,12 +29,16 @@ export const SVGS = {
     fbBad: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg>`
 };
 
-import { STATUS_CYCLE } from '../core/occupancy.js';
-
 window.SVGS = SVGS;
 
+// --- Booking Room Accessor Helper ---
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
+// --------------------------------------------------------------------------
+// 2. RESERVATION BAR RENDERING & TOOLTIP ENGINE
+// --------------------------------------------------------------------------
+
+// --- Reservation Timeline Bar DOM Generator ---
 export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) => {
     const eS = getDayIndex(s.checkIn) + 0.3;
     const eE = getDayIndex(s.checkOut) + 0.25;
