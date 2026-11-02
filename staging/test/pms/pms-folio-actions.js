@@ -492,9 +492,7 @@ export const confirmMerge = async () => {
     }
 };
 
-// ----------------------------------------------------------------------
-// EARLY CHECKOUT & REVERSAL ENGINE
-// ----------------------------------------------------------------------
+// --- Early Checkout Request & Fee Snapshot Evaluator ---
 export const requestEarlyCheckout = () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -565,6 +563,7 @@ export const requestEarlyCheckout = () => {
     );
 };
 
+// --- Revert Early Checkout (With Bed Collision Guard) ---
 export const undoEarlyCheckout = async () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -574,7 +573,6 @@ export const undoEarlyCheckout = async () => {
     const originalOut = s.earlyCheckout.originalCheckOut;
     const rL = s.rooms || [s.room];
 
-    // Bed collision guard: verify bed wasn't re-booked while released
     const occ = window.getOccupiedRooms ? window.getOccupiedRooms(s.checkOut, originalOut, id) : new Set();
     for (let r of rL) {
         if (occ.has(r)) {
@@ -604,6 +602,8 @@ export const undoEarlyCheckout = async () => {
         console.error("Undo Early Checkout Error:", err);
     }
 };
+
+
 
 window.saveBooking = saveBooking;
 window.requestDelete = requestDelete;
