@@ -1,12 +1,11 @@
 // ==========================================================================
-// pms/pms-calendar-bars.js - Reservation Bar Renderer & Tooltip Engine
+// pms/pms-calendar-bars.js - Reservation Bar Renderer & Stable Tooltip
 // Wild & Wandering Property Management System
 // ==========================================================================
 
 import { parseYMD, getLocalYMD, diffDays } from '../core/dates.js';
 import { getDue } from '../core/money.js';
 
-// OTA Channel Styling Badges
 const CHANNEL_BADGES = {
     'booking.com': { bg: '#003580', txt: '#fff', char: 'B' },
     'hostelworld': { bg: '#F15A24', txt: '#fff', char: 'H' },
@@ -22,7 +21,6 @@ export function renderReservationBar(booking, daysToShow, getDayIndexFn, todaySt
     const sIdx = getDayIndexFn(booking.checkIn);
     const eIdx = getDayIndexFn(booking.checkOut);
 
-    // If reservation is completely outside visible viewport
     if (eIdx <= 0 || sIdx >= daysToShow) return null;
 
     const visibleStart = Math.max(0, sIdx);
@@ -32,16 +30,11 @@ export function renderReservationBar(booking, daysToShow, getDayIndexFn, todaySt
     const bar = document.createElement('div');
     bar.className = 'staff-bar cursor-pointer select-none';
     bar.dataset.bookingId = booking.id;
-
-    // Grid positioning across the CSS timeline columns
-    // Column 1 is sidebar; calendar day columns start at 2
     bar.style.gridColumn = `${visibleStart + 2} / span ${span}`;
 
-    // Apply Status Background Color
     const status = (booking.status || 'future').toLowerCase();
     bar.classList.add(`status-${status}`);
 
-    // Alert Border Styling: Bad CC vs Owes Balance
     const dueAmount = getDue(booking);
     if (booking.isBadCC) {
         bar.classList.add('border-bad-cc');
@@ -49,7 +42,6 @@ export function renderReservationBar(booking, daysToShow, getDayIndexFn, todaySt
         bar.classList.add('border-owes-money');
     }
 
-    // Departure & Arrival Alert Badges
     if (booking.checkIn === todayStr && status === 'future') {
         bar.classList.add('alert-checkin-today');
     } else if (booking.checkIn <= yesterdayStr && status === 'future') {
@@ -60,7 +52,6 @@ export function renderReservationBar(booking, daysToShow, getDayIndexFn, todaySt
         bar.classList.add('alert-overdue-departure');
     }
 
-    // Search Matching Highlight & Dimming
     if (searchTerm && searchTerm.length > 0) {
         const fullName = `${booking.firstName || ''} ${booking.lastName || ''}`.toUpperCase();
         const bookId = (booking.bookId || '').toUpperCase();
@@ -71,37 +62,35 @@ export function renderReservationBar(booking, daysToShow, getDayIndexFn, todaySt
         }
     }
 
-    // OTA Channel Badge
     const srcKey = (booking.source || 'direct').toLowerCase();
     const ch = CHANNEL_BADGES[srcKey] || { bg: '#64748b', txt: '#fff', char: '?' };
     const badgeHtml = `<span class="ota-icon shrink-0" style="background:${ch.bg}; color:${ch.txt};" title="${srcKey.toUpperCase()}">${ch.char}</span>`;
 
     const guestDisplayName = `${booking.lastName || 'GUEST'}, ${booking.firstName ? booking.firstName[0] : ''}`.trim();
     bar.innerHTML = `
-        <div class="flex items-center gap-1 overflow-hidden w-full h-full px-1">
+        <div class="flex items-center gap-1 overflow-hidden w-full h-full px-1 pointer-events-none">
             ${badgeHtml}
             <span class="truncate font-black text-[11px] leading-tight ${booking.isRefundable ? 'italic' : ''}">${guestDisplayName}</span>
         </div>
     `;
 
-    // Tooltip Events (Decoupled with Fixed Viewport Anchoring)
-    bar.onmouseenter = (e) => showBarTooltip(e, booking);
-    bar.onmousemove = (e) => positionBarTooltip(e);
-    bar.onmouseleave = () => hideBarTooltip();
+    // Attached strictly to native pointer tracking with zero layout interference
+    bar.addEventListener('mouseenter', (e) => showBarTooltip(e, booking));
+    bar.addEventListener('mousemove', (e) => positionBarTooltip(e));
+    bar.addEventListener('mouseleave', () => hideBarTooltip());
 
-    // Click: Open Folio Modal
-    bar.onclick = (e) => {
+    bar.addEventListener('click', (e) => {
         e.stopPropagation();
         hideBarTooltip();
         if (typeof onOpenModalFn === 'function') {
             onOpenModalFn(booking);
         }
-    };
+    });
 
     return bar;
 }
 
-// --- Tooltip Controller (Fixes Screen Freakout / Flicker Loop) ---
+// Stable Tooltip DOM Container
 let tooltipEl = null;
 
 function getTooltipElement() {
@@ -137,11 +126,11 @@ export function showBarTooltip(e, b) {
     const due = getDue(b);
 
     el.innerHTML = `
-        <div class="font-black text-xs text-white uppercase border-b border-slate-700 pb-1 mb-1 flex justify-between items-center">
+        <div class="font-black text-xs text-white uppercase border-b border-slate-700 pb-1 mb-1 flex justify-between items-center pointer-events-none">
             <span>${b.firstName || ''} ${b.lastName || 'Guest'}</span>
             <span class="text-[9px] px-1.5 py-0.5 rounded uppercase font-bold bg-slate-800 text-slate-300">${b.source || 'Direct'}</span>
         </div>
-        <div class="space-y-0.5 text-[10px] text-slate-300 font-medium">
+        <div class="space-y-0.5 text-[10px] text-slate-300 font-medium pointer-events-none">
             <div>Dates: <b>${b.checkIn} &rarr; ${b.checkOut}</b> (${nights} nt)</div>
             <div>Room: <b>${Array.isArray(b.rooms) ? b.rooms.join(', ') : (b.room || 'Unassigned')}</b></div>
             <div>Balance Due: <b class="${due > 0 ? 'text-rose-400' : 'text-emerald-400'} font-bold">฿${due.toFixed(2)}</b></div>
@@ -159,7 +148,6 @@ export function positionBarTooltip(e) {
     let x = e.clientX + offset;
     let y = e.clientY + offset;
 
-    // Prevent viewport overflow
     const rect = tooltipEl.getBoundingClientRect();
     if (x + rect.width > window.innerWidth - 10) {
         x = e.clientX - rect.width - offset;
