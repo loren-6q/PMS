@@ -3,11 +3,14 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+// --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
+// --- Fallback Branding Asset Constant ---
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
+// --- Date Parsing & Conversion Resolvers ---
 const getParseYMD = () => window.parseYMD || (str => {
     if (!str || typeof str !== 'string') return 0;
     const p = str.split('-');
@@ -20,6 +23,11 @@ const getLocalYMD = () => window.getLocalYMD || (d => {
     return o.toISOString().split('T')[0];
 });
 
+// --------------------------------------------------------------------------
+// 1. PRINTABLE FOLIO INVOICE & RECEIPT GENERATOR
+// --------------------------------------------------------------------------
+
+// --- Render & Print Branded HTML Guest Folio Invoice ---
 export const generateGuestInvoice = () => {
     const guestId = $('guest-id')?.value;
     const staffList = window.staff || [];
@@ -336,5 +344,9 @@ export const generateGuestInvoice = () => {
         if (window.showAlert) window.showAlert("Pop-up blocked. Please allow pop-ups for this website to print/export invoices.");
     }
 };
+
+// --------------------------------------------------------------------------
+// 2. GLOBAL WINDOW EXPORTS
+// --------------------------------------------------------------------------
 
 window.generateGuestInvoice = generateGuestInvoice;
