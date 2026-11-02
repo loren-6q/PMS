@@ -4,23 +4,11 @@
 // ==========================================================================
 
 import { STATUS_CYCLE } from '../core/occupancy.js';
+import { parseYMD, getLocalYMD } from '../core/dates.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
-
-// --- Date Helper Resolvers ---
-const getParseYMD = () => window.parseYMD || (str => {
-    if (!str || typeof str !== 'string') return 0;
-    const p = str.split('-');
-    return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
-});
-
-const getLocalYMD = () => window.getLocalYMD || (d => {
-    if (!d) d = new Date();
-    const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
-    return o.toISOString().split('T')[0];
-});
 
 // --- State & Config Accessors ---
 const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
@@ -71,42 +59,6 @@ document.addEventListener('mouseup', () => {
     if (isDragging) isDragging = false;
 });
 
-// --- Custom Alert & Confirmation Modal Display ---
-export const showAlert = (msg, isConfirm = false, onConfirm = null) => {
-    const m = $('alert-modal'), c = $('alert-cancel'), b = $('alert-confirm');
-    if (!m) return;
-    const headerTitle = $('alert-header-title');
-    if (headerTitle) headerTitle.innerText = "Attention";
-    const msgEl = $('alert-message');
-    if (msgEl) msgEl.innerText = msg;
-
-    if (isConfirm) {
-        c.style.display = 'block';
-        c.classList.remove('hidden');
-        b.className = 'btn-modal bg-blue-600 text-white px-10';
-        b.innerText = 'Confirm';
-        b.onclick = () => { closeAlert(); if (onConfirm) onConfirm(); };
-    } else {
-        c.style.display = 'none';
-        c.classList.add('hidden');
-        b.className = 'btn-modal bg-blue-600 text-white px-10';
-        b.innerText = 'Okay';
-        b.onclick = closeAlert;
-    }
-    m.classList.add('active');
-    m.style.display = 'flex';
-    if (window.lucide) window.lucide.createIcons();
-};
-
-// --- Close Alert Modal ---
-export const closeAlert = () => {
-    const m = $('alert-modal');
-    if (m) {
-        m.classList.remove('active');
-        m.style.display = 'none';
-    }
-};
-
 // --- Close Main Guest Modal ---
 export const closeGuestModal = () => {
     const m = $('guest-modal');
@@ -129,16 +81,16 @@ export const closeModal = id => {
     }
 };
 
-// --- Open Email Parser Modal ---
+// --- Open Reservation Import Modal ---
 export const openEmailParserModal = () => {
-    const txt = $('email-textarea');
+    const txt = $('parse-textarea');
     if (txt) txt.value = '';
     const m = $('email-modal');
     if (m) {
         m.classList.add('active');
         m.style.display = 'flex';
     }
-    setTimeout(() => $('email-textarea')?.focus(), 50);
+    setTimeout(() => $('parse-textarea')?.focus(), 50);
     if (window.lucide) window.lucide.createIcons();
 };
 
@@ -183,7 +135,7 @@ export const showAuditHistory = () => {
     if (bBtn) {
         bBtn.innerText = 'Close';
         bBtn.className = 'btn-modal bg-slate-800 hover:bg-slate-700 text-white px-10';
-        bBtn.onclick = closeAlert;
+        bBtn.onclick = () => window.closeAlert && window.closeAlert();
     }
     const m = $('alert-modal');
     if (m) {
@@ -313,29 +265,26 @@ export const renderItineraryStripe = s => {
 export const calcNights = () => {
     const cI = $('check-in')?.value, cO = $('check-out')?.value;
     if (!cI || !cO) return 1;
-    const parseFn = getParseYMD();
-    const ms = parseFn(cO) - parseFn(cI);
+    const ms = parseYMD(cO) - parseYMD(cI);
     return Math.max(1, Math.round(ms / 86400000));
 };
 
 // --- Stay Duration Nights Counter Display ---
 export const updateNightsDisplay = (forcedNights = null) => {
     const n = forcedNights !== null ? forcedNights : calcNights();
-    const disp = $('booking-nights-display');
     const txtEl = $('nights-count-text');
-    if (disp) disp.dataset.nights = n;
+    const container = $('booking-nights-display');
+    if (container) container.dataset.nights = n;
     if (txtEl) {
         txtEl.innerText = `${n} Nt${n > 1 ? 's' : ''}`;
-    } else if (disp) {
-        disp.innerText = `${n} Nt${n > 1 ? 's' : ''}`;
     }
     return n;
 };
 
 // --- Retrieve Locked Stay Duration ---
 export const getStoredNights = () => {
-    const disp = $('booking-nights-display');
-    const n = parseInt(disp?.dataset?.nights);
+    const container = $('booking-nights-display');
+    const n = parseInt(container?.dataset?.nights);
     if (!isNaN(n) && n >= 1) return n;
     return calcNights();
 };
@@ -399,13 +348,12 @@ export const adjustPax = delta => {
 };
 
 // --------------------------------------------------------------------------
-// 4. ROOM AVAILABILITY, CLUSTERING & ASSIGNMENT CONTROLLER
+// 4. ROOM AVAILABILITY & BED SELECTION CONTROLLER
 // --------------------------------------------------------------------------
 
 // --- Occupied Room Set Evaluator for Target Date Range ---
 export const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = null) => {
     const occ = new Set();
-    const parseYMD = window.parseYMD || (s => Date.parse(s));
     const sU = parseYMD(checkInStr), eU = parseYMD(checkOutStr);
     if (!sU || !eU) return occ;
     const curProp = getPropId();
@@ -456,105 +404,7 @@ export const updateAvailableRooms = () => {
     });
 };
 
-// --- Resolve OTA Raw Category to Canonical PMS Room Type ---
-export const resolvePmsRoomType = (rawType = '') => {
-    if (!rawType) return '';
-    const rawLower = rawType.toLowerCase().trim();
-    const hotelRooms = getHotelRooms();
-    const roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
-
-    const direct = roomTypes.find(t => t.toLowerCase() === rawLower);
-    if (direct) return direct;
-
-    const sub = roomTypes.find(t => rawLower.includes(t.toLowerCase()) || t.toLowerCase().includes(rawLower));
-    if (sub) return sub;
-
-    let bestType = null;
-    let highestScore = 0;
-
-    roomTypes.forEach(pmsType => {
-        const pmsLower = pmsType.toLowerCase();
-        let score = 0;
-        if (rawLower.includes('female') && pmsLower.includes('female')) score += 20;
-        if (rawLower.includes('male') && !rawLower.includes('female') && pmsLower.includes('male') && !pmsLower.includes('female')) score += 20;
-        if (rawLower.includes('mixed') && pmsLower.includes('mixed')) score += 15;
-
-        ['4', '6', '8', '10', '12', 'quad', 'triple', 'twin', 'double', 'single', 'king'].forEach(kw => {
-            if (rawLower.includes(kw) && pmsLower.includes(kw)) score += 5;
-        });
-
-        ['dorm', 'ensuite', 'balcony', 'bungalow', 'oceanview', 'gardenview', 'deluxe', 'standard'].forEach(kw => {
-            if (rawLower.includes(kw) && pmsLower.includes(kw)) score += 3;
-        });
-
-        if (score > highestScore) {
-            highestScore = score;
-            bestType = pmsType;
-        }
-    });
-
-    return highestScore >= 5 ? bestType : rawType;
-};
-
-// --- Distance Metric for Clustered Multi-Bed Assignments ---
-export const getRoomDistance = (anchorId, candidateId) => {
-    if (!anchorId || !candidateId || anchorId === candidateId) return 0;
-    const hotelRooms = getHotelRooms();
-    const anchorIdx = hotelRooms.findIndex(r => r.id === anchorId);
-    const candIdx = hotelRooms.findIndex(r => r.id === candidateId);
-    if (anchorIdx === -1 || candIdx === -1) return 999;
-
-    const anchorBase = anchorId.split('№')[0].trim().toUpperCase();
-    const candBase = candidateId.split('№')[0].trim().toUpperCase();
-
-    if (anchorBase && anchorBase === candBase) {
-        const anchorNum = parseInt(anchorId.match(/\d+$/)?.[0] || '0', 10);
-        const candNum = parseInt(candidateId.match(/\d+$/)?.[0] || '0', 10);
-        return Math.abs(anchorNum - candNum);
-    }
-    return 100 + Math.abs(anchorIdx - candIdx);
-};
-
-// --- Best Available Room Auto-Suggester ---
-export const suggestAvailableRoom = (preferredType = null) => {
-    const cI = $('check-in')?.value, cO = $('check-out')?.value, cId = $('guest-id')?.value;
-    if (!cI || !cO) return "";
-    const occ = getOccupiedRooms(cI, cO, cId);
-
-    const assignedNow = Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean);
-    const assignedSet = new Set(assignedNow);
-    const hotelRooms = getHotelRooms();
-
-    let targetType = null;
-    let anchorRoom = null;
-
-    if (assignedNow.length > 0) {
-        anchorRoom = assignedNow[assignedNow.length - 1];
-        const refObj = hotelRooms.find(r => r.id === anchorRoom);
-        if (refObj && refObj.type) targetType = refObj.type;
-    }
-
-    if (!targetType && preferredType) {
-        targetType = resolvePmsRoomType(preferredType);
-    }
-
-    if (!targetType) return "";
-
-    let freeInType = hotelRooms.filter(r => {
-        if (r.inactive || r.type !== targetType) return false;
-        return !occ.has(r.id) && !assignedSet.has(r.id);
-    });
-
-    if (freeInType.length === 0) return "";
-
-    if (anchorRoom) {
-        freeInType.sort((a, b) => getRoomDistance(anchorRoom, a.id) - getRoomDistance(anchorRoom, b.id));
-    }
-
-    return freeInType[0].id;
-};
-
-// --- Add Assigned Room Selector Row ---
+// --- Add Assigned Room Selector Row with Dorm Dividers ---
 export function addRoomSelect(val = "", isManualAdd = false) {
     if (arguments.length === 0) isManualAdd = true;
     
@@ -564,21 +414,43 @@ export function addRoomSelect(val = "", isManualAdd = false) {
     const sel = document.createElement('select');
     w.className = "flex items-stretch gap-1 w-full";
     sel.className = "assigned-room-select flex-1 min-w-0 bg-white border border-blue-300 text-xs font-bold uppercase text-blue-800 rounded px-1 py-1 outline-none shadow-sm cursor-pointer focus:ring-2 focus:ring-blue-500 text-ellipsis";
-    sel.innerHTML = `<option value="">-- UNASSIGNED --</option>`;
+    sel.innerHTML = `<option value="">-- UNASSIGNED TRAY --</option>`;
     sel.onchange = updateAvailableRooms;
 
     let cg = '', og = null;
+    let lastBaseRoom = null;
+
     getHotelRooms().filter(r => !r.inactive).forEach(r => {
-        if (r.type !== cg) {
+        const cat = r.type || r.category || 'ROOMS';
+        if (cat !== cg) {
             og = document.createElement('optgroup');
-            og.label = `--- ${r.type.toUpperCase()} ---`;
+            og.label = `━━━ ${cat.toUpperCase()} ━━━`;
             sel.appendChild(og);
-            cg = r.type;
+            cg = cat;
+            lastBaseRoom = null;
         }
+
+        const classifyFn = window.classifyRoomForCalendar || (rm => {
+            const isDorm = !rm.isPrivate && (rm.isDorm === true || (rm.rule && rm.rule !== 'private') || (rm.category || '').toLowerCase().includes('dorm'));
+            let baseRoom = rm.parentRoom || (rm.id.includes('№') ? rm.id.split('№')[0].trim() : rm.id.replace(/\d+$/, '').trim());
+            return { isDorm, baseRoom };
+        });
+
+        const { isDorm, baseRoom } = classifyFn(r);
+        if (isDorm && baseRoom && baseRoom !== lastBaseRoom) {
+            const dormDiv = document.createElement('option');
+            dormDiv.disabled = true;
+            dormDiv.value = "";
+            dormDiv.innerText = `  ── ${baseRoom.toUpperCase()} ──`;
+            dormDiv.className = "text-slate-400 font-bold bg-slate-100 select-none";
+            og.appendChild(dormDiv);
+            lastBaseRoom = baseRoom;
+        }
+
         const opt = document.createElement('option');
         opt.value = r.id;
         const bunkArrow = (r.bunk === 'top' || r.bed === 'top') ? ' ↑' : ((r.bunk === 'bottom' || r.bunk === 'bot' || r.bed === 'bottom' || r.bed === 'bot') ? ' ↓' : '');
-        opt.innerText = `${r.id}${bunkArrow}`;
+        opt.innerText = isDorm ? `    ${r.id}${bunkArrow}` : `${r.id}${bunkArrow}`;
         og.appendChild(opt);
     });
 
@@ -587,12 +459,9 @@ export function addRoomSelect(val = "", isManualAdd = false) {
         if (!exists) {
             const legacyOpt = document.createElement('option');
             legacyOpt.value = val;
-            legacyOpt.innerText = `⚠️ ${val} (Preserved)`;
+            legacyOpt.innerText = `⚠️ ${val} (Historical / Preserved)`;
             sel.appendChild(legacyOpt);
         }
-    } else if (isManualAdd) {
-        const suggested = suggestAvailableRoom($('booked-type')?.value);
-        if (suggested) val = suggested;
     }
 
     sel.value = val || "";
@@ -616,11 +485,11 @@ export function addRoomSelect(val = "", isManualAdd = false) {
 }
 
 // --------------------------------------------------------------------------
-// 5. FOLIO FORM POPULATION & QUICK-ADD INGESTION
+// 5. GUEST FOLIO MODAL INGESTION & DISPLAY ENGINE
 // --------------------------------------------------------------------------
 
-// --- Populate Folio Modal Fields From Booking Record ---
-export const populateStaffForm = (s = {}) => {
+// --- Populate & Open Guest Folio Modal ---
+export const openGuestModal = (s = {}) => {
     const isN = !s.id;
     const f = $('guest-form');
     if (f) f.reset();
@@ -668,7 +537,7 @@ export const populateStaffForm = (s = {}) => {
     const sBtn = $('status-cycle-btn');
     if (sBtn) {
         sBtn.dataset.value = sObj.val;
-        sBtn.innerText = sObj.val.toUpperCase();
+        sBtn.innerText = sObj.label || sObj.val.toUpperCase();
         sBtn.style.background = sObj.bg;
         sBtn.style.color = sObj.txt;
     }
@@ -724,21 +593,20 @@ export const populateStaffForm = (s = {}) => {
 
     // --- Early Checkout Action Button Controller in #NTS Box ---
     const earlyBtn = $('early-out-btn');
-    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+    const todayStr = getLocalYMD(new Date());
     if (earlyBtn) {
         if (!isN && s.earlyCheckout) {
             earlyBtn.title = "Revert Early Checkout";
             earlyBtn.className = "absolute right-1 px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[9px] uppercase shadow-xs flex items-center gap-0.5 cursor-pointer";
             earlyBtn.innerHTML = `<i data-lucide="rotate-ccw" class="!w-2.5 !h-2.5"></i><span>UNDO</span>`;
-            earlyBtn.onclick = () => window.undoEarlyCheckout();
-        } else if (!isN && s.status === 'here' && s.checkOut > todayStr) {
+            earlyBtn.onclick = () => window.undoEarlyCheckout && window.undoEarlyCheckout();
+        } else if (!isN && s.checkOut > todayStr && window.isOccupyingBooking && window.isOccupyingBooking(s.status, true)) {
             earlyBtn.title = "Check Out Early Today";
             earlyBtn.className = "absolute right-1 px-1.5 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded font-black text-[9px] uppercase shadow-xs flex items-center gap-0.5 cursor-pointer";
             earlyBtn.innerHTML = `<i data-lucide="log-out" class="!w-2.5 !h-2.5"></i><span>OUT</span>`;
-            earlyBtn.onclick = () => window.requestEarlyCheckout();
+            earlyBtn.onclick = () => window.requestEarlyCheckout && window.requestEarlyCheckout();
         } else {
-            earlyBtn.classList.add('hidden');
-            earlyBtn.classList.remove('flex');
+            earlyBtn.className = "hidden";
         }
     }
     
@@ -763,12 +631,12 @@ export const populateStaffForm = (s = {}) => {
 // --- Edit Booking Entry Point ---
 export const editStaff = id => {
     const s = getStaff().find(x => x.id === id);
-    if (s) populateStaffForm(s);
+    if (s) openGuestModal(s);
 };
 
 // --- Quick Add from Timeline Cell Click ---
 export const quickAdd = (r, d) => {
-    populateStaffForm({});
+    openGuestModal({});
     if ($('check-in')) $('check-in').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const o = new Date(d);
     o.setDate(d.getDate() + 1);
@@ -792,7 +660,7 @@ export const quickAdd = (r, d) => {
         nextNum = (parseInt(directBookings[0].bookId.replace(pCode, ''), 10) || 0) + 1;
     }
     if ($('booking-id')) $('booking-id').value = `${pCode}${String(nextNum).padStart(5, '0')}`;
-    if ($('booking-date')) $('booking-date').value = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+    if ($('booking-date')) $('booking-date').value = getLocalYMD(new Date());
     updateAvailableRooms();
     if (window.calcExtension) window.calcExtension();
 };
@@ -802,8 +670,6 @@ export const quickAdd = (r, d) => {
 // --------------------------------------------------------------------------
 
 window.startDrag = startDrag;
-window.showAlert = showAlert;
-window.closeAlert = closeAlert;
 window.closeGuestModal = closeGuestModal;
 window.closeModal = closeModal;
 window.openEmailParserModal = openEmailParserModal;
@@ -821,13 +687,11 @@ window.handleCheckOutPicker = handleCheckOutPicker;
 window.adjustPax = adjustPax;
 window.getOccupiedRooms = getOccupiedRooms;
 window.updateAvailableRooms = updateAvailableRooms;
-window.resolvePmsRoomType = resolvePmsRoomType;
-window.getRoomDistance = getRoomDistance;
-window.suggestAvailableRoom = suggestAvailableRoom;
 window.addRoomSelect = addRoomSelect;
 window.setMulti = setMulti;
 window.cycleMulti = cycleMulti;
 window.renderItineraryStripe = renderItineraryStripe;
-window.populateStaffForm = populateStaffForm;
+window.openGuestModal = openGuestModal;
+window.populateStaffForm = openGuestModal;
 window.editStaff = editStaff;
 window.quickAdd = quickAdd;
