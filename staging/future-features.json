@@ -1,69 +1,90 @@
 {
   "system": "Wild & Wandering PMS Backlog & Feature Registry",
-  "version": "1.2.0",
-  "lastUpdated": "2026-11-01",
+  "version": "2.0.0",
+  "lastAudited": "2026-11-02",
   "features": [
     {
       "id": "FEAT-001",
-      "category": "PMS Folio & Status",
-      "title": "Smart Status Validation Warnings on Save",
-      "description": "Trigger non-blocking confirmation dialogs when status conflicts with dates: 'HERE' but check-in is in the future; 'FUTURE' but check-in is in the past; 'TOCHARGE' but balance due is 0.",
+      "category": "Housekeeping & Operations",
+      "title": "Housekeeping Status Matrix & Bed Turnover Tracking",
+      "description": "Real-time room and bed cleanliness tracker (Dirty, Cleaning in Progress, Clean, Inspected) with staff assignments and SMS/Telegram alerts for turned beds.",
       "status": "planned"
     },
     {
       "id": "FEAT-002",
-      "category": "PMS Folio Actions",
-      "title": "Consecutive Stay Back-to-Back Auto-Merge Detector",
-      "description": "Detect when a guest has two back-to-back reservations (Leg 1 check-out == Leg 2 check-in) and present a one-click 'Merge Consecutive Bookings' prompt in the folio header.",
+      "category": "Payments & POS",
+      "title": "On-Site Multi-Currency Cash Drawer & Till Reconciliation",
+      "description": "Shift opening and closing cash counts, petty cash logs, change calculators, and automated discrepancy reporting per front-desk staff member.",
       "status": "planned"
     },
     {
       "id": "FEAT-003",
-      "category": "Accounting & Ledger",
-      "title": "Itemized Nightly Rate Ledger Breakdown",
-      "description": "Expand the Total Price input into an optional day-by-day rate table showing the exact rate applied for each night (standard rate, weekend markup, FMP peak rate).",
+      "category": "Channel Management",
+      "title": "Automated OTA Promotion & Deal Margin Guardian",
+      "description": "Simulates Net Margin impact before activating Booking.com Genius, Agoda Flash Sales, or Airbnb promotions, alerting if ADR drops below floor.",
       "status": "planned"
     },
     {
       "id": "FEAT-004",
-      "category": "Operations",
-      "title": "Housekeeping & Bed Cleanliness State Matrix",
-      "description": "Add clean/dirty/inspected toggle states to bed rows on the calendar grid, updating automatically when a booking status cycles to 'LEFT'.",
+      "category": "Guest Experience",
+      "title": "Automated Multi-Channel Guest Messaging (WhatsApp / Email)",
+      "description": "Automated pre-arrival guides, Full Moon Party boat schedules, check-in instructions, and payment request links triggered by reservation status changes.",
       "status": "planned"
     },
     {
       "id": "FEAT-005",
-      "category": "Setup Wizard & Events",
-      "title": "Configurable Event Shoulder Ranges",
-      "description": "Allow properties in Setup Wizard Step 4 to configure custom event shoulder ranges (±1, ±2, or ±3 days) for timeline highlight shading and pricing curves.",
+      "category": "Guest Folio & POS",
+      "title": "Bar, Restaurant & Tour Tab Integration",
+      "description": "Charge beer, tours, motorbikes, and laundry directly to guest folios using digital signature slips or QR codes at on-site venues.",
       "status": "planned"
     },
     {
       "id": "FEAT-006",
-      "category": "Inventory & Operations",
-      "title": "Seasonal Dorm Capacity Switcher",
-      "description": "One-click toggle in Setup Wizard to deactivate upper dorm bunks for low-season (e.g. 8-bed to 6-bed), reducing OTA Channex availability automatically while keeping historical bookings safely mapped.",
+      "category": "Analytics & Revenue",
+      "title": "Dynamic Demand Forecasting & Shoulder Curve Optimizer",
+      "description": "Machine learning algorithm evaluating pace, pickup rate, local holiday calendars, and flight prices to automatically shift rates for event shoulder dates.",
       "status": "planned"
     },
     {
       "id": "FEAT-007",
-      "category": "Guest Communications",
-      "title": "Smart Email Communication Engine",
-      "description": "Convert manual email status pills (SENT, FMP?, SPECIAL) into an integrated templating engine that generates personalized confirmation emails based on dates, source OTA, and room type.",
+      "category": "Regulatory & Legal",
+      "title": "Thai Police Bureau & TM30 Real-Time API Dispatcher",
+      "description": "Direct automated XML/JSON payload transmission to the Thai Immigration Section 38 portal via cloud workers, replacing manual CSV batch uploads.",
       "status": "planned"
     },
     {
       "id": "FEAT-008",
-      "category": "Guest CRM & Identity",
-      "title": "Human-Supervised Universal Guest CRM & Multi-Identity Ledger",
-      "description": "Dynamic guest profile aggregator with human-in-the-loop verification: 1) Suggests potential duplicate/returning guest profiles using Levenshtein distance on names, phone digits, or passport numbers; 2) Front desk staff must explicitly approve or reject suggested associations; 3) Approved profiles store historical multi-identity aliases (newest email/phone/passport first without deleting older records); 4) Allows manual linking/unlinking of missed past bookings; 5) Generates consolidated multi-stay annual statements.",
+      "category": "Security & Audit",
+      "title": "Granular Role-Based Access Control (RBAC) & PIN Authorization",
+      "description": "Permission tiers (Owner, Manager, Front Desk, Volunteer) with manager PIN prompts for folio deletions, manual rate overrides, and cash refunds.",
       "status": "planned"
     },
     {
       "id": "FEAT-009",
-      "category": "Compliance & Regulatory",
-      "title": "International Police Registry, Passport OCR & Data Privacy Engine",
-      "description": "Universal regulatory reporting suite: 1) Client-side camera OCR passport scanner extracting MRZ machine-readable lines (Name, Passport No, DOB, Nationality, Expiry); 2) Jurisdictional export profiles (Thailand TM30 batch CSV, Portugal SEF/SIBA, Spain SES.HOSPEDAJES, generic blotter); 3) Privacy & compliance retention rules (GDPR / Thai PDPA) automatically encrypting or auto-redacting stored passport images and numbers after a configurable retention window (e.g. 30/90 days post-departure).",
+      "category": "Hardware Integration",
+      "title": "Smart Lock & Keyless RFID Bunk / Room Access",
+      "description": "Integration with TTLock / Tuya smart door locks generating time-bound digital PINs or NFC wristband keys upon guest check-in.",
+      "status": "planned"
+    },
+    {
+      "id": "FEAT-010",
+      "category": "Onboarding & Migration",
+      "title": "Universal Commercial Spreadsheet & CSV Ingestion Wizard",
+      "description": "Commercial multi-format onboarding wizard with interactive column mapping (Guest, Check-in, Check-out, Payout) and dynamic room-to-bunk visual assigner.",
+      "status": "planned"
+    },
+    {
+      "id": "FEAT-011",
+      "category": "Guest Communications",
+      "title": "Two-Way Direct OTA Extranet Messaging Drawer",
+      "description": "In-folio live chat interface allowing front-desk staff to read and reply to Booking.com, Airbnb, and Agoda guest messages via Channex API webhooks.",
+      "status": "planned"
+    },
+    {
+      "id": "FEAT-012",
+      "category": "Operations & Guest Communications",
+      "title": "Configurable Operational Lifecycle & Event Confirmation Pills",
+      "description": "Convert hardcoded event buttons (SENT: FMP, PRE/POST: CONF) into property-configurable custom lifecycle pills in Setup Wizard Step 1 for festivals, surf camps, and high-demand events.",
       "status": "planned"
     }
   ]
