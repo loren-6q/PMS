@@ -3,6 +3,8 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { STATUS_CYCLE } from '../core/occupancy.js';
+
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
@@ -193,12 +195,11 @@ export const cycleStatus = () => {
     const sBtn = $('status-cycle-btn');
     if (!sBtn) return;
     const cV = sBtn.dataset.value || 'future';
-    const cycle = window.STATUS_CYCLE || [];
-    let idx = cycle.findIndex(x => x.val === cV);
-    idx = (idx + 1) % cycle.length;
-    const nO = cycle[idx];
+    let idx = STATUS_CYCLE.findIndex(x => x.val === cV);
+    idx = (idx + 1) % STATUS_CYCLE.length;
+    const nO = STATUS_CYCLE[idx];
     sBtn.dataset.value = nO.val;
-    sBtn.innerText = nO.val.toUpperCase();
+    sBtn.innerText = nO.label || nO.val.toUpperCase();
     sBtn.style.background = nO.bg;
     sBtn.style.color = nO.txt;
     const hiddenInput = $('guest-status-hidden');
