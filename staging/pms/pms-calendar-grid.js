@@ -1,5 +1,5 @@
 // ==========================================================================
-// pms/pms-calendar-grid.js - Dorm Rooms Hierarchy, Bed Grid & Availability
+// pms/pms-calendar-grid.js - Dorm Room Hierarchy, Bed Rows & Availability
 // Wild & Wandering Property Management System
 // ==========================================================================
 
@@ -8,48 +8,72 @@ import { viewStart, getDaysToShow, populateMonthSelect } from './pms-calendar-ta
 import { renderReservationBar } from './pms-calendar-bars.js';
 import { openGuestModal } from './pms-folio-modal.js';
 
-// --- 1. Bed & Dorm Room Label Formatter (Sub-10 Character Law) ---
-export function formatBedDisplayLabel(room) {
+// --- 1. Bed Sidebar Label Formatter (The 10-Character Rule) ---
+export function formatBedDisplayLabel(room, parentRoomName = '') {
     const rawId = String(room.id || '').trim();
-    let parentName = room.parentRoom || '';
-    let bedNum = String(room.bed || '').trim();
+    let parent = String(parentRoomName || room.parentRoom || '').trim();
+    let bedPart = '';
 
-    if (!parentName && rawId.includes('№')) {
+    // Extract bed identifier
+    if (room.bed) {
+        bedPart = String(room.bed).trim();
+    } else if (rawId.includes('№')) {
         const parts = rawId.split('№');
-        parentName = parts[0].trim();
-        bedNum = parts[1].trim();
-    } else if (!parentName) {
+        if (!parent) parent = parts[0].trim();
+        bedPart = parts[1].trim();
+    } else {
         const match = rawId.match(/^(.*?)[\s\-_]+(\d+)$/);
         if (match) {
-            parentName = match[1].trim();
-            bedNum = match[2].trim();
+            if (!parent) parent = match[1].trim();
+            bedPart = match[2].trim();
         } else {
-            parentName = rawId;
+            if (!parent) parent = rawId;
         }
     }
 
-    if (bedNum && !bedNum.startsWith('№')) {
-        bedNum = `№ ${bedNum.padStart(2, '0')}`;
+    if (bedPart && !bedPart.startsWith('№')) {
+        bedPart = `№ ${bedPart.padStart(2, '0')}`;
     }
 
-    // THE 10-CHARACTER RULE:
-    // If room name < 10 characters: Display NAME № [Bed]
-    // If >= 10 characters: Display only № [Bed] (Header above shows full name)
-    let displayString = '';
-    if (parentName.length > 0 && parentName.length < 10) {
-        displayString = `${parentName} ${bedNum}`.trim();
-    } else {
-        displayString = bedNum || parentName;
+    // THE 10-CHARACTER LAW:
+    // If parent room name is UNDER 10 characters -> display "NAME № [Bed]" (e.g. "Dorm A № 01")
+    // If parent room name is 10 CHARACTERS OR LONGER -> display only "№ [Bed]" (Header row identifies room)
+    if (bedPart) {
+        if (parent.length > 0 && parent.length < 10) {
+            return `${parent} ${bedPart}`;
+        }
+        return bedPart;
     }
 
-    return {
-        parentName: parentName || 'DORM',
-        bedNum: bedNum,
-        displayString: displayString
-    };
+    // Non-dorm private unit
+    return rawId;
 }
 
-// --- 2. Calendar Header Grids ---
+export function classifyRoomForCalendar(r) {
+    const isPrivate = (r.rule === 'private') || (r.isDorm === false);
+    const isDorm = !isPrivate && (
+        r.isDorm === true ||
+        (r.rule && r.rule !== 'private') ||
+        (r.category || r.type || '').toLowerCase().includes('dorm') ||
+        (r.parentRoom && r.parentRoom !== r.id) ||
+        (r.id || '').includes('№')
+    );
+
+    let baseRoom = '';
+    if (isDorm) {
+        if (r.parentRoom && r.parentRoom !== r.id) {
+            baseRoom = r.parentRoom;
+        } else if ((r.id || '').includes('№')) {
+            baseRoom = r.id.split('№')[0].trim();
+        } else {
+            baseRoom = r.id.trim();
+        }
+    }
+
+    return { isDorm, baseRoom };
+}
+
+// --- 2. Header Months & Days Grid Builder ---
 export function buildHeaderGrids(monthsContainer, daysContainer, daysArray, todayStr) {
     if (!monthsContainer || !daysContainer) return;
 
@@ -132,7 +156,7 @@ export function renderCategoryAvailabilityRow(groupName, grpKey, roomList, daysA
     return aRow;
 }
 
-// --- 4. Group Toggles ---
+// --- 4. Collapsible Category & Accordion Controllers ---
 export function toggleGroup(grp, stateIdx = -1) {
     const icon = document.getElementById(`icon-${grp}`);
     const rows = document.querySelectorAll(`.group-${grp}`);
@@ -284,13 +308,24 @@ export function renderCalendar() {
         body.appendChild(trayRow);
     }
 
-    // 2. PHYSICAL ROOMS: Group strictly by DORM ROOM (Parent Room), NOT global category!
+    // 2. PHYSICAL ROOMS: Group strictly by PHYSICAL ROOM (Parent Dorm), NOT global category
     const hotelRooms = window.hotelRooms || [];
     const dormRoomsMap = new Map();
 
     hotelRooms.filter(r => !r.inactive).forEach(r => {
-        const parsed = formatBedDisplayLabel(r);
-        const parentRoomName = r.parentRoom || parsed.parentName || r.category || 'Standard';
+        const rawId = String(r.id || '').trim();
+        let parentRoomName = r.parentRoom || '';
+
+        if (!parentRoomName && rawId.includes('№')) {
+            parentRoomName = rawId.split('№')[0].trim();
+        } else if (!parentRoomName) {
+            const match = rawId.match(/^(.*?)[\s\-_]+(\d+)$/);
+            if (match && (r.isDorm || (r.category || '').toLowerCase().includes('dorm'))) {
+                parentRoomName = match[1].trim();
+            } else {
+                parentRoomName = r.parentRoom || r.category || r.type || rawId;
+            }
+        }
 
         if (!dormRoomsMap.has(parentRoomName)) {
             dormRoomsMap.set(parentRoomName, []);
@@ -325,11 +360,11 @@ export function renderCalendar() {
             const row = document.createElement('div');
             row.className = `timeline-grid bed-row relative group-${grpKey}`;
             
-            const parsed = formatBedDisplayLabel(bedRoom);
+            const displayLabel = formatBedDisplayLabel(bedRoom, dormRoomName);
 
             row.innerHTML = `
                 <div class="border-r border-slate-400 bg-slate-50 flex items-center justify-between px-2 uppercase font-black text-xs text-slate-700 sticky left-0 z-20 shadow-xs w-[var(--sidebar-w)]">
-                    <span class="truncate font-black text-slate-800 text-[11px]" title="${bedRoom.id}">${parsed.displayString}</span>
+                    <span class="truncate font-black text-slate-800 text-[11px]" title="${bedRoom.id}">${displayLabel}</span>
                 </div>
             `;
 
