@@ -2,8 +2,44 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 import { getAuth, onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, query, where, getDocs, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
-import { parseYMD, getLocalYMD } from '../core/dates.js';
 
+// Load all PMS domain modules into browser context
+import './pms-calendar-tape.js';
+import './pms-calendar-bars.js';
+import './pms-calendar-grid.js';
+import './pms-database.js';
+import './pms-dashboard.js';
+import './pms-folio-modal.js';
+import './pms-folio-ledger.js';
+import './pms-folio-actions.js';
+import './pms-folio-invoice.js';
+import './pms-tm30.js';
+import '../parser/parser-engine.js';
+import '../parser/room-assigner.js';
+
+// Embedded zero-drift date parsers from monolith (Immune to 404)
+export const parseYMD = str => { 
+    if (!str || typeof str !== 'string') return 0; 
+    const p = str.split('-'); 
+    return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10), 12, 0, 0); 
+};
+
+export const getLocalYMD = d => {
+    if (!d) d = new Date();
+    if (typeof d === 'string') {
+        const trimmed = d.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+        const parsed = new Date(trimmed.includes('T') ? trimmed : trimmed + 'T12:00:00Z');
+        d = isNaN(parsed.getTime()) ? new Date() : parsed;
+    } else if (typeof d === 'number') d = new Date(d);
+    if (!(d instanceof Date) || isNaN(d.getTime())) d = new Date();
+    try {
+        const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+        return isNaN(o.getTime()) ? new Date().toISOString().split('T')[0] : o.toISOString().split('T')[0];
+    } catch (e) {
+        return new Date().toISOString().split('T')[0];
+    }
+};
 export const $ = id => document.getElementById(id);
 export const $$ = s => document.querySelectorAll(s);
 export const REQUIRE_LOGIN = false;
