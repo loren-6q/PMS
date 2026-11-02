@@ -1,5 +1,5 @@
 // ==========================================================================
-// pms/pms-init.js - Front Desk PMS Core Frame Bootstrapper & Conductor
+// pms/pms-init.js - PMS Conductor, Logo Property Switcher & Master Search
 // Wild & Wandering Property Management System
 // ==========================================================================
 
@@ -7,21 +7,18 @@ import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { collection, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// View & Component Engines
 import { renderCalendar } from './pms-calendar-grid.js';
 import { renderDashboard } from './pms-dashboard.js';
 import * as dbModule from './pms-database.js';
 import { openGuestModal, initModalDrag } from './pms-folio-modal.js';
 import { scrollToToday } from './pms-calendar-tape.js';
 
-// Submodule Side-Effect Registrations
 import './pms-folio-actions.js';
 import './pms-folio-ledger.js';
 import './pms-folio-invoice.js';
 import './pms-tm30.js';
-import { processAndImportClipboard, processManualPaste } from '../parser/parser-engine.js';
+import { processManualPaste } from '../parser/parser-engine.js';
 
-// --- 1. Master Application State ---
 export let currentPropertyId = null;
 export let staffBookings = [];
 export let hotelRooms = [];
@@ -53,7 +50,7 @@ function safeRenderDatabase() {
     }
 }
 
-// --- 2. Master App Bootstrapper ---
+// --- 1. Master App Bootstrapper ---
 export async function initPms() {
     const safetyTimer = setTimeout(() => {
         console.warn("[PMS]: Bootloader safety timeout reached. Dismissing loader.");
@@ -72,7 +69,6 @@ export async function initPms() {
         const urlProp = urlParams.get('p');
         const storedProp = localStorage.getItem('currentPropertyId');
 
-        // Resolve active property
         if (urlProp && props.some(p => p.id === urlProp)) {
             currentPropertyId = urlProp;
         } else if (storedProp && props.some(p => p.id === storedProp)) {
@@ -80,29 +76,14 @@ export async function initPms() {
         } else if (props.length > 0) {
             currentPropertyId = props[0].id;
         } else {
-            // Fallback: If properties collection is empty on first boot, accept URL or default
             currentPropertyId = urlProp || storedProp || 'loud_samui';
         }
 
         window.currentPropertyId = currentPropertyId;
         localStorage.setItem('currentPropertyId', currentPropertyId);
 
-        // Populate Main Navbar Property Switcher Dropdown
-        const switcher = document.getElementById('main-property-switcher');
-        if (switcher) {
-            const list = props.length > 0 ? props : [{ id: currentPropertyId, name: currentPropertyId.replace('_', ' ').toUpperCase() }];
-            switcher.innerHTML = list.map(p => 
-                `<option value="${p.id}" ${p.id === currentPropertyId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`
-            ).join('');
-
-            switcher.onchange = (e) => {
-                const nextProp = e.target.value;
-                localStorage.setItem('currentPropertyId', nextProp);
-                const u = new URL(window.location.href);
-                u.searchParams.set('p', nextProp);
-                window.location.href = u.toString();
-            };
-        }
+        // ZERO-REAL-ESTATE LOGO SWITCHER SETUP
+        setupLogoPropertySwitcher(props);
 
         const activeProp = props.find(p => p.id === currentPropertyId) || { id: currentPropertyId, rooms: [] };
         hotelRooms = activeProp.rooms || [];
@@ -113,7 +94,6 @@ export async function initPms() {
 
         updateSyncStatus("Syncing Reservations...");
 
-        // Realtime Firestore Listener
         onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => {
             staffBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             window.staff = staffBookings;
@@ -137,6 +117,46 @@ export async function initPms() {
         console.error("[PMS Initialization Failed]:", err);
         clearTimeout(safetyTimer);
         hideBootLoader();
+    }
+}
+
+// --- 2. Zero-Real-Estate Logo Click Switcher ---
+function setupLogoPropertySwitcher(props) {
+    const logoContainer = document.getElementById('main-brand-logo-container') || document.getElementById('main-brand-logo')?.parentElement;
+    if (!logoContainer) return;
+
+    let dropdown = document.getElementById('logo-property-dropdown');
+    if (!dropdown) {
+        dropdown = document.createElement('div');
+        dropdown.id = 'logo-property-dropdown';
+        dropdown.className = 'absolute top-12 left-2 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-2 z-[9999] hidden text-white min-w-[200px] flex flex-col gap-1';
+        document.body.appendChild(dropdown);
+    }
+
+    if (props.length > 1) {
+        dropdown.innerHTML = `
+            <div class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-2 py-1 border-b border-slate-800">Switch Active Property</div>
+            ${props.map(p => `
+                <button type="button" onclick="window.switchActiveProperty('${p.id}')" class="text-left px-2 py-1.5 text-xs font-black uppercase rounded hover:bg-slate-800 flex items-center justify-between ${p.id === currentPropertyId ? 'text-blue-400 bg-slate-800/60' : 'text-slate-200'}">
+                    <span>${p.name || p.id}</span>
+                    ${p.id === currentPropertyId ? '✓' : ''}
+                </button>
+            `).join('')}
+        `;
+
+        logoContainer.style.cursor = 'pointer';
+        logoContainer.title = "Click to Switch Property";
+        logoContainer.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropdown.classList.toggle('hidden');
+        };
+
+        document.addEventListener('click', (e) => {
+            if (!dropdown.contains(e.target) && !logoContainer.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
     }
 }
 
@@ -196,7 +216,7 @@ export function switchTab(tabId) {
     }
 }
 
-// --- 4. Global Search & Jump Match Pill Engine ---
+// --- 4. Global Search & Jump Pill ---
 export function handleSearch(term) {
     searchTerm = (term || '').trim().toUpperCase();
     window.searchTerm = searchTerm;
@@ -213,7 +233,6 @@ export function handleSearch(term) {
         return;
     }
 
-    // Filter matching bookings
     const curProp = window.currentPropertyId;
     const matches = (window.staff || []).filter(b => {
         if (b.property !== curProp || b.status === 'cancelled') return false;
@@ -228,15 +247,9 @@ export function handleSearch(term) {
     currentSearchMatchIndex = 0;
 
     if (jumpBtn && matchCounter) {
-        if (matchedSearchIds.length > 0) {
-            matchCounter.innerText = `${matchedSearchIds.length} Match${matchedSearchIds.length === 1 ? '' : 'es'}`;
-            jumpBtn.classList.remove('hidden');
-            jumpBtn.style.display = 'flex';
-        } else {
-            matchCounter.innerText = '0 Matches';
-            jumpBtn.classList.remove('hidden');
-            jumpBtn.style.display = 'flex';
-        }
+        matchCounter.innerText = `${matchedSearchIds.length} Match${matchedSearchIds.length === 1 ? '' : 'es'}`;
+        jumpBtn.classList.remove('hidden');
+        jumpBtn.style.display = 'flex';
     }
 
     renderCalendar();
@@ -248,7 +261,6 @@ export function jumpToSearchMatch() {
     const targetId = matchedSearchIds[currentSearchMatchIndex];
     currentSearchMatchIndex = (currentSearchMatchIndex + 1) % matchedSearchIds.length;
 
-    // Scroll to matching reservation bar
     const bar = document.querySelector(`.staff-bar[data-booking-id="${targetId}"]`);
     const container = document.getElementById('calendar-scroll-container');
     if (bar && container) {
@@ -284,6 +296,12 @@ if (typeof window !== 'undefined') {
     window.handleSearch = handleSearch;
     window.jumpToSearchMatch = jumpToSearchMatch;
     window.clearSearchAndClose = clearSearchAndClose;
+    window.switchActiveProperty = (propId) => {
+        localStorage.setItem('currentPropertyId', propId);
+        const u = new URL(window.location.href);
+        u.searchParams.set('p', propId);
+        window.location.href = u.toString();
+    };
     window.toggleSearchMode = () => {
         const sc = document.getElementById('search-container');
         if (sc) sc.classList.toggle('hidden');
@@ -300,9 +318,6 @@ if (typeof window !== 'undefined') {
     window.editStaff = (id) => {
         const b = (staffBookings || []).find(x => x.id === id);
         if (b) openGuestModal(b);
-    };
-    window.saveGuest = () => {
-        if (typeof window.saveBooking === 'function') window.saveBooking();
     };
     window.closeModal = (id) => {
         const el = document.getElementById(id);
