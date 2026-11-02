@@ -3,7 +3,7 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { parseYMD } from '../core/dates.js';
+import { parseYMD } from '../pms/pms-init.js';
 
 const $$ = s => document.querySelectorAll(s);
 
