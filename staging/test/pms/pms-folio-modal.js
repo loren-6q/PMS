@@ -217,11 +217,15 @@ export const calcNights = () => {
     return Math.max(1, Math.round(ms / 86400000));
 };
 
+// --- Stay Duration Nights Counter Display ---
 export const updateNightsDisplay = (forcedNights = null) => {
     const n = forcedNights !== null ? forcedNights : calcNights();
     const disp = $('booking-nights-display');
-    if (disp) {
-        disp.dataset.nights = n;
+    const txtEl = $('nights-count-text');
+    if (disp) disp.dataset.nights = n;
+    if (txtEl) {
+        txtEl.innerText = `${n} Nt${n > 1 ? 's' : ''}`;
+    } else if (disp) {
         disp.innerText = `${n} Nt${n > 1 ? 's' : ''}`;
     }
     return n;
