@@ -440,9 +440,9 @@ export const suggestAvailableRoom = (preferredType = null) => {
 // ----------------------------------------------------------------------
 // 4. IMMUNE ROOM DROPDOWN WITH ARROWS (↑ / ↓) & PRESERVATION
 // ----------------------------------------------------------------------
-export const addRoomSelect = (val = "", isManualAdd = false) => {
+export function addRoomSelect(val = "", isManualAdd = false) {
     if (arguments.length === 0) isManualAdd = true;
-
+    
     const c = $('assigned-rooms-container');
     if (!c) return;
     const w = document.createElement('div');
