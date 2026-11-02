@@ -492,7 +492,7 @@ export const confirmMerge = async () => {
     }
 };
 
-window.saveGuest = saveGuest;
+window.saveBooking = saveBooking;
 window.requestDelete = requestDelete;
 window.requestDuplicate = requestDuplicate;
 window.requestSplit = requestSplit;
