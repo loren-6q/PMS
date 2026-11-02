@@ -3,21 +3,30 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+// --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
+// --- State, Store & Context Resolvers ---
 const getDb = () => window.db;
 const getAppId = () => window.appId || 'hotel-pms-v1';
 const getFs = () => window.fs || {};
 const getStaffList = () => window.staff || (window.getStaff ? window.getStaff() : []);
 
+// --- Active Property ID Resolver ---
 const getPropId = () => {
     const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
     return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
 };
 
+// --- Booking Room List Resolver Helper ---
 const getRoomsHelper = () => window.getRooms || (s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : [])));
 
+// --------------------------------------------------------------------------
+// 1. GLOBAL BATCH PASSPORT SYNCHRONIZATION
+// --------------------------------------------------------------------------
+
+// --- Scan & Link All Pending Passports to Active Bookings ---
 export const globalPassportSync = async () => {
     const btn = document.querySelector('button[onclick="window.globalPassportSync()"]');
     const originalText = btn ? btn.innerHTML : '';
@@ -135,6 +144,11 @@ export const globalPassportSync = async () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --------------------------------------------------------------------------
+// 2. SINGLE BOOKING TM30 SYNC & AUTO-FILL
+// --------------------------------------------------------------------------
+
+// --- Smart Sync TM30 Passport for Active Folio Modal ---
 export const syncTM30 = async () => {
     const btn = $('tm30-sync-btn');
     const origText = btn ? btn.innerHTML : '';
@@ -287,6 +301,7 @@ export const syncTM30 = async () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --- Ingest TM30 Passport Record Directly into Form Fields ---
 export const applyTM30Data = data => {
     const fnEl = $('first-name'), lnEl = $('last-name'), ctryEl = $('guest-country'), notesEl = $('guest-notes');
     if (data.firstName && fnEl) fnEl.value = data.firstName;
@@ -309,6 +324,10 @@ export const applyTM30Data = data => {
     if (window.updateHeaderName) window.updateHeaderName();
     if (window.closeAlert) window.closeAlert();
 };
+
+// --------------------------------------------------------------------------
+// 3. GLOBAL WINDOW EXPORTS
+// --------------------------------------------------------------------------
 
 window.globalPassportSync = globalPassportSync;
 window.syncTM30 = syncTM30;
