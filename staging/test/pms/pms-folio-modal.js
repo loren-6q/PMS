@@ -5,9 +5,11 @@
 
 import { STATUS_CYCLE } from '../core/occupancy.js';
 
+// --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
+// --- Date Helper Resolvers ---
 const getParseYMD = () => window.parseYMD || (str => {
     if (!str || typeof str !== 'string') return 0;
     const p = str.split('-');
@@ -20,20 +22,24 @@ const getLocalYMD = () => window.getLocalYMD || (d => {
     return o.toISOString().split('T')[0];
 });
 
+// --- State & Config Accessors ---
 const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
 const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
+// --- Active Property ID Resolver ---
 const getPropId = () => {
     const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
     return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
 };
 
-// ----------------------------------------------------------------------
-// 1. MODAL DRAG & DIALOG CONTROLLERS
-// ----------------------------------------------------------------------
+// --------------------------------------------------------------------------
+// 1. MODAL WINDOW DRAGGING & DIALOG CONTROLLERS
+// --------------------------------------------------------------------------
+
 let isDragging = false, dragOffsetX, dragOffsetY;
 
+// --- Modal Drag Initiator ---
 export const startDrag = e => {
     if (e.target.closest('button, input, select, i, textarea, .multi-state-btn')) return;
     isDragging = true;
@@ -48,6 +54,7 @@ export const startDrag = e => {
     dragOffsetY = e.clientY - r.top;
 };
 
+// --- Modal Drag Move Listener ---
 document.addEventListener('mousemove', e => {
     if (!isDragging) return;
     const m = $('guest-modal-content');
@@ -59,10 +66,12 @@ document.addEventListener('mousemove', e => {
     m.style.top = nT + 'px';
 });
 
+// --- Modal Drag Release Listener ---
 document.addEventListener('mouseup', () => {
     if (isDragging) isDragging = false;
 });
 
+// --- Custom Alert & Confirmation Modal Display ---
 export const showAlert = (msg, isConfirm = false, onConfirm = null) => {
     const m = $('alert-modal'), c = $('alert-cancel'), b = $('alert-confirm');
     if (!m) return;
@@ -89,6 +98,7 @@ export const showAlert = (msg, isConfirm = false, onConfirm = null) => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --- Close Alert Modal ---
 export const closeAlert = () => {
     const m = $('alert-modal');
     if (m) {
@@ -97,6 +107,7 @@ export const closeAlert = () => {
     }
 };
 
+// --- Close Main Guest Modal ---
 export const closeGuestModal = () => {
     const m = $('guest-modal');
     if (m) {
@@ -105,6 +116,7 @@ export const closeGuestModal = () => {
     }
 };
 
+// --- Universal Modal Closer ---
 export const closeModal = id => {
     if (id === 'guest-modal') {
         closeGuestModal();
@@ -117,6 +129,7 @@ export const closeModal = id => {
     }
 };
 
+// --- Open Email Parser Modal ---
 export const openEmailParserModal = () => {
     const txt = $('email-textarea');
     if (txt) txt.value = '';
@@ -129,6 +142,11 @@ export const openEmailParserModal = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --------------------------------------------------------------------------
+// 2. MODAL UI STATE, ACCORDIONS & MULTI-STATE CONTROLLERS
+// --------------------------------------------------------------------------
+
+// --- Accordion Section Toggle ---
 export const toggleSection = (sectionId, chevronId, forceState = null) => {
     const sec = $(sectionId), icon = $(chevronId);
     if (!sec) return;
@@ -144,6 +162,7 @@ export const toggleSection = (sectionId, chevronId, forceState = null) => {
     }
 };
 
+// --- Audit History Modal Display ---
 export const showAuditHistory = () => {
     const id = $('guest-id')?.value;
     const staffList = window.staff || [];
@@ -174,6 +193,7 @@ export const showAuditHistory = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --- Modal Header Name Sync ---
 export const updateHeaderName = () => {
     const fn = $('first-name')?.value.trim().toUpperCase() || '';
     const ln = $('last-name')?.value.trim().toUpperCase() || '';
@@ -181,6 +201,7 @@ export const updateHeaderName = () => {
     if (disp) disp.innerText = `${fn} ${ln}`.trim() || "NEW BOOKING";
 };
 
+// --- OTA Proxy Email Detection & Formatting ---
 export const checkEmailProxy = val => {
     const el = $('email');
     if (!el) return;
@@ -191,6 +212,7 @@ export const checkEmailProxy = val => {
     else if (v.includes('@')) el.classList.add('text-green-600', 'font-black');
 };
 
+// --- Folio Status Cycle Handler ---
 export const cycleStatus = () => {
     const sBtn = $('status-cycle-btn');
     if (!sBtn) return;
@@ -206,9 +228,88 @@ export const cycleStatus = () => {
     if (hiddenInput) hiddenInput.value = nO.val;
 };
 
-// ----------------------------------------------------------------------
-// 2. DATES, NIGHTS, ARROWS & PAX CONTROLLER
-// ----------------------------------------------------------------------
+// --- Multi-State Lifecycle Button State Setter ---
+export const setMulti = (id, state, labels, classes) => {
+    const el = $(id);
+    if (!el) return;
+    el.dataset.state = state;
+    el.innerText = labels[state];
+    el.className = id.includes('email')
+        ? `flex-1 min-w-[80px] unselectable multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border text-center whitespace-nowrap ${classes[state]}`
+        : `flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border ${classes[state]}`;
+};
+
+// --- Multi-State Lifecycle Button Cycle Initiator ---
+export const cycleMulti = (el, labels, classes) => {
+    if (!el) return;
+    let cur = parseInt(el.dataset.state || 0, 10);
+    cur = (cur + 1) % labels.length;
+    setMulti(el.id, cur, labels, classes);
+};
+
+// --- Linked Stay Multi-Leg Navigation Stripe ---
+export const renderItineraryStripe = s => {
+    const stripe = $('itinerary-stripe');
+    if (!stripe) return;
+    if (!s || !s.linkedId) {
+        stripe.classList.add('hidden');
+        stripe.innerHTML = '';
+        return;
+    }
+
+    const curProp = getPropId();
+    const legs = getStaff().filter(x => {
+        const xProp = window.toCanonicalPropId ? window.toCanonicalPropId(x.property) : x.property;
+        return xProp === curProp && x.linkedId === s.linkedId && x.status !== 'cancelled' && x.status !== 'noshow';
+    }).sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+
+    if (legs.length <= 1) {
+        stripe.classList.add('hidden');
+        stripe.innerHTML = '';
+        return;
+    }
+
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const formatCompactDate = (dIn, dOut) => {
+        if (!dIn || !dOut) return '--';
+        const iD = new Date(dIn + "T12:00:00Z"), oD = new Date(dOut + "T12:00:00Z");
+        const iM = months[iD.getUTCMonth()], oM = months[oD.getUTCMonth()];
+        const iDay = String(iD.getUTCDate()).padStart(2, '0');
+        const oDay = String(oD.getUTCDate()).padStart(2, '0');
+        return iM === oM ? `${iDay}-${oDay}${iM}` : `${iDay}${iM}-${oDay}${oM}`;
+    };
+
+    let html = `<div class="flex items-center gap-1.5 flex-wrap">`;
+    html += `<i data-lucide="link" class="!w-3.5 !h-3.5 text-slate-400 shrink-0 mr-0.5"></i>`;
+
+    legs.forEach((leg, idx) => {
+        const isCurrent = leg.id === s.id;
+        const rList = getRooms(leg).filter(Boolean);
+        const rStr = rList.join(',') || 'Unassigned';
+        const dateStr = formatCompactDate(leg.checkIn, leg.checkOut);
+
+        if (idx > 0) html += `<span class="text-slate-600 font-black text-xs select-none">|</span>`;
+
+        html += `
+            <button type="button" onclick="window.editStaff('${leg.id}')" class="px-2 py-0.5 rounded text-xs font-black uppercase transition-colors cursor-pointer flex items-center gap-1 shrink-0 ${isCurrent ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}" title="Switch to Leg ${idx + 1}">
+                ${isCurrent ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>' : ''}
+                <span>${dateStr} ${rStr}</span>
+            </button>
+        `;
+    });
+
+    html += `</div>`;
+    stripe.innerHTML = html;
+    stripe.classList.remove('hidden');
+    stripe.style.display = 'flex';
+    if (window.lucide) window.lucide.createIcons();
+};
+
+// --------------------------------------------------------------------------
+// 3. DATES, NIGHTS DURATION & PAX CONTROLLER
+// --------------------------------------------------------------------------
+
+// --- Calculate Stay Duration in Nights ---
 export const calcNights = () => {
     const cI = $('check-in')?.value, cO = $('check-out')?.value;
     if (!cI || !cO) return 1;
@@ -231,6 +332,7 @@ export const updateNightsDisplay = (forcedNights = null) => {
     return n;
 };
 
+// --- Retrieve Locked Stay Duration ---
 export const getStoredNights = () => {
     const disp = $('booking-nights-display');
     const n = parseInt(disp?.dataset?.nights);
@@ -238,6 +340,7 @@ export const getStoredNights = () => {
     return calcNights();
 };
 
+// --- Date Step Arrow Nudger (-1d / +1d) ---
 export const nudgeDate = (type, deltaDays) => {
     const inEl = $('check-in'), outEl = $('check-out');
     if (!inEl?.value || !outEl?.value) return;
@@ -261,6 +364,7 @@ export const nudgeDate = (type, deltaDays) => {
     if (window.calcExtension) window.calcExtension();
 };
 
+// --- Check-in Picker with Duration Preservation ---
 export const handleCheckInPicker = newCheckIn => {
     if (!newCheckIn) return;
     const lockedNights = getStoredNights();
@@ -272,6 +376,7 @@ export const handleCheckInPicker = newCheckIn => {
     if (window.calcExtension) window.calcExtension();
 };
 
+// --- Check-out Picker with Duration Preservation ---
 export const handleCheckOutPicker = newCheckOut => {
     if (!newCheckOut) return;
     const lockedNights = getStoredNights();
@@ -283,6 +388,7 @@ export const handleCheckOutPicker = newCheckOut => {
     if (window.calcExtension) window.calcExtension();
 };
 
+// --- Guest Count Adjuster (PAX +/-) ---
 export const adjustPax = delta => {
     const el = $('pax-count');
     if (!el) return;
@@ -292,9 +398,11 @@ export const adjustPax = delta => {
     if (window.calcExtension) window.calcExtension();
 };
 
-// ----------------------------------------------------------------------
-// 3. ROOM OCCUPANCY, AVAILABILITY & SUGGESTION ENGINE
-// ----------------------------------------------------------------------
+// --------------------------------------------------------------------------
+// 4. ROOM AVAILABILITY, CLUSTERING & ASSIGNMENT CONTROLLER
+// --------------------------------------------------------------------------
+
+// --- Occupied Room Set Evaluator for Target Date Range ---
 export const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = null) => {
     const occ = new Set();
     const parseYMD = window.parseYMD || (s => Date.parse(s));
@@ -324,6 +432,7 @@ export const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = nul
     return occ;
 };
 
+// --- Refresh Dropdown Options with (OCCUPIED) Status ---
 export const updateAvailableRooms = () => {
     const cI = $('check-in')?.value, cO = $('check-out')?.value, cId = $('guest-id')?.value;
     if (!cI || !cO) return;
@@ -347,6 +456,7 @@ export const updateAvailableRooms = () => {
     });
 };
 
+// --- Resolve OTA Raw Category to Canonical PMS Room Type ---
 export const resolvePmsRoomType = (rawType = '') => {
     if (!rawType) return '';
     const rawLower = rawType.toLowerCase().trim();
@@ -386,6 +496,7 @@ export const resolvePmsRoomType = (rawType = '') => {
     return highestScore >= 5 ? bestType : rawType;
 };
 
+// --- Distance Metric for Clustered Multi-Bed Assignments ---
 export const getRoomDistance = (anchorId, candidateId) => {
     if (!anchorId || !candidateId || anchorId === candidateId) return 0;
     const hotelRooms = getHotelRooms();
@@ -404,6 +515,7 @@ export const getRoomDistance = (anchorId, candidateId) => {
     return 100 + Math.abs(anchorIdx - candIdx);
 };
 
+// --- Best Available Room Auto-Suggester ---
 export const suggestAvailableRoom = (preferredType = null) => {
     const cI = $('check-in')?.value, cO = $('check-out')?.value, cId = $('guest-id')?.value;
     if (!cI || !cO) return "";
@@ -442,9 +554,7 @@ export const suggestAvailableRoom = (preferredType = null) => {
     return freeInType[0].id;
 };
 
-// ----------------------------------------------------------------------
-// 4. IMMUNE ROOM DROPDOWN WITH ARROWS (↑ / ↓) & PRESERVATION
-// ----------------------------------------------------------------------
+// --- Add Assigned Room Selector Row ---
 export function addRoomSelect(val = "", isManualAdd = false) {
     if (arguments.length === 0) isManualAdd = true;
     
@@ -503,82 +613,13 @@ export function addRoomSelect(val = "", isManualAdd = false) {
     w.appendChild(del);
     c.appendChild(w);
     updateAvailableRooms();
-};
+}
 
-export const setMulti = (id, state, labels, classes) => {
-    const el = $(id);
-    if (!el) return;
-    el.dataset.state = state;
-    el.innerText = labels[state];
-    el.className = id.includes('email')
-        ? `flex-1 min-w-[80px] unselectable multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border text-center whitespace-nowrap ${classes[state]}`
-        : `flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border ${classes[state]}`;
-};
+// --------------------------------------------------------------------------
+// 5. FOLIO FORM POPULATION & QUICK-ADD INGESTION
+// --------------------------------------------------------------------------
 
-export const cycleMulti = (el, labels, classes) => {
-    if (!el) return;
-    let cur = parseInt(el.dataset.state || 0, 10);
-    cur = (cur + 1) % labels.length;
-    setMulti(el.id, cur, labels, classes);
-};
-
-export const renderItineraryStripe = s => {
-    const stripe = $('itinerary-stripe');
-    if (!stripe) return;
-    if (!s || !s.linkedId) {
-        stripe.classList.add('hidden');
-        stripe.innerHTML = '';
-        return;
-    }
-
-    const curProp = getPropId();
-    const legs = getStaff().filter(x => {
-        const xProp = window.toCanonicalPropId ? window.toCanonicalPropId(x.property) : x.property;
-        return xProp === curProp && x.linkedId === s.linkedId && x.status !== 'cancelled' && x.status !== 'noshow';
-    }).sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
-
-    if (legs.length <= 1) {
-        stripe.classList.add('hidden');
-        stripe.innerHTML = '';
-        return;
-    }
-
-    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-    const formatCompactDate = (dIn, dOut) => {
-        if (!dIn || !dOut) return '--';
-        const iD = new Date(dIn + "T12:00:00Z"), oD = new Date(dOut + "T12:00:00Z");
-        const iM = months[iD.getUTCMonth()], oM = months[oD.getUTCMonth()];
-        const iDay = String(iD.getUTCDate()).padStart(2, '0');
-        const oDay = String(oD.getUTCDate()).padStart(2, '0');
-        return iM === oM ? `${iDay}-${oDay}${iM}` : `${iDay}${iM}-${oDay}${oM}`;
-    };
-
-    let html = `<div class="flex items-center gap-1.5 flex-wrap">`;
-    html += `<i data-lucide="link" class="!w-3.5 !h-3.5 text-slate-400 shrink-0 mr-0.5"></i>`;
-
-    legs.forEach((leg, idx) => {
-        const isCurrent = leg.id === s.id;
-        const rList = getRooms(leg).filter(Boolean);
-        const rStr = rList.join(',') || 'Unassigned';
-        const dateStr = formatCompactDate(leg.checkIn, leg.checkOut);
-
-        if (idx > 0) html += `<span class="text-slate-600 font-black text-xs select-none">|</span>`;
-
-        html += `
-            <button type="button" onclick="window.editStaff('${leg.id}')" class="px-2 py-0.5 rounded text-xs font-black uppercase transition-colors cursor-pointer flex items-center gap-1 shrink-0 ${isCurrent ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}" title="Switch to Leg ${idx + 1}">
-                ${isCurrent ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>' : ''}
-                <span>${dateStr} ${rStr}</span>
-            </button>
-        `;
-    });
-
-    html += `</div>`;
-    stripe.innerHTML = html;
-    stripe.classList.remove('hidden');
-    stripe.style.display = 'flex';
-    if (window.lucide) window.lucide.createIcons();
-};
-
+// --- Populate Folio Modal Fields From Booking Record ---
 export const populateStaffForm = (s = {}) => {
     const isN = !s.id;
     const f = $('guest-form');
@@ -681,6 +722,26 @@ export const populateStaffForm = (s = {}) => {
         if (el) el.style.visibility = isN ? 'hidden' : 'visible';
     });
 
+    // --- Early Checkout Action Button Controller in #NTS Box ---
+    const earlyBtn = $('early-out-btn');
+    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+    if (earlyBtn) {
+        if (!isN && s.earlyCheckout) {
+            earlyBtn.title = "Revert Early Checkout";
+            earlyBtn.className = "absolute right-1 px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[9px] uppercase shadow-xs flex items-center gap-0.5 cursor-pointer";
+            earlyBtn.innerHTML = `<i data-lucide="rotate-ccw" class="!w-2.5 !h-2.5"></i><span>UNDO</span>`;
+            earlyBtn.onclick = () => window.undoEarlyCheckout();
+        } else if (!isN && s.status === 'here' && s.checkOut > todayStr) {
+            earlyBtn.title = "Check Out Early Today";
+            earlyBtn.className = "absolute right-1 px-1.5 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded font-black text-[9px] uppercase shadow-xs flex items-center gap-0.5 cursor-pointer";
+            earlyBtn.innerHTML = `<i data-lucide="log-out" class="!w-2.5 !h-2.5"></i><span>OUT</span>`;
+            earlyBtn.onclick = () => window.requestEarlyCheckout();
+        } else {
+            earlyBtn.classList.add('hidden');
+            earlyBtn.classList.remove('flex');
+        }
+    }
+    
     const userEmail = (window.currentUserEmail || 'admin').toUpperCase();
     if ($('audit-log')) {
         $('audit-log').innerText = isN ? `NEW RECORD | CREATING AS ${userEmail}` : `CREATED BY ${s.createdBy || 'UNKNOWN'} ON ${s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-GB').slice(0, 5) : '--'}` + (s.lastEditedBy ? ` | LAST EDIT: ${s.lastEditedBy} ON ${new Date(s.lastEditedAt).toLocaleDateString('en-GB').slice(0, 5)}` : '');
@@ -699,11 +760,13 @@ export const populateStaffForm = (s = {}) => {
     if (window.lucide) window.lucide.createIcons();
 };
 
+// --- Edit Booking Entry Point ---
 export const editStaff = id => {
     const s = getStaff().find(x => x.id === id);
     if (s) populateStaffForm(s);
 };
 
+// --- Quick Add from Timeline Cell Click ---
 export const quickAdd = (r, d) => {
     populateStaffForm({});
     if ($('check-in')) $('check-in').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -733,6 +796,10 @@ export const quickAdd = (r, d) => {
     updateAvailableRooms();
     if (window.calcExtension) window.calcExtension();
 };
+
+// --------------------------------------------------------------------------
+// 6. GLOBAL WINDOW EXPORTS
+// --------------------------------------------------------------------------
 
 window.startDrag = startDrag;
 window.showAlert = showAlert;
