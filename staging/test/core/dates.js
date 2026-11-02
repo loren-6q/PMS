@@ -1,9 +1,16 @@
+// ==========================================================================
+// core/dates.js - Zero-Drift Date Parsing, Normalization & Math Utilities
+// Wild & Wandering Property Management System
+// ==========================================================================
+
+// --- Parse YMD String to UTC Noon Timestamp ---
 export const parseYMD = str => { 
     if (!str || typeof str !== 'string') return 0; 
     const p = str.split('-'); 
     return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])); 
 };
 
+// --- Normalize Date Object/String to Local YMD String (YYYY-MM-DD) ---
 export const getLocalYMD = d => {
     if (!d) d = new Date();
     if (typeof d === 'string') {
@@ -22,7 +29,7 @@ export const getLocalYMD = d => {
     }
 };
 
-// Essential utility added for date math compatibility (since monolith did inline math)
+// --- Calculate Integer Day Difference Between Two YMD Strings ---
 export function diffDays(startStr, endStr) {
     const s = parseYMD(startStr);
     const e = parseYMD(endStr);
