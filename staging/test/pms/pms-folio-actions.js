@@ -3,20 +3,28 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+// --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
+// --- State, Store & Context Resolvers ---
 const getDb = () => window.db;
 const getAppId = () => window.appId || 'hotel-pms-v1';
 const getStaff = () => window.staff || [];
 const getHotelRooms = () => window.hotelRooms || [];
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
+// --- Active Property ID Resolver ---
 const getPropId = () => {
     const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
     return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
 };
 
+// --------------------------------------------------------------------------
+// 1. RESERVATION PERSISTENCE (SAVE / DELETE / DUPLICATE)
+// --------------------------------------------------------------------------
+
+// --- Master Save Reservation Engine ---
 export const saveBooking = async (keepOpen = false) => {
     if (window.currentUserRole === 'staff') return;
     const sB = $('save-guest-btn') || $('save-btn');
@@ -176,6 +184,7 @@ export const saveBooking = async (keepOpen = false) => {
     }
 };
 
+// --- Permanently Delete Booking Record ---
 export const requestDelete = () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -212,6 +221,7 @@ export const requestDelete = () => {
     }
 };
 
+// --- Clone Booking Details into New Reservation Form ---
 export const requestDuplicate = () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -230,6 +240,11 @@ export const requestDuplicate = () => {
     if (window.showAlert) window.showAlert("Booking details duplicated as a new reservation.\nPlease assign dates, room, and save.");
 };
 
+// --------------------------------------------------------------------------
+// 2. STAY SEGMENTATION & SPLIT ACTIONS
+// --------------------------------------------------------------------------
+
+// --- Populate Room Options for Split Destination Leg ---
 export const populateSplitRoomDropdown = (splitStart, splitEnd, excludeId) => {
     const container = $('split-room-dropdown-container');
     if (!container) return;
@@ -256,6 +271,7 @@ export const populateSplitRoomDropdown = (splitStart, splitEnd, excludeId) => {
     container.innerHTML = optHtml;
 };
 
+// --- Open Stay Split Configuration Modal ---
 export const requestSplit = () => {
     const id = $('guest-id')?.value;
     const cI = $('check-in')?.value;
@@ -289,6 +305,7 @@ export const requestSplit = () => {
     }
 };
 
+// --- Execute Stay Split & Generate Linked Leg Record ---
 export const confirmSplit = async () => {
     const id = $('guest-id')?.value;
     const splitDate = $('split-date')?.value;
@@ -373,6 +390,11 @@ export const confirmSplit = async () => {
     }
 };
 
+// --------------------------------------------------------------------------
+// 3. CONTIGUOUS RESERVATION MERGE ACTIONS
+// --------------------------------------------------------------------------
+
+// --- Search & Display Adjacent Bookings to Merge ---
 export const requestMerge = () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -409,7 +431,7 @@ export const requestMerge = () => {
         if (a.linkedId && a.linkedId === cur.linkedId) scoreA += 50;
         if (b.linkedId && b.linkedId === cur.linkedId) scoreB += 50;
         if (a.lastName && a.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreA += 30;
-        if (b.lastName && b.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreB += 30;
+        if (b.lastName && b.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreA += 30;
         if (parseFn(a.checkOut) === curIn || parseFn(a.checkIn) === curOut) scoreA += 40;
         if (parseFn(b.checkOut) === curIn || parseFn(b.checkIn) === curOut) scoreB += 40;
         return scoreB - scoreA;
@@ -431,6 +453,7 @@ export const requestMerge = () => {
     }
 };
 
+// --- Execute Contiguous Merge & Absorb Target Stay ---
 export const confirmMerge = async () => {
     const id = $('guest-id')?.value;
     const targetId = $('merge-target')?.value;
@@ -491,6 +514,10 @@ export const confirmMerge = async () => {
         if (window.showAlert) window.showAlert("Error merging bookings: " + err.message);
     }
 };
+
+// --------------------------------------------------------------------------
+// 4. EARLY DEPARTURE & REVERSAL CONTROLLERS
+// --------------------------------------------------------------------------
 
 // --- Early Checkout Request & Fee Snapshot Evaluator ---
 export const requestEarlyCheckout = () => {
@@ -603,7 +630,9 @@ export const undoEarlyCheckout = async () => {
     }
 };
 
-
+// --------------------------------------------------------------------------
+// 5. GLOBAL WINDOW EXPORTS
+// --------------------------------------------------------------------------
 
 window.saveBooking = saveBooking;
 window.requestDelete = requestDelete;
@@ -615,8 +644,3 @@ window.confirmMerge = confirmMerge;
 window.populateSplitRoomDropdown = populateSplitRoomDropdown;
 window.requestEarlyCheckout = requestEarlyCheckout;
 window.undoEarlyCheckout = undoEarlyCheckout;
-
-
-
-
-
