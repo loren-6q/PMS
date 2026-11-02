@@ -27,14 +27,25 @@
     </script>
     <!-- SINGLE MODULAR ENTRY POINT -->
     <script src="./pms/pms-init.js" type="module"></script>
-    <link rel="stylesheet" href="https://loren-6q.github.io/PMS/style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body class="bg-slate-100 p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
-    <div id="boot-loader" class="loading-overlay"><div class="spinner"></div><div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4"><span id="sync-status">Authenticating...</span></div></div>
+    
+    <!-- 1. FULL-SCREEN AUTHENTICATION & BOOT LOADER -->
+    <div id="boot-loader" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4">
+            <span id="sync-status">Authenticating...</span>
+        </div>
+    </div>
 
+    <!-- MAIN APP CONTAINER -->
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
-        <!-- TOP NAVBAR -->
+        
+        <!-- ========================================================================== -->
+        <!-- 2. GLOBAL TOP NAVIGATION BAR -->
+        <!-- ========================================================================== -->
         <div class="bg-white px-1 sm:px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50 unselectable w-full">
             
             <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
@@ -72,7 +83,7 @@
                 </div>
                 
                 <div class="flex items-center gap-0.5 sm:gap-1 shrink-0 ml-0 sm:ml-1">
-                    <button onclick="window.openEmailParserModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-purple-600 bg-white border border-slate-200 hover:bg-purple-50 rounded shadow-sm transition-colors cursor-pointer" title="Import Booking"><i data-lucide="mail-plus" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
+                    <button onclick="window.openExtractModal()" id="btn-extract" class="p-1 sm:p-1.5 text-slate-500 hover:text-purple-600 bg-white border border-slate-200 hover:bg-purple-50 rounded shadow-sm transition-colors cursor-pointer" title="Import Booking"><i data-lucide="mail-plus" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
                     <a href="scan.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-amber-600 bg-white border border-slate-200 hover:bg-amber-50 rounded shadow-sm transition-colors cursor-pointer" title="Mobile Passport Scanner"><i data-lucide="scan" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
                     <button onclick="window.openPriceCheckModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-pink-600 bg-white border border-slate-200 hover:bg-pink-50 rounded shadow-sm transition-colors cursor-pointer" title="Price Check"><i data-lucide="tag" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
                     <a href="sync.html" target="_blank" class="p-1 sm:p-1.5 text-slate-500 hover:text-blue-600 bg-white border border-slate-200 hover:bg-blue-50 rounded shadow-sm transition-colors cursor-pointer" title="OTA Sync"><i data-lucide="refresh-cw" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></a>
@@ -102,7 +113,9 @@
             </div>
         </div>
 
-        <!-- DASHBOARD VIEW -->
+        <!-- ========================================================================== -->
+        <!-- 3. VIEW: DAILY OPERATIONS DASHBOARD -->
+        <!-- ========================================================================== -->
         <div id="dashboard-view" class="flex-1 flex flex-col min-h-0 bg-slate-100 overflow-y-auto hidden gap-2 p-0 sm:p-2">
             <div class="flex items-center justify-between bg-white p-2 rounded-lg shadow-sm border border-slate-200 shrink-0">
                 <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg flex items-center gap-2"><i data-lucide="layout-dashboard" class="text-blue-600"></i> Today's Snapshot <span id="dash-date-display" class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded ml-2">--</span></h2>
@@ -120,14 +133,15 @@
                     <div class="dash-card bg-indigo-50 border-indigo-200">
                         <div class="dash-title flex justify-between text-indigo-700 border-indigo-200"><span><i data-lucide="tags" size="12" class="inline mb-0.5"></i> Today's Rates</span><button onclick="window.openPriceCheckModal()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer border border-indigo-700 flex items-center gap-1 transition-colors"><i data-lucide="calculator" size="10"></i> CHECK</button></div>
                         <div id="dash-rates-list" class="text-[11px] font-black space-y-0.5 text-indigo-900 mt-1 flex flex-col"></div>
-                        <div class="mt-2 pt-2 border-t border-indigo-100 flex flex-col gap-1 shrink-0"><textarea id="rates-textarea" rows="2" class="input-base font-mono text-[9px] whitespace-pre !p-1 bg-white border-indigo-200" placeholder="Paste BDC search text here to update..."></textarea><button onclick="window.parseBdcPublicRates()" class="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm cursor-pointer w-full uppercase font-black transition-colors">UPDATE DAILY RATES</button></div>
                     </div>
                     <div class="dash-card border-orange-200 bg-orange-50/30"><div class="dash-title flex justify-between text-orange-600 border-orange-200"><span><i data-lucide="alert-triangle" size="12" class="inline mb-0.5"></i> Action Items</span></div><div id="dash-act-list" class="space-y-1 text-xs max-h-[160px] overflow-y-auto no-scrollbar"></div></div>
                 </div>
             </div>
         </div>
 
-        <!-- CALENDAR VIEW -->
+        <!-- ========================================================================== -->
+        <!-- 4. VIEW: MASTER CALENDAR TIMELINE -->
+        <!-- ========================================================================== -->
         <div id="calendar-view" class="flex-1 flex flex-col min-h-0 unselectable">
             <div id="calendar-scroll-container" class="flex-1 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-auto relative overscroll-none">
                 <div id="calendar-header-months" class="timeline-grid sticky top-0 z-[60] bg-slate-800 shadow-sm border-b border-slate-700 h-[26px] box-border"></div>
@@ -148,20 +162,22 @@
             </div>
 
             <footer id="calendar-legend" class="mt-0 bg-white p-1.5 sm:p-2 sm:rounded-b-lg border-x border-b border-slate-200 flex flex-col gap-y-1.5 shrink-0 text-[10px] md:text-[11px] select-text cursor-default shadow-lg max-h-[50vh] overflow-y-auto" style="display: none;">
-                <!-- ROW 1: 11 Status Cycles -->
+                <!-- ROW 1: 12 Status Cycles -->
                 <div class="flex items-center gap-1.5 flex-wrap justify-center select-text">
                     <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-1">Status:</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#ec4899; color:#fff;">NEW</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#ec4899; color:#ffffff;">NEW</span>
                     <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#7fc6f5; color:#1e293b;">FUTURE</span>
                     <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#dcfce7; color:#14532d;">HERE</span>
                     <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#aba39d; color:#1e293b;">LEFT</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs line-through select-text" style="background:#e5e7eb; color:#1e293b;">CANCELLED</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#e5e7eb; color:#64748b;">NO-SHOW</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#f97316; color:#ffffff;">EARLY OUT</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs line-through select-text" style="background:#1e293b; color:#fca5a5;">CANCELLED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#94a3b8; color:#334155;">NO-SHOW</span>
                     <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#fef08a; color:#1e293b;">SPECIAL</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#475569; color:#fff;">BLOCKED</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#0f172a; color:#fbbf24;">CHARGED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#b45309; color:#fef3c7;">BLOCKED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#ea580c; color:#ffffff;">TO-CHARGE</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#1e3a8a; color:#38bdf8;">CHARGED</span>
                     <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#fbcfe8; color:#831843;">VOL</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#f3e8ff; color:#581c87;">UNCONFIRMED</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#7e22ce; color:#ffffff;">UNCONFIRMED</span>
                 </div>
 
                 <!-- ROW 2: Bar Border States & Keyframe Alerts -->
@@ -264,7 +280,9 @@
             </footer>
         </div>
 
-        <!-- DATABASE VIEW -->
+        <!-- ========================================================================== -->
+        <!-- 5. VIEW: DATABASE LEDGER -->
+        <!-- ========================================================================== -->
         <div id="database-view" class="flex-1 flex flex-col min-h-0 bg-white sm:rounded shadow border-y sm:border border-slate-300 overflow-hidden hidden">
             <div class="p-2 bg-slate-100 border-b border-slate-300 flex flex-wrap gap-2 items-center text-xs unselectable shrink-0">
                 <div class="relative multi-select-container"><button onclick="window.toggleMultiSelect('db-room-dropdown', this)" class="bg-white border border-slate-300 px-2 py-1 rounded font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-between w-36 cursor-pointer"><span id="db-room-label" class="truncate">ALL ROOMS</span> <i data-lucide="chevron-down" size="14"></i></button><div id="db-room-dropdown" class="multi-select-dropdown absolute mt-1 w-48 bg-white border border-slate-300 rounded shadow-lg z-50 hidden"></div></div>
@@ -281,10 +299,12 @@
         </div>
     </div>
 
-    <!-- GUEST MODAL -->
+    <!-- ========================================================================== -->
+    <!-- 6. MASTER GUEST FOLIO MODAL -->
+    <!-- ========================================================================== -->
     <div id="guest-modal" class="modal-overlay">
-        <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800">
-            <div id="modal-header-btn" class="bg-slate-900 p-2 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable" onmousedown="window.startDrag(event)">
+        <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800 flex flex-col h-full max-h-[95vh] w-full max-w-[480px]">
+            <div id="modal-header-btn" class="bg-slate-900 p-2 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable shrink-0" onmousedown="window.startDrag(event)">
                 <div class="flex items-center gap-2 pointer-events-none">
                     <i data-lucide="user" size="18"></i>
                     <h3 id="modal-guest-name-display" class="text-lg font-black uppercase tracking-tighter leading-none">NEW BOOKING</h3>
@@ -294,10 +314,13 @@
                 </div>
             </div>
 
-            <div id="itinerary-stripe" class="hidden bg-slate-900 border-b border-slate-700 px-2 py-1 text-white flex items-center justify-between gap-1 overflow-x-auto no-scrollbar unselectable text-xs"></div>
+            <div id="itinerary-stripe" class="hidden bg-slate-900 border-b border-slate-700 px-2 py-1 text-white flex items-center justify-between gap-1 overflow-x-auto no-scrollbar unselectable text-xs shrink-0"></div>
 
-            <form id="guest-form" class="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 no-scrollbar relative">
-                <input type="hidden" id="guest-id"> <input type="hidden" id="created-at"> <input type="hidden" id="created-by"> <input type="hidden" id="guest-status-hidden">
+            <form id="guest-form" class="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 no-scrollbar relative block">
+                <input type="hidden" id="guest-id"> 
+                <input type="hidden" id="created-at"> 
+                <input type="hidden" id="created-by"> 
+                <input type="hidden" id="guest-status-hidden">
                 
                 <div class="section-header rounded-t-md mt-1" onclick="window.toggleSection('guest-profile-section', 'profile-chevron')">
                     <span>Guest Details</span>
@@ -308,7 +331,11 @@
                     <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">First Name</label><input type="text" id="first-name" class="input-base uppercase" oninput="window.updateHeaderName()"></div><div><label class="field-label">Last Name</label><input type="text" id="last-name" required class="input-base uppercase" oninput="window.updateHeaderName()"></div></div>
                     <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">Phone</label><input type="text" id="phone" class="input-base"></div><div><label class="field-label">Country</label><input type="text" id="guest-country" class="input-base" list="country-list" placeholder="Type country..."><datalist id="country-list"></datalist></div></div>
                     <div><label class="field-label">Email</label><input type="text" id="email" class="input-base" oninput="window.checkEmailProxy(this.value)"></div>
-                    <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200 mt-1 unselectable overflow-x-auto no-scrollbar"><div id="email-confirm-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['CONFIRM: --', 'SENT: FMP', 'SENT: NOT FMP'], ['text-slate-400 border-slate-300', 'bg-blue-100 text-blue-700 border-blue-400', 'bg-slate-200 text-slate-700 border-slate-400'])">CONFIRM: --</div><div id="email-prepost-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['PRE/POST: --', 'PRE/POST: SENT', 'PRE/POST: CONF'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400'])">PRE/POST: --</div><div id="email-special-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['SPECIAL: --', 'SPECIAL: SENT'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400'])">SPECIAL: --</div></div>
+                    <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200 mt-1 unselectable overflow-x-auto no-scrollbar">
+                        <div id="email-confirm-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['CONFIRM: --', 'SENT: FMP', 'SENT: NOT FMP'], ['text-slate-400 border-slate-300', 'bg-blue-100 text-blue-700 border-blue-400', 'bg-slate-200 text-slate-700 border-slate-400'])">CONFIRM: --</div>
+                        <div id="email-prepost-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['PRE/POST: --', 'PRE/POST: SENT', 'PRE/POST: CONF'], ['text-slate-400', 'bg-red-100 text-red-700 border-red-400', 'bg-green-100 text-green-700 border-green-400'])">PRE/POST: --</div>
+                        <div id="email-special-btn" class="flex-1 min-w-[80px] multi-state-btn px-0.5 py-1 rounded text-[9px] font-black uppercase border border-slate-300 text-slate-400 whitespace-nowrap" data-state="0" onclick="window.cycleMulti(this, ['SPECIAL: --', 'SPECIAL: SENT'], ['text-slate-400', 'bg-yellow-100 text-yellow-700 border-yellow-400'])">SPECIAL: --</div>
+                    </div>
                 </div>
 
                 <div class="bg-slate-50 p-1.5 rounded-md border border-slate-200 space-y-1.5">
@@ -331,16 +358,18 @@
                             </div>
                         </div>
 
-<div class="flex-1 min-w-0 flex flex-col items-center">
-    <label class="field-label text-center mb-0.5">#NTS</label>
-    <div id="booking-nights-display" class="w-full h-[28px] bg-indigo-50 border border-indigo-200 rounded font-black text-xs text-indigo-700 flex items-center justify-center px-1.5 shadow-sm select-none tracking-wide relative group" title="Stay Duration">
-        <span id="nights-count-text">1 Nt</span>
-        <button type="button" id="early-out-btn" onclick="window.requestEarlyCheckout()" class="hidden absolute right-1 px-1.5 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded font-black text-[9px] uppercase shadow-xs items-center gap-0.5 transition-colors cursor-pointer" title="Early Checkout">
-            <i data-lucide="log-out" class="!w-2.5 !h-2.5"></i>
-            <span>OUT</span>
-        </button>
-    </div>
-</div>                    
+                        <div class="flex-1 min-w-0 flex flex-col items-center">
+                            <label class="field-label text-center mb-0.5">#NTS</label>
+                            <div id="booking-nights-display" class="w-full h-[28px] bg-indigo-50 border border-indigo-200 rounded font-black text-xs text-indigo-700 flex items-center justify-center px-1.5 shadow-sm select-none tracking-wide relative group" title="Stay Duration">
+                                <span id="nights-count-text">1 Nt</span>
+                                <button type="button" id="early-out-btn" onclick="window.requestEarlyCheckout()" class="hidden absolute right-1 px-1.5 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded font-black text-[9px] uppercase shadow-xs items-center gap-0.5 transition-colors cursor-pointer" title="Early Checkout">
+                                    <i data-lucide="log-out" class="!w-2.5 !h-2.5"></i>
+                                    <span>OUT</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200">
                         <button type="button" id="tm30-sync-btn" onclick="window.syncTM30()" class="w-full h-[28px] bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300 rounded text-[9px] sm:text-[10px] font-black uppercase flex items-center justify-center gap-1 transition-colors cursor-pointer truncate px-1 shadow-sm" title="Scan Passports">
                             <i data-lucide="scan-face" size="13" class="shrink-0"></i>
@@ -379,13 +408,28 @@
                     <div id="ext-btn" class="multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border border-slate-300 text-slate-400" data-state="0" onclick="window.cycleMulti(this, ['NOT EXTENDED', 'EXTENDED'], ['text-slate-400', 'bg-blue-100 text-blue-700 border-blue-400'])">NOT EXTENDED</div>
                 </div>
 
-                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('ext-section', 'ext-chevron')"><span class="text-blue-700"><i data-lucide="calendar-plus" size="14" class="inline mb-0.5 mr-1"></i>Extend Stay</span><i data-lucide="chevron-down" id="ext-chevron" size="14" class="transition-transform duration-200" style="transform: rotate(-90deg);"></i></div>
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('ext-section', 'ext-chevron')">
+                    <span class="text-blue-700"><i data-lucide="calendar-plus" size="14" class="inline mb-0.5 mr-1"></i>Extend Stay</span>
+                    <i data-lucide="chevron-down" id="ext-chevron" size="14" class="transition-transform duration-200" style="transform: rotate(-90deg);"></i>
+                </div>
+                
                 <div id="ext-section" class="bg-blue-50/50 p-1.5 border-x border-b border-blue-200 rounded-b-md mt-0 hidden" style="display: none;">
-                    <div class="flex gap-1.5 items-end"><div class="w-16"><label class="field-label">Days</label><input type="number" id="ext-days" value="1" min="1" class="input-base text-center" oninput="if(window.calcExtension) window.calcExtension()"></div><div class="w-24"><label class="field-label text-slate-400 text-[10px]">Avg Daily ฿</label><input type="text" id="ext-avg-rate" class="input-base text-slate-500" readonly></div><div class="flex-1"><label class="field-label text-blue-600">Ext. Price ฿</label><input type="number" id="ext-price" class="input-base text-blue-700"></div></div>
-                    <div class="flex gap-1.5 mt-1.5"><button type="button" id="btn-check-bdc" onclick="window.checkBdcPrice()" class="flex-1 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-black uppercase rounded border border-slate-300 flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"><i data-lucide="external-link" size="12"></i> Check Rate</button><button type="button" onclick="window.confirmExtension()" class="flex-1 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded shadow-sm flex items-center justify-center gap-1 transition-colors cursor-pointer"><i data-lucide="plus-circle" size="12"></i> Add Extension</button></div>
+                    <div class="flex gap-1.5 items-end">
+                        <div class="w-16"><label class="field-label">Days</label><input type="number" id="ext-days" value="1" min="1" class="input-base text-center" oninput="if(window.calcExtension) window.calcExtension()"></div>
+                        <div class="w-24"><label class="field-label text-slate-400 text-[10px]">Avg Daily ฿</label><input type="text" id="ext-avg-rate" class="input-base text-slate-500" readonly></div>
+                        <div class="flex-1"><label class="field-label text-blue-600">Ext. Price ฿</label><input type="number" id="ext-price" class="input-base text-blue-700"></div>
+                    </div>
+                    <div class="flex gap-1.5 mt-1.5">
+                        <button type="button" id="btn-check-bdc" onclick="window.checkBdcPrice()" class="flex-1 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-black uppercase rounded border border-slate-300 flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"><i data-lucide="external-link" size="12"></i> Check Rate</button>
+                        <button type="button" onclick="window.confirmExtension()" class="flex-1 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded shadow-sm flex items-center justify-center gap-1 transition-colors cursor-pointer"><i data-lucide="plus-circle" size="12"></i> Add Extension</button>
+                    </div>
                 </div>
 
-                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('fin-section', 'fin-chevron')"><span>Payments</span><i data-lucide="chevron-down" id="fin-chevron" size="14" class="transition-transform duration-200"></i></div>
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('fin-section', 'fin-chevron')">
+                    <span>Payments</span>
+                    <i data-lucide="chevron-down" id="fin-chevron" size="14" class="transition-transform duration-200"></i>
+                </div>
+                
                 <div id="fin-section" class="bg-slate-100 p-1.5 border-x border-b border-slate-200 rounded-b-md mt-0 block">
                     <div class="flex justify-between items-end border-b-2 border-slate-200 pb-1 mb-1">
                         <div class="flex gap-2 items-end">
@@ -414,7 +458,11 @@
                     <button type="button" onclick="window.addPaymentRow()" class="w-full py-1 border-2 border-dashed border-slate-300 rounded text-xs font-black text-slate-500 hover:bg-slate-200 uppercase unselectable transition-colors cursor-pointer">+ ADD PAYMENT</button>
                 </div>
 
-                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('meta-section', 'meta-chevron')"><span>More</span><i data-lucide="chevron-down" id="meta-chevron" size="14" class="transition-transform duration-200"></i></div>
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('meta-section', 'meta-chevron')">
+                    <span>More</span>
+                    <i data-lucide="chevron-down" id="meta-chevron" size="14" class="transition-transform duration-200"></i>
+                </div>
+                
                 <div id="meta-section" class="bg-slate-50 p-1.5 border-x border-b border-slate-200 rounded-b-md mt-0 block">
                     <label class="field-label mb-0 border-b border-slate-200 pb-1">Guest Notes</label>
                     <textarea id="guest-notes" class="smart-notes w-full bg-white border border-slate-300 font-bold text-xs p-1.5 mb-1.5 rounded outline-none focus:ring-2 focus:ring-blue-500 mt-1" placeholder="NOTES..."></textarea>
@@ -427,7 +475,7 @@
                 </div>
             </form>
             
-            <div class="bg-slate-100 p-2 flex gap-2 justify-between items-center border-t border-slate-300 rounded-b-lg unselectable">
+            <div class="bg-slate-100 p-2 flex gap-2 justify-between items-center border-t border-slate-300 rounded-b-lg unselectable shrink-0">
                 <div class="flex items-center gap-1 shrink-0">
                     <button type="button" id="delete-btn" title="Delete" onclick="window.requestDelete()" class="btn-tool bg-red-600 text-white hover:bg-red-700"><i data-lucide="trash-2" size="14" class="shrink-0"></i></button>
                     <button type="button" id="split-btn" title="Split" onclick="window.requestSplit()" class="btn-tool bg-orange-100 text-orange-700 hover:bg-orange-200"><i data-lucide="scissors" size="14" class="shrink-0"></i></button>
@@ -448,8 +496,11 @@
         </div>
     </div>
 
-    <!-- UTILITY MODALS -->
-    <!-- 1. Extra Charges Modal -->
+    <!-- ========================================================================== -->
+    <!-- 7. UTILITY & CONFIRMATION MODALS -->
+    <!-- ========================================================================== -->
+
+    <!-- Extra Charges Modal -->
     <div id="charge-modal" class="alert-modal-overlay">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
             <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
@@ -480,33 +531,7 @@
         </div>
     </div>
 
-    <!-- 2. Email Parser Import Modal -->
-    <div id="email-modal" class="alert-modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col">
-            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm">
-                <span>Data Import</span><button type="button" onclick="window.closeModal('email-modal')" class="cursor-pointer"><i data-lucide="x" size="18"></i></button>
-            </div>
-            <div class="p-4 flex flex-col gap-3">
-                <p class="text-xs font-bold text-slate-500 leading-tight">Paste a confirmation email from Booking.com, Airbnb, or Hostelworld. Or paste a chunk of your Airbnb upcoming reservations list.</p>
-                <div class="flex flex-col">
-                    <label class="label-base hidden">Select Source Format</label>
-                    <select id="import-format-select" class="input-base cursor-pointer !text-sm !p-2 hidden">
-                        <option value="auto">Auto-Detect / Select Source</option>
-                        <option value="bdc-extranet">Booking.com (Extranet Dashboard)</option>
-                        <option value="airbnb-email">Airbnb (Confirmation / List)</option>
-                        <option value="hw-web">Hostelworld (Web Dashboard)</option>
-                    </select>
-                </div>
-                <textarea id="email-textarea" rows="8" class="input-base font-mono text-[10px] whitespace-pre !p-2" placeholder="Paste text here..."></textarea>
-                <div class="flex gap-2 justify-end mt-2">
-                    <button onclick="window.closeModal('email-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700">Cancel</button>
-                    <button onclick="if(window.parseEmail) window.parseEmail();" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1">Extract</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 3. Price Check Modal -->
+    <!-- Price Check Modal -->
     <div id="price-check-modal" class="alert-modal-overlay">
         <div class="bg-white rounded-xl shadow-2xl max-w-xs w-full overflow-hidden border-2 border-slate-800">
             <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
@@ -536,13 +561,13 @@
         </div>
     </div>
 
-    <!-- 4. Alert Modal -->
-    <div id="alert-modal" class="alert-modal-overlay">
+    <!-- Global Alert Modal -->
+    <div id="alert-modal" class="alert-modal-overlay z-[10000]">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
             <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm" id="alert-header-title">Attention</div>
             <div class="p-6 text-center">
                 <p id="alert-message" class="font-black text-slate-700 leading-tight text-md mb-6 whitespace-pre-line"></p>
-                <div class="flex gap-2 justify-center">
+                <div class="flex gap-2 justify-center" id="alert-actions">
                     <button id="alert-cancel" onclick="window.closeAlert()" class="btn-modal bg-slate-200 text-slate-700 px-6 hidden">Cancel</button>
                     <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
                 </div>
@@ -550,33 +575,47 @@
         </div>
     </div>
 
-    <!-- 5. Split Modal -->
+    <!-- Split Stay Modal -->
     <div id="split-modal" class="alert-modal-overlay">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
             <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Split Booking</div>
             <div class="p-6 text-center">
                 <p class="font-black text-slate-700 leading-tight text-md mb-4">Split this booking into two segments?</p>
+                
+                <div class="text-left mb-3">
+                    <label class="field-label text-left mb-1">Date of Split (Check-in for Leg 2)</label>
+                    <input type="date" id="split-date" class="input-base font-bold text-center">
+                </div>
+                
+                <div id="split-room-dropdown-container" class="mb-5"></div>
+
                 <div class="flex gap-2 justify-center">
                     <button onclick="window.closeModal('split-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button>
-                    <button type="button" onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10">Split</button>
+                    <button type="button" onclick="window.confirmSplit()" class="btn-modal bg-orange-600 text-white px-10 shadow-sm">Split</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 6. Merge Modal -->
+    <!-- Merge Stay Modal -->
     <div id="merge-modal" class="alert-modal-overlay">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
             <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Merge Bookings</div>
             <div class="p-6 text-center">
                 <p class="font-black text-slate-700 leading-tight text-md mb-4">Select a booking to absorb.<br><span class="text-xs font-bold text-slate-500 mt-2 block">Absorbed booking will be deleted!</span></p>
-                <select id="merge-target" class="input-base !text-sm !p-2 mb-6 cursor-pointer"></select>
+                <select id="merge-target" class="input-base !text-xs !p-2 mb-6 cursor-pointer font-bold uppercase"></select>
                 <div class="flex gap-2 justify-center">
                     <button onclick="window.closeModal('merge-modal')" class="btn-modal bg-slate-200 text-slate-700 px-6">Cancel</button>
-                    <button id="merge-confirm-btn" onclick="window.confirmMerge()" class="btn-modal bg-indigo-600 text-white px-10">Merge</button>
+                    <button id="merge-confirm-btn" onclick="window.confirmMerge()" class="btn-modal bg-indigo-600 text-white px-10 shadow-sm">Merge</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Hidden Tooltip Container -->
     <div id="custom-tooltip"></div>
+</body>
+
+
+     
+</html>
