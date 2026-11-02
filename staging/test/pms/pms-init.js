@@ -321,3 +321,179 @@ window.openEmailParserModal = () => {
 
 
 
+// --- Core Bootstrapper & DOM Listeners (from Monolith init()) ---
+
+export const init = async () => {
+    const processSnapshot = snap => {
+        staff = snap.docs.map(d => ({ id: d.id, ...d.data() })).map(s => {
+            const rList = getRooms(s).map(dbToUiRoom);
+            s.room = rList[0] || "";
+            s.rooms = rList;
+            if (window.healHostelworldDeposit) window.healHostelworldDeposit(s, db, appId);
+            return s;
+        });
+        window.staff = staff;
+
+        const base = ["France", "Germany", "United Kingdom", "United States", "Australia", "Netherlands", "Israel", "Spain", "Italy", "Switzerland", "Canada", "Sweden", "Denmark", "Russia", "Thailand", "Belgium", "Austria", "Ireland", "Norway", "Finland", "Brazil", "Argentina", "South Korea", "Japan", "China", "India", "Mexico", "New Zealand", "South Africa", "Portugal", "Greece"];
+        const COUNTRY_CANONICAL = {
+            'US': 'United States', 'USA': 'United States', 'UNITED STATES': 'United States',
+            'UK': 'United Kingdom', 'GB': 'United Kingdom', 'UNITED KINGDOM': 'United Kingdom',
+            'DE': 'Germany', 'GERMAN': 'Germany', 'GERMANY': 'Germany',
+            'FR': 'France', 'FRENCH': 'France', 'FRANCE': 'France',
+            'IL': 'Israel', 'ISRAEL': 'Israel',
+            'AU': 'Australia', 'AUSTRALIA': 'Australia',
+            'NL': 'Netherlands', 'NETHERLANDS': 'Netherlands',
+            'ES': 'Spain', 'SPAIN': 'Spain',
+            'IT': 'Italy', 'ITALY': 'Italy',
+            'CH': 'Switzerland', 'SWITZERLAND': 'Switzerland',
+            'CA': 'Canada', 'CANADA': 'Canada',
+            'SE': 'Sweden', 'SWEDEN': 'Sweden',
+            'DK': 'Denmark', 'DENMARK': 'Denmark',
+            'RU': 'Russia', 'RUSSIA': 'Russia',
+            'TH': 'Thailand', 'THAILAND': 'Thailand',
+            'KR': 'South Korea', 'SOUTH KOREA': 'South Korea', 'SOUHT KOREA': 'South Korea',
+            'ALGERIA': 'Algeria', 'ALGERIENNE': 'Algeria',
+            'TR': 'Turkey', 'TURKEY': 'Turkey',
+            'NZ': 'New Zealand', 'NEW ZEALAND': 'New Zealand',
+            'HK': 'Hong Kong', 'HONG KONG': 'Hong Kong',
+            'BY': 'Belarus', 'BELARUS': 'Belarus'
+        };
+
+        const cleanCountries = new Set(base);
+        staff.forEach(s => {
+            if (!s.country) return;
+            const raw = s.country.trim();
+            if (!raw || raw.toLowerCase().includes('folio') || raw.toLowerCase().includes('invoice') || raw.length < 2) return;
+            const lookup = raw.toUpperCase();
+            if (COUNTRY_CANONICAL[lookup]) {
+                cleanCountries.add(COUNTRY_CANONICAL[lookup]);
+            } else if (raw.length > 2 && /^[A-Za-z\s\-]+$/.test(raw)) {
+                const formatted = raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                cleanCountries.add(formatted);
+            }
+        });
+
+        const dl = $('country-list');
+        if (dl) dl.innerHTML = [...cleanCountries].sort().map(c => `<option value="${c}"></option>`).join('');
+
+        if ($('calendar-view')?.style.display !== 'none' && window.render) window.render();
+        if ($('dashboard-view')?.style.display === 'flex' && window.renderDashboard) window.renderDashboard();
+        if ($('database-view')?.style.display === 'flex' && window.renderDatabase) window.renderDatabase();
+
+        setTimeout(() => { if (window.runDiscrepancyAudit) window.runDiscrepancyAudit(); }, 200);
+
+        const editId = new URLSearchParams(window.location.search).get('edit');
+        if (editId && window.editStaff) { 
+            window.editStaff(editId); 
+            try { window.history.replaceState({}, document.title, window.location.pathname); } catch (e) {} 
+        }
+    };
+
+    const bypassLogin = async () => {
+        const safetyTimer = setTimeout(() => {
+            const bl = $('boot-loader');
+            if (bl && bl.style.display !== 'none') bl.style.display = 'none';
+        }, 3500);
+
+        try {
+            if (typeof window.__initial_auth_token !== 'undefined') {
+                try { await signInWithCustomToken(auth, window.__initial_auth_token); }
+                catch (tokenErr) { await signInAnonymously(auth); }
+            } else {
+                await signInAnonymously(auth);
+            }
+            currentUserRole = 'admin';
+            currentUserEmail = 'admin';
+            window.currentUserRole = currentUserRole;
+            window.currentUserEmail = currentUserEmail;
+            $$('.admin-only').forEach(el => el.classList.remove('hidden'));
+            await loadPropertyConfig();
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
+                if (window.showAlert) window.showAlert("Database Permission Denied.");
+            });
+        } catch (e) {
+            console.error("Auth bypass error:", e);
+            if ($('sync-status')) $('sync-status').innerText = "Auth Error";
+        } finally {
+            clearTimeout(safetyTimer);
+            const bl = $('boot-loader');
+            if (bl) bl.style.display = 'none';
+        }
+    };
+
+    if (typeof window.__initial_auth_token !== 'undefined' || !REQUIRE_LOGIN) {
+        bypassLogin();
+    } else {
+        onAuthStateChanged(auth, async user => {
+            if (user) {
+                currentUserRole = 'admin';
+                currentUserEmail = (user.email || 'admin@test.local').toLowerCase();
+                window.currentUserRole = currentUserRole;
+                window.currentUserEmail = currentUserEmail;
+                $('boot-loader').style.display = 'none';
+                await loadPropertyConfig();
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
+                    if (window.showAlert) window.showAlert("Database Permission Denied.");
+                    $('boot-loader').style.display = 'none';
+                });
+            } else {
+                window.location.href = 'index.html';
+            }
+        });
+    }
+
+    const tBodyEl = $('timeline-body');
+    if (tBodyEl) {
+        tBodyEl.addEventListener('mouseover', e => {
+            const col = e.target.closest('.day-column');
+            if (col && col.dataset.colIndex !== undefined) {
+                const idx = col.dataset.colIndex;
+                $$(`[data-col-index="${idx}"]`).forEach(el => el.classList.add('hover-col'));
+            }
+        });
+
+        tBodyEl.addEventListener('mouseout', e => {
+            const col = e.target.closest('.day-column');
+            if (col && col.dataset.colIndex !== undefined) {
+                const idx = col.dataset.colIndex;
+                $$(`[data-col-index="${idx}"]`).forEach(el => el.classList.remove('hover-col'));
+            }
+        });
+
+        tBodyEl.addEventListener('click', e => {
+            const col = e.target.closest('.day-column');
+            if (!col) return;
+            const dStr = col.dataset.dateIso;
+            const rId = col.dataset.roomId || "";
+            if (!dStr) return;
+
+            const modal = $('guest-modal');
+            const isModalOpen = modal && (modal.classList.contains('active') || window.getComputedStyle(modal).display !== 'none');
+            if (isModalOpen) {
+                if (rId) {
+                    const curSelects = Array.from($$('.assigned-room-select'));
+                    const emptySelect = curSelects.find(s => !s.value);
+                    if (emptySelect) emptySelect.value = rId;
+                    else if (!curSelects.some(s => s.value === rId) && window.addRoomSelect) window.addRoomSelect(rId);
+                    if (window.updateAvailableRooms) window.updateAvailableRooms();
+                }
+                return;
+            }
+            if (window.quickAdd) window.quickAdd(rId, new Date(dStr + "T12:00:00Z"));
+        });
+    }
+
+    window.addEventListener('resize', () => {
+        if ($('calendar-view')?.style.display !== 'none' && window.render) window.render();
+    });
+    if (window.updateNavLinks) window.updateNavLinks();
+    if (window.lucide) window.lucide.createIcons();
+    if (window.mountLegendSvgs) window.mountLegendSvgs();
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
+
