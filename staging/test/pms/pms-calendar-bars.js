@@ -22,23 +22,9 @@ export const SVGS = {
     fbBad: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4l16 16M4 20L20 4" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg>`
 };
 
-export const STATUS_CYCLE = [
-    { val: 'new', bg: '#ec4899', txt: '#fff' },
-    { val: 'future', bg: '#7fc6f5', txt: '#1e293b' },
-    { val: 'here', bg: '#dcfce7', txt: '#14532d' },
-    { val: 'left', bg: '#aba39d', txt: '#1e293b' },
-    { val: 'cancelled', bg: '#e5e7eb', txt: '#1e293b' },
-    { val: 'noshow', bg: '#e5e7eb', txt: '#1e293b' },
-    { val: 'special', bg: '#fef08a', txt: '#1e293b' },
-    { val: 'blocked', bg: '#475569', txt: '#fff' },
-    { val: 'charged', bg: '#0f172a', txt: '#fbbf24' },
-    { val: 'tocharge', bg: '#f97316', txt: '#fff' },
-    { val: 'vol', bg: '#fbcfe8', txt: '#831843' },
-    { val: 'unconfirmed', bg: '#f3e8ff', txt: '#581c87' }
-];
+import { STATUS_CYCLE } from '../core/occupancy.js';
 
 window.SVGS = SVGS;
-window.STATUS_CYCLE = STATUS_CYCLE;
 
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
