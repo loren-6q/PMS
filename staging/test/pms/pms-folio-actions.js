@@ -17,7 +17,7 @@ const getPropId = () => {
     return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
 };
 
-export const saveGuest = async (keepOpen = false) => {
+export const saveBooking = async (keepOpen = false) => {
     if (window.currentUserRole === 'staff') return;
     const sB = $('save-guest-btn') || $('save-btn');
     if (sB?.disabled) return;
