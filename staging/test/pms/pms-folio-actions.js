@@ -17,7 +17,7 @@ const getPropId = () => {
     return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
 };
 
-export const saveBooking = async (keepOpen = false) => {
+export const saveGuest = async (keepOpen = false) => {
     if (window.currentUserRole === 'staff') return;
     const sB = $('save-guest-btn') || $('save-btn');
     if (sB?.disabled) return;
@@ -492,7 +492,7 @@ export const confirmMerge = async () => {
     }
 };
 
-window.saveBooking = saveBooking;
+window.saveGuest = saveGuest;
 window.requestDelete = requestDelete;
 window.requestDuplicate = requestDuplicate;
 window.requestSplit = requestSplit;
