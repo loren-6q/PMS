@@ -692,6 +692,5 @@ window.setMulti = setMulti;
 window.cycleMulti = cycleMulti;
 window.renderItineraryStripe = renderItineraryStripe;
 window.openGuestModal = openGuestModal;
-window.populateStaffForm = openGuestModal;
 window.editStaff = editStaff;
 window.quickAdd = quickAdd;
