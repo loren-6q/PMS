@@ -114,7 +114,7 @@ export async function processAndImportClipboard() {
     }
 
     if (!text || text.trim() === '') {
-        const modal = document.getElementById('email-modal');
+        const modal = document.getElementById('import-modal');
         if (modal) {
             modal.classList.add('active');
             modal.style.display = 'flex';
@@ -126,7 +126,7 @@ export async function processAndImportClipboard() {
     if (parsed) {
         openGuestModal(parsed);
     } else {
-        const modal = document.getElementById('email-modal');
+        const modal = document.getElementById('import-modal');
         if (modal) {
             modal.classList.add('active');
             modal.style.display = 'flex';
@@ -148,7 +148,7 @@ export function parseBooking() {
 
     const parsed = parseOtaClipboardText(text);
     if (parsed) {
-        const modal = document.getElementById('email-modal');
+        const modal = document.getElementById('import-modal');
         if (modal) {
             modal.classList.remove('active');
             modal.style.display = 'none';
@@ -165,8 +165,6 @@ export function parseBooking() {
 
 if (typeof window !== 'undefined') {
     window.parseBooking = parseBooking;
-    window.parseEmail = parseBooking;
-    window.processManualPaste = parseBooking;
     window.processAndImportClipboard = processAndImportClipboard;
     window.parseOtaClipboardText = parseOtaClipboardText;
     window.parseFlexibleDate = parseFlexibleDate;
