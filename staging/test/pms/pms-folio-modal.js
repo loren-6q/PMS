@@ -82,10 +82,10 @@ export const closeModal = id => {
 };
 
 // --- Open Reservation Import Modal ---
-export const openEmailParserModal = () => {
+export const openExtractModal = () => {
     const txt = $('parse-textarea');
     if (txt) txt.value = '';
-    const m = $('email-modal');
+    const m = $('import-modal');
     if (m) {
         m.classList.add('active');
         m.style.display = 'flex';
@@ -672,7 +672,7 @@ export const quickAdd = (r, d) => {
 window.startDrag = startDrag;
 window.closeGuestModal = closeGuestModal;
 window.closeModal = closeModal;
-window.openEmailParserModal = openEmailParserModal;
+window.openExtractModal = openExtractModal;
 window.toggleSection = toggleSection;
 window.showAuditHistory = showAuditHistory;
 window.updateHeaderName = updateHeaderName;
