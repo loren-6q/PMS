@@ -1,72 +1,134 @@
 // ==========================================================================
-// parser/room-assigner.js - Automatic Room Suggestion Engine
+// parser/room-assigner.js - Intelligent Room Suggestion & Event Tetris
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { parseYMD } from '../pms/pms-init.js';
+import { parseYMD, getLocalYMD } from '../core/dates.js';
 
-// --- DOM Selector Helper ---
-const $$ = s => document.querySelectorAll(s);
-
-// --------------------------------------------------------------------------
-// 1. AUTOMATIC ROOM & BED SUGGESTION CONTROLLER
-// --------------------------------------------------------------------------
-
-// --- Automatically Suggest & Match Unassigned Rooms Based on Booked Type ---
-export const autoSuggestRoom = (bt, nt, cin, cout) => {
-    if (!cin || !cout || !bt) return;
-    const staff = window.staff || [];
+export function suggestRoomsForBooking(bookingParams) {
+    const { checkIn, checkOut, bookedType, unitCount = 1 } = bookingParams;
     const hotelRooms = window.hotelRooms || [];
+    const staffBookings = window.staff || [];
+    const curProp = window.currentPropertyId;
 
-    const sU = parseYMD(cin), eU = parseYMD(cout), occ = new Set();
-    staff.forEach(s => {
-        if (['cancelled', 'noshow', 'unconfirmed', 'charged'].includes(s.status)) return;
-        if (sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) {
-            (s.rooms?.length ? s.rooms : [s.room]).forEach(r => { if (r) occ.add(r); });
-        }
-    });
-
-    let av = hotelRooms.filter(r => !occ.has(r.id));
-    let aRId = [];
-
-    // NOTE: In Phase 2, this section will pull from window.propertyOtaMap dynamically
-    bt.split(' + ').forEach(part => {
-        let pT = null;
-        if (/DORMITORY|4-BED|DORM/i.test(part)) pT = "Standard Quad Dorm";
-        else if (/TRIPLE/i.test(part) && /BUNK/i.test(part)) pT = "Partial Oceanview Triple (Bunk+Twin)";
-        else if (/TRIPLE/i.test(part)) pT = "Partial Oceanview Triple (King+Twin)";
-        else if (/SIDE SEA VIEW/i.test(part) || (/PARTIAL/i.test(part) && !/TWIN|TRIPLE/i.test(part))) pT = "Partial Oceanview King Room";
-        else if (/PARTIAL SEA VIEW/i.test(part) || (/PARTIAL/i.test(part) && /TWIN/i.test(part))) pT = "Partial Oceanview Twin Room";
-        else if (/DELUXE TWIN/i.test(part) || (/OCEANVIEW/i.test(part) && /TWIN/i.test(part))) pT = "Oceanview Twin Room";
-        else if (/DELUXE DOUBLE/i.test(part) || (/OCEANVIEW/i.test(part) && !/TWIN/i.test(part))) pT = "Oceanview King Room";
-        else if (/TWIN ROOM WITH BALCONY/i.test(part) || (/GARDEN/i.test(part) && /TWIN/i.test(part))) pT = "Gardenview Twin Room";
-        else if (/KING ROOM WITH BALCONY/i.test(part) || (/GARDEN/i.test(part) && !/TWIN/i.test(part))) pT = "Gardenview King Room";
-        else if (/OCEANFRONT/i.test(part)) pT = /TWIN/i.test(part) ? "Oceanfront Twin" : "Oceanfront King";
-        else if (/BUNGALOW/i.test(part)) pT = "BUNGALOWS";
-
-        let pB = null;
-        if (/1 EXTRA-LARGE DOUBLE BED|1 EXTRA-LARGE|1 DOUBLE|1 KING|LARGE DOUBLE|1 BED|ONE BED/i.test(nt) || /KING|DOUBLE(?!\sTWIN)/i.test(part)) pB = "KING";
-        else if (/TWIN|SEPARATE|2 SINGLE|TWO SINGLE|2 BEDS|SINGLES/i.test(nt) || (/TWIN/i.test(part) && !/DOUBLE/i.test(part))) pB = "TWIN";
-        else if (/BUNK/i.test(nt)) pB = "BUNK+T";
-
-        let m = (pT && pB) ? av.find(r => r.type === pT && r.bed && r.bed.includes(pB)) : null;
-        if (!m && pT) m = av.find(r => r.type === pT);
-
-        if (m) {
-            aRId.push(m.id);
-            av = av.filter(r => r.id !== m.id);
-        }
-    });
-
-    if (aRId.length > 0) {
-        const s = $$('.assigned-room-select');
-        aRId.forEach((id, i) => { if (s[i]) s[i].value = id; });
-        if (window.updateAvailableRooms) window.updateAvailableRooms();
+    if (!checkIn || !checkOut || !bookedType || hotelRooms.length === 0) {
+        return Array(unitCount).fill("");
     }
-};
 
-// --------------------------------------------------------------------------
-// 2. GLOBAL WINDOW EXPORTS
-// --------------------------------------------------------------------------
+    const sIn = parseYMD(checkIn);
+    const sOut = parseYMD(checkOut);
 
-window.autoSuggestRoom = autoSuggestRoom;
+    // 1. Filter rooms matching requested category
+    const matchingRooms = hotelRooms.filter(r => {
+        if (r.inactive) return false;
+        const cat = (r.category || r.type || '').trim().toLowerCase();
+        const target = bookedType.trim().toLowerCase();
+        return cat === target || cat.includes(target) || target.includes(cat);
+    });
+
+    if (matchingRooms.length === 0) {
+        return Array(unitCount).fill("");
+    }
+
+    // 2. Filter candidate rooms currently free of date collisions
+    const availableRooms = matchingRooms.filter(room => {
+        const hasCollision = staffBookings.some(b => {
+            if (b.property !== curProp || b.status === 'cancelled' || b.status === 'noshow') return false;
+            const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
+            if (!rList.includes(room.id)) return false;
+
+            const bIn = parseYMD(b.checkIn);
+            const bOut = parseYMD(b.checkOut);
+            return (sIn < bOut && bIn < sOut);
+        });
+        return !hasCollision;
+    });
+
+    if (availableRooms.length === 0) {
+        return Array(unitCount).fill("");
+    }
+
+    // 3. Determine if stay falls within an active Property Event Peak
+    const propertyEvents = window.currentPropertyConfig?.events || window.fmpDates || [];
+    let isEventStay = false;
+    for (let d = new Date(sIn); d < new Date(sOut); d.setDate(d.getDate() + 1)) {
+        if (propertyEvents.includes(getLocalYMD(d))) {
+            isEventStay = true;
+            break;
+        }
+    }
+
+    const isDormCategory = bookedType.toLowerCase().includes('dorm') || availableRooms.some(r => r.isDorm);
+
+    const getRoommateBookings = (room) => {
+        const parentId = room.parentRoom || (room.id.includes('№') ? room.id.split('№')[0].trim() : room.id);
+        return staffBookings.filter(b => {
+            if (b.property !== curProp || b.status === 'cancelled' || b.status === 'noshow') return false;
+            const bIn = parseYMD(b.checkIn);
+            const bOut = parseYMD(b.checkOut);
+            if (sIn < bOut && bIn < sOut) {
+                const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
+                return rList.some(rid => rid.startsWith(parentId));
+            }
+            return false;
+        });
+    };
+
+    // 4. Scoring Algorithm (Event Tetris vs Low-Season Clustering vs Priority Rank)
+    availableRooms.sort((a, b) => {
+        let scoreA = 0;
+        let scoreB = 0;
+
+        const roommatesA = getRoommateBookings(a);
+        const roommatesB = getRoommateBookings(b);
+
+        if (isEventStay && isDormCategory) {
+            // --- EVENT TETRIS SCORING ---
+            if (roommatesA.some(r => r.checkOut === checkOut)) scoreA += 50;
+            if (roommatesB.some(r => r.checkOut === checkOut)) scoreB += 50;
+
+            if (roommatesA.some(r => r.checkIn === checkIn)) scoreA += 40;
+            if (roommatesB.some(r => r.checkIn === checkIn)) scoreB += 40;
+
+            if (roommatesA.length > 0) scoreA += 20;
+            if (roommatesB.length > 0) scoreB += 20;
+
+        } else if (isDormCategory) {
+            // --- LOW-SEASON DORM CLUSTERING ---
+            if (roommatesA.length > 0 && roommatesB.length === 0) scoreA += 50;
+            if (roommatesB.length > 0 && roommatesA.length === 0) scoreB += 50;
+            if (roommatesA.length !== roommatesB.length) {
+                scoreA += roommatesA.length * 10;
+                scoreB += roommatesB.length * 10;
+            }
+        }
+
+        // --- PROPERTY PRIORITY RANK TIE-BREAKER ---
+        const rankA = a.priorityRank !== undefined ? a.priorityRank : 999;
+        const rankB = b.priorityRank !== undefined ? b.priorityRank : 999;
+        scoreA += (1000 - rankA);
+        scoreB += (1000 - rankB);
+
+        if (scoreA !== scoreB) {
+            return scoreB - scoreA;
+        }
+
+        return a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    // 5. Allocate units
+    const allocated = [];
+    for (let i = 0; i < unitCount; i++) {
+        if (i < availableRooms.length) {
+            allocated.push(availableRooms[i].id);
+        } else {
+            allocated.push("");
+        }
+    }
+
+    return allocated;
+}
+
+if (typeof window !== 'undefined') {
+    window.suggestRoomsForBooking = suggestRoomsForBooking;
+}
