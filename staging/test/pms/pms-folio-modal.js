@@ -749,3 +749,6 @@ window.renderItineraryStripe = renderItineraryStripe;
 window.openGuestModal = openGuestModal;
 window.editStaff = editStaff;
 window.quickAdd = quickAdd;
+window.togglePropertyPicker = togglePropertyPicker;
+
+
