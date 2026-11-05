@@ -13,6 +13,10 @@ import { openGuestModal } from '../pms/pms-folio-modal.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { getLocalYMD } from '../core/dates.js';
 
+// --------------------------------------------------------------------------
+// 1. DATE NORMALIZATION & CALENDAR NAVIGATION UTILITIES
+// --------------------------------------------------------------------------
+
 // --- Universal Date Normalizer (Zero-Drift YYYY-MM-DD) ---
 export function parseFlexibleDate(rawStr) {
     if (!rawStr) return '';
@@ -73,6 +77,10 @@ export function jumpCalendarToDate(dateStr) {
         }
     }, 250);
 }
+
+// --------------------------------------------------------------------------
+// 2. MASTER MULTI-CHANNEL OTA ROUTER
+// --------------------------------------------------------------------------
 
 // --- Master Multi-Channel OTA Router ---
 export function parseOtaClipboardText(rawText) {
@@ -142,6 +150,10 @@ export function parseOtaClipboardText(rawText) {
     return null;
 }
 
+// --------------------------------------------------------------------------
+// 3. CLIPBOARD & MANUAL PASTE ACTION CONTROLLERS
+// --------------------------------------------------------------------------
+
 // --- Clipboard Action Trigger ---
 export async function processAndImportClipboard() {
     let text = '';
@@ -201,6 +213,10 @@ export function parseBooking() {
         customAlert("Unrecognized Format", "Could not match text to Booking.com, Agoda, Hostelworld, Airbnb, or Expedia.");
     }
 }
+
+// --------------------------------------------------------------------------
+// 4. GLOBAL WINDOW EXPORTS
+// --------------------------------------------------------------------------
 
 if (typeof window !== 'undefined') {
     window.parseBooking = parseBooking;
