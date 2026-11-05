@@ -48,11 +48,11 @@
         <!-- ========================================================================== -->
         <div class="bg-white px-1 sm:px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-1 shrink-0 z-50 unselectable w-full">
             
-            <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
-                <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
+<div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+                <button type="button" onclick="window.toggleMultiSelect ? window.toggleMultiSelect('app-menu-dropdown') : null" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer bg-transparent border-none p-0" title="Switch Property / Menu">
                     <img id="main-brand-logo" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Wild & Wandering" class="h-8 sm:h-11 object-contain">
-                </a>
-                
+                </button>
+     
                 <div class="flex bg-slate-100 rounded sm:rounded-lg p-0.5 sm:p-1 items-center gap-0.5 shrink-0 border border-slate-200">
                     <button id="tab-dash" onclick="window.switchTab('dashboard')" class="tab-btn !p-1 sm:!p-2" title="Dashboard"><i data-lucide="camera" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
                     <button id="tab-cal" onclick="window.switchTab('calendar')" class="tab-btn active !p-1 sm:!p-2" title="Calendar"><i data-lucide="calendar-days" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
@@ -475,9 +475,11 @@
                 </div>
             </form>
             
+            <!-- Audit History Stripe -->
+            <div id="audit-log" class="bg-slate-900 text-slate-400 text-[9px] font-bold px-3 py-1 uppercase tracking-wider shrink-0 select-none border-t border-slate-700"></div>
+
             <div class="bg-slate-100 p-2 flex gap-2 justify-between items-center border-t border-slate-300 rounded-b-lg unselectable shrink-0">
-                <div class="flex items-center gap-1 shrink-0">
-                    <button type="button" id="delete-btn" title="Delete" onclick="window.requestDelete()" class="btn-tool bg-red-600 text-white hover:bg-red-700"><i data-lucide="trash-2" size="14" class="shrink-0"></i></button>
+                <div class="flex items-center gap-1 shrink-0">                    <button type="button" id="delete-btn" title="Delete" onclick="window.requestDelete()" class="btn-tool bg-red-600 text-white hover:bg-red-700"><i data-lucide="trash-2" size="14" class="shrink-0"></i></button>
                     <button type="button" id="split-btn" title="Split" onclick="window.requestSplit()" class="btn-tool bg-orange-100 text-orange-700 hover:bg-orange-200"><i data-lucide="scissors" size="14" class="shrink-0"></i></button>
                     <button type="button" id="merge-btn" title="Merge" onclick="window.requestMerge()" class="btn-tool bg-indigo-100 text-indigo-700 hover:bg-indigo-200"><i data-lucide="merge" size="14" class="shrink-0"></i></button>
                     <button type="button" id="dup-btn" title="Duplicate" onclick="window.requestDuplicate()" class="btn-tool bg-blue-100 text-blue-700 hover:bg-blue-200"><i data-lucide="copy" size="14" class="shrink-0"></i></button>
