@@ -586,11 +586,11 @@ export const openGuestModal = (s = {}) => {
 
     renderItineraryStripe(s);
 
-    ['delete-btn', 'split-btn', 'merge-btn', 'dup-btn', 'hist-btn'].forEach(id => {
+['delete-btn', 'split-btn', 'merge-btn', 'dup-btn', 'hist-btn', 'invoice-btn'].forEach(id => {
         const el = $(id);
         if (el) el.style.visibility = isN ? 'hidden' : 'visible';
     });
-
+    
     // --- Early Checkout Action Button Controller in #NTS Box ---
     const earlyBtn = $('early-out-btn');
     const todayStr = getLocalYMD(new Date());
