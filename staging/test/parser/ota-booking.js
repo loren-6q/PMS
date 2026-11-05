@@ -13,8 +13,8 @@ export function parseBookingCom(rawText) {
     const isBdc = /booking\.com/i.test(fullText) || /booking number/i.test(fullText);
     if (!isBdc) return null;
 
-    // Cut off guest chat threads and auto-responders before parsing
-    const chatSplit = fullText.split(/(?:conversation\s*with\s*(?:guest|your\s*guests)|guest\s*messages|conversations\s*with\s*guest)/i);
+    // Truncate only on the actual conversation card at the bottom of the page
+    const chatSplit = fullText.split(/\n\s*(?:Conversations?\s+with\s+(?:the\s+guest|your\s+guest|[A-Z])|Messages\s+between\s+you\s+and\s+the\s+guest)/i);
     const text = chatSplit[0];
 
     // 2. Booking Reference ID
@@ -22,10 +22,12 @@ export function parseBookingCom(rawText) {
                     text.match(/\b([0-9]{9,10})\b/);
     const bookId = idMatch ? idMatch[1].trim() : '';
 
-    // 3. Guest Name
+    // 3. Guest Name (Guarded against "Guest reviews", "Guest messages", etc.)
     let firstName = '';
     let lastName = 'GUEST';
-    const nameMatch = text.match(/(?:guest\s*name|booked\s*by|guest)[\s:#]*([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i);
+    const nameMatch = text.match(/(?:guest\s*name|booked\s*by|lead\s*guest)[\s:#]*([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i) ||
+                      text.match(/\b(?:guest)[\s:#]+(?!(?:reviews|messages|communication|details|remarks|notes|status|count|pax|contact))\b([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i);
+    
     if (nameMatch) {
         const full = nameMatch[1].trim().replace(/\s+/g, ' ');
         const parts = full.split(' ');
@@ -56,7 +58,7 @@ export function parseBookingCom(rawText) {
     const bookDateMatch = text.match(/(?:booked\s*on|booking\s*date|received)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i);
     if (bookDateMatch) bookDate = parseFlexibleDate(bookDateMatch[1]);
 
-    // 7. Unit Count & Pax
+    // 7. Unit Count & Headcount (Pax)
     let pax = 1;
     let unitCount = 1;
 
@@ -72,7 +74,7 @@ export function parseBookingCom(rawText) {
         unitCount = pax;
     }
 
-    // 8. Total Price & Net
+    // 8. Total Price & Net Revenue
     let totalPrice = 0;
     let explicitNet = null;
 
@@ -93,7 +95,7 @@ export function parseBookingCom(rawText) {
 
     // 9. Itemized Nightly Rates Extraction
     const nightlyRates = [];
-    const rateLines = text.matchAll(/(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s*)?(\d{1,2}\s+[A-Za-z]{3}|\d{4}-\d{2}-\d{2})[\s:#]*(?:THB|฿)?\s*([0-9,]+(?:\.[0-9]{2})?)/gi);
+    const rateLines = text.matchAll(/(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s*)?(\d{1,2}\s+[A-Za-z]{3}|\d{4}-[0-9]{2}-[0-9]{2})[\s:#]*(?:THB|฿)?\s*([0-9,]+(?:\.[0-9]{2})?)/gi);
     for (const match of rateLines) {
         const dStr = parseFlexibleDate(match[1]);
         const rate = parseFloat(match[2].replace(/,/g, ''));
@@ -109,7 +111,7 @@ export function parseBookingCom(rawText) {
         bookedType = roomMatch[1].trim();
     }
 
-    // 11. Refundability Policy
+    // 11. Refundability Policy Extraction
     let refundability = 'unknown';
     if (/non-refundable|non\s*refundable/i.test(text)) {
         refundability = 'non-ref';
@@ -128,7 +130,7 @@ export function parseBookingCom(rawText) {
         });
     }
 
-    // 13. Contact Details
+    // 13. Contact Details & Proxy Email Flag
     let phone = '';
     let email = '';
     let isProxyEmail = false;
@@ -143,7 +145,7 @@ export function parseBookingCom(rawText) {
         }
     }
 
-    // 14. Special Requests (Excludes any chat messages)
+    // 14. Special Requests (Omits auto-responders)
     let specialRequests = '';
     const reqMatch = text.match(/(?:special\s*requests?|remarks?)[\s:#]*([^\n\r]+)/i);
     if (reqMatch && !/welcome to|check-in is at|thank you for choosing/i.test(reqMatch[1])) {
