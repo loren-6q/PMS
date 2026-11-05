@@ -475,11 +475,9 @@
                 </div>
             </form>
             
-            <!-- Audit History Stripe -->
-            <div id="audit-log" class="bg-slate-900 text-slate-400 text-[9px] font-bold px-3 py-1 uppercase tracking-wider shrink-0 select-none border-t border-slate-700"></div>
-
-            <div class="bg-slate-100 p-2 flex gap-2 justify-between items-center border-t border-slate-300 rounded-b-lg unselectable shrink-0">
-                <div class="flex items-center gap-1 shrink-0">                    <button type="button" id="delete-btn" title="Delete" onclick="window.requestDelete()" class="btn-tool bg-red-600 text-white hover:bg-red-700"><i data-lucide="trash-2" size="14" class="shrink-0"></i></button>
+            <div class="bg-slate-100 p-2 flex gap-2 justify-between items-center border-t border-slate-300 unselectable shrink-0">
+                <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" id="delete-btn" title="Delete" onclick="window.requestDelete()" class="btn-tool bg-red-600 text-white hover:bg-red-700"><i data-lucide="trash-2" size="14" class="shrink-0"></i></button>
                     <button type="button" id="split-btn" title="Split" onclick="window.requestSplit()" class="btn-tool bg-orange-100 text-orange-700 hover:bg-orange-200"><i data-lucide="scissors" size="14" class="shrink-0"></i></button>
                     <button type="button" id="merge-btn" title="Merge" onclick="window.requestMerge()" class="btn-tool bg-indigo-100 text-indigo-700 hover:bg-indigo-200"><i data-lucide="merge" size="14" class="shrink-0"></i></button>
                     <button type="button" id="dup-btn" title="Duplicate" onclick="window.requestDuplicate()" class="btn-tool bg-blue-100 text-blue-700 hover:bg-blue-200"><i data-lucide="copy" size="14" class="shrink-0"></i></button>
@@ -495,9 +493,13 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Audit History Stripe (At the very bottom of the modal) -->
+            <div id="audit-log" class="bg-slate-900 text-slate-400 text-[9px] font-bold px-3 py-1 uppercase tracking-wider shrink-0 select-none border-t border-slate-700 rounded-b-xl"></div>
         </div>
     </div>
 
+     
     <!-- ========================================================================== -->
     <!-- 7. UTILITY & CONFIRMATION MODALS -->
     <!-- ========================================================================== -->
