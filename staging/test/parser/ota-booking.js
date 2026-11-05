@@ -7,26 +7,33 @@ import { parseFlexibleDate } from './parser-engine.js';
 
 export function parseBookingCom(rawText) {
     if (!rawText) return null;
-    const fullText = rawText.replace(/\r/g, '');
+    let text = rawText.replace(/\r/g, '');
 
     // 1. Signature Check
-    const isBdc = /booking\.com/i.test(fullText) || /booking number/i.test(fullText);
+    const isBdc = /booking\.com/i.test(text) || /booking number/i.test(text);
     if (!isBdc) return null;
 
-    // Truncate only on the actual conversation card at the bottom of the page
-    const chatSplit = fullText.split(/\n\s*(?:Conversations?\s+with\s+(?:the\s+guest|your\s+guest|[A-Z])|Messages\s+between\s+you\s+and\s+the\s+guest)/i);
-    const text = chatSplit[0];
+    // 2. Window Slicing: Strip Navbar Header & Chat Footer
+    // Slices off everything before "Reservation details" (extranet navbar/tabs)
+    const detailsIdx = text.search(/Reservation\s*details/i);
+    if (detailsIdx !== -1) {
+        text = text.slice(detailsIdx);
+    }
 
-    // 2. Booking Reference ID
+    // Slices off everything after conversation thread begins
+    const chatSplit = text.split(/\n\s*(?:Conversations?\s+with|Messages\s+between)/i);
+    text = chatSplit[0];
+
+    // 3. Booking Reference ID
     const idMatch = text.match(/(?:booking\s*(?:number|id|reference)|confirmation\s*(?:number|code))[\s:#]*([0-9]{8,15})/i) ||
                     text.match(/\b([0-9]{9,10})\b/);
     const bookId = idMatch ? idMatch[1].trim() : '';
 
-    // 3. Guest Name (Guarded against "Guest reviews", "Guest messages", etc.)
+    // 4. Guest Name
     let firstName = '';
     let lastName = 'GUEST';
     const nameMatch = text.match(/(?:guest\s*name|booked\s*by|lead\s*guest)[\s:#]*([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i) ||
-                      text.match(/\b(?:guest)[\s:#]+(?!(?:reviews|messages|communication|details|remarks|notes|status|count|pax|contact))\b([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i);
+                      text.match(/\b(?:guest)[\s:#]+([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i);
     
     if (nameMatch) {
         const full = nameMatch[1].trim().replace(/\s+/g, ' ');
@@ -35,14 +42,14 @@ export function parseBookingCom(rawText) {
         lastName = parts.slice(1).join(' ') || 'GUEST';
     }
 
-    // 4. Country / Nationality
+    // 5. Country / Nationality
     let country = '';
     const countryMatch = text.match(/(?:country|region|nationality|citizen\s*of|citizen|residence)[\s:#]*([A-Za-z\s\-]+)(?:\n|$)/i);
     if (countryMatch) {
         country = countryMatch[1].trim().toUpperCase();
     }
 
-    // 5. Dates
+    // 6. Dates
     let checkIn = '';
     let checkOut = '';
     const inMatch = text.match(/(?:check-in|arrival|arriving)[\s:#]*(?:from\s*)?([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i) ||
@@ -53,12 +60,12 @@ export function parseBookingCom(rawText) {
     if (inMatch) checkIn = parseFlexibleDate(inMatch[1]);
     if (outMatch) checkOut = parseFlexibleDate(outMatch[1]);
 
-    // 6. Booking Date
+    // 7. Booking Date
     let bookDate = '';
     const bookDateMatch = text.match(/(?:booked\s*on|booking\s*date|received)[\s:#]*([^\n\r,]+(?:,\s*\d{4}|\s*\d{4}))/i);
     if (bookDateMatch) bookDate = parseFlexibleDate(bookDateMatch[1]);
 
-    // 7. Unit Count & Headcount (Pax)
+    // 8. Unit Count & Headcount (Pax)
     let pax = 1;
     let unitCount = 1;
 
@@ -74,7 +81,7 @@ export function parseBookingCom(rawText) {
         unitCount = pax;
     }
 
-    // 8. Total Price & Net Revenue
+    // 9. Total Price & Net Revenue
     let totalPrice = 0;
     let explicitNet = null;
 
@@ -93,7 +100,7 @@ export function parseBookingCom(rawText) {
         explicitNet = Number((totalPrice - commAmt).toFixed(2));
     }
 
-    // 9. Itemized Nightly Rates Extraction
+    // 10. Itemized Nightly Rates Extraction
     const nightlyRates = [];
     const rateLines = text.matchAll(/(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s*)?(\d{1,2}\s+[A-Za-z]{3}|\d{4}-[0-9]{2}-[0-9]{2})[\s:#]*(?:THB|฿)?\s*([0-9,]+(?:\.[0-9]{2})?)/gi);
     for (const match of rateLines) {
@@ -104,14 +111,14 @@ export function parseBookingCom(rawText) {
         }
     }
 
-    // 10. Unit / Room Category
+    // 11. Unit / Room Category
     let bookedType = '';
     const roomMatch = text.match(/(?:room\s*type|unit\s*type|accommodation|room)[\s:#]*([^\n\r]+)/i);
     if (roomMatch) {
         bookedType = roomMatch[1].trim();
     }
 
-    // 11. Refundability Policy Extraction
+    // 12. Refundability Policy Extraction
     let refundability = 'unknown';
     if (/non-refundable|non\s*refundable/i.test(text)) {
         refundability = 'non-ref';
@@ -119,7 +126,7 @@ export function parseBookingCom(rawText) {
         refundability = 'ref';
     }
 
-    // 12. Payments / Prepaid Classification
+    // 13. Payments / Prepaid Classification
     const payments = [];
     const isPrepaid = /payments?\s*by\s*booking\.com/i.test(text) || /prepaid\s*by\s*booking/i.test(text);
     if (isPrepaid && totalPrice > 0 && checkIn) {
@@ -130,7 +137,7 @@ export function parseBookingCom(rawText) {
         });
     }
 
-    // 13. Contact Details & Proxy Email Flag
+    // 14. Contact Details & Proxy Email Flag
     let phone = '';
     let email = '';
     let isProxyEmail = false;
@@ -145,14 +152,14 @@ export function parseBookingCom(rawText) {
         }
     }
 
-    // 14. Special Requests (Omits auto-responders)
+    // 15. Special Requests (Omits auto-responder templates)
     let specialRequests = '';
     const reqMatch = text.match(/(?:special\s*requests?|remarks?)[\s:#]*([^\n\r]+)/i);
     if (reqMatch && !/welcome to|check-in is at|thank you for choosing/i.test(reqMatch[1])) {
         specialRequests = reqMatch[1].trim();
     }
 
-    // 15. Formatted Header Summary Block
+    // 16. Formatted Header Summary Block
     let nights = 1;
     if (checkIn && checkOut) {
         const ms = new Date(checkOut) - new Date(checkIn);
