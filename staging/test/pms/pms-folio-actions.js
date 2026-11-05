@@ -519,6 +519,7 @@ export const confirmMerge = async () => {
 // 4. EARLY DEPARTURE & REVERSAL CONTROLLERS
 // --------------------------------------------------------------------------
 
+
 // --- Early Checkout Request & Fee Snapshot Evaluator ---
 export const requestEarlyCheckout = () => {
     const id = $('guest-id')?.value;
@@ -536,17 +537,50 @@ export const requestEarlyCheckout = () => {
     const stayedNights = Math.max(1, Math.round((parseFn(todayStr) - parseFn(s.checkIn)) / 86400000));
     const unstayedNights = Math.max(0, totalNights - stayedNights);
 
-    const nightlyRate = s.totalPrice / totalNights;
-    const unstayedAmount = Number((nightlyRate * unstayedNights).toFixed(2));
+    // 1. Calculate price using itemized daily rates if available, otherwise flat average
+    const hasItemized = Array.isArray(s.nightlyRates) && s.nightlyRates.length > 0;
+    let stayedAmount = 0;
+    let unstayedAmount = 0;
 
+    if (hasItemized) {
+        stayedAmount = s.nightlyRates
+            .filter(r => r.date >= s.checkIn && r.date < todayStr)
+            .reduce((sum, r) => sum + (parseFloat(r.rate) || 0), 0);
+        unstayedAmount = s.nightlyRates
+            .filter(r => r.date >= todayStr && r.date < s.checkOut)
+            .reduce((sum, r) => sum + (parseFloat(r.rate) || 0), 0);
+        stayedAmount = Number(stayedAmount.toFixed(2));
+        unstayedAmount = Number(unstayedAmount.toFixed(2));
+    } else {
+        const currentTotal = parseFloat(s.totalPrice) || 0;
+        const avgNightly = currentTotal / totalNights;
+        unstayedAmount = Number((avgNightly * unstayedNights).toFixed(2));
+        stayedAmount = Number((currentTotal - unstayedAmount).toFixed(2));
+    }
+
+    // 2. Step 1: Confirm Early Checkout and Bed Release
     window.showAlert(
         `EARLY CHECKOUT CONFIRMATION\n\n` +
+        `Guest: ${s.firstName || ''} ${s.lastName || 'GUEST'}\n` +
         `Scheduled Out: ${s.checkOut}\n` +
         `New Departure: ${todayStr} (${unstayedNights} unstayed nt${unstayedNights === 1 ? '' : 's'})\n` +
-        `Unstayed Value: ฿${unstayedAmount.toLocaleString()}\n\n` +
+        `Unstayed Value: ฿${unstayedAmount.toLocaleString()} ${hasItemized ? '(Itemized Daily Rates)' : '(Average Daily Rate)'}\n\n` +
         `Check out guest today and release bed inventory?`,
         true,
         async () => {
+            // 3. Step 2: Choose Financial Settlement (Refund / Deduct vs Keep Charge)
+            const shouldDeduct = window.confirm(
+                `EARLY CHECKOUT PRICING ADJUSTMENT\n\n` +
+                `• Stayed Amount (${stayedNights} nt${stayedNights === 1 ? '' : 's'}): ฿${stayedAmount.toLocaleString()}\n` +
+                `• Unstayed Amount (${unstayedNights} nt${unstayedNights === 1 ? '' : 's'}): ฿${unstayedAmount.toLocaleString()}\n\n` +
+                `Do you want to DEDUCT unstayed nights (฿${unstayedAmount.toLocaleString()}) from the Folio Total?\n\n` +
+                `[OK] = Deduct ฿${unstayedAmount.toLocaleString()} (Refund / Adjusted Total: ฿${stayedAmount.toLocaleString()})\n` +
+                `[Cancel] = Keep Full Charge ฿${(parseFloat(s.totalPrice) || 0).toLocaleString()} (Non-Refundable / Penalty)`
+            );
+
+            const originalTotal = parseFloat(s.totalPrice) || 0;
+            const newTotalPrice = shouldDeduct ? stayedAmount : originalTotal;
+
             const db = getDb();
             const appId = getAppId();
             let fsModule = window.fs;
@@ -557,18 +591,26 @@ export const requestEarlyCheckout = () => {
 
             const earlySnapshot = {
                 originalCheckOut: s.checkOut,
+                originalTotalPrice: originalTotal,
                 departureDate: todayStr,
+                stayedNights: stayedNights,
                 unstayedNights: unstayedNights,
                 unstayedAmount: unstayedAmount,
+                refunded: shouldDeduct,
+                isItemizedRate: hasItemized,
                 ts: new Date().toISOString()
             };
 
-            const noteMsg = `\n[EARLY CHECKOUT on ${todayStr}] Departed ${unstayedNights} nt(s) early. Original checkout: ${s.checkOut}. Released value: ฿${unstayedAmount}.`;
+            const noteMsg = `\n[EARLY CHECKOUT on ${todayStr}] Departed ${unstayedNights} nt(s) early (Original Out: ${s.checkOut}). ` +
+                (shouldDeduct 
+                    ? `Deducted ฿${unstayedAmount.toLocaleString()}. New Total: ฿${newTotalPrice.toLocaleString()}.` 
+                    : `Kept full charge of ฿${newTotalPrice.toLocaleString()} (Non-refundable / penalty).`);
 
             try {
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
                     checkOut: todayStr,
                     status: 'early',
+                    totalPrice: newTotalPrice,
                     earlyCheckout: earlySnapshot,
                     notes: ((s.notes || '') + noteMsg).trim(),
                     lastEditedAt: new Date().toISOString()
@@ -581,7 +623,14 @@ export const requestEarlyCheckout = () => {
                 }
 
                 if (window.closeGuestModal) window.closeGuestModal();
-                if (window.showAlert) window.showAlert(`Guest checked out early.\nBed released from ${todayStr} to ${s.checkOut}.`);
+                if (window.showAlert) {
+                    window.showAlert(
+                        `Early checkout complete.\n` +
+                        `• Departure set to: ${todayStr}\n` +
+                        `• Beds released: ${todayStr} to ${s.checkOut}\n` +
+                        `• Total Price: ฿${newTotalPrice.toLocaleString()} (${shouldDeduct ? 'Deducted' : 'Full Charge Kept'})`
+                    );
+                }
             } catch (err) {
                 console.error("Early Checkout Error:", err);
                 if (window.showAlert) window.showAlert("Error processing early checkout: " + err.message);
@@ -590,7 +639,7 @@ export const requestEarlyCheckout = () => {
     );
 };
 
-// --- Revert Early Checkout (With Bed Collision Guard) ---
+// --- Revert Early Checkout (With Bed Collision Guard & Price Restoration) ---
 export const undoEarlyCheckout = async () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -598,8 +647,10 @@ export const undoEarlyCheckout = async () => {
     if (!s || !s.earlyCheckout) return;
 
     const originalOut = s.earlyCheckout.originalCheckOut;
+    const originalTotal = s.earlyCheckout.originalTotalPrice !== undefined ? s.earlyCheckout.originalTotalPrice : s.totalPrice;
     const rL = s.rooms || [s.room];
 
+    // Collision check: verify beds are still free across original dates
     const occ = window.getOccupiedRooms ? window.getOccupiedRooms(s.checkOut, originalOut, id) : new Set();
     for (let r of rL) {
         if (occ.has(r)) {
@@ -607,6 +658,7 @@ export const undoEarlyCheckout = async () => {
         }
     }
 
+    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
     const db = getDb();
     const appId = getAppId();
     let fsModule = window.fs;
@@ -615,18 +667,29 @@ export const undoEarlyCheckout = async () => {
     }
     const { doc, updateDoc } = fsModule;
 
+    const revertMsg = `\n[EARLY CHECKOUT REVERTED on ${todayStr}] Restored original departure ${originalOut} and total ฿${originalTotal.toLocaleString()}.`;
+
     try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
             checkOut: originalOut,
             status: 'here',
+            totalPrice: originalTotal,
             earlyCheckout: null,
+            notes: ((s.notes || '') + revertMsg).trim(),
             lastEditedAt: new Date().toISOString()
         });
 
+        if (window.triggerAutoSync) {
+            const hotelRooms = getHotelRooms();
+            const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
+            window.triggerAutoSync(s.checkOut, originalOut, types);
+        }
+
         if (window.closeGuestModal) window.closeGuestModal();
-        if (window.showAlert) window.showAlert(`Early checkout reverted. Stay restored to ${originalOut}.`);
+        if (window.showAlert) window.showAlert(`Early checkout reverted.\nStay restored to ${originalOut}.\nTotal restored to ฿${originalTotal.toLocaleString()}.`);
     } catch (err) {
         console.error("Undo Early Checkout Error:", err);
+        if (window.showAlert) window.showAlert("Error reverting early checkout: " + err.message);
     }
 };
 
