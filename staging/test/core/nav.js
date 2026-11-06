@@ -121,16 +121,10 @@ export function mountNav() {
             <!-- LEFT: Brand Logo & Property Dropdown Picker -->
             <div class="flex items-center gap-2 shrink-0 min-w-0">
                 <div class="relative min-w-0">
-                    <button type="button" onclick="window.togglePropertyPicker()" class="flex items-center gap-1.5 hover:opacity-85 transition-opacity cursor-pointer bg-transparent border-none p-0" title="Switch Property">
-                        <img id="main-brand-logo" src="${logoSrc}" alt="Property Logo" class="h-8 sm:h-9 object-contain">
-                        <div class="text-left hidden sm:block">
-                            <div class="flex items-center gap-1 leading-tight">
-                                <span id="nav-prop-name" class="text-xs font-black text-slate-900 uppercase truncate max-w-[130px]">${propName}</span>
-                                <i data-lucide="chevron-down" class="!w-3 !h-3 text-slate-400"></i>
-                            </div>
-                            <span id="nav-prop-code" class="text-[9px] font-mono font-bold text-slate-400 tracking-wider">${propShort}</span>
-                        </div>
-                    </button>
+                    
+                    <button type="button" onclick="window.togglePropertyPicker()" class="flex items-center hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-none p-0" title="Switch Property">
+    <img id="main-brand-logo" src="${logoSrc}" alt="Property Logo" class="h-8 sm:h-9 object-contain">
+</button>
 
                     <!-- Property Picker Dropdown -->
                     <div id="property-picker-dropdown" class="absolute left-0 top-full mt-2 w-64 bg-white border-2 border-slate-800 rounded-xl shadow-2xl z-[150] hidden overflow-hidden">
