@@ -3,6 +3,7 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { mountNav } from '../core/nav.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, query, where, getDocs, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -481,13 +482,17 @@ export const init = async () => {
             if (bl && bl.style.display !== 'none') bl.style.display = 'none';
         }, 3500);
 
-        try {
+try {
             if (typeof window.__initial_auth_token !== 'undefined') {
                 try { await signInWithCustomToken(auth, window.__initial_auth_token); }
                 catch (tokenErr) { await signInAnonymously(auth); }
             } else {
                 await signInAnonymously(auth);
             }
+
+            // MOUNT NAVIGATION INSTANTLY
+            if (typeof mountNav === 'function') mountNav();
+
             currentUserRole = 'admin';
             currentUserEmail = 'admin';
             window.currentUserRole = currentUserRole;
@@ -506,7 +511,7 @@ export const init = async () => {
             if (bl) bl.style.display = 'none';
         }
     };
-
+    
     if (typeof window.__initial_auth_token !== 'undefined' || !REQUIRE_LOGIN) {
         bypassLogin();
     } else {
