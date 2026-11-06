@@ -5,7 +5,7 @@
 
 import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { customAlert } from '../core/ui-dialogs.js';
 import { loadPropertiesCatalog, toCanonicalPropId } from '../core/properties.js';
 
@@ -248,7 +248,11 @@ export async function confirmCreateNewProperty() {
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', slug), propData);
         closeNewPropertyModal();
-        window.switchProperty(slug);
+        if (typeof window.switchProperty === 'function') {
+            window.switchProperty(slug);
+        } else {
+            window.location.search = `?p=${slug}`;
+        }
     } catch (e) {
         customAlert("Creation Failed", e.message);
     }
@@ -259,32 +263,12 @@ export async function initSetup() {
     try {
         await signInAnonymously(auth);
 
-        // Direct query to ensure properties ALWAYS load
         const props = await loadPropertiesCatalog();
         const urlParams = new URLSearchParams(window.location.search);
         const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || 'swims_resort';
         window.currentPropertyId = toCanonicalPropId(pParam);
 
-         // Populate top navigation and property switcher
         await loadPropertyData(window.currentPropertyId);
-        jumpStep(1);
-
-    } catch (err) {
-        console.error("[Setup Boot Error]:", err);
-    }
-}
-        
-        // Populate header dropdown selector if present
-        const switcher = document.getElementById('property-select');
-        if (switcher && props.length > 0) {
-            switcher.innerHTML = props.map(p => 
-                `<option value="${p.id}" ${p.id === targetPropId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`
-            ).join('');
-        }
-
-        // Hydrate the selected property's full config
-        await loadPropertyData(targetPropId);
-
         jumpStep(1);
 
     } catch (err) {
@@ -301,10 +285,16 @@ if (typeof window !== 'undefined') {
     window.openNewPropertyModal = openNewPropertyModal;
     window.closeNewPropertyModal = closeNewPropertyModal;
     window.confirmCreateNewProperty = confirmCreateNewProperty;
-    window.switchSetupProperty = (id) => { window.switchProperty(id); };
+    window.switchSetupProperty = (id) => {
+        if (typeof window.switchProperty === 'function') {
+            window.switchProperty(id);
+        } else {
+            window.location.search = `?p=${id}`;
+        }
+    };
 }
 
-// Zero-race condition execution
+// Guaranteed Zero-Race Execution
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSetup);
 } else {
