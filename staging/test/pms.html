@@ -589,6 +589,66 @@
             </div>
         </div>
     </div>
+     
+
+<!-- Early Checkout Modal -->
+    <div id="early-checkout-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800 flex flex-col">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span class="flex items-center gap-1.5"><i data-lucide="log-out" class="!w-3.5 !h-3.5 text-amber-400"></i> Early Checkout</span>
+                <button type="button" onclick="window.closeModal('early-checkout-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
+            </div>
+            <div class="p-4 space-y-3 text-xs">
+                <div class="bg-slate-50 p-2.5 rounded border border-slate-200">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-black text-slate-800 text-sm uppercase truncate mr-2" id="eco-guest-name">--</span>
+                        <span class="text-[9px] font-black text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded shrink-0" id="eco-booking-id">--</span>
+                    </div>
+                    <div class="text-slate-500 text-[11px] font-bold flex justify-between">
+                        <span>Original Stay:</span>
+                        <span class="text-slate-800" id="eco-stay-dates">--</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="field-label font-black text-slate-700 mb-1">New Departure Date</label>
+                    <input type="date" id="eco-date" class="input-base font-bold text-center !text-xs cursor-pointer" onchange="window.recalcEarlyCheckoutModal()">
+                </div>
+
+                <!-- Live Stay vs Unstayed Breakdown Box -->
+                <div class="grid grid-cols-2 gap-2 bg-indigo-50/60 p-2 rounded border border-indigo-200 text-center">
+                    <div>
+                        <span class="block text-[9px] font-black uppercase text-indigo-500 tracking-wider">Stayed (<span id="eco-stayed-nts">0</span> nt)</span>
+                        <span class="block text-sm font-black text-indigo-900 mt-0.5" id="eco-stayed-amt">฿0</span>
+                    </div>
+                    <div class="border-l border-indigo-200">
+                        <span class="block text-[9px] font-black uppercase text-amber-600 tracking-wider">Unstayed (<span id="eco-unstayed-nts">0</span> nt)</span>
+                        <span class="block text-sm font-black text-amber-700 mt-0.5" id="eco-unstayed-amt">฿0</span>
+                    </div>
+                </div>
+
+                <div class="text-[10px] font-bold text-slate-400 italic text-center" id="eco-rate-note">
+                    Calculated using average daily rate
+                </div>
+            </div>
+
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex flex-col gap-1.5">
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" onclick="window.confirmEarlyCheckout('refund')" class="btn-modal bg-emerald-600 hover:bg-emerald-700 text-white flex flex-col items-center justify-center !py-1.5 !px-1 leading-tight shadow-sm cursor-pointer">
+                        <span class="font-black text-xs uppercase">Deduct & Refund</span>
+                        <span class="text-[8px] font-bold opacity-80 mt-0.5" id="eco-btn-refund-sub">Deduct unstayed fee</span>
+                    </button>
+                    <button type="button" onclick="window.confirmEarlyCheckout('penalty')" class="btn-modal bg-amber-500 hover:bg-amber-600 text-white flex flex-col items-center justify-center !py-1.5 !px-1 leading-tight shadow-sm cursor-pointer">
+                        <span class="font-black text-xs uppercase">Keep as Penalty</span>
+                        <span class="text-[8px] font-bold opacity-80 mt-0.5">Itemize fee on folio</span>
+                    </button>
+                </div>
+                <button type="button" onclick="window.closeModal('early-checkout-modal')" class="btn-modal bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs !py-1 cursor-pointer">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+     
 
     <!-- Global Alert Modal -->
     <div id="alert-modal" class="alert-modal-overlay z-[10000]">
