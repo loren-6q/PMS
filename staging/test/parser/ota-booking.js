@@ -5,7 +5,7 @@
 
 import { parseFlexibleDate } from './parser-engine.js';
 
-// --- ISO-2 Country Code Dictionary ---
+// --- ISO-2 Country Code Dictionary (TM30 Standard) ---
 const COUNTRY_ISO_MAP = {
     'AF': 'AFGHANISTAN', 'AL': 'ALBANIA', 'DZ': 'ALGERIA', 'AD': 'ANDORRA', 'AO': 'ANGOLA',
     'AR': 'ARGENTINA', 'AM': 'ARMENIA', 'AU': 'AUSTRALIA', 'AT': 'AUSTRIA', 'AZ': 'AZERBAIJAN',
@@ -32,16 +32,16 @@ const COUNTRY_ISO_MAP = {
     'UY': 'URUGUAY', 'UZ': 'UZBEKISTAN', 'VN': 'VIETNAM', 'ZW': 'ZIMBABWE'
 };
 
-// --- Extract PMS Category from Extranet String ---
+// --- Helper: Extract Exact PMS Room Category from Parentheses ---
 function cleanCategoryString(raw) {
     if (!raw) return '';
     const str = raw.replace(/^[-•]\s*/, '').trim();
 
     // Match outer parentheses: "Deluxe Double Room with Side Sea View (Partial Oceanview King Room (A5,7,9,11))"
-    // -> "Partial Oceanview King Room (A5,7,9,11)"
+    // -> captures "Partial Oceanview King Room (A5,7,9,11)"
     const pMatch = str.match(/\((.+)\)\s*$/);
     if (pMatch && pMatch[1]) {
-        // Strip nested assignment tags: "(A5,7,9,11)" -> "Partial Oceanview King Room"
+        // Strip trailing room-allocation numbers: "(A5,7,9,11)" -> "Partial Oceanview King Room"
         const stripped = pMatch[1].replace(/\s*\([^)]*\)\s*$/, '').trim();
         return stripped || pMatch[1].trim();
     }
@@ -51,11 +51,11 @@ function cleanCategoryString(raw) {
 export function parseBookingCom(rawText) {
     if (!rawText) return null;
 
-    // Split into trimmed, non-empty lines
+    // Split into non-empty, trimmed lines
     const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
     if (lines.length === 0) return null;
 
-    // Signature verification
+    // Strict Extranet verification
     const isBdc = lines.some(l => /Booking\.com/i.test(l) || /Booking number/i.test(l) || /Reservation details/i.test(l));
     if (!isBdc) return null;
 
@@ -79,79 +79,76 @@ export function parseBookingCom(rawText) {
     let isPrepaid = false;
     let specialRequests = '';
 
-    // --- LINE-BY-LINE EXACT STATE MACHINE ---
+    // --- EXACT LINE-BY-LINE STATE MACHINE ---
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
 
-        // 1. Check-in Date (Exact label: "Check-in")
+        // 1. Check-in Date
         if (/^Check-in$/i.test(line) && i + 1 < lines.length) {
             checkIn = parseFlexibleDate(lines[i + 1]);
         }
 
-        // 2. Check-out Date (Exact label: "Check-out")
+        // 2. Check-out Date
         if (/^Check-out$/i.test(line) && i + 1 < lines.length) {
             checkOut = parseFlexibleDate(lines[i + 1]);
         }
 
-        // 3. Headcount (Exact label: "Total guests:")
+        // 3. Headcount (Total guests: \n 1)
         if (/^Total\s*guests:?$/i.test(line) && i + 1 < lines.length) {
             const p = parseInt(lines[i + 1], 10);
             if (!isNaN(p) && p > 0) pax = p;
         }
 
-        // 4. Unit Count (Exact label: "Total units")
+        // 4. Unit Count (Total units \n 1)
         if (/^Total\s*units:?$/i.test(line) && i + 1 < lines.length) {
             const u = parseInt(lines[i + 1], 10);
             if (!isNaN(u) && u > 0) unitCount = u;
         }
 
-        // 5. Total Price (Exact label: "Total price")
+        // 5. Total Price (Total price \n THB 6,191.28)
         if (/^Total\s*price$/i.test(line) && i + 1 < lines.length) {
             const m = lines[i + 1].match(/([0-9,]+(?:\.[0-9]{2})?)/);
             if (m) totalPrice = parseFloat(m[1].replace(/,/g, '')) || 0;
         }
 
-        // 6. Guest Name & Contact Block (Exact label: "Guest name:")
+        // 6. Guest Name & Contact Details (Guest name: \n Ashraf Idrissou \n gb)
         if (/^Guest\s*name:?$/i.test(line) && i + 1 < lines.length) {
             const nameLine = lines[i + 1];
             const parts = nameLine.split(' ').map(p => p.trim()).filter(Boolean);
             firstName = parts[0] || '';
             lastName = parts.slice(1).join(' ') || 'GUEST';
 
-            // Scan lines below name for ISO country code, email, and phone
+            // Scan following lines for 2-digit ISO country code, proxy email, and phone
             for (let j = i + 2; j < Math.min(i + 6, lines.length); j++) {
                 const sub = lines[j];
-                // 2-Letter ISO Country Code (e.g. "gb")
                 if (!country && /^[a-zA-Z]{2}$/.test(sub)) {
                     const iso = sub.toUpperCase();
                     country = COUNTRY_ISO_MAP[iso] || iso;
                 }
-                // Email
                 if (!email && sub.includes('@')) {
                     email = sub;
                     if (email.includes('@guest.booking.com')) {
                         isProxyEmail = true;
                     }
                 }
-                // Phone Number
                 if (!phone && /^\+\d[\d\s\-\(\)]{6,20}$/.test(sub)) {
                     phone = sub;
                 }
             }
         }
 
-        // 7. Booking Number (Exact label: "Booking number:")
+        // 7. Booking Number (Booking number: \n 6504048867)
         if (/^Booking\s*number:?$/i.test(line) && i + 1 < lines.length) {
             const m = lines[i + 1].match(/\b([0-9]{8,15})\b/);
             if (m) bookId = m[1];
         }
 
-        // 8. Received Date (Exact label: "Received")
+        // 8. Received Date (Received \n Sat 19 Sept 2026)
         if (/^Received$/i.test(line) && i + 1 < lines.length) {
             bookDate = parseFlexibleDate(lines[i + 1]);
         }
 
-        // 9. Commission & Charges (Exact label: "Commission and charges:")
+        // 9. Commission and Charges (Commission and charges: \n THB 1,258.89)
         if (/^Commission\s*and\s*charges:?$/i.test(line) && i + 1 < lines.length) {
             const m = lines[i + 1].match(/([0-9,]+(?:\.[0-9]{2})?)/);
             if (m) commissionAmt = parseFloat(m[1].replace(/,/g, '')) || 0;
@@ -162,12 +159,12 @@ export function parseBookingCom(rawText) {
             isPrepaid = true;
         }
 
-        // 11. Room Category (Target 1: Line directly preceding "Cancellation")
+        // 11. Room Category (Target A: Line directly above "Cancellation")
         if (i + 1 < lines.length && /^Cancellation$/i.test(lines[i + 1])) {
             bookedType = cleanCategoryString(line);
         }
 
-        // 11b. Room Category Fallback (Target 2: Bullet line under payment details)
+        // 11b. Room Category (Target B: Bullet line under payment details)
         if (!bookedType && /^[-•]\s*(.+)/.test(line)) {
             const raw = line.replace(/^[-•]\s*/, '').trim();
             if (raw.length > 5 &&
@@ -179,7 +176,7 @@ export function parseBookingCom(rawText) {
             }
         }
 
-        // 12. Cancellation Policy (Exact label: "Cancellation")
+        // 12. Cancellation Policy (Cancellation \n The guest will be charged the total price...)
         if (/^Cancellation$/i.test(line) && i + 1 < lines.length) {
             const policyText = lines[i + 1];
             if (/charged\s+the\s+total\s+price|cancel\s+at\s+any\s+time|non-refundable/i.test(policyText)) {
@@ -197,30 +194,27 @@ export function parseBookingCom(rawText) {
         }
     }
 
-    // Fallback: If unitCount was unstated, default to pax
     if (!unitCount || unitCount < 1) unitCount = pax;
 
-    // Calculate Net Payout & Commission
+    // Financial Reconciliation
     if (totalPrice > 0) {
         if (commissionAmt > 0) {
             explicitNet = Number((totalPrice - commissionAmt).toFixed(2));
         } else {
             const defaultRate = parseFloat(window.currentPropertyConfig?.commissions?.['booking.com'] || 18);
-            commissionAmt = Number((totalPrice * (defaultRate / 100)).toFixed(2));
+            commissionAmt = Number((totalPrice * (commRate / 100)).toFixed(2));
             explicitNet = Number((totalPrice - commissionAmt).toFixed(2));
         }
     }
 
-    // Payment Entries: Both BDC-PAY (Payout) and BDC-KP (Commission)
+    // Split Payments: bdc-pay (Bank Transfer Payout) + bdc-kp (Commission Kept by BDC)
     const payments = [];
     if (isPrepaid && totalPrice > 0 && checkIn) {
-        // 1. Net Payout received from Booking.com
         payments.push({
             date: checkIn,
             amt: explicitNet !== null ? explicitNet : totalPrice,
             method: 'bdc-pay'
         });
-        // 2. Commission Kept by Booking.com (Settles balance to ฿0.00)
         if (commissionAmt > 0) {
             payments.push({
                 date: checkIn,
@@ -230,7 +224,6 @@ export function parseBookingCom(rawText) {
         }
     }
 
-    // Duration and average daily rate
     let nights = 1;
     if (checkIn && checkOut) {
         const ms = new Date(checkOut) - new Date(checkIn);
@@ -238,7 +231,6 @@ export function parseBookingCom(rawText) {
     }
     const avgNightly = totalPrice > 0 ? (totalPrice / nights).toFixed(2) : '0.00';
 
-    // Summary Header Block
     const noteLines = [
         `--- ORIGINAL OTA BOOKING ---`,
         `Source: BOOKING.COM`,
