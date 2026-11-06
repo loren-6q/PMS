@@ -519,8 +519,13 @@ export const confirmMerge = async () => {
 // 4. EARLY DEPARTURE & REVERSAL CONTROLLERS
 // --------------------------------------------------------------------------
 
+let currentEcoBooking = null;
+let currentEcoStayedAmt = 0;
+let currentEcoUnstayedAmt = 0;
+let currentEcoStayedNts = 0;
+let currentEcoUnstayedNts = 0;
 
-// --- Early Checkout Request & Fee Snapshot Evaluator ---
+// --- Open Early Checkout Modal ---
 export const requestEarlyCheckout = () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -528,118 +533,190 @@ export const requestEarlyCheckout = () => {
     if (!s) return;
 
     const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
-    if (s.checkOut <= todayStr) {
-        return window.showAlert ? window.showAlert("Guest is already scheduled to depart today or earlier.") : null;
+    if (s.checkOut <= s.checkIn) {
+        return window.customAlert ? window.customAlert("Invalid Stay", "Booking check-out is already on or before check-in.") : null;
     }
+
+    currentEcoBooking = s;
+
+    // Populate modal info
+    const nameEl = $('eco-guest-name');
+    const idEl = $('eco-booking-id');
+    const datesEl = $('eco-stay-dates');
+    const dateInput = $('eco-date');
+
+    if (nameEl) nameEl.innerText = `${s.firstName || ''} ${s.lastName || 'GUEST'}`.trim();
+    if (idEl) idEl.innerText = s.bookId || s.id;
+    if (datesEl) datesEl.innerText = `${s.checkIn} → ${s.checkOut}`;
+
+    if (dateInput) {
+        // Set default to today; bounded between checkIn and checkOut - 1 day
+        dateInput.min = s.checkIn;
+        const maxDate = new Date(s.checkOut + "T12:00:00Z");
+        maxDate.setUTCDate(maxDate.getUTCDate() - 1);
+        dateInput.max = maxDate.toISOString().split('T')[0];
+        
+        // Pick today if within range, else max allowed date
+        if (todayStr >= s.checkIn && todayStr < s.checkOut) {
+            dateInput.value = todayStr;
+        } else {
+            dateInput.value = dateInput.max;
+        }
+    }
+
+    recalcEarlyCheckoutModal();
+
+    const m = $('early-checkout-modal');
+    if (m) {
+        m.classList.add('active');
+        m.style.display = 'flex';
+    }
+    if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
+};
+
+// --- Recalculate Live Stayed vs Unstayed Breakdown ---
+export const recalcEarlyCheckoutModal = () => {
+    if (!currentEcoBooking) return;
+    const s = currentEcoBooking;
+    const targetOut = $('eco-date')?.value;
+    if (!targetOut) return;
 
     const parseFn = window.parseYMD || (str => Date.parse(str));
     const totalNights = Math.max(1, Math.round((parseFn(s.checkOut) - parseFn(s.checkIn)) / 86400000));
-    const stayedNights = Math.max(1, Math.round((parseFn(todayStr) - parseFn(s.checkIn)) / 86400000));
+    const stayedNights = Math.max(0, Math.round((parseFn(targetOut) - parseFn(s.checkIn)) / 86400000));
     const unstayedNights = Math.max(0, totalNights - stayedNights);
 
-    // 1. Calculate price using itemized daily rates if available, otherwise flat average
+    currentEcoStayedNts = stayedNights;
+    currentEcoUnstayedNts = unstayedNights;
+
     const hasItemized = Array.isArray(s.nightlyRates) && s.nightlyRates.length > 0;
-    let stayedAmount = 0;
-    let unstayedAmount = 0;
+    let stayedAmt = 0;
+    let unstayedAmt = 0;
 
     if (hasItemized) {
-        stayedAmount = s.nightlyRates
-            .filter(r => r.date >= s.checkIn && r.date < todayStr)
+        stayedAmt = s.nightlyRates
+            .filter(r => r.date >= s.checkIn && r.date < targetOut)
             .reduce((sum, r) => sum + (parseFloat(r.rate) || 0), 0);
-        unstayedAmount = s.nightlyRates
-            .filter(r => r.date >= todayStr && r.date < s.checkOut)
+        unstayedAmt = s.nightlyRates
+            .filter(r => r.date >= targetOut && r.date < s.checkOut)
             .reduce((sum, r) => sum + (parseFloat(r.rate) || 0), 0);
-        stayedAmount = Number(stayedAmount.toFixed(2));
-        unstayedAmount = Number(unstayedAmount.toFixed(2));
+        stayedAmt = Number(stayedAmt.toFixed(2));
+        unstayedAmt = Number(unstayedAmt.toFixed(2));
     } else {
-        const currentTotal = parseFloat(s.totalPrice) || 0;
-        const avgNightly = currentTotal / totalNights;
-        unstayedAmount = Number((avgNightly * unstayedNights).toFixed(2));
-        stayedAmount = Number((currentTotal - unstayedAmount).toFixed(2));
+        const curTotal = parseFloat(s.totalPrice) || 0;
+        const avg = curTotal / totalNights;
+        unstayedAmt = Number((avg * unstayedNights).toFixed(2));
+        stayedAmt = Number((curTotal - unstayedAmt).toFixed(2));
     }
 
-    // 2. Step 1: Confirm Early Checkout and Bed Release
-    window.showAlert(
-        `EARLY CHECKOUT CONFIRMATION\n\n` +
-        `Guest: ${s.firstName || ''} ${s.lastName || 'GUEST'}\n` +
-        `Scheduled Out: ${s.checkOut}\n` +
-        `New Departure: ${todayStr} (${unstayedNights} unstayed nt${unstayedNights === 1 ? '' : 's'})\n` +
-        `Unstayed Value: ฿${unstayedAmount.toLocaleString()} ${hasItemized ? '(Itemized Daily Rates)' : '(Average Daily Rate)'}\n\n` +
-        `Check out guest today and release bed inventory?`,
-        true,
-        async () => {
-            // 3. Step 2: Choose Financial Settlement (Refund / Deduct vs Keep Charge)
-            const shouldDeduct = window.confirm(
-                `EARLY CHECKOUT PRICING ADJUSTMENT\n\n` +
-                `• Stayed Amount (${stayedNights} nt${stayedNights === 1 ? '' : 's'}): ฿${stayedAmount.toLocaleString()}\n` +
-                `• Unstayed Amount (${unstayedNights} nt${unstayedNights === 1 ? '' : 's'}): ฿${unstayedAmount.toLocaleString()}\n\n` +
-                `Do you want to DEDUCT unstayed nights (฿${unstayedAmount.toLocaleString()}) from the Folio Total?\n\n` +
-                `[OK] = Deduct ฿${unstayedAmount.toLocaleString()} (Refund / Adjusted Total: ฿${stayedAmount.toLocaleString()})\n` +
-                `[Cancel] = Keep Full Charge ฿${(parseFloat(s.totalPrice) || 0).toLocaleString()} (Non-Refundable / Penalty)`
-            );
+    currentEcoStayedAmt = stayedAmt;
+    currentEcoUnstayedAmt = unstayedAmt;
 
-            const originalTotal = parseFloat(s.totalPrice) || 0;
-            const newTotalPrice = shouldDeduct ? stayedAmount : originalTotal;
-
-            const db = getDb();
-            const appId = getAppId();
-            let fsModule = window.fs;
-            if (!fsModule || !fsModule.updateDoc) {
-                fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-            }
-            const { doc, updateDoc } = fsModule;
-
-            const earlySnapshot = {
-                originalCheckOut: s.checkOut,
-                originalTotalPrice: originalTotal,
-                departureDate: todayStr,
-                stayedNights: stayedNights,
-                unstayedNights: unstayedNights,
-                unstayedAmount: unstayedAmount,
-                refunded: shouldDeduct,
-                isItemizedRate: hasItemized,
-                ts: new Date().toISOString()
-            };
-
-            const noteMsg = `\n[EARLY CHECKOUT on ${todayStr}] Departed ${unstayedNights} nt(s) early (Original Out: ${s.checkOut}). ` +
-                (shouldDeduct 
-                    ? `Deducted ฿${unstayedAmount.toLocaleString()}. New Total: ฿${newTotalPrice.toLocaleString()}.` 
-                    : `Kept full charge of ฿${newTotalPrice.toLocaleString()} (Non-refundable / penalty).`);
-
-            try {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
-                    checkOut: todayStr,
-                    status: 'early',
-                    totalPrice: newTotalPrice,
-                    earlyCheckout: earlySnapshot,
-                    notes: ((s.notes || '') + noteMsg).trim(),
-                    lastEditedAt: new Date().toISOString()
-                });
-
-                if (window.triggerAutoSync) {
-                    const hotelRooms = getHotelRooms();
-                    const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
-                    window.triggerAutoSync(todayStr, s.checkOut, types);
-                }
-
-                if (window.closeGuestModal) window.closeGuestModal();
-                if (window.showAlert) {
-                    window.showAlert(
-                        `Early checkout complete.\n` +
-                        `• Departure set to: ${todayStr}\n` +
-                        `• Beds released: ${todayStr} to ${s.checkOut}\n` +
-                        `• Total Price: ฿${newTotalPrice.toLocaleString()} (${shouldDeduct ? 'Deducted' : 'Full Charge Kept'})`
-                    );
-                }
-            } catch (err) {
-                console.error("Early Checkout Error:", err);
-                if (window.showAlert) window.showAlert("Error processing early checkout: " + err.message);
-            }
-        }
-    );
+    if ($('eco-stayed-nts')) $('eco-stayed-nts').innerText = stayedNights;
+    if ($('eco-stayed-amt')) $('eco-stayed-amt').innerText = `฿${stayedAmt.toLocaleString()}`;
+    if ($('eco-unstayed-nts')) $('eco-unstayed-nts').innerText = unstayedNights;
+    if ($('eco-unstayed-amt')) $('eco-unstayed-amt').innerText = `฿${unstayedAmt.toLocaleString()}`;
+    if ($('eco-rate-note')) $('eco-rate-note').innerText = hasItemized ? 'Calculated using itemized daily rates' : 'Calculated using average daily rate';
+    if ($('eco-btn-refund-sub')) $('eco-btn-refund-sub').innerText = `Deduct ฿${unstayedAmt.toLocaleString()}`;
 };
 
-// --- Revert Early Checkout (With Bed Collision Guard & Price Restoration) ---
+// --- Execute Early Checkout (Refund or Penalty) ---
+export const confirmEarlyCheckout = async (mode) => {
+    if (!currentEcoBooking) return;
+    const s = currentEcoBooking;
+    const id = s.id;
+    const targetOut = $('eco-date')?.value;
+    if (!targetOut) return;
+
+    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+    const originalTotal = parseFloat(s.totalPrice) || 0;
+    const db = getDb();
+    const appId = getAppId();
+
+    let fsModule = window.fs;
+    if (!fsModule || !fsModule.updateDoc) {
+        fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+    }
+    const { doc, updateDoc } = fsModule;
+
+    let newTotalPrice = originalTotal;
+    let extraCharges = Array.isArray(s.extraCharges) ? [...s.extraCharges] : [];
+    let penaltyId = null;
+
+    if (mode === 'refund') {
+        // Mode A: Deduct unstayed nights from room total
+        newTotalPrice = currentEcoStayedAmt;
+    } else {
+        // Mode B: Keep full charge as an itemized penalty fee on the folio
+        newTotalPrice = currentEcoStayedAmt; // Room portion
+        penaltyId = 'ec_penalty_' + Date.now();
+        extraCharges.push({
+            id: penaltyId,
+            desc: `EARLY DEPARTURE PENALTY (${currentEcoUnstayedNts} NT${currentEcoUnstayedNts === 1 ? '' : 'S'})`,
+            amount: currentEcoUnstayedAmt,
+            amt: currentEcoUnstayedAmt,
+            date: targetOut
+        });
+    }
+
+    const earlySnapshot = {
+        originalCheckOut: s.checkOut,
+        originalTotalPrice: originalTotal,
+        departureDate: targetOut,
+        stayedNights: currentEcoStayedNts,
+        unstayedNights: currentEcoUnstayedNts,
+        unstayedAmount: currentEcoUnstayedAmt,
+        stayedAmount: currentEcoStayedAmt,
+        mode: mode,
+        penaltyId: penaltyId,
+        ts: new Date().toISOString()
+    };
+
+    const noteMsg = `\n[EARLY CHECKOUT on ${todayStr}] Departed on ${targetOut} (${currentEcoUnstayedNts} nts early, original departure: ${s.checkOut}). ` +
+        (mode === 'refund' 
+            ? `Deducted ฿${currentEcoUnstayedAmt.toLocaleString()} unstayed room charges. New Folio Total: ฿${newTotalPrice.toLocaleString()}.` 
+            : `Kept full charge: Room adjusted to ฿${currentEcoStayedAmt.toLocaleString()} + added ฿${currentEcoUnstayedAmt.toLocaleString()} early checkout penalty item.`);
+
+    try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
+            checkOut: targetOut,
+            status: 'early',
+            totalPrice: newTotalPrice,
+            extraCharges: extraCharges,
+            earlyCheckout: earlySnapshot,
+            notes: ((s.notes || '') + noteMsg).trim(),
+            lastEditedAt: new Date().toISOString()
+        });
+
+        // Trigger Channex auto-sync to release inventory
+        if (window.triggerAutoSync) {
+            const hotelRooms = getHotelRooms();
+            const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
+            window.triggerAutoSync(targetOut, s.checkOut, types);
+        }
+
+        // Close early checkout modal and refresh active folio
+        if (window.closeModal) window.closeModal('early-checkout-modal');
+        s.checkOut = targetOut;
+        s.status = 'early';
+        s.totalPrice = newTotalPrice;
+        s.extraCharges = extraCharges;
+        s.earlyCheckout = earlySnapshot;
+        if (window.openGuestModal) window.openGuestModal(s);
+
+        if (window.showToast) {
+            window.showToast(
+                "Early Checkout", 
+                `Departed on ${targetOut}. ${mode === 'refund' ? `Deducted ฿${currentEcoUnstayedAmt.toLocaleString()}` : `Itemized ฿${currentEcoUnstayedAmt.toLocaleString()} penalty fee`}.`
+            );
+        }
+    } catch (err) {
+        console.error("Early Checkout Error:", err);
+        if (window.customAlert) window.customAlert("Error", "Error processing early checkout: " + err.message);
+    }
+};
+
+// --- Revert Early Checkout (With Collision Check & Penalty Removal) ---
 export const undoEarlyCheckout = async () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -648,13 +725,14 @@ export const undoEarlyCheckout = async () => {
 
     const originalOut = s.earlyCheckout.originalCheckOut;
     const originalTotal = s.earlyCheckout.originalTotalPrice !== undefined ? s.earlyCheckout.originalTotalPrice : s.totalPrice;
+    const penaltyId = s.earlyCheckout.penaltyId;
     const rL = s.rooms || [s.room];
 
-    // Collision check: verify beds are still free across original dates
+    // Collision check: verify rooms are free for the restored window
     const occ = window.getOccupiedRooms ? window.getOccupiedRooms(s.checkOut, originalOut, id) : new Set();
     for (let r of rL) {
         if (occ.has(r)) {
-            return window.showAlert ? window.showAlert(`COLLISION DETECTED:\n\nCannot revert early checkout. Room ${r} has already been assigned to another guest between ${s.checkOut} and ${originalOut}.`) : null;
+            return window.customAlert ? window.customAlert("Collision Detected", `Cannot revert early checkout. Room ${r} is already occupied between ${s.checkOut} and ${originalOut}.`) : null;
         }
     }
 
@@ -667,6 +745,12 @@ export const undoEarlyCheckout = async () => {
     }
     const { doc, updateDoc } = fsModule;
 
+    // Remove the penalty fee from extra charges if one was created
+    let extraCharges = Array.isArray(s.extraCharges) ? [...s.extraCharges] : [];
+    if (penaltyId) {
+        extraCharges = extraCharges.filter(c => c.id !== penaltyId);
+    }
+
     const revertMsg = `\n[EARLY CHECKOUT REVERTED on ${todayStr}] Restored original departure ${originalOut} and total ฿${originalTotal.toLocaleString()}.`;
 
     try {
@@ -674,6 +758,7 @@ export const undoEarlyCheckout = async () => {
             checkOut: originalOut,
             status: 'here',
             totalPrice: originalTotal,
+            extraCharges: extraCharges,
             earlyCheckout: null,
             notes: ((s.notes || '') + revertMsg).trim(),
             lastEditedAt: new Date().toISOString()
@@ -685,11 +770,19 @@ export const undoEarlyCheckout = async () => {
             window.triggerAutoSync(s.checkOut, originalOut, types);
         }
 
-        if (window.closeGuestModal) window.closeGuestModal();
-        if (window.showAlert) window.showAlert(`Early checkout reverted.\nStay restored to ${originalOut}.\nTotal restored to ฿${originalTotal.toLocaleString()}.`);
+        s.checkOut = originalOut;
+        s.status = 'here';
+        s.totalPrice = originalTotal;
+        s.extraCharges = extraCharges;
+        s.earlyCheckout = null;
+        if (window.openGuestModal) window.openGuestModal(s);
+
+        if (window.showToast) {
+            window.showToast("Restored", `Early checkout reverted. Stay restored to ${originalOut}.`);
+        }
     } catch (err) {
         console.error("Undo Early Checkout Error:", err);
-        if (window.showAlert) window.showAlert("Error reverting early checkout: " + err.message);
+        if (window.customAlert) window.customAlert("Error", "Error reverting early checkout: " + err.message);
     }
 };
 
@@ -706,4 +799,6 @@ window.requestMerge = requestMerge;
 window.confirmMerge = confirmMerge;
 window.populateSplitRoomDropdown = populateSplitRoomDropdown;
 window.requestEarlyCheckout = requestEarlyCheckout;
+window.recalcEarlyCheckoutModal = recalcEarlyCheckoutModal;
+window.confirmEarlyCheckout = confirmEarlyCheckout;
 window.undoEarlyCheckout = undoEarlyCheckout;
