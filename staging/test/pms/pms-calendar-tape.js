@@ -75,6 +75,28 @@ export const jumpToMonth = val => {
     }
 };
 
+// --- Jump Calendar View to Target Date (With Lead-in Buffer) ---
+export const jumpToDate = (dateStr, bufferDays = 3) => {
+    if (!dateStr) return;
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+        d.setDate(d.getDate() - bufferDays);
+        window.viewStart = d;
+    }
+    if (typeof window.switchTab === 'function') {
+        window.switchTab('calendar');
+    }
+    if (typeof window.render === 'function') {
+        window.render();
+    }
+    if (typeof syncMonthSelectWithView === 'function') {
+        syncMonthSelectWithView();
+    }
+};
+window.jumpToDate = jumpToDate;
+
+
 // --- Toggle Day Column Width Mode (Standard vs Expanded) ---
 export const toggleZoom = () => {
     window.isZoomWide = !window.isZoomWide;
@@ -179,6 +201,7 @@ window.prevPeriod = prevPeriod;
 window.nextPeriod = nextPeriod;
 window.goToday = goToday;
 window.jumpToMonth = jumpToMonth;
+window.jumpToDate = jumpToDate;
 window.toggleZoom = toggleZoom;
 window.handleSearch = handleSearch;
 window.clearSearch = clearSearch;
