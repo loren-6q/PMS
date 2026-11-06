@@ -1,46 +1,100 @@
 // ==========================================================================
-// core/occupancy.js - The Immutable Occupancy Law & Status Palette
+// core/occupancy.js - Reservation Occupancy Rules & Net Inventory Engine
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-// --- 1. Status Classifications & High-Contrast Palette ---
-export const PMS_STATUS = {
-    OCCUPYING: ['here', 'future', 'new', 'blocked'],
-    NON_OCCUPYING: ['cancelled', 'noshow', 'unconfirmed', 'charged', 'tocharge', 'vol', 'left', 'early'],
-    SPECIAL: 'special'
-};
+import { parseYMD, getLocalYMD } from './dates.js';
 
-export const STATUS_CYCLE = [
-    { val: 'new', bg: '#ec4899', txt: '#ffffff', label: 'NEW' },
-    { val: 'future', bg: '#7fc6f5', txt: '#1e293b', label: 'FUTURE' },
-    { val: 'here', bg: '#dcfce7', txt: '#14532d', label: 'HERE' },
-    { val: 'left', bg: '#aba39d', txt: '#1e293b', label: 'LEFT' },
-    { val: 'early', bg: '#f97316', txt: '#ffffff', label: 'EARLY OUT' },
-    { val: 'cancelled', bg: '#1e293b', txt: '#fca5a5', label: 'CANCELLED' },
-    { val: 'noshow', bg: '#94a3b8', txt: '#334155', label: 'NO-SHOW' },
-    { val: 'special', bg: '#fef08a', txt: '#1e293b', label: 'SPECIAL' },
-    { val: 'blocked', bg: '#b45309', txt: '#fef3c7', label: 'BLOCKED' },
-    { val: 'charged', bg: '#1e3a8a', txt: '#38bdf8', label: 'CHARGED' },
-    { val: 'tocharge', bg: '#ea580c', txt: '#ffffff', label: 'TO-CHARGE' },
-    { val: 'vol', bg: '#fbcfe8', txt: '#831843', label: 'VOL' },
-    { val: 'unconfirmed', bg: '#7e22ce', txt: '#ffffff', label: 'UNCONFIRMED' }
-];
+export const NON_OCCUPYING_STATUSES = new Set([
+    'cancelled',
+    'canceled',
+    'noshow',
+    'no_show',
+    'unconfirmed',
+    'charged'
+]);
 
-// --- 2. Live Inventory Occupancy Law Evaluator ---
-export function isOccupyingBooking(status, hasAssignedRoom = false) {
-    if (!status) return false;
-    const s = String(status).trim().toLowerCase();
-
-    if (s === PMS_STATUS.SPECIAL) {
-        return !!hasAssignedRoom;
-    }
-
-    return PMS_STATUS.OCCUPYING.includes(s);
+export function isOccupyingBooking(status = '', isUnassigned = false) {
+    const s = String(status).toLowerCase().trim();
+    if (NON_OCCUPYING_STATUSES.has(s)) return false;
+    if (s === 'special' && isUnassigned) return false;
+    return true;
 }
 
-// --- 3. Window Global Bridge ---
+/**
+ * Computes net live inventory per room category over a date horizon.
+ */
+export function calculateLiveInventory({
+    staffList = (window.staff || []),
+    roomTypes = (window.roomTypes || []),
+    totalRoomsByType = (window.totalRoomsByType || {}),
+    hotelRooms = (window.hotelRooms || []),
+    startDateYMD = getLocalYMD(new Date()),
+    daysCount = 90,
+    currentPropertyId = (window.currentPropertyId || '')
+} = {}) {
+    const startMs = parseYMD(startDateYMD) || Date.now();
+    const inventory = {};
+
+    for (let i = -7; i < daysCount; i++) {
+        const curD = new Date(startMs + (i * 86400000));
+        const dStr = getLocalYMD(curD);
+        inventory[dStr] = {};
+
+        const occupied = {};
+        roomTypes.forEach(rt => { occupied[rt] = 0; });
+
+        if (Array.isArray(staffList)) {
+            for (let j = 0; j < staffList.length; j++) {
+                const s = staffList[j];
+                if (!s) continue;
+
+                if (currentPropertyId && s.property && s.property !== currentPropertyId) {
+                    continue;
+                }
+
+                const rList = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
+                const isUnassigned = rList.length === 0 || rList[0] === "";
+
+                if (!isOccupyingBooking(s.status, isUnassigned)) continue;
+
+                const cIn = s.checkIn || s.start || s.startDate;
+                const cOut = s.checkOut || s.end || s.endDate;
+
+                if (cIn && cOut && dStr >= cIn && dStr < cOut) {
+                    let cat = null;
+                    if (!isUnassigned && rList.length > 0) {
+                        const hRoom = hotelRooms.find(hr => hr.id === rList[0]);
+                        if (hRoom && hRoom.type) cat = hRoom.type;
+                    }
+                    if (!cat) cat = s.bookedType || s.category || s.roomType;
+
+                    if (cat) {
+                        const matchedRt = roomTypes.find(rt => rt.toLowerCase() === cat.toLowerCase());
+                        if (matchedRt) {
+                            if (matchedRt.toLowerCase().includes('dorm')) {
+                                occupied[matchedRt] = (occupied[matchedRt] || 0) + parseInt(s.pax || s.bedCount || 1, 10);
+                            } else {
+                                occupied[matchedRt] = (occupied[matchedRt] || 0) + Math.max(1, rList.length);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        roomTypes.forEach(rt => {
+            const cap = totalRoomsByType[rt] || 1;
+            const occ = occupied[rt] || 0;
+            inventory[dStr][rt] = Math.max(0, cap - occ);
+        });
+    }
+
+    window.liveInventory = inventory;
+    return inventory;
+}
+
 if (typeof window !== 'undefined') {
-    window.PMS_STATUS = PMS_STATUS;
-    window.STATUS_CYCLE = STATUS_CYCLE;
     window.isOccupyingBooking = isOccupyingBooking;
+    window.calculateLiveInventory = calculateLiveInventory;
 }
