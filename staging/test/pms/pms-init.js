@@ -279,27 +279,44 @@ export const loadPropertyConfig = async () => {
         propsList.forEach(p => {
             const short = (p.short || p.shortCode || p.id).toUpperCase();
             PROP_MAP[short] = p.id;
+            PROP_MAP[p.id.toUpperCase()] = p.id;
+            PROP_MAP[p.id.toLowerCase()] = p.id;
             PROP_REVERSE_MAP[p.id] = short;
         });
         window.PROP_MAP = PROP_MAP;
         window.PROP_REVERSE_MAP = PROP_REVERSE_MAP;
 
-        if (initialP && PROP_MAP[initialP]) {
-            currentPropertyId = PROP_MAP[initialP];
+        // Dynamic URL resolution: matches short code, exact id, or uppercase id
+        if (initialP) {
+            const cleanP = initialP.trim().toUpperCase();
+            if (PROP_MAP[cleanP]) {
+                currentPropertyId = PROP_MAP[cleanP];
+            } else {
+                const found = propsList.find(p => p.id.toUpperCase() === cleanP || (p.short && p.short.toUpperCase() === cleanP));
+                if (found) currentPropertyId = found.id;
+            }
             initialP = null;
         }
+
+        // Automatic fallback if currentPropertyId is corrupted or invalid
+        if (!propsList.some(p => p.id === currentPropertyId)) {
+            const fallbackMatch = propsList.find(p => 
+                p.id.toLowerCase().includes(currentPropertyId.toLowerCase()) || 
+                currentPropertyId.toLowerCase().includes(p.id.toLowerCase())
+            );
+            currentPropertyId = fallbackMatch ? fallbackMatch.id : (propsList[0]?.id || 'swims_resort');
+        }
+
+        try { localStorage.setItem('last_prop', currentPropertyId); } catch (e) {}
 
         const switcher = $('main-property-switcher');
         if (switcher && propsList.length > 0) {
             switcher.innerHTML = propsList.map(p => `<option value="${p.id}">${(p.name || p.id).toUpperCase()}</option>`).join('');
-            if (!propsList.find(p => p.id === currentPropertyId)) {
-                currentPropertyId = propsList[0].id;
-            }
             switcher.value = currentPropertyId;
         }
 
         window.syncPropertyUrl(currentPropertyId);
-        const propToLoad = propsList.find(p => p.id === currentPropertyId);
+        const propToLoad = propsList.find(p => p.id === currentPropertyId) || propsList[0];
         if (propToLoad) {
             window.currentPropertyConfig = propToLoad;
             document.title = propToLoad.name || 'Wild & Wandering PMS';
@@ -357,6 +374,7 @@ window.handlePropertySwitch = async propId => {
     try { localStorage.setItem('last_prop', propId); } catch (e) {}
     window.syncPropertyUrl(propId);
     await loadPropertyConfig();
+    if (typeof mountNav === 'function') mountNav();
     if (staff && staff.length > 0) {
         staff.forEach(s => {
             const rList = getRooms(s).map(dbToUiRoom);
@@ -372,12 +390,17 @@ window.handlePropertySwitch = async propId => {
 
 // --- Main Navigation Tab Switcher (Dashboard / Calendar / Database) ---
 window.switchTab = t => {
-    $('dashboard-view').style.display = t === 'dashboard' ? 'flex' : 'none';
-    $('calendar-view').style.display = t === 'calendar' ? 'flex' : 'none';
-    $('database-view').style.display = t === 'database' ? 'flex' : 'none';
-    $('tab-dash').classList.toggle('active', t === 'dashboard');
-    $('tab-cal').classList.toggle('active', t === 'calendar');
-    $('tab-db').classList.toggle('active', t === 'database');
+    const dashView = $('dashboard-view');
+    const calView = $('calendar-view');
+    const dbView = $('database-view');
+
+    if (dashView) dashView.style.display = t === 'dashboard' ? 'flex' : 'none';
+    if (calView) calView.style.display = t === 'calendar' ? 'flex' : 'none';
+    if (dbView) dbView.style.display = t === 'database' ? 'flex' : 'none';
+
+    $('tab-dash')?.classList.toggle('active', t === 'dashboard');
+    $('tab-cal')?.classList.toggle('active', t === 'calendar');
+    $('tab-db')?.classList.toggle('active', t === 'database');
 
     const ctxCal = $('context-tools-cal');
     if (ctxCal) {
@@ -398,9 +421,13 @@ window.switchTab = t => {
 
 // --- Open Email Parser Modal (Direct Trigger) ---
 window.openEmailParserModal = () => { 
-    $('email-textarea').value = ''; 
-    $('email-modal').style.display = 'flex'; 
-    setTimeout(() => $('email-textarea').focus(), 50); 
+    const ta = $('email-textarea');
+    if (ta) ta.value = ''; 
+    const m = $('email-modal');
+    if (m) {
+        m.style.display = 'flex'; 
+        setTimeout(() => ta?.focus(), 50); 
+    }
 };
 
 // --------------------------------------------------------------------------
@@ -482,7 +509,7 @@ export const init = async () => {
             if (bl && bl.style.display !== 'none') bl.style.display = 'none';
         }, 3500);
 
-try {
+        try {
             if (typeof window.__initial_auth_token !== 'undefined') {
                 try { await signInWithCustomToken(auth, window.__initial_auth_token); }
                 catch (tokenErr) { await signInAnonymously(auth); }
@@ -490,15 +517,17 @@ try {
                 await signInAnonymously(auth);
             }
 
-            // MOUNT NAVIGATION INSTANTLY
-            if (typeof mountNav === 'function') mountNav();
-
             currentUserRole = 'admin';
             currentUserEmail = 'admin';
             window.currentUserRole = currentUserRole;
             window.currentUserEmail = currentUserEmail;
             $$('.admin-only').forEach(el => el.classList.remove('hidden'));
+
             await loadPropertyConfig();
+
+            // Mount universal navigation after config is in memory
+            if (typeof mountNav === 'function') mountNav();
+
             onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
                 if (window.showAlert) window.showAlert("Database Permission Denied.");
             });
@@ -523,6 +552,7 @@ try {
                 window.currentUserEmail = currentUserEmail;
                 $('boot-loader').style.display = 'none';
                 await loadPropertyConfig();
+                if (typeof mountNav === 'function') mountNav();
                 onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
                     if (window.showAlert) window.showAlert("Database Permission Denied.");
                     $('boot-loader').style.display = 'none';
