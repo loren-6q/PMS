@@ -76,46 +76,18 @@
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col antialiased overflow-hidden">
 
-    <!-- TOP NAVIGATION HEADER -->
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-40 px-3 py-1 flex items-center justify-between shadow-xs shrink-0">
-        <div class="flex items-center gap-2">
-            <a href="index.html" class="flex items-center hover:opacity-90 transition-opacity">
-                <img id="nav-brand-icon" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Brand Logo" class="h-7 sm:h-8 object-contain mr-1">
-            </a>
-            <div>
-                <h1 class="text-xs font-black text-slate-900 leading-tight">Property Setup Wizard</h1>
-                <p class="text-[9px] text-slate-400 font-bold" id="header-status-text">Configuration Engine</p>
-            </div>
-
-            <div class="h-4 w-px bg-slate-200 mx-1"></div>
-
-            <div class="flex items-center gap-1 bg-slate-100 rounded p-0.5 border border-slate-200">
-                <i data-lucide="building-2" size="13" class="text-slate-500 ml-1"></i>
-                <select id="property-select" onchange="window.switchSetupProperty(this.value)" class="bg-transparent text-[11px] font-bold text-slate-800 pr-1 py-0 cursor-pointer outline-none">
-                    <option value="">Loading properties...</option>
-                </select>
-                <button type="button" onclick="window.openNewPropertyModal()" class="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[9.5px] font-black uppercase rounded border border-indigo-200 cursor-pointer transition-colors shadow-2xs" title="Create a new property">
-                    + New
-                </button>
-            </div>
-        </div>
-
-        <div class="flex items-center gap-1.5">
-            <a id="btn-goto-pms" href="pms.html" onclick="event.preventDefault(); window.launchApp('pms')" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-bold transition-colors">
-                <i data-lucide="layout-grid" size="13" class="text-indigo-600"></i>
-                <span class="hidden sm:inline">PMS</span>
-            </a>
-            <a id="btn-goto-cm" href="cm.html" onclick="event.preventDefault(); window.launchApp('cm')" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-bold transition-colors">
-                <i data-lucide="calendar" size="13" class="text-indigo-600"></i>
-                <span class="hidden sm:inline">Channel Manager</span>
-            </a>
+<!-- UNIVERSAL TOP NAVIGATION (Mounted by core/nav.js) -->
+    <div id="app-nav">
+        <!-- Right Slot: Setup Save Button -->
+        <div id="nav-right-slot">
             <button type="button" onclick="window.savePropertyToDatabase(true)" id="btn-save-header" class="flex items-center gap-1 px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase shadow-xs transition-colors cursor-pointer">
                 <i data-lucide="save" size="13"></i>
                 <span>SAVE</span>
             </button>
         </div>
-    </header>
+    </div>
 
+     
     <!-- 5-STEP STEPPER NAVIGATION -->
     <nav class="bg-white border-b border-slate-200 px-3 py-1 shrink-0">
         <div class="max-w-7xl mx-auto grid grid-cols-5 gap-1.5">
