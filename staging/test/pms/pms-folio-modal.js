@@ -599,14 +599,17 @@ export const openGuestModal = (s = {}) => {
             earlyBtn.title = "Revert Early Checkout";
             earlyBtn.className = "absolute right-1 px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[9px] uppercase shadow-xs flex items-center gap-0.5 cursor-pointer";
             earlyBtn.innerHTML = `<i data-lucide="rotate-ccw" class="!w-2.5 !h-2.5"></i><span>UNDO</span>`;
+            earlyBtn.style.display = 'flex';
             earlyBtn.onclick = () => window.undoEarlyCheckout && window.undoEarlyCheckout();
         } else if (!isN && s.checkOut > todayStr && window.isOccupyingBooking && window.isOccupyingBooking(s.status, true)) {
-            earlyBtn.title = "Check Out Early Today";
-            earlyBtn.className = "absolute right-1 px-1.5 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded font-black text-[9px] uppercase shadow-xs flex items-center gap-0.5 cursor-pointer";
+            earlyBtn.title = "Check Out Early";
+            earlyBtn.className = "absolute right-1 px-1.5 py-0.5 bg-amber-700 hover:bg-amber-800 text-white rounded font-black text-[9px] uppercase shadow-xs flex items-center gap-0.5 cursor-pointer";
             earlyBtn.innerHTML = `<i data-lucide="log-out" class="!w-2.5 !h-2.5"></i><span>OUT</span>`;
+            earlyBtn.style.display = 'flex';
             earlyBtn.onclick = () => window.requestEarlyCheckout && window.requestEarlyCheckout();
         } else {
             earlyBtn.className = "hidden";
+            earlyBtn.style.display = 'none';
         }
     }
     
