@@ -1,43 +1,27 @@
 // ==========================================================================
-// core/properties.js - Canonical Properties & Universal Navigation Engine
+// core/properties.js - Dynamic Firestore Property Catalog & Config Loader
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { db, appId } from './config.js';
+import { db, auth, appId } from './config.js';
+import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// Canonical Property Dictionary
-export const PROPERTY_CANONICAL_MAP = {
-    'swims_resort': 'swims_resort',
-    'swims': 'swims_resort',
-    'swims resort': 'swims_resort',
-    'loud_beach': 'loud_beach',
-    'loud': 'loud_beach',
-    'loud beach': 'loud_beach'
-};
-
-// Normalize raw property strings or short codes
-export function toCanonicalPropId(rawId) {
-    if (!rawId) return 'swims_resort';
-    const clean = String(rawId).trim().toLowerCase();
-    return PROPERTY_CANONICAL_MAP[clean] || clean;
-}
-
-// Get the active property ID from URL or local storage
-export function getActivePropertyId() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || 'swims_resort';
-    const canon = toCanonicalPropId(pParam);
-    localStorage.setItem('last_prop', canon);
-    return canon;
-}
-
-// Fetch all properties from Firestore
+/**
+ * Loads all property documents from Firestore into memory.
+ */
 export async function loadPropertiesCatalog() {
+    if (window.availableProperties && window.availableProperties.length > 0) {
+        return window.availableProperties;
+    }
     try {
+        if (!auth.currentUser) {
+            await signInAnonymously(auth);
+        }
         const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
         const props = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         window.availableProperties = props;
+        window.activePropertiesList = props; // alias for compatibility
         return props;
     } catch (err) {
         console.error("[Properties Catalog Load Error]:", err);
@@ -45,9 +29,12 @@ export async function loadPropertiesCatalog() {
     }
 }
 
-// Fetch a single property config document
+/**
+ * Loads a single property config document from Firestore.
+ */
 export async function getActivePropertyConfig(propId) {
     try {
+        if (!auth.currentUser) await signInAnonymously(auth);
         const targetId = toCanonicalPropId(propId || getActivePropertyId());
         const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', targetId));
         if (snap.exists()) {
@@ -61,61 +48,56 @@ export async function getActivePropertyConfig(propId) {
     return null;
 }
 
-// --------------------------------------------------------------------------
-// UNIVERSAL HEADER & PROPERTY PICKER CONTROLLER
-// --------------------------------------------------------------------------
-
-// Toggle Property Picker Dropdown attached to Top-Left Brand Logo
-export function togglePropertyPicker() {
-    const dropdown = document.getElementById('property-picker-dropdown');
-    if (!dropdown) return;
-
-    const isHidden = dropdown.classList.contains('hidden');
-    if (!isHidden) {
-        dropdown.classList.add('hidden');
-        return;
+/**
+ * Dynamically resolves any raw input or slug against live Firestore documents.
+ * Zero hardcoded dictionaries.
+ */
+export function toCanonicalPropId(rawId) {
+    if (!rawId) {
+        return localStorage.getItem('last_prop') || window.availableProperties?.[0]?.id || 'swims_resort';
     }
-
-    renderPropertyPickerList();
-    dropdown.classList.remove('hidden');
-}
-
-// Render the list of available properties inside the logo dropdown
-export function renderPropertyPickerList() {
-    const listContainer = document.getElementById('property-picker-list');
-    if (!listContainer) return;
-
+    const clean = String(rawId).trim().toLowerCase();
     const props = window.availableProperties || [];
-    const curProp = getActivePropertyId();
 
-    if (props.length === 0) {
-        listContainer.innerHTML = `<div class="p-3 text-xs text-slate-500 font-bold">No properties loaded.</div>`;
-        return;
-    }
+    // 1. Exact match against Firestore document IDs
+    const exact = props.find(p => p.id.toLowerCase() === clean);
+    if (exact) return exact.id;
 
-    listContainer.innerHTML = props.map(p => {
-        const isSelected = p.id === curProp;
-        const displayName = p.name || p.id;
-        const displayCode = (p.short || p.id).toUpperCase();
-        return `
-            <button type="button" onclick="window.switchProperty('${p.id}')" class="w-full text-left px-3 py-2 rounded text-xs font-bold uppercase transition-colors flex items-center justify-between cursor-pointer ${
-                isSelected ? 'bg-indigo-600 text-white font-black shadow-sm' : 'text-slate-700 hover:bg-slate-100'
-            }">
-                <div class="flex flex-col">
-                    <span>${displayName}</span>
-                    <span class="text-[9px] ${isSelected ? 'text-indigo-200' : 'text-slate-400'} font-mono">${displayCode}</span>
-                </div>
-                ${isSelected ? '<span class="text-xs font-black">✓</span>' : ''}
-            </button>
-        `;
-    }).join('');
+    // 2. Match against property short codes or names in Firestore
+    const match = props.find(p => 
+        (p.short && p.short.toLowerCase() === clean) ||
+        (p.name && p.name.toLowerCase() === clean) ||
+        p.id.toLowerCase().includes(clean)
+    );
+    if (match) return match.id;
 
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-        window.lucide.createIcons();
-    }
+    // 3. Fallback: return clean string
+    return clean;
 }
 
-// Switch property and reload the active page with preserved ?p= query
+/**
+ * Retrieves the active property ID from URL param or localStorage.
+ */
+export function getActivePropertyId() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || '';
+    const canon = toCanonicalPropId(pParam);
+    if (canon) localStorage.setItem('last_prop', canon);
+    return canon;
+}
+
+/**
+ * Returns the short display code (e.g. 'SWIMS', 'LOUD') from Firestore metadata.
+ */
+export function toDisplayPropKey(propId) {
+    const props = window.availableProperties || [];
+    const match = props.find(p => p.id.toLowerCase() === String(propId).toLowerCase());
+    return (match?.short || match?.id || propId || '').toUpperCase();
+}
+
+/**
+ * Switches the active property, updates localStorage, and reloads with ?p= preserved.
+ */
 export function switchProperty(targetPropId) {
     const canon = toCanonicalPropId(targetPropId);
     localStorage.setItem('last_prop', canon);
@@ -124,71 +106,12 @@ export function switchProperty(targetPropId) {
     window.location.href = url.toString();
 }
 
-// Universal app navigation: preserves active property across all frames
-export function navigateToApp(appName, event) {
-    if (event) event.preventDefault();
-    const curProp = getActivePropertyId();
-    window.location.href = `${appName}.html?p=${curProp}`;
-}
-
-// Mount and initialize the universal navigation on any page
-export async function mountUniversalNav(activeApp = '') {
-    const curProp = getActivePropertyId();
-    window.currentPropertyId = curProp;
-
-    // Highlight the active app pill in header
-    if (activeApp) {
-        document.querySelectorAll('.nav-app-link').forEach(link => {
-            const isMatch = link.dataset.app === activeApp || link.getAttribute('href')?.startsWith(activeApp);
-            if (isMatch) {
-                link.className = "nav-app-link px-2.5 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-black uppercase flex items-center gap-1 shadow-2xs";
-            } else {
-                link.className = "nav-app-link px-2.5 py-1 rounded border border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 text-[11px] font-bold uppercase flex items-center gap-1 transition-colors";
-            }
-        });
-    }
-
-    // Load catalog if empty
-    if (!window.availableProperties || window.availableProperties.length === 0) {
-        await loadPropertiesCatalog();
-    }
-
-    // Resolve active property branding
-    const propCfg = await getActivePropertyConfig(curProp);
-    if (propCfg) {
-        const logoEl = document.getElementById('nav-brand-logo');
-        const nameEl = document.getElementById('nav-property-name');
-        const codeEl = document.getElementById('nav-property-code');
-
-        if (logoEl && propCfg.iconUrl) logoEl.src = propCfg.iconUrl;
-        if (nameEl) nameEl.innerText = propCfg.name || curProp;
-        if (codeEl) codeEl.innerText = (propCfg.short || curProp).toUpperCase();
-    }
-
-    // Auto-close property dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        const dropdown = document.getElementById('property-picker-dropdown');
-        const logoBtn = document.getElementById('nav-brand-logo')?.closest('button');
-        if (dropdown && !dropdown.classList.contains('hidden')) {
-            if (!dropdown.contains(e.target) && (!logoBtn || !logoBtn.contains(e.target))) {
-                dropdown.classList.add('hidden');
-            }
-        }
-    });
-
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-        window.lucide.createIcons();
-    }
-}
-
-// Global Window Exports
+// Global window bridges
 if (typeof window !== 'undefined') {
-    window.toCanonicalPropId = toCanonicalPropId;
-    window.getActivePropertyId = getActivePropertyId;
     window.loadPropertiesCatalog = loadPropertiesCatalog;
     window.getActivePropertyConfig = getActivePropertyConfig;
-    window.togglePropertyPicker = togglePropertyPicker;
+    window.toCanonicalPropId = toCanonicalPropId;
+    window.getActivePropertyId = getActivePropertyId;
+    window.toDisplayPropKey = toDisplayPropKey;
     window.switchProperty = switchProperty;
-    window.navigateToApp = navigateToApp;
-    window.mountUniversalNav = mountUniversalNav;
 }
