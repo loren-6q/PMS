@@ -3,11 +3,11 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { app, auth, db, appId } from '../core/config.js';
+import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { customAlert } from '../core/ui-dialogs.js';
-import { loadPropertiesCatalog, toCanonicalPropId } from '../core/properties.js';
+import { loadPropertiesCatalog, toCanonicalPropId, getActivePropertyId, mountUniversalNav } from '../core/properties.js';
 
 import { renderPaymentMethodsTable, renderAddonsTable, updateLogoPreview } from './setup-profile.js';
 import { renderRoomDefinitionsTable, compileRoomsFromDefinitions } from './setup-rooms.js';
@@ -45,7 +45,6 @@ export function jumpStep(stepNum) {
     const prevBtn = document.getElementById('btn-prev-step');
     if (prevBtn) prevBtn.disabled = (currentStep === 1);
 
-    // Refresh active step tables on transition
     if (currentStep === 1) {
         renderPaymentMethodsTable();
         renderAddonsTable();
@@ -93,7 +92,55 @@ export function updateStep5Review() {
     if (plansEl) plansEl.innerText = `${(window.channexRateMap || []).length} Rate Plans`;
 }
 
-// --- Cloud Persistence with Non-Destructive Merging & Automatic Backup ---
+// --- Hydrate All Input Fields and Tables from Property Data ---
+export async function loadPropertyData(propId) {
+    window.currentPropertyId = propId;
+
+    try {
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
+        if (snap.exists()) {
+            const data = snap.data();
+            window.currentPropertyConfig = { id: snap.id, ...data };
+
+            const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+            setVal('prop-name', data.name);
+            setVal('prop-short', data.short);
+            setVal('prop-currency', data.currency || 'THB');
+            setVal('prop-timezone', data.timezone || 'Asia/Bangkok');
+            setVal('prop-address', data.address);
+            setVal('prop-email', data.email);
+            setVal('prop-phone', data.phone);
+            setVal('prop-logo-url', data.logoUrl);
+            setVal('prop-banner-url', data.bannerUrl);
+            setVal('prop-icon-url', data.iconUrl);
+
+            updateLogoPreview('primary', data.logoUrl);
+            updateLogoPreview('banner', data.bannerUrl);
+            updateLogoPreview('icon', data.iconUrl);
+
+            window.roomDefinitions = Array.isArray(data.roomDefinitions) ? data.roomDefinitions : [];
+            window.paymentMethods = Array.isArray(data.payments) && data.payments.length > 0 ? data.payments : null;
+            window.addonsList = Array.isArray(data.addons) && data.addons.length > 0 ? data.addons : null;
+            window.channexMap = Array.isArray(data.channexMap) ? data.channexMap : [];
+            window.channexRateMap = Array.isArray(data.channexRateMap) ? data.channexRateMap : [];
+            window.pricingRules = data.pricingRules || {};
+            window.masterPricing = data.masterPricing || {};
+
+            setVal('chan-api-key', data.channex?.apiKey);
+            setVal('chan-prop-id', data.channex?.propId);
+
+            renderPaymentMethodsTable(window.paymentMethods);
+            renderAddonsTable(window.addonsList);
+            renderRoomDefinitionsTable();
+            renderStep3UnifiedMapping();
+            renderPricingConfig();
+        }
+    } catch (err) {
+        console.error("[Property Hydration Error]:", err);
+    }
+}
+
+// --- Save Property to Firestore with Automatic Rolling Backup ---
 export async function savePropertyToDatabase(notify = true) {
     const btn = document.getElementById('btn-save-header');
     const btnFooter = document.getElementById('btn-save-footer');
@@ -104,7 +151,7 @@ export async function savePropertyToDatabase(notify = true) {
         const propId = window.currentPropertyId || 'swims_resort';
         const compiled = compileRoomsFromDefinitions();
 
-        // 1. Immutable Rolling Backup in Firestore before changes
+        // 1. Immutable Rolling Backup
         const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'properties_backups', `${propId}_${Date.now()}`);
         await setDoc(backupRef, {
             roomDefinitions: window.roomDefinitions || [],
@@ -112,7 +159,7 @@ export async function savePropertyToDatabase(notify = true) {
             savedAt: new Date().toISOString()
         });
 
-        // 2. Persist Property Configuration
+        // 2. Persist Property Document
         const propData = {
             id: propId,
             name: document.getElementById('prop-name')?.value.trim() || propId,
@@ -143,16 +190,14 @@ export async function savePropertyToDatabase(notify = true) {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), propData, { merge: true });
         window.currentPropertyConfig = { ...propData };
 
-        // 3. Auto-Push Updated Capacity to Channex if credentials exist
         if (propData.channex.apiKey && propData.channex.propId && typeof window.triggerAutoSync === 'function') {
             const todayStr = new Date().toISOString().split('T')[0];
             const futureDate = new Date();
             futureDate.setDate(futureDate.getDate() + 90);
-            const futureStr = futureDate.toISOString().split('T')[0];
-            window.triggerAutoSync(todayStr, futureStr);
+            window.triggerAutoSync(todayStr, futureDate.toISOString().split('T')[0]);
         }
 
-        if (notify) customAlert("Saved", `Configuration for "${propData.name}" saved, backed up, and synced.`);
+        if (notify) customAlert("Saved", `Property configuration for "${propData.name}" saved and backed up.`);
 
     } catch (err) {
         console.error("[Setup Save Error]:", err);
@@ -166,7 +211,7 @@ export async function savePropertyToDatabase(notify = true) {
     }
 }
 
-// --- New Property Modal Controllers ---
+// --- New Property Modal ---
 export function openNewPropertyModal() {
     const modal = document.getElementById('new-property-modal');
     if (modal) {
@@ -203,69 +248,37 @@ export async function confirmCreateNewProperty() {
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', slug), propData);
         closeNewPropertyModal();
-        window.location.search = `?p=${slug}`;
+        window.switchProperty(slug);
     } catch (e) {
         customAlert("Creation Failed", e.message);
     }
 }
 
-export function launchApp(appName) {
-    const p = window.currentPropertyId || 'swims_resort';
-    window.location.href = `${appName}.html?p=${p}`;
-}
-
-// --- Setup Wizard Master Bootstrapper ---
+// --- Master Setup Bootstrapper ---
 export async function initSetup() {
     try {
         await signInAnonymously(auth);
 
-        const props = await loadPropertiesCatalog();
-        const urlParams = new URLSearchParams(window.location.search);
-        const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || 'swims_resort';
-        window.currentPropertyId = toCanonicalPropId(pParam);
+        // Direct query to ensure properties ALWAYS load
+        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
+        const props = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.availableProperties = props;
 
-        const activeProp = props.find(p => p.id === window.currentPropertyId) || props[0];
-        window.currentPropertyConfig = activeProp || {};
+        const targetPropId = getActivePropertyId();
 
+        // Populate top navigation and property switcher
+        await mountUniversalNav('setup');
+
+        // Populate header dropdown selector if present
         const switcher = document.getElementById('property-select');
         if (switcher && props.length > 0) {
             switcher.innerHTML = props.map(p => 
-                `<option value="${p.id}" ${p.id === window.currentPropertyId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`
+                `<option value="${p.id}" ${p.id === targetPropId ? 'selected' : ''}>${(p.name || p.id).toUpperCase()}</option>`
             ).join('');
         }
 
-        if (activeProp) {
-            const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
-            setVal('prop-name', activeProp.name);
-            setVal('prop-short', activeProp.short);
-            setVal('prop-currency', activeProp.currency || 'THB');
-            setVal('prop-timezone', activeProp.timezone || 'Asia/Bangkok');
-            setVal('prop-address', activeProp.address);
-            setVal('prop-email', activeProp.email);
-            setVal('prop-phone', activeProp.phone);
-            setVal('prop-logo-url', activeProp.logoUrl);
-            setVal('prop-banner-url', activeProp.bannerUrl);
-            setVal('prop-icon-url', activeProp.iconUrl);
-
-            updateLogoPreview('primary', activeProp.logoUrl);
-            updateLogoPreview('banner', activeProp.bannerUrl);
-            updateLogoPreview('icon', activeProp.iconUrl);
-
-            window.roomDefinitions = activeProp.roomDefinitions || [];
-            window.paymentMethods = activeProp.payments || [];
-            window.addonsList = activeProp.addons || [];
-            window.channexMap = activeProp.channexMap || [];
-            window.channexRateMap = activeProp.channexRateMap || [];
-            window.pricingRules = activeProp.pricingRules || {};
-            window.masterPricing = activeProp.masterPricing || {};
-
-            setVal('chan-api-key', activeProp.channex?.apiKey);
-            setVal('chan-prop-id', activeProp.channex?.propId);
-
-            renderPaymentMethodsTable();
-            renderAddonsTable();
-            renderRoomDefinitionsTable();
-        }
+        // Hydrate the selected property's full config
+        await loadPropertyData(targetPropId);
 
         jumpStep(1);
 
@@ -274,7 +287,7 @@ export async function initSetup() {
     }
 }
 
-// Global Window Exports
+// Global Exports
 if (typeof window !== 'undefined') {
     window.jumpStep = jumpStep;
     window.nextStep = nextStep;
@@ -283,8 +296,12 @@ if (typeof window !== 'undefined') {
     window.openNewPropertyModal = openNewPropertyModal;
     window.closeNewPropertyModal = closeNewPropertyModal;
     window.confirmCreateNewProperty = confirmCreateNewProperty;
-    window.launchApp = launchApp;
-    window.switchSetupProperty = (id) => { window.location.search = `?p=${id}`; };
+    window.switchSetupProperty = (id) => { window.switchProperty(id); };
 }
 
-document.addEventListener('DOMContentLoaded', initSetup);
+// Zero-race condition execution
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSetup);
+} else {
+    initSetup();
+}
