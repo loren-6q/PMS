@@ -520,10 +520,72 @@ export const confirmMerge = async () => {
 // --------------------------------------------------------------------------
 
 let currentEcoBooking = null;
-let currentEcoStayedAmt = 0;
-let currentEcoUnstayedAmt = 0;
-let currentEcoStayedNts = 0;
-let currentEcoUnstayedNts = 0;
+
+// --- Helper: Pure Calculation of Stayed vs Unstayed Amounts ---
+function calculateStayMath(booking, targetOutDate) {
+    const parseFn = window.parseYMD || (str => {
+        if (!str || typeof str !== 'string') return 0;
+        const p = str.split('-');
+        return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+    });
+
+    // If booking was already checked out early, recover the true original checkout and total
+    const originalOut = (booking.earlyCheckout && booking.earlyCheckout.originalCheckOut) 
+        ? booking.earlyCheckout.originalCheckOut 
+        : booking.checkOut;
+
+    const originalTotal = (booking.earlyCheckout && booking.earlyCheckout.originalTotalPrice !== undefined)
+        ? booking.earlyCheckout.originalTotalPrice
+        : (parseFloat(booking.totalPrice) || 0);
+
+    const inMs = parseFn(booking.checkIn);
+    const origOutMs = parseFn(originalOut);
+    const targetOutMs = parseFn(targetOutDate);
+
+    const totalNights = Math.max(1, Math.round((origOutMs - inMs) / 86400000));
+    const stayedNights = Math.max(0, Math.round((targetOutMs - inMs) / 86400000));
+    const unstayedNights = Math.max(0, totalNights - stayedNights);
+
+    // Sum any existing non-penalty add-on charges (e.g. laundry, tour, ferry)
+    const existingOtherCharges = (Array.isArray(booking.extraCharges) ? booking.extraCharges : [])
+        .filter(c => !c.desc?.includes('EARLY DEPARTURE PENALTY'))
+        .reduce((sum, c) => sum + (parseFloat(c.amt || c.amount || 0) || 0), 0);
+
+    // True base room portion of the original total
+    const originalRoomPrice = Math.max(0, originalTotal - existingOtherCharges);
+
+    let stayedAmt = 0;
+    let unstayedAmt = 0;
+    const hasItemized = Array.isArray(booking.nightlyRates) && booking.nightlyRates.length > 0;
+
+    if (hasItemized) {
+        stayedAmt = booking.nightlyRates
+            .filter(r => r.date >= booking.checkIn && r.date < targetOutDate)
+            .reduce((sum, r) => sum + (parseFloat(r.rate) || 0), 0);
+        unstayedAmt = booking.nightlyRates
+            .filter(r => r.date >= targetOutDate && r.date < originalOut)
+            .reduce((sum, r) => sum + (parseFloat(r.rate) || 0), 0);
+        stayedAmt = Number(stayedAmt.toFixed(2));
+        unstayedAmt = Number(unstayedAmt.toFixed(2));
+    } else {
+        const avg = originalRoomPrice / totalNights;
+        stayedAmt = Number((avg * stayedNights).toFixed(2));
+        unstayedAmt = Number((originalRoomPrice - stayedAmt).toFixed(2));
+    }
+
+    return {
+        originalOut,
+        originalTotal,
+        originalRoomPrice,
+        existingOtherCharges,
+        totalNights,
+        stayedNights,
+        unstayedNights,
+        stayedAmt,
+        unstayedAmt,
+        hasItemized
+    };
+}
 
 // --- Open Early Checkout Modal ---
 export const requestEarlyCheckout = () => {
@@ -532,33 +594,34 @@ export const requestEarlyCheckout = () => {
     const s = getStaff().find(x => x.id === id);
     if (!s) return;
 
-    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
-    if (s.checkOut <= s.checkIn) {
-        return window.customAlert ? window.customAlert("Invalid Stay", "Booking check-out is already on or before check-in.") : null;
-    }
-
     currentEcoBooking = s;
 
-    // Populate modal headers
-    const nameEl = $('eco-guest-name');
-    const idEl = $('eco-booking-id');
-    const datesEl = $('eco-stay-dates');
+    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+    const originalOut = (s.earlyCheckout && s.earlyCheckout.originalCheckOut) ? s.earlyCheckout.originalCheckOut : s.checkOut;
+
+    // Populate guest overview card
+    if ($('eco-guest-name')) $('eco-guest-name').innerText = `${s.firstName || ''} ${s.lastName || 'GUEST'}`.trim();
+    if ($('eco-booking-id')) $('eco-booking-id').innerText = s.bookId || s.id;
+    if ($('eco-stay-dates')) $('eco-stay-dates').innerText = `${s.checkIn} → ${originalOut}`;
+
+    const origTotal = (s.earlyCheckout && s.earlyCheckout.originalTotalPrice !== undefined) ? s.earlyCheckout.originalTotalPrice : (parseFloat(s.totalPrice) || 0);
+    if ($('eco-orig-total')) $('eco-orig-total').innerText = `฿${origTotal.toLocaleString()}`;
+
+    // Set date bounds
     const dateInput = $('eco-date');
-
-    if (nameEl) nameEl.innerText = `${s.firstName || ''} ${s.lastName || 'GUEST'}`.trim();
-    if (idEl) idEl.innerText = s.bookId || s.id;
-    if (datesEl) datesEl.innerText = `${s.checkIn} → ${s.checkOut}`;
-
     if (dateInput) {
         dateInput.min = s.checkIn;
-        const maxDate = new Date(s.checkOut + "T12:00:00Z");
+        const maxDate = new Date(originalOut + "T12:00:00Z");
         maxDate.setUTCDate(maxDate.getUTCDate() - 1);
         dateInput.max = maxDate.toISOString().split('T')[0];
 
-        if (todayStr >= s.checkIn && todayStr < s.checkOut) {
+        // Default to today if within stay bounds; else checkIn + 1 day
+        if (todayStr >= s.checkIn && todayStr < originalOut) {
             dateInput.value = todayStr;
         } else {
-            dateInput.value = dateInput.max;
+            const nextDay = new Date(s.checkIn + "T12:00:00Z");
+            nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+            dateInput.value = nextDay.toISOString().split('T')[0];
         }
     }
 
@@ -572,50 +635,21 @@ export const requestEarlyCheckout = () => {
     if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
 };
 
-// --- Recalculate Live Stayed vs Unstayed Breakdown ---
+// --- Recalculate Live Stayed vs Unstayed Breakdown in Modal ---
 export const recalcEarlyCheckoutModal = () => {
     if (!currentEcoBooking) return;
-    const s = currentEcoBooking;
     const targetOut = $('eco-date')?.value;
     if (!targetOut) return;
 
-    const parseFn = window.parseYMD || (str => Date.parse(str));
-    const totalNights = Math.max(1, Math.round((parseFn(s.checkOut) - parseFn(s.checkIn)) / 86400000));
-    const stayedNights = Math.max(0, Math.round((parseFn(targetOut) - parseFn(s.checkIn)) / 86400000));
-    const unstayedNights = Math.max(0, totalNights - stayedNights);
+    const math = calculateStayMath(currentEcoBooking, targetOut);
 
-    currentEcoStayedNts = stayedNights;
-    currentEcoUnstayedNts = unstayedNights;
-
-    const hasItemized = Array.isArray(s.nightlyRates) && s.nightlyRates.length > 0;
-    let stayedAmt = 0;
-    let unstayedAmt = 0;
-
-    if (hasItemized) {
-        stayedAmt = s.nightlyRates
-            .filter(r => r.date >= s.checkIn && r.date < targetOut)
-            .reduce((sum, r) => sum + (parseFloat(r.rate) || 0), 0);
-        unstayedAmt = s.nightlyRates
-            .filter(r => r.date >= targetOut && r.date < s.checkOut)
-            .reduce((sum, r) => sum + (parseFloat(r.rate) || 0), 0);
-        stayedAmt = Number(stayedAmt.toFixed(2));
-        unstayedAmt = Number(unstayedAmt.toFixed(2));
-    } else {
-        const curTotal = parseFloat(s.totalPrice) || 0;
-        const avg = curTotal / totalNights;
-        unstayedAmt = Number((avg * unstayedNights).toFixed(2));
-        stayedAmt = Number((curTotal - unstayedAmt).toFixed(2));
-    }
-
-    currentEcoStayedAmt = stayedAmt;
-    currentEcoUnstayedAmt = unstayedAmt;
-
-    if ($('eco-stayed-nts')) $('eco-stayed-nts').innerText = stayedNights;
-    if ($('eco-stayed-amt')) $('eco-stayed-amt').innerText = `฿${stayedAmt.toLocaleString()}`;
-    if ($('eco-unstayed-nts')) $('eco-unstayed-nts').innerText = unstayedNights;
-    if ($('eco-unstayed-amt')) $('eco-unstayed-amt').innerText = `฿${unstayedAmt.toLocaleString()}`;
-    if ($('eco-rate-note')) $('eco-rate-note').innerText = hasItemized ? 'Calculated using itemized daily rates' : 'Calculated using average daily rate';
-    if ($('eco-btn-refund-sub')) $('eco-btn-refund-sub').innerText = `Deduct ฿${unstayedAmt.toLocaleString()}`;
+    if ($('eco-stayed-nts')) $('eco-stayed-nts').innerText = math.stayedNights;
+    if ($('eco-stayed-amt')) $('eco-stayed-amt').innerText = `฿${math.stayedAmt.toLocaleString()}`;
+    if ($('eco-unstayed-nts')) $('eco-unstayed-nts').innerText = math.unstayedNights;
+    if ($('eco-unstayed-amt')) $('eco-unstayed-amt').innerText = `฿${math.unstayedAmt.toLocaleString()}`;
+    if ($('eco-rate-note')) $('eco-rate-note').innerText = math.hasItemized ? 'Calculated using itemized daily rates' : 'Calculated using average daily rate';
+    if ($('eco-btn-refund-sub')) $('eco-btn-refund-sub').innerText = `Deduct ฿${math.unstayedAmt.toLocaleString()}`;
+    if ($('eco-btn-penalty-sub')) $('eco-btn-penalty-sub').innerText = `Itemize ฿${math.unstayedAmt.toLocaleString()} fee`;
 };
 
 // --- Execute Early Checkout (Refund or Penalty) ---
@@ -627,8 +661,10 @@ export const confirmEarlyCheckout = async (mode) => {
     const id = currentEcoBooking.id;
     const s = getStaff().find(x => x.id === id) || currentEcoBooking;
 
+    // Recalculate live to guarantee zero desync from user input
+    const math = calculateStayMath(s, targetOut);
+
     const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
-    const originalTotal = parseFloat(s.totalPrice) || 0;
     const db = getDb();
     const appId = getAppId();
 
@@ -638,46 +674,47 @@ export const confirmEarlyCheckout = async (mode) => {
     }
     const { doc, updateDoc } = fsModule;
 
-    // Filter out any preexisting penalty before appending
+    // Preserve non-penalty add-ons; remove any previous early departure penalty
     let extraCharges = (Array.isArray(s.extraCharges) ? [...s.extraCharges] : [])
         .filter(c => !c.desc?.includes('EARLY DEPARTURE PENALTY'));
 
-    let newTotalPrice = originalTotal;
+    let newTotalPrice = 0;
     let penaltyId = null;
 
     if (mode === 'refund') {
-        // Mode A: Room charges reduced to stayed nights only
-        newTotalPrice = currentEcoStayedAmt;
+        // Mode A: Total reduced strictly to Stayed Room Portion + Other Add-ons
+        newTotalPrice = Number((math.stayedAmt + math.existingOtherCharges).toFixed(2));
     } else {
-        // Mode B: Full charge retained. Room is Stayed Portion, difference itemized as Penalty Fee
-        newTotalPrice = originalTotal;
+        // Mode B: Total remains FULL Grand Total.
+        // Stayed Room Portion + Added Penalty Line Item + Other Add-ons = Original Total
         penaltyId = 'ec_penalty_' + Date.now();
         extraCharges.push({
             id: penaltyId,
-            desc: `EARLY DEPARTURE PENALTY (${currentEcoUnstayedNts} NT${currentEcoUnstayedNts === 1 ? '' : 'S'})`,
-            amount: currentEcoUnstayedAmt,
-            amt: currentEcoUnstayedAmt,
+            desc: `EARLY DEPARTURE PENALTY (${math.unstayedNights} NT${math.unstayedNights === 1 ? '' : 'S'})`,
+            amount: math.unstayedAmt,
+            amt: math.unstayedAmt,
             date: targetOut
         });
+        newTotalPrice = Number((math.stayedAmt + math.unstayedAmt + math.existingOtherCharges).toFixed(2));
     }
 
     const earlySnapshot = {
-        originalCheckOut: s.checkOut,
-        originalTotalPrice: originalTotal,
+        originalCheckOut: math.originalOut,
+        originalTotalPrice: math.originalTotal,
         departureDate: targetOut,
-        stayedNights: currentEcoStayedNts,
-        unstayedNights: currentEcoUnstayedNts,
-        unstayedAmount: currentEcoUnstayedAmt,
-        stayedAmount: currentEcoStayedAmt,
+        stayedNights: math.stayedNights,
+        unstayedNights: math.unstayedNights,
+        stayedAmount: math.stayedAmt,
+        unstayedAmount: math.unstayedAmt,
         mode: mode,
         penaltyId: penaltyId,
         ts: new Date().toISOString()
     };
 
-    const noteMsg = `\n[EARLY CHECKOUT on ${todayStr}] Departed on ${targetOut} (${currentEcoUnstayedNts} nts early, original departure: ${s.checkOut}). ` +
+    const noteMsg = `\n[EARLY CHECKOUT on ${todayStr}] Departed on ${targetOut} (${math.unstayedNights} nts early, original departure: ${math.originalOut}). ` +
         (mode === 'refund' 
-            ? `Deducted ฿${currentEcoUnstayedAmt.toLocaleString()} unstayed room charges. New Folio Total: ฿${newTotalPrice.toLocaleString()}.` 
-            : `Kept full charge of ฿${originalTotal.toLocaleString()} (฿${currentEcoStayedAmt.toLocaleString()} room + ฿${currentEcoUnstayedAmt.toLocaleString()} penalty fee).`);
+            ? `Deducted ฿${math.unstayedAmt.toLocaleString()} unstayed room charges. New Folio Total: ฿${newTotalPrice.toLocaleString()}.` 
+            : `Kept full charge of ฿${newTotalPrice.toLocaleString()} (฿${math.stayedAmt.toLocaleString()} room + ฿${math.unstayedAmt.toLocaleString()} penalty fee).`);
 
     const updatedNotes = ((s.notes || '') + noteMsg).trim();
 
@@ -692,13 +729,14 @@ export const confirmEarlyCheckout = async (mode) => {
             lastEditedAt: new Date().toISOString()
         });
 
+        // Trigger Channex auto-sync to release unoccupied dates
         if (window.triggerAutoSync) {
             const hotelRooms = getHotelRooms();
             const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
-            window.triggerAutoSync(targetOut, s.checkOut, types);
+            window.triggerAutoSync(targetOut, math.originalOut, types);
         }
 
-        // Synchronize in-memory objects and active form immediately
+        // Synchronize in-memory object and window.staff immediately
         s.checkOut = targetOut;
         s.status = 'early';
         s.totalPrice = newTotalPrice;
@@ -707,6 +745,13 @@ export const confirmEarlyCheckout = async (mode) => {
         s.notes = updatedNotes;
         window.activeExtraCharges = [...extraCharges];
 
+        const staffList = window.staff || [];
+        const staffIdx = staffList.findIndex(x => x.id === id);
+        if (staffIdx > -1) {
+            staffList[staffIdx] = { ...s };
+        }
+
+        // Close early checkout modal and immediately refresh folio form & ledger
         if (window.closeModal) window.closeModal('early-checkout-modal');
         if (window.openGuestModal) window.openGuestModal(s);
         if ($('guest-notes')) $('guest-notes').value = updatedNotes;
@@ -716,7 +761,7 @@ export const confirmEarlyCheckout = async (mode) => {
         if (window.showToast) {
             window.showToast(
                 "Early Checkout", 
-                `Departed on ${targetOut}. ${mode === 'refund' ? `Deducted ฿${currentEcoUnstayedAmt.toLocaleString()}` : `Itemized ฿${currentEcoUnstayedAmt.toLocaleString()} penalty fee`}.`
+                `Departed on ${targetOut}. ${mode === 'refund' ? `Deducted ฿${math.unstayedAmt.toLocaleString()}` : `Itemized ฿${math.unstayedAmt.toLocaleString()} penalty fee`}.`
             );
         }
     } catch (err) {
@@ -737,6 +782,7 @@ export const undoEarlyCheckout = async () => {
     const penaltyId = s.earlyCheckout.penaltyId;
     const rL = s.rooms || [s.room];
 
+    // Collision Check: Verify rooms are not booked by another guest across restored dates
     const occ = window.getOccupiedRooms ? window.getOccupiedRooms(s.checkOut, originalOut, id) : new Set();
     for (let r of rL) {
         if (occ.has(r)) {
@@ -753,7 +799,7 @@ export const undoEarlyCheckout = async () => {
     }
     const { doc, updateDoc } = fsModule;
 
-    // Purge penalty charges from extra charges
+    // Purge penalty line items
     let extraCharges = (Array.isArray(s.extraCharges) ? [...s.extraCharges] : [])
         .filter(c => c.id !== penaltyId && !c.desc?.includes('EARLY DEPARTURE PENALTY'));
 
@@ -771,13 +817,14 @@ export const undoEarlyCheckout = async () => {
             lastEditedAt: new Date().toISOString()
         });
 
+        // Trigger Channex auto-sync to re-block inventory
         if (window.triggerAutoSync) {
             const hotelRooms = getHotelRooms();
             const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
             window.triggerAutoSync(s.checkOut, originalOut, types);
         }
 
-        // Synchronize in-memory objects and active form immediately
+        // Synchronize in-memory objects immediately
         s.checkOut = originalOut;
         s.status = 'here';
         s.totalPrice = originalTotal;
@@ -786,6 +833,13 @@ export const undoEarlyCheckout = async () => {
         s.notes = updatedNotes;
         window.activeExtraCharges = [...extraCharges];
 
+        const staffList = window.staff || [];
+        const staffIdx = staffList.findIndex(x => x.id === id);
+        if (staffIdx > -1) {
+            staffList[staffIdx] = { ...s };
+        }
+
+        // Immediately refresh active folio form & ledger
         if (window.openGuestModal) window.openGuestModal(s);
         if ($('guest-notes')) $('guest-notes').value = updatedNotes;
         if (window.renderExtraCharges) window.renderExtraCharges();
