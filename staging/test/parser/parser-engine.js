@@ -52,7 +52,7 @@ export function parseFlexibleDate(rawStr) {
     return '';
 }
 
-// --- Calendar Jump & Scroll Controller ---
+// --- Calendar Jump Controller ---
 export function jumpCalendarToDate(dateStr) {
     if (!dateStr) return;
 
@@ -61,45 +61,20 @@ export function jumpCalendarToDate(dateStr) {
         window.switchTab('calendar');
     }
 
-    // 2. Select option in jump-month-select
-    const ym = dateStr.slice(0, 7); // e.g. "2026-11"
-    const sel = document.getElementById('jump-month-select');
-    if (sel) {
-        let matchedOpt = Array.from(sel.options).find(o => o.value === ym || o.value.startsWith(ym));
-        if (!matchedOpt) {
-            const d = new Date(dateStr + "T12:00:00Z");
-            const mName = d.toLocaleString('en-US', { month: 'short' });
-            const yStr = d.getFullYear().toString();
-            matchedOpt = Array.from(sel.options).find(o => o.text.includes(mName) && o.text.includes(yStr));
-        }
-        if (matchedOpt) {
-            sel.value = matchedOpt.value;
-            if (typeof window.jumpToMonth === 'function') {
-                window.jumpToMonth(matchedOpt.value);
-            } else if (sel.onchange) {
-                sel.onchange();
-            }
-        }
+    // 2. Set calendar view window 3 days before check-in (native PMS formula)
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+        d.setDate(d.getDate() - 3);
+        window.viewStart = d;
     }
 
-    if (typeof window.jumpToDate === 'function') {
-        window.jumpToDate(dateStr);
+    // 3. Trigger native calendar render
+    if (typeof window.render === 'function') {
+        window.render();
     }
-
-    // 3. Directly scroll #calendar-scroll-container to check-in column
-    setTimeout(() => {
-        const container = document.getElementById('calendar-scroll-container');
-        const cell = document.querySelector(`[data-date="${dateStr}"]`) ||
-                     document.querySelector(`.timeline-col[data-date="${dateStr}"]`) ||
-                     document.getElementById(`day-col-${dateStr}`);
-        if (container && cell) {
-            const cellLeft = cell.offsetLeft;
-            container.scrollTo({ left: Math.max(0, cellLeft - 180), behavior: 'smooth' });
-        } else if (cell && typeof cell.scrollIntoView === 'function') {
-            cell.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-        }
-    }, 250);
 }
+
 
 // --------------------------------------------------------------------------
 // 2. MASTER MULTI-CHANNEL OTA ROUTER
