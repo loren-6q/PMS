@@ -4,10 +4,10 @@
 // ==========================================================================
 
 import { db, appId } from '../core/config.js';
-import { collection, getDocs, doc, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { customAlert } from '../core/ui-dialogs.js';
 
-// Canonical № Bed Formatter
+// Canonical № Bed Formatter (Enforces standard delimiter [Room Name] № [01..NN])
 export function formatDormBedId(parentRoomName, bedNumber) {
     const cleanParent = String(parentRoomName || 'Dorm').trim();
     const paddedNum = String(bedNumber).padStart(2, '0');
@@ -183,7 +183,9 @@ export function renderRoomDefinitionsTable() {
     }
 
     compileRoomsFromDefinitions();
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
 }
 
 export function toggleInactiveRows() {
@@ -434,80 +436,6 @@ export function toggleBedPreviewDrawer() {
     drawer.style.display = 'flex';
 }
 
-export async function standardizeAllPropertiesAndBookings() {
-    customAlert(
-        "Standardize № IDs",
-        "Permanently converts all dorm bed IDs across Firestore properties and bookings into canonical standard ([Room Name] № [01..NN]).",
-        true,
-        async () => {
-            customAlert("Migrating Database...", "Auditing properties and reservations in Firestore...");
-            try {
-                const curProp = window.currentPropertyId;
-                const propSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', curProp));
-                if (!propSnap.exists()) return customAlert("Error", `Property ${curProp} not found.`);
-
-                const propData = propSnap.data();
-                const roomDefs = Array.isArray(propData.roomDefinitions) ? propData.roomDefinitions : [];
-                const migrationMap = new Map();
-                const canonicalRooms = [];
-
-                roomDefs.forEach(def => {
-                    const rawName = (def.name || 'Room').trim();
-                    const cat = (def.category || 'Standard Room').trim();
-                    const total = Math.max(1, parseInt(def.beds || def.units || 1, 10));
-                    const rule = def.rule || 'private';
-                    const floor = def.floor || '1';
-                    const baseId = (def.id || rawName).trim();
-
-                    if (rule === 'private') {
-                        canonicalRooms.push({ id: baseId, name: rawName, category: cat, floor, bed: 'private', rule: 'private' });
-                        migrationMap.set(baseId.toUpperCase(), baseId);
-                    } else {
-                        for (let b = 1; b <= total; b++) {
-                            const canonicalBedId = formatDormBedId(rawName, b);
-                            canonicalRooms.push({ id: canonicalBedId, name: `${rawName} Bed ${b}`, category: cat, floor, rule });
-                            migrationMap.set(canonicalBedId.toUpperCase(), canonicalBedId);
-                            migrationMap.set(`${rawName} Bed ${b}`.toUpperCase(), canonicalBedId);
-                            migrationMap.set(`${rawName}-${b}`.toUpperCase(), canonicalBedId);
-                        }
-                    }
-                });
-
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', curProp), {
-                    rooms: canonicalRooms,
-                    updatedAt: new Date().toISOString()
-                });
-
-                const staffSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
-                let updated = 0;
-                for (let docSnap of staffSnap.docs) {
-                    const b = docSnap.data();
-                    if (b.property !== curProp) continue;
-                    const rList = Array.isArray(b.rooms) ? b.rooms : [b.room];
-                    let dirty = false;
-                    const newRooms = rList.map(r => {
-                        if (!r) return "";
-                        const can = migrationMap.get(String(r).trim().toUpperCase());
-                        if (can && can !== r) { dirty = true; return can; }
-                        return r;
-                    });
-                    if (dirty) {
-                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', docSnap.id), {
-                            rooms: newRooms,
-                            room: newRooms[0] || ""
-                        });
-                        updated++;
-                    }
-                }
-
-                customAlert("Complete", `Standardized ${curProp}: ${canonicalRooms.length} rooms/beds updated, ${updated} bookings migrated.`);
-            } catch (e) {
-                customAlert("Failed", e.message);
-            }
-        }
-    );
-}
-
 export function toggleBatchDormPanel() {
     document.getElementById('batch-dorm-panel')?.classList.toggle('hidden');
 }
@@ -567,6 +495,7 @@ export function clearAllRoomDefs() {
     });
 }
 
+// Global Window Exports
 if (typeof window !== 'undefined') {
     window.formatDormBedId = formatDormBedId;
     window.compileRoomsFromDefinitions = compileRoomsFromDefinitions;
@@ -578,7 +507,6 @@ if (typeof window !== 'undefined') {
     window.closeReorderCategoriesModal = closeReorderCategoriesModal;
     window.moveCategory = moveCategory;
     window.toggleBedPreviewDrawer = toggleBedPreviewDrawer;
-    window.standardizeAllPropertiesAndBookings = standardizeAllPropertiesAndBookings;
     window.toggleBatchDormPanel = toggleBatchDormPanel;
     window.toggleBatchRoomPanel = toggleBatchRoomPanel;
     window.executeBatchDormGenerate = executeBatchDormGenerate;
