@@ -3,7 +3,7 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { loadPropertiesCatalog, toCanonicalPropId } from './properties.js';
+import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey } from './properties.js';
 
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
@@ -18,7 +18,13 @@ export const APP_REGISTRY = [
 export function getActiveProp() {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get('p') || localStorage.getItem('last_prop') || 'swims_resort';
-    return typeof toCanonicalPropId === 'function' ? toCanonicalPropId(raw) : raw.toLowerCase();
+    const canon = typeof toCanonicalPropId === 'function' ? toCanonicalPropId(raw) : raw.toLowerCase();
+    
+    // Automatically repair poisoned local storage
+    if (localStorage.getItem('last_prop') !== canon) {
+        localStorage.setItem('last_prop', canon);
+    }
+    return canon;
 }
 
 export function switchProperty(propId) {
@@ -56,23 +62,23 @@ function renderPropertyPickerList() {
 
     if (list.length === 0) {
         container.innerHTML = `
-            <div class="p-3 text-xs text-slate-500 font-bold flex flex-col gap-1">
-                <span>Loading properties catalog...</span>
-                <button type="button" onclick="window.switchProperty('swims_resort')" class="text-left text-indigo-600 hover:underline">SWIMS RESORT</button>
-                <button type="button" onclick="window.switchProperty('loud_beach')" class="text-left text-indigo-600 hover:underline">LOUD BEACH</button>
+            <div class="p-2 text-xs font-bold flex flex-col gap-1">
+                <button type="button" onclick="window.switchProperty('swims_resort')" class="text-left px-2 py-1.5 rounded hover:bg-slate-100 ${cur === 'swims_resort' ? 'font-black text-indigo-600' : 'text-slate-700'}">SWIMS RESORT</button>
+                <button type="button" onclick="window.switchProperty('loud_samui')" class="text-left px-2 py-1.5 rounded hover:bg-slate-100 ${cur === 'loud_samui' ? 'font-black text-indigo-600' : 'text-slate-700'}">LOUD SAMUI</button>
             </div>`;
         return;
     }
 
     container.innerHTML = list.map(p => {
-        const isSel = p.id.toLowerCase() === cur.toLowerCase();
+        const canonId = toCanonicalPropId(p.id);
+        const isSel = canonId.toLowerCase() === cur.toLowerCase();
         return `
-            <button type="button" onclick="window.switchProperty('${p.id}')" class="w-full text-left px-3 py-2 rounded text-xs font-bold uppercase transition-colors flex items-center justify-between cursor-pointer ${
-                isSel ? 'bg-indigo-600 text-white font-black shadow-sm' : 'text-slate-700 hover:bg-slate-100'
+            <button type="button" onclick="window.switchProperty('${canonId}')" class="w-full text-left px-3 py-2 rounded text-xs font-bold uppercase transition-colors flex items-center justify-between cursor-pointer ${
+                isSel ? 'bg-indigo-600 text-white font-black shadow-xs' : 'text-slate-700 hover:bg-slate-100'
             }">
                 <div class="flex flex-col">
                     <span>${p.name || p.id}</span>
-                    <span class="text-[9px] ${isSel ? 'text-indigo-200' : 'text-slate-400'} font-mono">${(p.short || p.id).toUpperCase()}</span>
+                    <span class="text-[9px] ${isSel ? 'text-indigo-200' : 'text-slate-400'} font-mono">${(p.short || toDisplayPropKey(canonId)).toUpperCase()}</span>
                 </div>
                 ${isSel ? '<span class="text-xs font-black">✓</span>' : ''}
             </button>
@@ -84,10 +90,6 @@ function renderPropertyPickerList() {
     }
 }
 
-/**
- * Mounts the navigation header bar IMMEDIATELY (synchronously)
- * without waiting for asynchronous network or database calls.
- */
 export function mountNav() {
     const container = document.getElementById('app-nav');
     if (!container) return;
@@ -96,109 +98,107 @@ export function mountNav() {
     const curPropId = getActiveProp();
     window.currentPropertyId = curPropId;
 
-    // Resolve display strings immediately from active memory or URL fallback
     const propList = window.activePropertiesList || [];
-    const activeProp = propList.find(p => p.id.toLowerCase() === curPropId.toLowerCase()) || window.currentPropertyConfig || {
+    const activeProp = propList.find(p => toCanonicalPropId(p.id) === curPropId) || window.currentPropertyConfig || {
         id: curPropId,
-        name: curPropId === 'loud_beach' ? 'LOUD Beach' : 'SWIMS Resort',
-        short: curPropId === 'loud_beach' ? 'LOUD' : 'SWIMS',
         iconUrl: DEFAULT_WW_ICON
     };
 
     const logoSrc = activeProp.iconUrl || activeProp.logoUrl || DEFAULT_WW_ICON;
-    const propName = activeProp.name || (curPropId === 'loud_beach' ? 'LOUD Beach' : 'SWIMS Resort');
-    const propShort = (activeProp.short || curPropId).toUpperCase();
 
-    // Preserve existing slot content in HTML (e.g. Save button, search bar)
-    const centerSlot = document.getElementById('nav-center-slot');
-    const rightSlot = document.getElementById('nav-right-slot');
-    const centerHtml = centerSlot ? centerSlot.innerHTML : '';
-    const rightHtml = rightSlot ? rightSlot.innerHTML : '';
+    // Preserve existing child slots without destroying them if already mounted
+    if (!container.querySelector('header')) {
+        const centerSlot = document.getElementById('nav-center-slot');
+        const rightSlot = document.getElementById('nav-right-slot');
+        const centerHtml = centerSlot ? centerSlot.innerHTML : '';
+        const rightHtml = rightSlot ? rightSlot.innerHTML : '';
 
-    // 1. RENDER HEADER SYNCHRONOUSLY RIGHT NOW (0ms Delay)
-    container.innerHTML = `
-        <header class="bg-white px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex items-center justify-between gap-1.5 shrink-0 z-50 unselectable w-full">
-            <!-- LEFT: Brand Logo & Property Dropdown Picker -->
-            <div class="flex items-center gap-2 shrink-0 min-w-0">
-                <div class="relative min-w-0">
-                    
-                    <button type="button" onclick="window.togglePropertyPicker()" class="flex items-center hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-none p-0" title="Switch Property">
-    <img id="main-brand-logo" src="${logoSrc}" alt="Property Logo" class="h-8 sm:h-9 object-contain">
-</button>
+        container.innerHTML = `
+            <header class="bg-white px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex items-center justify-between gap-1.5 shrink-0 z-50 unselectable w-full">
+                <!-- LEFT: Logo-Only Property Dropdown Picker -->
+                <div class="flex items-center gap-2 shrink-0 min-w-0">
+                    <div class="relative min-w-0">
+                        <button type="button" onclick="window.togglePropertyPicker()" class="flex items-center hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-none p-0" title="Switch Property">
+                            <img id="main-brand-logo" src="${logoSrc}" alt="Property Logo" class="h-8 sm:h-9 object-contain">
+                        </button>
 
-                    <!-- Property Picker Dropdown -->
-                    <div id="property-picker-dropdown" class="absolute left-0 top-full mt-2 w-64 bg-white border-2 border-slate-800 rounded-xl shadow-2xl z-[150] hidden overflow-hidden">
-                        <div class="bg-slate-900 text-white text-[10px] font-black uppercase px-3 py-2 flex justify-between items-center">
-                            <span class="flex items-center gap-1.5"><i data-lucide="building-2" size="12" class="text-indigo-400"></i> Switch Property</span>
-                            <button type="button" onclick="window.togglePropertyPicker()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="14"></i></button>
+                        <div id="property-picker-dropdown" class="absolute left-0 top-full mt-2 w-64 bg-white border-2 border-slate-800 rounded-xl shadow-2xl z-[150] hidden overflow-hidden">
+                            <div class="bg-slate-900 text-white text-[10px] font-black uppercase px-3 py-2 flex justify-between items-center">
+                                <span class="flex items-center gap-1.5"><i data-lucide="building-2" size="12" class="text-indigo-400"></i> Switch Property</span>
+                                <button type="button" onclick="window.togglePropertyPicker()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="14"></i></button>
+                            </div>
+                            <div id="property-picker-list" class="p-1 space-y-0.5 max-h-64 overflow-y-auto"></div>
                         </div>
-                        <div id="property-picker-list" class="p-1 space-y-0.5 max-h-64 overflow-y-auto"></div>
                     </div>
                 </div>
-            </div>
 
-            <!-- CENTER: App Context Tools (Slot) -->
-            <div id="nav-center-slot" class="flex items-center gap-1 shrink-1 min-w-0">
-                ${centerHtml}
-            </div>
-
-            <!-- RIGHT: Universal App Links & Actions (Slot) -->
-            <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 ml-auto">
-                <nav class="hidden md:flex items-center gap-0.5">
-                    ${APP_REGISTRY.map(app => {
-                        const isCur = app.id === currentApp;
-                        return `
-                            <a href="${app.href}?p=${curPropId}" onclick="window.navigateToApp('${app.id}', event)" class="px-2 py-1 rounded text-[11px] font-black uppercase flex items-center gap-1 transition-colors ${
-                                isCur ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs' : 'text-slate-600 hover:bg-slate-100 border border-transparent'
-                            }">
-                                <i data-lucide="${app.icon}" class="!w-3 !h-3"></i>
-                                <span>${app.label}</span>
-                            </a>
-                        `;
-                    }).join('')}
-                </nav>
-
-                <div id="nav-right-slot" class="flex items-center gap-1">
-                    ${rightHtml}
+                <!-- CENTER: App Context Tools -->
+                <div id="nav-center-slot" class="flex items-center gap-1 shrink-1 min-w-0">
+                    ${centerHtml}
                 </div>
-            </div>
-        </header>
-    `;
 
-    // 2. Bind Outside-Click Listener
-    document.addEventListener('click', (e) => {
-        const dd = document.getElementById('property-picker-dropdown');
-        const logoBtn = document.getElementById('main-brand-logo')?.closest('button');
-        if (dd && !dd.classList.contains('hidden')) {
-            if (!dd.contains(e.target) && (!logoBtn || !logoBtn.contains(e.target))) {
-                dd.classList.add('hidden');
+                <!-- RIGHT: Universal App Links & Page Actions -->
+                <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 ml-auto">
+                    <nav class="hidden md:flex items-center gap-0.5">
+                        ${APP_REGISTRY.map(app => {
+                            const isCur = app.id === currentApp;
+                            return `
+                                <a href="${app.href}?p=${curPropId}" onclick="window.navigateToApp('${app.id}', event)" class="px-2 py-1 rounded text-[11px] font-black uppercase flex items-center gap-1 transition-colors ${
+                                    isCur ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs' : 'text-slate-600 hover:bg-slate-100 border border-transparent'
+                                }">
+                                    <i data-lucide="${app.icon}" class="!w-3 !h-3"></i>
+                                    <span>${app.label}</span>
+                                </a>
+                            `;
+                        }).join('')}
+                    </nav>
+
+                    <div id="nav-right-slot" class="flex items-center gap-1">
+                        ${rightHtml}
+                    </div>
+                </div>
+            </header>
+        `;
+
+        document.addEventListener('click', (e) => {
+            const dd = document.getElementById('property-picker-dropdown');
+            const logoBtn = document.getElementById('main-brand-logo')?.closest('button');
+            if (dd && !dd.classList.contains('hidden')) {
+                if (!dd.contains(e.target) && (!logoBtn || !logoBtn.contains(e.target))) {
+                    dd.classList.add('hidden');
+                }
             }
-        }
-    });
+        });
+    } else {
+        const logoEl = document.getElementById('main-brand-logo');
+        if (logoEl && logoSrc) logoEl.src = logoSrc;
+    }
 
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
         window.lucide.createIcons();
     }
 
-    // 3. BACKGROUND REFRESH: Query catalog without blocking rendering
+    // Refresh catalog asynchronously
     if (typeof loadPropertiesCatalog === 'function') {
         loadPropertiesCatalog().then(props => {
+            window.activePropertiesList = props;
             if (Array.isArray(props) && props.length > 0) {
-                const updated = props.find(p => p.id.toLowerCase() === curPropId.toLowerCase());
+                const updated = props.find(p => toCanonicalPropId(p.id) === curPropId);
                 if (updated) {
-                    const nameEl = document.getElementById('nav-prop-name');
-                    const codeEl = document.getElementById('nav-prop-code');
                     const logoEl = document.getElementById('main-brand-logo');
-                    if (nameEl && updated.name) nameEl.innerText = updated.name;
-                    if (codeEl && updated.short) codeEl.innerText = updated.short.toUpperCase();
-                    if (logoEl && updated.iconUrl) logoEl.src = updated.iconUrl;
+                    const icon = updated.iconUrl || updated.logoUrl;
+                    if (logoEl && icon) logoEl.src = icon;
+                }
+                const dd = document.getElementById('property-picker-dropdown');
+                if (dd && !dd.classList.contains('hidden')) {
+                    renderPropertyPickerList();
                 }
             }
         }).catch(() => {});
     }
 }
 
-// Global window bridges
+// Global bridges
 if (typeof window !== 'undefined') {
     window.switchProperty = switchProperty;
     window.navigateToApp = navigateToApp;
@@ -206,7 +206,6 @@ if (typeof window !== 'undefined') {
     window.mountNav = mountNav;
 }
 
-// Self-mount immediately
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mountNav);
 } else {
