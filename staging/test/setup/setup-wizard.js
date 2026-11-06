@@ -7,8 +7,7 @@ import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { customAlert } from '../core/ui-dialogs.js';
-import { loadPropertiesCatalog, toCanonicalPropId, getActivePropertyId } from '../core/properties.js';
-import { mountNav } from '../core/nav.js';
+import { loadPropertiesCatalog, toCanonicalPropId } from '../core/properties.js';
 
 import { renderPaymentMethodsTable, renderAddonsTable, updateLogoPreview } from './setup-profile.js';
 import { renderRoomDefinitionsTable, compileRoomsFromDefinitions } from './setup-rooms.js';
@@ -261,14 +260,19 @@ export async function initSetup() {
         await signInAnonymously(auth);
 
         // Direct query to ensure properties ALWAYS load
-        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'properties'));
-        const props = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        window.availableProperties = props;
+        const props = await loadPropertiesCatalog();
+        const urlParams = new URLSearchParams(window.location.search);
+        const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || 'swims_resort';
+        window.currentPropertyId = toCanonicalPropId(pParam);
 
-        const targetPropId = getActivePropertyId();
+         // Populate top navigation and property switcher
+        await loadPropertyData(window.currentPropertyId);
+        jumpStep(1);
 
-        // Populate top navigation and property switcher
-        await mountNav({ currentApp: 'setup' });
+    } catch (err) {
+        console.error("[Setup Boot Error]:", err);
+    }
+}
         
         // Populate header dropdown selector if present
         const switcher = document.getElementById('property-select');
