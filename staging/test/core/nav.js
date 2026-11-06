@@ -18,11 +18,11 @@ export const APP_REGISTRY = [
 export function getActiveProp() {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get('p') || localStorage.getItem('last_prop') || 'swims_resort';
-    return toCanonicalPropId(raw);
+    return typeof toCanonicalPropId === 'function' ? toCanonicalPropId(raw) : raw.toLowerCase();
 }
 
 export function switchProperty(propId) {
-    const target = toCanonicalPropId(propId);
+    const target = typeof toCanonicalPropId === 'function' ? toCanonicalPropId(propId) : propId.toLowerCase();
     localStorage.setItem('last_prop', target);
     const url = new URL(window.location.href);
     url.searchParams.set('p', target);
@@ -55,7 +55,12 @@ function renderPropertyPickerList() {
     const cur = getActiveProp();
 
     if (list.length === 0) {
-        container.innerHTML = `<div class="p-3 text-xs text-slate-500 font-bold">No properties loaded.</div>`;
+        container.innerHTML = `
+            <div class="p-3 text-xs text-slate-500 font-bold flex flex-col gap-1">
+                <span>Loading properties catalog...</span>
+                <button type="button" onclick="window.switchProperty('swims_resort')" class="text-left text-indigo-600 hover:underline">SWIMS RESORT</button>
+                <button type="button" onclick="window.switchProperty('loud_beach')" class="text-left text-indigo-600 hover:underline">LOUD BEACH</button>
+            </div>`;
         return;
     }
 
@@ -79,7 +84,11 @@ function renderPropertyPickerList() {
     }
 }
 
-export async function mountNav() {
+/**
+ * Mounts the navigation header bar IMMEDIATELY (synchronously)
+ * without waiting for asynchronous network or database calls.
+ */
+export function mountNav() {
     const container = document.getElementById('app-nav');
     if (!container) return;
 
@@ -87,31 +96,26 @@ export async function mountNav() {
     const curPropId = getActiveProp();
     window.currentPropertyId = curPropId;
 
-    // Load property list from Firestore
-    if (!window.activePropertiesList || window.activePropertiesList.length === 0) {
-        await loadPropertiesCatalog();
-    }
-
+    // Resolve display strings immediately from active memory or URL fallback
     const propList = window.activePropertiesList || [];
-    const activeProp = propList.find(p => p.id.toLowerCase() === curPropId.toLowerCase()) || propList[0] || {
+    const activeProp = propList.find(p => p.id.toLowerCase() === curPropId.toLowerCase()) || window.currentPropertyConfig || {
         id: curPropId,
-        name: curPropId,
-        short: curPropId.toUpperCase(),
+        name: curPropId === 'loud_beach' ? 'LOUD Beach' : 'SWIMS Resort',
+        short: curPropId === 'loud_beach' ? 'LOUD' : 'SWIMS',
         iconUrl: DEFAULT_WW_ICON
     };
 
-    window.currentPropertyConfig = activeProp;
-
     const logoSrc = activeProp.iconUrl || activeProp.logoUrl || DEFAULT_WW_ICON;
-    const propName = activeProp.name || curPropId;
-    const propShort = (activeProp.short || toDisplayPropKey(curPropId)).toUpperCase();
+    const propName = activeProp.name || (curPropId === 'loud_beach' ? 'LOUD Beach' : 'SWIMS Resort');
+    const propShort = (activeProp.short || curPropId).toUpperCase();
 
-    // Preserve any existing slot content defined in HTML
+    // Preserve existing slot content in HTML (e.g. Save button, search bar)
     const centerSlot = document.getElementById('nav-center-slot');
     const rightSlot = document.getElementById('nav-right-slot');
     const centerHtml = centerSlot ? centerSlot.innerHTML : '';
     const rightHtml = rightSlot ? rightSlot.innerHTML : '';
 
+    // 1. RENDER HEADER SYNCHRONOUSLY RIGHT NOW (0ms Delay)
     container.innerHTML = `
         <header class="bg-white px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex items-center justify-between gap-1.5 shrink-0 z-50 unselectable w-full">
             <!-- LEFT: Brand Logo & Property Dropdown Picker -->
@@ -167,7 +171,7 @@ export async function mountNav() {
         </header>
     `;
 
-    // Close dropdowns on outside click
+    // 2. Bind Outside-Click Listener
     document.addEventListener('click', (e) => {
         const dd = document.getElementById('property-picker-dropdown');
         const logoBtn = document.getElementById('main-brand-logo')?.closest('button');
@@ -181,6 +185,23 @@ export async function mountNav() {
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
         window.lucide.createIcons();
     }
+
+    // 3. BACKGROUND REFRESH: Query catalog without blocking rendering
+    if (typeof loadPropertiesCatalog === 'function') {
+        loadPropertiesCatalog().then(props => {
+            if (Array.isArray(props) && props.length > 0) {
+                const updated = props.find(p => p.id.toLowerCase() === curPropId.toLowerCase());
+                if (updated) {
+                    const nameEl = document.getElementById('nav-prop-name');
+                    const codeEl = document.getElementById('nav-prop-code');
+                    const logoEl = document.getElementById('main-brand-logo');
+                    if (nameEl && updated.name) nameEl.innerText = updated.name;
+                    if (codeEl && updated.short) codeEl.innerText = updated.short.toUpperCase();
+                    if (logoEl && updated.iconUrl) logoEl.src = updated.iconUrl;
+                }
+            }
+        }).catch(() => {});
+    }
 }
 
 // Global window bridges
@@ -191,7 +212,7 @@ if (typeof window !== 'undefined') {
     window.mountNav = mountNav;
 }
 
-// Self-mounting on DOM ready
+// Self-mount immediately
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mountNav);
 } else {
