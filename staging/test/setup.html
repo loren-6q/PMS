@@ -1,0 +1,823 @@
+<!-- ==========================================================================
+     setup.html - Property Setup Wizard & Onboarding UI
+     Wild & Wandering Property Management System
+     ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Setup Wizard - Wild & Wandering</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { font-family: 'Roboto Condensed', sans-serif; font-size: 12px; }
+        .step-pill { background-color: #ffffff; color: #64748b; border: 1px solid #e2e8f0; }
+        .step-pill.active { background-color: #4f46e5; color: #ffffff; border-color: #4338ca; }
+        .step-pill.completed { background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+        
+        #addon-list-body tr, #payment-methods-table-body tr, #room-def-list-body tr {
+            height: 24px !important;
+            max-height: 24px !important;
+        }
+        #addon-list-body td, #payment-methods-table-body td, #room-def-list-body td {
+            padding: 1px 4px !important;
+            font-size: 11px !important;
+            line-height: 1.1 !important;
+            vertical-align: middle !important;
+        }
+        .table-input {
+            border: 1px solid #cbd5e1;
+            border-radius: 0.25rem;
+            padding: 0px 4px !important;
+            outline: none;
+            font-size: 11px !important;
+            font-weight: 700;
+            font-family: 'Roboto Condensed', sans-serif;
+            background-color: #ffffff;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            width: 100%;
+            box-sizing: border-box;
+            height: 20px !important;
+            min-height: 20px !important;
+            max-height: 20px !important;
+            line-height: 1 !important;
+        }
+        .table-input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18); background-color: #fff; }
+        .label-base { display: block; font-size: 0.625rem; font-weight: 900; color: #64748b; margin-bottom: 0.15rem; text-transform: uppercase; letter-spacing: 0.08em; }
+
+        .order-btn-col {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 1px;
+            height: 20px;
+        }
+        .order-arrow-btn {
+            height: 9px !important;
+            width: 14px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            line-height: 0 !important;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col antialiased overflow-hidden">
+
+    <!-- TOP NAVIGATION HEADER -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-40 px-3 py-1 flex items-center justify-between shadow-xs shrink-0">
+        <div class="flex items-center gap-2">
+            <a href="index.html" class="flex items-center hover:opacity-90 transition-opacity">
+                <img id="nav-brand-icon" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Brand Logo" class="h-7 sm:h-8 object-contain mr-1">
+            </a>
+            <div>
+                <h1 class="text-xs font-black text-slate-900 leading-tight">Property Setup Wizard</h1>
+                <p class="text-[9px] text-slate-400 font-bold" id="header-status-text">Configuration Engine</p>
+            </div>
+
+            <div class="h-4 w-px bg-slate-200 mx-1"></div>
+
+            <div class="flex items-center gap-1 bg-slate-100 rounded p-0.5 border border-slate-200">
+                <i data-lucide="building-2" size="13" class="text-slate-500 ml-1"></i>
+                <select id="property-select" onchange="window.switchSetupProperty(this.value)" class="bg-transparent text-[11px] font-bold text-slate-800 pr-1 py-0 cursor-pointer outline-none">
+                    <option value="">Loading properties...</option>
+                </select>
+                <button type="button" onclick="window.openNewPropertyModal()" class="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[9.5px] font-black uppercase rounded border border-indigo-200 cursor-pointer transition-colors shadow-2xs" title="Create a new property">
+                    + New
+                </button>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+            <a id="btn-goto-pms" href="pms.html" onclick="event.preventDefault(); window.launchApp('pms')" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-bold transition-colors">
+                <i data-lucide="layout-grid" size="13" class="text-indigo-600"></i>
+                <span class="hidden sm:inline">PMS</span>
+            </a>
+            <a id="btn-goto-cm" href="cm.html" onclick="event.preventDefault(); window.launchApp('cm')" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-bold transition-colors">
+                <i data-lucide="calendar" size="13" class="text-indigo-600"></i>
+                <span class="hidden sm:inline">Channel Manager</span>
+            </a>
+            <button type="button" onclick="window.savePropertyToDatabase(true)" id="btn-save-header" class="flex items-center gap-1 px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase shadow-xs transition-colors cursor-pointer">
+                <i data-lucide="save" size="13"></i>
+                <span>SAVE</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 5-STEP STEPPER NAVIGATION -->
+    <nav class="bg-white border-b border-slate-200 px-3 py-1 shrink-0">
+        <div class="max-w-7xl mx-auto grid grid-cols-5 gap-1.5">
+            <button type="button" onclick="window.jumpStep(1)" id="pill-step-1" class="step-pill active py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
+                <span id="badge-step-1" class="w-5 h-5 rounded bg-white text-indigo-700 font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs">1</span>
+                <span class="text-[11px] font-extrabold truncate">General & Payments</span>
+            </button>
+            <button type="button" onclick="window.jumpStep(2)" id="pill-step-2" class="step-pill py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
+                <span id="badge-step-2" class="w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200">2</span>
+                <span class="text-[11px] font-extrabold truncate">Room Inventory</span>
+            </button>
+            <button type="button" onclick="window.jumpStep(3)" id="pill-step-3" class="step-pill py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
+                <span id="badge-step-3" class="w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200">3</span>
+                <span class="text-[11px] font-extrabold truncate">Channel Manager</span>
+            </button>
+            <button type="button" onclick="window.jumpStep(4)" id="pill-step-4" class="step-pill py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
+                <span id="badge-step-4" class="w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200">4</span>
+                <span class="text-[11px] font-extrabold truncate">Pricing & Curves</span>
+            </button>
+            <button type="button" onclick="window.jumpStep(5)" id="pill-step-5" class="step-pill py-1 px-2 rounded border text-left transition-all flex items-center gap-1.5 cursor-pointer">
+                <span id="badge-step-5" class="w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200">5</span>
+                <span class="text-[11px] font-extrabold truncate">Review & Launch</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-2 flex flex-col gap-2 min-h-0 overflow-hidden">
+
+        <!-- STEP 1: GENERAL PROFILE, BRAND ASSETS, PAYMENTS & ADD-ONS -->
+        <section id="step-content-1" class="space-y-2 flex-1 overflow-y-auto">
+            <!-- Property Details Card -->
+            <div class="bg-indigo-50/50 border border-indigo-200 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-indigo-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-profile', 'chev-prop-profile')">
+                    <h2 class="text-xs font-black uppercase text-indigo-950 flex items-center gap-1.5">
+                        <i data-lucide="building" class="text-indigo-600" size="14"></i> Property Profile
+                    </h2>
+                    <i data-lucide="chevron-down" id="chev-prop-profile" size="14" class="text-indigo-600 transition-transform"></i>
+                </div>
+
+                <div id="sec-prop-profile" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <div>
+                        <label class="label-base text-indigo-900">Property Name</label>
+                        <input type="text" id="prop-name" class="table-input font-bold" value="">
+                    </div>
+                    <div>
+                        <label class="label-base text-indigo-900">Short Code</label>
+                        <input type="text" id="prop-short" class="table-input uppercase font-mono font-black" value="">
+                    </div>
+                    <div>
+                        <label class="label-base text-indigo-900">Base Currency</label>
+                        <select id="prop-currency" class="table-input font-bold">
+                            <option value="THB" selected>THB (฿) - Thai Baht</option>
+                            <option value="USD">USD ($) - US Dollar</option>
+                            <option value="EUR">EUR (€) - Euro</option>
+                            <option value="GBP">GBP (£) - British Pound</option>
+                            <option value="VND">VND (₫) - Vietnamese Dong</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label-base text-indigo-900">Timezone</label>
+                        <select id="prop-timezone" class="table-input font-medium">
+                            <option value="Asia/Bangkok" selected>Asia/Bangkok (UTC+7)</option>
+                            <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
+                            <option value="Europe/London">Europe/London (UTC+0)</option>
+                            <option value="America/New_York">America/New York (UTC-5)</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1 sm:col-span-2">
+                        <label class="label-base text-indigo-900">Physical Address</label>
+                        <input type="text" id="prop-address" placeholder="Physical Address" class="table-input font-medium">
+                    </div>
+                    <div>
+                        <label class="label-base text-indigo-900">Contact Email</label>
+                        <input type="email" id="prop-email" placeholder="Email" class="table-input font-medium">
+                    </div>
+                    <div>
+                        <label class="label-base text-indigo-900">Phone / WhatsApp</label>
+                        <input type="text" id="prop-phone" placeholder="Phone" class="table-input font-medium">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Brand Assets Card -->
+            <div class="bg-purple-50/50 border border-purple-200 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-purple-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-logos', 'chev-prop-logos')">
+                    <h2 class="text-xs font-black uppercase text-purple-950 flex items-center gap-1.5">
+                        <i data-lucide="image" class="text-purple-600" size="14"></i> Brand Assets & Logos
+                    </h2>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="event.stopPropagation(); window.resetLogosToDefault()" class="px-2 py-0.5 bg-white hover:bg-purple-100 text-purple-700 text-[9px] font-black uppercase rounded border border-purple-300 cursor-pointer transition-colors">
+                            Reset to Default
+                        </button>
+                        <i data-lucide="chevron-down" id="chev-prop-logos" size="14" class="text-purple-600 transition-transform"></i>
+                    </div>
+                </div>
+
+                <div id="sec-prop-logos" class="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                    <div class="border border-purple-200 rounded p-2 bg-white flex flex-col gap-1.5">
+                        <span class="label-base text-purple-900">Primary Brand Logo</span>
+                        <div class="h-12 w-full bg-slate-50 rounded border border-purple-200 flex items-center justify-center p-1 overflow-hidden">
+                            <img id="preview-logo-primary" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Primary Logo" class="h-full object-contain">
+                        </div>
+                        <input type="text" id="prop-logo-url" placeholder="Direct Image URL..." oninput="window.updateLogoPreview('primary', this.value)" class="table-input font-mono !text-[10px]">
+                        <label class="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 rounded font-black text-[9.5px] uppercase text-center cursor-pointer shadow-2xs">
+                            Upload File
+                            <input type="file" accept="image/*" class="hidden" onchange="window.handleLogoFileUpload(event, 'primary')">
+                        </label>
+                    </div>
+
+                    <div class="border border-purple-200 rounded p-2 bg-white flex flex-col gap-1.5">
+                        <span class="label-base text-purple-900">Header Banner / Stripe</span>
+                        <div class="h-12 w-full bg-slate-50 rounded border border-purple-200 flex items-center justify-center p-1 overflow-hidden">
+                            <img id="preview-logo-banner" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Banner Logo" class="h-full object-contain">
+                        </div>
+                        <input type="text" id="prop-banner-url" placeholder="Direct Image URL..." oninput="window.updateLogoPreview('banner', this.value)" class="table-input font-mono !text-[10px]">
+                        <label class="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 rounded font-black text-[9.5px] uppercase text-center cursor-pointer shadow-2xs">
+                            Upload File
+                            <input type="file" accept="image/*" class="hidden" onchange="window.handleLogoFileUpload(event, 'banner')">
+                        </label>
+                    </div>
+
+                    <div class="border border-purple-200 rounded p-2 bg-white flex flex-col gap-1.5">
+                        <span class="label-base text-purple-900">Square Favicon & App Icon</span>
+                        <div class="h-12 w-full bg-slate-50 rounded border border-purple-200 flex items-center justify-center p-1 overflow-hidden">
+                            <img id="preview-logo-icon" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="App Icon" class="h-10 w-10 object-contain rounded">
+                        </div>
+                        <input type="text" id="prop-icon-url" placeholder="Direct Image URL..." oninput="window.updateLogoPreview('icon', this.value)" class="table-input font-mono !text-[10px]">
+                        <label class="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 rounded font-black text-[9.5px] uppercase text-center cursor-pointer shadow-2xs">
+                            Upload File
+                            <input type="file" accept="image/*" class="hidden" onchange="window.handleLogoFileUpload(event, 'icon')">
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Methods Card -->
+            <div class="bg-emerald-50/50 border border-emerald-200 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-emerald-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-payments', 'chev-prop-payments')">
+                    <div>
+                        <h2 class="text-xs font-black uppercase text-emerald-950 flex items-center gap-1.5">
+                            <i data-lucide="credit-card" class="text-emerald-600" size="14"></i> Payment Methods & Commission (KP) Setup
+                        </h2>
+                        <span class="text-[9.5px] text-emerald-700 font-bold">Configure settlement methods and OTA commission withholding.</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="event.stopPropagation(); window.restoreDefaultAddonsAndPayments()" class="px-2 py-0.5 bg-white hover:bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase rounded border border-emerald-300 cursor-pointer">
+                            Restore Defaults
+                        </button>
+                        <i data-lucide="chevron-down" id="chev-prop-payments" size="14" class="text-emerald-700 transition-transform"></i>
+                    </div>
+                </div>
+
+                <div id="sec-prop-payments" class="overflow-x-auto border border-emerald-200 rounded bg-white">
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0">
+                            <tr>
+                                <th class="py-1 px-2 w-32">Identifier / Key</th>
+                                <th class="py-1 px-2">Display Label</th>
+                                <th class="py-1 px-2 w-48">Accounting Class</th>
+                                <th class="py-1 px-2 w-16 text-center">Del</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payment-methods-table-body" class="divide-y divide-slate-100 font-semibold"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Add-ons Card -->
+            <div class="bg-amber-50/50 border border-amber-200 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-amber-200 pb-1.5 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-prop-addons', 'chev-prop-addons')">
+                    <div>
+                        <h2 class="text-xs font-black uppercase text-amber-950 flex items-center gap-1.5">
+                            <i data-lucide="plus-circle" class="text-amber-600" size="14"></i> Add-ons & Extra Charges
+                        </h2>
+                        <span class="text-[9.5px] text-amber-700 font-bold">Standard service catalogue for guest billing.</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="event.stopPropagation(); window.addBlankAddonRow()" class="bg-amber-600 hover:bg-amber-700 text-white font-black text-[9.5px] uppercase px-2 py-0.5 rounded shadow-xs flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="plus" size="11"></i> Add Item
+                        </button>
+                        <i data-lucide="chevron-down" id="chev-prop-addons" size="14" class="text-amber-700 transition-transform"></i>
+                    </div>
+                </div>
+
+                <div id="sec-prop-addons" class="overflow-x-auto border border-amber-200 rounded bg-white">
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0">
+                            <tr>
+                                <th class="py-1 px-1.5 w-14 text-center">Order</th>
+                                <th class="py-1 px-1.5 w-2/5">Item / Service Name</th>
+                                <th class="py-1 px-1.5 w-1/5">Category</th>
+                                <th class="py-1 px-1.5 w-1/5 text-center">Unit Price (฿)</th>
+                                <th class="py-1 px-1.5 text-center w-8">Del</th>
+                            </tr>
+                        </thead>
+                        <tbody id="addon-list-body" class="divide-y divide-slate-100 font-semibold"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- STEP 2: ROOM INVENTORY -->
+        <section id="step-content-2" class="flex-1 flex flex-col min-h-0 hidden">
+            <div class="bg-white border border-slate-300 rounded-lg p-2 shadow-xs flex-1 flex flex-col min-h-0">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-1 mb-1 shrink-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <h3 class="text-xs font-black uppercase text-slate-800">Room Inventory</h3>
+                        <span id="room-count-badge" class="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-black text-[9.5px]">0 Rooms</span>
+                        <span id="unit-count-badge" class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 font-bold text-[9.5px]">0 Beds/Units Total</span>
+                    </div>
+
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <button type="button" onclick="window.addBlankRoomDef()" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
+                            <i data-lucide="plus" size="11"></i> Add Room
+                        </button>
+                        <button type="button" onclick="window.openReorderCategoriesModal()" class="px-2 py-0.5 rounded bg-indigo-800 hover:bg-indigo-900 text-white text-[9.5px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs" title="Reorder entire room categories">
+                            <i data-lucide="arrow-up-down" size="11"></i> Reorder Categories
+                        </button>
+                        <button type="button" onclick="window.toggleBatchDormPanel()" class="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white text-[9.5px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
+                            <i data-lucide="bed-double" size="11"></i> Batch Dorm
+                        </button>
+                        <button type="button" onclick="window.toggleBatchRoomPanel()" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-black uppercase flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
+                            <i data-lucide="door-closed" size="11"></i> Batch Room
+                        </button>
+                        <button type="button" onclick="window.toggleBedPreviewDrawer()" id="btn-toggle-bed-preview" class="px-2 py-0.5 rounded border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[9.5px] font-black uppercase flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="eye" size="11"></i> All Beds
+                        </button>
+                        <button type="button" onclick="window.standardizeAllPropertiesAndBookings()" class="px-2 py-0.5 rounded border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800 text-[9.5px] font-black uppercase flex items-center gap-1 cursor-pointer" title="Convert all beds and booking records to canonical standard № IDs">
+                            <i data-lucide="shield-check" size="11"></i> Standardize №
+                        </button>
+                        <button type="button" onclick="window.clearAllRoomDefs()" class="px-2 py-0.5 rounded border border-rose-200 text-rose-600 hover:bg-rose-50 text-[9.5px] font-black uppercase transition-colors cursor-pointer">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Batch Dorm Panel -->
+                <div id="batch-dorm-panel" class="hidden mb-1 p-2 bg-amber-50/90 border border-amber-300 rounded text-xs shrink-0 shadow-xs">
+                    <div class="flex items-center justify-between pb-1 mb-1 border-b border-amber-200">
+                        <span class="font-black text-amber-900 uppercase text-[9.5px] flex items-center gap-1">
+                            <i data-lucide="bed-double" size="12"></i> Batch Dorm Generator
+                        </span>
+                        <button type="button" onclick="window.toggleBatchDormPanel()" class="text-amber-800 hover:text-black cursor-pointer"><i data-lucide="x" size="13"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                        <div>
+                            <label class="label-base text-amber-900">Room Name</label>
+                            <input type="text" id="gen-dorm-name" placeholder="e.g. DORM A" class="table-input font-bold" value="DORM A">
+                        </div>
+                        <div class="col-span-2 sm:col-span-1">
+                            <label class="label-base text-amber-900">Category Name</label>
+                            <input type="text" id="gen-dorm-cat" placeholder="e.g. Standard 6-Bed Dorm" class="table-input font-bold" value="Standard 6-Bed Dorm">
+                        </div>
+                        <div>
+                            <label class="label-base text-amber-900">Beds Count</label>
+                            <input type="number" id="gen-dorm-beds" min="1" max="60" value="6" class="table-input font-black text-center">
+                        </div>
+                        <div>
+                            <label class="label-base text-amber-900">Floor</label>
+                            <input type="text" id="gen-dorm-floor" value="1" class="table-input text-center font-bold">
+                        </div>
+                        <div>
+                            <label class="label-base text-amber-900">Bunk Stacking</label>
+                            <select id="gen-dorm-rule" class="table-input font-bold">
+                                <option value="odd-top">DORM (Top # Odd)</option>
+                                <option value="even-top">DORM (Top # Even)</option>
+                                <option value="single">DORM (Single Beds)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end mt-1">
+                        <button type="button" onclick="window.executeBatchDormGenerate()" class="px-2.5 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[9.5px] rounded shadow-xs cursor-pointer">
+                            Generate Dorm Room
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Batch Private Room Panel -->
+                <div id="batch-room-panel" class="hidden mb-1 p-2 bg-emerald-50/90 border border-emerald-300 rounded text-xs shrink-0 shadow-xs">
+                    <div class="flex items-center justify-between pb-1 mb-1 border-b border-emerald-200">
+                        <span class="font-black text-emerald-900 uppercase text-[9.5px] flex items-center gap-1">
+                            <i data-lucide="door-closed" size="12"></i> Batch Room Generator
+                        </span>
+                        <button type="button" onclick="window.toggleBatchRoomPanel()" class="text-emerald-800 hover:text-black cursor-pointer"><i data-lucide="x" size="13"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                        <div>
+                            <label class="label-base text-emerald-900">Name / Prefix</label>
+                            <input type="text" id="gen-room-prefix" placeholder="e.g. ROOM " class="table-input font-bold" value="ROOM ">
+                        </div>
+                        <div>
+                            <label class="label-base text-emerald-900">Category Name</label>
+                            <input type="text" id="gen-room-cat" placeholder="e.g. Deluxe King" class="table-input font-bold" value="Deluxe King Room">
+                        </div>
+                        <div>
+                            <label class="label-base text-emerald-900">Start # &rarr; End #</label>
+                            <div class="flex items-center gap-1">
+                                <input type="number" id="gen-room-start" value="1" min="1" class="table-input text-center font-bold">
+                                <span>-</span>
+                                <input type="number" id="gen-room-end" value="4" min="1" class="table-input text-center font-bold">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="label-base text-emerald-900">Floor</label>
+                            <input type="text" id="gen-room-floor" value="1" class="table-input text-center font-bold">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="button" onclick="window.executeBatchRoomGenerate()" class="w-full py-0.5 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[9.5px] rounded shadow-xs cursor-pointer h-[22px]">
+                                Generate Rooms
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Room Definitions Table -->
+                <div class="border border-slate-200 rounded flex-1 min-h-0 overflow-y-auto">
+                    <datalist id="setup-category-datalist"></datalist>
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0 z-20 shadow-xs">
+                            <tr>
+                                <th class="py-1 px-1.5 w-12 text-center">#</th>
+                                <th class="py-1 px-1.5 w-32">Room Name</th>
+                                <th class="py-1 px-1.5">Category</th>
+                                <th class="py-1 px-1.5 w-20 text-center">Units / Beds</th>
+                                <th class="py-1 px-1.5 w-16 text-center">Floor</th>
+                                <th class="py-1 px-1.5 w-36">Room Rule</th>
+                                <th class="py-1 px-1.5 text-center w-8">Del</th>
+                            </tr>
+                        </thead>
+                        <tbody id="room-def-list-body" class="divide-y divide-slate-100 font-semibold"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- STEP 3: CHANNEL MANAGER & MAPPING -->
+        <section id="step-content-3" class="space-y-2 flex-1 overflow-y-auto hidden">
+            <div class="bg-sky-50/60 border border-sky-200 rounded-lg p-2 shadow-xs">
+                <div class="border-b border-sky-200 pb-1 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-chan-creds', 'chev-chan-creds')">
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-xs font-black uppercase text-sky-950 flex items-center gap-1.5">
+                            <i data-lucide="key-round" class="text-sky-600" size="14"></i> Channel Manager Connection
+                        </h2>
+                    </div>
+                    <i data-lucide="chevron-down" id="chev-chan-creds" size="14" class="text-sky-600 transition-transform"></i>
+                </div>
+
+                <div id="sec-chan-creds" class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                    <div>
+                        <label class="label-base text-sky-900">Channex API Key</label>
+                        <input type="password" id="chan-api-key" placeholder="Enter API key..." class="table-input font-mono">
+                    </div>
+                    <div>
+                        <label class="label-base text-sky-900">Channex Property ID</label>
+                        <input type="text" id="chan-prop-id" placeholder="UUID e.g. be74cdc9-..." class="table-input font-mono">
+                    </div>
+                    <div class="flex items-end">
+                        <button type="button" onclick="window.fetchChannexData()" class="w-full py-1 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase rounded transition-colors shadow-xs cursor-pointer h-[22px]">
+                            Fetch Channex Data
+                        </button>
+                    </div>
+                    <div class="flex items-end">
+                        <button type="button" onclick="window.openCreateRatePlanModal()" class="w-full py-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9.5px] uppercase rounded transition-colors shadow-xs cursor-pointer h-[22px]">
+                            + Create & Push Plan
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-2" id="unified-mapping-container"></div>
+        </section>
+
+        <!-- STEP 4: PRICING RULES & CURVES -->
+        <section id="step-content-4" class="space-y-2 flex-1 overflow-y-auto hidden">
+            <!-- Base Rate Anchors Card -->
+            <div class="bg-indigo-50/70 border border-indigo-200 rounded-lg p-2.5 shadow-xs">
+                <div class="border-b border-indigo-200 pb-1 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-anchors', 'chev-price-anchors')">
+                    <div>
+                        <h2 class="text-xs font-black uppercase text-indigo-950 flex items-center gap-1.5">
+                            <i data-lucide="anchor" size="14" class="text-indigo-600"></i> Base Rate Anchors & Master Channel
+                        </h2>
+                        <span class="text-[9px] text-indigo-700 font-bold">The master channel receives the exact price typed on the calendar (1:1 baseline).</span>
+                    </div>
+                    <i data-lucide="chevron-down" id="chev-price-anchors" size="14" class="text-indigo-600 transition-transform"></i>
+                </div>
+
+                <div id="sec-price-anchors" class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <div class="bg-white p-2 rounded border border-indigo-200 shadow-2xs">
+                        <label class="label-base text-indigo-700">Master Anchor Channel</label>
+                        <select id="rule-master-driver" class="table-input font-bold text-slate-800" onchange="window.pricingRules.masterDriver = this.value; window.renderChannelRulesList();">
+                            <option value="Direct" selected>Direct (Website Booking Engine)</option>
+                            <option value="Default">Default (Standard Channel)</option>
+                            <option value="Booking.com">Booking.com</option>
+                            <option value="Hostelworld">Hostelworld</option>
+                            <option value="Agoda">Agoda</option>
+                            <option value="Expedia">Expedia</option>
+                            <option value="Airbnb">Airbnb</option>
+                        </select>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-indigo-200 shadow-2xs">
+                        <label class="label-base text-indigo-700">Dorm Master Room Anchor</label>
+                        <select id="anchor-dorm-select" class="table-input font-bold text-slate-800"></select>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-indigo-200 shadow-2xs">
+                        <label class="label-base text-indigo-700">Private Master Room Anchor</label>
+                        <select id="anchor-private-select" class="table-input font-bold text-slate-800"></select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bidirectional Room Pricing Links -->
+            <div class="bg-slate-50/90 border border-slate-300 rounded-lg p-2.5 shadow-xs">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-1 mb-1.5 cursor-pointer" onclick="window.toggleCardSection('sec-price-links', 'chev-price-links')">
+                    <h3 class="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
+                        <i data-lucide="link" size="14" class="text-indigo-600"></i> Bidirectional Room Pricing Links
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="event.stopPropagation(); window.addRelationshipRow()" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase transition-colors cursor-pointer shadow-xs">
+                            + Add Link Rule
+                        </button>
+                        <i data-lucide="chevron-down" id="chev-price-links" size="14" class="text-slate-500 transition-transform"></i>
+                    </div>
+                </div>
+
+                <div id="sec-price-links" class="overflow-x-auto border border-slate-200 rounded bg-white">
+                    <table class="w-full text-left text-[11px] border-collapse">
+                        <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0">
+                            <tr>
+                                <th class="py-1 px-1.5 w-1/4">Anchor (Base)</th>
+                                <th class="py-1 px-1.5 w-1/4">Target Room</th>
+                                <th class="py-1 px-1.5 w-1/4">Standard Offset</th>
+                                <th class="py-1 px-1.5 w-1/4 text-pink-300">EVT Offset</th>
+                                <th class="py-1 px-1.5 text-center w-8">Del</th>
+                            </tr>
+                        </thead>
+                        <tbody id="relationships-table-body" class="divide-y divide-slate-100 font-semibold"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Refundable Markups & Channel Adjustments -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                <div class="bg-emerald-50/70 border border-emerald-300 rounded-lg p-2.5 shadow-xs">
+                    <div class="border-b border-emerald-200 pb-1 mb-1.5 flex items-center justify-between cursor-pointer" onclick="window.toggleCardSection('sec-price-markup', 'chev-price-markup')">
+                        <h3 class="text-xs font-black uppercase text-emerald-950">Refundable Rate Markups</h3>
+                        <i data-lucide="chevron-down" id="chev-price-markup" size="14" class="text-emerald-700 transition-transform"></i>
+                    </div>
+
+                    <div id="sec-price-markup" class="flex flex-wrap items-center gap-3 text-xs pt-0.5">
+                        <div class="flex-1 min-w-[130px]">
+                            <label class="label-base">Standard Dates</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="rule-std-ref" value="25" min="0" max="100" class="table-input !w-16 font-black text-center">
+                                <span class="font-bold text-slate-600 text-[11px]">% above Non-Ref</span>
+                            </div>
+                        </div>
+
+                        <div id="evt-ref-row" class="flex-1 min-w-[130px]">
+                            <label class="label-base text-pink-800">Event / Peak</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="rule-evt-ref" value="25" min="0" max="100" class="table-input !w-16 font-black text-center text-pink-800 border-pink-300 bg-pink-50">
+                                <span class="font-bold text-pink-900 text-[11px]">% above EVT Non-Ref</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-amber-50/70 border border-amber-300 rounded-lg p-2.5 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-amber-200 pb-1 mb-1.5 cursor-pointer" onclick="window.toggleCardSection('sec-price-channels', 'chev-price-channels')">
+                        <h3 class="text-xs font-black uppercase text-amber-950">Sales Channel Adjustments</h3>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="event.stopPropagation(); window.addVerifiedChannelRule()" class="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[9.5px] font-black uppercase transition-colors cursor-pointer border border-amber-300">
+                                + Add Channel
+                            </button>
+                            <i data-lucide="chevron-down" id="chev-price-channels" size="14" class="text-amber-700 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <div id="sec-price-channels" class="space-y-1 text-xs">
+                        <div id="channel-rules-container" class="space-y-1"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seasonal & Event Dual-Curve Panel -->
+            <div class="bg-pink-50/70 border border-pink-300 rounded-lg p-2.5 shadow-xs">
+                <div class="flex items-center justify-between border-b border-pink-200 pb-1 mb-1.5">
+                    <div class="cursor-pointer flex items-center gap-1.5" onclick="window.toggleCardSection('event-curve-panel', 'chev-price-events')">
+                        <h3 class="text-xs font-black uppercase text-pink-950 flex items-center gap-1.5">
+                            <i data-lucide="sparkles" size="14" class="text-pink-600"></i> Seasonal / Event Pricing Curves
+                        </h3>
+                        <i data-lucide="chevron-down" id="chev-price-events" size="14" class="text-pink-700 transition-transform"></i>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-events" onchange="window.toggleEventSettings(this.checked)" class="sr-only peer">
+                        <div class="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-pink-600"></div>
+                    </label>
+                </div>
+
+                <div id="event-curve-panel" class="hidden space-y-2">
+                    <div class="border border-pink-200 rounded bg-white p-2 shadow-2xs">
+                        <div class="flex items-center justify-between pb-1 mb-1 border-b border-pink-100">
+                            <span class="text-[9.5px] font-black text-pink-800 uppercase tracking-wider">Peak Pricing Curve</span>
+                            <div class="flex items-center gap-1 bg-pink-50 p-0.5 rounded border border-pink-200 text-[9.5px]">
+                                <span class="text-[9px] font-black uppercase text-pink-900 px-1">Rates Span:</span>
+                                <button type="button" onclick="window.cycleRatesSpan()" id="rates-span-pill" class="px-1.5 py-0.2 rounded font-black text-white bg-pink-600 cursor-pointer">
+                                    ±2 Days
+                                </button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-center border-collapse text-[11px]" id="event-price-table">
+                                <thead id="event-price-thead"></thead>
+                                <tbody id="event-price-tbody" class="divide-y divide-pink-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="border border-pink-200 rounded bg-white p-2 shadow-2xs">
+                        <div class="flex items-center justify-between pb-1 mb-1 border-b border-pink-100">
+                            <span class="text-[9.5px] font-black text-pink-800 uppercase tracking-wider">Peak Stay Restrictions Curve</span>
+                            <div class="flex items-center gap-1 bg-pink-50 p-0.5 rounded border border-pink-200 text-[9.5px]">
+                                <span class="text-[9px] font-black uppercase text-pink-900 px-1">Restr Span:</span>
+                                <button type="button" onclick="window.cycleRestrSpan()" id="restr-span-pill" class="px-1.5 py-0.2 rounded font-black text-white bg-indigo-600 cursor-pointer">
+                                    ±6 Days
+                                </button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-center border-collapse text-[11px]" id="event-restr-table">
+                                <thead id="event-restr-thead"></thead>
+                                <tbody id="event-restr-tbody" class="divide-y divide-pink-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- STEP 5: REVIEW & LAUNCH -->
+        <section id="step-content-5" class="space-y-2 flex-1 overflow-y-auto hidden">
+            <div class="bg-white border border-slate-300 rounded-lg p-3 shadow-xs">
+                <div class="border-b border-slate-200 pb-1.5 mb-2">
+                    <h2 class="text-xs font-black uppercase text-slate-800">Setup Verification</h2>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-3">
+                    <div class="p-2 rounded border border-slate-200 bg-slate-50">
+                        <div class="text-[9px] font-black uppercase text-slate-400">Property</div>
+                        <div id="rev-prop-name" class="text-xs font-black text-slate-800 mt-0.5">--</div>
+                        <div id="rev-prop-code" class="text-[10px] font-mono font-bold text-slate-500">--</div>
+                    </div>
+                    <div class="p-2 rounded border border-slate-200 bg-slate-50">
+                        <div class="text-[9px] font-black uppercase text-slate-400">Room Inventory</div>
+                        <div id="rev-inv-count" class="text-xs font-black text-indigo-700 mt-0.5">0 Units</div>
+                        <div id="rev-cat-count" class="text-[10px] font-bold text-slate-500">0 Categories</div>
+                    </div>
+                    <div class="p-2 rounded border border-slate-200 bg-slate-50">
+                        <div class="text-[9px] font-black uppercase text-slate-400">Channel Manager</div>
+                        <div id="rev-chan-status" class="text-xs font-black text-slate-800 mt-0.5">--</div>
+                        <div id="rev-chan-plans" class="text-[10px] font-bold text-slate-500">0 Rate Plans</div>
+                    </div>
+                    <div class="p-2 rounded border border-slate-200 bg-slate-50">
+                        <div class="text-[9px] font-black uppercase text-slate-400">Pricing Logic</div>
+                        <div id="rev-rules-status" class="text-xs font-black text-emerald-700 mt-0.5">Ready</div>
+                        <div id="rev-events-status" class="text-[10px] font-bold text-slate-500">Events: Off</div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2 border-t border-slate-200">
+                    <button type="button" onclick="window.launchApp('cm')" class="w-full sm:w-auto px-4 py-1.5 rounded bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] uppercase flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer">
+                        <i data-lucide="calendar" size="13"></i> Open Channel Manager (cm.html)
+                    </button>
+                    <button type="button" onclick="window.launchApp('pms')" class="w-full sm:w-auto px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[11px] uppercase flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer">
+                        <i data-lucide="layout-grid" size="13"></i> Open Front Desk PMS (pms.html)
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- FOOTER CONTROLS -->
+        <footer class="pt-1.5 pb-1 flex items-center justify-between border-t border-slate-200 shrink-0 bg-white px-2 mt-auto rounded-b">
+            <button type="button" id="btn-prev-step" onclick="window.prevStep()" class="flex items-center gap-1 px-2.5 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 text-[10px] font-black uppercase transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                <i data-lucide="arrow-left" size="12"></i> Previous
+            </button>
+
+            <span id="wizard-step-indicator" class="text-[10px] font-black uppercase text-slate-400">Step 1 of 5</span>
+
+            <div class="flex items-center gap-1.5">
+                <button type="button" onclick="window.savePropertyToDatabase(true)" id="btn-save-footer" class="flex items-center gap-1 px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase transition-colors shadow-xs cursor-pointer">
+                    <i data-lucide="save" size="12"></i>
+                    <span>SAVE</span>
+                </button>
+                <button type="button" id="btn-next-step" onclick="window.nextStep()" class="flex items-center gap-1 px-3.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase transition-colors shadow-xs cursor-pointer">
+                    <span>Continue</span> <i data-lucide="arrow-right" size="12"></i>
+                </button>
+            </div>
+        </footer>
+
+    </main>
+
+    <!-- MODALS CONTAINER -->
+    <div id="reorder-categories-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-3 border border-slate-300">
+            <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200">
+                <h4 class="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
+                    <i data-lucide="arrow-up-down" size="14" class="text-indigo-600"></i> Reorder Room Categories
+                </h4>
+                <button type="button" onclick="window.closeReorderCategoriesModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="15"></i></button>
+            </div>
+            <div id="reorder-cat-list" class="space-y-1 max-h-64 overflow-y-auto p-1 border border-slate-200 rounded bg-slate-50"></div>
+            <div class="flex items-center justify-end gap-1.5 mt-3 pt-1.5 border-t border-slate-200">
+                <button type="button" onclick="window.closeReorderCategoriesModal()" class="px-2.5 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[9.5px] font-black uppercase cursor-pointer">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="new-property-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-3.5 border border-slate-300">
+            <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-200">
+                <h4 class="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
+                    <i data-lucide="plus-circle" size="14" class="text-indigo-600"></i> Create New Property
+                </h4>
+                <button type="button" onclick="window.closeNewPropertyModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="15"></i></button>
+            </div>
+            <div class="space-y-2 text-xs">
+                <div>
+                    <label class="label-base">Property Name</label>
+                    <input type="text" id="new-prop-input-name" placeholder="e.g. WET Pool Party Hostel" class="table-input font-bold">
+                </div>
+                <div>
+                    <label class="label-base">Short Code</label>
+                    <input type="text" id="new-prop-input-short" placeholder="e.g. WET" class="table-input font-mono font-black uppercase">
+                </div>
+                <div>
+                    <label class="label-base">Property Slug / ID</label>
+                    <input type="text" id="new-prop-input-id" placeholder="e.g. wet_pool" class="table-input font-mono">
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-1.5 mt-3 pt-1.5 border-t border-slate-200">
+                <button type="button" onclick="window.closeNewPropertyModal()" class="px-2.5 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[9.5px] font-black uppercase cursor-pointer">
+                    Cancel
+                </button>
+                <button type="button" onclick="window.confirmCreateNewProperty()" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-black uppercase shadow-xs cursor-pointer">
+                    Create Property
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="create-rate-plan-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-3.5 border border-slate-300">
+            <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200">
+                <h4 class="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
+                    <i data-lucide="tags" size="14" class="text-emerald-600"></i> Create & Push Rate Plan
+                </h4>
+                <button type="button" onclick="window.closeCreateRatePlanModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="15"></i></button>
+            </div>
+
+            <div class="mb-2 p-1.5 bg-slate-50 rounded border border-slate-200">
+                <span class="text-[9px] font-black uppercase text-slate-500 block mb-0.5">Quick Presets:</span>
+                <div class="flex flex-wrap gap-1">
+                    <button type="button" onclick="window.applyRatePlanPreset('Standard Non-Refundable', 'DEFAULT', 'non-ref')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer">Non-Ref</button>
+                    <button type="button" onclick="window.applyRatePlanPreset('Standard Flexible', 'DEFAULT', 'ref')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer">Flexible</button>
+                    <button type="button" onclick="window.applyRatePlanPreset('Event Rate', 'DEFAULT', 'non-ref')" class="px-1.5 py-0.5 rounded bg-pink-50 hover:bg-pink-100 border border-pink-300 text-[9px] font-bold text-pink-800 cursor-pointer">Event Rate</button>
+                </div>
+            </div>
+
+            <div class="space-y-2 text-xs">
+                <div>
+                    <label class="label-base">Rate Plan Title</label>
+                    <input type="text" id="crp-title" class="table-input font-bold" value="Standard Non-Refundable">
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-0.5">
+                        <label class="label-base mb-0">Push To Which Categories?</label>
+                        <div class="flex gap-1 text-[9px] font-black uppercase text-indigo-700">
+                            <button type="button" onclick="window.toggleAllTargetRooms(true)" class="hover:underline cursor-pointer">All</button>
+                            <span>•</span>
+                            <button type="button" onclick="window.toggleAllTargetRooms(false)" class="hover:underline cursor-pointer">None</button>
+                        </div>
+                    </div>
+                    <div id="crp-room-checklist" class="max-h-28 overflow-y-auto border border-slate-200 rounded p-1 bg-slate-50 space-y-0.5"></div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-1.5 mt-3 pt-1.5 border-t border-slate-200">
+                <button type="button" onclick="window.closeCreateRatePlanModal()" class="px-2.5 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[9.5px] font-black uppercase cursor-pointer">
+                    Cancel
+                </button>
+                <button type="button" onclick="window.executeCreateAndPushRatePlan()" class="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-black uppercase shadow-xs cursor-pointer flex items-center gap-1">
+                    <i data-lucide="cloud-upload" size="12"></i>
+                    <span>Create & Map</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ENTRY POINT -->
+    <script type="module" src="setup/setup-wizard.js"></script>
+</body>
+</html>
