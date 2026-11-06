@@ -539,7 +539,7 @@ export const requestEarlyCheckout = () => {
 
     currentEcoBooking = s;
 
-    // Populate modal info
+    // Populate modal headers
     const nameEl = $('eco-guest-name');
     const idEl = $('eco-booking-id');
     const datesEl = $('eco-stay-dates');
@@ -550,13 +550,11 @@ export const requestEarlyCheckout = () => {
     if (datesEl) datesEl.innerText = `${s.checkIn} → ${s.checkOut}`;
 
     if (dateInput) {
-        // Set default to today; bounded between checkIn and checkOut - 1 day
         dateInput.min = s.checkIn;
         const maxDate = new Date(s.checkOut + "T12:00:00Z");
         maxDate.setUTCDate(maxDate.getUTCDate() - 1);
         dateInput.max = maxDate.toISOString().split('T')[0];
-        
-        // Pick today if within range, else max allowed date
+
         if (todayStr >= s.checkIn && todayStr < s.checkOut) {
             dateInput.value = todayStr;
         } else {
@@ -623,10 +621,11 @@ export const recalcEarlyCheckoutModal = () => {
 // --- Execute Early Checkout (Refund or Penalty) ---
 export const confirmEarlyCheckout = async (mode) => {
     if (!currentEcoBooking) return;
-    const s = currentEcoBooking;
-    const id = s.id;
     const targetOut = $('eco-date')?.value;
     if (!targetOut) return;
+
+    const id = currentEcoBooking.id;
+    const s = getStaff().find(x => x.id === id) || currentEcoBooking;
 
     const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
     const originalTotal = parseFloat(s.totalPrice) || 0;
@@ -639,16 +638,19 @@ export const confirmEarlyCheckout = async (mode) => {
     }
     const { doc, updateDoc } = fsModule;
 
+    // Filter out any preexisting penalty before appending
+    let extraCharges = (Array.isArray(s.extraCharges) ? [...s.extraCharges] : [])
+        .filter(c => !c.desc?.includes('EARLY DEPARTURE PENALTY'));
+
     let newTotalPrice = originalTotal;
-    let extraCharges = Array.isArray(s.extraCharges) ? [...s.extraCharges] : [];
     let penaltyId = null;
 
     if (mode === 'refund') {
-        // Mode A: Deduct unstayed nights from room total
+        // Mode A: Room charges reduced to stayed nights only
         newTotalPrice = currentEcoStayedAmt;
     } else {
-        // Mode B: Keep full charge as an itemized penalty fee on the folio
-        newTotalPrice = currentEcoStayedAmt; // Room portion
+        // Mode B: Full charge retained. Room is Stayed Portion, difference itemized as Penalty Fee
+        newTotalPrice = originalTotal;
         penaltyId = 'ec_penalty_' + Date.now();
         extraCharges.push({
             id: penaltyId,
@@ -675,7 +677,9 @@ export const confirmEarlyCheckout = async (mode) => {
     const noteMsg = `\n[EARLY CHECKOUT on ${todayStr}] Departed on ${targetOut} (${currentEcoUnstayedNts} nts early, original departure: ${s.checkOut}). ` +
         (mode === 'refund' 
             ? `Deducted ฿${currentEcoUnstayedAmt.toLocaleString()} unstayed room charges. New Folio Total: ฿${newTotalPrice.toLocaleString()}.` 
-            : `Kept full charge: Room adjusted to ฿${currentEcoStayedAmt.toLocaleString()} + added ฿${currentEcoUnstayedAmt.toLocaleString()} early checkout penalty item.`);
+            : `Kept full charge of ฿${originalTotal.toLocaleString()} (฿${currentEcoStayedAmt.toLocaleString()} room + ฿${currentEcoUnstayedAmt.toLocaleString()} penalty fee).`);
+
+    const updatedNotes = ((s.notes || '') + noteMsg).trim();
 
     try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
@@ -684,25 +688,30 @@ export const confirmEarlyCheckout = async (mode) => {
             totalPrice: newTotalPrice,
             extraCharges: extraCharges,
             earlyCheckout: earlySnapshot,
-            notes: ((s.notes || '') + noteMsg).trim(),
+            notes: updatedNotes,
             lastEditedAt: new Date().toISOString()
         });
 
-        // Trigger Channex auto-sync to release inventory
         if (window.triggerAutoSync) {
             const hotelRooms = getHotelRooms();
             const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
             window.triggerAutoSync(targetOut, s.checkOut, types);
         }
 
-        // Close early checkout modal and refresh active folio
-        if (window.closeModal) window.closeModal('early-checkout-modal');
+        // Synchronize in-memory objects and active form immediately
         s.checkOut = targetOut;
         s.status = 'early';
         s.totalPrice = newTotalPrice;
         s.extraCharges = extraCharges;
         s.earlyCheckout = earlySnapshot;
+        s.notes = updatedNotes;
+        window.activeExtraCharges = [...extraCharges];
+
+        if (window.closeModal) window.closeModal('early-checkout-modal');
         if (window.openGuestModal) window.openGuestModal(s);
+        if ($('guest-notes')) $('guest-notes').value = updatedNotes;
+        if (window.renderExtraCharges) window.renderExtraCharges();
+        if (window.calcFinancials) window.calcFinancials();
 
         if (window.showToast) {
             window.showToast(
@@ -728,7 +737,6 @@ export const undoEarlyCheckout = async () => {
     const penaltyId = s.earlyCheckout.penaltyId;
     const rL = s.rooms || [s.room];
 
-    // Collision check: verify rooms are free for the restored window
     const occ = window.getOccupiedRooms ? window.getOccupiedRooms(s.checkOut, originalOut, id) : new Set();
     for (let r of rL) {
         if (occ.has(r)) {
@@ -745,13 +753,12 @@ export const undoEarlyCheckout = async () => {
     }
     const { doc, updateDoc } = fsModule;
 
-    // Remove the penalty fee from extra charges if one was created
-    let extraCharges = Array.isArray(s.extraCharges) ? [...s.extraCharges] : [];
-    if (penaltyId) {
-        extraCharges = extraCharges.filter(c => c.id !== penaltyId);
-    }
+    // Purge penalty charges from extra charges
+    let extraCharges = (Array.isArray(s.extraCharges) ? [...s.extraCharges] : [])
+        .filter(c => c.id !== penaltyId && !c.desc?.includes('EARLY DEPARTURE PENALTY'));
 
     const revertMsg = `\n[EARLY CHECKOUT REVERTED on ${todayStr}] Restored original departure ${originalOut} and total ฿${originalTotal.toLocaleString()}.`;
+    const updatedNotes = ((s.notes || '') + revertMsg).trim();
 
     try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
@@ -760,7 +767,7 @@ export const undoEarlyCheckout = async () => {
             totalPrice: originalTotal,
             extraCharges: extraCharges,
             earlyCheckout: null,
-            notes: ((s.notes || '') + revertMsg).trim(),
+            notes: updatedNotes,
             lastEditedAt: new Date().toISOString()
         });
 
@@ -770,12 +777,19 @@ export const undoEarlyCheckout = async () => {
             window.triggerAutoSync(s.checkOut, originalOut, types);
         }
 
+        // Synchronize in-memory objects and active form immediately
         s.checkOut = originalOut;
         s.status = 'here';
         s.totalPrice = originalTotal;
         s.extraCharges = extraCharges;
         s.earlyCheckout = null;
+        s.notes = updatedNotes;
+        window.activeExtraCharges = [...extraCharges];
+
         if (window.openGuestModal) window.openGuestModal(s);
+        if ($('guest-notes')) $('guest-notes').value = updatedNotes;
+        if (window.renderExtraCharges) window.renderExtraCharges();
+        if (window.calcFinancials) window.calcFinancials();
 
         if (window.showToast) {
             window.showToast("Restored", `Early checkout reverted. Stay restored to ${originalOut}.`);
