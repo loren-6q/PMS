@@ -52,30 +52,6 @@ export function parseFlexibleDate(rawStr) {
     return '';
 }
 
-// --- Calendar Jump Controller ---
-export function jumpCalendarToDate(dateStr) {
-    if (!dateStr) return;
-
-    // 1. Switch to Calendar View Tab
-    if (typeof window.switchTab === 'function') {
-        window.switchTab('calendar');
-    }
-
-    // 2. Set calendar view window 3 days before check-in (native PMS formula)
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-        const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-        d.setDate(d.getDate() - 3);
-        window.viewStart = d;
-    }
-
-    // 3. Trigger native calendar render
-    if (typeof window.render === 'function') {
-        window.render();
-    }
-}
-
-
 // --------------------------------------------------------------------------
 // 2. MASTER MULTI-CHANNEL OTA ROUTER
 // --------------------------------------------------------------------------
@@ -91,7 +67,7 @@ export function parseOtaClipboardText(rawText) {
                    parseExpedia(rawText);
 
     if (result) {
-        // 1. Match category in active property (Longest string tested first)
+        // Resolve matching category in active property (longest string first)
         if (result.bookedType && window.hotelRooms) {
             const types = [...new Set(window.hotelRooms.map(r => r.category || r.type).filter(Boolean))];
             types.sort((a, b) => b.length - a.length);
@@ -106,7 +82,7 @@ export function parseOtaClipboardText(rawText) {
             }
         }
 
-        // 2. Net Price fallback calculation
+        // Net Price fallback calculation
         if (result.netPrice === null && result.totalPrice > 0) {
             const commissions = window.currentPropertyConfig?.commissions || {};
             const channelRate = parseFloat(commissions[result.source] || commissions.default || 0);
@@ -116,13 +92,22 @@ export function parseOtaClipboardText(rawText) {
             }
         }
 
-        // 3. Booking date fallback
+        // Ensure prepaid payments use the net payout
+        if (result.netPrice !== null && Array.isArray(result.payments)) {
+            result.payments.forEach(p => {
+                if (['bdc-pay', 'agoda-pay', 'expedia-pay'].includes(p.method)) {
+                    p.amt = result.netPrice;
+                }
+            });
+        }
+
+        // Booking date fallback
         if (!result.bookDate) {
             result.bookDate = getLocalYMD(new Date());
             result.bookDateIsEstimated = true;
         }
 
-        // 4. Intelligent Room Assignment
+        // Intelligent Room Assignment (Event Tetris & Dorm Clustering)
         const assignedRooms = suggestRoomsForBooking({
             checkIn: result.checkIn,
             checkOut: result.checkOut,
@@ -165,7 +150,9 @@ export async function processAndImportClipboard() {
 
     const parsed = parseOtaClipboardText(text);
     if (parsed) {
-        if (parsed.checkIn) jumpCalendarToDate(parsed.checkIn);
+        if (parsed.checkIn && typeof window.jumpToDate === 'function') {
+            window.jumpToDate(parsed.checkIn);
+        }
         openGuestModal(parsed);
     } else {
         const modal = document.getElementById('import-modal');
@@ -196,7 +183,9 @@ export function parseBooking() {
             modal.classList.remove('active');
             modal.style.display = 'none';
         }
-        if (parsed.checkIn) jumpCalendarToDate(parsed.checkIn);
+        if (parsed.checkIn && typeof window.jumpToDate === 'function') {
+            window.jumpToDate(parsed.checkIn);
+        }
         openGuestModal(parsed);
     } else {
         customAlert("Unrecognized Format", "Could not match text to Booking.com, Agoda, Hostelworld, Airbnb, or Expedia.");
@@ -212,5 +201,4 @@ if (typeof window !== 'undefined') {
     window.processAndImportClipboard = processAndImportClipboard;
     window.parseOtaClipboardText = parseOtaClipboardText;
     window.parseFlexibleDate = parseFlexibleDate;
-    window.jumpCalendarToDate = jumpCalendarToDate;
 }
