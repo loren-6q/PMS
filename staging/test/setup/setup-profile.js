@@ -5,20 +5,45 @@
 
 import { customAlert } from '../core/ui-dialogs.js';
 
-export const DEFAULT_PAYMENT_METHODS = [
-    { key: "cash", label: "Cash", type: "revenue" },
-    { key: "card", label: "Credit Card (POS)", type: "revenue" },
-    { key: "qr", label: "Thai PromptPay / QR", type: "revenue" },
-    { key: "transfer", label: "Bank Transfer", type: "revenue" },
-    { key: "bdc-pay", label: "Booking.com Virtual Card", type: "revenue" },
-    { key: "bdc-kp", label: "Booking.com Commission (Withheld)", type: "commission" },
-    { key: "hw-kp", label: "Hostelworld Deposit (Withheld)", type: "commission" },
-    { key: "agoda-pay", label: "Agoda eCard / Payout", type: "revenue" },
-    { key: "agoda-kp", label: "Agoda Commission (Withheld)", type: "commission" },
-    { key: "airbnb-pay", label: "Airbnb Payout", type: "revenue" },
-    { key: "expedia-pay", label: "Expedia Collect Payout", type: "revenue" },
-    { key: "expedia-kp", label: "Expedia Commission (Withheld)", type: "commission" }
+// --- Base Direct Settlement Methods ---
+export const BASE_DIRECT_PAYMENTS = [
+    { key: "cash", label: "Cash", type: "revenue", isBase: true },
+    { key: "card", label: "Credit Card (POS)", type: "revenue", isBase: true },
+    { key: "cc-fee", label: "Credit Card Surcharge / Fee", type: "revenue", isBase: true },
+    { key: "qr", label: "Thai PromptPay / QR", type: "revenue", isBase: true },
+    { key: "transfer", label: "Bank Transfer", type: "revenue", isBase: true },
+    { key: "other", label: "Other Direct Settlement", type: "revenue", isBase: true }
 ];
+
+// --- Standard OTA Channels (Auto-Generated -pay and -kp Pairs) ---
+export const STANDARD_OTA_CHANNELS = [
+    { code: "bdc", name: "Booking.com" },
+    { code: "hw", name: "Hostelworld" },
+    { code: "agoda", name: "Agoda" },
+    { code: "airbnb", name: "Airbnb" },
+    { code: "expedia", name: "Expedia" },
+    { code: "trip", name: "Trip.com" }
+];
+
+// Helper: Generates paired -pay and -kp rows for any channel
+export function createOtaPaymentPair(code, name) {
+    const cleanCode = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return [
+        { key: `${cleanCode}-pay`, label: `${name} Payout / Collect`, type: "revenue", channel: cleanCode },
+        { key: `${cleanCode}-kp`, label: `${name} Commission (Withheld)`, type: "commission", channel: cleanCode }
+    ];
+}
+
+// Generate the complete default payment array
+export function buildDefaultPaymentMethods() {
+    const list = [...BASE_DIRECT_PAYMENTS];
+    STANDARD_OTA_CHANNELS.forEach(ota => {
+        list.push(...createOtaPaymentPair(ota.code, ota.name));
+    });
+    return list;
+}
+
+export const DEFAULT_PAYMENT_METHODS = buildDefaultPaymentMethods();
 
 export const DEFAULT_ADDONS = [
     { id: "towel", name: "Towel Rental", price: 50, category: "Amenity" },
@@ -27,6 +52,8 @@ export const DEFAULT_ADDONS = [
     { id: "laundry", name: "Laundry Bag (1kg)", price: 60, category: "Service" },
     { id: "scooter", name: "Scooter Rental (24h)", price: 250, category: "Rental" }
 ];
+
+// --- 1. BRANDING & ASSET PREVIEWS ---
 
 export function toggleCardSection(contentId, chevronId) {
     const el = document.getElementById(contentId);
@@ -44,27 +71,45 @@ export function toggleCardSection(contentId, chevronId) {
     }
 }
 
+// Preview uses the uploaded image first; property config second; WWicon only as final fallback
 export function updateLogoPreview(type, url) {
     const previewEl = document.getElementById(`preview-logo-${type}`);
     if (!previewEl) return;
+
+    const propCfg = window.currentPropertyConfig || {};
+    const fieldMap = { primary: 'logoUrl', banner: 'bannerUrl', icon: 'iconUrl' };
+    const propSavedAsset = propCfg[fieldMap[type]];
+
     if (url && String(url).startsWith('http')) {
         previewEl.src = url;
         previewEl.classList.remove('hidden');
+    } else if (propSavedAsset && String(propSavedAsset).startsWith('http')) {
+        previewEl.src = propSavedAsset;
+        previewEl.classList.remove('hidden');
     } else {
         previewEl.src = 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
+        previewEl.classList.remove('hidden');
     }
 }
 
 export function resetLogosToDefault() {
-    const defLogo = 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
+    const propCfg = window.currentPropertyConfig || {};
     const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-    setVal('prop-logo-url', defLogo);
-    setVal('prop-banner-url', defLogo);
-    setVal('prop-icon-url', defLogo);
-    updateLogoPreview('primary', defLogo);
-    updateLogoPreview('banner', defLogo);
-    updateLogoPreview('icon', defLogo);
-    customAlert("Logos Reset", "Restored default brand logos.");
+
+    // Reset to property's configured assets if they exist, otherwise WW fallback
+    const logo = propCfg.logoUrl || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
+    const banner = propCfg.bannerUrl || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
+    const icon = propCfg.iconUrl || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
+
+    setVal('prop-logo-url', logo);
+    setVal('prop-banner-url', banner);
+    setVal('prop-icon-url', icon);
+
+    updateLogoPreview('primary', logo);
+    updateLogoPreview('banner', banner);
+    updateLogoPreview('icon', icon);
+
+    customAlert("Logos Reset", "Restored active property brand assets.");
 }
 
 export async function handleLogoFileUpload(event, type) {
@@ -93,6 +138,8 @@ export async function handleLogoFileUpload(event, type) {
     }
 }
 
+// --- 2. PAYMENT METHODS & AUTO-PAIRED OTA SETTLEMENT ---
+
 export function renderPaymentMethodsTable(payments = null) {
     const tbody = document.getElementById('payment-methods-table-body');
     if (!tbody) return;
@@ -115,7 +162,7 @@ export function renderPaymentMethodsTable(payments = null) {
                 </select>
             </td>
             <td class="text-center py-1 px-2">
-                <button type="button" onclick="window.deletePaymentMethodRow(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer">
+                <button type="button" onclick="window.deletePaymentMethodRow(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer" title="Delete">
                     <i data-lucide="trash-2" size="13"></i>
                 </button>
             </td>
@@ -123,8 +170,78 @@ export function renderPaymentMethodsTable(payments = null) {
         tbody.appendChild(tr);
     });
 
-    if (window.lucide) window.lucide.createIcons();
+    // Add a toolbar row at the bottom to dynamically add new OTA Channels or custom methods
+    const footerTr = document.createElement('tr');
+    footerTr.className = "bg-slate-50/80 border-t-2 border-slate-200 text-xs";
+    footerTr.innerHTML = `
+        <td colspan="4" class="py-1.5 px-2">
+            <div class="flex items-center justify-between gap-2">
+                <button type="button" onclick="window.addCustomOtaChannelPair()" class="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 rounded font-black text-[9.5px] uppercase flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="plus" size="11"></i> Add OTA Channel (Auto -PAY & -KP)
+                </button>
+                <button type="button" onclick="window.addBlankPaymentRow()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-black text-[9.5px] uppercase cursor-pointer">
+                    + Custom Single Method
+                </button>
+            </div>
+        </td>
+    `;
+    tbody.appendChild(footerTr);
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
 }
+
+// Add an OTA channel pair (e.g. Tiket -> tiket-pay & tiket-kp)
+export function addCustomOtaChannelPair() {
+    const name = prompt("Enter OTA Channel Name (e.g. Tiket, Traveloka, Ctrip):");
+    if (!name || !name.trim()) return;
+
+    const code = prompt("Enter Short Prefix Code (e.g. tiket, traveloka, ctrip):", name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    if (!code || !code.trim()) return;
+
+    const pair = createOtaPaymentPair(code.trim(), name.trim());
+    window.paymentMethods = window.paymentMethods || [];
+
+    // Ensure no duplicates
+    pair.forEach(item => {
+        if (!window.paymentMethods.some(m => m.key === item.key)) {
+            window.paymentMethods.push(item);
+        }
+    });
+
+    renderPaymentMethodsTable(window.paymentMethods);
+    customAlert("Channel Added", `Added ${pair[0].key} and ${pair[1].key} to payment methods.`);
+}
+
+export function addBlankPaymentRow() {
+    const key = prompt("Enter payment key identifier (e.g. promptpay-bar, crypto):");
+    if (!key || !key.trim()) return;
+    const cleanKey = key.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+
+    window.paymentMethods = window.paymentMethods || [];
+    window.paymentMethods.push({
+        key: cleanKey,
+        label: cleanKey.toUpperCase(),
+        type: "revenue"
+    });
+    renderPaymentMethodsTable(window.paymentMethods);
+}
+
+export function deletePaymentMethodRow(idx) {
+    window.paymentMethods.splice(idx, 1);
+    renderPaymentMethodsTable(window.paymentMethods);
+}
+
+export function restoreDefaultAddonsAndPayments() {
+    window.paymentMethods = buildDefaultPaymentMethods();
+    window.addonsList = [...DEFAULT_ADDONS];
+    renderPaymentMethodsTable();
+    renderAddonsTable();
+    customAlert("Restored", "Default direct payments, OTA pairs, and add-on services restored.");
+}
+
+// --- 3. ADD-ONS SERVICE CATALOGUE ---
 
 export function renderAddonsTable(addons = null) {
     const tbody = document.getElementById('addon-list-body');
@@ -155,7 +272,9 @@ export function renderAddonsTable(addons = null) {
         tbody.appendChild(tr);
     });
 
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
 }
 
 export function moveAddonRow(idx, dir) {
@@ -183,29 +302,19 @@ export function deleteAddonRow(idx) {
     renderAddonsTable(window.addonsList);
 }
 
-export function deletePaymentMethodRow(idx) {
-    window.paymentMethods.splice(idx, 1);
-    renderPaymentMethodsTable(window.paymentMethods);
-}
-
-export function restoreDefaultAddonsAndPayments() {
-    window.paymentMethods = [...DEFAULT_PAYMENT_METHODS];
-    window.addonsList = [...DEFAULT_ADDONS];
-    renderPaymentMethodsTable();
-    renderAddonsTable();
-    customAlert("Restored", "Default payment methods and add-on services restored.");
-}
-
+// Global Window Exports
 if (typeof window !== 'undefined') {
     window.toggleCardSection = toggleCardSection;
     window.updateLogoPreview = updateLogoPreview;
     window.resetLogosToDefault = resetLogosToDefault;
     window.handleLogoFileUpload = handleLogoFileUpload;
     window.renderPaymentMethodsTable = renderPaymentMethodsTable;
+    window.addCustomOtaChannelPair = addCustomOtaChannelPair;
+    window.addBlankPaymentRow = addBlankPaymentRow;
+    window.deletePaymentMethodRow = deletePaymentMethodRow;
+    window.restoreDefaultAddonsAndPayments = restoreDefaultAddonsAndPayments;
     window.renderAddonsTable = renderAddonsTable;
     window.moveAddonRow = moveAddonRow;
     window.addBlankAddonRow = addBlankAddonRow;
     window.deleteAddonRow = deleteAddonRow;
-    window.deletePaymentMethodRow = deletePaymentMethodRow;
-    window.restoreDefaultAddonsAndPayments = restoreDefaultAddonsAndPayments;
 }
