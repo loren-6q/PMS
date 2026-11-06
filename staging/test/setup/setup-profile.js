@@ -5,18 +5,18 @@
 
 import { customAlert } from '../core/ui-dialogs.js';
 
-// --- Base Direct Settlement Methods ---
+// --- Base Direct Settlement Methods (Always active) ---
 export const BASE_DIRECT_PAYMENTS = [
-    { key: "cash", label: "Cash", type: "revenue", isBase: true },
-    { key: "card", label: "Credit Card (POS)", type: "revenue", isBase: true },
-    { key: "cc-fee", label: "Credit Card Surcharge / Fee", type: "revenue", isBase: true },
-    { key: "qr", label: "Thai PromptPay / QR", type: "revenue", isBase: true },
-    { key: "transfer", label: "Bank Transfer", type: "revenue", isBase: true },
-    { key: "other", label: "Other Direct Settlement", type: "revenue", isBase: true }
+    { key: "cash", label: "Cash", type: "revenue", isBase: true, active: true },
+    { key: "card", label: "Credit Card (POS)", type: "revenue", isBase: true, active: true },
+    { key: "cc-fee", label: "Credit Card Fee / Surcharge", type: "revenue", isBase: true, active: true },
+    { key: "qr", label: "Thai PromptPay / QR", type: "revenue", isBase: true, active: true },
+    { key: "transfer", label: "Bank Transfer", type: "revenue", isBase: true, active: true },
+    { key: "other", label: "Other Direct Settlement", type: "revenue", isBase: true, active: true }
 ];
 
-// --- Standard OTA Channels (Auto-Generated -pay and -kp Pairs) ---
-export const STANDARD_OTA_CHANNELS = [
+// --- Standard Known OTA Channels ---
+export const STANDARD_OTA_REGISTRY = [
     { code: "bdc", name: "Booking.com" },
     { code: "hw", name: "Hostelworld" },
     { code: "agoda", name: "Agoda" },
@@ -25,21 +25,21 @@ export const STANDARD_OTA_CHANNELS = [
     { code: "trip", name: "Trip.com" }
 ];
 
-// Helper: Generates paired -pay and -kp rows for any channel
-export function createOtaPaymentPair(code, name) {
+// Helper: Generates a pair of -PAY and -KP methods
+export function createOtaPaymentPair(code, name, isActive = true) {
     const cleanCode = code.toLowerCase().replace(/[^a-z0-9]/g, '');
     return [
-        { key: `${cleanCode}-pay`, label: `${name} Payout / Collect`, type: "revenue", channel: cleanCode },
-        { key: `${cleanCode}-kp`, label: `${name} Commission (Withheld)`, type: "commission", channel: cleanCode }
+        { key: `${cleanCode}-pay`, label: `${name} Payout / Collect`, type: "revenue", channel: cleanCode, channelName: name, active: isActive },
+        { key: `${cleanCode}-kp`, label: `${name} Commission (Withheld)`, type: "commission", channel: cleanCode, channelName: name, active: isActive }
     ];
 }
 
-// Generate the complete default payment array
+// Generate the initial default payment methods
 export function buildDefaultPaymentMethods() {
     const list = [...BASE_DIRECT_PAYMENTS];
-    STANDARD_OTA_CHANNELS.forEach(ota => {
-        list.push(...createOtaPaymentPair(ota.code, ota.name));
-    });
+    // Start with Booking.com and Hostelworld active by default; others available to toggle
+    list.push(...createOtaPaymentPair("bdc", "Booking.com", true));
+    list.push(...createOtaPaymentPair("hw", "Hostelworld", true));
     return list;
 }
 
@@ -96,7 +96,6 @@ export function resetLogosToDefault() {
     const propCfg = window.currentPropertyConfig || {};
     const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
 
-    // Reset to property's configured assets if they exist, otherwise WW fallback
     const logo = propCfg.logoUrl || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
     const banner = propCfg.bannerUrl || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
     const icon = propCfg.iconUrl || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
@@ -142,57 +141,169 @@ export async function handleLogoFileUpload(event, type) {
 
 export function renderPaymentMethodsTable(payments = null) {
     const tbody = document.getElementById('payment-methods-table-body');
+    const togglesContainer = document.getElementById('ota-channel-toggles-container');
     if (!tbody) return;
     tbody.innerHTML = '';
 
     window.paymentMethods = payments || window.paymentMethods || [...DEFAULT_PAYMENT_METHODS];
 
-    window.paymentMethods.forEach((m, idx) => {
+    // 1. Render the Quick Channel Toggle Pills
+    if (togglesContainer) {
+        // Collect all channels currently present in the list
+        const activeChannels = new Set(
+            window.paymentMethods
+                .filter(m => m.channel && m.active !== false)
+                .map(m => m.channel.toLowerCase())
+        );
+
+        togglesContainer.innerHTML = STANDARD_OTA_REGISTRY.map(ota => {
+            const isToggled = activeChannels.has(ota.code.toLowerCase());
+            return `
+                <button type="button" onclick="window.toggleOtaChannel('${ota.code}', '${ota.name}')" class="px-2 py-0.5 rounded font-black text-[9px] uppercase border cursor-pointer transition-colors ${
+                    isToggled ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                }">
+                    ${isToggled ? '✓ ' : ''}${ota.name}
+                </button>
+            `;
+        }).join('');
+    }
+
+    // Separate active and archived
+    const activeMethods = window.paymentMethods.filter(m => m.active !== false);
+    const archivedMethods = window.paymentMethods.filter(m => m.active === false);
+
+    // 2. Render Active Rows
+    activeMethods.forEach((m) => {
+        const actualIdx = window.paymentMethods.findIndex(x => x.key === m.key);
         const tr = document.createElement('tr');
         tr.className = "border-b border-slate-100 hover:bg-slate-50 transition-colors";
         tr.innerHTML = `
-            <td class="font-mono text-xs font-bold text-slate-500 py-1 px-2">${m.key}</td>
-            <td class="py-1 px-2">
-                <input type="text" value="${m.label || ''}" class="table-input font-bold" onchange="window.paymentMethods[${idx}].label = this.value">
+            <td class="font-mono text-xs font-bold text-slate-500 py-1 px-2">
+                <span class="px-1 py-0.2 rounded bg-slate-100 border border-slate-200">${m.key}</span>
             </td>
             <td class="py-1 px-2">
-                <select class="table-input font-bold" onchange="window.paymentMethods[${idx}].type = this.value">
+                <input type="text" value="${m.label || ''}" class="table-input font-bold" onchange="window.paymentMethods[${actualIdx}].label = this.value">
+            </td>
+            <td class="py-1 px-2">
+                <select class="table-input font-bold" onchange="window.paymentMethods[${actualIdx}].type = this.value">
                     <option value="revenue" ${m.type === 'revenue' ? 'selected' : ''}>Collected Revenue</option>
                     <option value="commission" ${m.type === 'commission' ? 'selected' : ''}>OTA Withheld (Commission)</option>
                 </select>
             </td>
             <td class="text-center py-1 px-2">
-                <button type="button" onclick="window.deletePaymentMethodRow(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer" title="Delete">
-                    <i data-lucide="trash-2" size="13"></i>
-                </button>
+                ${m.isBase 
+                    ? `<span class="text-[9px] text-slate-300 font-bold uppercase select-none">CORE</span>`
+                    : `<button type="button" onclick="window.archivePaymentMethodRow('${m.key}')" class="text-slate-400 hover:text-amber-600 cursor-pointer text-[10px] font-bold" title="Deactivate / Archive Channel">
+                           Archive
+                       </button>`
+                }
             </td>
         `;
         tbody.appendChild(tr);
     });
 
-    // Add a toolbar row at the bottom to dynamically add new OTA Channels or custom methods
-    const footerTr = document.createElement('tr');
-    footerTr.className = "bg-slate-50/80 border-t-2 border-slate-200 text-xs";
-    footerTr.innerHTML = `
-        <td colspan="4" class="py-1.5 px-2">
-            <div class="flex items-center justify-between gap-2">
-                <button type="button" onclick="window.addCustomOtaChannelPair()" class="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 rounded font-black text-[9.5px] uppercase flex items-center gap-1 cursor-pointer">
-                    <i data-lucide="plus" size="11"></i> Add OTA Channel (Auto -PAY & -KP)
-                </button>
-                <button type="button" onclick="window.addBlankPaymentRow()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-black text-[9.5px] uppercase cursor-pointer">
-                    + Custom Single Method
-                </button>
-            </div>
-        </td>
-    `;
-    tbody.appendChild(footerTr);
+    // 3. Render Collapsible Archived / Historical Methods Tray (If any exist)
+    if (archivedMethods.length > 0) {
+        const archHeader = document.createElement('tr');
+        archHeader.className = "bg-slate-800 text-slate-300 cursor-pointer select-none";
+        archHeader.onclick = () => window.toggleArchivedPaymentRows();
+        archHeader.innerHTML = `
+            <td colspan="4" class="p-1.5 px-2 text-[9.5px] font-black uppercase tracking-wider">
+                <div class="flex items-center justify-between">
+                    <span class="text-amber-300 flex items-center gap-1.5">
+                        <i data-lucide="archive" size="12"></i> Archived / Disconnected Channels (${archivedMethods.length / 2} OTAs)
+                        <span class="text-slate-400 normal-case font-normal">(Preserved for historical booking balance & commission reporting)</span>
+                    </span>
+                    <i data-lucide="chevron-down" id="archived-pay-chevron" size="12" class="transition-transform duration-200 rotate-[-90deg]"></i>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(archHeader);
+
+        archivedMethods.forEach((m) => {
+            const actualIdx = window.paymentMethods.findIndex(x => x.key === m.key);
+            const tr = document.createElement('tr');
+            tr.className = "archived-pay-row hidden bg-slate-50 border-b border-slate-200 text-slate-400";
+            tr.innerHTML = `
+                <td class="font-mono text-[10px] py-1 px-2 line-through">${m.key}</td>
+                <td class="py-1 px-2 text-[10px] font-semibold">${m.label}</td>
+                <td class="py-1 px-2 text-[10px] uppercase">${m.type}</td>
+                <td class="text-center py-1 px-2">
+                    <button type="button" onclick="window.reactivatePaymentMethodRow('${m.key}')" class="px-1.5 py-0.2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[8.5px] uppercase rounded cursor-pointer shadow-2xs">
+                        Restore
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
 
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
         window.lucide.createIcons();
     }
 }
 
-// Add an OTA channel pair (e.g. Tiket -> tiket-pay & tiket-kp)
+// Toggle an OTA channel ON or OFF without deleting historical references
+export function toggleOtaChannel(code, name) {
+    window.paymentMethods = window.paymentMethods || [];
+    const cleanCode = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const payKey = `${cleanCode}-pay`;
+    const kpKey = `${cleanCode}-kp`;
+
+    const payEntry = window.paymentMethods.find(m => m.key === payKey);
+    const kpEntry = window.paymentMethods.find(m => m.key === kpKey);
+
+    if (payEntry && kpEntry) {
+        // Toggle active status
+        const nextState = !(payEntry.active !== false);
+        payEntry.active = nextState;
+        kpEntry.active = nextState;
+    } else {
+        // Add fresh pair
+        window.paymentMethods.push(...createOtaPaymentPair(cleanCode, name, true));
+    }
+
+    renderPaymentMethodsTable();
+}
+
+export function archivePaymentMethodRow(key) {
+    const item = window.paymentMethods.find(m => m.key === key);
+    if (!item) return;
+
+    if (item.channel) {
+        // Archive both the pay and kp keys for the channel together
+        window.paymentMethods.forEach(m => {
+            if (m.channel === item.channel) m.active = false;
+        });
+    } else {
+        item.active = false;
+    }
+    renderPaymentMethodsTable();
+}
+
+export function reactivatePaymentMethodRow(key) {
+    const item = window.paymentMethods.find(m => m.key === key);
+    if (!item) return;
+
+    if (item.channel) {
+        window.paymentMethods.forEach(m => {
+            if (m.channel === item.channel) m.active = true;
+        });
+    } else {
+        item.active = true;
+    }
+    renderPaymentMethodsTable();
+}
+
+export function toggleArchivedPaymentRows() {
+    const rows = document.querySelectorAll('.archived-pay-row');
+    const ch = document.getElementById('archived-pay-chevron');
+    if (!rows.length) return;
+    const isHidden = rows[0].classList.contains('hidden');
+    rows.forEach(r => r.classList.toggle('hidden', !isHidden));
+    if (ch) ch.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+}
+
 export function addCustomOtaChannelPair() {
     const name = prompt("Enter OTA Channel Name (e.g. Tiket, Traveloka, Ctrip):");
     if (!name || !name.trim()) return;
@@ -200,37 +311,17 @@ export function addCustomOtaChannelPair() {
     const code = prompt("Enter Short Prefix Code (e.g. tiket, traveloka, ctrip):", name.toLowerCase().replace(/[^a-z0-9]/g, ''));
     if (!code || !code.trim()) return;
 
-    const pair = createOtaPaymentPair(code.trim(), name.trim());
+    const pair = createOtaPaymentPair(code.trim(), name.trim(), true);
     window.paymentMethods = window.paymentMethods || [];
 
-    // Ensure no duplicates
     pair.forEach(item => {
-        if (!window.paymentMethods.some(m => m.key === item.key)) {
-            window.paymentMethods.push(item);
-        }
+        const exist = window.paymentMethods.find(m => m.key === item.key);
+        if (exist) exist.active = true;
+        else window.paymentMethods.push(item);
     });
 
     renderPaymentMethodsTable(window.paymentMethods);
     customAlert("Channel Added", `Added ${pair[0].key} and ${pair[1].key} to payment methods.`);
-}
-
-export function addBlankPaymentRow() {
-    const key = prompt("Enter payment key identifier (e.g. promptpay-bar, crypto):");
-    if (!key || !key.trim()) return;
-    const cleanKey = key.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
-
-    window.paymentMethods = window.paymentMethods || [];
-    window.paymentMethods.push({
-        key: cleanKey,
-        label: cleanKey.toUpperCase(),
-        type: "revenue"
-    });
-    renderPaymentMethodsTable(window.paymentMethods);
-}
-
-export function deletePaymentMethodRow(idx) {
-    window.paymentMethods.splice(idx, 1);
-    renderPaymentMethodsTable(window.paymentMethods);
 }
 
 export function restoreDefaultAddonsAndPayments() {
@@ -309,9 +400,11 @@ if (typeof window !== 'undefined') {
     window.resetLogosToDefault = resetLogosToDefault;
     window.handleLogoFileUpload = handleLogoFileUpload;
     window.renderPaymentMethodsTable = renderPaymentMethodsTable;
+    window.toggleOtaChannel = toggleOtaChannel;
+    window.archivePaymentMethodRow = archivePaymentMethodRow;
+    window.reactivatePaymentMethodRow = reactivatePaymentMethodRow;
+    window.toggleArchivedPaymentRows = toggleArchivedPaymentRows;
     window.addCustomOtaChannelPair = addCustomOtaChannelPair;
-    window.addBlankPaymentRow = addBlankPaymentRow;
-    window.deletePaymentMethodRow = deletePaymentMethodRow;
     window.restoreDefaultAddonsAndPayments = restoreDefaultAddonsAndPayments;
     window.renderAddonsTable = renderAddonsTable;
     window.moveAddonRow = moveAddonRow;
