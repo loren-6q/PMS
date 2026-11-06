@@ -43,11 +43,11 @@
     <!-- MAIN APP CONTAINER -->
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
         
-<!-- ========================================================================== -->
+        <!-- ========================================================================== -->
         <!-- 2. UNIVERSAL NAVIGATION (Mounted via core/nav.js) -->
         <!-- ========================================================================== -->
         <div id="app-nav" data-app="pms">
-            <!-- Center Slot: PMS Specific View Tabs & Calendar Period Controls -->
+            <!-- Center Slot: PMS Tabs & Calendar Jump Controls -->
             <div id="nav-center-slot" class="flex items-center gap-1 sm:gap-2">
                 <div class="flex bg-slate-100 rounded sm:rounded-lg p-0.5 sm:p-1 items-center gap-0.5 shrink-0 border border-slate-200">
                     <button type="button" id="tab-dash" onclick="window.switchTab('dashboard')" class="tab-btn !p-1 sm:!p-2" title="Dashboard"><i data-lucide="camera" class="!w-4 !h-4 sm:!w-[18px] sm:!h-[18px]"></i></button>
@@ -65,7 +65,7 @@
                 </div>
             </div>
 
-            <!-- Right Slot: PMS Search Bar & Modal Triggers -->
+            <!-- Right Slot: PMS Search & Quick Actions -->
             <div id="nav-right-slot" class="flex items-center gap-1">
                 <div id="search-jump-btn" onclick="window.jumpToSearchMatch()" class="hidden items-center bg-orange-100 text-orange-700 px-1 sm:px-2 py-0.5 sm:py-1 rounded font-black text-[9px] sm:text-xs uppercase cursor-pointer hover:bg-orange-200 shrink-0 border border-orange-300">
                     <span id="match-counter">Match?</span>
