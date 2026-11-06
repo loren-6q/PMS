@@ -1,0 +1,363 @@
+<!-- ==========================================================================
+     cm.html - Operations Rate Matrix & Channel Manager
+     Wild & Wandering Property Management System
+     ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>W&W Channel Manager</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden bg-slate-100 font-sans">
+    <!-- Loading Overlay -->
+    <div id="loader" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div id="sync-status" class="mt-4 font-black text-indigo-800 uppercase tracking-widest text-xs">INITIALIZING ENGINE...</div>
+    </div>
+    
+    <!-- Custom In-App Alert Dialog -->
+    <div id="custom-alert" class="alert-modal-overlay hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white p-5 rounded-xl shadow-xl max-w-sm w-full text-center border-2 border-slate-800">
+            <p id="custom-alert-msg" class="font-black text-slate-700 mb-5 text-xs sm:text-sm whitespace-pre-wrap"></p>
+            <div class="flex gap-2 justify-center">
+                <button id="custom-alert-cancel" onclick="document.getElementById('custom-alert').classList.add('hidden')" class="hidden px-4 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-black uppercase text-xs cursor-pointer">Cancel</button>
+                <button id="custom-alert-confirm" onclick="document.getElementById('custom-alert').classList.add('hidden')" class="px-6 py-1.5 bg-indigo-600 text-white rounded-lg font-black uppercase text-xs cursor-pointer">Okay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Desktop Tooltip -->
+    <div id="cm-tooltip" class="fixed hidden z-[10000] bg-slate-900/95 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-2xl border border-slate-700 max-w-xs leading-snug pointer-events-none"></div>
+
+    <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+        <!-- UNIVERSAL TOP NAVBAR (Self-Mounts via core/nav.js) -->
+        <div id="app-nav" data-app="cm">
+            <!-- Right Slot: Operational CM Controls -->
+            <div id="nav-right-slot" class="flex items-center gap-1.5">
+                <div id="save-indicator" class="text-[9.5px] font-black uppercase tracking-widest transition-all mr-1 opacity-0 text-emerald-600">PRICING SAVED</div>
+                
+                <!-- Event Pricing Toggle -->
+                <button type="button" id="prop-event-pricing-btn" onclick="window.togglePropertyEventRates()" class="px-2 py-1 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200" title="Toggle Event Pricing (EVT) on/off">
+                    <i data-lucide="calendar-off" size="13" class="text-slate-400"></i> <span>EVENTS: OFF</span>
+                </button>
+
+                <!-- Ripple vs Override Toggle -->
+                <button type="button" id="mode-toggle-btn" onclick="window.toggleEditMode()" class="px-2 py-1 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200" title="Toggle Ripple vs Override mode">
+                    <span id="mode-icon"><i data-lucide="zap" size="13" class="text-amber-600"></i></span>
+                    <span id="mode-label">RIPPLE MODE</span>
+                </button>
+
+                <!-- Save & Sync -->
+                <button type="button" id="btn-save-sync" onclick="window.saveAndSync(this, 'delta');" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 cursor-pointer">
+                    <i data-lucide="zap" size="13"></i> SAVE & SYNC
+                </button>
+                
+                <button type="button" onclick="window.saveAndSync(this, 'full')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-xs flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="cloud-upload" size="13"></i> FULL SYNC
+                </button>
+            </div>
+        </div>
+
+        <!-- MAIN OPERATIONAL WORKSPACE -->
+        <main class="flex-1 flex flex-col min-h-0 bg-slate-100 sm:rounded-lg overflow-hidden border-y sm:border border-slate-300 shadow-xs relative z-0">
+            <!-- TABS -->
+            <div class="flex px-2 pt-1.5 bg-slate-200 border-b border-slate-300 shrink-0 gap-1 overflow-x-auto no-scrollbar shadow-inner unselectable">
+                <button type="button" onclick="window.switchTab('grid')" id="tab-grid" class="tab-btn active">
+                    <i data-lucide="calendar" size="14"></i> Calendar Matrix
+                </button>
+                <button type="button" onclick="window.switchTab('promos')" id="tab-promos" class="tab-btn">
+                    <i data-lucide="tags" size="14" class="text-pink-600"></i> Deals & Promos
+                </button>
+                <button type="button" onclick="window.switchTab('manual')" id="tab-manual" class="tab-btn">
+                    <i data-lucide="refresh-cw" size="14" class="text-emerald-600"></i> OTA Sync & Auditor
+                </button>
+            </div>
+
+            <!-- VIEW 1: CALENDAR MATRIX -->
+            <div id="view-grid" class="flex-1 flex flex-col min-h-0 relative">
+                <!-- Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-1.5 px-2 py-1.5 bg-white border-b border-slate-200 shrink-0 shadow-xs z-30 text-xs">
+                    <!-- Date Tape Controls -->
+                    <div class="flex items-center gap-1">
+                        <button type="button" onclick="window.shiftTape(-7)" class="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"><i data-lucide="chevron-left" size="15"></i></button>
+                        <input type="date" id="tape-start" class="input-base !w-auto cursor-pointer !py-0.5 !px-1.5 font-black bg-slate-100" onchange="window.renderRateMatrix()">
+                        <button type="button" onclick="window.shiftTape(7)" class="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"><i data-lucide="chevron-right" size="15"></i></button>
+                    </div>
+
+                    <!-- Depth & Density Selectors -->
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
+                            <span class="px-1.5 text-slate-400">DEPTH:</span>
+                            <button type="button" onclick="window.setDrillLevel('master')" id="depth-master" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Master</button>
+                            <button type="button" onclick="window.setDrillLevel('room')" id="depth-room" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black">Room</button>
+                            <button type="button" onclick="window.setDrillLevel('event')" id="depth-event" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Event</button>
+                            <button type="button" onclick="window.setDrillLevel('rates')" id="depth-rates" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">All Rates</button>
+                        </div>
+                        
+                        <div class="h-4 w-px bg-slate-300 mx-0.5 hidden sm:block"></div>
+                        
+                        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
+                            <span class="px-1.5 text-slate-400">VIEW:</span>
+                            <button type="button" onclick="window.setViewDensity('avail')" id="density-avail" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Avail</button>
+                            <button type="button" onclick="window.setViewDensity('price')" id="density-price" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Price</button>
+                            <button type="button" onclick="window.setViewDensity('compact')" id="density-compact" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Compact</button>
+                            <button type="button" onclick="window.setViewDensity('minmax')" id="density-minmax" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Min/Max</button>
+                            <button type="button" onclick="window.setViewDensity('full')" id="density-full" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black">Full</button>
+                        </div>
+                    </div>
+
+                    <!-- Channel Filter, Curve & Bulk Actions -->
+                    <div class="flex items-center gap-1.5">
+                        <div class="flex items-center bg-slate-100 rounded border border-slate-200 px-1 py-0.5 text-xs">
+                            <span class="text-[9px] font-black text-slate-400 uppercase mr-1">PREVIEW:</span>
+                            <select id="channel-preview-select" onchange="window.channelPreviewFilter = this.value; window.renderRateMatrix();" class="bg-transparent font-black text-xs text-indigo-700 outline-none cursor-pointer">
+                                <option value="ALL">All Rates</option>
+                                <option value="DEFAULT">Default Channel</option>
+                                <option value="BDC">Booking.com</option>
+                            </select>
+                        </div>
+                        <button type="button" id="btn-curve-tuner" onclick="window.toggleCurveTuner()" class="view-btn !bg-pink-50 text-pink-700 !border-pink-300 hover:bg-pink-100 cursor-pointer font-black text-xs px-2.5 py-1 rounded flex items-center gap-1">
+                            <i data-lucide="sparkles" size="12"></i> CURVE
+                        </button>
+                        <button type="button" onclick="window.toggleQuickBulk()" class="view-btn !bg-slate-100 cursor-pointer font-black text-xs px-2.5 py-1 rounded border border-slate-300 hover:bg-slate-200 flex items-center gap-1">
+                            <i data-lucide="layers" size="12"></i> BULK
+                        </button>
+                    </div>
+                </div>
+
+                <!-- QUICK BULK DRAWER -->
+                <div id="quick-bulk-panel" class="hidden bg-slate-900 border-b border-slate-800 p-2 shrink-0 shadow-xl flex-col gap-2 z-30 text-slate-200">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs font-black uppercase text-amber-400 flex items-center gap-1 mr-1">
+                                <i data-lucide="layers" size="14"></i> Bulk Update
+                            </span>
+                            <label class="text-[10px] font-black uppercase text-slate-400">Start:</label>
+                            <input type="date" id="qb-start" class="input-base !py-0.5 !px-1.5 !text-xs w-28 bg-slate-800 text-white border-slate-700">
+                            <label class="text-[10px] font-black uppercase text-slate-400">End:</label>
+                            <input type="date" id="qb-end" class="input-base !py-0.5 !px-1.5 !text-xs w-28 bg-slate-800 text-white border-slate-700">
+                            
+                            <div class="flex items-center bg-slate-800 rounded p-0.5 border border-slate-700 text-[10px] font-black uppercase ml-1">
+                                <span class="px-1 text-slate-400">SCOPE:</span>
+                                <button type="button" onclick="window.setBulkScopeMode('anchors')" id="qb-scope-anchors" class="px-2 py-0.5 rounded cursor-pointer bg-indigo-600 text-white shadow-2xs font-black">Anchors</button>
+                                <button type="button" onclick="window.setBulkScopeMode('all')" id="qb-scope-all" class="px-2 py-0.5 rounded cursor-pointer text-slate-400 hover:text-white">All</button>
+                            </div>
+
+                            <button type="button" onclick="window.applyBulkGrid(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded font-black text-xs uppercase cursor-pointer">Apply</button>
+                            <button type="button" onclick="window.applyBulkGrid(true)" class="bg-rose-900 hover:bg-rose-800 text-rose-300 border border-rose-700 px-2.5 py-1 rounded font-black text-xs uppercase cursor-pointer">Clear</button>
+                        </div>
+                        <button type="button" onclick="window.toggleQuickBulk(true)" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
+                    </div>
+                    <div class="overflow-auto max-h-56 border border-slate-700 rounded bg-slate-800/90 shadow-inner">
+                        <table class="w-full text-left text-xs whitespace-nowrap">
+                            <thead class="bg-slate-950 text-white text-[9px] uppercase font-black sticky top-0 z-10 border-b border-slate-700">
+                                <tr>
+                                    <th class="p-1.5 border-r border-slate-800 w-52">Room / Scope</th>
+                                    <th class="p-1.5 text-center border-r border-slate-800 w-24">Rate (฿)</th>
+                                    <th class="p-1.5 text-center border-r border-slate-800 w-32">Min Stay (&gt; for Arr)</th>
+                                    <th class="p-1.5 text-center border-r border-slate-800 w-32">Max Stay</th>
+                                    <th class="p-1.5 text-center w-36">Closed Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="qb-grid-body" class="divide-y divide-slate-700/50"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- QUICK EVENT CURVE TUNER DRAWER -->
+                <div id="quick-curve-panel" class="hidden bg-slate-900 border-b border-pink-900/60 p-2.5 shrink-0 shadow-xl flex-col gap-2.5 z-30 text-slate-200">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs font-black uppercase text-pink-400 flex items-center gap-1.5 mr-1">
+                                <i data-lucide="sparkles" size="14"></i> Event Curve Tuner
+                            </span>
+                            <label class="text-[10px] font-black uppercase text-slate-400">Target Event:</label>
+                            <select id="ct-event-select" onchange="window.handleCurveEventSelect(this.value)" class="input-base !py-0.5 !px-2 !text-xs font-bold bg-slate-800 text-pink-300 border-slate-700 cursor-pointer"></select>
+                            
+                            <div class="flex items-center gap-1 bg-slate-800 p-0.5 rounded border border-slate-700 text-[10px] font-black ml-1">
+                                <span class="px-1 text-slate-400 uppercase text-[9px]">PEAK ADJUST:</span>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(-0.10, true)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-rose-300 cursor-pointer">-10%</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(0.10, true)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-emerald-300 cursor-pointer">+10%</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(-500, false)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-rose-300 cursor-pointer">-500฿</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(500, false)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-emerald-300 cursor-pointer">+500฿</button>
+                            </div>
+
+                            <button type="button" onclick="window.applyCurveTuner(false)" class="bg-pink-600 hover:bg-pink-700 text-white px-3 py-1 rounded font-black text-xs uppercase cursor-pointer ml-1">Apply to Event</button>
+                            <button type="button" onclick="window.saveCurveTunerAsDefault()" class="bg-indigo-700 hover:bg-indigo-600 text-indigo-100 border border-indigo-600 px-2.5 py-1 rounded font-black text-xs uppercase cursor-pointer" title="Save this curve as default baseline">Save as Default</button>
+                        </div>
+                        <button type="button" onclick="window.toggleCurveTuner(true)" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
+                    </div>
+
+                    <div class="overflow-auto rounded border border-slate-700 bg-slate-800/95 shadow-inner max-h-[220px]">
+                        <table class="w-full text-center border-collapse text-xs whitespace-nowrap">
+                            <thead class="bg-slate-950 text-white text-[9px] font-black uppercase sticky top-0 z-10 border-b border-slate-700">
+                                <tr>
+                                    <th class="p-2 text-left border-r border-slate-800 w-44">Segment / Anchor</th>
+                                    <th class="p-2 border-r border-slate-800 w-24">Std Base</th>
+                                    <th class="p-2 border-r border-slate-800 w-24 text-pink-400">EVT Pkg</th>
+                                    <th class="p-2 border-r border-slate-800 w-24" id="ct-th-m2">EVT -2</th>
+                                    <th class="p-2 border-r border-slate-800 w-24" id="ct-th-m1">EVT -1</th>
+                                    <th class="p-2 border-r border-slate-800 w-28 text-amber-400 font-black bg-amber-950/40" id="ct-th-0">Peak (0)</th>
+                                    <th class="p-2 border-r border-slate-800 w-24" id="ct-th-p1">EVT +1</th>
+                                    <th class="p-2 w-24" id="ct-th-p2">EVT +2</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ct-grid-body" class="divide-y divide-slate-700/60 font-black"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- MAIN TABLE -->
+                <div class="flex-1 overflow-auto bg-slate-200 relative z-10 pt-[2px]" id="grid-container">
+                    <table class="rate-grid-table" id="rate-table">
+                        <thead id="grid-head"></thead>
+                        <tbody id="grid-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- CELL LEGEND FOOTER -->
+                <footer id="cm-calendar-legend" class="bg-slate-900 border-t border-slate-800 text-slate-300 px-3 py-1 flex flex-wrap items-center justify-between gap-2 text-[10px] shrink-0 select-text z-30">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Legend:</span>
+                        <div class="flex items-center gap-1 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                            <span class="font-black text-amber-400 text-[9px]">TOP:</span>
+                            <span class="text-slate-200 font-bold">Min | Max</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                            <span class="font-black text-indigo-400 text-[9px]">PILL:</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-slate-700 text-slate-300">OPEN</span>
+                            <span class="text-slate-500">&rarr;</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900">CTA</span>
+                            <span class="text-slate-500">&rarr;</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900">CTD</span>
+                            <span class="text-slate-500">&rarr;</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900">CTB</span>
+                            <span class="text-slate-500">&rarr;</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white">STOP</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 text-amber-300 font-bold text-[9px]">
+                        <span class="w-2.5 h-2.5 bg-amber-100 border border-amber-400 rounded-xs inline-block"></span>
+                        <span>Custom Override (Double-click to unlock/revert)</span>
+                    </div>
+                </footer>
+            </div>
+
+            <!-- VIEW 2: PROMOTIONS & DEALS -->
+            <div id="view-promos" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
+                <div class="max-w-5xl mx-auto space-y-4">
+                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-xs">
+                        <div class="flex justify-between items-center border-b border-slate-200 pb-2 mb-3">
+                            <div>
+                                <h2 class="text-xs sm:text-sm font-black uppercase text-slate-800 flex items-center gap-1.5">
+                                    <i data-lucide="tags" class="text-pink-600"></i> OTA Promotions & Deals
+                                </h2>
+                                <span class="text-[11px] font-bold text-slate-500">Margin-preserving promotional markups.</span>
+                            </div>
+                            <button type="button" onclick="window.openAddPromoModal()" class="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white rounded font-black text-xs uppercase cursor-pointer">+ Add Promo</button>
+                        </div>
+                        <div class="overflow-x-auto border border-slate-200 rounded bg-slate-50">
+                            <table class="w-full text-left text-xs whitespace-nowrap">
+                                <thead class="bg-slate-800 text-white text-[9px] uppercase font-black">
+                                    <tr>
+                                        <th class="p-2">Channel</th>
+                                        <th class="p-2">Campaign</th>
+                                        <th class="p-2">Date Window</th>
+                                        <th class="p-2 text-center">Discount</th>
+                                        <th class="p-2 text-center text-pink-300">Markup Required</th>
+                                        <th class="p-2">Scope</th>
+                                        <th class="p-2 text-center">Status</th>
+                                        <th class="p-2 text-center">Del</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="promo-table-body" class="bg-white font-bold"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 3: OTA AUDITOR & LIVE AVAILABILITY -->
+            <div id="view-manual" class="hidden flex-1 flex flex-col p-2 sm:p-3 gap-2 bg-white min-h-0 overflow-y-auto">
+                <div class="flex items-center justify-between pb-1 border-b border-slate-200">
+                    <h2 class="text-xs sm:text-sm font-black uppercase text-slate-800 flex items-center gap-1.5">
+                        <i data-lucide="refresh-cw" size="15" class="text-emerald-600"></i> OTA Missing Booking Auditor
+                    </h2>
+                    <button type="button" id="reset-dismissed-btn" onclick="window.resetDismissed()" class="hidden text-xs font-black text-amber-600 hover:text-amber-700 uppercase bg-amber-50 border border-amber-200 px-2 py-1 rounded cursor-pointer">
+                        Reset Dismissed
+                    </button>
+                </div>
+                <textarea id="audit-text" class="w-full h-20 bg-slate-50 border border-slate-300 rounded p-2 text-xs font-mono outline-none resize-none" placeholder="Paste Booking.com, Hostelworld, or Airbnb extranet list data here..." oninput="window.checkMissing()"></textarea>
+                <div id="audit-result"></div>
+
+                <div class="mt-2 border-t border-slate-200 pt-2 flex justify-between items-center">
+                    <span class="text-xs font-black uppercase text-slate-700">Live Inventory Baseline</span>
+                    <button type="button" onclick="window.markSynced()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase cursor-pointer">Mark Synced</button>
+                </div>
+                <div class="flex-1 overflow-auto border border-slate-200 rounded">
+                    <table class="sync-table w-full text-left border-collapse text-xs" id="sync-table">
+                        <thead id="sync-head"></thead>
+                        <tbody id="sync-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: ADD PROMO -->
+    <div id="promo-modal" class="alert-modal-overlay hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full border-2 border-slate-800 flex flex-col overflow-hidden text-xs">
+            <div class="bg-slate-900 p-2.5 text-white font-bold uppercase flex justify-between items-center">
+                <span>Add OTA Promotion</span>
+                <button type="button" onclick="document.getElementById('promo-modal').classList.add('hidden')" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
+            </div>
+            <div class="p-3 space-y-2">
+                <input type="hidden" id="promo-rule-id">
+                <div>
+                    <label class="label-base">Channel</label>
+                    <select id="promo-channel" class="input-base">
+                        <option value="Booking.com">Booking.com</option>
+                        <option value="ALL">All Channels</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="label-base">Campaign Name</label>
+                    <input type="text" id="promo-name" placeholder="e.g. Genius 15%" class="input-base uppercase font-bold">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="label-base">Discount (%)</label>
+                        <input type="number" id="promo-discount-pct" value="15" oninput="window.updatePromoModalMath()" class="input-base font-black text-pink-600">
+                    </div>
+                    <div>
+                        <label class="label-base">Markup Required</label>
+                        <input type="text" id="promo-calculated-markup" readonly class="input-base bg-slate-100 font-black text-emerald-700 text-center">
+                    </div>
+                </div>
+                <div>
+                    <label class="label-base">Room Scope</label>
+                    <select id="promo-room-scope" class="input-base">
+                        <option value="ALL">All Categories</option>
+                    </select>
+                </div>
+                <div class="pt-2 flex justify-end gap-2 border-t border-slate-200">
+                    <button type="button" onclick="document.getElementById('promo-modal').classList.add('hidden')" class="px-3 py-1 bg-slate-200 rounded font-bold uppercase cursor-pointer">Cancel</button>
+                    <button type="button" onclick="window.savePromoRule()" class="px-4 py-1 bg-pink-600 hover:bg-pink-700 text-white rounded font-black uppercase shadow-xs cursor-pointer">Save Promo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ENTRY POINTS -->
+    <script type="module" src="core/nav.js"></script>
+    <script type="module" src="./cm/cm-init.js"></script>
+</body>
+</html>
