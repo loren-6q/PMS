@@ -1138,24 +1138,63 @@ color: #047857;
 border-color: #a7f3d0;
 }
 
+/* Compact Table Rows & Inputs */
+#addon-list-body tr, #payment-methods-table-body tr, #room-def-list-body tr {
+height: 24px !important;
+max-height: 24px !important;
+}
+
+#addon-list-body td, #payment-methods-table-body td, #room-def-list-body td {
+padding: 1px 4px !important;
+font-size: 11px !important;
+line-height: 1.1 !important;
+vertical-align: middle !important;
+}
+
 .table-input {
 border: 1px solid #cbd5e1;
 border-radius: 0.25rem;
-padding: 0.25rem 0.5rem;
+padding: 0px 4px !important;
 outline: none;
-font-size: 0.75rem;
+font-size: 11px !important;
 font-weight: 700;
 font-family: 'Roboto Condensed', sans-serif;
 background-color: #ffffff;
 transition: border-color 0.15s, box-shadow 0.15s;
 width: 100%;
 box-sizing: border-box;
+height: 20px !important;
+min-height: 20px !important;
+max-height: 20px !important;
+line-height: 1 !important;
 }
 
 .table-input:focus {
 border-color: #6366f1;
 box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
 background-color: #ffffff;
+}
+
+/* Order Up/Down Arrow Buttons */
+.order-btn-col {
+display: flex;
+flex-direction: column;
+justify-content: center;
+align-items: center;
+gap: 1px;
+height: 20px;
+}
+
+.order-arrow-btn {
+height: 9px !important;
+width: 14px !important;
+display: flex !important;
+align-items: center !important;
+justify-content: center !important;
+padding: 0 !important;
+margin: 0 !important;
+line-height: 0 !important;
+cursor: pointer;
 }
 
 /* Universal Cyclical Category Theme Banners */
