@@ -1,132 +1,172 @@
 // ==========================================================================
-// parser/ota-airbnb.js - Airbnb Confirmation & Reservation List Regex Engine
+// parser/ota-airbnb.js - Airbnb Confirmation & Extranet Normalizer
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-// --- Helper: Clean Currency String to Float ---
-const cM = s => Number(parseFloat((s || '').replace(/[^0-9.-]+/g, "")).toFixed(2)) || 0;
+import { parseFlexibleDate } from './parser-engine.js';
 
-// --- Helper: Flexible Date String to YYYY-MM-DD Normalizer ---
-const fD = dS => {
-    if (!dS) return '';
-    let clean = dS.replace(/´/g, '').replace(/'/g, '').replace(/,/g, '').replace(/(st|nd|rd|th)\b/gi, '').trim();
-    const mths = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
-    let parts = clean.split(/\s+/);
-    let d = 1, m = '01', y = new Date().getFullYear();
-    parts.forEach(p => {
-        let l = p.toLowerCase().substring(0, 3);
-        if (mths[l]) m = mths[l];
-        else if (/^\d{1,2}$/.test(p)) d = parseInt(p, 10);
-        else if (/^\d{2}$/.test(p) && p.length === 2) y = 2000 + parseInt(p, 10);
-        else if (/^\d{4}$/.test(p)) y = parseInt(p, 10);
-    });
-    return `${y}-${m}-${String(d).padStart(2, '0')}`;
-};
+export function parseAirbnb(rawText) {
+    if (!rawText) return null;
+    const text = rawText.replace(/\r/g, '');
 
-// --------------------------------------------------------------------------
-// 1. AIRBNB DETECTOR & PARSER ENGINE
-// --------------------------------------------------------------------------
+    const isAirbnb = /airbnb/i.test(text) || /hm[a-z0-9]{8}/i.test(text) || /reservation\s*code/i.test(text);
+    if (!isAirbnb) return null;
 
-// --- Detect if Raw Text Originates from Airbnb ---
-export const isAirbnbText = text => {
-    if (!text || typeof text !== 'string') return false;
-    const lower = text.toLowerCase();
-    return lower.includes('airbnb') || lower.includes('reservation confirmed');
-};
+    // 1. Reservation Code (e.g. HM12345678 or 10-char alphanumeric)
+    const codeMatch = text.match(/(?:confirmation\s*code|reservation\s*code)[\s:#]*([A-Z0-9]{8,12})/i) ||
+                      text.match(/\b(HM[A-Z0-9]{8,10})\b/i);
+    const bookId = codeMatch ? codeMatch[1].trim().toUpperCase() : '';
 
-// --- Extract Structured Booking Data from Airbnb Text ---
-export const parseAirbnb = text => {
-    if (!text) return null;
-    const ab = text.split(/[\n\r]+/).map(x => x.trim()).filter(Boolean);
-    const ex = reg => { const m = text.match(reg); return m ? m[1].trim() : ''; };
-
-    let gN = '', bT = '', cI = '', cO = '', cCode = '', notes = '';
-
-    let sunsetIdx = ab.findIndex(l => l.toLowerCase().includes('sunset'));
-    if (sunsetIdx > 0 && /^([a-zA-Z]{3})\s\d+/.test(ab[sunsetIdx - 2])) {
-        gN = ab[sunsetIdx - 1].split(/['’]s group/i)[0].trim();
-        bT = ab[sunsetIdx];
-        let dateLine = ab[sunsetIdx - 2];
-        let dMatch = dateLine.match(/([a-zA-Z]{3}\s\d+)[^\dA-Za-z]+(?:([a-zA-Z]{3})\s)?(\d+)/i);
-        if (dMatch) {
-            let d1 = dMatch[1];
-            let m2 = dMatch[2] || d1.split(' ')[0];
-            let d2 = dMatch[3];
-            cI = fD(d1);
-            cO = fD(`${m2} ${d2}`);
-        }
-    } else {
-        let nIdx = ab.findIndex(x => x.includes('Identity verified') || x.includes('reviews'));
-        if (nIdx > 0) {
-            gN = ab[nIdx - 1];
-            let cLine = ab[nIdx + 1];
-            if (cLine && !cLine.includes('Hello') && !cLine.includes('Hi') && !cLine.includes('Automatically')) {
-                let parts = cLine.split(',');
-                cCode = parts[parts.length - 1].trim();
-            }
-        } else {
-            gN = ex(/Reservation confirmed - (.*?)\s+arrives/i);
-        }
-
-        cI = fD(ex(/Check-in[\s\S]*?([A-Za-z]{3},\s*[A-Za-z]{3}\s*\d+(?:,\s*\d{4})?)/i));
-        cO = fD(ex(/Checkout[\s\S]*?([A-Za-z]{3},\s*[A-Za-z]{3}\s*\d+(?:,\s*\d{4})?)/i));
-        bT = ex(/([^\n]+?)\s*Room\s*Check-in/i);
-
-        let msgIdx = ab.findIndex(x => x.toLowerCase().includes('message from'));
-        if (msgIdx > -1) {
-            let msg = [];
-            for (let i = msgIdx + 1; i < ab.length; i++) {
-                if (ab[i].includes('Automatically translated') || ab[i].includes('Hosting requirements') || ab[i].includes('View itinerary')) break;
-                if (ab[i].trim()) msg.push(ab[i]);
-            }
-            if (msg.length > 0) notes = "GUEST MSG:\n" + msg.join("\n");
-        }
+    // 2. Guest Name
+    let firstName = '';
+    let lastName = 'GUEST';
+    const nameMatch = text.match(/(?:guest|guest\s*name|hosted)[\s:#]*([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i);
+    if (nameMatch) {
+        const parts = nameMatch[1].trim().replace(/\s+/g, ' ').split(' ');
+        firstName = parts[0] || '';
+        lastName = parts.slice(1).join(' ') || 'GUEST';
     }
 
-    const bId = ex(/Confirmation code[\s\S]*?([A-Z0-9]+)/i) || ex(/\b([A-Z0-9]{10})\b/);
-    const bD = fD(ex(/Airbnb[\s\S]*?([A-Za-z]{3},\s*[A-Za-z]{3}\s*\d+(?:,\s*\d{4})?)/i));
-    const pax = parseInt(ex(/Guests[\s\S]*?(\d+)/i), 10) || 1;
-    const tot = cM(ex(/Total\s*(?:\([A-Z]+\))?[\s\S]{0,30}?(?:THB|฿|\$|€|£|[A-Z]{3})\s*([\d,.]+)/i));
-    const comm = cM(ex(/Host service fee[\s\S]*?(?:฿|THB)\s*([\d,.]+)/i));
-
-    let lN = gN.trim(), fN = "";
-    if (gN.includes(',')) {
-        const p = gN.split(',');
-        lN = p[0].trim();
-        fN = p.slice(1).join(',').trim();
-    } else {
-        const p = gN.split(/\s+/);
-        fN = p[0]?.trim() || '';
-        lN = p.length > 1 ? p.slice(1).join(' ').trim() : '';
+    // 3. Country / Location
+    let country = '';
+    const locMatch = text.match(/(?:lives\s*in|from|country)[\s:#]*([A-Za-z\s,]+)(?:\n|$)/i);
+    if (locMatch) {
+        country = locMatch[1].trim().split(',').pop().trim().toUpperCase();
     }
 
+    // 4. Dates
+    let checkIn = '';
+    let checkOut = '';
+    const inMatch = text.match(/(?:check-in|arrive)[\s:#]*([^\n\r]+)/i);
+    const outMatch = text.match(/(?:checkout|check-out|depart)[\s:#]*([^\n\r]+)/i);
+    if (inMatch) checkIn = parseFlexibleDate(inMatch[1]);
+    if (outMatch) checkOut = parseFlexibleDate(outMatch[1]);
+
+    // 5. Booking Date
+    let bookDate = '';
+    const bookDateMatch = text.match(/(?:booked|booked\s*on)[\s:#]*([^\n\r]+)/i);
+    if (bookDateMatch) bookDate = parseFlexibleDate(bookDateMatch[1]);
+
+    // 6. Units & Headcount (Pax)
+    let pax = 1;
+    let unitCount = 1;
+    const paxMatch = text.match(/(\d+)\s*guests?\b/i) ||
+                     text.match(/(?:number\s*of\s*guests|guests|adults)[\s:#]*(\d+)/i);
+    if (paxMatch) pax = parseInt(paxMatch[1], 10) || 1;
+
+    // 7. Pricing & Payout
+    let totalPrice = 0;
+    let explicitNet = null;
+    let commissionAmt = 0;
+
+    const payoutMatch = text.match(/(?:host\s*payout|payout|you\s*earn|total\s*payout)[\s:#]*(?:THB|฿|[A-Z]{3})?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+    if (payoutMatch) explicitNet = parseFloat(payoutMatch[1].replace(/,/g, ''));
+
+    const totalMatch = text.match(/(?:total\s*price|total|guest\s*paid)[\s:#]*(?:THB|฿|[A-Z]{3})?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+    if (totalMatch) totalPrice = parseFloat(totalMatch[1].replace(/,/g, '')) || 0;
+
+    if (totalPrice === 0 && explicitNet !== null) {
+        // Airbnb host-only fee ~3-15%
+        totalPrice = explicitNet;
+    }
+    if (explicitNet === null && totalPrice > 0) {
+        commissionAmt = Number((totalPrice * 0.15).toFixed(2));
+        explicitNet = Number((totalPrice - commissionAmt).toFixed(2));
+    } else if (totalPrice > 0 && explicitNet !== null) {
+        commissionAmt = Number((totalPrice - explicitNet).toFixed(2));
+    }
+
+    // 8. Room / Listing Name
+    let bookedType = '';
+    const listMatch = text.match(/(?:entire\s*place|private\s*room|listing|room)[\s:#]*([^\n\r]+)/i);
+    if (listMatch) {
+        bookedType = listMatch[1].replace(/^[-•]\s*/, '').trim();
+    }
+
+    // 9. Refundability Policy
+    let refundability = 'ref';
+    if (/non-refundable|firm|strict/i.test(text)) {
+        refundability = 'non-ref';
+    } else if (/flexible|moderate/i.test(text)) {
+        refundability = 'ref';
+    }
+
+    // 10. Payments: Airbnb is 100% prepaid (airbnb-pay for payout + airbnb-kp for fee)
     const payments = [];
-    if (tot > 0) {
+    if (totalPrice > 0 && checkIn) {
         payments.push({
-            date: cI || new Date().toISOString().split('T')[0],
-            amt: Math.max(0, tot - comm),
+            date: checkIn,
+            amt: explicitNet !== null ? explicitNet : totalPrice,
             method: 'airbnb-pay'
         });
+        if (commissionAmt > 0) {
+            payments.push({
+                date: checkIn,
+                amt: commissionAmt,
+                method: 'airbnb-kp'
+            });
+        }
     }
+
+    // 11. Contact Details (Airbnb masks direct contact before booking)
+    let phone = '';
+    const phoneMatch = text.match(/(\+\d[\d\s\-\(\)]{7,20})/);
+    if (phoneMatch) phone = phoneMatch[1].trim();
+
+    // 12. Special Requests
+    let specialRequests = '';
+    const reqMatch = text.match(/(?:message\s*from\s*guest|note)[\s:#]*\n?([^\n\r]+)/i);
+    if (reqMatch) specialRequests = reqMatch[1].trim();
+
+    // Duration & Average Daily Rate
+    let nights = 1;
+    if (checkIn && checkOut) {
+        const ms = new Date(checkOut) - new Date(checkIn);
+        nights = Math.max(1, Math.round(ms / 86400000)) || 1;
+    }
+    const avgNightly = totalPrice > 0 ? (totalPrice / nights).toFixed(2) : '0.00';
+
+    // Standard Note Block
+    const noteLines = [
+        `--- ORIGINAL OTA BOOKING ---`,
+        `Source: AIRBNB`,
+        `Book ID: ${bookId}`,
+        `Dates: ${checkIn || '--'} to ${checkOut || '--'} (${nights} Night${nights > 1 ? 's' : ''})`,
+        `Booked: ${bookedType || '--'}`,
+        `Units (Rooms/Beds): ${unitCount}`,
+        `Pax: ${pax}`,
+        `Total: ฿${totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        `Net Payout: ฿${explicitNet !== null ? explicitNet.toFixed(2) : '--'} (Fee: ฿${commissionAmt.toFixed(2)})`,
+        `Avg Nightly: ฿${parseFloat(avgNightly).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        `----------------------------`,
+        `• Policy: ${refundability.toUpperCase()}`
+    ];
+    if (country) noteLines.push(`• Nationality: ${country}`);
+    if (specialRequests) noteLines.push(`• Special Request: ${specialRequests}`);
 
     return {
         source: 'airbnb',
-        bookId: bId,
-        firstName: fN.toUpperCase(),
-        lastName: lN.toUpperCase(),
-        checkIn: cI,
-        checkOut: cO,
-        bookDate: bD,
+        bookId,
+        firstName: firstName.toUpperCase(),
+        lastName: lastName.toUpperCase(),
+        country,
         pax,
-        bookedType: bT.toUpperCase(),
-        totalPrice: tot,
-        netPrice: Math.max(0, tot - comm),
+        unitCount,
+        checkIn,
+        checkOut,
+        bookDate,
+        totalPrice,
+        netPrice: explicitNet,
+        netVerified: true,
+        nightlyRates: [],
+        isAverageRate: true,
+        bookedType,
+        phone,
         email: '',
-        phone: '',
-        country: cCode,
-        refundability: 'ref',
-        status: 'future',
+        isProxyEmail: false,
+        refundability,
         payments,
-        notes: (notes || `[AIRBNB IMPORT: ฿${tot}]`).trim()
+        status: 'future',
+        notes: noteLines.join('\n')
     };
-};
+}
