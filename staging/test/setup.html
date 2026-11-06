@@ -20,9 +20,8 @@
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col antialiased overflow-hidden">
 
-<!-- UNIVERSAL TOP NAVIGATION (Mounted by core/nav.js) -->
-    <div id="app-nav">
-        <!-- Right Slot: Setup Save Button -->
+    <!-- UNIVERSAL TOP NAVIGATION (Self-Mounts via core/nav.js) -->
+    <div id="app-nav" data-app="setup">
         <div id="nav-right-slot">
             <button type="button" onclick="window.savePropertyToDatabase(true)" id="btn-save-header" class="flex items-center gap-1 px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase shadow-xs transition-colors cursor-pointer">
                 <i data-lucide="save" size="13"></i>
@@ -31,7 +30,6 @@
         </div>
     </div>
 
-     
     <!-- 5-STEP STEPPER NAVIGATION -->
     <nav class="bg-white border-b border-slate-200 px-3 py-1 shrink-0">
         <div class="max-w-7xl mx-auto grid grid-cols-5 gap-1.5">
@@ -61,11 +59,8 @@
     <!-- Main Content Container -->
     <main class="flex-1 max-w-7xl w-full mx-auto p-2 flex flex-col gap-2 min-h-0 overflow-hidden">
 
-        <!-- ==========================================================================
-             STEP 1: GENERAL PROFILE, BRAND ASSETS, PAYMENTS & ADD-ONS
-             ========================================================================== -->
+        <!-- STEP 1: GENERAL PROFILE, BRAND ASSETS, PAYMENTS & ADD-ONS -->
         <section id="step-content-1" class="space-y-2 flex-1 overflow-y-auto">
-            <!-- Step Banner -->
             <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-lg p-2.5 px-3 flex items-center justify-between shadow-xs">
                 <div>
                     <span class="text-[9px] font-black uppercase tracking-widest text-indigo-400">Step 1 of 5</span>
@@ -197,7 +192,6 @@
                 </div>
 
                 <div id="sec-prop-payments" class="space-y-2">
-                    <!-- Quick Channel Activation Bar -->
                     <div class="bg-white p-2 border border-emerald-200 rounded text-xs flex flex-wrap items-center justify-between gap-1.5">
                         <div class="flex items-center gap-1.5 flex-wrap">
                             <span class="text-[9px] font-black uppercase text-slate-500 mr-1">Active OTA Channels:</span>
@@ -208,7 +202,6 @@
                         </button>
                     </div>
 
-                    <!-- Active Payments Table -->
                     <div class="overflow-x-auto border border-emerald-200 rounded bg-white">
                         <table class="w-full text-left text-[11px] border-collapse">
                             <thead class="bg-slate-800 text-[9px] font-black uppercase text-white border-b border-slate-900 sticky top-0">
@@ -259,11 +252,8 @@
             </div>
         </section>
 
-        <!-- ==========================================================================
-             STEP 2: ROOM INVENTORY & BED ARCHITECTURE
-             ========================================================================== -->
+        <!-- STEP 2: ROOM INVENTORY -->
         <section id="step-content-2" class="flex-1 flex flex-col min-h-0 hidden">
-            <!-- Step Banner -->
             <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-lg p-2.5 px-3 mb-2 flex items-center justify-between shadow-xs shrink-0">
                 <div>
                     <span class="text-[9px] font-black uppercase tracking-widest text-indigo-400">Step 2 of 5</span>
@@ -401,11 +391,8 @@
             </div>
         </section>
 
-        <!-- ==========================================================================
-             STEP 3: CHANNEL MANAGER & MAPPING
-             ========================================================================== -->
+        <!-- STEP 3: CHANNEL MANAGER & MAPPING -->
         <section id="step-content-3" class="space-y-2 flex-1 overflow-y-auto hidden">
-            <!-- Step Banner -->
             <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-lg p-2.5 px-3 flex items-center justify-between shadow-xs">
                 <div>
                     <span class="text-[9px] font-black uppercase tracking-widest text-sky-400">Step 3 of 5</span>
@@ -449,11 +436,8 @@
             <div class="space-y-2" id="unified-mapping-container"></div>
         </section>
 
-        <!-- ==========================================================================
-             STEP 4: PRICING RULES & CURVES
-             ========================================================================== -->
+        <!-- STEP 4: PRICING RULES & CURVES -->
         <section id="step-content-4" class="space-y-2 flex-1 overflow-y-auto hidden">
-            <!-- Step Banner -->
             <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-lg p-2.5 px-3 flex items-center justify-between shadow-xs">
                 <div>
                     <span class="text-[9px] font-black uppercase tracking-widest text-pink-400">Step 4 of 5</span>
@@ -627,11 +611,8 @@
             </div>
         </section>
 
-        <!-- ==========================================================================
-             STEP 5: REVIEW & LAUNCH
-             ========================================================================== -->
+        <!-- STEP 5: REVIEW & LAUNCH -->
         <section id="step-content-5" class="space-y-2 flex-1 overflow-y-auto hidden">
-            <!-- Step Banner -->
             <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-lg p-2.5 px-3 flex items-center justify-between shadow-xs">
                 <div>
                     <span class="text-[9px] font-black uppercase tracking-widest text-emerald-400">Step 5 of 5</span>
@@ -800,6 +781,7 @@
     </div>
 
     <!-- ENTRY POINT -->
+    <script type="module" src="core/nav.js"></script>
     <script type="module" src="setup/setup-wizard.js"></script>
 </body>
 </html>
