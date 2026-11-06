@@ -56,23 +56,46 @@ export function parseFlexibleDate(rawStr) {
 export function jumpCalendarToDate(dateStr) {
     if (!dateStr) return;
 
-    // 1. Ensure Calendar tab is active
+    // 1. Switch to Calendar View Tab
     if (typeof window.switchTab === 'function') {
         window.switchTab('calendar');
     }
 
-    // 2. Jump month/date in calendar controller
-    if (typeof window.jumpToDate === 'function') {
-        window.jumpToDate(dateStr);
-    } else if (typeof window.jumpToMonth === 'function') {
-        window.jumpToMonth(dateStr.slice(0, 7));
+    // 2. Select option in jump-month-select
+    const ym = dateStr.slice(0, 7); // e.g. "2026-11"
+    const sel = document.getElementById('jump-month-select');
+    if (sel) {
+        let matchedOpt = Array.from(sel.options).find(o => o.value === ym || o.value.startsWith(ym));
+        if (!matchedOpt) {
+            const d = new Date(dateStr + "T12:00:00Z");
+            const mName = d.toLocaleString('en-US', { month: 'short' });
+            const yStr = d.getFullYear().toString();
+            matchedOpt = Array.from(sel.options).find(o => o.text.includes(mName) && o.text.includes(yStr));
+        }
+        if (matchedOpt) {
+            sel.value = matchedOpt.value;
+            if (typeof window.jumpToMonth === 'function') {
+                window.jumpToMonth(matchedOpt.value);
+            } else if (sel.onchange) {
+                sel.onchange();
+            }
+        }
     }
 
-    // 3. Scroll horizontally to the check-in date cell
+    if (typeof window.jumpToDate === 'function') {
+        window.jumpToDate(dateStr);
+    }
+
+    // 3. Directly scroll #calendar-scroll-container to check-in column
     setTimeout(() => {
+        const container = document.getElementById('calendar-scroll-container');
         const cell = document.querySelector(`[data-date="${dateStr}"]`) ||
-                     document.querySelector(`.timeline-col[data-date="${dateStr}"]`);
-        if (cell) {
+                     document.querySelector(`.timeline-col[data-date="${dateStr}"]`) ||
+                     document.getElementById(`day-col-${dateStr}`);
+        if (container && cell) {
+            const cellLeft = cell.offsetLeft;
+            container.scrollTo({ left: Math.max(0, cellLeft - 180), behavior: 'smooth' });
+        } else if (cell && typeof cell.scrollIntoView === 'function') {
             cell.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
         }
     }, 250);
@@ -93,7 +116,7 @@ export function parseOtaClipboardText(rawText) {
                    parseExpedia(rawText);
 
     if (result) {
-        // Resolve matching category in active property (longest string first)
+        // 1. Match category in active property (Longest string tested first)
         if (result.bookedType && window.hotelRooms) {
             const types = [...new Set(window.hotelRooms.map(r => r.category || r.type).filter(Boolean))];
             types.sort((a, b) => b.length - a.length);
@@ -108,7 +131,7 @@ export function parseOtaClipboardText(rawText) {
             }
         }
 
-        // Net Price fallback calculation
+        // 2. Net Price fallback calculation
         if (result.netPrice === null && result.totalPrice > 0) {
             const commissions = window.currentPropertyConfig?.commissions || {};
             const channelRate = parseFloat(commissions[result.source] || commissions.default || 0);
@@ -118,22 +141,13 @@ export function parseOtaClipboardText(rawText) {
             }
         }
 
-        // Ensure prepaid payments use the net payout
-        if (result.netPrice !== null && Array.isArray(result.payments)) {
-            result.payments.forEach(p => {
-                if (['bdc-pay', 'agoda-pay', 'expedia-pay'].includes(p.method)) {
-                    p.amt = result.netPrice;
-                }
-            });
-        }
-
-        // Booking date fallback
+        // 3. Booking date fallback
         if (!result.bookDate) {
             result.bookDate = getLocalYMD(new Date());
             result.bookDateIsEstimated = true;
         }
 
-        // Intelligent Room Assignment
+        // 4. Intelligent Room Assignment
         const assignedRooms = suggestRoomsForBooking({
             checkIn: result.checkIn,
             checkOut: result.checkOut,
