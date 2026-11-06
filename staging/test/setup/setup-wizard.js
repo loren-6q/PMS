@@ -7,7 +7,8 @@ import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { customAlert } from '../core/ui-dialogs.js';
-import { loadPropertiesCatalog, toCanonicalPropId, getActivePropertyId, mountUniversalNav } from '../core/properties.js';
+import { loadPropertiesCatalog, toCanonicalPropId, getActivePropertyId } from '../core/properties.js';
+import { mountNav } from '../core/nav.js';
 
 import { renderPaymentMethodsTable, renderAddonsTable, updateLogoPreview } from './setup-profile.js';
 import { renderRoomDefinitionsTable, compileRoomsFromDefinitions } from './setup-rooms.js';
@@ -267,8 +268,8 @@ export async function initSetup() {
         const targetPropId = getActivePropertyId();
 
         // Populate top navigation and property switcher
-        await mountUniversalNav('setup');
-
+        await mountNav({ currentApp: 'setup' });
+        
         // Populate header dropdown selector if present
         const switcher = document.getElementById('property-select');
         if (switcher && props.length > 0) {
