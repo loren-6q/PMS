@@ -3,7 +3,7 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey } from './properties.js';
+import { loadPropertiesCatalog, toCanonicalPropId } from './properties.js';
 
 const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
