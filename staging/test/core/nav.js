@@ -1,9 +1,9 @@
 // ==========================================================================
-// core/nav.js - Self-Mounting Universal Header & Property Switcher
+// core/nav.js - Self-Mounting Universal Header & Dynamic Property Switcher
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { loadPropertiesCatalog, toCanonicalPropId } from './properties.js';
+import { loadPropertiesCatalog, getActivePropertyId, switchProperty, toDisplayPropKey } from './properties.js';
 
 const DEFAULT_BRAND_LOGO = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
@@ -15,52 +15,38 @@ export const APP_REGISTRY = [
     { id: 'tm30', label: 'TM30', href: 'tm30.html', icon: 'file-text' }
 ];
 
-export function getActiveProp() {
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get('p') || localStorage.getItem('last_prop') || '';
-    return toCanonicalPropId(raw);
-}
-
-export function switchProperty(propId) {
-    const target = toCanonicalPropId(propId);
-    localStorage.setItem('last_prop', target);
-    const url = new URL(window.location.href);
-    url.searchParams.set('p', target);
-    window.location.href = url.toString();
-}
-
 export function navigateToApp(appName, event) {
     if (event) event.preventDefault();
-    const cur = getActiveProp();
-    window.location.href = `${appName}.html?p=${cur}`;
+    const curProp = getActivePropertyId();
+    window.location.href = `${appName}.html?p=${curProp}`;
 }
 
 export function togglePropertyPicker() {
-    const dd = document.getElementById('property-picker-dropdown');
-    if (!dd) return;
-    const isHidden = dd.classList.contains('hidden');
+    const dropdown = document.getElementById('property-picker-dropdown');
+    if (!dropdown) return;
+    const isHidden = dropdown.classList.contains('hidden');
     if (isHidden) {
         renderPropertyPickerList();
-        dd.classList.remove('hidden');
+        dropdown.classList.remove('hidden');
     } else {
-        dd.classList.add('hidden');
+        dropdown.classList.add('hidden');
     }
 }
 
-function renderPropertyPickerList() {
+export function renderPropertyPickerList() {
     const container = document.getElementById('property-picker-list');
     if (!container) return;
 
-    const list = window.activePropertiesList || [];
-    const cur = getActiveProp();
+    const props = window.availableProperties || [];
+    const curProp = getActivePropertyId();
 
-    if (list.length === 0) {
+    if (props.length === 0) {
         container.innerHTML = `<div class="p-3 text-xs text-slate-400 font-bold text-center">Loading properties from database...</div>`;
         return;
     }
 
-    container.innerHTML = list.map(p => {
-        const isSel = p.id.toLowerCase() === cur.toLowerCase();
+    container.innerHTML = props.map(p => {
+        const isSel = p.id.toLowerCase() === curProp.toLowerCase();
         return `
             <button type="button" onclick="window.switchProperty('${p.id}')" class="w-full text-left px-3 py-2 rounded text-xs font-bold uppercase transition-colors flex items-center justify-between cursor-pointer ${
                 isSel ? 'bg-indigo-600 text-white font-black shadow-xs' : 'text-slate-700 hover:bg-slate-100'
@@ -83,24 +69,23 @@ export function mountNav() {
     const container = document.getElementById('app-nav');
     if (!container) return;
 
-    // Prevent re-mounting if header already exists
     if (container.querySelector('header')) {
         updateNavBrandLogo();
         return;
     }
 
     const currentApp = container.dataset.app || '';
-    const curProp = getActiveProp();
+    const curProp = getActivePropertyId();
     window.currentPropertyId = curProp;
 
-    // Preserve existing live slot elements and their event listeners
+    // Capture existing slot elements so their DOM event listeners are NOT destroyed
     const centerSlot = document.getElementById('nav-center-slot');
     const rightSlot = document.getElementById('nav-right-slot');
 
     const header = document.createElement('header');
     header.className = "bg-white px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex items-center justify-between gap-1.5 shrink-0 z-50 unselectable w-full";
 
-    // 1. Left: Logo-Only Dropdown Trigger
+    // 1. LEFT: Icon-Only Logo Button
     const leftDiv = document.createElement('div');
     leftDiv.className = "flex items-center gap-2 shrink-0 min-w-0";
     leftDiv.innerHTML = `
@@ -119,12 +104,10 @@ export function mountNav() {
     `;
     header.appendChild(leftDiv);
 
-    // 2. Center: Move the actual center DOM node inside
-    if (centerSlot) {
-        header.appendChild(centerSlot);
-    }
+    // 2. CENTER: Append live center slot without string serialization
+    if (centerSlot) header.appendChild(centerSlot);
 
-    // 3. Right: Universal App Links + Page Actions Slot
+    // 3. RIGHT: App Links + Live Right Slot
     const rightWrapper = document.createElement('div');
     rightWrapper.className = "flex items-center gap-1 sm:gap-1.5 shrink-0 ml-auto";
 
@@ -143,14 +126,11 @@ export function mountNav() {
     }).join('');
 
     rightWrapper.appendChild(navLinks);
-    if (rightSlot) {
-        rightWrapper.appendChild(rightSlot);
-    }
+    if (rightSlot) rightWrapper.appendChild(rightSlot);
     header.appendChild(rightWrapper);
 
     container.appendChild(header);
 
-    // Outside click dismiss
     document.addEventListener('click', (e) => {
         const dd = document.getElementById('property-picker-dropdown');
         const logoBtn = document.getElementById('main-brand-logo')?.closest('button');
@@ -165,7 +145,6 @@ export function mountNav() {
         window.lucide.createIcons();
     }
 
-    // Background fetch of Firestore property metadata
     loadPropertiesCatalog().then(props => {
         if (Array.isArray(props) && props.length > 0) {
             updateNavBrandLogo();
@@ -178,8 +157,8 @@ export function mountNav() {
 }
 
 function updateNavBrandLogo() {
-    const curProp = getActiveProp();
-    const props = window.activePropertiesList || [];
+    const curProp = getActivePropertyId();
+    const props = window.availableProperties || [];
     const active = props.find(p => p.id.toLowerCase() === curProp.toLowerCase());
     const logoEl = document.getElementById('main-brand-logo');
     if (logoEl && active) {
@@ -188,9 +167,9 @@ function updateNavBrandLogo() {
 }
 
 if (typeof window !== 'undefined') {
-    window.switchProperty = switchProperty;
     window.navigateToApp = navigateToApp;
     window.togglePropertyPicker = togglePropertyPicker;
+    window.renderPropertyPickerList = renderPropertyPickerList;
     window.mountNav = mountNav;
 }
 
