@@ -3,18 +3,19 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { parseYMD, getLocalYMD, diffDays } from '../core/dates.js';
+import { diffDays } from '../core/dates.js';
 import { getDue } from '../core/money.js';
+import { applyStatusStyle } from '../core/occupancy.js';
 
 const CHANNEL_BADGES = {
     'booking.com': { bg: '#003580', txt: '#fff', char: 'B' },
     'hostelworld': { bg: '#F15A24', txt: '#fff', char: 'H' },
-    'agoda': { bg: '#87B2D6', txt: '#fff', char: 'A' },
-    'airbnb': { bg: '#FF5A5F', txt: '#fff', char: 'A' },
-    'expedia': { bg: '#facc15', txt: '#003580', char: 'E' },
-    'ctrip': { bg: '#3b82f6', txt: '#fff', char: 'T' },
-    'direct': { bg: '#10b981', txt: '#fff', char: 'D' },
-    'walk-in': { bg: '#475569', txt: '#fff', char: 'W' }
+    'agoda':       { bg: '#87B2D6', txt: '#fff', char: 'A' },
+    'airbnb':      { bg: '#FF5A5F', txt: '#fff', char: 'A' },
+    'expedia':     { bg: '#facc15', txt: '#003580', char: 'E' },
+    'ctrip':       { bg: '#3b82f6', txt: '#fff', char: 'T' },
+    'direct':      { bg: '#10b981', txt: '#fff', char: 'D' },
+    'walk-in':     { bg: '#475569', txt: '#fff', char: 'W' }
 };
 
 export function renderReservationBar(booking, daysToShow, getDayIndexFn, todayStr, yesterdayStr, onOpenModalFn, searchTerm = '') {
@@ -32,13 +33,17 @@ export function renderReservationBar(booking, daysToShow, getDayIndexFn, todaySt
     bar.dataset.bookingId = booking.id;
     bar.style.gridColumn = `${visibleStart + 2} / span ${span}`;
 
-    const status = (booking.status || 'future').toLowerCase();
-    bar.classList.add(`status-${status}`);
+    const status = (booking.status || 'future').toLowerCase().trim();
+    bar.classList.add(`status-${status.replace(/\s+/g, '-')}`);
 
+    // Authoritative status color & styling from core/occupancy.js
+    applyStatusStyle(bar, status, false);
+
+    // Alerts: Bad CC & Balance Due (No-shows WHO OWE MONEY GET RED BORDER)
     const dueAmount = getDue(booking);
-    if (booking.isBadCC) {
+    if (booking.badCC) {
         bar.classList.add('border-bad-cc');
-    } else if (dueAmount > 0.05 && !['cancelled', 'noshow', 'charged'].includes(status)) {
+    } else if (dueAmount > 0.05 && status !== 'cancelled' && status !== 'charged') {
         bar.classList.add('border-owes-money');
     }
 
@@ -53,9 +58,10 @@ export function renderReservationBar(booking, daysToShow, getDayIndexFn, todaySt
     }
 
     if (searchTerm && searchTerm.length > 0) {
+        const cleanTerm = searchTerm.trim().toUpperCase();
         const fullName = `${booking.firstName || ''} ${booking.lastName || ''}`.toUpperCase();
-        const bookId = (booking.bookId || '').toUpperCase();
-        if (fullName.includes(searchTerm) || bookId.includes(searchTerm)) {
+        const bookId = String(booking.bookId || '').toUpperCase();
+        if (fullName.includes(cleanTerm) || bookId.includes(cleanTerm)) {
             bar.classList.add('search-match-highlight');
         } else {
             bar.classList.add('search-dimmed');
@@ -66,15 +72,15 @@ export function renderReservationBar(booking, daysToShow, getDayIndexFn, todaySt
     const ch = CHANNEL_BADGES[srcKey] || { bg: '#64748b', txt: '#fff', char: '?' };
     const badgeHtml = `<span class="ota-icon shrink-0" style="background:${ch.bg}; color:${ch.txt};" title="${srcKey.toUpperCase()}">${ch.char}</span>`;
 
+    const isRefundable = booking.refundability === 'ref';
     const guestDisplayName = `${booking.lastName || 'GUEST'}, ${booking.firstName ? booking.firstName[0] : ''}`.trim();
     bar.innerHTML = `
         <div class="flex items-center gap-1 overflow-hidden w-full h-full px-1 pointer-events-none">
             ${badgeHtml}
-            <span class="truncate font-black text-[11px] leading-tight ${booking.isRefundable ? 'italic' : ''}">${guestDisplayName}</span>
+            <span class="truncate font-black text-[11px] leading-tight ${isRefundable ? 'italic' : ''}">${guestDisplayName}</span>
         </div>
     `;
 
-    // Attached strictly to native pointer tracking with zero layout interference
     bar.addEventListener('mouseenter', (e) => showBarTooltip(e, booking));
     bar.addEventListener('mousemove', (e) => positionBarTooltip(e));
     bar.addEventListener('mouseleave', () => hideBarTooltip());
@@ -124,6 +130,7 @@ export function showBarTooltip(e, b) {
     const el = getTooltipElement();
     const nights = diffDays(b.checkIn, b.checkOut);
     const due = getDue(b);
+    const roomText = Array.isArray(b.rooms) ? b.rooms.filter(Boolean).join(', ') : (b.room || 'Unassigned');
 
     el.innerHTML = `
         <div class="font-black text-xs text-white uppercase border-b border-slate-700 pb-1 mb-1 flex justify-between items-center pointer-events-none">
@@ -132,8 +139,8 @@ export function showBarTooltip(e, b) {
         </div>
         <div class="space-y-0.5 text-[10px] text-slate-300 font-medium pointer-events-none">
             <div>Dates: <b>${b.checkIn} &rarr; ${b.checkOut}</b> (${nights} nt)</div>
-            <div>Room: <b>${Array.isArray(b.rooms) ? b.rooms.join(', ') : (b.room || 'Unassigned')}</b></div>
-            <div>Balance Due: <b class="${due > 0 ? 'text-rose-400' : 'text-emerald-400'} font-bold">฿${due.toFixed(2)}</b></div>
+            <div>Room: <b>${roomText || 'Unassigned'}</b></div>
+            <div>Balance Due: <b class="${due > 0 ? 'text-rose-400' : 'text-emerald-400'} font-bold">฿${Number(due || 0).toFixed(2)}</b></div>
             ${b.bookId ? `<div class="text-[9px] text-slate-400 font-mono">ID: ${b.bookId}</div>` : ''}
         </div>
     `;
