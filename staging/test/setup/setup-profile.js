@@ -37,7 +37,6 @@ export function createOtaPaymentPair(code, name, isActive = true) {
 // Generate the initial default payment methods
 export function buildDefaultPaymentMethods() {
     const list = [...BASE_DIRECT_PAYMENTS];
-    // Start with Booking.com and Hostelworld active by default; others available to toggle
     list.push(...createOtaPaymentPair("bdc", "Booking.com", true));
     list.push(...createOtaPaymentPair("hw", "Hostelworld", true));
     return list;
@@ -52,6 +51,100 @@ export const DEFAULT_ADDONS = [
     { id: "laundry", name: "Laundry Bag (1kg)", price: 60, category: "Service" },
     { id: "scooter", name: "Scooter Rental (24h)", price: 250, category: "Rental" }
 ];
+
+/**
+ * Normalizes, deduplicates, and auto-heals payment methods:
+ * 1. Deduplicates by key (purges duplicate -kp entries)
+ * 2. Auto-heals: If an orphan -kp exists without a -pay, creates the matching -pay
+ * 3. Supports legacy string arrays and objects seamlessly
+ */
+export function normalizePaymentMethods(methods = []) {
+    if (!Array.isArray(methods) || methods.length === 0) {
+        return [...DEFAULT_PAYMENT_METHODS];
+    }
+
+    const normalized = [];
+    const seenKeys = new Set();
+
+    methods.forEach(item => {
+        if (!item) return;
+        let obj = typeof item === 'string'
+            ? { key: item.trim().toLowerCase(), label: item, type: item.endsWith('-kp') ? 'commission' : 'revenue', active: true }
+            : { ...item };
+
+        if (!obj.key) return;
+        obj.key = String(obj.key).trim().toLowerCase();
+
+        // Convert bare OTA key (e.g. 'hw') into canonical 'hw-pay'
+        const otaDirectMatch = STANDARD_OTA_REGISTRY.find(o => o.code === obj.key);
+        if (otaDirectMatch) {
+            obj.key = `${otaDirectMatch.code}-pay`;
+            obj.channel = otaDirectMatch.code;
+            obj.channelName = otaDirectMatch.name;
+        }
+
+        const baseDirect = BASE_DIRECT_PAYMENTS.find(b => b.key === obj.key);
+        if (baseDirect) {
+            obj.label = obj.label || baseDirect.label;
+            obj.type = baseDirect.type;
+            obj.isBase = true;
+        }
+
+        if (!obj.channel && (obj.key.endsWith('-pay') || obj.key.endsWith('-kp'))) {
+            obj.channel = obj.key.replace(/-(pay|kp)$/, '');
+        }
+
+        if (obj.channel && !obj.channelName) {
+            const reg = STANDARD_OTA_REGISTRY.find(o => o.code === obj.channel.toLowerCase());
+            obj.channelName = reg ? reg.name : obj.channel.toUpperCase();
+        }
+
+        if (!seenKeys.has(obj.key)) {
+            seenKeys.add(obj.key);
+            normalized.push(obj);
+        }
+    });
+
+    const toAdd = [];
+    normalized.forEach(m => {
+        if (m.key.endsWith('-kp')) {
+            const baseCode = m.channel || m.key.slice(0, -3);
+            const payKey = `${baseCode}-pay`;
+            if (!seenKeys.has(payKey)) {
+                seenKeys.add(payKey);
+                const reg = STANDARD_OTA_REGISTRY.find(o => o.code === baseCode);
+                const name = m.channelName || (reg ? reg.name : baseCode.toUpperCase());
+                toAdd.push({
+                    key: payKey,
+                    label: `${name} Payout / Collect`,
+                    type: "revenue",
+                    channel: baseCode,
+                    channelName: name,
+                    active: m.active !== false
+                });
+            }
+        } else if (m.key.endsWith('-pay')) {
+            const baseCode = m.channel || m.key.slice(0, -4);
+            const kpKey = `${baseCode}-kp`;
+            if (!seenKeys.has(kpKey)) {
+                seenKeys.add(kpKey);
+                const reg = STANDARD_OTA_REGISTRY.find(o => o.code === baseCode);
+                const name = m.channelName || (reg ? reg.name : baseCode.toUpperCase());
+                toAdd.push({
+                    key: kpKey,
+                    label: `${name} Commission (Withheld)`,
+                    type: "commission",
+                    channel: baseCode,
+                    channelName: name,
+                    active: m.active !== false
+                });
+            }
+        }
+    });
+
+    normalized.push(...toAdd);
+    return normalized;
+}
 
 // --- 1. BRANDING & ASSET PREVIEWS ---
 
@@ -71,7 +164,6 @@ export function toggleCardSection(contentId, chevronId) {
     }
 }
 
-// Preview uses the uploaded image first; property config second; WWicon only as final fallback
 export function updateLogoPreview(type, url) {
     const previewEl = document.getElementById(`preview-logo-${type}`);
     if (!previewEl) return;
@@ -145,11 +237,9 @@ export function renderPaymentMethodsTable(payments = null) {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    window.paymentMethods = payments || window.paymentMethods || [...DEFAULT_PAYMENT_METHODS];
+    window.paymentMethods = normalizePaymentMethods(payments || window.paymentMethods || [...DEFAULT_PAYMENT_METHODS]);
 
-    // 1. Render the Quick Channel Toggle Pills
     if (togglesContainer) {
-        // Collect all channels currently present in the list
         const activeChannels = new Set(
             window.paymentMethods
                 .filter(m => m.channel && m.active !== false)
@@ -168,11 +258,9 @@ export function renderPaymentMethodsTable(payments = null) {
         }).join('');
     }
 
-    // Separate active and archived
     const activeMethods = window.paymentMethods.filter(m => m.active !== false);
     const archivedMethods = window.paymentMethods.filter(m => m.active === false);
 
-    // 2. Render Active Rows
     activeMethods.forEach((m) => {
         const actualIdx = window.paymentMethods.findIndex(x => x.key === m.key);
         const tr = document.createElement('tr');
@@ -202,7 +290,6 @@ export function renderPaymentMethodsTable(payments = null) {
         tbody.appendChild(tr);
     });
 
-    // 3. Render Collapsible Archived / Historical Methods Tray (If any exist)
     if (archivedMethods.length > 0) {
         const archHeader = document.createElement('tr');
         archHeader.className = "bg-slate-800 text-slate-300 cursor-pointer select-none";
@@ -221,7 +308,6 @@ export function renderPaymentMethodsTable(payments = null) {
         tbody.appendChild(archHeader);
 
         archivedMethods.forEach((m) => {
-            const actualIdx = window.paymentMethods.findIndex(x => x.key === m.key);
             const tr = document.createElement('tr');
             tr.className = "archived-pay-row hidden bg-slate-50 border-b border-slate-200 text-slate-400";
             tr.innerHTML = `
@@ -243,9 +329,8 @@ export function renderPaymentMethodsTable(payments = null) {
     }
 }
 
-// Toggle an OTA channel ON or OFF without deleting historical references
 export function toggleOtaChannel(code, name) {
-    window.paymentMethods = window.paymentMethods || [];
+    window.paymentMethods = normalizePaymentMethods(window.paymentMethods || []);
     const cleanCode = code.toLowerCase().replace(/[^a-z0-9]/g, '');
     const payKey = `${cleanCode}-pay`;
     const kpKey = `${cleanCode}-kp`;
@@ -254,13 +339,19 @@ export function toggleOtaChannel(code, name) {
     const kpEntry = window.paymentMethods.find(m => m.key === kpKey);
 
     if (payEntry && kpEntry) {
-        // Toggle active status
-        const nextState = !(payEntry.active !== false);
+        const nextState = !(payEntry.active !== false && kpEntry.active !== false);
         payEntry.active = nextState;
         kpEntry.active = nextState;
     } else {
-        // Add fresh pair
-        window.paymentMethods.push(...createOtaPaymentPair(cleanCode, name, true));
+        const pair = createOtaPaymentPair(cleanCode, name, true);
+        pair.forEach(item => {
+            const existing = window.paymentMethods.find(m => m.key === item.key);
+            if (existing) {
+                existing.active = true;
+            } else {
+                window.paymentMethods.push(item);
+            }
+        });
     }
 
     renderPaymentMethodsTable();
@@ -271,7 +362,6 @@ export function archivePaymentMethodRow(key) {
     if (!item) return;
 
     if (item.channel) {
-        // Archive both the pay and kp keys for the channel together
         window.paymentMethods.forEach(m => {
             if (m.channel === item.channel) m.active = false;
         });
@@ -395,6 +485,7 @@ export function deleteAddonRow(idx) {
 
 // Global Window Exports
 if (typeof window !== 'undefined') {
+    window.normalizePaymentMethods = normalizePaymentMethods;
     window.toggleCardSection = toggleCardSection;
     window.updateLogoPreview = updateLogoPreview;
     window.resetLogosToDefault = resetLogosToDefault;
