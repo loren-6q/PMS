@@ -3,6 +3,8 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { STATUS_CYCLE, getStatusObj } from '../core/occupancy.js';
+
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
@@ -30,9 +32,38 @@ let dbSortAsc = false;
 // 1. MULTI-SELECT DROPDOWN FILTER CONTROLLERS
 // --------------------------------------------------------------------------
 
+// --- Populate Filter Dropdowns (Status & Channel Source) ---
+export const initDbFilterDropdowns = () => {
+    // 1. Status Dropdown
+    const statusDrop = $('db-status-dropdown');
+    if (statusDrop && statusDrop.children.length === 0) {
+        statusDrop.innerHTML = STATUS_CYCLE.map(s => `
+            <label class="flex items-center px-2 py-1 hover:bg-slate-50 cursor-pointer text-xs font-bold uppercase text-slate-700">
+                <input type="checkbox" value="${s.val}" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-2 rounded border-slate-300 text-indigo-600 focus:ring-0">
+                <span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5 shrink-0" style="background:${s.bg}; border: 1px solid ${s.border};"></span>
+                <span>${s.label}</span>
+            </label>
+        `).join('');
+    }
+
+    // 2. Source Dropdown
+    const sourceDrop = $('db-source-dropdown');
+    if (sourceDrop && sourceDrop.children.length === 0) {
+        const sources = ['direct', 'booking.com', 'agoda', 'hostelworld', 'airbnb', 'expedia', 'ctrip', 'walk-in', 'other'];
+        sourceDrop.innerHTML = sources.map(src => `
+            <label class="flex items-center px-2 py-1 hover:bg-slate-50 cursor-pointer text-xs font-bold uppercase text-slate-700">
+                <input type="checkbox" value="${src}" onchange="window.updateMultiLabel('db-source-dropdown', 'db-source-label', 'ALL SOURCES'); window.renderDatabase();" class="mr-2 rounded border-slate-300 text-indigo-600 focus:ring-0">
+                <span>${src}</span>
+            </label>
+        `).join('');
+    }
+};
+
 // --- Floating Multi-Select Dropdown Toggle & Positioner ---
 export const toggleMultiSelect = (id, btn) => {
     if (window.event) window.event.stopPropagation();
+    initDbFilterDropdowns();
+
     const d = $(id);
     if (!d) return;
     const isHidden = d.style.display === 'none' || d.style.display === '' || d.classList.contains('hidden');
@@ -158,13 +189,15 @@ export const getFilteredBookings = (v = 'db', sKey = dbSortKey, sAsc = dbSortAsc
     return staffList.filter(s => {
         const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
         if (sProp !== curProp) return false;
-        if (statF.length > 0 && !statF.includes(s.status)) return false;
+
+        const cleanStatus = String(s.status || 'future').toLowerCase().trim();
+        if (statF.length > 0 && !statF.includes(cleanStatus)) return false;
 
         const fN = ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase();
         const bId = (s.bookId || '').toUpperCase();
         if (searchTerm && !fN.includes(searchTerm) && !bId.includes(searchTerm)) return false;
         if (nF && !fN.includes(nF) && !bId.includes(nF)) return false;
-        if (sF.length > 0 && !sF.includes(s.source)) return false;
+        if (sF.length > 0 && !sF.includes(String(s.source || 'direct').toLowerCase())) return false;
         if (dS && s.checkOut <= dS) return false;
         if (dE && s.checkIn >= dE) return false;
 
@@ -209,6 +242,10 @@ export const getFilteredBookings = (v = 'db', sKey = dbSortKey, sAsc = dbSortAsc
             vA = window.getPaid ? window.getPaid(a) : 0;
             vB = window.getPaid ? window.getPaid(b) : 0;
         }
+        if (sKey === 'status') {
+            vA = a.status || '';
+            vB = b.status || '';
+        }
         return sAsc ? (vA > vB ? 1 : -1) : (vA < vB ? 1 : -1);
     });
 };
@@ -233,6 +270,8 @@ export const renderDatabase = () => {
     if (!body) return;
     body.innerHTML = '';
 
+    initDbFilterDropdowns();
+
     const getRooms = getRoomsHelper();
     const records = getFilteredBookings('db', dbSortKey, dbSortAsc);
 
@@ -240,6 +279,8 @@ export const renderDatabase = () => {
         const due = window.getDue ? window.getDue(s) : 0;
         const paid = window.getPaid ? window.getPaid(s) : 0;
         const asg = getRooms(s).filter(Boolean).join(', ') || '--';
+
+        const st = getStatusObj(s.status);
 
         const tr = document.createElement('tr');
         tr.className = "border-b hover:bg-slate-50 cursor-pointer";
@@ -254,7 +295,9 @@ export const renderDatabase = () => {
             <td class="p-2 border-r border-slate-200 text-right font-black">฿${Number(s.totalPrice || 0).toFixed(2)}</td>
             <td class="p-2 border-r border-slate-200 text-right font-black text-green-600">฿${paid.toFixed(2)}</td>
             <td class="p-2 border-r border-slate-200 text-right font-black ${due > 0 ? 'text-red-600' : ''} ${s.badCC ? 'underline decoration-dashed decoration-red-500' : ''}">฿${due.toFixed(2)}</td>
-            <td class="p-2 uppercase"><span class="px-2 py-0.5 rounded text-[10px] text-white status-${s.status}">${s.status}</span></td>
+            <td class="p-2 text-center">
+                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border: 1px solid ${st.border};">${st.label}</span>
+            </td>
         `;
         body.appendChild(tr);
     });
