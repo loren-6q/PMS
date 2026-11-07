@@ -3,10 +3,9 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { STATUS_CYCLE } from '../core/occupancy.js';
-import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { getNextStatus, applyStatusStyle, isOccupyingBooking } from '../core/occupancy.js';
+import { parseYMD } from '../core/dates.js';
 import { 
-    activeExtraCharges, 
     setActiveExtraCharges, 
     addPaymentRow, 
     renderExtraCharges, 
@@ -84,18 +83,13 @@ export function updateHeaderName() {
 export function cycleStatus() {
     const sBtn = document.getElementById('status-cycle-btn');
     if (!sBtn) return;
-    const currentVal = sBtn.dataset.value || 'future';
-    let idx = STATUS_CYCLE.findIndex(x => x.val === currentVal);
-    idx = (idx + 1) % STATUS_CYCLE.length;
-    const nextStatus = STATUS_CYCLE[idx];
-
-    sBtn.dataset.value = nextStatus.val;
-    sBtn.innerText = nextStatus.label;
-    sBtn.style.background = nextStatus.bg;
-    sBtn.style.color = nextStatus.txt;
-
     const hiddenInput = document.getElementById('guest-status-hidden');
-    if (hiddenInput) hiddenInput.value = nextStatus.val;
+    const currentVal = hiddenInput?.value || sBtn.dataset.value || 'future';
+    const nextVal = getNextStatus(currentVal);
+
+    sBtn.dataset.value = nextVal;
+    if (hiddenInput) hiddenInput.value = nextVal;
+    applyStatusStyle(sBtn, nextVal, true);
 }
 
 export function setMultiState(id, state, labels, classes) {
@@ -127,8 +121,11 @@ export function calcNights() {
 export function updateNightsDisplay(forcedNights = null) {
     const n = forcedNights !== null ? forcedNights : calcNights();
     const disp = document.getElementById('booking-nights-display');
-    if (disp) {
-        disp.dataset.nights = n;
+    const txtEl = document.getElementById('nights-count-text');
+    if (disp) disp.dataset.nights = n;
+    if (txtEl) {
+        txtEl.innerText = `${n} Nt${n > 1 ? 's' : ''}`;
+    } else if (disp) {
         disp.innerText = `${n} Nt${n > 1 ? 's' : ''}`;
     }
     return n;
@@ -208,16 +205,18 @@ export function updateAvailableRooms() {
     const sU = parseYMD(cI);
     const eU = parseYMD(cO);
     const occupied = new Set();
-    const curProp = window.currentPropertyId || 'swims_resort';
+    const curProp = (window.currentPropertyId || 'swims_resort').toLowerCase();
 
     (window.staff || []).forEach(s => {
         if (s.id === bookingId) return;
         const sProp = (s.property || 'swims_resort').toLowerCase();
-        if (sProp !== curProp.toLowerCase()) return;
-        if (['cancelled', 'noshow', 'unconfirmed', 'charged', 'vol'].includes(s.status)) return;
+        if (sProp !== curProp) return;
+
+        const rList = Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []);
+        const hasAssigned = rList.length > 0 && rList[0] !== "";
+        if (!isOccupyingBooking(s.status, hasAssigned)) return;
 
         if (sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) {
-            const rList = Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []);
             rList.forEach(r => { if (r) occupied.add(r); });
         }
     });
@@ -250,7 +249,6 @@ export function addRoomSelect(initialVal = "") {
     sel.innerHTML = `<option value="">-- UNASSIGNED --</option>`;
     sel.onchange = updateAvailableRooms;
 
-    // Group active rooms by Parent Room / Dorm Name
     const roomGroups = new Map();
     (window.hotelRooms || []).filter(r => !r.inactive).forEach(r => {
         let parentName = r.parentRoom;
@@ -261,21 +259,18 @@ export function addRoomSelect(initialVal = "") {
         roomGroups.get(parentName).push(r);
     });
 
-    // Build hierarchical optgroups with concise bed labels
     roomGroups.forEach((beds, parentTitle) => {
         const optGroup = document.createElement('optgroup');
         optGroup.label = `--- ${parentTitle.toUpperCase()} ---`;
 
         beds.forEach(r => {
             const opt = document.createElement('option');
-            opt.value = r.id; // Exact canonical value saved to Firestore
-            
-            // Concise label prevents horizontal clipping on small screens
+            opt.value = r.id;
             const displayLabel = r.id.includes('№') ? `№ ${r.id.split('№')[1].trim()}` : r.id;
             const bunkArrow = (r.bunk === 'top' || r.bed === 'top') 
                 ? ' ↑' 
                 : ((r.bunk === 'bottom' || r.bunk === 'bot' || r.bed === 'bottom' || r.bed === 'bot') ? ' ↓' : '');
-            
+
             opt.innerText = `${displayLabel}${bunkArrow}`;
             optGroup.appendChild(opt);
         });
@@ -283,7 +278,6 @@ export function addRoomSelect(initialVal = "") {
         sel.appendChild(optGroup);
     });
 
-    // Safety Fallback: Preserve original assignment if room was archived or modified
     if (initialVal) {
         const exists = Array.from(sel.options).some(o => o.value === initialVal);
         if (!exists) {
@@ -322,10 +316,10 @@ export function renderItineraryStripe(s) {
         return;
     }
 
-    const curProp = window.currentPropertyId || 'swims_resort';
+    const curProp = (window.currentPropertyId || 'swims_resort').toLowerCase();
     const legs = (window.staff || []).filter(x => {
         const xProp = (x.property || 'swims_resort').toLowerCase();
-        return xProp === curProp.toLowerCase() && x.linkedId === s.linkedId && x.status !== 'cancelled' && x.status !== 'noshow';
+        return xProp === curProp && x.linkedId === s.linkedId && x.status !== 'cancelled' && x.status !== 'no-show';
     }).sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
 
     if (legs.length <= 1) {
@@ -409,16 +403,13 @@ export function populateFolioForm(b = {}) {
     });
 
     const statusVal = b.status || (isNew ? 'new' : 'future');
-    const sObj = STATUS_CYCLE.find(x => x.val === statusVal) || STATUS_CYCLE[0];
     const sBtn = document.getElementById('status-cycle-btn');
     if (sBtn) {
-        sBtn.dataset.value = sObj.val;
-        sBtn.innerText = sObj.label;
-        sBtn.style.background = sObj.bg;
-        sBtn.style.color = sObj.txt;
+        sBtn.dataset.value = statusVal;
+        applyStatusStyle(sBtn, statusVal, true);
     }
     const hiddenStatus = document.getElementById('guest-status-hidden');
-    if (hiddenStatus) hiddenStatus.value = sObj.val;
+    if (hiddenStatus) hiddenStatus.value = statusVal;
 
     // Assigned Rooms
     const rContainer = document.getElementById('assigned-rooms-container');
