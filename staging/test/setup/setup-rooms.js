@@ -138,7 +138,7 @@ export function renderRoomDefinitionsTable() {
                 <td colspan="7" class="py-1.5 px-3 bg-slate-200">
                     <div class="flex items-center justify-between">
                         <span class="tracking-wider text-slate-800 font-black">${currentCat}</span>
-                        <span class="text-[10px] bg-white/80 px-2 py-0.5 rounded font-bold border border-slate-300">
+                        <span class="text-[10px] bg-slate-300 text-slate-700 px-2 py-0.5 rounded font-bold border border-slate-400/60 shadow-2xs">
                             ${sameCat.length} Rooms • ${totalBeds} Beds (${isDorm ? 'DORM' : 'PRIVATE'})
                         </span>
                     </div>
