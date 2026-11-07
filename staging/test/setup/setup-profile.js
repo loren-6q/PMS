@@ -227,7 +227,13 @@ export function updateLogoPreview(type, url) {
 
     const candidateUrl = (url && String(url).trim()) || (inputEl?.value && String(inputEl.value).trim()) || propSavedAsset;
 
-    if (candidateUrl && String(candidateUrl).startsWith('http')) {
+    const isValidImg = candidateUrl && (
+        String(candidateUrl).startsWith('http://') ||
+        String(candidateUrl).startsWith('https://') ||
+        String(candidateUrl).startsWith('data:image/')
+    );
+
+    if (isValidImg) {
         previewEl.src = candidateUrl;
         previewEl.classList.remove('hidden');
     } else {
