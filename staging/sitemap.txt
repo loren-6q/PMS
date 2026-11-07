@@ -18,6 +18,7 @@
 │   ├── occupancy.js           (The Occupancy Law: PMS_STATUS, isOccupyingBooking)
 │   ├── properties.js          (Canonical property IDs, display keys, switcher state)
 │   ├── ui-dialogs.js          (Unified customAlert, showToast, confirmModal)
+│   ├── status-theme.js        (Booking Status color, labels, and cycling logic)
 │   └── audit-rooms.js         (Inventory integrity, room structure validation, orphaned booking reconciliation)
 │
 ├── parser/
