@@ -4,9 +4,10 @@
 // ==========================================================================
 
 import { mountNav } from '../core/nav.js';
+import { parseYMD, getLocalYMD } from '../core/dates.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, query, where, getDocs, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 
 // --- Load All PMS Domain Modules into Browser Context ---
@@ -24,47 +25,15 @@ import '../parser/parser-engine.js';
 import '../parser/room-assigner.js';
 
 // --------------------------------------------------------------------------
-// 1. EMBEDDED ZERO-DRIFT DATE PARSERS
+// 1. DOM SELECTORS, FLAGS & FIREBASE CONFIG
 // --------------------------------------------------------------------------
 
-// --- String Date Parser (Zero-Drift UTC Noon Timestamp) ---
-export const parseYMD = str => { 
-    if (!str || typeof str !== 'string') return 0; 
-    const p = str.split('-'); 
-    return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10), 12, 0, 0); 
-};
-
-// --- Local Date String Normalizer (YYYY-MM-DD) ---
-export const getLocalYMD = d => {
-    if (!d) d = new Date();
-    if (typeof d === 'string') {
-        const trimmed = d.trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-        const parsed = new Date(trimmed.includes('T') ? trimmed : trimmed + 'T12:00:00Z');
-        d = isNaN(parsed.getTime()) ? new Date() : parsed;
-    } else if (typeof d === 'number') d = new Date(d);
-    if (!(d instanceof Date) || isNaN(d.getTime())) d = new Date();
-    try {
-        const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
-        return isNaN(o.getTime()) ? new Date().toISOString().split('T')[0] : o.toISOString().split('T')[0];
-    } catch (e) {
-        return new Date().toISOString().split('T')[0];
-    }
-};
-
-// --------------------------------------------------------------------------
-// 2. CONFIGURATION, DOM SELECTORS & FIREBASE INITIALIZATION
-// --------------------------------------------------------------------------
-
-// --- DOM Selector Helpers ---
 export const $ = id => document.getElementById(id);
 export const $$ = s => document.querySelectorAll(s);
 
-// --- Global Flags & Asset Constants ---
 export const REQUIRE_LOGIN = false;
 export const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
 
-// --- Firebase Configuration & App Instances ---
 export const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
 export const appId = 'hotel-pms-v1';
 export const app = initializeApp(firebaseConfig);
@@ -72,7 +41,6 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app, 'asia-southeast1');
 
-// --- Property Key Maps & Initial Route Resolvers ---
 export let PROP_MAP = {};
 export let PROP_REVERSE_MAP = {};
 
@@ -83,7 +51,6 @@ try { storedProp = localStorage.getItem('last_prop'); } catch (e) {}
 
 export let currentPropertyId = storedProp || 'swims_resort';
 
-// --- Session, User & Calendar Viewport State ---
 export let currentUserRole = null, currentUserEmail = 'unknown';
 export let staff = [], dailyRates = {};
 export let viewStart = new Date();
@@ -95,10 +62,9 @@ window.activeExtraCharges = [];
 window.viewStart = viewStart;
 
 // --------------------------------------------------------------------------
-// 3. UI, FAVICON & ROOM TOKENIZATION HELPERS
+// 2. UI, FAVICON & ROOM TOKENIZATION HELPERS
 // --------------------------------------------------------------------------
 
-// --- Dynamic Browser Favicon Switcher ---
 window.updateFavicon = (iconUrl) => {
     const url = iconUrl || DEFAULT_WW_ICON;
     let link = document.querySelector("link[rel*='icon']");
@@ -113,10 +79,8 @@ window.updateFavicon = (iconUrl) => {
     if (appleLink) appleLink.href = url;
 };
 
-// --- Booking Room List Resolver Helper ---
 export const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
-// --- Split Room String into Alphanumeric Token Array ---
 export const tokenizeRoom = str => {
     if (!str) return [];
     return (String(str).toUpperCase().replace(/^ROOM\s+/, '').match(/[A-Z]+|\d+/g) || []).map(t => {
@@ -125,13 +89,11 @@ export const tokenizeRoom = str => {
     });
 };
 
-// --- Array Token Match Evaluator ---
 export const tokensMatch = (t1, t2) => {
     if (!t1.length || !t2.length || t1.length !== t2.length) return false;
     return t1.every((v, i) => v === t2[i]);
 };
 
-// --- Database ID to UI Canonical Room Identifier Resolver ---
 export const dbToUiRoom = rid => {
     if (!rid) return rid;
     const nid = String(rid).toUpperCase().trim();
@@ -147,11 +109,10 @@ export const dbToUiRoom = rid => {
     return rid;
 };
 
-// --- UI to Database Room Identifier Alias ---
 export const uiToDbRoom = rid => dbToUiRoom(rid);
 
 // --------------------------------------------------------------------------
-// 4. GLOBAL CONTEXT & COMPATIBILITY BRIDGES
+// 3. GLOBAL CONTEXT & COMPATIBILITY BRIDGES
 // --------------------------------------------------------------------------
 
 window.db = db;
@@ -167,13 +128,9 @@ window.getCurrentPropertyId = () => currentPropertyId;
 window.getHotelRooms = () => hotelRooms;
 window.getStaff = () => staff;
 
-// --- Total Payments Paid Calculator ---
 window.getPaid = s => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
-
-// --- Outstanding Folio Balance Due Calculator ---
 window.getDue = s => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
 
-// --- Close Main Guest Modal ---
 window.closeGuestModal = () => {
     const m = $('guest-modal');
     if (m) {
@@ -182,7 +139,6 @@ window.closeGuestModal = () => {
     }
 };
 
-// --- Auto-Revert to Empty Room Selector Listener ---
 document.addEventListener('DOMContentLoaded', () => {
     const container = $('assigned-rooms-container');
     if (container) {
@@ -199,7 +155,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// --- Audit Trail Difference Description Generator ---
 window.generateAuditDiff = (oldRec, newRec) => {
     if (!oldRec) return "Created new booking.";
     let changes = [];
@@ -214,7 +169,6 @@ window.generateAuditDiff = (oldRec, newRec) => {
     return changes.length > 0 ? changes.join(' | ') : "Saved without major changes.";
 };
 
-// --- Top Navbar Property Parameter Link Rewriter ---
 window.updateNavLinks = shortKey => {
     const key = shortKey || PROP_REVERSE_MAP[currentPropertyId] || '';
     document.querySelectorAll('a[href*=".html"]').forEach(a => {
@@ -225,7 +179,6 @@ window.updateNavLinks = shortKey => {
     });
 };
 
-// --- Sync Browser URL with Selected Property Param ---
 window.syncPropertyUrl = propId => {
     const shortKey = PROP_REVERSE_MAP[propId] || PROP_REVERSE_MAP[currentPropertyId] || '';
     try {
@@ -238,7 +191,6 @@ window.syncPropertyUrl = propId => {
     window.updateNavLinks(shortKey);
 };
 
-// --- Trigger Background Channex Cloud Function Delta Sync ---
 window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypes = null) => {
     if (window.channexConfig && window.channexConfig.apiKey) {
         try {
@@ -263,10 +215,9 @@ window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypes
 };
 
 // --------------------------------------------------------------------------
-// 5. PROPERTY CONFIGURATION & SWITCHER CONTROLLERS
+// 4. PROPERTY CONFIGURATION & SWITCHER CONTROLLERS
 // --------------------------------------------------------------------------
 
-// --- Load Active Property Metadata, Rooms & Dropdowns ---
 export const loadPropertyConfig = async () => {
     try {
         const propsRef = collection(db, 'artifacts', appId, 'public', 'data', 'properties');
@@ -286,7 +237,6 @@ export const loadPropertyConfig = async () => {
         window.PROP_MAP = PROP_MAP;
         window.PROP_REVERSE_MAP = PROP_REVERSE_MAP;
 
-        // Dynamic URL resolution: matches short code, exact id, or uppercase id
         if (initialP) {
             const cleanP = initialP.trim().toUpperCase();
             if (PROP_MAP[cleanP]) {
@@ -298,7 +248,6 @@ export const loadPropertyConfig = async () => {
             initialP = null;
         }
 
-        // Automatic fallback if currentPropertyId is corrupted or invalid
         if (!propsList.some(p => p.id === currentPropertyId)) {
             const fallbackMatch = propsList.find(p => 
                 p.id.toLowerCase().includes(currentPropertyId.toLowerCase()) || 
@@ -355,6 +304,7 @@ export const loadPropertyConfig = async () => {
             });
         }
 
+        // Populate Database Room Categories Dropdown
         const drop = $('db-room-dropdown');
         if (drop) {
             drop.innerHTML = '';
@@ -364,7 +314,6 @@ export const loadPropertyConfig = async () => {
     } catch (e) { console.error("Failed to load config", e); }
 };
 
-// --- Active Property Switch Handler ---
 window.handlePropertySwitch = async propId => {
     if (!propId || propId === currentPropertyId) return;
     initialP = null;
@@ -388,7 +337,6 @@ window.handlePropertySwitch = async propId => {
     $('boot-loader').style.display = 'none';
 };
 
-// --- Main Navigation Tab Switcher (Dashboard / Calendar / Database) ---
 window.switchTab = t => {
     const dashView = $('dashboard-view');
     const calView = $('calendar-view');
@@ -419,7 +367,6 @@ window.switchTab = t => {
     if (t === 'dashboard' && window.renderDashboard) window.renderDashboard();
 };
 
-// --- Open Email Parser Modal (Direct Trigger) ---
 window.openEmailParserModal = () => { 
     const ta = $('email-textarea');
     if (ta) ta.value = ''; 
@@ -431,12 +378,10 @@ window.openEmailParserModal = () => {
 };
 
 // --------------------------------------------------------------------------
-// 6. CORE BOOTSTRAPPER, AUTHENTICATION & EVENT LISTENERS
+// 5. CORE BOOTSTRAPPER, AUTHENTICATION & EVENT LISTENERS
 // --------------------------------------------------------------------------
 
-// --- Master Initialization Bootstrapper ---
 export const init = async () => {
-    // --- Firestore Staff Snapshot Ingestion Handler ---
     const processSnapshot = snap => {
         staff = snap.docs.map(d => ({ id: d.id, ...d.data() })).map(s => {
             const rList = getRooms(s).map(dbToUiRoom);
@@ -502,7 +447,6 @@ export const init = async () => {
         }
     };
 
-    // --- Anonymous / Custom Token Authentication Bypass ---
     const bypassLogin = async () => {
         const safetyTimer = setTimeout(() => {
             const bl = $('boot-loader');
@@ -525,7 +469,6 @@ export const init = async () => {
 
             await loadPropertyConfig();
 
-            // Mount universal navigation after config is in memory
             if (typeof mountNav === 'function') mountNav();
 
             onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
@@ -563,7 +506,6 @@ export const init = async () => {
         });
     }
 
-    // --- Timeline Body Hover Column & Cell Click Delegation ---
     const tBodyEl = $('timeline-body');
     if (tBodyEl) {
         tBodyEl.addEventListener('mouseover', e => {
@@ -605,7 +547,6 @@ export const init = async () => {
         });
     }
 
-    // --- Responsive Window Resize & Post-Boot UI Initializers ---
     window.addEventListener('resize', () => {
         if ($('calendar-view')?.style.display !== 'none' && window.render) window.render();
     });
@@ -614,7 +555,6 @@ export const init = async () => {
     if (window.mountLegendSvgs) window.mountLegendSvgs();
 };
 
-// --- DOM Lifecycle Auto-Boot Trigger ---
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
