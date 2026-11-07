@@ -5,14 +5,13 @@
 
 import { customAlert } from '../core/ui-dialogs.js';
 
-// --- Base Direct Settlement Methods (Always active) ---
+// --- Base Direct Settlement Methods (Always active & on top) ---
 export const BASE_DIRECT_PAYMENTS = [
     { key: "cash", label: "Cash", type: "revenue", isBase: true, active: true },
-    { key: "card", label: "Credit Card (POS)", type: "revenue", isBase: true, active: true },
-    { key: "cc-fee", label: "Credit Card Fee / Surcharge", type: "revenue", isBase: true, active: true },
-    { key: "qr", label: "Thai PromptPay / QR", type: "revenue", isBase: true, active: true },
+    { key: "scan", label: "PromptPay / QR Scan", type: "revenue", isBase: true, active: true },
     { key: "transfer", label: "Bank Transfer", type: "revenue", isBase: true, active: true },
-    { key: "other", label: "Other Direct Settlement", type: "revenue", isBase: true, active: true }
+    { key: "card", label: "Credit Card (POS)", type: "revenue", isBase: true, active: true },
+    { key: "card-kp", label: "Credit Card Fee / Commission", type: "commission", isBase: true, channel: "card", channelName: "Credit Card", active: true }
 ];
 
 // --- Standard Known OTA Channels ---
@@ -52,11 +51,41 @@ export const DEFAULT_ADDONS = [
     { id: "scooter", name: "Scooter Rental (24h)", price: 250, category: "Rental" }
 ];
 
+const BASE_SORT_ORDER = ['cash', 'scan', 'transfer', 'card', 'card-kp'];
+
+/**
+ * Sorts payment methods:
+ * 1. Base Direct Methods locked at the top in exact sequence
+ * 2. OTA Channels grouped together alphabetically, with -pay immediately followed by -kp
+ */
+export function sortPaymentMethods(list = []) {
+    return [...list].sort((a, b) => {
+        const aBaseIdx = BASE_SORT_ORDER.indexOf(a.key);
+        const bBaseIdx = BASE_SORT_ORDER.indexOf(b.key);
+
+        if (aBaseIdx !== -1 && bBaseIdx !== -1) return aBaseIdx - bBaseIdx;
+        if (aBaseIdx !== -1) return -1;
+        if (bBaseIdx !== -1) return 1;
+
+        const aChan = a.channel || a.key.replace(/-(pay|kp)$/, '');
+        const bChan = b.channel || b.key.replace(/-(pay|kp)$/, '');
+
+        if (aChan !== bChan) {
+            return aChan.localeCompare(bChan);
+        }
+
+        const aIsKp = a.key.endsWith('-kp') ? 1 : 0;
+        const bIsKp = b.key.endsWith('-kp') ? 1 : 0;
+        return aIsKp - bIsKp;
+    });
+}
+
 /**
  * Normalizes, deduplicates, and auto-heals payment methods:
- * 1. Deduplicates by key (purges duplicate -kp entries)
- * 2. Auto-heals: If an orphan -kp exists without a -pay, creates the matching -pay
- * 3. Supports legacy string arrays and objects seamlessly
+ * 1. Migrates legacy 'qr' to 'scan'.
+ * 2. Deduplicates by key (purges duplicate -kp entries).
+ * 3. Auto-heals: If an orphan -kp exists without a -pay, creates the matching -pay.
+ * 4. Ensures all BASE_DIRECT_PAYMENTS exist.
  */
 export function normalizePaymentMethods(methods = []) {
     if (!Array.isArray(methods) || methods.length === 0) {
@@ -75,6 +104,12 @@ export function normalizePaymentMethods(methods = []) {
         if (!obj.key) return;
         obj.key = String(obj.key).trim().toLowerCase();
 
+        // Migrate legacy 'qr' key to 'scan'
+        if (obj.key === 'qr') {
+            obj.key = 'scan';
+            obj.label = 'PromptPay / QR Scan';
+        }
+
         // Convert bare OTA key (e.g. 'hw') into canonical 'hw-pay'
         const otaDirectMatch = STANDARD_OTA_REGISTRY.find(o => o.code === obj.key);
         if (otaDirectMatch) {
@@ -88,6 +123,8 @@ export function normalizePaymentMethods(methods = []) {
             obj.label = obj.label || baseDirect.label;
             obj.type = baseDirect.type;
             obj.isBase = true;
+            if (baseDirect.channel) obj.channel = baseDirect.channel;
+            if (baseDirect.channelName) obj.channelName = baseDirect.channelName;
         }
 
         if (!obj.channel && (obj.key.endsWith('-pay') || obj.key.endsWith('-kp'))) {
@@ -105,9 +142,18 @@ export function normalizePaymentMethods(methods = []) {
         }
     });
 
+    // Ensure all 5 standard base direct settlement methods are present
+    BASE_DIRECT_PAYMENTS.forEach(baseItem => {
+        if (!seenKeys.has(baseItem.key)) {
+            seenKeys.add(baseItem.key);
+            normalized.push({ ...baseItem });
+        }
+    });
+
+    // Auto-heal: Ensure every -kp has a matching -pay, and every -pay has a matching -kp
     const toAdd = [];
     normalized.forEach(m => {
-        if (m.key.endsWith('-kp')) {
+        if (m.key.endsWith('-kp') && m.key !== 'card-kp') {
             const baseCode = m.channel || m.key.slice(0, -3);
             const payKey = `${baseCode}-pay`;
             if (!seenKeys.has(payKey)) {
@@ -143,7 +189,7 @@ export function normalizePaymentMethods(methods = []) {
     });
 
     normalized.push(...toAdd);
-    return normalized;
+    return sortPaymentMethods(normalized);
 }
 
 // --- 1. BRANDING & ASSET PREVIEWS ---
@@ -164,19 +210,25 @@ export function toggleCardSection(contentId, chevronId) {
     }
 }
 
+// Preview uses the passed URL, or the input value, or the property config, before WWicon fallback
 export function updateLogoPreview(type, url) {
-    const previewEl = document.getElementById(`preview-logo-${type}`);
+    const previewEl = document.getElementById(`preview-logo-${type}`) ||
+                      document.getElementById(`logo-preview-${type}`) ||
+                      document.getElementById(`preview-${type}`);
     if (!previewEl) return;
+
+    const inputEl = document.getElementById(`prop-${type}-url`) ||
+                    document.getElementById(`prop-logo-${type}`) ||
+                    (type === 'primary' ? document.getElementById('prop-logo-url') : null);
 
     const propCfg = window.currentPropertyConfig || {};
     const fieldMap = { primary: 'logoUrl', banner: 'bannerUrl', icon: 'iconUrl' };
-    const propSavedAsset = propCfg[fieldMap[type]];
+    const propSavedAsset = propCfg[fieldMap[type]] || propCfg[type] || '';
 
-    if (url && String(url).startsWith('http')) {
-        previewEl.src = url;
-        previewEl.classList.remove('hidden');
-    } else if (propSavedAsset && String(propSavedAsset).startsWith('http')) {
-        previewEl.src = propSavedAsset;
+    const candidateUrl = (url && String(url).trim()) || (inputEl?.value && String(inputEl.value).trim()) || propSavedAsset;
+
+    if (candidateUrl && String(candidateUrl).startsWith('http')) {
+        previewEl.src = candidateUrl;
         previewEl.classList.remove('hidden');
     } else {
         previewEl.src = 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
@@ -239,10 +291,11 @@ export function renderPaymentMethodsTable(payments = null) {
 
     window.paymentMethods = normalizePaymentMethods(payments || window.paymentMethods || [...DEFAULT_PAYMENT_METHODS]);
 
+    // 1. Render Quick Channel Toggle Pills
     if (togglesContainer) {
         const activeChannels = new Set(
             window.paymentMethods
-                .filter(m => m.channel && m.active !== false)
+                .filter(m => m.channel && m.channel !== 'card' && m.active !== false)
                 .map(m => m.channel.toLowerCase())
         );
 
@@ -261,6 +314,7 @@ export function renderPaymentMethodsTable(payments = null) {
     const activeMethods = window.paymentMethods.filter(m => m.active !== false);
     const archivedMethods = window.paymentMethods.filter(m => m.active === false);
 
+    // 2. Render Active Rows
     activeMethods.forEach((m) => {
         const actualIdx = window.paymentMethods.findIndex(x => x.key === m.key);
         const tr = document.createElement('tr');
@@ -290,6 +344,7 @@ export function renderPaymentMethodsTable(payments = null) {
         tbody.appendChild(tr);
     });
 
+    // 3. Render Collapsible Archived / Historical Methods Tray
     if (archivedMethods.length > 0) {
         const archHeader = document.createElement('tr');
         archHeader.className = "bg-slate-800 text-slate-300 cursor-pointer select-none";
@@ -361,7 +416,7 @@ export function archivePaymentMethodRow(key) {
     const item = window.paymentMethods.find(m => m.key === key);
     if (!item) return;
 
-    if (item.channel) {
+    if (item.channel && item.channel !== 'card') {
         window.paymentMethods.forEach(m => {
             if (m.channel === item.channel) m.active = false;
         });
@@ -375,7 +430,7 @@ export function reactivatePaymentMethodRow(key) {
     const item = window.paymentMethods.find(m => m.key === key);
     if (!item) return;
 
-    if (item.channel) {
+    if (item.channel && item.channel !== 'card') {
         window.paymentMethods.forEach(m => {
             if (m.channel === item.channel) m.active = true;
         });
@@ -486,6 +541,7 @@ export function deleteAddonRow(idx) {
 // Global Window Exports
 if (typeof window !== 'undefined') {
     window.normalizePaymentMethods = normalizePaymentMethods;
+    window.sortPaymentMethods = sortPaymentMethods;
     window.toggleCardSection = toggleCardSection;
     window.updateLogoPreview = updateLogoPreview;
     window.resetLogosToDefault = resetLogosToDefault;
