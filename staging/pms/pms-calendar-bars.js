@@ -43,7 +43,7 @@ export function renderReservationBar(booking, daysToShow, getDayIndexFn, todaySt
     const dueAmount = getDue(booking);
     if (booking.badCC) {
         bar.classList.add('border-bad-cc');
-    } else if (dueAmount > 0.05 && status !== 'cancelled' && status !== 'charged') {
+    } else if (dueAmount > 0.05 && status !== 'cancelled') {
         bar.classList.add('border-owes-money');
     }
 
