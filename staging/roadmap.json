@@ -65,6 +65,18 @@
           "showToast(message, type, durationMs)"
         ]
       },
+      "core/status-theme.js": {
+        "responsibility": "Canonical single source of truth for booking status definitions, hex color styling, text contrast rules, and status cycling logic.",
+        "functions": [
+          "getStatusTheme(status)",
+          "getNextStatus(currentStatus)",
+          "applyStatusStyle(element, status, applyText)"
+        ],
+        "constants": [
+          "STATUS_ORDER",
+          "STATUS_THEMES"
+        ]
+      },
       "core/audit-rooms.js": {
         "responsibility": "Inventory structural integrity auditing, orphan reservation recovery, and capacity mismatch reconciliation.",
         "functions": [
