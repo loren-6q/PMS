@@ -16,6 +16,37 @@ import { renderPricingConfig } from './setup-pricing.js';
 
 export let currentStep = 1;
 
+// Known OTA channels that must strictly exist as [channel, channel-kp] pairs
+export const KNOWN_OTA_KEYS = new Set(['hw', 'bdc', 'agoda', 'abnb', 'airbnb', 'exp']);
+
+/**
+ * Enforces atomic OTA pairing and eliminates duplicates:
+ * 1. Any orphan -kp key (e.g. 'hw-kp') automatically generates its base key ('hw').
+ * 2. Any base OTA key automatically generates its -kp commission key.
+ * 3. All items pass through a Set, preventing duplicate entries.
+ */
+export function normalizePaymentMethods(rawList = []) {
+    if (!Array.isArray(rawList)) return [];
+    const clean = new Set();
+    rawList.forEach(item => {
+        if (!item) return;
+        const key = String(item).trim().toLowerCase();
+        if (!key) return;
+
+        if (key.endsWith('-kp')) {
+            const base = key.slice(0, -3);
+            if (base) clean.add(base);
+            clean.add(key);
+        } else if (KNOWN_OTA_KEYS.has(key)) {
+            clean.add(key);
+            clean.add(`${key}-kp`);
+        } else {
+            clean.add(key);
+        }
+    });
+    return Array.from(clean);
+}
+
 // --- 5-Step Stepper Router ---
 export function jumpStep(stepNum) {
     currentStep = Math.max(1, Math.min(5, parseInt(stepNum, 10) || 1));
@@ -119,7 +150,10 @@ export async function loadPropertyData(propId) {
             updateLogoPreview('icon', data.iconUrl);
 
             window.roomDefinitions = Array.isArray(data.roomDefinitions) ? data.roomDefinitions : [];
-            window.paymentMethods = Array.isArray(data.payments) && data.payments.length > 0 ? data.payments : null;
+            
+            // Auto-heal orphaned -kp keys and de-duplicate on data load
+            window.paymentMethods = normalizePaymentMethods(Array.isArray(data.payments) ? data.payments : []);
+            
             window.addonsList = Array.isArray(data.addons) && data.addons.length > 0 ? data.addons : null;
             window.channexMap = Array.isArray(data.channexMap) ? data.channexMap : [];
             window.channexRateMap = Array.isArray(data.channexRateMap) ? data.channexRateMap : [];
@@ -159,7 +193,7 @@ export async function savePropertyToDatabase(notify = true) {
             savedAt: new Date().toISOString()
         });
 
-        // 2. Persist Property Document
+        // 2. Persist Property Document with Normalized Payments
         const propData = {
             id: propId,
             name: document.getElementById('prop-name')?.value.trim() || propId,
@@ -172,7 +206,7 @@ export async function savePropertyToDatabase(notify = true) {
             logoUrl: document.getElementById('prop-logo-url')?.value || '',
             bannerUrl: document.getElementById('prop-banner-url')?.value || '',
             iconUrl: document.getElementById('prop-icon-url')?.value || '',
-            payments: window.paymentMethods || [],
+            payments: normalizePaymentMethods(window.paymentMethods || []),
             addons: window.addonsList || [],
             roomDefinitions: window.roomDefinitions || [],
             rooms: compiled,
@@ -278,6 +312,7 @@ export async function initSetup() {
 
 // Global Exports
 if (typeof window !== 'undefined') {
+    window.normalizePaymentMethods = normalizePaymentMethods;
     window.jumpStep = jumpStep;
     window.nextStep = nextStep;
     window.prevStep = prevStep;
