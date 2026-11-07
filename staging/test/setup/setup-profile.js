@@ -210,7 +210,7 @@ export function toggleCardSection(contentId, chevronId) {
     }
 }
 
-// Preview uses the passed URL, or the input value, or the property config, before WWicon fallback
+// Preview uses the passed URL, input value, or property config, supporting HTTP, Data URIs & Blobs
 export function updateLogoPreview(type, url) {
     const previewEl = document.getElementById(`preview-logo-${type}`) ||
                       document.getElementById(`logo-preview-${type}`) ||
@@ -230,15 +230,28 @@ export function updateLogoPreview(type, url) {
     const isValidImg = candidateUrl && (
         String(candidateUrl).startsWith('http://') ||
         String(candidateUrl).startsWith('https://') ||
-        String(candidateUrl).startsWith('data:image/')
+        String(candidateUrl).startsWith('data:image/') ||
+        String(candidateUrl).startsWith('blob:')
     );
 
     if (isValidImg) {
         previewEl.src = candidateUrl;
         previewEl.classList.remove('hidden');
+        previewEl.style.display = '';
+        previewEl.title = "Click to view full image in a new tab";
+        previewEl.style.cursor = "pointer";
+        previewEl.onclick = () => {
+            const win = window.open();
+            if (win) {
+                win.document.write(`<title>Asset Preview - ${type}</title><body style="margin:0;background:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh;"><img src="${candidateUrl}" style="max-width:90%;max-height:90%;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.5);" /></body>`);
+            }
+        };
     } else {
         previewEl.src = 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
         previewEl.classList.remove('hidden');
+        previewEl.style.display = '';
+        previewEl.onclick = null;
+        previewEl.style.cursor = "default";
     }
 }
 
