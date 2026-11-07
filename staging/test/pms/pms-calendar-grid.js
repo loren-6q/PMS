@@ -5,6 +5,7 @@
 
 import { mNames } from './pms-calendar-tape.js';
 import { SVGS, renderReservationBar } from './pms-calendar-bars.js';
+import { STATUS_CYCLE, isOccupyingBooking } from '../core/occupancy.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
@@ -83,7 +84,6 @@ export const toggleGroup = (grp, stateIdx = -1) => {
 // 2. ROOM CLASSIFICATION, LABELS & ICON FORMATTERS
 // --------------------------------------------------------------------------
 
-// --- Room Floor Indicator Icon Generator ---
 export const getFloorIcon = f => {
     if (!f) return '';
     const fStr = String(f).toLowerCase().trim();
@@ -99,7 +99,6 @@ export const getFloorIcon = f => {
     return '';
 };
 
-// --- Bunk Tier Direction Indicator Icon Generator ---
 export const getBunkIcon = b => {
     if (!b) return '';
     const bStr = String(b).toLowerCase().trim();
@@ -112,7 +111,6 @@ export const getBunkIcon = b => {
     return '';
 };
 
-// --- Classify Room Category for Calendar Hierarchy ---
 export const classifyRoomForCalendar = r => {
     const cat = (r.category || r.type || '').toLowerCase();
     const bunk = (r.bunk || r.bed || '').toLowerCase();
@@ -148,7 +146,6 @@ export const classifyRoomForCalendar = r => {
     return { isDorm, baseRoom };
 };
 
-// --- Format Bed Display Identifier for Sidebar ---
 export const formatBedDisplayLabel = id => {
     if (!id) return '';
     const str = String(id).trim();
@@ -163,7 +160,6 @@ export const formatBedDisplayLabel = id => {
     return str;
 };
 
-// --- Universal Room Matcher with Normalization Fallback ---
 export const matchesRoom = (assignedRoom, targetRoomId) => {
     if (!assignedRoom || !targetRoomId) return false;
     if (String(assignedRoom).trim() === String(targetRoomId).trim()) return true;
@@ -176,7 +172,6 @@ export const matchesRoom = (assignedRoom, targetRoomId) => {
 // 3. MASTER CALENDAR ASSEMBLY & TIMELINE GRID RENDERER
 // --------------------------------------------------------------------------
 
-// --- Master Calendar Timeline Grid Assembler ---
 export const render = () => {
     if (!window.viewStart) {
         window.viewStart = new Date();
@@ -267,11 +262,11 @@ export const render = () => {
     actStaff.forEach(s => {
         if (s.status === 'cancelled') return;
         const rList = getRooms(s).filter(Boolean);
-        const isUnassignedStatus = ['unconfirmed', 'charged', 'tocharge', 'noshow', 'vol'].includes(s.status);
         const hasAssignedRoom = rList.length > 0 && rList[0] !== "" && rList.some(rName => hotelRooms.some(hr => matchesRoom(rName, hr.id)));
-        const isUnassigned = isUnassignedStatus || !hasAssignedRoom;
+        const isOccupying = isOccupyingBooking(s.status, hasAssignedRoom);
 
-        if (isUnassigned && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC) {
+        // Put into Unassigned tray if not actively occupying a physical room
+        if (!isOccupying && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC) {
             uConf.push(s);
         }
     });
@@ -301,7 +296,7 @@ export const render = () => {
     const archivedHotelRooms = hotelRooms.filter(r => {
         if (!r.inactive) return false;
         return actStaff.some(s => {
-            if (['cancelled', 'noshow'].includes(s.status)) return false;
+            if (s.status === 'cancelled' || s.status === 'no-show') return false;
             const inMs = window.parseYMD(s.checkIn);
             const outMs = window.parseYMD(s.checkOut);
             if (inMs > veUTC || outMs < vsUTC) return false;
@@ -325,9 +320,9 @@ export const render = () => {
             const { isDorm, baseRoom } = classifyRoomForCalendar(r);
 
             const isAssignedToThisRoom = s => {
-                if (['unconfirmed', 'charged', 'tocharge', 'noshow', 'vol'].includes(s.status)) return false;
                 const rList = getRooms(s);
-                return rList.some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
+                const isAssigned = rList.some(rm => matchesRoom(rm, r.id));
+                return isAssigned && isOccupyingBooking(s.status, true) && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
             };
 
             if (isDorm) {
@@ -369,7 +364,7 @@ export const render = () => {
         archivedHotelRooms.forEach(r => {
             const isAssigned = s => {
                 const rList = getRooms(s);
-                return rList.some(rm => matchesRoom(rm, r.id)) && s.status !== 'cancelled' && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
+                return rList.some(rm => matchesRoom(rm, r.id)) && isOccupyingBooking(s.status, true) && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
             };
 
             tRows.push({
@@ -391,7 +386,6 @@ export const render = () => {
     tRows.forEach(rD => {
         if (rD.isDivider) {
             cGrp = (rD.label || 'UNKNOWN').replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
-            const isDCol = cGrp === 'unassigned-unconfirmed';
             const hRow = document.createElement('div');
             hRow.className = `timeline-grid ${rD.isUnconfirmedZone ? 'mt-4' : ''} cursor-pointer transition-colors unselectable group-header`;
             hRow.dataset.group = cGrp;
@@ -416,7 +410,7 @@ export const render = () => {
                 const dT = days[i].getTime();
                 const occ = new Set();
                 actStaff.forEach(s => {
-                    if (['unconfirmed', 'charged', 'cancelled', 'noshow', 'vol'].includes(s.status)) return;
+                    if (!isOccupyingBooking(s.status, true)) return;
                     if (dT >= window.parseYMD(s.checkIn) && dT < window.parseYMD(s.checkOut)) {
                         getRooms(s).forEach(r => {
                             const uiR = window.dbToUiRoom ? window.dbToUiRoom(r) : r;
@@ -529,7 +523,6 @@ export const render = () => {
 // 4. CALENDAR LEGEND DRAWER & VECTOR KEY CONTROLLERS
 // --------------------------------------------------------------------------
 
-// --- Toggle Collapsible Bottom Legend Drawer ---
 export const toggleLegendDrawer = () => {
     const leg = document.getElementById('calendar-legend');
     const chevron = document.getElementById('legend-toggle-chevron');
@@ -550,8 +543,17 @@ export const toggleLegendDrawer = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-// --- Mount SVG Icons into Legend Drawer Elements ---
+// --- Mount SVG Icons and Canonical Status Pills into Legend Drawer ---
 export const mountLegendSvgs = () => {
+    // 1. Mount Status Pills from Canonical Palette
+    const pillContainer = document.getElementById('legend-status-pills');
+    if (pillContainer) {
+        pillContainer.innerHTML = STATUS_CYCLE.map(s => 
+            `<span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text ${s.strike ? 'line-through' : ''}" style="background:${s.bg}; color:${s.txt}; border: 1px solid ${s.border};">${s.label}</span>`
+        ).join('');
+    }
+
+    // 2. Mount SVGs
     if (!SVGS) return false;
     const keys = ['upFree', 'upPaid', 'ext', 'link', 'mailConf', 'mailNotFmp', 'mailPre', 'mailPreConf', 'mailSpec', 'fbGood', 'fbBad'];
     keys.forEach(k => {
