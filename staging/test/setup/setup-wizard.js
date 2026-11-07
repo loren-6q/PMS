@@ -9,43 +9,12 @@ import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/f
 import { customAlert } from '../core/ui-dialogs.js';
 import { loadPropertiesCatalog, toCanonicalPropId } from '../core/properties.js';
 
-import { renderPaymentMethodsTable, renderAddonsTable, updateLogoPreview } from './setup-profile.js';
+import { renderPaymentMethodsTable, renderAddonsTable, updateLogoPreview, normalizePaymentMethods } from './setup-profile.js';
 import { renderRoomDefinitionsTable, compileRoomsFromDefinitions } from './setup-rooms.js';
 import { renderStep3UnifiedMapping } from './setup-mapping.js';
 import { renderPricingConfig } from './setup-pricing.js';
 
 export let currentStep = 1;
-
-// Known OTA channels that must strictly exist as [channel, channel-kp] pairs
-export const KNOWN_OTA_KEYS = new Set(['hw', 'bdc', 'agoda', 'abnb', 'airbnb', 'exp']);
-
-/**
- * Enforces atomic OTA pairing and eliminates duplicates:
- * 1. Any orphan -kp key (e.g. 'hw-kp') automatically generates its base key ('hw').
- * 2. Any base OTA key automatically generates its -kp commission key.
- * 3. All items pass through a Set, preventing duplicate entries.
- */
-export function normalizePaymentMethods(rawList = []) {
-    if (!Array.isArray(rawList)) return [];
-    const clean = new Set();
-    rawList.forEach(item => {
-        if (!item) return;
-        const key = String(item).trim().toLowerCase();
-        if (!key) return;
-
-        if (key.endsWith('-kp')) {
-            const base = key.slice(0, -3);
-            if (base) clean.add(base);
-            clean.add(key);
-        } else if (KNOWN_OTA_KEYS.has(key)) {
-            clean.add(key);
-            clean.add(`${key}-kp`);
-        } else {
-            clean.add(key);
-        }
-    });
-    return Array.from(clean);
-}
 
 // --- 5-Step Stepper Router ---
 export function jumpStep(stepNum) {
@@ -151,7 +120,7 @@ export async function loadPropertyData(propId) {
 
             window.roomDefinitions = Array.isArray(data.roomDefinitions) ? data.roomDefinitions : [];
             
-            // Auto-heal orphaned -kp keys and de-duplicate on data load
+            // Normalized via setup-profile.js engine on load
             window.paymentMethods = normalizePaymentMethods(Array.isArray(data.payments) ? data.payments : []);
             
             window.addonsList = Array.isArray(data.addons) && data.addons.length > 0 ? data.addons : null;
@@ -312,7 +281,6 @@ export async function initSetup() {
 
 // Global Exports
 if (typeof window !== 'undefined') {
-    window.normalizePaymentMethods = normalizePaymentMethods;
     window.jumpStep = jumpStep;
     window.nextStep = nextStep;
     window.prevStep = prevStep;
