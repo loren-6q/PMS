@@ -785,6 +785,7 @@ if (typeof window !== 'undefined') {
     window.executeWizardGenerate = executeWizardGenerate;
     window.clearAllRoomDefs = clearAllRoomDefs;
 
+    // Guaranteed Modal Dismissal via Escape Key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeBedPreviewDrawer();
@@ -792,6 +793,8 @@ if (typeof window !== 'undefined') {
             closeReorderCategoriesModal();
             closeRoomDeleteConfirmModal();
             closeRelocationModal();
+            if (typeof window.closeNewPropertyModal === 'function') window.closeNewPropertyModal();
+            if (typeof window.closeCreateRatePlanModal === 'function') window.closeCreateRatePlanModal();
         }
     });
 }
