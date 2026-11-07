@@ -1,109 +1,99 @@
 // ==========================================================================
-// core/ui-dialogs.js - Universal Alert, Modal & Toast Notification System
+// core/ui-dialogs.js - Universal Custom In-Page Modals & Alerts
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-// --------------------------------------------------------------------------
-// 1. MODAL ALERTS & CONFIRMATION DIALOGS
-// --------------------------------------------------------------------------
+let activeConfirmCallback = null;
 
-// --- Display Universal Modal Alert or Confirmation Dialog ---
-export function customAlert(title, message, isConfirm = false, onConfirm = null) {
-    const modal = document.getElementById('custom-alert') || document.getElementById('alert-modal');
-    const titleEl = document.getElementById('modal-title') || document.getElementById('alert-header-title');
-    const msgEl = document.getElementById('custom-alert-msg') || document.getElementById('alert-message');
-    const cancelBtn = document.getElementById('custom-alert-cancel') || document.getElementById('alert-cancel');
-    const confirmBtn = document.getElementById('custom-alert-confirm') || document.getElementById('alert-confirm');
+function ensureDialogElements() {
+    let modal = document.getElementById('ww-universal-dialog-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ww-universal-dialog-modal';
+        modal.className = "hidden fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 select-none";
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-300 text-xs animate-in fade-in zoom-in-95 duration-150">
+                <div class="bg-slate-900 text-white p-3 font-black uppercase flex justify-between items-center">
+                    <span id="ww-dialog-title" class="tracking-wide">Alert</span>
+                    <button type="button" onclick="window.closeCustomDialog()" class="text-slate-400 hover:text-white text-base leading-none cursor-pointer">&times;</button>
+                </div>
+                <div class="p-4 space-y-3">
+                    <p id="ww-dialog-msg" class="font-bold text-slate-700 leading-relaxed whitespace-pre-line"></p>
+                    <div class="pt-2 border-t border-slate-100 flex justify-end gap-2">
+                        <button type="button" id="ww-dialog-btn-cancel" onclick="window.closeCustomDialog()" class="hidden px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold uppercase rounded cursor-pointer text-[10px]">
+                            Cancel
+                        </button>
+                        <button type="button" id="ww-dialog-btn-confirm" onclick="window.executeCustomDialogConfirm()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase rounded shadow-xs cursor-pointer text-[10px]">
+                            OK
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
 
-    if (!modal || !msgEl) {
-        if (isConfirm) {
-            if (window.confirm(`${title ? title + ': ' : ''}${message}`)) {
-                if (onConfirm) onConfirm();
-            }
-        } else {
-            window.alert(`${title ? title + ': ' : ''}${message}`);
-        }
-        return;
-    }
-
-    if (titleEl) titleEl.innerText = title || "System Alert";
-    msgEl.innerText = message || "";
-
-    if (cancelBtn) {
-        cancelBtn.classList.toggle('hidden', !isConfirm);
-        cancelBtn.style.display = isConfirm ? 'block' : 'none';
-    }
-
-    if (confirmBtn) {
-        confirmBtn.innerText = isConfirm ? 'Confirm' : 'OK';
-        confirmBtn.onclick = () => {
-            modal.classList.remove('active');
-            modal.classList.add('hidden');
-            modal.style.display = 'none';
-            if (onConfirm) onConfirm();
+        modal.onclick = (e) => {
+            if (e.target === modal) window.closeCustomDialog();
         };
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                window.closeCustomDialog();
+            }
+        });
+    }
+    return modal;
+}
+
+export function customAlert(title, message, isConfirm = false, onConfirm = null) {
+    const modal = ensureDialogElements();
+    const titleEl = document.getElementById('ww-dialog-title');
+    const msgEl = document.getElementById('ww-dialog-msg');
+    const cancelBtn = document.getElementById('ww-dialog-btn-cancel');
+    const confirmBtn = document.getElementById('ww-dialog-btn-confirm');
+
+    if (titleEl) titleEl.innerText = title || "Notice";
+    if (msgEl) msgEl.innerText = message || "";
+
+    activeConfirmCallback = typeof onConfirm === 'function' ? onConfirm : null;
+
+    if (isConfirm) {
+        if (cancelBtn) cancelBtn.classList.remove('hidden');
+        if (confirmBtn) {
+            confirmBtn.innerText = "Confirm";
+            confirmBtn.className = "px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-black uppercase rounded shadow-xs cursor-pointer text-[10px]";
+        }
+    } else {
+        if (cancelBtn) cancelBtn.classList.add('hidden');
+        if (confirmBtn) {
+            confirmBtn.innerText = "OK";
+            confirmBtn.className = "px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase rounded shadow-xs cursor-pointer text-[10px]";
+        }
     }
 
     modal.classList.remove('hidden');
-    modal.classList.add('active');
     modal.style.display = 'flex';
-    if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
 }
 
-// --- Dismiss Active Modal Alert ---
-export function closeAlert() {
-    const modal = document.getElementById('custom-alert') || document.getElementById('alert-modal');
+export function closeCustomDialog() {
+    const modal = document.getElementById('ww-universal-dialog-modal');
     if (modal) {
-        modal.classList.remove('active');
         modal.classList.add('hidden');
         modal.style.display = 'none';
     }
+    activeConfirmCallback = null;
 }
 
-// --------------------------------------------------------------------------
-// 2. TOAST NOTIFICATIONS
-// --------------------------------------------------------------------------
-
-// --- Display Transient Toast Notification Banner ---
-export function showToast(title, message, type = "success") {
-    let container = document.getElementById('toast-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'toast-container';
-        container.className = "fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none";
-        document.body.appendChild(container);
+export function executeCustomDialogConfirm() {
+    const cb = activeConfirmCallback;
+    closeCustomDialog();
+    if (typeof cb === 'function') {
+        cb();
     }
-
-    const toast = document.createElement('div');
-    const bgColor = type === "success" 
-        ? "bg-emerald-600 border-emerald-500 shadow-emerald-500/20" 
-        : "bg-rose-600 border-rose-500 shadow-rose-500/20";
-
-    toast.className = `${bgColor} border text-white p-3 rounded-lg shadow-xl transform transition-all duration-300 translate-x-full opacity-0 max-w-xs pointer-events-auto`;
-    toast.innerHTML = `
-        <div class="flex items-start gap-2">
-            <div>
-                <h4 class="text-xs font-black uppercase tracking-widest">${title}</h4>
-                <p class="text-[11px] font-bold text-white/90 mt-0.5 leading-tight">${message}</p>
-            </div>
-        </div>
-    `;
-    container.appendChild(toast);
-
-    requestAnimationFrame(() => toast.classList.remove('translate-x-full', 'opacity-0'));
-    setTimeout(() => {
-        toast.classList.add('opacity-0', 'translate-x-full');
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
 }
-
-// --------------------------------------------------------------------------
-// 3. GLOBAL WINDOW EXPORTS
-// --------------------------------------------------------------------------
 
 if (typeof window !== 'undefined') {
     window.customAlert = customAlert;
-    window.closeAlert = closeAlert;
-    window.showToast = showToast;
-    window.showAlert = (msg, isConfirm, onConfirm) => customAlert("Notification", msg, isConfirm, onConfirm);
+    window.closeCustomDialog = closeCustomDialog;
+    window.executeCustomDialogConfirm = executeCustomDialogConfirm;
 }
