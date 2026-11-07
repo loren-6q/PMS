@@ -131,22 +131,10 @@
             </div>
 
             <footer id="calendar-legend" class="mt-0 bg-white p-1.5 sm:p-2 sm:rounded-b-lg border-x border-b border-slate-200 flex flex-col gap-y-1.5 shrink-0 text-[10px] md:text-[11px] select-text cursor-default shadow-lg max-h-[50vh] overflow-y-auto" style="display: none;">
-                <!-- ROW 1: 12 Status Cycles -->
+                <!-- ROW 1: Canonical 13 Status Palette (Mounted via pms-calendar-grid.js from core/occupancy.js) -->
                 <div class="flex items-center gap-1.5 flex-wrap justify-center select-text">
                     <span class="font-black text-slate-400 uppercase tracking-widest text-[9px] mr-1">Status:</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#ec4899; color:#ffffff;">NEW</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#7fc6f5; color:#1e293b;">FUTURE</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#dcfce7; color:#14532d;">HERE</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#aba39d; color:#1e293b;">LEFT</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#f97316; color:#ffffff;">EARLY OUT</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs line-through select-text" style="background:#1e293b; color:#fca5a5;">CANCELLED</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#94a3b8; color:#334155;">NO-SHOW</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#fef08a; color:#1e293b;">SPECIAL</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#b45309; color:#fef3c7;">BLOCKED</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#ea580c; color:#ffffff;">TO-CHARGE</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#1e3a8a; color:#38bdf8;">CHARGED</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#fbcfe8; color:#831843;">VOL</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text" style="background:#7e22ce; color:#ffffff;">UNCONFIRMED</span>
+                    <div id="legend-status-pills" class="flex items-center gap-1.5 flex-wrap justify-center"></div>
                 </div>
 
                 <!-- ROW 2: Bar Border States & Keyframe Alerts -->
