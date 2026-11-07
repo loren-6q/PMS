@@ -3,6 +3,7 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { getStatusTheme, getNextStatus, applyStatusStyle } from '../core/status-theme.js';
 import { STATUS_CYCLE } from '../core/occupancy.js';
 import { parseYMD, getLocalYMD } from '../core/dates.js';
 
