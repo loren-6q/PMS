@@ -6,11 +6,13 @@
 import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { collection, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { toCanonicalPropId } from '../core/properties.js';
+import { renderLegendStatusPills } from '../core/occupancy.js';
 
 import { renderCalendar } from './pms-calendar-grid.js';
 import { renderDashboard } from './pms-dashboard.js';
-import * as dbModule from './pms-database.js';
-import { openGuestModal, initModalDrag } from './pms-folio-modal.js';
+import { renderDatabaseTable } from './pms-database.js';
+import { openGuestModal, initModalDrag, editStaff } from './pms-folio-modal.js';
 import { scrollToToday } from './pms-calendar-tape.js';
 
 import './pms-folio-actions.js';
@@ -40,16 +42,6 @@ function hideBootLoader() {
     }
 }
 
-function safeRenderDatabase() {
-    if (typeof dbModule.renderDatabase === 'function') {
-        dbModule.renderDatabase();
-    } else if (typeof dbModule.renderDatabaseTable === 'function') {
-        dbModule.renderDatabaseTable();
-    } else if (typeof window.renderDatabase === 'function') {
-        window.renderDatabase();
-    }
-}
-
 // --- 1. Master App Bootstrapper ---
 export async function initPms() {
     const safetyTimer = setTimeout(() => {
@@ -76,21 +68,24 @@ export async function initPms() {
         } else if (props.length > 0) {
             currentPropertyId = props[0].id;
         } else {
-            currentPropertyId = urlProp || storedProp || 'loud_samui';
+            currentPropertyId = urlProp || storedProp || 'swims_resort';
         }
 
+        currentPropertyId = toCanonicalPropId(currentPropertyId);
         window.currentPropertyId = currentPropertyId;
         localStorage.setItem('currentPropertyId', currentPropertyId);
 
-        // ZERO-REAL-ESTATE LOGO SWITCHER SETUP
         setupLogoPropertySwitcher(props);
 
-        const activeProp = props.find(p => p.id === currentPropertyId) || { id: currentPropertyId, rooms: [] };
+        const activeProp = props.find(p => toCanonicalPropId(p.id) === currentPropertyId) || { id: currentPropertyId, rooms: [] };
         hotelRooms = activeProp.rooms || [];
         window.hotelRooms = hotelRooms;
         window.currentPropertyConfig = activeProp;
 
         initModalDrag();
+
+        // Render canonical legend pills from core/occupancy.js
+        renderLegendStatusPills();
 
         updateSyncStatus("Syncing Reservations...");
 
@@ -100,7 +95,7 @@ export async function initPms() {
 
             if (activeTab === 'calendar') renderCalendar();
             else if (activeTab === 'dashboard') renderDashboard(staffBookings, currentPropertyId, openGuestModal);
-            else if (activeTab === 'database') safeRenderDatabase();
+            else if (activeTab === 'database') renderDatabaseTable();
 
             clearTimeout(safetyTimer);
             hideBootLoader();
@@ -136,12 +131,15 @@ function setupLogoPropertySwitcher(props) {
     if (props.length > 1) {
         dropdown.innerHTML = `
             <div class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-2 py-1 border-b border-slate-800">Switch Active Property</div>
-            ${props.map(p => `
-                <button type="button" onclick="window.switchActiveProperty('${p.id}')" class="text-left px-2 py-1.5 text-xs font-black uppercase rounded hover:bg-slate-800 flex items-center justify-between ${p.id === currentPropertyId ? 'text-blue-400 bg-slate-800/60' : 'text-slate-200'}">
-                    <span>${p.name || p.id}</span>
-                    ${p.id === currentPropertyId ? '✓' : ''}
-                </button>
-            `).join('')}
+            ${props.map(p => {
+                const isSelected = toCanonicalPropId(p.id) === currentPropertyId;
+                return `
+                    <button type="button" onclick="window.switchActiveProperty('${p.id}')" class="text-left px-2 py-1.5 text-xs font-black uppercase rounded hover:bg-slate-800 flex items-center justify-between ${isSelected ? 'text-blue-400 bg-slate-800/60' : 'text-slate-200'}">
+                        <span>${p.name || p.id}</span>
+                        ${isSelected ? '✓' : ''}
+                    </button>
+                `;
+            }).join('')}
         `;
 
         logoContainer.style.cursor = 'pointer';
@@ -206,7 +204,7 @@ export function switchTab(tabId) {
     } else if (tabId === 'dashboard') {
         renderDashboard(staffBookings, currentPropertyId, openGuestModal);
     } else if (tabId === 'database') {
-        safeRenderDatabase();
+        renderDatabaseTable();
     } else if (tabId === 'tm30' && typeof window.renderTm30Table === 'function') {
         window.renderTm30Table();
     }
@@ -229,13 +227,13 @@ export function handleSearch(term) {
         currentSearchMatchIndex = 0;
         if (jumpBtn) jumpBtn.classList.add('hidden');
         renderCalendar();
-        safeRenderDatabase();
+        renderDatabaseTable();
         return;
     }
 
-    const curProp = window.currentPropertyId;
+    const curProp = toCanonicalPropId(window.currentPropertyId);
     const matches = (window.staff || []).filter(b => {
-        if (b.property !== curProp || b.status === 'cancelled') return false;
+        if (toCanonicalPropId(b.property) !== curProp || b.status === 'cancelled') return false;
         const fn = (b.firstName || '').toUpperCase();
         const ln = (b.lastName || '').toUpperCase();
         const ref = (b.bookId || '').toUpperCase();
@@ -253,7 +251,7 @@ export function handleSearch(term) {
     }
 
     renderCalendar();
-    safeRenderDatabase();
+    renderDatabaseTable();
 }
 
 export function jumpToSearchMatch() {
@@ -292,10 +290,12 @@ export function clearSearchAndClose() {
 // --- 5. Window Global Bridge ---
 if (typeof window !== 'undefined') {
     window.renderCalendar = renderCalendar;
+    window.renderDatabase = renderDatabaseTable;
     window.switchTab = switchTab;
     window.handleSearch = handleSearch;
     window.jumpToSearchMatch = jumpToSearchMatch;
     window.clearSearchAndClose = clearSearchAndClose;
+    window.editStaff = editStaff;
     window.switchActiveProperty = (propId) => {
         localStorage.setItem('currentPropertyId', propId);
         const u = new URL(window.location.href);
@@ -315,17 +315,6 @@ if (typeof window !== 'undefined') {
     };
     window.parseEmailBooking = () => processManualPaste();
     window.processManualPaste = processManualPaste;
-    window.editStaff = (id) => {
-        const b = (staffBookings || []).find(x => x.id === id);
-        if (b) openGuestModal(b);
-    };
-    window.closeModal = (id) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.classList.remove('active');
-            el.style.display = 'none';
-        }
-    };
 }
 
 if (document.readyState === 'loading') {
