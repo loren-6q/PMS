@@ -27,7 +27,7 @@
                 <button type="button" onclick="window.closeAlert()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="18"></i></button>
             </div>
             <div class="p-6 text-center">
-                <div id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></div>
+                <div id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap text-left"></div>
                 <div id="alert-actions" class="mt-6 flex gap-2 justify-center">
                     <button id="alert-cancel" onclick="window.closeAlert()" class="hidden btn-modal bg-slate-200 text-slate-700">Cancel</button>
                     <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
@@ -37,7 +37,7 @@
     </div>
 
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
-        <!-- Uniform Top Navbar matching PMS & Accounting -->
+        <!-- Top Navbar -->
         <div class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-2 shrink-0 z-50 unselectable w-full">
             <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
                 <a href="index.html" class="flex flex-col min-w-0 mr-1 sm:mr-3 hover:brightness-110 transition-all cursor-pointer">
@@ -68,14 +68,34 @@
         <div class="flex-1 flex flex-col gap-2 bg-white p-2 sm:p-3 border-x sm:border border-slate-300 rounded-none sm:rounded-lg shadow min-h-0 overflow-hidden">
             <!-- 1. MISSING BOOKING AUDITOR -->
             <div class="w-full flex flex-col border border-slate-300 rounded-lg shrink-0 bg-slate-50 overflow-hidden shadow-sm">
-                <div class="bg-slate-200 p-2 px-3 font-black text-slate-700 uppercase flex items-center justify-between shrink-0 border-b border-slate-300">
+                <div class="bg-slate-200 p-2 px-3 font-black text-slate-700 uppercase flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-slate-300">
                     <span class="text-xs sm:text-sm flex items-center gap-1.5">
                         <i data-lucide="search" size="14" class="text-blue-600"></i> 1. Missing Booking Auditor
                     </span>
-                    <span id="auditor-prop-indicator" class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Paste Extranet List Below</span>
+                    
+                    <!-- Direct Single-ID Verifier -->
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] font-black uppercase text-slate-500 hidden sm:inline">Quick Check ID:</span>
+                        <input type="text" id="direct-check-input" placeholder="e.g. 5791113459" class="bg-white border border-slate-300 rounded px-2 py-0.5 text-xs font-mono font-bold w-36 outline-none focus:border-blue-500 shadow-inner" onkeydown="if(event.key==='Enter') window.verifySingleId()">
+                        <button type="button" onclick="window.verifySingleId()" class="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] uppercase rounded shadow-xs cursor-pointer">Find</button>
+                    </div>
                 </div>
+
                 <div class="p-2 sm:p-3 flex flex-col gap-2">
                     <textarea id="audit-text" class="w-full h-16 sm:h-20 bg-white border border-slate-300 rounded p-2 outline-none focus:ring-2 focus:ring-blue-500 whitespace-pre text-xs text-slate-700 font-mono resize-none transition-all placeholder:text-slate-400" placeholder="Paste Booking.com, Hostelworld, or Airbnb list data here..." oninput="window.checkMissing()"></textarea>
+
+                    <!-- Scan Metrics Status Bar -->
+                    <div id="scan-metrics-bar" class="hidden flex items-center justify-between bg-white border border-slate-200 rounded px-3 py-1 text-xs font-bold text-slate-600 shadow-2xs">
+                        <div class="flex items-center gap-3">
+                            <span>Scanned: <strong id="metric-scanned" class="font-mono text-slate-900">0</strong></span>
+                            <span>•</span>
+                            <span class="text-emerald-700">In PMS: <strong id="metric-matched" class="font-mono">0</strong></span>
+                            <span>•</span>
+                            <span class="text-rose-600">Missing: <strong id="metric-missing" class="font-mono">0</strong></span>
+                        </div>
+                        <span id="metric-prop-badge" class="text-[10px] font-mono font-black text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200 uppercase">SWIMS</span>
+                    </div>
+
                     <div id="audit-result" class="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto no-scrollbar"></div>
                 </div>
             </div>
@@ -209,14 +229,9 @@
             } catch (e) {}
 
             const navBtn = document.getElementById('nav-pms-btn');
-            if (navBtn) {
-                navBtn.href = `index.html?p=${shortKey}`;
-            }
-
-            const ind = document.getElementById('auditor-prop-indicator');
-            if (ind) {
-                ind.innerText = `Active: ${shortKey} | Paste Extranet List Below`;
-            }
+            if (navBtn) navBtn.href = `index.html?p=${shortKey}`;
+            const badge = document.getElementById('metric-prop-badge');
+            if (badge) badge.innerText = shortKey;
         };
 
         const updateDismissedUI = () => {
@@ -263,8 +278,6 @@
         const loadPropertyBaseline = async () => {
             try {
                 let baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', getBaselineDocId()));
-                
-                // Backward compatibility: If no per-property doc exists and we're on SWIMS, fallback to original legacy baseline
                 if (!baselineSnap.exists() && currentPropertyId === 'swims_resort') {
                     baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'));
                 }
@@ -278,7 +291,6 @@
                 }
                 updateDismissedUI();
             } catch (baseErr) {
-                console.warn("Could not load baseline for property:", currentPropertyId, baseErr);
                 snapshotData = {};
                 dismissedIds = [];
             }
@@ -286,11 +298,7 @@
 
         const setupPropertyData = async () => {
             const propObj = propertiesList.find(p => p.id === currentPropertyId);
-            if (propObj) {
-                hotelRooms = propObj.rooms || [];
-            } else {
-                hotelRooms = [];
-            }
+            hotelRooms = propObj ? (propObj.rooms || []) : [];
 
             rawTypes = [];
             totalRoomsByType = {};
@@ -336,8 +344,12 @@
             }
 
             const activeStaff = staff.filter(s => {
-                const sProp = s.property || 'swims_resort';
-                return sProp === currentPropertyId && s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed';
+                const sProp = (s.property || 'swims_resort').toLowerCase();
+                const curProp = currentPropertyId.toLowerCase();
+                const isPropMatch = sProp === curProp ||
+                    (curProp === 'swims_resort' && sProp === 'swims') ||
+                    (curProp === 'loud_samui' && sProp === 'loud');
+                return isPropMatch && s.status !== 'cancelled' && s.status !== 'noshow' && s.status !== 'unconfirmed';
             });
 
             activeStaff.forEach(s => {
@@ -369,7 +381,6 @@
                     else if (bt.includes("OCEANFRONT")) { inferred = bt.includes("TWIN") ? "Oceanfront Twin" : "Oceanfront King"; }
                     else if (bt.includes("BUNGALOW")) inferred = "BUNGALOWS";
 
-                    // Fallback to match directly against dynamic room types of this property
                     if (!inferred) {
                         const directMatch = rawTypes.find(t => t.toUpperCase() === bt || bt.includes(t.toUpperCase()));
                         if (directMatch) inferred = directMatch;
@@ -526,190 +537,233 @@
             });
         };
 
-        // ENHANCED PMS LOOKUP: Finds bookings directly OR checks for merged extension tags in notes
-        const findPmsBooking = (id, extraPredicate = null) => {
-            if (!id && !extraPredicate) return null;
-            const cleanId = id ? String(id).trim() : null;
-            const curProp = currentPropertyId;
+        // PMS Lookup - String & Number Coercion + Canonical Property Match
+        const findPmsBooking = id => {
+            if (!id) return null;
+            const targetId = String(id).trim();
+            const curProp = currentPropertyId.toLowerCase();
 
             return staff.find(s => {
-                const sProp = s.property || 'swims_resort';
-                if (sProp !== curProp) return false;
+                const sProp = (s.property || 'swims_resort').toLowerCase();
+                const isPropMatch = sProp === curProp ||
+                    (curProp === 'swims_resort' && sProp === 'swims') ||
+                    (curProp === 'loud_samui' && sProp === 'loud');
+                if (!isPropMatch) return false;
 
-                if (cleanId) {
-                    if (s.bookId === cleanId || s.id === cleanId) return true;
-                    if (cleanId.includes('-') && s.bookId === cleanId.split('-')[1]) return true;
+                const sBookId = String(s.bookId || '').trim();
+                const sId = String(s.id || '').trim();
 
-                    // Merge detection: Check if booking notes recorded this ID as an absorbed extension
-                    if (s.notes) {
-                        if (s.notes.includes(cleanId)) return true;
-                        if (s.notes.includes(`[Merged Book ID]: ${cleanId}`)) return true;
-                        if (s.notes.includes(`--- MERGED WITH BOOKING ${cleanId} ---`)) return true;
-                    }
+                if (sBookId === targetId || sId === targetId) return true;
+                if (targetId.includes('-') && sBookId === targetId.split('-')[1]) return true;
+
+                if (s.notes && typeof s.notes === 'string') {
+                    if (s.notes.includes(targetId)) return true;
                 }
-
-                if (extraPredicate && extraPredicate(s)) return true;
                 return false;
             });
         };
 
+        // Quick Direct Verifier
+        window.verifySingleId = () => {
+            const input = document.getElementById('direct-check-input');
+            const id = input?.value.trim();
+            if (!id) return;
+
+            const b = findPmsBooking(id);
+            if (b) {
+                const isCancelled = b.status === 'cancelled' || b.status === 'noshow';
+                const rNames = (b.rooms && b.rooms.length) ? b.rooms.join(', ') : (b.room || 'Unassigned');
+                window.showAlert(
+                    `STATUS: FOUND IN DATABASE\n\n` +
+                    `Book ID: ${b.bookId || b.id}\n` +
+                    `Guest: ${b.firstName || ''} ${b.lastName || ''}\n` +
+                    `Property: ${(b.property || 'swims_resort').toUpperCase()}\n` +
+                    `Status: ${b.status.toUpperCase()}${isCancelled ? ' (NOT OCCUPYING ROOM)' : ''}\n` +
+                    `Dates: ${b.checkIn} -> ${b.checkOut}\n` +
+                    `Room: ${rNames}\n` +
+                    `Source: ${b.source || 'OTA'}`
+                );
+            } else {
+                window.showAlert(
+                    `STATUS: NOT FOUND IN DATABASE\n\n` +
+                    `ID: ${id}\n` +
+                    `Property: ${currentPropertyId.toUpperCase()}\n\n` +
+                    `This booking does NOT exist in your PMS Firestore database.`
+                );
+            }
+        };
+
+        // Unconditional Auditor Engine
         window.checkMissing = () => {
             const rawText = document.getElementById('audit-text')?.value || '';
             const resultDiv = document.getElementById('audit-result');
+            const metricsBar = document.getElementById('scan-metrics-bar');
             if (!resultDiv) return;
-            if (!rawText.trim()) { resultDiv.innerHTML = ''; return; }
 
-            let foundIds = new Set();
-            let missingHtml = [];
-            let actionCount = 0;
+            if (!rawText.trim()) {
+                resultDiv.innerHTML = '';
+                if (metricsBar) metricsBar.classList.add('hidden');
+                return;
+            }
+
+            const lines = rawText.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+            const foundIds = new Set();
+            const missingHtml = [];
+            let totalScanned = 0;
+            let totalMatched = 0;
+            let totalMissing = 0;
 
             const ignoreIds = ['16646458'];
             const dismissed = dismissedIds || [];
 
-            const lowerText = rawText.toLowerCase();
-            let source = 'bdc';
-            if (lowerText.includes('hostelworld') || /\b\d{5,7}-\d+\b/.test(rawText)) {
-                source = 'hw';
-            } else if (lowerText.includes('airbnb') || lowerText.includes('switch to traveling') || lowerText.includes('upcoming reservations')) {
-                source = 'airbnb';
-            } else if (lowerText.includes('booking.com') || lowerText.includes('extranet')) {
-                source = 'bdc';
+            // 1. EXTRACT ALL 10-DIGIT BOOKING.COM IDS (e.g. 5791113459)
+            const bdcIds = [];
+            const bdcRegex = /\b\d{10}\b/g;
+            let match;
+            while ((match = bdcRegex.exec(rawText)) !== null) {
+                const id = match[0];
+                if (!bdcIds.includes(id)) bdcIds.push(id);
             }
 
-            const addMissing = (id, guestName, badge, type, displayId) => {
-                if (ignoreIds.includes(id) || dismissed.includes(id) || foundIds.has(id)) return;
+            // 2. EXTRACT ALL HOSTELWORLD IDS (e.g. 12345-67890)
+            const hwIds = [];
+            const hwRegex = /\b(\d{5,7}-\d+)\b/g;
+            while ((match = hwRegex.exec(rawText)) !== null) {
+                const id = match[1];
+                if (!hwIds.includes(id)) hwIds.push(id);
+            }
+
+            totalScanned = bdcIds.length + hwIds.length;
+
+            const addResultCard = (id, guestName, badge, type, displayId, details = '') => {
+                if (ignoreIds.includes(id) || foundIds.has(id)) return;
                 foundIds.add(id);
-                actionCount++;
+                if (dismissed.includes(id)) return;
 
                 let cardStyle = '', icon = '';
                 if (type === 'missing') {
-                    cardStyle = 'bg-rose-50 border-rose-200 text-rose-900';
-                    icon = '<i data-lucide="arrow-right" class="text-rose-500 shrink-0" size="16"></i>';
-                } else if (type === 'cancel') {
+                    totalMissing++;
+                    cardStyle = 'bg-rose-50 border-rose-300 text-rose-900';
+                    icon = '<i data-lucide="alert-circle" class="text-rose-600 shrink-0" size="18"></i>';
+                } else if (type === 'cancel_discrepancy') {
+                    totalMissing++;
+                    cardStyle = 'bg-amber-100 border-amber-400 text-amber-950 font-black';
+                    icon = '<i data-lucide="alert-triangle" class="text-amber-600 shrink-0" size="18"></i>';
+                } else if (type === 'cancel_in_pms') {
                     cardStyle = 'bg-amber-50 border-amber-300 text-amber-900';
-                    icon = '<i data-lucide="arrow-right" class="text-amber-500 shrink-0" size="16"></i>';
-                } else if (type === 'ota_cancel') {
-                    cardStyle = 'bg-slate-100 border-slate-300 text-slate-700 opacity-80';
-                    icon = '<i data-lucide="arrow-right" class="text-slate-400 shrink-0" size="16"></i>';
+                    icon = '<i data-lucide="arrow-right-circle" class="text-amber-500 shrink-0" size="16"></i>';
                 }
 
                 missingHtml.push(`
-                    <div class="${cardStyle} px-3 py-2 rounded-lg border shadow-sm flex items-center justify-between gap-3 text-xs">
+                    <div class="${cardStyle} px-3 py-2 rounded-lg border shadow-xs flex items-center justify-between gap-3 text-xs">
                         <div class="font-bold truncate flex items-center gap-2 flex-1 min-w-0">
-                            ${icon} <span class="truncate font-black text-sm">${guestName}</span> <span class="opacity-60 font-mono text-xs shrink-0">(${displayId})</span> 
-                            <span class="bg-white/60 text-[9px] px-1.5 py-0.5 rounded uppercase font-black tracking-wider shrink-0 border border-black/10">${badge}</span>
+                            ${icon}
+                            <div class="truncate flex flex-col min-w-0">
+                                <div class="flex items-center gap-2 truncate">
+                                    <span class="truncate font-black text-sm">${guestName}</span>
+                                    <span class="opacity-75 font-mono text-xs shrink-0">(${displayId})</span>
+                                    <span class="bg-white/80 text-[9px] px-1.5 py-0.2 rounded uppercase font-black tracking-wider shrink-0 border border-black/10">${badge}</span>
+                                </div>
+                                ${details ? `<span class="text-[10px] opacity-75 truncate mt-0.5">${details}</span>` : ''}
+                            </div>
                         </div>
-                        <button onclick="window.dismissBooking('${id}')" class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 text-[10px] font-black uppercase rounded shadow-sm border border-slate-200 transition-colors shrink-0 flex items-center gap-1 cursor-pointer">
+                        <button onclick="window.dismissBooking('${id}')" class="px-2 py-1 bg-white hover:bg-slate-100 text-slate-600 text-[10px] font-black uppercase rounded shadow-2xs border border-slate-300 transition-colors shrink-0 flex items-center gap-1 cursor-pointer">
                             Dismiss <i data-lucide="x" size="11"></i>
                         </button>
                     </div>
                 `);
             };
 
-            if (source === 'hw') {
-                const hwRegex = /\b(\d{5,7}-\d+)\b/g;
-                let match;
-                while ((match = hwRegex.exec(rawText)) !== null) {
-                    let id = match[1];
-                    let startIndex = match.index + id.length;
-                    let textAfterId = rawText.substring(startIndex);
-                    let firstDigitIndex = textAfterId.search(/\d/);
-                    let rawName = firstDigitIndex > -1 ? textAfterId.substring(0, firstDigitIndex) : textAfterId.substring(0, 50);
+            // Audit Booking.com IDs
+            bdcIds.forEach(id => {
+                let guestName = "GUEST #" + id;
+                let isOtaCancelled = false;
 
-                    let guestName = rawName
-                        .replace(/Visa|Mastercard|Amex|JCB|Diners|UnionPay|Discover|Maestro|Cash|None/gi, '')
-                        .replace(/Late|Reference|Card|Type/gi, '')
-                        .replace(/[\n\r\t]/g, ' ')
-                        .trim();
+                // Find guest name and status from nearby lines
+                const lineIdx = lines.findIndex(l => l.includes(id));
+                if (lineIdx !== -1) {
+                    const windowStart = Math.max(0, lineIdx - 3);
+                    const windowEnd = Math.min(lines.length - 1, lineIdx + 3);
+                    const contextText = lines.slice(windowStart, windowEnd + 1).join(' ');
 
-                    if (!guestName || guestName.length < 2) guestName = "UNKNOWN GUEST";
-
-                    let pmsBooking = findPmsBooking(id);
-                    if (!pmsBooking) {
-                        addMissing(id, guestName, 'Missing in PMS', 'missing', id);
+                    if (/\bcancelled\b/i.test(contextText) && !/free\s+cancellation/i.test(contextText)) {
+                        isOtaCancelled = true;
                     }
-                }
-            } else if (source === 'airbnb') {
-                let lines = rawText.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
-                for (let i = 0; i < lines.length; i++) {
-                    if (lines[i].toLowerCase().includes('sunset') || lines[i].toLowerCase().includes('entire') || lines[i].toLowerCase().includes('private room') || lines[i].toLowerCase().includes('group')) {
-                        let rawName = lines[i - 1];
-                        if (!rawName) continue;
 
-                        let guestName = rawName.split(/['’]s group/i)[0].trim();
-                        let pmsBooking = findPmsBooking(null, s => 
-                            s.source === 'airbnb' && s.status !== 'cancelled' && s.status !== 'noshow' &&
-                            (s.firstName.toLowerCase().includes(guestName.toLowerCase()) ||
-                             s.lastName.toLowerCase().includes(guestName.toLowerCase()) ||
-                             guestName.toLowerCase().includes(s.firstName.toLowerCase()) ||
-                             guestName.toLowerCase().includes(s.lastName.toLowerCase()))
-                        );
-
-                        if (!pmsBooking) {
-                            let pseudoId = 'ABNB_' + guestName.replace(/\s+/g, '').toUpperCase();
-                            addMissing(pseudoId, guestName, 'Missing Airbnb', 'missing', 'AirBnB');
-                        }
-                    }
-                }
-            } else {
-                let lines = rawText.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
-                const numRegex = /\b\d{10}\b/g;
-
-                for (let i = 0; i < lines.length; i++) {
-                    let match;
-                    while ((match = numRegex.exec(lines[i])) !== null) {
-                        let id = match[0];
-                        let pmsBooking = findPmsBooking(id);
-                        let guestName = "UNKNOWN GUEST";
-                        let isCancelled = false;
-
-                        for (let j = i; j >= Math.max(0, i - 12); j--) {
-                            if (/\b(adult|child|adults|children)\b/i.test(lines[j])) {
-                                if (j - 1 >= 0) {
-                                    let rawLine = lines[j - 1];
-                                    guestName = rawLine
-                                        .replace(/THB|฿/gi, '')
-                                        .replace(/Payment via Booking\.com/i, '')
-                                        .replace(/Bank transfer/i, '')
-                                        .replace(/StatusPriceCommission and chargesBooking number/i, '')
-                                        .replace(/[\d,.]+/g, '')
-                                        .trim();
-
-                                    for (let k = Math.max(0, j - 2); k <= i; k++) {
-                                        if (lines[k] && /cancelled|canceled/i.test(lines[k])) isCancelled = true;
-                                    }
-                                }
+                    for (let j = windowStart; j <= windowEnd; j++) {
+                        const l = lines[j];
+                        if (j !== lineIdx && !l.includes(id) && !/THB|฿|adult|room|night|paid|check/i.test(l)) {
+                            const clean = l.replace(/[^a-zA-Z\s-]/g, '').trim();
+                            if (clean.length >= 3 && clean.length <= 40 && clean.includes(' ')) {
+                                guestName = clean;
                                 break;
                             }
                         }
-                        if (!guestName || guestName.length < 2) guestName = "UNKNOWN GUEST";
-
-                        if (!pmsBooking && !isCancelled) addMissing(id, guestName, 'Missing', 'missing', id);
-                        else if (!pmsBooking && isCancelled) addMissing(id, guestName, 'OTA Cancelled', 'ota_cancel', id);
-                        else if (pmsBooking && isCancelled && pmsBooking.status !== 'cancelled') addMissing(id, guestName, 'Cancel in PMS!', 'cancel', id);
                     }
                 }
+
+                const pms = findPmsBooking(id);
+
+                if (!pms) {
+                    if (!isOtaCancelled) {
+                        addMissingItem(id, guestName, 'Missing in PMS', 'missing', id);
+                    }
+                } else {
+                    const isPmsCancelled = pms.status === 'cancelled' || pms.status === 'noshow';
+
+                    if (isPmsCancelled && !isOtaCancelled) {
+                        // CRITICAL: Cancelled in PMS, but Active in Booking.com
+                        addMissingItem(id, pms.firstName ? `${pms.firstName} ${pms.lastName}` : guestName, 'Cancelled in PMS (Active on OTA)', 'cancel_discrepancy', id, `PMS Status: ${pms.status.toUpperCase()} -> Guest Still Coming!`);
+                    } else if (!isPmsCancelled && isOtaCancelled) {
+                        addMissingItem(id, pms.firstName ? `${pms.firstName} ${pms.lastName}` : guestName, 'Cancel in PMS', 'cancel_in_pms', id, `Room: ${pms.rooms?.join(', ') || pms.room} -> OTA is Cancelled`);
+                    } else {
+                        totalMatched++;
+                    }
+                }
+            });
+
+            // Audit Hostelworld IDs
+            hwIds.forEach(id => {
+                const pms = findPmsBooking(id);
+                if (!pms) {
+                    addMissingItem(id, "Hostelworld Guest", 'Missing HW', 'missing', id);
+                } else {
+                    totalMatched++;
+                }
+            });
+
+            // Update Metrics Bar
+            if (metricsBar) {
+                metricsBar.classList.remove('hidden');
+                document.getElementById('metric-scanned').innerText = totalScanned;
+                document.getElementById('metric-matched').innerText = totalMatched;
+                document.getElementById('metric-missing').innerText = totalMissing;
             }
 
-            if (actionCount === 0) {
+            // Render Output
+            if (missingHtml.length === 0) {
                 resultDiv.innerHTML = `
                     <div class="bg-emerald-50 border border-emerald-400 text-emerald-800 p-2.5 rounded-lg shadow-sm text-center">
                         <div class="font-black text-sm mb-0.5 flex items-center justify-center gap-1.5">
-                            <i data-lucide="check-circle" size="16" class="text-emerald-500"></i> ALL CLEAR
+                            <i data-lucide="check-circle" size="16" class="text-emerald-500"></i> ALL CLEAR (${totalScanned} CHECKED)
                         </div>
-                        <p class="font-bold text-xs text-emerald-600">No missing or pending cancelled bookings found for this property.</p>
+                        <p class="font-bold text-xs text-emerald-600">All ${totalScanned} detected reservations match active records in ${currentPropertyId.toUpperCase()}.</p>
                     </div>`;
             } else {
                 resultDiv.innerHTML = `
                     <div class="bg-slate-50 border border-slate-300 p-2.5 rounded-lg shadow-sm">
-                        <div class="font-black text-xs text-slate-800 mb-2 flex items-center gap-1.5 uppercase tracking-wider">
-                            <i data-lucide="alert-triangle" size="14" class="text-rose-600"></i> ${actionCount} ACTION ITEM${actionCount > 1 ? 'S' : ''} FOUND
+                        <div class="font-black text-xs text-slate-800 mb-2 flex items-center justify-between uppercase tracking-wider">
+                            <span class="flex items-center gap-1.5 text-rose-600">
+                                <i data-lucide="alert-triangle" size="15"></i> ${missingHtml.length} Action Item${missingHtml.length > 1 ? 's' : ''} Found
+                            </span>
+                            <span class="text-[10px] text-slate-500 font-bold font-mono">${totalScanned} Scanned</span>
                         </div>
                         <div class="flex flex-col gap-1.5">
                             ${missingHtml.join('')}
                         </div>
                     </div>`;
             }
+
             if (window.lucide) window.lucide.createIcons();
         };
 
