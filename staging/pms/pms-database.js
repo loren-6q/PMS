@@ -8,7 +8,7 @@ import { doc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/fireba
 import { getDue, getPaid, getCurrencySymbol } from '../core/money.js';
 import { toCanonicalPropId } from '../core/properties.js';
 import { getLocalYMD } from '../core/dates.js';
-import { STATUS_CYCLE } from '../core/occupancy.js';
+import { STATUS_CYCLE, getStatusObj } from '../core/occupancy.js';
 import { customAlert } from '../core/ui-dialogs.js';
 
 // --- 1. Database Sorting State ---
@@ -54,13 +54,13 @@ export function initDatabaseFilters() {
         `).join('');
     }
 
-    // 3. Populate Status Checkboxes (Includes 13th Status: EARLY OUT)
+    // 3. Populate Canonical 13 Statuses from core/occupancy.js
     const statusDrop = document.getElementById('db-status-dropdown');
     if (statusDrop && statusDrop.children.length === 0) {
         statusDrop.innerHTML = STATUS_CYCLE.map(s => `
             <label class="flex items-center px-2 py-1 hover:bg-slate-50 cursor-pointer text-xs font-bold uppercase text-slate-700">
                 <input type="checkbox" value="${s.val}" onchange="window.updateMultiLabel('db-status-dropdown', 'db-status-label', 'ALL STATUS'); window.renderDatabase();" class="mr-2 rounded border-slate-300 text-indigo-600 focus:ring-0">
-                <span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5 shrink-0" style="background:${s.bg}"></span>
+                <span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5 shrink-0" style="background:${s.bg}; border: 1px solid ${s.border};"></span>
                 <span>${s.label}</span>
             </label>
         `).join('');
@@ -76,7 +76,6 @@ export function toggleMultiSelect(dropdownId, triggerBtn) {
 
     const isHidden = dropdown.classList.contains('hidden') || dropdown.style.display === 'none';
 
-    // Hide all open multi-select dropdowns
     document.querySelectorAll('.multi-select-dropdown').forEach(d => {
         d.classList.add('hidden');
         d.style.display = 'none';
@@ -173,8 +172,9 @@ export function getFilteredBookings(staffList = null, currentPropertyId = null) 
         const sProp = toCanonicalPropId(s.property);
         if (sProp !== curProp) return false;
 
-        // Status Filter
-        if (statusFilters.length > 0 && !statusFilters.includes(s.status)) return false;
+        // Canonical Status Filter
+        const stKey = (s.status || 'future').toLowerCase().trim();
+        if (statusFilters.length > 0 && !statusFilters.includes(stKey)) return false;
 
         // Channel Source Filter
         if (sourceFilters.length > 0 && !sourceFilters.includes((s.source || 'direct').toLowerCase())) return false;
@@ -235,6 +235,9 @@ export function getFilteredBookings(staffList = null, currentPropertyId = null) 
         } else if (dbSortKey === 'room') {
             vA = a.rooms?.[0] || a.room || 'ZZZ';
             vB = b.rooms?.[0] || b.room || 'ZZZ';
+        } else if (dbSortKey === 'status') {
+            vA = a.status || '';
+            vB = b.status || '';
         }
 
         if (vA < vB) return dbSortAsc ? -1 : 1;
@@ -263,9 +266,11 @@ export function renderDatabaseTable() {
         const rList = Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []);
         const assigned = rList.filter(Boolean).join(', ') || '--';
 
-        // Compact dates formatting: MM/DD → MM/DD
         const dIn = s.checkIn ? s.checkIn.substr(5).replace('-', '/') : '?';
         const dOut = s.checkOut ? s.checkOut.substr(5).replace('-', '/') : '?';
+
+        // Authoritative Status Theme from core/occupancy.js
+        const st = getStatusObj(s.status);
 
         const tr = document.createElement('tr');
         tr.className = "border-b border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer text-xs";
@@ -288,7 +293,7 @@ export function renderDatabaseTable() {
             <td class="p-2 border-r border-slate-200 text-right font-black font-mono text-emerald-600">${currency}${paid.toLocaleString()}</td>
             <td class="p-2 border-r border-slate-200 text-right font-black font-mono ${due > 0 ? 'text-rose-600' : 'text-slate-400'}">${currency}${due.toLocaleString()}</td>
             <td class="p-2 text-center">
-                <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase text-white status-${s.status} shadow-xs">${s.status}</span>
+                <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase shadow-xs select-text ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border: 1px solid ${st.border};">${st.label}</span>
             </td>
         `;
         tbody.appendChild(tr);
@@ -332,7 +337,6 @@ export function bulkDeleteVisible() {
     );
 }
 
-// Global click listener to close multi-select dropdowns when clicking outside
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.multi-select-container') && !e.target.closest('.multi-select-dropdown')) {
         document.querySelectorAll('.multi-select-dropdown').forEach(d => {
