@@ -77,7 +77,7 @@ export function renderStep3UnifiedMapping() {
             selectOptions += `<option value="${cr.id}" ${isSel}>${cr.attributes?.title || cr.id}</option>`;
         });
 
-        // Resolve all rate plans that belong to this Channex Room Type
+        // Resolve and map rate plans belonging to this Channex Room Type
         let ratePlansHtml = '';
         if (isMapped) {
             const matchingPlans = (window.channexRatePlans || []).filter(p => {
@@ -89,19 +89,33 @@ export function renderStep3UnifiedMapping() {
                 ratePlansHtml = `
                     <div class="mt-1 pt-2 border-t border-emerald-200">
                         <div class="text-[9.5px] font-black uppercase text-emerald-900 tracking-wider mb-1 flex items-center justify-between">
-                            <span>Inherited Rate Plans (${matchingPlans.length})</span>
-                            <span class="text-slate-400 font-mono text-[9px] lowercase">Channex Room: ${currentMap.channexId.slice(0, 8)}...</span>
+                            <span>Channex Rate Plan Mapping (${matchingPlans.length})</span>
+                            <span class="text-slate-400 font-mono text-[9px] lowercase">Room ID: ${currentMap.channexId.slice(0, 8)}...</span>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                            ${matchingPlans.map(plan => `
-                                <div class="p-1.5 bg-white border border-emerald-200 rounded flex items-center justify-between gap-2 shadow-2xs">
-                                    <div class="flex items-center gap-1.5 truncate">
-                                        <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                                        <span class="font-bold text-slate-800 text-[11px] truncate">${plan.attributes?.title || plan.id}</span>
+                        <div class="space-y-1">
+                            ${matchingPlans.map(plan => {
+                                const currentRateMap = window.channexRateMap.find(r => r.ratePlanId === plan.id);
+                                const title = plan.attributes?.title || plan.id;
+                                const isFlexTitle = /flex|ref/i.test(title);
+                                const assignedType = currentRateMap?.rateType || (isFlexTitle ? 'ref' : 'non-ref');
+
+                                return `
+                                    <div class="p-1.5 bg-white border border-emerald-200 rounded flex items-center justify-between gap-2 shadow-2xs">
+                                        <div class="flex items-center gap-1.5 truncate">
+                                            <span class="w-2 h-2 rounded-full ${assignedType === 'ref' ? 'bg-indigo-500' : (assignedType === 'non-ref' ? 'bg-emerald-500' : 'bg-slate-300')} shrink-0"></span>
+                                            <span class="font-bold text-slate-800 text-[11px] truncate">${title}</span>
+                                            <span class="font-mono text-[9px] text-slate-400 bg-slate-50 px-1 py-0.2 rounded border border-slate-200 shrink-0">${plan.id.slice(0, 8)}</span>
+                                        </div>
+                                        <div class="w-48 shrink-0">
+                                            <select class="table-input font-bold text-[10px]" onchange="window.updateRatePlanRole('${cat}', '${currentMap.channexId}', '${plan.id}', '${title.replace(/'/g, "\\'")}', this.value)">
+                                                <option value="non-ref" ${assignedType === 'non-ref' ? 'selected' : ''}>Standard Non-Ref (Base)</option>
+                                                <option value="ref" ${assignedType === 'ref' ? 'selected' : ''}>Flexible (+% Markup)</option>
+                                                <option value="ignore" ${assignedType === 'ignore' ? 'selected' : ''}>-- Ignore / Do Not Sync --</option>
+                                            </select>
+                                        </div>
                                     </div>
-                                    <span class="font-mono text-[9px] text-slate-400 bg-slate-50 px-1 py-0.2 rounded border border-slate-200 shrink-0">${plan.id.slice(0, 8)}</span>
-                                </div>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </div>
                     </div>
                 `;
@@ -233,10 +247,35 @@ export function executeCreateAndPushRatePlan() {
     customAlert("Rate Plans Bound", `Generated internal plan bindings for ${chks.length} category(ies).`);
 }
 
+export function updateRatePlanRole(pmsCategory, channexRoomId, ratePlanId, ratePlanTitle, rateType) {
+    window.channexRateMap = window.channexRateMap || [];
+    const idx = window.channexRateMap.findIndex(r => r.ratePlanId === ratePlanId);
+
+    if (rateType === 'ignore') {
+        if (idx > -1) window.channexRateMap.splice(idx, 1);
+    } else {
+        const entry = {
+            pmsCategory,
+            channexRoomId,
+            ratePlanId,
+            ratePlanTitle,
+            rateType
+        };
+        if (idx > -1) {
+            window.channexRateMap[idx] = entry;
+        } else {
+            window.channexRateMap.push(entry);
+        }
+    }
+
+    renderStep3UnifiedMapping();
+}
+
 if (typeof window !== 'undefined') {
     window.fetchChannexData = fetchChannexData;
     window.renderStep3UnifiedMapping = renderStep3UnifiedMapping;
     window.updateRoomTypeMapping = updateRoomTypeMapping;
+    window.updateRatePlanRole = updateRatePlanRole;
     window.openCreateRatePlanModal = openCreateRatePlanModal;
     window.closeCreateRatePlanModal = closeCreateRatePlanModal;
     window.applyRatePlanPreset = applyRatePlanPreset;
