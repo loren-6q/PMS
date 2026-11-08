@@ -182,7 +182,6 @@ export async function savePropertyToDatabase(notify = true) {
             roomDefinitions: window.roomDefinitions || [],
             rooms: compiled,
             channex: {
-                channex: {
                 apiKey: document.getElementById('chan-api-key')?.value.trim() || '',
                 propId: document.getElementById('chan-prop-id')?.value.trim() || ''
             },
