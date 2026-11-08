@@ -185,7 +185,7 @@ export const requestDelete = () => {
                     window.triggerAutoSync(s.checkIn, s.checkOut, types, null, id);
                 }
                 if (window.closeGuestModal) window.closeGuestModal();
-                showToast("Deleted", `Booking ${s?.bookId || id} removed.`);
+                if (window.showToast) window.showToast("Deleted", `Booking ${s?.bookId || id} removed.`);
             } catch (err) {
                 console.error("Delete Error:", err);
                 customAlert("Delete Error", err.message);
@@ -209,7 +209,7 @@ export const requestDuplicate = () => {
     clone.notes = (clone.notes ? clone.notes + '\n' : '') + `[DUPLICATED FROM PREVIOUS BOOKING ${s.bookId || s.id}]`;
 
     if (window.populateFolioForm) window.populateFolioForm(clone);
-    showToast("Duplicated", "Booking cloned as a new reservation. Assign dates, room, and save.");
+    customAlert("Duplicated", "Booking cloned as a new reservation. Assign dates, room, and save.");
 };
 
 // --------------------------------------------------------------------------
@@ -669,10 +669,13 @@ export const confirmEarlyCheckout = async (mode) => {
         if (window.renderExtraCharges) window.renderExtraCharges();
         if (window.calcFinancials) window.calcFinancials();
 
-        showToast(
-            "Early Checkout", 
-            `Departed on ${targetOut}. ${mode === 'refund' ? `Deducted ฿${math.unstayedAmt.toLocaleString()}` : `Itemized ฿${math.unstayedAmt.toLocaleString()} penalty fee`}.`
-        );
+        if (window.showToast) {
+            window.showToast(
+                "Early Checkout", 
+                `Departed on ${targetOut}. ${mode === 'refund' ? `Deducted ฿${math.unstayedAmt.toLocaleString()}` : `Itemized ฿${math.unstayedAmt.toLocaleString()} penalty fee`}.`
+            );
+        }
+        
     } catch (err) {
         console.error("Early Checkout Error:", err);
         customAlert("Error", "Error processing early checkout: " + err.message);
@@ -741,7 +744,9 @@ export const undoEarlyCheckout = async () => {
         if (window.renderExtraCharges) window.renderExtraCharges();
         if (window.calcFinancials) window.calcFinancials();
 
-        showToast("Restored", `Early checkout reverted. Stay restored to ${originalOut}.`);
+        if (window.showToast) {
+            window.showToast("Restored", `Early checkout reverted. Stay restored to ${originalOut}.`);
+        }
     } catch (err) {
         console.error("Undo Early Checkout Error:", err);
         customAlert("Error", "Error reverting early checkout: " + err.message);
