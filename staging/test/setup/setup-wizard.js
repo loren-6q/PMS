@@ -124,6 +124,8 @@ export async function loadPropertyData(propId) {
             window.paymentMethods = normalizePaymentMethods(Array.isArray(data.payments) ? data.payments : []);
             
             window.addonsList = Array.isArray(data.addons) && data.addons.length > 0 ? data.addons : null;
+            window.channexRooms = Array.isArray(data.channexRooms) ? data.channexRooms : [];
+            window.channexRatePlans = Array.isArray(data.channexRatePlans) ? data.channexRatePlans : [];
             window.channexMap = Array.isArray(data.channexMap) ? data.channexMap : [];
             window.channexRateMap = Array.isArray(data.channexRateMap) ? data.channexRateMap : [];
             window.pricingRules = data.pricingRules || {};
@@ -180,9 +182,12 @@ export async function savePropertyToDatabase(notify = true) {
             roomDefinitions: window.roomDefinitions || [],
             rooms: compiled,
             channex: {
+                channex: {
                 apiKey: document.getElementById('chan-api-key')?.value.trim() || '',
                 propId: document.getElementById('chan-prop-id')?.value.trim() || ''
             },
+            channexRooms: window.channexRooms || [],
+            channexRatePlans: window.channexRatePlans || [],
             channexMap: window.channexMap || [],
             channexRateMap: window.channexRateMap || [],
             pricingRules: window.pricingRules || {},
