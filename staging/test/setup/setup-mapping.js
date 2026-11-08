@@ -41,6 +41,24 @@ export async function fetchChannexData() {
     }
 }
 
+const AVAILABLE_CHANNELS = [
+    { val: "DEFAULT", label: "DEFAULT (General OTAs)" },
+    { val: "Booking.com", label: "Booking.com" },
+    { val: "Hostelworld", label: "Hostelworld" },
+    { val: "Agoda", label: "Agoda" },
+    { val: "Airbnb", label: "Airbnb" },
+    { val: "Expedia", label: "Expedia" },
+    { val: "Direct", label: "Direct (Website)" }
+];
+
+const AVAILABLE_POLICIES = [
+    { val: "non-ref", label: "Non-Refundable" },
+    { val: "ref", label: "Refundable (+%)" },
+    { val: "event-non-ref", label: "Event Non-Refundable" },
+    { val: "event-ref", label: "Event Refundable (+%)" },
+    { val: "ignore", label: "-- Ignore / Do Not Sync --" }
+];
+
 export function renderStep3UnifiedMapping() {
     const container = document.getElementById('unified-mapping-container');
     if (!container) return;
@@ -87,36 +105,77 @@ export function renderStep3UnifiedMapping() {
 
             if (matchingPlans.length > 0) {
                 ratePlansHtml = `
-                    <div class="mt-1 pt-2 border-t border-emerald-200">
-                        <div class="text-[9.5px] font-black uppercase text-emerald-900 tracking-wider mb-1 flex items-center justify-between">
-                            <span>Channex Rate Plan Mapping (${matchingPlans.length})</span>
-                            <span class="text-slate-400 font-mono text-[9px] lowercase">Room ID: ${currentMap.channexId.slice(0, 8)}...</span>
-                        </div>
-                        <div class="space-y-1">
-                            ${matchingPlans.map(plan => {
-                                const currentRateMap = window.channexRateMap.find(r => r.ratePlanId === plan.id);
-                                const title = plan.attributes?.title || plan.id;
-                                const isFlexTitle = /flex|ref/i.test(title);
-                                const assignedType = currentRateMap?.rateType || (isFlexTitle ? 'ref' : 'non-ref');
+                    <div class="mt-2 pt-2 border-t border-emerald-200 overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead class="bg-slate-100/70 border-b border-slate-200 text-slate-500 font-black text-[9px] uppercase tracking-wider">
+                                <tr>
+                                    <th class="py-1 px-2">RATE PLAN NAME</th>
+                                    <th class="py-1 px-2 w-48">SALES CHANNEL</th>
+                                    <th class="py-1 px-2 w-48">CANCELLATION POLICY</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                ${matchingPlans.map(plan => {
+                                    const title = plan.attributes?.title || plan.id;
+                                    let mapping = window.channexRateMap.find(r => r.ratePlanId === plan.id);
 
-                                return `
-                                    <div class="p-1.5 bg-white border border-emerald-200 rounded flex items-center justify-between gap-2 shadow-2xs">
-                                        <div class="flex items-center gap-1.5 truncate">
-                                            <span class="w-2 h-2 rounded-full ${assignedType === 'ref' ? 'bg-indigo-500' : (assignedType === 'non-ref' ? 'bg-emerald-500' : 'bg-slate-300')} shrink-0"></span>
-                                            <span class="font-bold text-slate-800 text-[11px] truncate">${title}</span>
-                                            <span class="font-mono text-[9px] text-slate-400 bg-slate-50 px-1 py-0.2 rounded border border-slate-200 shrink-0">${plan.id.slice(0, 8)}</span>
-                                        </div>
-                                        <div class="w-48 shrink-0">
-                                            <select class="table-input font-bold text-[10px]" onchange="window.updateRatePlanRole('${cat}', '${currentMap.channexId}', '${plan.id}', '${title.replace(/'/g, "\\'")}', this.value)">
-                                                <option value="non-ref" ${assignedType === 'non-ref' ? 'selected' : ''}>Standard Non-Ref (Base)</option>
-                                                <option value="ref" ${assignedType === 'ref' ? 'selected' : ''}>Flexible (+% Markup)</option>
-                                                <option value="ignore" ${assignedType === 'ignore' ? 'selected' : ''}>-- Ignore / Do Not Sync --</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
+                                    if (!mapping) {
+                                        const isBdc = /booking\.com|bdc/i.test(title);
+                                        const isFlex = /flex|ref/i.test(title);
+                                        const isEvt = /event|peak|pkg/i.test(title);
+
+                                        mapping = {
+                                            ratePlanId: plan.id,
+                                            pmsCategory: cat,
+                                            channexRoomId: currentMap.channexId,
+                                            ratePlanTitle: title,
+                                            channel: isBdc ? "Booking.com" : "DEFAULT",
+                                            policy: isEvt ? (isFlex ? "event-ref" : "event-non-ref") : (isFlex ? "ref" : "non-ref"),
+                                            isEvent: isEvt
+                                        };
+                                        window.channexRateMap.push(mapping);
+                                    }
+
+                                    const isEventPlan = mapping.policy?.startsWith('event');
+                                    const isFlexPolicy = mapping.policy === 'ref' || mapping.policy === 'event-ref';
+
+                                    let policySelectClass = 'table-input font-bold text-xs';
+                                    if (isEventPlan) {
+                                        policySelectClass += ' border-pink-400 text-pink-700 bg-pink-50/20';
+                                    } else if (isFlexPolicy) {
+                                        policySelectClass += ' border-emerald-400 text-emerald-700 bg-emerald-50/20';
+                                    }
+
+                                    return `
+                                        <tr class="hover:bg-slate-50/80 transition-colors">
+                                            <td class="py-1.5 px-2">
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span class="font-bold text-slate-800 text-xs">${title}</span>
+                                                    <span class="px-1.5 py-0.2 rounded font-black text-[9px] uppercase ${
+                                                        isEventPlan ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                                    }">${isEventPlan ? 'EVENT RATE' : 'STD RATE'}</span>
+                                                </div>
+                                                <div class="font-mono text-[9.5px] text-slate-400 mt-0.5">ID: ...${plan.id.slice(-8)}</div>
+                                            </td>
+                                            <td class="py-1.5 px-2">
+                                                <select class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'channel', this.value)">
+                                                    ${AVAILABLE_CHANNELS.map(ch => `
+                                                        <option value="${ch.val}" ${mapping.channel === ch.val ? 'selected' : ''}>${ch.label}</option>
+                                                    `).join('')}
+                                                </select>
+                                            </td>
+                                            <td class="py-1.5 px-2">
+                                                <select class="${policySelectClass} cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'policy', this.value)">
+                                                    ${AVAILABLE_POLICIES.map(pol => `
+                                                        <option value="${pol.val}" ${mapping.policy === pol.val ? 'selected' : ''}>${pol.label}</option>
+                                                    `).join('')}
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
                     </div>
                 `;
             } else {
@@ -247,25 +306,35 @@ export function executeCreateAndPushRatePlan() {
     customAlert("Rate Plans Bound", `Generated internal plan bindings for ${chks.length} category(ies).`);
 }
 
-export function updateRatePlanRole(pmsCategory, channexRoomId, ratePlanId, ratePlanTitle, rateType) {
+export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoomId, ratePlanTitle, field, value) {
     window.channexRateMap = window.channexRateMap || [];
-    const idx = window.channexRateMap.findIndex(r => r.ratePlanId === ratePlanId);
+    let mapping = window.channexRateMap.find(r => r.ratePlanId === ratePlanId);
 
-    if (rateType === 'ignore') {
+    if (value === 'ignore') {
+        const idx = window.channexRateMap.findIndex(r => r.ratePlanId === ratePlanId);
         if (idx > -1) window.channexRateMap.splice(idx, 1);
-    } else {
-        const entry = {
+        renderStep3UnifiedMapping();
+        return;
+    }
+
+    if (!mapping) {
+        mapping = {
+            ratePlanId,
             pmsCategory,
             channexRoomId,
-            ratePlanId,
             ratePlanTitle,
-            rateType
+            channel: 'DEFAULT',
+            policy: 'non-ref',
+            rateType: 'non-ref',
+            isEvent: false
         };
-        if (idx > -1) {
-            window.channexRateMap[idx] = entry;
-        } else {
-            window.channexRateMap.push(entry);
-        }
+        window.channexRateMap.push(mapping);
+    }
+
+    mapping[field] = value;
+    if (field === 'policy') {
+        mapping.rateType = value;
+        mapping.isEvent = value.startsWith('event');
     }
 
     renderStep3UnifiedMapping();
@@ -275,7 +344,7 @@ if (typeof window !== 'undefined') {
     window.fetchChannexData = fetchChannexData;
     window.renderStep3UnifiedMapping = renderStep3UnifiedMapping;
     window.updateRoomTypeMapping = updateRoomTypeMapping;
-    window.updateRatePlanRole = updateRatePlanRole;
+    window.updateRatePlanClassification = updateRatePlanClassification;
     window.openCreateRatePlanModal = openCreateRatePlanModal;
     window.closeCreateRatePlanModal = closeCreateRatePlanModal;
     window.applyRatePlanPreset = applyRatePlanPreset;
