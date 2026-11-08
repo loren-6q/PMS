@@ -262,11 +262,11 @@ export const render = () => {
     actStaff.forEach(s => {
         if (s.status === 'cancelled') return;
         const rList = getRooms(s).filter(Boolean);
+        const isUnassignedStatus = ['unconfirmed', 'charged', 'to-charge', 'tocharge', 'no-show', 'noshow', 'vol'].includes(s.status);
         const hasAssignedRoom = rList.length > 0 && rList[0] !== "" && rList.some(rName => hotelRooms.some(hr => matchesRoom(rName, hr.id)));
-        const isOccupying = isOccupyingBooking(s.status, hasAssignedRoom);
+        const isUnassigned = isUnassignedStatus || !hasAssignedRoom;
 
-        // Put into Unassigned tray if not actively occupying a physical room
-        if (!isOccupying && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC) {
+        if (isUnassigned && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC) {
             uConf.push(s);
         }
     });
@@ -320,9 +320,9 @@ export const render = () => {
             const { isDorm, baseRoom } = classifyRoomForCalendar(r);
 
             const isAssignedToThisRoom = s => {
+                if (['unconfirmed', 'charged', 'to-charge', 'tocharge', 'no-show', 'noshow', 'vol', 'cancelled'].includes(s.status)) return false;
                 const rList = getRooms(s);
-                const isAssigned = rList.some(rm => matchesRoom(rm, r.id));
-                return isAssigned && isOccupyingBooking(s.status, true) && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
+                return rList.some(rm => matchesRoom(rm, r.id)) && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
             };
 
             if (isDorm) {
