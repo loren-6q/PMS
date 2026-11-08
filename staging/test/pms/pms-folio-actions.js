@@ -3,40 +3,40 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { db, appId } from '../core/config.js';
+import { doc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { toCanonicalPropId } from '../core/properties.js';
+import { isOccupyingBooking } from '../core/occupancy.js';
+import { customAlert, showToast } from '../core/ui-dialogs.js';
+
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
 // --- State, Store & Context Resolvers ---
-const getDb = () => window.db;
-const getAppId = () => window.appId || 'hotel-pms-v1';
 const getStaff = () => window.staff || [];
 const getHotelRooms = () => window.hotelRooms || [];
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
-
-// --- Active Property ID Resolver ---
-const getPropId = () => {
-    const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
-    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
-};
+const getPropId = () => toCanonicalPropId(window.currentPropertyId || 'swims_resort');
 
 // --------------------------------------------------------------------------
 // 1. RESERVATION PERSISTENCE (SAVE / DELETE / DUPLICATE)
 // --------------------------------------------------------------------------
 
-// --- Master Save Reservation Engine ---
 export const saveBooking = async (keepOpen = false) => {
     if (window.currentUserRole === 'staff') return;
-    const sB = $('save-guest-btn') || $('save-btn');
+    const sB = $('save-booking-btn') || $('save-guest-btn') || $('save-btn');
     if (sB?.disabled) return;
     if (sB) { sB.disabled = true; sB.innerHTML = 'SAVING...'; }
 
     try {
-        const cI = $('check-in')?.value, cO = $('check-out')?.value;
-        if (cI >= cO) {
+        const cI = $('check-in')?.value;
+        const cO = $('check-out')?.value;
+        if (!cI || !cO || cI >= cO) {
             if (sB) { sB.disabled = false; sB.innerHTML = '<i data-lucide="check" size="14"></i> <span>SAVE</span>'; }
             if (window.lucide) window.lucide.createIcons();
-            return window.showAlert ? window.showAlert("INVALID DATES:\nDeparture must be after arrival.") : alert("Invalid Dates");
+            return customAlert("Invalid Dates", "Departure date must be after arrival date.");
         }
 
         const idI = $('guest-id');
@@ -47,60 +47,54 @@ export const saveBooking = async (keepOpen = false) => {
         const curProp = getPropId();
         const linkCodeVal = $('link-code')?.value.trim().toUpperCase() || '';
 
+        // Prevent Duplicate Booking IDs
         if (bId) {
             const dupe = getStaff().find(s => {
-                const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-                const isOcc = window.isOccupyingBooking ? window.isOccupyingBooking(s.status) : (s.status !== 'cancelled');
-                if (sProp !== curProp || s.bookId !== bId || s.id === id || !isOcc) return false;
-                
-                const parseFn = window.parseYMD || (str => Date.parse(str));
-                const isLinked = linkCodeVal && s.linkedId && linkCodeVal === s.linkedId;
-                const isContiguousOrSplit = parseFn(cI) >= parseFn(s.checkOut) || parseFn(cO) <= parseFn(s.checkIn);
-                if (isLinked || isContiguousOrSplit) return false;
+                if (toCanonicalPropId(s.property) !== curProp || s.bookId !== bId || s.id === id) return false;
+                if (!isOccupyingBooking(s.status, true)) return false;
 
-                return true;
+                const isLinked = linkCodeVal && s.linkedId && linkCodeVal === s.linkedId;
+                const isContiguousOrSplit = parseYMD(cI) >= parseYMD(s.checkOut) || parseYMD(cO) <= parseYMD(s.checkIn);
+                return !(isLinked || isContiguousOrSplit);
             });
+
             if (dupe) {
                 if (sB) { sB.disabled = false; sB.innerHTML = '<i data-lucide="check" size="14"></i> <span>SAVE</span>'; }
                 if (window.lucide) window.lucide.createIcons();
-                if (window.closeModal) window.closeModal('email-modal');
-                if (window.showAlert) {
-                    window.showAlert(`Duplicate Blocked:\nBooking ID ${bId} already exists in the system!\n\nOpening original record now...`);
-                    setTimeout(() => { if (window.closeAlert) window.closeAlert(); if (window.editStaff) window.editStaff(dupe.id); }, 2500);
-                }
+                customAlert("Duplicate Blocked", `Booking ID ${bId} already exists in the system!\n\nOpening original record now...`);
+                setTimeout(() => { if (window.editStaff) window.editStaff(dupe.id); }, 2000);
                 return;
             }
         }
 
         const rL = Array.from($$('.assigned-room-select') || []).map(sel => sel.value).filter(Boolean);
-        const stat = $('guest-status-hidden')?.value || 'future';
+        const rawStat = $('guest-status-hidden')?.value || 'future';
+        const stat = rawStat === 'noshow' ? 'no-show' : rawStat;
 
-        const isOccStatus = window.isOccupyingBooking ? window.isOccupyingBooking(stat) : (stat !== 'cancelled');
-
-        if (isOccStatus) {
+        // Room Overlap Collision Guard
+        if (isOccupyingBooking(stat, rL.length > 0)) {
             const occupiedNow = window.getOccupiedRooms ? window.getOccupiedRooms(cI, cO, id) : new Set();
-            const parseYMD = window.parseYMD || (s => Date.parse(s));
             for (let r of rL) {
                 if (occupiedNow.has(r)) {
-                    const conflictBooking = getStaff().find(s => {
-                        if (s.id === id) return false;
-                        const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-                        if (sProp !== curProp) return false;
-                        const isOcc = window.isOccupyingBooking ? window.isOccupyingBooking(s.status) : (s.status !== 'cancelled');
-                        if (!isOcc) return false;
+                    const conflict = getStaff().find(s => {
+                        if (s.id === id || toCanonicalPropId(s.property) !== curProp) return false;
+                        if (!isOccupyingBooking(s.status, true)) return false;
                         if (parseYMD(cI) >= parseYMD(s.checkOut) || parseYMD(cO) <= parseYMD(s.checkIn)) return false;
                         return getRooms(s).includes(r);
                     });
                     if (sB) { sB.disabled = false; sB.innerHTML = '<i data-lucide="check" size="14"></i> <span>SAVE</span>'; }
                     if (window.lucide) window.lucide.createIcons();
-                    return window.showAlert ? window.showAlert(`ROOM OVERLAP ERROR:\n\nRoom ${r} is already assigned to ${conflictBooking?.firstName || ''} ${conflictBooking?.lastName || 'another guest'} during these dates.`) : alert(`Room ${r} is occupied.`);
+                    return customAlert("Room Overlap", `Room ${r} is already assigned to ${conflict?.firstName || ''} ${conflict?.lastName || 'another guest'} during these dates.`);
                 }
             }
         }
 
         const ext = getStaff().find(s => s.id === id);
         const now = new Date().toISOString();
-        const userEmail = window.currentUserEmail || 'admin';
+        const userEmail = (window.currentUserEmail || 'admin').toUpperCase();
+
+        const refState = parseInt($('refund-btn')?.dataset?.state || 0, 10);
+        const refundabilityVal = refState === 1 ? 'non-ref' : (refState === 2 ? 'ref' : '');
 
         const ent = {
             id,
@@ -134,7 +128,7 @@ export const saveBooking = async (keepOpen = false) => {
             emailConfirm: parseInt($('email-confirm-btn')?.dataset?.state || 0, 10),
             emailPrePost: parseInt($('email-prepost-btn')?.dataset?.state || 0, 10) > 0 ? (parseInt($('email-prepost-btn')?.dataset?.state, 10) === 1 ? 'sent' : 'confirmed') : false,
             emailSpecial: parseInt($('email-special-btn')?.dataset?.state || 0, 10) === 1,
-            refundability: parseInt($('refund-btn')?.dataset?.state || 0, 10) === 1 ? 'non-ref' : (parseInt($('refund-btn')?.dataset?.state || 0, 10) === 2 ? 'ref' : 'unknown'),
+            refundability: refundabilityVal,
             upgrade: parseInt($('upgrade-btn')?.dataset?.state || 0, 10) > 0 ? (parseInt($('upgrade-btn')?.dataset?.state, 10) === 1 ? 'free' : 'paid') : 'none',
             rating: parseInt($('rating-btn')?.dataset?.state || 0, 10) > 0 ? (parseInt($('rating-btn')?.dataset?.state, 10) === 1 ? 'good' : 'bad') : 'none',
             extended: parseInt($('ext-btn')?.dataset?.state || 0, 10) === 1,
@@ -149,23 +143,11 @@ export const saveBooking = async (keepOpen = false) => {
         const diff = window.generateAuditDiff ? window.generateAuditDiff(ext, ent) : "Saved.";
         ent.auditLog.push({ ts: now, user: userEmail, msg: diff });
 
-        const db = getDb();
-        const appId = getAppId();
-        
-        let fsModule = window.fs;
-        if (!fsModule || !fsModule.setDoc) {
-            fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-        }
-        const { doc, setDoc } = fsModule;
-
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), ent);
 
         const hotelRooms = getHotelRooms();
         const bookingRoomTypes = Array.from(new Set([
-            ...rL.map(rId => {
-                const hr = hotelRooms.find(hr => hr.id === rId);
-                return hr ? hr.type : null;
-            }).filter(Boolean),
+            ...rL.map(rId => hotelRooms.find(hr => hr.id === rId)?.type).filter(Boolean),
             $('booked-type')?.value,
             ext?.bookedType
         ])).filter(Boolean);
@@ -177,51 +159,41 @@ export const saveBooking = async (keepOpen = false) => {
         if (!keepOpen && window.closeGuestModal) window.closeGuestModal();
     } catch (err) {
         console.error("Save Error:", err);
-        if (window.showAlert) window.showAlert("Save encountered an error. Please verify your connection.\n\nError: " + err.message);
+        customAlert("Save Error", "Save encountered an error. Please verify your connection.\n\n" + err.message);
     } finally {
         if (sB) { sB.disabled = false; sB.innerHTML = '<i data-lucide="check" size="14"></i> <span>SAVE</span>'; }
         if (window.lucide) window.lucide.createIcons();
     }
 };
 
-// --- Permanently Delete Booking Record ---
 export const requestDelete = () => {
     const id = $('guest-id')?.value;
     if (!id) return;
-    const curProp = getPropId();
     const s = getStaff().find(x => x.id === id);
     const name = s ? `${s.firstName || ''} ${s.lastName || ''}`.trim() : 'Guest';
 
-    const performDelete = async () => {
-        const db = getDb();
-        const appId = getAppId();
-        let fsModule = window.fs;
-        if (!fsModule || !fsModule.deleteDoc) {
-            fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-        }
-        const { doc, deleteDoc } = fsModule;
-        try {
-            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id));
-            if (window.triggerAutoSync && s) {
-                const hotelRooms = getHotelRooms();
-                const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
-                window.triggerAutoSync(s.checkIn, s.checkOut, types, null, id);
+    customAlert(
+        "Delete Booking",
+        `Permanently delete booking for ${name} (${s?.bookId || id})? This cannot be undone.`,
+        true,
+        async () => {
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id));
+                if (window.triggerAutoSync && s) {
+                    const hotelRooms = getHotelRooms();
+                    const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
+                    window.triggerAutoSync(s.checkIn, s.checkOut, types, null, id);
+                }
+                if (window.closeGuestModal) window.closeGuestModal();
+                showToast("Deleted", `Booking ${s?.bookId || id} removed.`);
+            } catch (err) {
+                console.error("Delete Error:", err);
+                customAlert("Delete Error", err.message);
             }
-            if (window.closeGuestModal) window.closeGuestModal();
-        } catch (err) {
-            console.error("Delete Error:", err);
-            if (window.showAlert) window.showAlert("Delete Error: " + err.message);
         }
-    };
-
-    if (window.showAlert) {
-        window.showAlert(`Permanently delete booking for ${name} (${s?.bookId || id})?`, true, performDelete);
-    } else {
-        performDelete();
-    }
+    );
 };
 
-// --- Clone Booking Details into New Reservation Form ---
 export const requestDuplicate = () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -236,15 +208,14 @@ export const requestDuplicate = () => {
     clone.extraCharges = [];
     clone.notes = (clone.notes ? clone.notes + '\n' : '') + `[DUPLICATED FROM PREVIOUS BOOKING ${s.bookId || s.id}]`;
 
-    if (window.populateStaffForm) window.populateStaffForm(clone);
-    if (window.showAlert) window.showAlert("Booking details duplicated as a new reservation.\nPlease assign dates, room, and save.");
+    if (window.populateFolioForm) window.populateFolioForm(clone);
+    showToast("Duplicated", "Booking cloned as a new reservation. Assign dates, room, and save.");
 };
 
 // --------------------------------------------------------------------------
 // 2. STAY SEGMENTATION & SPLIT ACTIONS
 // --------------------------------------------------------------------------
 
-// --- Populate Room Options for Split Destination Leg ---
 export const populateSplitRoomDropdown = (splitStart, splitEnd, excludeId) => {
     const container = $('split-room-dropdown-container');
     if (!container) return;
@@ -271,18 +242,15 @@ export const populateSplitRoomDropdown = (splitStart, splitEnd, excludeId) => {
     container.innerHTML = optHtml;
 };
 
-// --- Open Stay Split Configuration Modal ---
 export const requestSplit = () => {
     const id = $('guest-id')?.value;
     const cI = $('check-in')?.value;
     const cO = $('check-out')?.value;
     if (!id || !cI || !cO) return;
 
-    const s = getStaff().find(x => x.id === id);
-    const parseFn = window.parseYMD || (str => Date.parse(str));
-    const ms = parseFn(cO) - parseFn(cI);
+    const ms = parseYMD(cO) - parseYMD(cI);
     const nights = Math.round(ms / 86400000);
-    if (nights <= 1) return window.showAlert ? window.showAlert("Cannot split a 1-night stay.") : alert("Cannot split 1-night stay.");
+    if (nights <= 1) return customAlert("Cannot Split", "Cannot split a 1-night stay.");
 
     const dIn = new Date(cI + "T12:00:00Z");
     dIn.setUTCDate(dIn.getUTCDate() + Math.floor(nights / 2));
@@ -305,7 +273,6 @@ export const requestSplit = () => {
     }
 };
 
-// --- Execute Stay Split & Generate Linked Leg Record ---
 export const confirmSplit = async () => {
     const id = $('guest-id')?.value;
     const splitDate = $('split-date')?.value;
@@ -315,26 +282,17 @@ export const confirmSplit = async () => {
     const s = getStaff().find(x => x.id === id);
     if (!s) return;
     if (splitDate <= s.checkIn || splitDate >= s.checkOut) {
-        return window.showAlert ? window.showAlert("Split date must be between Check-in and Check-out.") : alert("Invalid split date");
+        return customAlert("Invalid Split Date", "Split date must be between Check-in and Check-out.");
     }
 
-    const parseFn = window.parseYMD || (str => Date.parse(str));
-    const totalNights = Math.max(1, Math.round((parseFn(s.checkOut) - parseFn(s.checkIn)) / 86400000));
-    const leg1Nights = Math.max(1, Math.round((parseFn(splitDate) - parseFn(s.checkIn)) / 86400000));
+    const totalNights = Math.max(1, Math.round((parseYMD(s.checkOut) - parseYMD(s.checkIn)) / 86400000));
+    const leg1Nights = Math.max(1, Math.round((parseYMD(splitDate) - parseYMD(s.checkIn)) / 86400000));
     const leg2Nights = Math.max(1, totalNights - leg1Nights);
 
     const leg1Price = Number(((s.totalPrice / totalNights) * leg1Nights).toFixed(2));
     const leg2Price = Number((s.totalPrice - leg1Price).toFixed(2));
 
     const linkCode = s.linkedId || `LK-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-
-    const db = getDb();
-    const appId = getAppId();
-    let fsModule = window.fs;
-    if (!fsModule || !fsModule.setDoc) {
-        fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-    }
-    const { doc, setDoc, updateDoc } = fsModule;
     const newLegId = Math.random().toString(36).substr(2, 9);
     const curProp = getPropId();
 
@@ -383,10 +341,10 @@ export const confirmSplit = async () => {
 
         if (window.closeModal) window.closeModal('split-modal');
         if (window.closeGuestModal) window.closeGuestModal();
-        if (window.showAlert) window.showAlert(`Booking split successfully!\n\nLeg 1: ${s.checkIn} → ${splitDate}\nLeg 2: ${splitDate} → ${s.checkOut} (Room: ${leg2Room || 'Same'})\n\nLinked with code: ${linkCode}`);
+        customAlert("Split Complete", `Booking split successfully!\n\nLeg 1: ${s.checkIn} → ${splitDate}\nLeg 2: ${splitDate} → ${s.checkOut} (Room: ${leg2Room || 'Same'})\n\nLinked with code: ${linkCode}`);
     } catch (err) {
         console.error("Split Error:", err);
-        if (window.showAlert) window.showAlert("Error splitting booking: " + err.message);
+        customAlert("Split Error", err.message);
     }
 };
 
@@ -394,7 +352,6 @@ export const confirmSplit = async () => {
 // 3. CONTIGUOUS RESERVATION MERGE ACTIONS
 // --------------------------------------------------------------------------
 
-// --- Search & Display Adjacent Bookings to Merge ---
 export const requestMerge = () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -402,18 +359,15 @@ export const requestMerge = () => {
     if (!cur) return;
 
     const curProp = getPropId();
-    const parseFn = window.parseYMD || (str => Date.parse(str));
-    const curIn = parseFn(cur.checkIn);
-    const curOut = parseFn(cur.checkOut);
+    const curIn = parseYMD(cur.checkIn);
+    const curOut = parseYMD(cur.checkOut);
 
     const candidates = getStaff().filter(s => {
-        if (s.id === id) return false;
-        const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-        if (sProp !== curProp) return false;
-        if (s.status === 'cancelled' || s.status === 'noshow') return false;
+        if (s.id === id || toCanonicalPropId(s.property) !== curProp) return false;
+        if (!isOccupyingBooking(s.status, true)) return false;
 
-        const sIn = parseFn(s.checkIn);
-        const sOut = parseFn(s.checkOut);
+        const sIn = parseYMD(s.checkIn);
+        const sOut = parseYMD(s.checkOut);
         const isAdjacentBefore = Math.abs(sOut - curIn) <= (2 * 86400000);
         const isAdjacentAfter = Math.abs(sIn - curOut) <= (2 * 86400000);
         const sharesLink = cur.linkedId && s.linkedId && cur.linkedId === s.linkedId;
@@ -423,7 +377,7 @@ export const requestMerge = () => {
     });
 
     if (candidates.length === 0) {
-        return window.showAlert ? window.showAlert("No adjacent or matching bookings found nearby to merge with.") : alert("No candidates to merge");
+        return customAlert("No Bookings Found", "No adjacent or matching bookings found nearby to merge with.");
     }
 
     candidates.sort((a, b) => {
@@ -432,8 +386,8 @@ export const requestMerge = () => {
         if (b.linkedId && b.linkedId === cur.linkedId) scoreB += 50;
         if (a.lastName && a.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreA += 30;
         if (b.lastName && b.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreA += 30;
-        if (parseFn(a.checkOut) === curIn || parseFn(a.checkIn) === curOut) scoreA += 40;
-        if (parseFn(b.checkOut) === curIn || parseFn(b.checkIn) === curOut) scoreB += 40;
+        if (parseYMD(a.checkOut) === curIn || parseYMD(a.checkIn) === curOut) scoreA += 40;
+        if (parseYMD(b.checkOut) === curIn || parseYMD(b.checkIn) === curOut) scoreB += 40;
         return scoreB - scoreA;
     });
 
@@ -453,7 +407,6 @@ export const requestMerge = () => {
     }
 };
 
-// --- Execute Contiguous Merge & Absorb Target Stay ---
 export const confirmMerge = async () => {
     const id = $('guest-id')?.value;
     const targetId = $('merge-target')?.value;
@@ -476,14 +429,6 @@ export const confirmMerge = async () => {
                       `• Absorbed Room: ${(absorbed.rooms || []).join(',') || absorbed.room}\n` +
                       `• Absorbed Total: ฿${absorbed.totalPrice || 0}\n` +
                       (absorbed.notes ? `• Absorbed Notes: ${absorbed.notes}` : '');
-
-    const db = getDb();
-    const appId = getAppId();
-    let fsModule = window.fs;
-    if (!fsModule || !fsModule.updateDoc) {
-        fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-    }
-    const { doc, updateDoc, deleteDoc } = fsModule;
 
     try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
@@ -508,10 +453,10 @@ export const confirmMerge = async () => {
 
         if (window.closeModal) window.closeModal('merge-modal');
         if (window.closeGuestModal) window.closeGuestModal();
-        if (window.showAlert) window.showAlert(`Bookings successfully merged into ${primary.bookId || id}!\n\nNew Stay: ${earliestIn} to ${latestOut}\nTotal: ฿${combinedTotal}`);
+        customAlert("Merge Complete", `Bookings successfully merged into ${primary.bookId || id}!\n\nNew Stay: ${earliestIn} to ${latestOut}\nTotal: ฿${combinedTotal}`);
     } catch (err) {
         console.error("Merge Error:", err);
-        if (window.showAlert) window.showAlert("Error merging bookings: " + err.message);
+        customAlert("Merge Error", err.message);
     }
 };
 
@@ -521,15 +466,7 @@ export const confirmMerge = async () => {
 
 let currentEcoBooking = null;
 
-// --- Helper: Pure Calculation of Stayed vs Unstayed Amounts ---
 function calculateStayMath(booking, targetOutDate) {
-    const parseFn = window.parseYMD || (str => {
-        if (!str || typeof str !== 'string') return 0;
-        const p = str.split('-');
-        return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
-    });
-
-    // If booking was already checked out early, recover the true original checkout and total
     const originalOut = (booking.earlyCheckout && booking.earlyCheckout.originalCheckOut) 
         ? booking.earlyCheckout.originalCheckOut 
         : booking.checkOut;
@@ -538,20 +475,18 @@ function calculateStayMath(booking, targetOutDate) {
         ? booking.earlyCheckout.originalTotalPrice
         : (parseFloat(booking.totalPrice) || 0);
 
-    const inMs = parseFn(booking.checkIn);
-    const origOutMs = parseFn(originalOut);
-    const targetOutMs = parseFn(targetOutDate);
+    const inMs = parseYMD(booking.checkIn);
+    const origOutMs = parseYMD(originalOut);
+    const targetOutMs = parseYMD(targetOutDate);
 
     const totalNights = Math.max(1, Math.round((origOutMs - inMs) / 86400000));
     const stayedNights = Math.max(0, Math.round((targetOutMs - inMs) / 86400000));
     const unstayedNights = Math.max(0, totalNights - stayedNights);
 
-    // Sum any existing non-penalty add-on charges (e.g. laundry, tour, ferry)
     const existingOtherCharges = (Array.isArray(booking.extraCharges) ? booking.extraCharges : [])
         .filter(c => !c.desc?.includes('EARLY DEPARTURE PENALTY'))
         .reduce((sum, c) => sum + (parseFloat(c.amt || c.amount || 0) || 0), 0);
 
-    // True base room portion of the original total
     const originalRoomPrice = Math.max(0, originalTotal - existingOtherCharges);
 
     let stayedAmt = 0;
@@ -587,7 +522,6 @@ function calculateStayMath(booking, targetOutDate) {
     };
 }
 
-// --- Open Early Checkout Modal ---
 export const requestEarlyCheckout = () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -596,10 +530,9 @@ export const requestEarlyCheckout = () => {
 
     currentEcoBooking = s;
 
-    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
+    const todayStr = getLocalYMD(new Date());
     const originalOut = (s.earlyCheckout && s.earlyCheckout.originalCheckOut) ? s.earlyCheckout.originalCheckOut : s.checkOut;
 
-    // Populate guest overview card
     if ($('eco-guest-name')) $('eco-guest-name').innerText = `${s.firstName || ''} ${s.lastName || 'GUEST'}`.trim();
     if ($('eco-booking-id')) $('eco-booking-id').innerText = s.bookId || s.id;
     if ($('eco-stay-dates')) $('eco-stay-dates').innerText = `${s.checkIn} → ${originalOut}`;
@@ -607,7 +540,6 @@ export const requestEarlyCheckout = () => {
     const origTotal = (s.earlyCheckout && s.earlyCheckout.originalTotalPrice !== undefined) ? s.earlyCheckout.originalTotalPrice : (parseFloat(s.totalPrice) || 0);
     if ($('eco-orig-total')) $('eco-orig-total').innerText = `฿${origTotal.toLocaleString()}`;
 
-    // Set date bounds
     const dateInput = $('eco-date');
     if (dateInput) {
         dateInput.min = s.checkIn;
@@ -615,7 +547,6 @@ export const requestEarlyCheckout = () => {
         maxDate.setUTCDate(maxDate.getUTCDate() - 1);
         dateInput.max = maxDate.toISOString().split('T')[0];
 
-        // Default to today if within stay bounds; else checkIn + 1 day
         if (todayStr >= s.checkIn && todayStr < originalOut) {
             dateInput.value = todayStr;
         } else {
@@ -635,7 +566,6 @@ export const requestEarlyCheckout = () => {
     if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
 };
 
-// --- Recalculate Live Stayed vs Unstayed Breakdown in Modal ---
 export const recalcEarlyCheckoutModal = () => {
     if (!currentEcoBooking) return;
     const targetOut = $('eco-date')?.value;
@@ -652,7 +582,6 @@ export const recalcEarlyCheckoutModal = () => {
     if ($('eco-btn-penalty-sub')) $('eco-btn-penalty-sub').innerText = `Itemize ฿${math.unstayedAmt.toLocaleString()} fee`;
 };
 
-// --- Execute Early Checkout (Refund or Penalty) ---
 export const confirmEarlyCheckout = async (mode) => {
     if (!currentEcoBooking) return;
     const targetOut = $('eco-date')?.value;
@@ -660,21 +589,9 @@ export const confirmEarlyCheckout = async (mode) => {
 
     const id = currentEcoBooking.id;
     const s = getStaff().find(x => x.id === id) || currentEcoBooking;
-
-    // Recalculate live to guarantee zero desync from user input
     const math = calculateStayMath(s, targetOut);
+    const todayStr = getLocalYMD(new Date());
 
-    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
-    const db = getDb();
-    const appId = getAppId();
-
-    let fsModule = window.fs;
-    if (!fsModule || !fsModule.updateDoc) {
-        fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-    }
-    const { doc, updateDoc } = fsModule;
-
-    // Preserve non-penalty add-ons; remove any previous early departure penalty
     let extraCharges = (Array.isArray(s.extraCharges) ? [...s.extraCharges] : [])
         .filter(c => !c.desc?.includes('EARLY DEPARTURE PENALTY'));
 
@@ -682,11 +599,8 @@ export const confirmEarlyCheckout = async (mode) => {
     let penaltyId = null;
 
     if (mode === 'refund') {
-        // Mode A: Total reduced strictly to Stayed Room Portion + Other Add-ons
         newTotalPrice = Number((math.stayedAmt + math.existingOtherCharges).toFixed(2));
     } else {
-        // Mode B: Total remains FULL Grand Total.
-        // Stayed Room Portion + Added Penalty Line Item + Other Add-ons = Original Total
         penaltyId = 'ec_penalty_' + Date.now();
         extraCharges.push({
             id: penaltyId,
@@ -721,7 +635,7 @@ export const confirmEarlyCheckout = async (mode) => {
     try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
             checkOut: targetOut,
-            status: 'early',
+            status: 'early out',
             totalPrice: newTotalPrice,
             extraCharges: extraCharges,
             earlyCheckout: earlySnapshot,
@@ -729,16 +643,14 @@ export const confirmEarlyCheckout = async (mode) => {
             lastEditedAt: new Date().toISOString()
         });
 
-        // Trigger Channex auto-sync to release unoccupied dates
         if (window.triggerAutoSync) {
             const hotelRooms = getHotelRooms();
             const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
             window.triggerAutoSync(targetOut, math.originalOut, types);
         }
 
-        // Synchronize in-memory object and window.staff immediately
         s.checkOut = targetOut;
-        s.status = 'early';
+        s.status = 'early out';
         s.totalPrice = newTotalPrice;
         s.extraCharges = extraCharges;
         s.earlyCheckout = earlySnapshot;
@@ -751,26 +663,22 @@ export const confirmEarlyCheckout = async (mode) => {
             staffList[staffIdx] = { ...s };
         }
 
-        // Close early checkout modal and immediately refresh folio form & ledger
         if (window.closeModal) window.closeModal('early-checkout-modal');
         if (window.openGuestModal) window.openGuestModal(s);
         if ($('guest-notes')) $('guest-notes').value = updatedNotes;
         if (window.renderExtraCharges) window.renderExtraCharges();
         if (window.calcFinancials) window.calcFinancials();
 
-        if (window.showToast) {
-            window.showToast(
-                "Early Checkout", 
-                `Departed on ${targetOut}. ${mode === 'refund' ? `Deducted ฿${math.unstayedAmt.toLocaleString()}` : `Itemized ฿${math.unstayedAmt.toLocaleString()} penalty fee`}.`
-            );
-        }
+        showToast(
+            "Early Checkout", 
+            `Departed on ${targetOut}. ${mode === 'refund' ? `Deducted ฿${math.unstayedAmt.toLocaleString()}` : `Itemized ฿${math.unstayedAmt.toLocaleString()} penalty fee`}.`
+        );
     } catch (err) {
         console.error("Early Checkout Error:", err);
-        if (window.customAlert) window.customAlert("Error", "Error processing early checkout: " + err.message);
+        customAlert("Error", "Error processing early checkout: " + err.message);
     }
 };
 
-// --- Revert Early Checkout (With Collision Check & Penalty Removal) ---
 export const undoEarlyCheckout = async () => {
     const id = $('guest-id')?.value;
     if (!id) return;
@@ -782,24 +690,15 @@ export const undoEarlyCheckout = async () => {
     const penaltyId = s.earlyCheckout.penaltyId;
     const rL = s.rooms || [s.room];
 
-    // Collision Check: Verify rooms are not booked by another guest across restored dates
     const occ = window.getOccupiedRooms ? window.getOccupiedRooms(s.checkOut, originalOut, id) : new Set();
     for (let r of rL) {
         if (occ.has(r)) {
-            return window.customAlert ? window.customAlert("Collision Detected", `Cannot revert early checkout. Room ${r} is already occupied between ${s.checkOut} and ${originalOut}.`) : null;
+            return customAlert("Collision Detected", `Cannot revert early checkout. Room ${r} is already occupied between ${s.checkOut} and ${originalOut}.`);
         }
     }
 
-    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0];
-    const db = getDb();
-    const appId = getAppId();
-    let fsModule = window.fs;
-    if (!fsModule || !fsModule.updateDoc) {
-        fsModule = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-    }
-    const { doc, updateDoc } = fsModule;
+    const todayStr = getLocalYMD(new Date());
 
-    // Purge penalty line items
     let extraCharges = (Array.isArray(s.extraCharges) ? [...s.extraCharges] : [])
         .filter(c => c.id !== penaltyId && !c.desc?.includes('EARLY DEPARTURE PENALTY'));
 
@@ -817,14 +716,12 @@ export const undoEarlyCheckout = async () => {
             lastEditedAt: new Date().toISOString()
         });
 
-        // Trigger Channex auto-sync to re-block inventory
         if (window.triggerAutoSync) {
             const hotelRooms = getHotelRooms();
             const types = (s.rooms || []).map(r => hotelRooms.find(hr => hr.id === r)?.type).filter(Boolean);
             window.triggerAutoSync(s.checkOut, originalOut, types);
         }
 
-        // Synchronize in-memory objects immediately
         s.checkOut = originalOut;
         s.status = 'here';
         s.totalPrice = originalTotal;
@@ -839,18 +736,15 @@ export const undoEarlyCheckout = async () => {
             staffList[staffIdx] = { ...s };
         }
 
-        // Immediately refresh active folio form & ledger
         if (window.openGuestModal) window.openGuestModal(s);
         if ($('guest-notes')) $('guest-notes').value = updatedNotes;
         if (window.renderExtraCharges) window.renderExtraCharges();
         if (window.calcFinancials) window.calcFinancials();
 
-        if (window.showToast) {
-            window.showToast("Restored", `Early checkout reverted. Stay restored to ${originalOut}.`);
-        }
+        showToast("Restored", `Early checkout reverted. Stay restored to ${originalOut}.`);
     } catch (err) {
         console.error("Undo Early Checkout Error:", err);
-        if (window.customAlert) window.customAlert("Error", "Error reverting early checkout: " + err.message);
+        customAlert("Error", "Error reverting early checkout: " + err.message);
     }
 };
 
