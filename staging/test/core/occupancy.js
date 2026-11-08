@@ -42,7 +42,10 @@ export function isOccupyingBooking(status, hasAssignedRoom = false) {
 
 // --- 3. Pure Direct Status Styling Engine ---
 export function getStatusObj(status) {
-    const raw = String(status || 'future').trim().toLowerCase();
+    let raw = String(status || 'future').trim().toLowerCase();
+    if (raw === 'early') raw = 'early out';
+    if (raw === 'noshow') raw = 'no-show';
+    if (raw === 'tocharge') raw = 'to-charge';
     return STATUS_CYCLE.find(s => s.val === raw) || STATUS_CYCLE[1];
 }
 
