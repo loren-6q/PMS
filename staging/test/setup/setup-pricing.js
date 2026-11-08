@@ -118,7 +118,7 @@ export function renderChannelRulesList() {
     }
     const channels = window.pricingRules.channels;
 
-    container.innerHTML = channels.map((ch, idx) => ``
+    container.innerHTML = channels.map((ch, idx) => `
         <div class="flex items-center justify-between p-1.5 bg-white border border-amber-200 rounded text-xs">
             <span class="font-black text-slate-800">${ch.name}</span>
             <div class="flex items-center gap-1.5">
