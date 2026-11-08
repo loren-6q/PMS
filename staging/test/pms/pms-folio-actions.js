@@ -8,7 +8,7 @@ import { doc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/fireb
 import { parseYMD, getLocalYMD } from '../core/dates.js';
 import { toCanonicalPropId } from '../core/properties.js';
 import { isOccupyingBooking } from '../core/occupancy.js';
-import { customAlert, showToast } from '../core/ui-dialogs.js';
+import { customAlert } from '../core/ui-dialogs.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
