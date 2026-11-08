@@ -3,31 +3,16 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { parseYMD, getLocalYMD } from '../core/dates.js';
+
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
-
-// --- Fallback Branding Asset Constant ---
-const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
-
-// --- Date Parsing & Conversion Resolvers ---
-const getParseYMD = () => window.parseYMD || (str => {
-    if (!str || typeof str !== 'string') return 0;
-    const p = str.split('-');
-    return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
-});
-
-const getLocalYMD = () => window.getLocalYMD || (d => {
-    if (!d) d = new Date();
-    const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
-    return o.toISOString().split('T')[0];
-});
 
 // --------------------------------------------------------------------------
 // 1. FINANCIAL CALCULATIONS, NET OVERRIDE & CREDIT CARD STATUS
 // --------------------------------------------------------------------------
 
-// --- Toggle Bad Credit Card Flag & Visual Badge ---
 export const toggleBadCC = () => {
     const b = $('bad-cc-box');
     if (!b) return;
@@ -38,13 +23,12 @@ export const toggleBadCC = () => {
         b.classList.remove('border-red-600');
     } else {
         b.dataset.bad = 'true';
-        b.innerHTML = '<span class="text-white text-[10px] font-black">X</span>';
+        b.innerHTML = '<span class="text-white text-[10px] font-black leading-none">✕</span>';
         b.classList.replace('border-slate-300', 'bg-red-500');
         b.classList.add('border-red-600');
     }
 };
 
-// --- Recalculate Folio Balance, Payments Due & Net Prices ---
 export const calcFinancials = () => {
     const tot = Number($('total-price')?.value) || 0;
     let pd = 0, cD = 0;
@@ -59,7 +43,7 @@ export const calcFinancials = () => {
     const due = Number((tot - pd).toFixed(2));
     const dC = $('display-due');
     const tC = $('total-price')?.parentElement;
-    const pax = parseInt($('pax-count')?.value) || 1;
+    const pax = parseInt($('pax-count')?.value, 10) || 1;
 
     if (dC) dC.innerText = `฿${due.toFixed(2)}`;
     const dispPaid = $('display-paid');
@@ -92,7 +76,6 @@ export const calcFinancials = () => {
     }
 };
 
-// --- Flag Net Revenue as Manually Overridden ---
 export const overrideNet = () => {
     const nEl = $('net-price');
     if (nEl) nEl.dataset.override = 'true';
@@ -104,15 +87,13 @@ export const overrideNet = () => {
 
 let pCount = 0;
 
-// --- Append New Payment Transaction Row ---
 export const addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
     const id = `pay-${pCount++}`;
     const div = document.createElement('div');
     div.className = `payment-row flex gap-1 items-center bg-white p-1 rounded border border-slate-200 transition-opacity ${loc ? 'opacity-70' : ''}`;
     div.id = id;
 
-    const getYmdFn = getLocalYMD();
-    if (!d) d = getYmdFn(new Date());
+    if (!d) d = getLocalYMD(new Date());
 
     if (a === '') {
         const currentTot = Number($('total-price')?.value) || 0;
@@ -140,7 +121,6 @@ export const addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-// --- Unlock Saved Payment Row for Editing ---
 export const unlockPayment = id => {
     const r = $(id);
     if (!r) return;
@@ -150,10 +130,9 @@ export const unlockPayment = id => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-// --- Remove Payment Transaction Row ---
 export const removePaymentRow = id => {
-    if (window.showAlert) {
-        window.showAlert("Delete this payment entry?", true, () => {
+    if (window.customAlert) {
+        window.customAlert("Delete Payment", "Delete this payment entry?", true, () => {
             const el = $(id);
             if (el) el.remove();
             calcFinancials();
@@ -169,15 +148,13 @@ export const removePaymentRow = id => {
 // 3. DYNAMIC FOLIO ADD-ONS & EXTRA CHARGES
 // --------------------------------------------------------------------------
 
-// --- Open Extra Charge Ingestion Modal ---
 export const openChargeModal = () => {
     const dEl = $('charge-desc');
     const aEl = $('charge-amount');
     const dtEl = $('charge-date');
     if (dEl) dEl.value = '';
     if (aEl) aEl.value = '';
-    const getYmdFn = getLocalYMD();
-    if (dtEl) dtEl.value = $('check-in')?.value || getYmdFn(new Date());
+    if (dtEl) dtEl.value = $('check-in')?.value || getLocalYMD(new Date());
 
     const presetsWrap = $('charge-presets-container') || $('charge-modal')?.querySelector('.preset-pill')?.parentElement;
     if (presetsWrap) {
@@ -207,7 +184,6 @@ export const openChargeModal = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-// --- Populate Modal from Add-on Preset Pill ---
 export const applyChargePreset = (desc, amt) => {
     const dEl = $('charge-desc');
     const aEl = $('charge-amount');
@@ -218,15 +194,13 @@ export const applyChargePreset = (desc, amt) => {
     }
 };
 
-// --- Confirm & Apply Extra Charge to Folio ---
 export const confirmAddCharge = () => {
     const desc = $('charge-desc')?.value.trim();
     const amt = parseFloat($('charge-amount')?.value);
-    const getYmdFn = getLocalYMD();
-    const date = $('charge-date')?.value || getYmdFn(new Date());
+    const date = $('charge-date')?.value || getLocalYMD(new Date());
 
-    if (!desc) return window.showAlert ? window.showAlert("Please enter a description for the charge.") : null;
-    if (isNaN(amt) || amt <= 0) return window.showAlert ? window.showAlert("Please enter a valid charge amount.") : null;
+    if (!desc) return window.customAlert ? window.customAlert("Missing Info", "Please enter a description for the charge.") : null;
+    if (isNaN(amt) || amt <= 0) return window.customAlert ? window.customAlert("Invalid Amount", "Please enter a valid charge amount.") : null;
 
     const chargeObj = {
         id: 'chg_' + Math.random().toString(36).substr(2, 9),
@@ -247,7 +221,6 @@ export const confirmAddCharge = () => {
     if (window.closeModal) window.closeModal('charge-modal');
 };
 
-// --- Remove Extra Charge Entry from Folio ---
 export const removeCharge = chargeId => {
     if (!Array.isArray(window.activeExtraCharges)) return;
     const idx = window.activeExtraCharges.findIndex(c => c.id === chargeId);
@@ -261,7 +234,6 @@ export const removeCharge = chargeId => {
     }
 };
 
-// --- Render Extra Charges List in Folio Modal ---
 export const renderExtraCharges = () => {
     const wrapper = $('extra-charges-wrapper');
     const list = $('extra-charges-list');
@@ -304,20 +276,20 @@ export const renderExtraCharges = () => {
 // 4. STAY EXTENSIONS & RATE CHECK ENGINES
 // --------------------------------------------------------------------------
 
-// --- Calculate Extension Pricing & FMP Detection ---
 export const calcExtension = () => {
-    const cI = $('check-in')?.value, cO = $('check-out')?.value;
-    const parseFn = getParseYMD();
-    const ms = parseFn(cO) - parseFn(cI);
+    const cI = $('check-in')?.value;
+    const cO = $('check-out')?.value;
+    const ms = parseYMD(cO) - parseYMD(cI);
     const avg = ms > 0 ? (Number($('total-price')?.value) || 0) / Math.round(ms / 86400000) : 0;
-    const days = parseInt($('ext-days')?.value) || 1;
+    const days = parseInt($('ext-days')?.value, 10) || 1;
     let xFMP = false;
 
     const fmpList = window.fmpDates || [];
     if (cO) {
-        const sD = parseFn(cO), eD = sD + (days * 86400000);
+        const sD = parseYMD(cO);
+        const eD = sD + (days * 86400000);
         for (let f of fmpList) {
-            const fT = new Date(f + "T12:00:00").getTime();
+            const fT = parseYMD(f);
             if ((sD <= fT && eD >= fT) || (Math.abs(sD - fT) <= 3 * 86400000) || (Math.abs(eD - fT) <= 3 * 86400000)) {
                 xFMP = true;
                 break;
@@ -360,12 +332,11 @@ export const calcExtension = () => {
     }
 };
 
-// --- Open Booking.com Live Price Comparison in New Window ---
 export const checkBdcPrice = () => {
     const cO = $('check-out')?.value;
-    if (!cO) return window.showAlert ? window.showAlert("Please set a check-out date first.") : null;
+    if (!cO) return window.customAlert ? window.customAlert("Missing Date", "Please set a check-out date first.") : null;
     const d = new Date(cO + "T12:00:00Z");
-    d.setUTCDate(d.getUTCDate() + (parseInt($('ext-days')?.value) || 1));
+    d.setUTCDate(d.getUTCDate() + (parseInt($('ext-days')?.value, 10) || 1));
     const roomCount = Array.from($$('.assigned-room-select')).filter(sel => sel.value !== "").length || 1;
     const pax = $('pax-count')?.value || 1;
     const curProp = window.currentPropertyConfig || {};
@@ -373,13 +344,12 @@ export const checkBdcPrice = () => {
     window.open(`${bdcUrl}?checkin=${cO}&checkout=${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}&group_adults=${pax}&group_children=0&no_rooms=${roomCount}`, '_blank');
 };
 
-// --- Commit Stay Extension & Update Total Price ---
 export const confirmExtension = async () => {
     const cO = $('check-out')?.value;
-    if (!cO) return window.showAlert ? window.showAlert("Please set a check-out date first.") : null;
+    if (!cO) return window.customAlert ? window.customAlert("Missing Date", "Please set a check-out date first.") : null;
     const aP = $('ext-price')?.value;
-    if (aP === '') return window.showAlert ? window.showAlert("Please enter the Extension Price first.") : null;
-    const days = parseInt($('ext-days')?.value) || 1;
+    if (aP === '') return window.customAlert ? window.customAlert("Missing Price", "Please enter the Extension Price first.") : null;
+    const days = parseInt($('ext-days')?.value, 10) || 1;
     const d = new Date(cO + "T12:00:00Z");
     d.setUTCDate(d.getUTCDate() + days);
     const nCo = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
@@ -404,25 +374,22 @@ export const confirmExtension = async () => {
     if (window.updateAvailableRooms) window.updateAvailableRooms();
     calcFinancials();
     calcExtension();
-    if (window.showAlert) window.showAlert(`Booking extended by ${days} day(s).\n\nCheckout is now ${nCo}.\nAdded ฿${aP} to Total Price.`);
+    if (window.customAlert) window.customAlert("Extension Applied", `Booking extended by ${days} day(s).\n\nCheckout is now ${nCo}.\nAdded ฿${aP} to Total Price.`);
 };
 
-// --- Open Standalone Price Check Modal ---
 export const openPriceCheckModal = () => {
     const d = new Date();
     d.setHours(12, 0, 0, 0);
-    const getYmdFn = getLocalYMD();
     const ciEl = $('pc-checkin');
-    if (ciEl) ciEl.value = getYmdFn(d);
+    if (ciEl) ciEl.value = getLocalYMD(d);
     const m = $('price-check-modal');
     if (m) m.style.display = 'flex';
 };
 
-// --- Execute Standalone OTA Price Check Query ---
 export const runPriceCheck = () => {
     const cI = $('pc-checkin')?.value;
-    const n = parseInt($('pc-nights')?.value) || 1;
-    const p = parseInt($('pc-pax')?.value) || 1;
+    const n = parseInt($('pc-nights')?.value, 10) || 1;
+    const p = parseInt($('pc-pax')?.value, 10) || 1;
     if (!cI) return;
     const d = new Date(cI + "T12:00:00Z");
     d.setUTCDate(d.getUTCDate() + n);
