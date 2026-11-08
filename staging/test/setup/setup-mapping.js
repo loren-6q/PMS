@@ -272,7 +272,10 @@ export function openCreateRatePlanModal() {
 
 export function closeCreateRatePlanModal() {
     const modal = document.getElementById('create-rate-plan-modal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
 }
 
 export function applyRatePlanPreset(title, channel, policy) {
@@ -284,26 +287,65 @@ export function toggleAllTargetRooms(checked) {
     document.querySelectorAll('.crp-cat-chk').forEach(chk => chk.checked = checked);
 }
 
-export function executeCreateAndPushRatePlan() {
+export async function executeCreateAndPushRatePlan() {
     const title = document.getElementById('crp-title')?.value.trim();
     if (!title) return customAlert("Input Required", "Enter a rate plan title.");
 
-    const chks = document.querySelectorAll('.crp-cat-chk:checked');
+    const chks = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
     if (chks.length === 0) return customAlert("Input Required", "Select at least one room category.");
 
-    window.channexRateMap = window.channexRateMap || [];
-    chks.forEach(chk => {
-        const cat = chk.value;
-        const planId = `plan_${Math.random().toString(36).substr(2, 8)}`;
-        window.channexRateMap.push({
-            pmsCategory: cat,
-            ratePlanId: planId,
-            ratePlanTitle: `${cat} - ${title}`
-        });
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
+    const currency = document.getElementById('prop-currency')?.value || window.currentPropertyConfig?.currency || 'THB';
+
+    if (!apiKey || !propId) {
+        return customAlert("Credentials Required", "Enter both Channex API Key and Property UUID before pushing rate plans.");
+    }
+
+    const unmapped = chks.filter(cat => {
+        const m = (window.channexMap || []).find(x => x.pmsCategory === cat);
+        return !m || !m.channexId;
     });
 
-    closeCreateRatePlanModal();
-    customAlert("Rate Plans Bound", `Generated internal plan bindings for ${chks.length} category(ies).`);
+    if (unmapped.length > 0) {
+        return customAlert("Mapping Required", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmapped.join('\n• ')}`);
+    }
+
+    try {
+        customAlert("Pushing to Channex...", `Creating ${chks.length} rate plan(s) in Channex...`);
+        let createdCount = 0;
+
+        for (const cat of chks) {
+            const currentMap = window.channexMap.find(m => m.pmsCategory === cat);
+            const payload = {
+                rate_plan: {
+                    title: `${cat} - ${title}`,
+                    property_id: propId,
+                    room_type_id: currentMap.channexId,
+                    currency: currency,
+                    options: [{ occupancy: 1, is_primary: true, rate: 0 }]
+                }
+            };
+
+            const res = await ChannexClient.request('/rate_plans', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            }, apiKey);
+
+            if (res?.data) {
+                window.channexRatePlans = window.channexRatePlans || [];
+                window.channexRatePlans.push(res.data);
+                createdCount++;
+            }
+        }
+
+        closeCreateRatePlanModal();
+        renderStep3UnifiedMapping();
+        customAlert("Success", `Created and mapped ${createdCount} rate plan(s) in Channex.`);
+    } catch (err) {
+        console.error("[Create Rate Plan Error]:", err);
+        customAlert("Creation Failed", err.message);
+    }
 }
 
 export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoomId, ratePlanTitle, field, value) {
