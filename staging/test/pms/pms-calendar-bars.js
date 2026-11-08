@@ -4,7 +4,7 @@
 // ==========================================================================
 
 import { getDayIndex } from './pms-calendar-tape.js';
-import { STATUS_CYCLE } from '../core/occupancy.js';
+import { applyStatusStyle } from '../core/occupancy.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
