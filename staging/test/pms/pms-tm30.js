@@ -3,30 +3,25 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { db, appId } from '../core/config.js';
+import { collection, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { toCanonicalPropId, toDisplayPropKey } from '../core/properties.js';
+import { isOccupyingBooking } from '../core/occupancy.js';
+import { customAlert } from '../core/ui-dialogs.js';
+
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
 // --- State, Store & Context Resolvers ---
-const getDb = () => window.db;
-const getAppId = () => window.appId || 'hotel-pms-v1';
-const getFs = () => window.fs || {};
-const getStaffList = () => window.staff || (window.getStaff ? window.getStaff() : []);
-
-// --- Active Property ID Resolver ---
-const getPropId = () => {
-    const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
-    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
-};
-
-// --- Booking Room List Resolver Helper ---
+const getStaffList = () => window.staff || [];
+const getPropId = () => toCanonicalPropId(window.currentPropertyId || 'swims_resort');
 const getRoomsHelper = () => window.getRooms || (s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : [])));
 
 // --------------------------------------------------------------------------
 // 1. GLOBAL BATCH PASSPORT SYNCHRONIZATION
 // --------------------------------------------------------------------------
 
-// --- Scan & Link All Pending Passports to Active Bookings ---
 export const globalPassportSync = async () => {
     const btn = document.querySelector('button[onclick="window.globalPassportSync()"]');
     const originalText = btn ? btn.innerHTML : '';
@@ -35,11 +30,8 @@ export const globalPassportSync = async () => {
         btn.disabled = true;
     }
 
-    const db = getDb();
-    const appId = getAppId();
-    const { collection, query, where, getDocs, doc, updateDoc } = getFs();
     const curProp = getPropId();
-    const displayKey = window.toDisplayPropKey ? window.toDisplayPropKey(curProp) : 'SWIMS';
+    const displayKey = toDisplayPropKey(curProp) || 'SWIMS';
     const staffList = getStaffList();
     const getRooms = getRoomsHelper();
 
@@ -58,7 +50,7 @@ export const globalPassportSync = async () => {
         });
 
         if (foundPassports.length === 0) {
-            if (window.showAlert) window.showAlert(`No pending unsynced passports found for ${displayKey}.`);
+            customAlert("No Passports", `No pending unsynced passports found for ${displayKey}.`);
             if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
             if (window.lucide) window.lucide.createIcons();
             return;
@@ -78,12 +70,8 @@ export const globalPassportSync = async () => {
                 if (/^[a-zA-Z]0\d$/.test(p.roomNumber)) searchRooms.push(p.roomNumber[0] + p.roomNumber[2]);
                 else if (/^[a-zA-Z]\d$/.test(p.roomNumber)) searchRooms.push(p.roomNumber[0] + '0' + p.roomNumber[1]);
                 
-                matchedBooking = staffList.filter(x => {
-                    const xProp = window.toCanonicalPropId ? window.toCanonicalPropId(x.property) : x.property;
-                    return xProp === curProp;
-                }).find(s => {
-                    const isOcc = window.isOccupyingBooking ? window.isOccupyingBooking(s.status) : (s.status !== 'cancelled' && s.status !== 'noshow');
-                    if (!isOcc) return false;
+                matchedBooking = staffList.filter(x => toCanonicalPropId(x.property) === curProp).find(s => {
+                    if (!isOccupyingBooking(s.status, true)) return false;
                     return getRooms(s).some(r => {
                         const normR = window.normalizeRoomId ? window.normalizeRoomId(r, curProp) : r;
                         return searchRooms.includes(r) || searchRooms.includes(normR);
@@ -92,12 +80,8 @@ export const globalPassportSync = async () => {
             }
 
             if (!matchedBooking && p.firstName && p.lastName) {
-                matchedBooking = staffList.filter(x => {
-                    const xProp = window.toCanonicalPropId ? window.toCanonicalPropId(x.property) : x.property;
-                    return xProp === curProp;
-                }).find(s => {
-                    const isOcc = window.isOccupyingBooking ? window.isOccupyingBooking(s.status) : (s.status !== 'cancelled' && s.status !== 'noshow');
-                    if (!isOcc) return false;
+                matchedBooking = staffList.filter(x => toCanonicalPropId(x.property) === curProp).find(s => {
+                    if (!isOccupyingBooking(s.status, true)) return false;
                     const bName = ((s.firstName || '') + " " + (s.lastName || '')).toUpperCase();
                     return bName.includes(p.lastName.toUpperCase()) && bName.includes(p.firstName.toUpperCase());
                 });
@@ -119,7 +103,7 @@ export const globalPassportSync = async () => {
         }
 
         if (syncCount === 0) {
-            if (window.showAlert) window.showAlert(`Found ${foundPassports.length} pending passport(s), but could not match ANY to active bookings.`);
+            customAlert("No Matches", `Found ${foundPassports.length} pending passport(s), but could not match ANY to active bookings.`);
             if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
             if (window.lucide) window.lucide.createIcons();
             return;
@@ -134,10 +118,10 @@ export const globalPassportSync = async () => {
         }
 
         await Promise.all(updatePromises);
-        if (window.showAlert) window.showAlert(`✅ Global Sync Complete!\n\nSuccessfully matched ${syncCount} out of ${foundPassports.length} passports to existing bookings.`);
+        customAlert("Global Sync Complete", `Successfully matched ${syncCount} out of ${foundPassports.length} passports to existing bookings.`);
     } catch (e) {
         console.error("Global Sync Error", e);
-        if (window.showAlert) window.showAlert("Error during global sync: " + e.message);
+        customAlert("Global Sync Error", e.message);
     }
 
     if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
@@ -148,7 +132,6 @@ export const globalPassportSync = async () => {
 // 2. SINGLE BOOKING TM30 SYNC & AUTO-FILL
 // --------------------------------------------------------------------------
 
-// --- Smart Sync TM30 Passport for Active Folio Modal ---
 export const syncTM30 = async () => {
     const btn = $('tm30-sync-btn');
     const origText = btn ? btn.innerHTML : '';
@@ -157,9 +140,6 @@ export const syncTM30 = async () => {
         if (window.lucide) window.lucide.createIcons();
     }
 
-    const db = getDb();
-    const appId = getAppId();
-    const { collection, query, where, getDocs, doc, updateDoc } = getFs();
     const curProp = getPropId();
 
     try {
@@ -185,7 +165,7 @@ export const syncTM30 = async () => {
 
         if (rL.length === 0 && !gFirstName && !gLastName) {
             if (pendingPassports.length === 0) {
-                if (window.showAlert) window.showAlert("No recent passports found to import.");
+                customAlert("No Passports", "No recent passports found to import.");
                 if (btn) btn.innerHTML = origText;
                 if (window.lucide) window.lucide.createIcons();
                 return;
@@ -261,7 +241,7 @@ export const syncTM30 = async () => {
         });
 
         if (matchedPassports.length === 0) {
-            if (window.showAlert) window.showAlert(`No pending passports found matching this room or name.`);
+            customAlert("No Match", `No pending passports found matching this room or name.`);
             if (btn) btn.innerHTML = origText;
             if (window.lucide) window.lucide.createIcons();
             return;
@@ -291,17 +271,16 @@ export const syncTM30 = async () => {
         if (notesEl) notesEl.value = (notesEl.value + appendNotes).trim();
         if (window.updateHeaderName) window.updateHeaderName();
 
-        if (window.showAlert) window.showAlert(`✅ Smart Sync Complete!\n\n1. Sent Checkout Date & Phone to TM30 Queue.\n2. Pulled ${matchedPassports.length} passport(s) into PMS notes.\n\nDon't forget to hit Save!`);
+        customAlert("Smart Sync Complete", `1. Sent Checkout Date & Phone to TM30 Queue.\n2. Pulled ${matchedPassports.length} passport(s) into PMS notes.\n\nDon't forget to hit Save!`);
     } catch (e) {
         console.error("Sync Error", e);
-        if (window.showAlert) window.showAlert("Error syncing passports. Please check your connection.");
+        customAlert("Sync Error", "Error syncing passports: " + e.message);
     }
 
     if (btn) btn.innerHTML = origText;
     if (window.lucide) window.lucide.createIcons();
 };
 
-// --- Ingest TM30 Passport Record Directly into Form Fields ---
 export const applyTM30Data = data => {
     const fnEl = $('first-name'), lnEl = $('last-name'), ctryEl = $('guest-country'), notesEl = $('guest-notes');
     if (data.firstName && fnEl) fnEl.value = data.firstName;
