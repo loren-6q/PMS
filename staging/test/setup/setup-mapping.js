@@ -119,9 +119,7 @@ export function renderStep3UnifiedMapping() {
         const isMapped = !!(currentMap && currentMap.channexId);
 
         const card = document.createElement('div');
-        card.className = `rounded-lg border mb-3 overflow-hidden shadow-xs bg-white ${
-            isMapped ? 'border-slate-700' : 'border-slate-300'
-        }`;
+        card.className = isMapped ? 'mapping-card-mapped' : 'mapping-card-unmapped';
 
         let selectOptions = `<option value="">-- UNMAPPED / IGNORED --</option>`;
         const roomsList = window.channexRooms || [];
@@ -156,7 +154,6 @@ export function renderStep3UnifiedMapping() {
                                     const title = plan.attributes?.title || plan.id;
                                     let mapping = window.channexRateMap.find(r => r.ratePlanId === plan.id);
 
-                                    // Run fuzzy detection if new or missing proper classifications
                                     const detected = detectRatePlanClassification(title, plan);
 
                                     if (!mapping) {
@@ -199,9 +196,7 @@ export function renderStep3UnifiedMapping() {
                                             <td class="py-1.5 px-2">
                                                 <div class="flex items-center gap-1.5 flex-wrap">
                                                     <span class="font-bold text-slate-800 text-xs">${title}</span>
-                                                    <span class="rate-plan-badge px-1.5 py-0.2 rounded font-black text-[9px] uppercase ${
-                                                        isEventPlan ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
-                                                    }">${isEventPlan ? 'EVENT' : 'STD'}</span>
+                                                    <span class="rate-plan-badge ${isEventPlan ? 'setup-badge-event' : 'setup-badge-std'}">${isEventPlan ? 'EVENT' : 'STD'}</span>
                                                 </div>
                                                 <div class="font-mono text-[9.5px] text-slate-400 mt-0.5">ID: ...${plan.id.slice(-8)}</div>
                                             </td>
@@ -235,19 +230,14 @@ export function renderStep3UnifiedMapping() {
             }
         }
 
-        // Darker distinct category header container
         card.innerHTML = `
-            <div class="px-3 py-2 flex items-center justify-between gap-3 ${
-                isMapped ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-800'
-            }">
+            <div class="${isMapped ? 'mapping-header-mapped' : 'mapping-header-unmapped'}">
                 <div class="flex items-center gap-2">
-                    <span class="px-2 py-0.5 rounded text-[9.5px] font-black uppercase ${
-                        isMapped ? 'bg-emerald-500 text-slate-950 shadow-xs' : 'bg-slate-400 text-white'
-                    }">${isMapped ? 'MAPPED ✓' : 'UNMAPPED ⚠'}</span>
-                    <span class="font-black text-xs uppercase tracking-wide ${isMapped ? 'text-white' : 'text-slate-800'}">${cat}</span>
+                    <span class="${isMapped ? 'mapping-badge-mapped' : 'mapping-badge-unmapped'}">${isMapped ? 'MAPPED ✓' : 'UNMAPPED ⚠'}</span>
+                    <span class="font-black text-xs uppercase tracking-wide text-slate-900">${cat}</span>
                 </div>
                 <div class="w-64">
-                    <select class="table-input font-bold ${isMapped ? 'bg-slate-900 text-white border-slate-600' : 'bg-white'}" onchange="window.updateRoomTypeMapping('${cat}', this.value)">
+                    <select class="table-input font-bold bg-white text-slate-800" onchange="window.updateRoomTypeMapping('${cat}', this.value)">
                         ${selectOptions}
                     </select>
                 </div>
@@ -308,34 +298,19 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     renderStep3UnifiedMapping();
 }
 
-
-
-// Rate Plan Templates for Batch Suite: [OTA / Event] [Policy] [Room] (No redundant word "Rate")
+// Rate Plan Templates for Batch Suite: [OTA / Event] [Policy] [Room]
 const BATCH_RATE_TEMPLATES = [
-    // Standard DEFAULT
     { id: 'def_non_ref', titleTpl: 'Non-Refundable {CAT}', channel: 'DEFAULT', policy: 'non-ref', checked: true, isEvent: false },
     { id: 'def_ref', titleTpl: 'Refundable {CAT}', channel: 'DEFAULT', policy: 'ref', checked: true, isEvent: false },
-
-    // Booking.com (BDC)
     { id: 'bdc_non_ref', titleTpl: 'BDC Non-Refundable {CAT}', channel: 'Booking.com', policy: 'non-ref', checked: true, isEvent: false },
     { id: 'bdc_ref', titleTpl: 'BDC Refundable {CAT}', channel: 'Booking.com', policy: 'ref', checked: true, isEvent: false },
-
-    // Hostelworld (HW)
     { id: 'hw_non_ref', titleTpl: 'HW Non-Refundable {CAT}', channel: 'Hostelworld', policy: 'non-ref', checked: false, isEvent: false },
     { id: 'hw_ref', titleTpl: 'HW Refundable {CAT}', channel: 'Hostelworld', policy: 'ref', checked: false, isEvent: false },
-
-    // Agoda
     { id: 'agoda_non_ref', titleTpl: 'Agoda Non-Refundable {CAT}', channel: 'Agoda', policy: 'non-ref', checked: false, isEvent: false },
     { id: 'agoda_ref', titleTpl: 'Agoda Refundable {CAT}', channel: 'Agoda', policy: 'ref', checked: false, isEvent: false },
-
-    // Expedia
     { id: 'exp_non_ref', titleTpl: 'Expedia Non-Refundable {CAT}', channel: 'Expedia', policy: 'non-ref', checked: false, isEvent: false },
     { id: 'exp_ref', titleTpl: 'Expedia Refundable {CAT}', channel: 'Expedia', policy: 'ref', checked: false, isEvent: false },
-
-    // Airbnb
     { id: 'air_std', titleTpl: 'Airbnb Standard {CAT}', channel: 'Airbnb', policy: 'non-ref', checked: false, isEvent: false },
-
-    // Event Rates (DEFAULT)
     { id: 'evt_non_ref', titleTpl: 'Event Non-Refundable {CAT}', channel: 'DEFAULT', policy: 'event-non-ref', checked: false, isEvent: true },
     { id: 'evt_ref', titleTpl: 'Event Refundable {CAT}', channel: 'DEFAULT', policy: 'event-ref', checked: false, isEvent: true }
 ];
@@ -1003,9 +978,7 @@ export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoo
 
             if (badge) {
                 badge.innerText = isEvent ? 'EVENT' : 'STD';
-                badge.className = `rate-plan-badge px-1.5 py-0.2 rounded font-black text-[9px] uppercase ${
-                    isEvent ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
-                }`;
+                badge.className = `rate-plan-badge ${isEvent ? 'setup-badge-event' : 'setup-badge-std'}`;
             }
 
             if (field === 'policy') {
