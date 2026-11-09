@@ -134,8 +134,15 @@ export const showAuditHistory = () => {
     const bBtn = $('alert-confirm');
     if (bBtn) {
         bBtn.innerText = 'Close';
-        bBtn.className = 'btn-modal bg-slate-800 hover:bg-slate-700 text-white px-10';
-        bBtn.onclick = () => window.closeAlert && window.closeAlert();
+        bBtn.className = 'btn-modal bg-slate-800 hover:bg-slate-700 text-white px-10 cursor-pointer';
+        bBtn.onclick = () => {
+            const m = $('alert-modal');
+            if (m) {
+                m.classList.remove('active');
+                m.style.display = 'none';
+            }
+            if (typeof window.closeAlert === 'function') window.closeAlert();
+        };
     }
     const m = $('alert-modal');
     if (m) {
@@ -143,6 +150,14 @@ export const showAuditHistory = () => {
         m.style.display = 'flex';
     }
     if (window.lucide) window.lucide.createIcons();
+};
+
+export const closeAlert = () => {
+    const m = $('alert-modal');
+    if (m) {
+        m.classList.remove('active');
+        m.style.display = 'none';
+    }
 };
 
 // --- Modal Header Name Sync ---
