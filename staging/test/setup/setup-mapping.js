@@ -119,18 +119,34 @@ export function renderStep3UnifiedMapping() {
                                     const title = plan.attributes?.title || plan.id;
                                     let mapping = window.channexRateMap.find(r => r.ratePlanId === plan.id);
 
-                                    if (!mapping) {
-                                        const isBdc = /booking\.com|bdc/i.test(title);
-                                        const isFlex = /flex|ref/i.test(title);
+                                   if (!mapping) {
+                                        let detectedChannel = "DEFAULT";
+                                        if (/booking\.com|bdc\b/i.test(title)) detectedChannel = "Booking.com";
+                                        else if (/hostelworld|hw\b/i.test(title)) detectedChannel = "Hostelworld";
+                                        else if (/agoda\b/i.test(title)) detectedChannel = "Agoda";
+                                        else if (/expedia\b/i.test(title)) detectedChannel = "Expedia";
+                                        else if (/airbnb\b/i.test(title)) detectedChannel = "Airbnb";
+                                        else if (/direct\b/i.test(title)) detectedChannel = "Direct";
+
+                                        const isNonRef = /non-ref|nonref|non refundable/i.test(title);
+                                        const isFlex = !isNonRef && /flex|ref|refundable/i.test(title);
                                         const isEvt = /event|peak|pkg/i.test(title);
+
+                                        let detectedPolicy = "non-ref";
+                                        if (isEvt) {
+                                            detectedPolicy = isFlex ? "event-ref" : "event-non-ref";
+                                        } else {
+                                            detectedPolicy = isFlex ? "ref" : "non-ref";
+                                        }
 
                                         mapping = {
                                             ratePlanId: plan.id,
                                             pmsCategory: cat,
                                             channexRoomId: currentMap.channexId,
                                             ratePlanTitle: title,
-                                            channel: isBdc ? "Booking.com" : "DEFAULT",
-                                            policy: isEvt ? (isFlex ? "event-ref" : "event-non-ref") : (isFlex ? "ref" : "non-ref"),
+                                            channel: detectedChannel,
+                                            policy: detectedPolicy,
+                                            rateType: detectedPolicy,
                                             isEvent: isEvt
                                         };
                                         window.channexRateMap.push(mapping);
@@ -283,6 +299,58 @@ const BATCH_RATE_TEMPLATES = [
     { id: 'evt_ref', titleTpl: '{CAT} - Event Refundable', channel: 'DEFAULT', policy: 'event-ref', checked: false, isEvent: true }
 ];
 
+// Rate Plan Templates for Batch Suite: [OTA / Event] [Policy] [Room] (No redundant word "Rate")
+const BATCH_RATE_TEMPLATES = [
+    // Standard DEFAULT
+    { id: 'def_non_ref', titleTpl: 'Non-Refundable {CAT}', channel: 'DEFAULT', policy: 'non-ref', checked: true, isEvent: false },
+    { id: 'def_ref', titleTpl: 'Refundable {CAT}', channel: 'DEFAULT', policy: 'ref', checked: true, isEvent: false },
+
+    // Booking.com (BDC)
+    { id: 'bdc_non_ref', titleTpl: 'BDC Non-Refundable {CAT}', channel: 'Booking.com', policy: 'non-ref', checked: true, isEvent: false },
+    { id: 'bdc_ref', titleTpl: 'BDC Refundable {CAT}', channel: 'Booking.com', policy: 'ref', checked: true, isEvent: false },
+
+    // Hostelworld (HW)
+    { id: 'hw_non_ref', titleTpl: 'HW Non-Refundable {CAT}', channel: 'Hostelworld', policy: 'non-ref', checked: false, isEvent: false },
+    { id: 'hw_ref', titleTpl: 'HW Refundable {CAT}', channel: 'Hostelworld', policy: 'ref', checked: false, isEvent: false },
+
+    // Agoda
+    { id: 'agoda_non_ref', titleTpl: 'Agoda Non-Refundable {CAT}', channel: 'Agoda', policy: 'non-ref', checked: false, isEvent: false },
+    { id: 'agoda_ref', titleTpl: 'Agoda Refundable {CAT}', channel: 'Agoda', policy: 'ref', checked: false, isEvent: false },
+
+    // Expedia
+    { id: 'exp_non_ref', titleTpl: 'Expedia Non-Refundable {CAT}', channel: 'Expedia', policy: 'non-ref', checked: false, isEvent: false },
+    { id: 'exp_ref', titleTpl: 'Expedia Refundable {CAT}', channel: 'Expedia', policy: 'ref', checked: false, isEvent: false },
+
+    // Airbnb
+    { id: 'air_std', titleTpl: 'Airbnb Standard {CAT}', channel: 'Airbnb', policy: 'non-ref', checked: false, isEvent: false },
+
+    // Event Rates (DEFAULT)
+    { id: 'evt_non_ref', titleTpl: 'Event Non-Refundable {CAT}', channel: 'DEFAULT', policy: 'event-non-ref', checked: false, isEvent: true },
+    { id: 'evt_ref', titleTpl: 'Event Refundable {CAT}', channel: 'DEFAULT', policy: 'event-ref', checked: false, isEvent: true }
+];
+
+export function switchCreateModalTab(tab = 'rooms') {
+    const btnRooms = document.getElementById('tab-btn-create-rooms');
+    const btnRates = document.getElementById('tab-btn-create-rates');
+    const paneRooms = document.getElementById('create-modal-pane-rooms');
+    const paneRates = document.getElementById('create-modal-pane-rates');
+
+    const isRooms = tab === 'rooms';
+
+    if (btnRooms && btnRates) {
+        btnRooms.className = isRooms
+            ? "flex-1 py-1.5 text-center font-black text-[11px] uppercase border-b-2 border-indigo-600 text-indigo-700 cursor-pointer transition-colors"
+            : "flex-1 py-1.5 text-center font-bold text-[11px] uppercase border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer transition-colors";
+
+        btnRates.className = !isRooms
+            ? "flex-1 py-1.5 text-center font-black text-[11px] uppercase border-b-2 border-indigo-600 text-indigo-700 cursor-pointer transition-colors"
+            : "flex-1 py-1.5 text-center font-bold text-[11px] uppercase border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer transition-colors";
+    }
+
+    if (paneRooms) paneRooms.classList.toggle('hidden', !isRooms);
+    if (paneRates) paneRates.classList.toggle('hidden', isRooms);
+}
+
 export function openCreateRatePlanModal(initialTab = 'rooms') {
     const modal = document.getElementById('create-rate-plan-modal');
     if (!modal) return;
@@ -302,18 +370,18 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
             const isMapped = channexMap.some(m => m.pmsCategory === cat && m.channexId);
 
             return `
-                <label class="flex items-center justify-between p-1.5 rounded hover:bg-slate-100 cursor-pointer border border-slate-200 bg-white">
+                <label class="flex items-center justify-between p-2 rounded hover:bg-slate-100 cursor-pointer border border-slate-200 bg-white">
                     <div class="flex items-center gap-2 truncate">
                         <input type="checkbox" class="crp-roomtype-chk" value="${cat}" ${!isMapped ? 'checked' : ''}>
                         <span class="font-bold text-slate-800 truncate text-[11px]">${cat}</span>
                     </div>
-                    <div class="flex items-center gap-1.5 shrink-0">
-                        <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded ${
                             isDorm ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                         }">
                             ${isDorm ? `${totalBeds} Beds (Dorm)` : `${sameCat.length} Unit(s)`}
                         </span>
-                        <span class="text-[8.5px] font-black uppercase px-1.5 py-0.2 rounded ${
+                        <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded ${
                             isMapped ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
                         }">
                             ${isMapped ? 'Mapped ✓' : 'Unmapped'}
@@ -351,16 +419,16 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
         }).join('');
     }
 
-    // 4. Populate Batch Rate Plan Suite Checklist
+    // 4. Populate Batch Rate Plan Suite Checklist (Grid)
     const batchListEl = document.getElementById('crp-batch-plans-list');
     if (batchListEl) {
         batchListEl.innerHTML = BATCH_RATE_TEMPLATES.map((tpl, i) => `
             <label class="flex items-center justify-between p-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer">
-                <div class="flex items-center gap-2 truncate">
+                <div class="flex items-center gap-1.5 truncate">
                     <input type="checkbox" class="crp-batch-tpl-chk" data-idx="${i}" ${tpl.checked ? 'checked' : ''}>
-                    <span class="font-bold text-slate-800 text-[11px] truncate">${tpl.titleTpl}</span>
+                    <span class="font-bold text-slate-800 text-[10.5px] truncate">${tpl.titleTpl.replace(' {CAT}', '')}</span>
                 </div>
-                <div class="flex items-center gap-1 shrink-0 text-[9px] font-black uppercase">
+                <div class="flex items-center gap-1 shrink-0 text-[8.5px] font-black uppercase">
                     <span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">${tpl.channel}</span>
                     <span class="px-1.5 py-0.2 rounded ${tpl.isEvent ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}">${tpl.policy}</span>
                 </div>
@@ -461,7 +529,6 @@ export async function executeCreateAndPushRoomTypes() {
             if (res?.data) {
                 window.channexRooms.push(res.data);
 
-                // Auto-pair into PMS mapping
                 const existIdx = window.channexMap.findIndex(m => m.pmsCategory === cat);
                 if (existIdx > -1) {
                     window.channexMap[existIdx].channexId = res.data.id;
@@ -473,7 +540,6 @@ export async function executeCreateAndPushRoomTypes() {
             }
         }
 
-        // Persist to Firestore automatically so the new mapping is permanently locked in
         if (typeof window.savePropertyToDatabase === 'function') {
             await window.savePropertyToDatabase(false);
         }
@@ -487,7 +553,7 @@ export async function executeCreateAndPushRoomTypes() {
     }
 }
 
-// Option A: Clone All Rate Plans from a Source Category
+// Option A: Clone All Rate Plans from a Source Category (Preserves [OTA/Policy] [Room] order)
 export async function executeCloneRatePlans() {
     const sourceCat = document.getElementById('crp-clone-source')?.value;
     if (!sourceCat) return customAlert("Input Required", "Please select a source category to clone plans from.");
@@ -536,13 +602,17 @@ export async function executeCloneRatePlans() {
                 const spTitle = sp.attributes?.title || sp.id;
                 const spMap = (window.channexRateMap || []).find(r => r.ratePlanId === sp.id) || {};
 
+                // Replaces source room name with target room name; otherwise appends tgtCat at the end: [OTA/Policy] [TargetRoom]
                 let newTitle = spTitle;
                 const escSource = sourceCat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 if (new RegExp(escSource, 'i').test(newTitle)) {
                     newTitle = newTitle.replace(new RegExp(escSource, 'gi'), tgtCat);
                 } else {
-                    newTitle = `${tgtCat} - ${newTitle}`;
+                    newTitle = `${newTitle} ${tgtCat}`;
                 }
+
+                // Strip any accidental "Rate" suffix
+                newTitle = newTitle.replace(/\s+Rate\b/gi, '').trim();
 
                 const payload = {
                     rate_plan: {
@@ -560,7 +630,6 @@ export async function executeCloneRatePlans() {
                 }, apiKey);
 
                 if (res?.data) {
-                    window.channexRatePlans = window.channexRatePlans || [];
                     window.channexRatePlans.push(res.data);
 
                     window.channexRateMap = window.channexRateMap || [];
@@ -593,7 +662,7 @@ export async function executeCloneRatePlans() {
     }
 }
 
-// Option B: Batch Create Rate Plan Suite
+// Option B: Batch Create Rate Plan Suite: Formats as [OTA / Event] [Policy] [Room]
 export async function executeBatchCreateRatePlans() {
     const targetCats = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
     if (targetCats.length === 0) return customAlert("Input Required", "Select at least one target room category.");
@@ -629,7 +698,7 @@ export async function executeBatchCreateRatePlans() {
             const tgtMap = window.channexMap.find(m => m.pmsCategory === tgtCat);
 
             for (const tpl of selectedTemplates) {
-                const finalTitle = tpl.titleTpl.replace(/{CAT}/g, tgtCat);
+                const finalTitle = tpl.titleTpl.replace(/{CAT}/g, tgtCat).trim();
 
                 const payload = {
                     rate_plan: {
@@ -680,10 +749,10 @@ export async function executeBatchCreateRatePlans() {
     }
 }
 
-// Option C: Push Single Custom Rate Plan
+// Option C: Push Single Custom Rate Plan: Formats as [Prefix] [Room]
 export async function executeCreateAndPushRatePlan() {
-    const title = document.getElementById('crp-title')?.value.trim();
-    if (!title) return customAlert("Input Required", "Enter a rate plan title.");
+    const rawTitle = document.getElementById('crp-title')?.value.trim();
+    if (!rawTitle) return customAlert("Input Required", "Enter a rate plan title or prefix.");
 
     const chks = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
     if (chks.length === 0) return customAlert("Input Required", "Select at least one room category.");
@@ -711,9 +780,11 @@ export async function executeCreateAndPushRatePlan() {
 
         for (const cat of chks) {
             const currentMap = window.channexMap.find(m => m.pmsCategory === cat);
+            const finalTitle = rawTitle.includes('{CAT}') ? rawTitle.replace(/{CAT}/gi, cat) : `${rawTitle} ${cat}`;
+
             const payload = {
                 rate_plan: {
-                    title: `${cat} - ${title}`,
+                    title: finalTitle.trim(),
                     property_id: propId,
                     room_type_id: currentMap.channexId,
                     currency: currency,
