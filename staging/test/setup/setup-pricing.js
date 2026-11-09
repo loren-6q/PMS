@@ -15,13 +15,24 @@ export const DEFAULT_CHANNELS = [
     { name: "Expedia", sub: "Custom Channel", op: "+%", val: 0, locked: false }
 ];
 
-export function renderPricingConfig() {
-    window.pricingRules = window.pricingRules || {};
-    window.masterPricing = window.masterPricing || {};
+function ensureParsedObject(val) {
+    if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch (e) { return {}; }
+    }
+    return (val && typeof val === 'object') ? val : {};
+}
 
-    // Synchronize relationships array across pricingRules and masterPricing
-    window.pricingRules.relationships = window.pricingRules.relationships || window.masterPricing.relationships || [];
-    window.masterPricing.relationships = window.pricingRules.relationships;
+export function renderPricingConfig() {
+    window.masterPricing = ensureParsedObject(window.masterPricing);
+    window.pricingRules = ensureParsedObject(window.pricingRules);
+
+    // Synchronize relationships from masterPricing or pricingRules
+    if (!Array.isArray(window.masterPricing.relationships) && Array.isArray(window.pricingRules.relationships)) {
+        window.masterPricing.relationships = window.pricingRules.relationships;
+    } else if (!Array.isArray(window.masterPricing.relationships)) {
+        window.masterPricing.relationships = [];
+    }
+    window.pricingRules.relationships = window.masterPricing.relationships;
 
     const rules = window.pricingRules;
     const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
@@ -84,56 +95,56 @@ export function renderRelationshipsTable(categories = null) {
         categories = Array.from(new Set(defs.map(r => r.category).filter(Boolean)));
     }
 
-    const rels = window.pricingRules?.relationships || [];
+    const rels = window.masterPricing?.relationships || [];
 
     rels.forEach((rel, idx) => {
         const tr = document.createElement('tr');
         tr.className = "border-b border-slate-100 hover:bg-slate-50/60 transition-colors";
 
-        const stdOp = rel.stdOp || rel.type || 'sync';
-        const stdVal = rel.stdVal ?? rel.val ?? 0;
-        const evtOp = rel.evtOp || (rel.evtOffset ? '+%' : 'sync');
-        const evtVal = rel.evtVal ?? rel.evtOffset ?? 0;
+        const stdOp = rel.type || rel.stdOp || '=';
+        const stdVal = rel.val ?? rel.stdVal ?? 0;
+        const evtOp = rel.typeFmp || rel.evtOp || '=';
+        const evtVal = rel.valFmp ?? rel.evtVal ?? 0;
 
         const anchorOpts = categories.map(c => '<option value="' + c + '" ' + (rel.anchor === c ? 'selected' : '') + '>' + c + '</option>').join('');
         const targetOpts = categories.map(c => '<option value="' + c + '" ' + (rel.target === c ? 'selected' : '') + '>' + c + '</option>').join('');
 
         let html = '';
         html += '<td class="py-1 px-2">';
-        html += '  <select class="table-input font-bold" onchange="window.pricingRules.relationships[' + idx + '].anchor = this.value">';
+        html += '  <select class="table-input font-bold" onchange="window.masterPricing.relationships[' + idx + '].anchor = this.value">';
         html += '    <option value="">-- Select Anchor --</option>' + anchorOpts;
         html += '  </select>';
         html += '</td>';
 
         html += '<td class="py-1 px-2">';
-        html += '  <select class="table-input font-bold text-indigo-700" onchange="window.pricingRules.relationships[' + idx + '].target = this.value">';
+        html += '  <select class="table-input font-bold text-indigo-700" onchange="window.masterPricing.relationships[' + idx + '].target = this.value">';
         html += '    <option value="">-- Select Target --</option>' + targetOpts;
         html += '  </select>';
         html += '</td>';
 
         html += '<td class="py-1 px-2">';
         html += '  <div class="flex items-center gap-1">';
-        html += '    <select class="table-input font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateRelRule(' + idx + ', \'stdOp\', this.value, this)">';
-        html += '      <option value="sync" ' + (stdOp === 'sync' || stdOp === '=' ? 'selected' : '') + '>SYNC (==)</option>';
+        html += '    <select class="table-input font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateRelRule(' + idx + ', \'std\', this.value, this)">';
+        html += '      <option value="=" ' + (stdOp === '=' || stdOp === 'sync' ? 'selected' : '') + '>SYNC (==)</option>';
         html += '      <option value="+%" ' + (stdOp === '+%' ? 'selected' : '') + '>+ %</option>';
         html += '      <option value="-%" ' + (stdOp === '-%' ? 'selected' : '') + '>- %</option>';
-        html += '      <option value="+$" ' + (stdOp === '+$' || stdOp === '+' ? 'selected' : '') + '>+ ฿</option>';
-        html += '      <option value="-$" ' + (stdOp === '-$' || stdOp === '-' ? 'selected' : '') + '>- ฿</option>';
+        html += '      <option value="+" ' + (stdOp === '+' || stdOp === '+$' ? 'selected' : '') + '>+ ฿</option>';
+        html += '      <option value="-" ' + (stdOp === '-' || stdOp === '-$' ? 'selected' : '') + '>- ฿</option>';
         html += '    </select>';
-        html += '    <input type="number" class="table-input font-black text-center !w-16" value="' + stdVal + '" oninput="window.pricingRules.relationships[' + idx + '].stdVal = parseFloat(this.value) || 0; window.pricingRules.relationships[' + idx + '].val = window.pricingRules.relationships[' + idx + '].stdVal;" ' + (stdOp === 'sync' || stdOp === '=' ? 'disabled' : '') + '>';
+        html += '    <input type="number" class="table-input font-black text-center !w-16" value="' + stdVal + '" oninput="window.updateRelVal(' + idx + ', \'std\', this.value)" ' + (stdOp === '=' || stdOp === 'sync' ? 'disabled' : '') + '>';
         html += '  </div>';
         html += '</td>';
 
         html += '<td class="py-1 px-2">';
         html += '  <div class="flex items-center gap-1">';
-        html += '    <select class="table-input table-input-pink font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateRelRule(' + idx + ', \'evtOp\', this.value, this)">';
-        html += '      <option value="sync" ' + (evtOp === 'sync' || evtOp === '=' ? 'selected' : '') + '>SYNC (==)</option>';
+        html += '    <select class="table-input table-input-pink font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateRelRule(' + idx + ', \'evt\', this.value, this)">';
+        html += '      <option value="=" ' + (evtOp === '=' || evtOp === 'sync' ? 'selected' : '') + '>SYNC (==)</option>';
         html += '      <option value="+%" ' + (evtOp === '+%' ? 'selected' : '') + '>+ %</option>';
         html += '      <option value="-%" ' + (evtOp === '-%' ? 'selected' : '') + '>- %</option>';
-        html += '      <option value="+$" ' + (evtOp === '+$' || evtOp === '+' ? 'selected' : '') + '>+ ฿</option>';
-        html += '      <option value="-$" ' + (evtOp === '-$' || evtOp === '-' ? 'selected' : '') + '>- ฿</option>';
+        html += '      <option value="+" ' + (evtOp === '+' || evtOp === '+$' ? 'selected' : '') + '>+ ฿</option>';
+        html += '      <option value="-" ' + (evtOp === '-' || evtOp === '-$' ? 'selected' : '') + '>- ฿</option>';
         html += '    </select>';
-        html += '    <input type="number" class="table-input table-input-pink font-black text-center !w-16" value="' + evtVal + '" oninput="window.pricingRules.relationships[' + idx + '].evtVal = parseFloat(this.value) || 0; window.pricingRules.relationships[' + idx + '].evtOffset = window.pricingRules.relationships[' + idx + '].evtVal;" ' + (evtOp === 'sync' || evtOp === '=' ? 'disabled' : '') + '>';
+        html += '    <input type="number" class="table-input table-input-pink font-black text-center !w-16" value="' + evtVal + '" oninput="window.updateRelVal(' + idx + ', \'evt\', this.value)" ' + (evtOp === '=' || evtOp === 'sync' ? 'disabled' : '') + '>';
         html += '  </div>';
         html += '</td>';
 
@@ -152,45 +163,57 @@ export function renderRelationshipsTable(categories = null) {
     }
 }
 
-export function updateRelRule(idx, field, value, selectEl) {
-    const rel = window.pricingRules?.relationships?.[idx];
+export function updateRelRule(idx, ruleType, value, selectEl) {
+    const rel = window.masterPricing?.relationships?.[idx];
     if (!rel) return;
-    rel[field] = value;
-    if (field === 'stdOp') {
+    if (ruleType === 'std') {
         rel.type = value;
+        rel.stdOp = value;
         const input = selectEl.nextElementSibling;
-        if (input) input.disabled = (value === 'sync' || value === '=');
-    } else if (field === 'evtOp') {
+        if (input) input.disabled = (value === '=' || value === 'sync');
+    } else {
+        rel.typeFmp = value;
+        rel.evtOp = value;
         const input = selectEl.nextElementSibling;
-        if (input) input.disabled = (value === 'sync' || value === '=');
+        if (input) input.disabled = (value === '=' || value === 'sync');
+    }
+}
+
+export function updateRelVal(idx, ruleType, value) {
+    const rel = window.masterPricing?.relationships?.[idx];
+    if (!rel) return;
+    const num = parseFloat(value) || 0;
+    if (ruleType === 'std') {
+        rel.val = num;
+        rel.stdVal = num;
+    } else {
+        rel.valFmp = num;
+        rel.evtVal = num;
     }
 }
 
 export function addRelationshipRow() {
-    window.pricingRules = window.pricingRules || {};
-    window.pricingRules.relationships = window.pricingRules.relationships || [];
-    window.masterPricing = window.masterPricing || {};
-    window.masterPricing.relationships = window.pricingRules.relationships;
+    window.masterPricing = ensureParsedObject(window.masterPricing);
+    window.masterPricing.relationships = window.masterPricing.relationships || [];
+    window.pricingRules = ensureParsedObject(window.pricingRules);
+    window.pricingRules.relationships = window.masterPricing.relationships;
 
     const categories = Array.from(new Set((window.roomDefinitions || []).map(r => r.category).filter(Boolean)));
-    window.pricingRules.relationships.push({
+    window.masterPricing.relationships.push({
         anchor: categories[0] || '',
         target: categories[1] || categories[0] || '',
-        stdOp: 'sync',
-        stdVal: 0,
-        evtOp: 'sync',
-        evtVal: 0,
         type: '=',
         val: 0,
-        evtOffset: 0
+        typeFmp: '=',
+        valFmp: 0
     });
     renderRelationshipsTable(categories);
 }
 
 export function deleteRelationshipRow(idx) {
-    if (!window.pricingRules?.relationships) return;
-    window.pricingRules.relationships.splice(idx, 1);
-    if (window.masterPricing) window.masterPricing.relationships = window.pricingRules.relationships;
+    if (!window.masterPricing?.relationships) return;
+    window.masterPricing.relationships.splice(idx, 1);
+    if (window.pricingRules) window.pricingRules.relationships = window.masterPricing.relationships;
     renderRelationshipsTable();
 }
 
@@ -199,7 +222,7 @@ export function renderChannelRulesList() {
     if (!container) return;
     container.innerHTML = '';
 
-    window.pricingRules = window.pricingRules || {};
+    window.pricingRules = ensureParsedObject(window.pricingRules);
 
     if (!Array.isArray(window.pricingRules.channelRules) || window.pricingRules.channelRules.length === 0) {
         if (Array.isArray(window.pricingRules.channels)) {
@@ -266,7 +289,7 @@ export function updateChannelOp(idx, value, selectEl) {
 }
 
 export function addVerifiedChannelRule() {
-    window.pricingRules = window.pricingRules || {};
+    window.pricingRules = ensureParsedObject(window.pricingRules);
     window.pricingRules.channelRules = window.pricingRules.channelRules || [];
 
     const name = prompt("Enter sales channel name (e.g. Traveloka, Trip.com, Airbnb):");
@@ -371,6 +394,7 @@ if (typeof window !== 'undefined') {
     window.renderPricingConfig = renderPricingConfig;
     window.renderRelationshipsTable = renderRelationshipsTable;
     window.updateRelRule = updateRelRule;
+    window.updateRelVal = updateRelVal;
     window.addRelationshipRow = addRelationshipRow;
     window.deleteRelationshipRow = deleteRelationshipRow;
     window.renderChannelRulesList = renderChannelRulesList;
