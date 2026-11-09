@@ -251,14 +251,72 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     renderStep3UnifiedMapping();
 }
 
-export function openCreateRatePlanModal() {
+export function switchCreateModalTab(tab = 'rooms') {
+    const btnRooms = document.getElementById('tab-btn-create-rooms');
+    const btnRates = document.getElementById('tab-btn-create-rates');
+    const paneRooms = document.getElementById('create-modal-pane-rooms');
+    const paneRates = document.getElementById('create-modal-pane-rates');
+
+    const isRooms = tab === 'rooms';
+
+    if (btnRooms && btnRates) {
+        btnRooms.className = isRooms
+            ? "flex-1 py-1 text-center font-black text-[10.5px] uppercase border-b-2 border-indigo-600 text-indigo-700 cursor-pointer transition-colors"
+            : "flex-1 py-1 text-center font-bold text-[10.5px] uppercase border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer transition-colors";
+
+        btnRates.className = !isRooms
+            ? "flex-1 py-1 text-center font-black text-[10.5px] uppercase border-b-2 border-indigo-600 text-indigo-700 cursor-pointer transition-colors"
+            : "flex-1 py-1 text-center font-bold text-[10.5px] uppercase border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer transition-colors";
+    }
+
+    if (paneRooms) paneRooms.classList.toggle('hidden', !isRooms);
+    if (paneRates) paneRates.classList.toggle('hidden', isRooms);
+}
+
+export function openCreateRatePlanModal(initialTab = 'rooms') {
     const modal = document.getElementById('create-rate-plan-modal');
     if (!modal) return;
 
-    const categories = Array.from(new Set((window.roomDefinitions || []).filter(r => !r.inactive).map(r => r.category).filter(Boolean)));
-    const listEl = document.getElementById('crp-room-checklist');
-    if (listEl) {
-        listEl.innerHTML = categories.map(c => `
+    const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
+    const categories = Array.from(new Set(defs.map(r => r.category).filter(Boolean)));
+    const channexMap = window.channexMap || [];
+
+    // 1. Populate Room Types Pane Checklist (Step 2 Categories)
+    const roomTypeChecklist = document.getElementById('crp-roomtype-checklist');
+    if (roomTypeChecklist) {
+        roomTypeChecklist.innerHTML = categories.map(cat => {
+            const sameCat = defs.filter(r => r.category === cat);
+            const isDorm = sameCat.some(r => r.rule !== 'private');
+            const totalBeds = sameCat.reduce((s, r) => s + parseInt(r.beds || r.units || 1, 10), 0);
+            const isMapped = channexMap.some(m => m.pmsCategory === cat && m.channexId);
+
+            return `
+                <label class="flex items-center justify-between p-1.5 rounded hover:bg-slate-100 cursor-pointer border border-slate-200 bg-white">
+                    <div class="flex items-center gap-2 truncate">
+                        <input type="checkbox" class="crp-roomtype-chk" value="${cat}" ${!isMapped ? 'checked' : ''}>
+                        <span class="font-bold text-slate-800 truncate text-[11px]">${cat}</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${
+                            isDorm ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                        }">
+                            ${isDorm ? `${totalBeds} Beds (Dorm)` : `${sameCat.length} Unit(s)`}
+                        </span>
+                        <span class="text-[8.5px] font-black uppercase px-1.5 py-0.2 rounded ${
+                            isMapped ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                        }">
+                            ${isMapped ? 'Mapped ✓' : 'Unmapped'}
+                        </span>
+                    </div>
+                </label>
+            `;
+        }).join('');
+    }
+
+    // 2. Populate Rate Plans Pane Checklist
+    const rateChecklist = document.getElementById('crp-room-checklist');
+    if (rateChecklist) {
+        rateChecklist.innerHTML = categories.map(c => `
             <label class="flex items-center gap-1.5 font-bold cursor-pointer text-xs p-1 hover:bg-slate-100 rounded">
                 <input type="checkbox" class="crp-cat-chk" value="${c}" checked>
                 <span>${c}</span>
@@ -266,8 +324,13 @@ export function openCreateRatePlanModal() {
         `).join('');
     }
 
+    switchCreateModalTab(initialTab);
+
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
 }
 
 export function closeCreateRatePlanModal() {
@@ -278,15 +341,105 @@ export function closeCreateRatePlanModal() {
     }
 }
 
-export function applyRatePlanPreset(title, channel, policy) {
-    const titleInput = document.getElementById('crp-title');
-    if (titleInput) titleInput.value = title;
+export function toggleAllTargetRoomTypes(mode = 'all') {
+    const chks = document.querySelectorAll('.crp-roomtype-chk');
+    const channexMap = window.channexMap || [];
+    chks.forEach(chk => {
+        if (mode === 'all') chk.checked = true;
+        else if (mode === 'none') chk.checked = false;
+        else if (mode === 'unmapped') {
+            const isMapped = channexMap.some(m => m.pmsCategory === chk.value && m.channexId);
+            chk.checked = !isMapped;
+        }
+    });
 }
 
 export function toggleAllTargetRooms(checked) {
     document.querySelectorAll('.crp-cat-chk').forEach(chk => chk.checked = checked);
 }
 
+export function applyRatePlanPreset(title) {
+    const titleInput = document.getElementById('crp-title');
+    if (titleInput) titleInput.value = title;
+}
+
+// Push Step 2 categories as official Channex Room Types
+export async function executeCreateAndPushRoomTypes() {
+    const chks = Array.from(document.querySelectorAll('.crp-roomtype-chk:checked')).map(c => c.value);
+    if (chks.length === 0) return customAlert("Input Required", "Select at least one room category to push.");
+
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
+
+    if (!apiKey || !propId) {
+        return customAlert("Credentials Required", "Enter both Channex API Key and Property UUID first.");
+    }
+
+    const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
+    window.channexRooms = window.channexRooms || [];
+    window.channexMap = window.channexMap || [];
+
+    try {
+        customAlert("Creating in Channex...", `Pushing ${chks.length} room type(s) to Channex...`);
+        let createdCount = 0;
+
+        for (const cat of chks) {
+            const sameCat = defs.filter(r => r.category === cat);
+            const isDorm = sameCat.some(r => r.rule !== 'private');
+            const totalBeds = sameCat.reduce((s, r) => s + parseInt(r.beds || r.units || 1, 10), 0);
+            const occAdults = isDorm ? 1 : Math.max(1, parseInt(sameCat[0]?.beds || 2, 10));
+            const countOfRooms = isDorm ? totalBeds : Math.max(1, sameCat.length);
+            const bedCapacity = Math.max(1, parseInt(sameCat[0]?.beds || 1, 10));
+
+            const payload = {
+                room_type: {
+                    property_id: propId,
+                    title: cat,
+                    count_of_rooms: countOfRooms,
+                    occ_adults: occAdults,
+                    occ_children: 0,
+                    occ_infants: 0,
+                    default_occupancy: occAdults,
+                    room_kind: isDorm ? 'dorm' : 'room',
+                    ...(isDorm ? { capacity: bedCapacity } : {})
+                }
+            };
+
+            const res = await ChannexClient.request('/room_types', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            }, apiKey);
+
+            if (res?.data) {
+                window.channexRooms.push(res.data);
+
+                // Auto-pair into PMS mapping
+                const existIdx = window.channexMap.findIndex(m => m.pmsCategory === cat);
+                if (existIdx > -1) {
+                    window.channexMap[existIdx].channexId = res.data.id;
+                    window.channexMap[existIdx].channexTitle = cat;
+                } else {
+                    window.channexMap.push({ pmsCategory: cat, channexId: res.data.id, channexTitle: cat });
+                }
+                createdCount++;
+            }
+        }
+
+        // Persist to Firestore automatically so the new mapping is permanently locked in
+        if (typeof window.savePropertyToDatabase === 'function') {
+            await window.savePropertyToDatabase(false);
+        }
+
+        closeCreateRatePlanModal();
+        renderStep3UnifiedMapping();
+        customAlert("Success", `Created ${createdCount} room type(s) in Channex and automatically paired your Step 2 categories.`);
+    } catch (err) {
+        console.error("[Create Room Types Error]:", err);
+        customAlert("Creation Failed", err.message);
+    }
+}
+
+// Push Rate Plans linked to mapped categories
 export async function executeCreateAndPushRatePlan() {
     const title = document.getElementById('crp-title')?.value.trim();
     if (!title) return customAlert("Input Required", "Enter a rate plan title.");
@@ -308,7 +461,7 @@ export async function executeCreateAndPushRatePlan() {
     });
 
     if (unmapped.length > 0) {
-        return customAlert("Mapping Required", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmapped.join('\n• ')}`);
+        return customAlert("Mapping Required", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmapped.join('\n• ')}\n\nUse the 'Room Types' tab to create them first.`);
     }
 
     try {
@@ -337,6 +490,10 @@ export async function executeCreateAndPushRatePlan() {
                 window.channexRatePlans.push(res.data);
                 createdCount++;
             }
+        }
+
+        if (typeof window.savePropertyToDatabase === 'function') {
+            await window.savePropertyToDatabase(false);
         }
 
         closeCreateRatePlanModal();
@@ -387,9 +544,12 @@ if (typeof window !== 'undefined') {
     window.renderStep3UnifiedMapping = renderStep3UnifiedMapping;
     window.updateRoomTypeMapping = updateRoomTypeMapping;
     window.updateRatePlanClassification = updateRatePlanClassification;
+    window.switchCreateModalTab = switchCreateModalTab;
     window.openCreateRatePlanModal = openCreateRatePlanModal;
     window.closeCreateRatePlanModal = closeCreateRatePlanModal;
-    window.applyRatePlanPreset = applyRatePlanPreset;
+    window.toggleAllTargetRoomTypes = toggleAllTargetRoomTypes;
     window.toggleAllTargetRooms = toggleAllTargetRooms;
+    window.applyRatePlanPreset = applyRatePlanPreset;
+    window.executeCreateAndPushRoomTypes = executeCreateAndPushRoomTypes;
     window.executeCreateAndPushRatePlan = executeCreateAndPushRatePlan;
 }
