@@ -68,6 +68,36 @@ const AVAILABLE_POLICIES = [
     { val: "ignore", label: "-- Ignore / Do Not Sync --" }
 ];
 
+// Fuzzy Classifier Helper for OTA Channel and Refundability Policy
+export function detectRatePlanClassification(title, plan = null) {
+    let channel = "DEFAULT";
+    if (/\b(booking(\.com)?|bdc)\b/i.test(title)) channel = "Booking.com";
+    else if (/\b(hostelworld|hw)\b/i.test(title)) channel = "Hostelworld";
+    else if (/\b(agoda)\b/i.test(title)) channel = "Agoda";
+    else if (/\b(expedia|exp)\b/i.test(title)) channel = "Expedia";
+    else if (/\b(airbnb|abnb)\b/i.test(title)) channel = "Airbnb";
+    else if (/\b(direct|web(site)?)\b/i.test(title)) channel = "Direct";
+
+    const isEvt = /\b(event|peak|full[-_\s]?moon|fmp|pkg|package)\b/i.test(title);
+    const isNonRef = /\b(non[-_\s]?ref(undable)?|nr\b|n[-_]?ref|no[-_\s]?refund|nonrefundable)\b/i.test(title);
+    const isExplicitFlex = !isNonRef && /\b(flex(ible)?|ref(undable)?|free[-_\s]?cancel(lation)?|standard|std)\b/i.test(title);
+
+    let policy = "non-ref";
+    const planPolicyId = plan?.attributes?.cancellation_policy_id || plan?.relationships?.cancellation_policy?.data?.id;
+    const linkedChannexPolicy = (window.channexPolicies || []).find(cp => cp.id === planPolicyId);
+    const channexPolicyTitle = linkedChannexPolicy?.attributes?.title || '';
+
+    if (isNonRef) {
+        policy = isEvt ? "event-non-ref" : "non-ref";
+    } else if (isExplicitFlex || /\b(flex|free|standard)\b/i.test(channexPolicyTitle)) {
+        policy = isEvt ? "event-ref" : "ref";
+    } else {
+        policy = isEvt ? "event-non-ref" : "non-ref";
+    }
+
+    return { channel, policy, isEvent: policy.startsWith('event') };
+}
+
 export function renderStep3UnifiedMapping() {
     const container = document.getElementById('unified-mapping-container');
     if (!container) return;
@@ -89,11 +119,10 @@ export function renderStep3UnifiedMapping() {
         const isMapped = !!(currentMap && currentMap.channexId);
 
         const card = document.createElement('div');
-        card.className = `p-3 rounded-lg border mb-2 flex flex-col gap-2 ${
-            isMapped ? 'bg-emerald-50/50 border-emerald-300' : 'bg-white border-slate-300'
+        card.className = `rounded-lg border mb-3 overflow-hidden shadow-xs bg-white ${
+            isMapped ? 'border-slate-700' : 'border-slate-300'
         }`;
 
-        // Build room options - ensures saved selection displays even if fresh fetch has not run yet
         let selectOptions = `<option value="">-- UNMAPPED / IGNORED --</option>`;
         const roomsList = window.channexRooms || [];
         if (currentMap?.channexId && !roomsList.some(cr => cr.id === currentMap.channexId)) {
@@ -104,7 +133,6 @@ export function renderStep3UnifiedMapping() {
             selectOptions += `<option value="${cr.id}" ${isSel}>${cr.attributes?.title || cr.id}</option>`;
         });
 
-        // Resolve and map rate plans belonging to this Channex Room Type
         let ratePlansHtml = '';
         if (isMapped) {
             const matchingPlans = (window.channexRatePlans || []).filter(p => {
@@ -114,7 +142,7 @@ export function renderStep3UnifiedMapping() {
 
             if (matchingPlans.length > 0) {
                 ratePlansHtml = `
-                    <div class="mt-2 pt-2 border-t border-emerald-200 overflow-x-auto">
+                    <div class="overflow-x-auto p-2 bg-white">
                         <table class="w-full text-left text-xs border-collapse">
                             <thead class="bg-slate-100/70 border-b border-slate-200 text-slate-500 font-black text-[9px] uppercase tracking-wider">
                                 <tr>
@@ -128,52 +156,38 @@ export function renderStep3UnifiedMapping() {
                                     const title = plan.attributes?.title || plan.id;
                                     let mapping = window.channexRateMap.find(r => r.ratePlanId === plan.id);
 
-                                   if (!mapping) {
-                                        // 1. Channel Detection (Fuzzy patterns for all major OTAs)
-                                        let detectedChannel = "DEFAULT";
-                                        if (/\b(booking(\.com)?|bdc)\b/i.test(title)) detectedChannel = "Booking.com";
-                                        else if (/\b(hostelworld|hw)\b/i.test(title)) detectedChannel = "Hostelworld";
-                                        else if (/\b(agoda)\b/i.test(title)) detectedChannel = "Agoda";
-                                        else if (/\b(expedia|exp)\b/i.test(title)) detectedChannel = "Expedia";
-                                        else if (/\b(airbnb|abnb)\b/i.test(title)) detectedChannel = "Airbnb";
-                                        else if (/\b(direct|web(site)?)\b/i.test(title)) detectedChannel = "Direct";
+                                    // Run fuzzy detection if new or missing proper classifications
+                                    const detected = detectRatePlanClassification(title, plan);
 
-                                        // 2. Cancellation Policy Detection (Guards against "Non-Ref" triggering "Ref")
-                                        const isEvt = /\b(event|peak|full[-_\s]?moon|fmp|pkg|package)\b/i.test(title);
-                                        const isNonRef = /\b(non[-_\s]?ref(undable)?|nr\b|n[-_]?ref|no[-_\s]?refund|nonrefundable)\b/i.test(title);
-                                        const isExplicitFlex = !isNonRef && /\b(flex(ible)?|ref(undable)?|free[-_\s]?cancel(lation)?|standard|std)\b/i.test(title);
-
-                                        // 3. Fallback: Check Channex policy object if title is ambiguous
-                                        let detectedPolicy = "non-ref";
-                                        const planPolicyId = plan.attributes?.cancellation_policy_id || plan.relationships?.cancellation_policy?.data?.id;
-                                        const linkedChannexPolicy = (window.channexPolicies || []).find(cp => cp.id === planPolicyId);
-                                        const channexPolicyTitle = linkedChannexPolicy?.attributes?.title || '';
-
-                                        if (isNonRef) {
-                                            detectedPolicy = isEvt ? "event-non-ref" : "non-ref";
-                                        } else if (isExplicitFlex || /\b(flex|free|standard)\b/i.test(channexPolicyTitle)) {
-                                            detectedPolicy = isEvt ? "event-ref" : "ref";
-                                        } else {
-                                            detectedPolicy = isEvt ? "event-non-ref" : "non-ref";
-                                        }
-
+                                    if (!mapping) {
                                         mapping = {
                                             ratePlanId: plan.id,
                                             pmsCategory: cat,
                                             channexRoomId: currentMap.channexId,
                                             ratePlanTitle: title,
-                                            channel: detectedChannel,
-                                            policy: detectedPolicy,
-                                            rateType: detectedPolicy,
-                                            isEvent: isEvt
+                                            channel: detected.channel,
+                                            policy: detected.policy,
+                                            rateType: detected.policy,
+                                            isEvent: detected.isEvent
                                         };
                                         window.channexRateMap.push(mapping);
+                                    } else {
+                                        if (!mapping.channel || mapping.channel === "DEFAULT") {
+                                            if (detected.channel !== "DEFAULT") mapping.channel = detected.channel;
+                                        }
+                                        if (!mapping.policy || mapping.policy === "non-ref") {
+                                            if (detected.policy !== "non-ref") {
+                                                mapping.policy = detected.policy;
+                                                mapping.rateType = detected.policy;
+                                                mapping.isEvent = detected.isEvent;
+                                            }
+                                        }
                                     }
 
                                     const isEventPlan = mapping.policy?.startsWith('event');
                                     const isFlexPolicy = mapping.policy === 'ref' || mapping.policy === 'event-ref';
 
-                                    let policySelectClass = 'table-input font-bold text-xs';
+                                    let policySelectClass = 'table-input font-bold text-xs cursor-pointer';
                                     if (isEventPlan) {
                                         policySelectClass += ' border-pink-400 text-pink-700 bg-pink-50/20';
                                     } else if (isFlexPolicy) {
@@ -185,21 +199,21 @@ export function renderStep3UnifiedMapping() {
                                             <td class="py-1.5 px-2">
                                                 <div class="flex items-center gap-1.5 flex-wrap">
                                                     <span class="font-bold text-slate-800 text-xs">${title}</span>
-                                                    <span class="px-1.5 py-0.2 rounded font-black text-[9px] uppercase ${
+                                                    <span class="rate-plan-badge px-1.5 py-0.2 rounded font-black text-[9px] uppercase ${
                                                         isEventPlan ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
-                                                    }">${isEventPlan ? 'EVENT RATE' : 'STD RATE'}</span>
+                                                    }">${isEventPlan ? 'EVENT' : 'STD'}</span>
                                                 </div>
                                                 <div class="font-mono text-[9.5px] text-slate-400 mt-0.5">ID: ...${plan.id.slice(-8)}</div>
                                             </td>
                                             <td class="py-1.5 px-2">
-                                                <select class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'channel', this.value)">
+                                                <select class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'channel', this.value, this)">
                                                     ${AVAILABLE_CHANNELS.map(ch => `
                                                         <option value="${ch.val}" ${mapping.channel === ch.val ? 'selected' : ''}>${ch.label}</option>
                                                     `).join('')}
                                                 </select>
                                             </td>
                                             <td class="py-1.5 px-2">
-                                                <select class="${policySelectClass} cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'policy', this.value)">
+                                                <select class="${policySelectClass}" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'policy', this.value, this)">
                                                     ${AVAILABLE_POLICIES.map(pol => `
                                                         <option value="${pol.val}" ${mapping.policy === pol.val ? 'selected' : ''}>${pol.label}</option>
                                                     `).join('')}
@@ -214,23 +228,26 @@ export function renderStep3UnifiedMapping() {
                 `;
             } else {
                 ratePlansHtml = `
-                    <div class="mt-1 pt-1.5 border-t border-slate-200 text-[10px] text-slate-400 italic">
+                    <div class="p-3 bg-white text-[10px] text-slate-400 italic">
                         No primary rate plans attached to this room type in Channex. Click "Fetch Channex Data" above to refresh.
                     </div>
                 `;
             }
         }
 
+        // Darker distinct category header container
         card.innerHTML = `
-            <div class="flex items-center justify-between gap-3">
+            <div class="px-3 py-2 flex items-center justify-between gap-3 ${
+                isMapped ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-800'
+            }">
                 <div class="flex items-center gap-2">
-                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${
-                        isMapped ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+                    <span class="px-2 py-0.5 rounded text-[9.5px] font-black uppercase ${
+                        isMapped ? 'bg-emerald-500 text-slate-950 shadow-xs' : 'bg-slate-400 text-white'
                     }">${isMapped ? 'MAPPED ✓' : 'UNMAPPED ⚠'}</span>
-                    <span class="font-black text-xs text-slate-800 uppercase">${cat}</span>
+                    <span class="font-black text-xs uppercase tracking-wide ${isMapped ? 'text-white' : 'text-slate-800'}">${cat}</span>
                 </div>
                 <div class="w-64">
-                    <select class="table-input font-bold" onchange="window.updateRoomTypeMapping('${cat}', this.value)">
+                    <select class="table-input font-bold ${isMapped ? 'bg-slate-900 text-white border-slate-600' : 'bg-white'}" onchange="window.updateRoomTypeMapping('${cat}', this.value)">
                         ${selectOptions}
                     </select>
                 </div>
@@ -266,18 +283,24 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
             window.channexMap.push({ pmsCategory, channexId, channexTitle: title });
         }
 
-        // Auto-bind all primary rate plans that belong to this Channex room type
+        // Auto-bind all primary rate plans with auto-detected channel & policy
         const matchingPlans = (window.channexRatePlans || []).filter(p => {
             const rId = p.attributes?.room_type_id || p.relationships?.room_type?.data?.id;
             return rId === channexId;
         });
 
         matchingPlans.forEach(plan => {
+            const planTitle = plan.attributes?.title || plan.id;
+            const detected = detectRatePlanClassification(planTitle, plan);
             window.channexRateMap.push({
                 pmsCategory,
                 channexRoomId: channexId,
                 ratePlanId: plan.id,
-                ratePlanTitle: plan.attributes?.title || plan.id
+                ratePlanTitle: planTitle,
+                channel: detected.channel,
+                policy: detected.policy,
+                rateType: detected.policy,
+                isEvent: detected.isEvent
             });
         });
     }
@@ -941,38 +964,57 @@ export async function executeCreateAndPushRatePlan() {
     }
 }
 
-export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoomId, ratePlanTitle, field, value) {
+export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoomId, ratePlanTitle, field, value, selectEl = null) {
     window.channexRateMap = window.channexRateMap || [];
     let mapping = window.channexRateMap.find(r => r.ratePlanId === ratePlanId);
 
     if (value === 'ignore') {
         const idx = window.channexRateMap.findIndex(r => r.ratePlanId === ratePlanId);
         if (idx > -1) window.channexRateMap.splice(idx, 1);
-        renderStep3UnifiedMapping();
-        return;
+    } else {
+        if (!mapping) {
+            mapping = {
+                ratePlanId,
+                pmsCategory,
+                channexRoomId,
+                ratePlanTitle,
+                channel: 'DEFAULT',
+                policy: 'non-ref',
+                rateType: 'non-ref',
+                isEvent: false
+            };
+            window.channexRateMap.push(mapping);
+        }
+
+        mapping[field] = value;
+        if (field === 'policy') {
+            mapping.rateType = value;
+            mapping.isEvent = value.startsWith('event');
+        }
     }
 
-    if (!mapping) {
-        mapping = {
-            ratePlanId,
-            pmsCategory,
-            channexRoomId,
-            ratePlanTitle,
-            channel: 'DEFAULT',
-            policy: 'non-ref',
-            rateType: 'non-ref',
-            isEvent: false
-        };
-        window.channexRateMap.push(mapping);
-    }
+    // Surgical in-place DOM update prevents focus loss and stops Tab from jumping to top of page
+    if (selectEl) {
+        const tr = selectEl.closest('tr');
+        if (tr) {
+            const badge = tr.querySelector('.rate-plan-badge');
+            const isEvent = mapping?.policy?.startsWith('event');
+            const isFlex = mapping?.policy === 'ref' || mapping?.policy === 'event-ref';
 
-    mapping[field] = value;
-    if (field === 'policy') {
-        mapping.rateType = value;
-        mapping.isEvent = value.startsWith('event');
-    }
+            if (badge) {
+                badge.innerText = isEvent ? 'EVENT' : 'STD';
+                badge.className = `rate-plan-badge px-1.5 py-0.2 rounded font-black text-[9px] uppercase ${
+                    isEvent ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                }`;
+            }
 
-    renderStep3UnifiedMapping();
+            if (field === 'policy') {
+                selectEl.className = `table-input font-bold text-xs cursor-pointer ${
+                    isEvent ? 'border-pink-400 text-pink-700 bg-pink-50/20' : (isFlex ? 'border-emerald-400 text-emerald-700 bg-emerald-50/20' : '')
+                }`;
+            }
+        }
+    }
 }
 
 if (typeof window !== 'undefined') {
