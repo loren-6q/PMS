@@ -688,65 +688,7 @@ export const quickAdd = (r, d) => {
 };
 
 
-// --- Property Picker Dropdown Controller for Top Brand Logo ---
-export const togglePropertyPicker = () => {
-    const dropdown = document.getElementById('property-picker-dropdown');
-    if (!dropdown) return;
 
-    const isHidden = dropdown.classList.contains('hidden');
-    if (!isHidden) {
-        dropdown.classList.add('hidden');
-        return;
-    }
-
-    // Delegate directly to universal core/nav.js property catalog
-    if (typeof window.renderPropertyPickerList === 'function') {
-        window.renderPropertyPickerList();
-        dropdown.classList.remove('hidden');
-        return;
-    }
-
-    const props = window.availableProperties || [];
-    const curVal = (window.currentPropertyId || '').toLowerCase();
-
-    if (props.length === 0) {
-        dropdown.innerHTML = `<div class="p-3 text-xs text-slate-500 font-bold">Loading properties from database...</div>`;
-    } else {
-        let html = `
-            <div class="bg-slate-900 text-white text-[10px] font-black uppercase px-3 py-2 flex justify-between items-center">
-                <span>Switch Property</span>
-                <button type="button" onclick="window.togglePropertyPicker()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" class="!w-3.5 !h-3.5"></i></button>
-            </div>
-            <div class="p-1 space-y-0.5 max-h-64 overflow-y-auto">
-        `;
-        props.forEach(p => {
-            const isSelected = (p.id || '').toLowerCase() === curVal;
-            html += `
-                <button type="button" onclick="if(window.switchProperty) window.switchProperty('${p.id}'); window.togglePropertyPicker();" class="w-full text-left px-3 py-2 rounded text-xs font-bold uppercase transition-colors flex items-center justify-between cursor-pointer ${isSelected ? 'bg-indigo-600 text-white font-black shadow-sm' : 'text-slate-700 hover:bg-slate-100'}">
-                    <span>${p.name || p.id}</span>
-                    ${isSelected ? '<span class="text-xs font-black">✓</span>' : ''}
-                </button>
-            `;
-        });
-        html += `</div>`;
-        dropdown.innerHTML = html;
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons();
-        }
-    }
-    dropdown.classList.remove('hidden');
-};
-
-// Auto-close property picker when clicking outside
-document.addEventListener('click', (e) => {
-    const dropdown = document.getElementById('property-picker-dropdown');
-    const logoBtn = document.getElementById('main-brand-logo')?.closest('button');
-    if (dropdown && !dropdown.classList.contains('hidden')) {
-        if (!dropdown.contains(e.target) && (!logoBtn || !logoBtn.contains(e.target))) {
-            dropdown.classList.add('hidden');
-        }
-    }
-});
 
 // --------------------------------------------------------------------------
 // 6. GLOBAL WINDOW EXPORTS
