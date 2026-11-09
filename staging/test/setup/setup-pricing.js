@@ -15,57 +15,43 @@ export const DEFAULT_CHANNELS = [
     { name: "Expedia", sub: "Custom Channel", op: "+%", val: 0, locked: false }
 ];
 
-function ensureParsedObject(val) {
-    if (typeof val === 'string') {
-        try { return JSON.parse(val); } catch (e) { return {}; }
-    }
-    return (val && typeof val === 'object') ? val : {};
-}
+const parseJson = v => (typeof v === 'string' ? JSON.parse(v || '{}') : (v || {}));
 
 export function renderPricingConfig() {
-    window.masterPricing = ensureParsedObject(window.masterPricing);
-    window.pricingRules = ensureParsedObject(window.pricingRules);
+    window.masterPricing = parseJson(window.masterPricing);
+    window.pricingRules = parseJson(window.pricingRules);
 
-    // Synchronize relationships from masterPricing or pricingRules
-    if (!Array.isArray(window.masterPricing.relationships) && Array.isArray(window.pricingRules.relationships)) {
-        window.masterPricing.relationships = window.pricingRules.relationships;
-    } else if (!Array.isArray(window.masterPricing.relationships)) {
-        window.masterPricing.relationships = [];
-    }
+    window.masterPricing.relationships = window.masterPricing.relationships || window.pricingRules.relationships || [];
     window.pricingRules.relationships = window.masterPricing.relationships;
 
     const rules = window.pricingRules;
     const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
     const categories = Array.from(new Set(defs.map(r => r.category).filter(Boolean)));
 
-    // 1. Base Rate Anchors & Master Channel
-    const mdSelect = document.getElementById('rule-master-driver');
-    if (mdSelect) {
-        if (rules.masterDriver) mdSelect.value = rules.masterDriver;
-        mdSelect.onchange = () => {
-            rules.masterDriver = mdSelect.value;
-            renderChannelRulesList();
-        };
+    // 1. Master Driver & Anchors
+    const md = document.getElementById('rule-master-driver');
+    if (md) {
+        if (rules.masterDriver) md.value = rules.masterDriver;
+        md.onchange = () => { rules.masterDriver = md.value; renderChannelRulesList(); };
     }
 
-    const dormAnchorSel = document.getElementById('anchor-dorm-select');
-    const privAnchorSel = document.getElementById('anchor-private-select');
-
+    const dormSel = document.getElementById('anchor-dorm-select');
+    const privSel = document.getElementById('anchor-private-select');
     const dormCats = Array.from(new Set(defs.filter(r => r.rule !== 'private').map(r => r.category)));
     const privCats = Array.from(new Set(defs.filter(r => r.rule === 'private').map(r => r.category)));
 
-    if (dormAnchorSel) {
+    if (dormSel) {
         const list = dormCats.length ? dormCats : categories;
-        dormAnchorSel.innerHTML = '<option value="">-- Select Master Dorm --</option>' +
-            list.map(c => '<option value="' + c + '" ' + (rules.anchorDorm === c ? 'selected' : '') + '>' + c + '</option>').join('');
-        dormAnchorSel.onchange = () => { rules.anchorDorm = dormAnchorSel.value; };
+        dormSel.innerHTML = '<option value="">-- Select Master Dorm --</option>' +
+            list.map(c => `<option value="${c}" ${rules.anchorDorm === c ? 'selected' : ''}>${c}</option>`).join('');
+        dormSel.onchange = () => { rules.anchorDorm = dormSel.value; renderEventPricingMatrix(); };
     }
 
-    if (privAnchorSel) {
+    if (privSel) {
         const list = privCats.length ? privCats : categories;
-        privAnchorSel.innerHTML = '<option value="">-- Select Master Private --</option>' +
-            list.map(c => '<option value="' + c + '" ' + (rules.anchorPrivate === c ? 'selected' : '') + '>' + c + '</option>').join('');
-        privAnchorSel.onchange = () => { rules.anchorPrivate = privAnchorSel.value; };
+        privSel.innerHTML = '<option value="">-- Select Master Private --</option>' +
+            list.map(c => `<option value="${c}" ${rules.anchorPrivate === c ? 'selected' : ''}>${c}</option>`).join('');
+        privSel.onchange = () => { rules.anchorPrivate = privSel.value; renderEventPricingMatrix(); };
     }
 
     // 2. Refundable Markups
@@ -85,6 +71,7 @@ export function renderPricingConfig() {
     renderEventPricingMatrix();
 }
 
+// --- Bidirectional Pricing Links ---
 export function renderRelationshipsTable(categories = null) {
     const tbody = document.getElementById('relationships-table-body');
     if (!tbody) return;
@@ -101,111 +88,79 @@ export function renderRelationshipsTable(categories = null) {
         const tr = document.createElement('tr');
         tr.className = "border-b border-slate-100 hover:bg-slate-50/60 transition-colors";
 
-        const stdOp = rel.type || rel.stdOp || '=';
-        const stdVal = rel.val ?? rel.stdVal ?? 0;
-        const evtOp = rel.typeFmp || rel.evtOp || '=';
-        const evtVal = rel.valFmp ?? rel.evtVal ?? 0;
+        const stdOp = rel.type || '=';
+        const stdVal = rel.val ?? 0;
+        const evtOp = rel.typeFmp || '=';
+        const evtVal = rel.valFmp ?? 0;
 
-        const anchorOpts = categories.map(c => '<option value="' + c + '" ' + (rel.anchor === c ? 'selected' : '') + '>' + c + '</option>').join('');
-        const targetOpts = categories.map(c => '<option value="' + c + '" ' + (rel.target === c ? 'selected' : '') + '>' + c + '</option>').join('');
+        const anchorOpts = categories.map(c => `<option value="${c}" ${rel.anchor === c ? 'selected' : ''}>${c}</option>`).join('');
+        const targetOpts = categories.map(c => `<option value="${c}" ${rel.target === c ? 'selected' : ''}>${c}</option>`).join('');
 
-        let html = '';
-        html += '<td class="py-1 px-2">';
-        html += '  <select class="table-input font-bold" onchange="window.masterPricing.relationships[' + idx + '].anchor = this.value">';
-        html += '    <option value="">-- Select Anchor --</option>' + anchorOpts;
-        html += '  </select>';
-        html += '</td>';
-
-        html += '<td class="py-1 px-2">';
-        html += '  <select class="table-input font-bold text-indigo-700" onchange="window.masterPricing.relationships[' + idx + '].target = this.value">';
-        html += '    <option value="">-- Select Target --</option>' + targetOpts;
-        html += '  </select>';
-        html += '</td>';
-
-        html += '<td class="py-1 px-2">';
-        html += '  <div class="flex items-center gap-1">';
-        html += '    <select class="table-input font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateRelRule(' + idx + ', \'std\', this.value, this)">';
-        html += '      <option value="=" ' + (stdOp === '=' || stdOp === 'sync' ? 'selected' : '') + '>SYNC (==)</option>';
-        html += '      <option value="+%" ' + (stdOp === '+%' ? 'selected' : '') + '>+ %</option>';
-        html += '      <option value="-%" ' + (stdOp === '-%' ? 'selected' : '') + '>- %</option>';
-        html += '      <option value="+" ' + (stdOp === '+' || stdOp === '+$' ? 'selected' : '') + '>+ ฿</option>';
-        html += '      <option value="-" ' + (stdOp === '-' || stdOp === '-$' ? 'selected' : '') + '>- ฿</option>';
-        html += '    </select>';
-        html += '    <input type="number" class="table-input font-black text-center !w-16" value="' + stdVal + '" oninput="window.updateRelVal(' + idx + ', \'std\', this.value)" ' + (stdOp === '=' || stdOp === 'sync' ? 'disabled' : '') + '>';
-        html += '  </div>';
-        html += '</td>';
-
-        html += '<td class="py-1 px-2">';
-        html += '  <div class="flex items-center gap-1">';
-        html += '    <select class="table-input table-input-pink font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateRelRule(' + idx + ', \'evt\', this.value, this)">';
-        html += '      <option value="=" ' + (evtOp === '=' || evtOp === 'sync' ? 'selected' : '') + '>SYNC (==)</option>';
-        html += '      <option value="+%" ' + (evtOp === '+%' ? 'selected' : '') + '>+ %</option>';
-        html += '      <option value="-%" ' + (evtOp === '-%' ? 'selected' : '') + '>- %</option>';
-        html += '      <option value="+" ' + (evtOp === '+' || evtOp === '+$' ? 'selected' : '') + '>+ ฿</option>';
-        html += '      <option value="-" ' + (evtOp === '-' || evtOp === '-$' ? 'selected' : '') + '>- ฿</option>';
-        html += '    </select>';
-        html += '    <input type="number" class="table-input table-input-pink font-black text-center !w-16" value="' + evtVal + '" oninput="window.updateRelVal(' + idx + ', \'evt\', this.value)" ' + (evtOp === '=' || evtOp === 'sync' ? 'disabled' : '') + '>';
-        html += '  </div>';
-        html += '</td>';
-
-        html += '<td class="py-1 px-2 text-center">';
-        html += '  <button type="button" onclick="window.deleteRelationshipRow(' + idx + ')" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5" title="Delete Rule">';
-        html += '    <i data-lucide="trash-2" size="13"></i>';
-        html += '  </button>';
-        html += '</td>';
-
-        tr.innerHTML = html;
+        tr.innerHTML = `
+            <td class="py-1 px-2">
+                <select class="table-input font-bold" onchange="window.masterPricing.relationships[${idx}].anchor = this.value">
+                    <option value="">-- Select Anchor --</option>${anchorOpts}
+                </select>
+            </td>
+            <td class="py-1 px-2">
+                <select class="table-input font-bold text-indigo-700" onchange="window.masterPricing.relationships[${idx}].target = this.value">
+                    <option value="">-- Select Target --</option>${targetOpts}
+                </select>
+            </td>
+            <td class="py-1 px-2">
+                <div class="flex items-center gap-1">
+                    <select class="table-input font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateRelRule(${idx}, 'std', this.value, this)">
+                        <option value="=" ${stdOp === '=' ? 'selected' : ''}>SYNC (==)</option>
+                        <option value="+%" ${stdOp === '+%' ? 'selected' : ''}>+ %</option>
+                        <option value="-%" ${stdOp === '-%' ? 'selected' : ''}>- %</option>
+                        <option value="+" ${stdOp === '+' ? 'selected' : ''}>+ ฿</option>
+                        <option value="-" ${stdOp === '-' ? 'selected' : ''}>- ฿</option>
+                    </select>
+                    <input type="number" class="table-input font-black text-center !w-16" value="${stdVal}" oninput="window.masterPricing.relationships[${idx}].val = parseFloat(this.value) || 0" ${stdOp === '=' ? 'disabled' : ''}>
+                </div>
+            </td>
+            <td class="py-1 px-2">
+                <div class="flex items-center gap-1">
+                    <select class="table-input table-input-pink font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateRelRule(${idx}, 'evt', this.value, this)">
+                        <option value="=" ${evtOp === '=' ? 'selected' : ''}>SYNC (==)</option>
+                        <option value="+%" ${evtOp === '+%' ? 'selected' : ''}>+ %</option>
+                        <option value="-%" ${evtOp === '-%' ? 'selected' : ''}>- %</option>
+                        <option value="+" ${evtOp === '+' ? 'selected' : ''}>+ ฿</option>
+                        <option value="-" ${evtOp === '-' ? 'selected' : ''}>- ฿</option>
+                    </select>
+                    <input type="number" class="table-input table-input-pink font-black text-center !w-16" value="${evtVal}" oninput="window.masterPricing.relationships[${idx}].valFmp = parseFloat(this.value) || 0" ${evtOp === '=' ? 'disabled' : ''}>
+                </div>
+            </td>
+            <td class="py-1 px-2 text-center">
+                <button type="button" onclick="window.deleteRelationshipRow(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5" title="Delete Rule">
+                    <i data-lucide="trash-2" size="13"></i>
+                </button>
+            </td>
+        `;
         tbody.appendChild(tr);
     });
 
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-        window.lucide.createIcons();
-    }
+    if (window.lucide) window.lucide.createIcons();
 }
 
-export function updateRelRule(idx, ruleType, value, selectEl) {
+export function updateRelRule(idx, type, value, selectEl) {
     const rel = window.masterPricing?.relationships?.[idx];
     if (!rel) return;
-    if (ruleType === 'std') {
-        rel.type = value;
-        rel.stdOp = value;
-        const input = selectEl.nextElementSibling;
-        if (input) input.disabled = (value === '=' || value === 'sync');
-    } else {
-        rel.typeFmp = value;
-        rel.evtOp = value;
-        const input = selectEl.nextElementSibling;
-        if (input) input.disabled = (value === '=' || value === 'sync');
-    }
-}
-
-export function updateRelVal(idx, ruleType, value) {
-    const rel = window.masterPricing?.relationships?.[idx];
-    if (!rel) return;
-    const num = parseFloat(value) || 0;
-    if (ruleType === 'std') {
-        rel.val = num;
-        rel.stdVal = num;
-    } else {
-        rel.valFmp = num;
-        rel.evtVal = num;
-    }
+    if (type === 'std') rel.type = value;
+    else rel.typeFmp = value;
+    const input = selectEl.nextElementSibling;
+    if (input) input.disabled = (value === '=');
 }
 
 export function addRelationshipRow() {
-    window.masterPricing = ensureParsedObject(window.masterPricing);
+    window.masterPricing = parseJson(window.masterPricing);
     window.masterPricing.relationships = window.masterPricing.relationships || [];
-    window.pricingRules = ensureParsedObject(window.pricingRules);
     window.pricingRules.relationships = window.masterPricing.relationships;
 
     const categories = Array.from(new Set((window.roomDefinitions || []).map(r => r.category).filter(Boolean)));
     window.masterPricing.relationships.push({
-        anchor: categories[0] || '',
-        target: categories[1] || categories[0] || '',
-        type: '=',
-        val: 0,
-        typeFmp: '=',
-        valFmp: 0
+        anchor: categories[0] || '', target: categories[1] || categories[0] || '',
+        type: '=', val: 0, typeFmp: '=', valFmp: 0
     });
     renderRelationshipsTable(categories);
 }
@@ -213,71 +168,49 @@ export function addRelationshipRow() {
 export function deleteRelationshipRow(idx) {
     if (!window.masterPricing?.relationships) return;
     window.masterPricing.relationships.splice(idx, 1);
-    if (window.pricingRules) window.pricingRules.relationships = window.masterPricing.relationships;
     renderRelationshipsTable();
 }
 
+// --- Sales Channel Adjustments ---
 export function renderChannelRulesList() {
     const container = document.getElementById('channel-rules-container');
     if (!container) return;
     container.innerHTML = '';
 
-    window.pricingRules = ensureParsedObject(window.pricingRules);
-
-    if (!Array.isArray(window.pricingRules.channelRules) || window.pricingRules.channelRules.length === 0) {
-        if (Array.isArray(window.pricingRules.channels)) {
-            window.pricingRules.channelRules = window.pricingRules.channels.map(c => {
-                const op = c.op || (c.type === '=' ? 'sync' : (c.type || '+%'));
-                return {
-                    name: c.name || c.channel,
-                    sub: c.sub || (c.name === 'DEFAULT' ? 'Standard OTA Pipe' : (c.name === 'DIRECT' ? 'Direct Website Engine' : 'Custom Channel')),
-                    op: op,
-                    val: c.val ?? (c.markupPct || 0),
-                    locked: c.locked || (c.name === 'DEFAULT' || c.name === 'DIRECT')
-                };
-            });
-        } else {
-            window.pricingRules.channelRules = JSON.parse(JSON.stringify(DEFAULT_CHANNELS));
-        }
+    window.pricingRules = parseJson(window.pricingRules);
+    if (!Array.isArray(window.pricingRules.channelRules) || !window.pricingRules.channelRules.length) {
+        window.pricingRules.channelRules = JSON.parse(JSON.stringify(DEFAULT_CHANNELS));
     }
 
-    const rules = window.pricingRules.channelRules;
-
-    rules.forEach((cr, idx) => {
+    window.pricingRules.channelRules.forEach((cr, idx) => {
         const isLocked = cr.locked || cr.name === 'DEFAULT' || cr.name === 'DIRECT';
         const row = document.createElement('div');
         row.className = "flex items-center justify-between p-1.5 px-2 bg-white border border-slate-200 rounded text-xs hover:bg-slate-50 transition-colors";
-
-        let html = '';
-        html += '<div>';
-        html += '  <span class="font-black text-slate-800 text-xs">' + cr.name + '</span>';
-        html += '  <span class="block text-[9px] text-slate-400 font-semibold uppercase">' + (cr.sub || 'Custom Channel') + '</span>';
-        html += '</div>';
-        html += '<div class="flex items-center gap-1.5">';
-        html += '  <select class="table-input font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateChannelOp(' + idx + ', this.value, this)" ' + (isLocked ? 'disabled' : '') + '>';
-        html += '    <option value="sync" ' + (cr.op === 'sync' ? 'selected' : '') + '>SYNC (==)</option>';
-        html += '    <option value="+%" ' + (cr.op === '+%' ? 'selected' : '') + '>+ %</option>';
-        html += '    <option value="-%" ' + (cr.op === '-%' ? 'selected' : '') + '>- %</option>';
-        html += '    <option value="+$" ' + (cr.op === '+$' ? 'selected' : '') + '>+ $</option>';
-        html += '    <option value="-$" ' + (cr.op === '-$' ? 'selected' : '') + '>- $</option>';
-        html += '  </select>';
-        html += '  <input type="number" class="table-input font-black text-center !w-16" value="' + (cr.val || 0) + '" oninput="window.pricingRules.channelRules[' + idx + '].val = parseFloat(this.value) || 0" ' + (isLocked || cr.op === 'sync' ? 'disabled' : '') + '>';
-        if (isLocked) {
-            html += '<span class="w-4"></span>';
-        } else {
-            html += '  <button type="button" onclick="window.deleteChannelRule(' + idx + ')" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5 ml-1" title="Delete Channel">';
-            html += '    <i data-lucide="trash-2" size="13"></i>';
-            html += '  </button>';
-        }
-        html += '</div>';
-
-        row.innerHTML = html;
+        row.innerHTML = `
+            <div>
+                <span class="font-black text-slate-800 text-xs">${cr.name}</span>
+                <span class="block text-[9px] text-slate-400 font-semibold uppercase">${cr.sub || 'Custom Channel'}</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <select class="table-input font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateChannelOp(${idx}, this.value, this)" ${isLocked ? 'disabled' : ''}>
+                    <option value="sync" ${cr.op === 'sync' ? 'selected' : ''}>SYNC (==)</option>
+                    <option value="+%" ${cr.op === '+%' ? 'selected' : ''}>+ %</option>
+                    <option value="-%" ${cr.op === '-%' ? 'selected' : ''}>- %</option>
+                    <option value="+$" ${cr.op === '+$' ? 'selected' : ''}>+ $</option>
+                    <option value="-$" ${cr.op === '-$' ? 'selected' : ''}>- $</option>
+                </select>
+                <input type="number" class="table-input font-black text-center !w-16" value="${cr.val || 0}" oninput="window.pricingRules.channelRules[${idx}].val = parseFloat(this.value) || 0" ${isLocked || cr.op === 'sync' ? 'disabled' : ''}>
+                ${isLocked ? '<span class="w-4"></span>' : `
+                    <button type="button" onclick="window.deleteChannelRule(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5 ml-1" title="Delete Channel">
+                        <i data-lucide="trash-2" size="13"></i>
+                    </button>
+                `}
+            </div>
+        `;
         container.appendChild(row);
     });
 
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-        window.lucide.createIcons();
-    }
+    if (window.lucide) window.lucide.createIcons();
 }
 
 export function updateChannelOp(idx, value, selectEl) {
@@ -289,25 +222,17 @@ export function updateChannelOp(idx, value, selectEl) {
 }
 
 export function addVerifiedChannelRule() {
-    window.pricingRules = ensureParsedObject(window.pricingRules);
+    window.pricingRules = parseJson(window.pricingRules);
     window.pricingRules.channelRules = window.pricingRules.channelRules || [];
-
     const name = prompt("Enter sales channel name (e.g. Traveloka, Trip.com, Airbnb):");
     if (!name || !name.trim()) return;
 
     const trimmed = name.trim();
     if (window.pricingRules.channelRules.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
-        return customAlert("Duplicate Channel", '"' + trimmed + '" is already configured.');
+        return customAlert("Duplicate Channel", `"${trimmed}" is already configured.`);
     }
 
-    window.pricingRules.channelRules.push({
-        name: trimmed,
-        sub: 'Custom Channel',
-        op: '+%',
-        val: 0,
-        locked: false
-    });
-
+    window.pricingRules.channelRules.push({ name: trimmed, sub: 'Custom Channel', op: '+%', val: 0, locked: false });
     renderChannelRulesList();
 }
 
@@ -317,7 +242,7 @@ export function deleteChannelRule(idx) {
     renderChannelRulesList();
 }
 
-// Seasonal & Event Dual-Curve Panel
+// --- Seasonal & Event Dual-Curve Panel (Master Anchors Only) ---
 let ratesSpanDays = 2;
 let restrSpanDays = 6;
 
@@ -330,14 +255,14 @@ export function toggleEventSettings(enabled) {
 export function cycleRatesSpan() {
     ratesSpanDays = ratesSpanDays === 2 ? 3 : (ratesSpanDays === 3 ? 4 : 2);
     const pill = document.getElementById('rates-span-pill');
-    if (pill) pill.innerText = '±' + ratesSpanDays + ' Days';
+    if (pill) pill.innerText = `±${ratesSpanDays} Days`;
     renderEventPricingMatrix();
 }
 
 export function cycleRestrSpan() {
     restrSpanDays = restrSpanDays === 6 ? 4 : (restrSpanDays === 4 ? 8 : 6);
     const pill = document.getElementById('restr-span-pill');
-    if (pill) pill.innerText = '±' + restrSpanDays + ' Days';
+    if (pill) pill.innerText = `±${restrSpanDays} Days`;
     renderEventPricingMatrix();
 }
 
@@ -348,45 +273,47 @@ export function renderEventPricingMatrix() {
     const rTbody = document.getElementById('event-restr-tbody');
 
     if (pThead && pTbody) {
-        let th = '<tr><th class="p-1 text-slate-500 uppercase text-[9px] text-left">Category</th>';
+        let th = '<tr><th class="p-1 text-slate-500 uppercase text-[9px] text-left">Master Anchor</th>';
         for (let i = -ratesSpanDays; i <= ratesSpanDays; i++) {
-            const label = i === 0 ? 'PEAK' : (i > 0 ? '+' + i + 'd' : i + 'd');
-            const cls = i === 0 ? 'text-pink-700 bg-pink-100' : 'text-slate-700';
-            th += '<th class="p-1 text-[9px] font-black ' + cls + '">' + label + '</th>';
+            const label = i === 0 ? 'PEAK' : (i > 0 ? `+${i}d` : `${i}d`);
+            th += `<th class="p-1 text-[9px] font-black ${i === 0 ? 'text-pink-700 bg-pink-100' : 'text-slate-700'}">${label}</th>`;
         }
         th += '</tr>';
         pThead.innerHTML = th;
 
-        const categories = Array.from(new Set((window.roomDefinitions || []).filter(r => !r.inactive).map(r => r.category).filter(Boolean)));
-        let tbodyHtml = '';
-        categories.forEach(cat => {
-            tbodyHtml += '<tr><td class="p-1 font-bold text-slate-800 text-left">' + cat + '</td>';
+        // Rippling Engine: Only display the Master Anchors (Dorm & Private)
+        const anchors = [
+            window.pricingRules?.anchorDorm || 'Standard Dorm',
+            window.pricingRules?.anchorPrivate || 'Deluxe Private King'
+        ].filter(Boolean);
+
+        pTbody.innerHTML = anchors.map(cat => {
+            let row = `<tr><td class="p-1 font-bold text-slate-800 text-left text-xs">${cat} <span class="text-[9px] text-indigo-600 uppercase font-black">(Anchor)</span></td>`;
             for (let i = -ratesSpanDays; i <= ratesSpanDays; i++) {
-                const isPeak = i === 0;
-                tbodyHtml += '<td class="p-1"><input type="number" class="table-input !w-12 text-center font-black ' + (isPeak ? 'table-input-pink' : '') + '" value="' + (isPeak ? 1200 : 800) + '"></td>';
+                const isPeak = (i === 0);
+                row += `<td class="p-1"><input type="number" class="table-input !w-12 text-center font-black ${isPeak ? 'table-input-pink' : ''}" value="${isPeak ? 1200 : 800}"></td>`;
             }
-            tbodyHtml += '</tr>';
-        });
-        pTbody.innerHTML = tbodyHtml;
+            row += '</tr>';
+            return row;
+        }).join('');
     }
 
     if (rThead && rTbody) {
         let th = '<tr><th class="p-1 text-slate-500 uppercase text-[9px] text-left">Restriction</th>';
         for (let i = -restrSpanDays; i <= restrSpanDays; i++) {
-            const label = i === 0 ? 'PEAK' : (i > 0 ? '+' + i + 'd' : i + 'd');
-            const cls = i === 0 ? 'text-indigo-700 bg-indigo-100' : 'text-slate-700';
-            th += '<th class="p-1 text-[9px] font-black ' + cls + '">' + label + '</th>';
+            const label = i === 0 ? 'PEAK' : (i > 0 ? `+${i}d` : `${i}d`);
+            th += `<th class="p-1 text-[9px] font-black ${i === 0 ? 'text-indigo-700 bg-indigo-100' : 'text-slate-700'}">${label}</th>`;
         }
         th += '</tr>';
         rThead.innerHTML = th;
 
-        let trHtml = '<tr><td class="p-1 font-bold text-slate-800 text-left">Min Stay (Nts)</td>';
+        let tr = '<tr><td class="p-1 font-bold text-slate-800 text-left">Min Stay (Nts)</td>';
         for (let i = 0; i <= restrSpanDays * 2; i++) {
             const val = Math.abs(i - restrSpanDays) <= 1 ? 3 : 1;
-            trHtml += '<td class="p-1"><input type="number" class="table-input !w-10 text-center font-black" value="' + val + '"></td>';
+            tr += `<td class="p-1"><input type="number" class="table-input !w-10 text-center font-black" value="${val}"></td>`;
         }
-        trHtml += '</tr>';
-        rTbody.innerHTML = trHtml;
+        tr += '</tr>';
+        rTbody.innerHTML = tr;
     }
 }
 
@@ -394,7 +321,6 @@ if (typeof window !== 'undefined') {
     window.renderPricingConfig = renderPricingConfig;
     window.renderRelationshipsTable = renderRelationshipsTable;
     window.updateRelRule = updateRelRule;
-    window.updateRelVal = updateRelVal;
     window.addRelationshipRow = addRelationshipRow;
     window.deleteRelationshipRow = deleteRelationshipRow;
     window.renderChannelRulesList = renderChannelRulesList;
