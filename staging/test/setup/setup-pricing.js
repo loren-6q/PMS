@@ -6,140 +6,282 @@
 import { customAlert } from '../core/ui-dialogs.js';
 
 export const DEFAULT_CHANNELS = [
-    { name: "Direct", multiplier: 1.0, markupPct: 0 },
-    { name: "Booking.com", multiplier: 1.18, markupPct: 18 },
-    { name: "Hostelworld", multiplier: 1.15, markupPct: 15 },
-    { name: "Agoda", multiplier: 1.18, markupPct: 18 },
-    { name: "Airbnb", multiplier: 1.15, markupPct: 15 },
-    { name: "Expedia", multiplier: 1.18, markupPct: 18 }
+    { name: "DEFAULT", sub: "Standard OTA Pipe", op: "sync", val: 0, locked: true },
+    { name: "DIRECT", sub: "Direct Website Engine", op: "sync", val: 0, locked: true },
+    { name: "Booking.com", sub: "BDC Channel", op: "+%", val: 0, locked: false },
+    { name: "Hostelworld", sub: "HW Channel", op: "+%", val: 0, locked: false },
+    { name: "Agoda", sub: "Agoda Channel", op: "+%", val: 0, locked: false },
+    { name: "Direct Website", sub: "Custom Channel", op: "-%", val: 10, locked: false },
+    { name: "Expedia", sub: "Custom Channel", op: "+%", val: 0, locked: false }
 ];
 
 export function renderPricingConfig() {
-    const definitions = window.roomDefinitions || [];
-    const categories = Array.from(new Set(definitions.filter(r => !r.inactive).map(r => r.category).filter(Boolean)));
+    window.pricingRules = window.pricingRules || {};
+    window.masterPricing = window.masterPricing || {};
+
+    // Synchronize relationships array across pricingRules and masterPricing
+    window.pricingRules.relationships = window.pricingRules.relationships || window.masterPricing.relationships || [];
+    window.masterPricing.relationships = window.pricingRules.relationships;
+
+    const rules = window.pricingRules;
+    const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
+    const categories = Array.from(new Set(defs.map(r => r.category).filter(Boolean)));
+
+    // 1. Base Rate Anchors & Master Channel
+    const mdSelect = document.getElementById('rule-master-driver');
+    if (mdSelect) {
+        if (rules.masterDriver) mdSelect.value = rules.masterDriver;
+        mdSelect.onchange = () => {
+            rules.masterDriver = mdSelect.value;
+            renderChannelRulesList();
+        };
+    }
 
     const dormAnchorSel = document.getElementById('anchor-dorm-select');
     const privAnchorSel = document.getElementById('anchor-private-select');
 
+    const dormCats = Array.from(new Set(defs.filter(r => r.rule !== 'private').map(r => r.category)));
+    const privCats = Array.from(new Set(defs.filter(r => r.rule === 'private').map(r => r.category)));
+
     if (dormAnchorSel) {
-        const dorms = categories.filter(c => c.toLowerCase().includes('dorm') || c.toLowerCase().includes('bed'));
-        const list = dorms.length ? dorms : categories;
-        dormAnchorSel.innerHTML = list.map(c => `<option value="${c}">${c}</option>`).join('');
+        const list = dormCats.length ? dormCats : categories;
+        dormAnchorSel.innerHTML = `<option value="">-- Select Master Dorm --</option>` +
+            list.map(c => `<option value="${c}" ${rules.anchorDorm === c ? 'selected' : ''}>${c}</option>`).join('');
+        dormAnchorSel.onchange = () => { rules.anchorDorm = dormAnchorSel.value; };
     }
 
     if (privAnchorSel) {
-        const privates = categories.filter(c => !c.toLowerCase().includes('dorm') && !c.toLowerCase().includes('bed'));
-        const list = privates.length ? privates : categories;
-        privAnchorSel.innerHTML = list.map(c => `<option value="${c}">${c}</option>`).join('');
+        const list = privCats.length ? privCats : categories;
+        privAnchorSel.innerHTML = `<option value="">-- Select Master Private --</option>` +
+            list.map(c => `<option value="${c}" ${rules.anchorPrivate === c ? 'selected' : ''}>${c}</option>`).join('');
+        privAnchorSel.onchange = () => { rules.anchorPrivate = privAnchorSel.value; };
     }
 
-    renderRelationshipsTable();
+    // 2. Refundable Markups
+    const stdRef = document.getElementById('rule-std-ref');
+    const evtRef = document.getElementById('rule-evt-ref');
+    if (stdRef) {
+        stdRef.value = rules.stdRefundableMarkup ?? 25;
+        stdRef.oninput = () => { rules.stdRefundableMarkup = parseFloat(stdRef.value) || 0; };
+    }
+    if (evtRef) {
+        evtRef.value = rules.evtRefundableMarkup ?? 25;
+        evtRef.oninput = () => { rules.evtRefundableMarkup = parseFloat(evtRef.value) || 0; };
+    }
+
+    renderRelationshipsTable(categories);
     renderChannelRulesList();
     renderEventPricingMatrix();
 }
 
-export function renderRelationshipsTable() {
+export function renderRelationshipsTable(categories = null) {
     const tbody = document.getElementById('relationships-table-body');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    window.masterPricing = window.masterPricing || { relationships: [] };
-    const relationships = window.masterPricing.relationships || [];
-    const categories = Array.from(new Set((window.roomDefinitions || []).map(r => r.category).filter(Boolean)));
+    if (!categories) {
+        const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
+        categories = Array.from(new Set(defs.map(r => r.category).filter(Boolean)));
+    }
 
-    relationships.forEach((rel, idx) => {
+    const rels = window.pricingRules?.relationships || [];
+
+    rels.forEach((rel, idx) => {
         const tr = document.createElement('tr');
-        tr.className = "border-b border-slate-100 text-xs";
+        tr.className = "border-b border-slate-100 hover:bg-slate-50/60 transition-colors";
 
-        const anchorOpts = categories.map(c => `<option value="${c}" ${c === rel.anchor ? 'selected' : ''}>${c}</option>`).join('');
-        const targetOpts = categories.map(c => `<option value="${c}" ${c === rel.target ? 'selected' : ''}>${c}</option>`).join('');
+        const stdOp = rel.stdOp || rel.type || 'sync';
+        const stdVal = rel.stdVal ?? rel.val ?? 0;
+        const evtOp = rel.evtOp || (rel.evtOffset ? '+%' : 'sync');
+        const evtVal = rel.evtVal ?? rel.evtOffset ?? 0;
 
         tr.innerHTML = `
-            <td class="p-1.5"><select class="table-input font-bold" onchange="window.masterPricing.relationships[${idx}].anchor = this.value">${anchorOpts}</select></td>
-            <td class="p-1.5"><select class="table-input font-bold" onchange="window.masterPricing.relationships[${idx}].target = this.value">${targetOpts}</select></td>
-            <td class="p-1.5">
+            <td class="py-1 px-2">
+                <select class="table-input font-bold" onchange="window.pricingRules.relationships[${idx}].anchor = this.value">
+                    <option value="">-- Select Anchor --</option>
+                    ${categories.map(c => `<option value="${c}" ${rel.anchor === c ? 'selected' : ''}>${c}</option>`).join('')}
+                </select>
+            </td>
+            <td class="py-1 px-2">
+                <select class="table-input font-bold text-indigo-700" onchange="window.pricingRules.relationships[${idx}].target = this.value">
+                    <option value="">-- Select Target --</option>
+                    ${categories.map(c => `<option value="${c}" ${rel.target === c ? 'selected' : ''}>${c}</option>`).join('')}
+                </select>
+            </td>
+            <td class="py-1 px-2">
                 <div class="flex items-center gap-1">
-                    <select class="table-input !w-20 font-black text-center" onchange="window.masterPricing.relationships[${idx}].type = this.value">
-                        <option value="=" ${rel.type === '=' ? 'selected' : ''}>SYNC (=)</option>
-                        <option value="+%" ${rel.type === '+%' ? 'selected' : ''}>+ %</option>
-                        <option value="-%" ${rel.type === '-%' ? 'selected' : ''}>- %</option>
-                        <option value="+" ${rel.type === '+' ? 'selected' : ''}>+ ฿</option>
-                        <option value="-" ${rel.type === '-' ? 'selected' : ''}>- ฿</option>
+                    <select class="table-input font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateRelRule(${idx}, 'stdOp', this.value, this)">
+                        <option value="sync" ${stdOp === 'sync' || stdOp === '=' ? 'selected' : ''}>SYNC (==)</option>
+                        <option value="+%" ${stdOp === '+%' ? 'selected' : ''}>+ %</option>
+                        <option value="-%" ${stdOp === '-%' ? 'selected' : ''}>- %</option>
+                        <option value="+$" ${stdOp === '+$' || stdOp === '+' ? 'selected' : ''}>+ ฿</option>
+                        <option value="-$" ${stdOp === '-$' || stdOp === '-' ? 'selected' : ''}>- ฿</option>
                     </select>
-                    <input type="number" value="${rel.val || 0}" class="table-input !w-16 font-black text-center" oninput="window.masterPricing.relationships[${idx}].val = parseFloat(this.value) || 0">
+                    <input type="number" class="table-input font-black text-center !w-16" value="${stdVal}" oninput="window.pricingRules.relationships[${idx}].stdVal = parseFloat(this.value) || 0; window.pricingRules.relationships[${idx}].val = window.pricingRules.relationships[${idx}].stdVal;" ${stdOp === 'sync' || stdOp === '=' ? 'disabled' : ''}>
                 </div>
             </td>
-            <td class="p-1.5">
-                <input type="number" value="${rel.evtOffset || 0}" class="table-input !w-16 font-black text-center text-pink-700 bg-pink-50" oninput="window.masterPricing.relationships[${idx}].evtOffset = parseFloat(this.value) || 0">
+            <td class="py-1 px-2">
+                <div class="flex items-center gap-1">
+                    <select class="table-input table-input-pink font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateRelRule(${idx}, 'evtOp', this.value, this)">
+                        <option value="sync" ${evtOp === 'sync' || evtOp === '=' ? 'selected' : ''}>SYNC (==)</option>
+                        <option value="+%" ${evtOp === '+%' ? 'selected' : ''}>+ %</option>
+                        <option value="-%" ${evtOp === '-%' ? 'selected' : ''}>- %</option>
+                        <option value="+$" ${evtOp === '+$' || evtOp === '+' ? 'selected' : ''}>+ ฿</option>
+                        <option value="-$" ${evtOp === '-$' || evtOp === '-' ? 'selected' : ''}>- ฿</option>
+                    </select>
+                    <input type="number" class="table-input table-input-pink font-black text-center !w-16" value="${evtVal}" oninput="window.pricingRules.relationships[${idx}].evtVal = parseFloat(this.value) || 0; window.pricingRules.relationships[${idx}].evtOffset = window.pricingRules.relationships[${idx}].evtVal;" ${evtOp === 'sync' || evtOp === '=' ? 'disabled' : ''}>
+                </div>
             </td>
-            <td class="text-center p-1.5">
-                <button type="button" onclick="window.deleteRelationshipRow(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer">&times;</button>
+            <td class="py-1 px-2 text-center">
+                <button type="button" onclick="window.deleteRelationshipRow(\${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5" title="Delete Rule">
+                    <i data-lucide="trash-2" size="13"></i>
+                </button>
             </td>
         `;
         tbody.appendChild(tr);
     });
 
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+}
+
+export function updateRelRule(idx, field, value, selectEl) {
+    const rel = window.pricingRules?.relationships?.[idx];
+    if (!rel) return;
+    rel[field] = value;
+    if (field === 'stdOp') {
+        rel.type = value;
+        const input = selectEl.nextElementSibling;
+        if (input) input.disabled = (value === 'sync' || value === '=');
+    } else if (field === 'evtOp') {
+        const input = selectEl.nextElementSibling;
+        if (input) input.disabled = (value === 'sync' || value === '=');
+    }
 }
 
 export function addRelationshipRow() {
-    window.masterPricing = window.masterPricing || { relationships: [] };
+    window.pricingRules = window.pricingRules || {};
+    window.pricingRules.relationships = window.pricingRules.relationships || [];
+    window.masterPricing = window.masterPricing || {};
+    window.masterPricing.relationships = window.pricingRules.relationships;
+
     const categories = Array.from(new Set((window.roomDefinitions || []).map(r => r.category).filter(Boolean)));
-    window.masterPricing.relationships.push({
-        anchor: categories[0] || 'Room',
-        target: categories[1] || categories[0] || 'Room',
+    window.pricingRules.relationships.push({
+        anchor: categories[0] || '',
+        target: categories[1] || categories[0] || '',
+        stdOp: 'sync',
+        stdVal: 0,
+        evtOp: 'sync',
+        evtVal: 0,
         type: '=',
         val: 0,
         evtOffset: 0
     });
-    renderRelationshipsTable();
+    renderRelationshipsTable(categories);
 }
 
 export function deleteRelationshipRow(idx) {
-    window.masterPricing.relationships.splice(idx, 1);
+    if (!window.pricingRules?.relationships) return;
+    window.pricingRules.relationships.splice(idx, 1);
+    if (window.masterPricing) window.masterPricing.relationships = window.pricingRules.relationships;
     renderRelationshipsTable();
 }
 
 export function renderChannelRulesList() {
     const container = document.getElementById('channel-rules-container');
     if (!container) return;
+    container.innerHTML = '';
 
     window.pricingRules = window.pricingRules || {};
-    if (!Array.isArray(window.pricingRules.channels)) {
-        if (window.pricingRules.channels && typeof window.pricingRules.channels === 'object') {
-            window.pricingRules.channels = Object.entries(window.pricingRules.channels).map(([name, val]) => ({
-                name,
-                multiplier: typeof val === 'object' ? (val.multiplier ?? 1) : (Number(val) || 1),
-                markupPct: typeof val === 'object' ? (val.markupPct ?? 0) : 0
-            }));
+
+    // Normalize channels to exact structure
+    if (!Array.isArray(window.pricingRules.channelRules) || window.pricingRules.channelRules.length === 0) {
+        if (Array.isArray(window.pricingRules.channels)) {
+            window.pricingRules.channelRules = window.pricingRules.channels.map(c => {
+                const op = c.op || (c.type === '=' ? 'sync' : (c.type || '+%'));
+                return {
+                    name: c.name || c.channel,
+                    sub: c.sub || (c.name === 'DEFAULT' ? 'Standard OTA Pipe' : (c.name === 'DIRECT' ? 'Direct Website Engine' : 'Custom Channel')),
+                    op: op,
+                    val: c.val ?? (c.markupPct || 0),
+                    locked: c.locked || (c.name === 'DEFAULT' || c.name === 'DIRECT')
+                };
+            });
         } else {
-            window.pricingRules.channels = [...DEFAULT_CHANNELS];
+            window.pricingRules.channelRules = JSON.parse(JSON.stringify(DEFAULT_CHANNELS));
         }
     }
-    const channels = window.pricingRules.channels;
 
-    container.innerHTML = channels.map((ch, idx) => `
-        <div class="flex items-center justify-between p-1.5 bg-white border border-amber-200 rounded text-xs">
-            <span class="font-black text-slate-800">${ch.name}</span>
-            <div class="flex items-center gap-1.5">
-                <span class="text-[10px] text-slate-500 font-bold">Multiplier:</span>
-                <input type="number" step="0.01" value="${ch.multiplier}" class="table-input !w-16 text-center font-black" onchange="window.pricingRules.channels[${idx}].multiplier = parseFloat(this.value) || 1">
-                <button type="button" onclick="window.deleteChannelRule(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer ml-1">&times;</button>
+    const rules = window.pricingRules.channelRules;
+
+    rules.forEach((cr, idx) => {
+        const isLocked = cr.locked || cr.name === 'DEFAULT' || cr.name === 'DIRECT';
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between p-1.5 px-2 bg-white border border-slate-200 rounded text-xs hover:bg-slate-50 transition-colors";
+
+        row.innerHTML = `
+            <div>
+                <span class="font-black text-slate-800 text-xs">\${cr.name}</span>
+                <span class="block text-[9px] text-slate-400 font-semibold uppercase">\${cr.sub || 'Custom Channel'}</span>
             </div>
-        </div>
-    `).join('');
+            <div class="flex items-center gap-1.5">
+                <select class="table-input font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateChannelOp(${idx}, this.value, this)" ${isLocked ? 'disabled' : ''}>
+                    <option value="sync" \${cr.op === 'sync' ? 'selected' : ''}>SYNC (==)</option>
+                    <option value="+%" \${cr.op === '+%' ? 'selected' : ''}>+ %</option>
+                    <option value="-%" \${cr.op === '-%' ? 'selected' : ''}>- %</option>
+                    <option value="+$" ${cr.op === '+$' ? 'selected' : ''}>+ $</option>
+                    <option value="-$" ${cr.op === '-$' ? 'selected' : ''}>- $</option>
+                </select>
+                <input type="number" class="table-input font-black text-center !w-16" value="${cr.val || 0}" oninput="window.pricingRules.channelRules[${idx}].val = parseFloat(this.value) || 0" ${isLocked || cr.op === 'sync' ? 'disabled' : ''}>${isLocked ? '<span class="w-4"></span>' : `
+                    <button type="button" onclick="window.deleteChannelRule(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5 ml-1" title="Delete Channel">
+                        <i data-lucide="trash-2" size="13"></i>
+                    </button>
+                `}
+            </div>
+        `;
+        container.appendChild(row);
+    });
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+}
+
+export function updateChannelOp(idx, value, selectEl) {
+    const cr = window.pricingRules?.channelRules?.[idx];
+    if (!cr) return;
+    cr.op = value;
+    const input = selectEl.nextElementSibling;
+    if (input) input.disabled = (value === 'sync');
 }
 
 export function addVerifiedChannelRule() {
-    window.pricingRules = window.pricingRules || { channels: [] };
-    const name = prompt("Enter sales channel name (e.g. Traveloka, Trip.com):");
-    if (!name) return;
-    window.pricingRules.channels.push({ name, multiplier: 1.18, markupPct: 18 });
+    window.pricingRules = window.pricingRules || {};
+    window.pricingRules.channelRules = window.pricingRules.channelRules || [];
+
+    const name = prompt("Enter sales channel name (e.g. Traveloka, Trip.com, Airbnb):");
+    if (!name || !name.trim()) return;
+
+    const trimmed = name.trim();
+    if (window.pricingRules.channelRules.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+        return customAlert("Duplicate Channel", `"\${trimmed}" is already configured.`);
+    }
+
+    window.pricingRules.channelRules.push({
+        name: trimmed,
+        sub: 'Custom Channel',
+        op: '+%',
+        val: 0,
+        locked: false
+    });
+
     renderChannelRulesList();
 }
 
 export function deleteChannelRule(idx) {
-    window.pricingRules.channels.splice(idx, 1);
+    if (!window.pricingRules?.channelRules) return;
+    window.pricingRules.channelRules.splice(idx, 1);
     renderChannelRulesList();
 }
 
@@ -174,7 +316,7 @@ export function renderEventPricingMatrix() {
     const rTbody = document.getElementById('event-restr-tbody');
 
     if (pThead && pTbody) {
-        let th = `<tr><th class="p-1 text-slate-500 uppercase text-[9px]">Category</th>`;
+        let th = `<tr><th class="p-1 text-slate-500 uppercase text-[9px] text-left">Category</th>`;
         for (let i = -ratesSpanDays; i <= ratesSpanDays; i++) {
             th += `<th class="p-1 text-[9px] font-black ${i === 0 ? 'text-pink-700 bg-pink-100' : 'text-slate-700'}">${i === 0 ? 'PEAK' : (i > 0 ? `+${i}d` : `${i}d`)}</th>`;
         }
@@ -183,9 +325,9 @@ export function renderEventPricingMatrix() {
 
         const categories = Array.from(new Set((window.roomDefinitions || []).filter(r => !r.inactive).map(r => r.category).filter(Boolean)));
         pTbody.innerHTML = categories.map(cat => {
-            let row = `<tr><td class="p-1 font-bold text-slate-800 text-left">${cat}</td>`;
+            let row = `<tr><td class="p-1 font-bold text-slate-800 text-left">\${cat}</td>`;
             for (let i = -ratesSpanDays; i <= ratesSpanDays; i++) {
-                row += `<td class="p-1"><input type="number" class="table-input !w-12 text-center font-black ${i === 0 ? 'bg-pink-50 border-pink-300 text-pink-900' : ''}" value="${i === 0 ? 1200 : 800}"></td>`;
+                row += `<td class="p-1"><input type="number" class="table-input !w-12 text-center font-black ${i === 0 ? 'table-input-pink' : ''}" value="${i === 0 ? 1200 : 800}"></td>`;
             }
             row += `</tr>`;
             return row;
@@ -193,7 +335,7 @@ export function renderEventPricingMatrix() {
     }
 
     if (rThead && rTbody) {
-        let th = `<tr><th class="p-1 text-slate-500 uppercase text-[9px]">Restriction</th>`;
+        let th = `<tr><th class="p-1 text-slate-500 uppercase text-[9px] text-left">Restriction</th>`;
         for (let i = -restrSpanDays; i <= restrSpanDays; i++) {
             th += `<th class="p-1 text-[9px] font-black ${i === 0 ? 'text-indigo-700 bg-indigo-100' : 'text-slate-700'}">${i === 0 ? 'PEAK' : (i > 0 ? `+${i}d` : `${i}d`)}</th>`;
         }
@@ -203,7 +345,7 @@ export function renderEventPricingMatrix() {
         rTbody.innerHTML = `
             <tr>
                 <td class="p-1 font-bold text-slate-800 text-left">Min Stay (Nts)</td>
-                ${Array.from({ length: (restrSpanDays * 2) + 1 }, (_, i) => `<td class="p-1"><input type="number" class="table-input !w-10 text-center font-black" value="${Math.abs(i - restrSpanDays) <= 1 ? 3 : 1}"></td>`).join('')}
+                \${Array.from({ length: (restrSpanDays * 2) + 1 }, (_, i) => `<td class="p-1"><input type="number" class="table-input !w-10 text-center font-black" value="${Math.abs(i - restrSpanDays) <= 1 ? 3 : 1}"></td>`).join('')}
             </tr>
         `;
     }
@@ -211,8 +353,12 @@ export function renderEventPricingMatrix() {
 
 if (typeof window !== 'undefined') {
     window.renderPricingConfig = renderPricingConfig;
+    window.renderRelationshipsTable = renderRelationshipsTable;
+    window.updateRelRule = updateRelRule;
     window.addRelationshipRow = addRelationshipRow;
     window.deleteRelationshipRow = deleteRelationshipRow;
+    window.renderChannelRulesList = renderChannelRulesList;
+    window.updateChannelOp = updateChannelOp;
     window.addVerifiedChannelRule = addVerifiedChannelRule;
     window.deleteChannelRule = deleteChannelRule;
     window.toggleEventSettings = toggleEventSettings;
