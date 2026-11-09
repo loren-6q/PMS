@@ -147,6 +147,7 @@ export function mountNav() {
 
     loadPropertiesCatalog().then(props => {
         if (Array.isArray(props) && props.length > 0) {
+            window.availableProperties = props; // <-- ADD THIS LINE
             updateNavBrandLogo();
             const dd = document.getElementById('property-picker-dropdown');
             if (dd && !dd.classList.contains('hidden')) {
@@ -170,6 +171,7 @@ if (typeof window !== 'undefined') {
     window.navigateToApp = navigateToApp;
     window.togglePropertyPicker = togglePropertyPicker;
     window.renderPropertyPickerList = renderPropertyPickerList;
+    window.switchProperty = switchProperty; // <-- ADD THIS LINE so button onclick can call it
     window.mountNav = mountNav;
 }
 
