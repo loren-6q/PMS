@@ -273,6 +273,16 @@ export function switchCreateModalTab(tab = 'rooms') {
     if (paneRates) paneRates.classList.toggle('hidden', isRooms);
 }
 
+// Rate Plan Templates for Batch Suite Creation
+const BATCH_RATE_TEMPLATES = [
+    { id: 'def_non_ref', titleTpl: '{CAT} - Non-Refundable Rate', channel: 'DEFAULT', policy: 'non-ref', checked: true, isEvent: false },
+    { id: 'def_ref', titleTpl: '{CAT} - Refundable Rate', channel: 'DEFAULT', policy: 'ref', checked: true, isEvent: false },
+    { id: 'bdc_non_ref', titleTpl: 'BDC Non-Refundable {CAT}', channel: 'Booking.com', policy: 'non-ref', checked: true, isEvent: false },
+    { id: 'bdc_ref', titleTpl: 'BDC Refundable {CAT}', channel: 'Booking.com', policy: 'ref', checked: true, isEvent: false },
+    { id: 'evt_non_ref', titleTpl: '{CAT} - Event Non-Refundable', channel: 'DEFAULT', policy: 'event-non-ref', checked: false, isEvent: true },
+    { id: 'evt_ref', titleTpl: '{CAT} - Event Refundable', channel: 'DEFAULT', policy: 'event-ref', checked: false, isEvent: true }
+];
+
 export function openCreateRatePlanModal(initialTab = 'rooms') {
     const modal = document.getElementById('create-rate-plan-modal');
     if (!modal) return;
@@ -280,6 +290,7 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
     const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
     const categories = Array.from(new Set(defs.map(r => r.category).filter(Boolean)));
     const channexMap = window.channexMap || [];
+    const allPlans = window.channexRatePlans || [];
 
     // 1. Populate Room Types Pane Checklist (Step 2 Categories)
     const roomTypeChecklist = document.getElementById('crp-roomtype-checklist');
@@ -313,13 +324,46 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
         }).join('');
     }
 
-    // 2. Populate Rate Plans Pane Checklist
+    // 2. Populate Target Categories Checklist for Rate Plans
     const rateChecklist = document.getElementById('crp-room-checklist');
     if (rateChecklist) {
         rateChecklist.innerHTML = categories.map(c => `
             <label class="flex items-center gap-1.5 font-bold cursor-pointer text-xs p-1 hover:bg-slate-100 rounded">
                 <input type="checkbox" class="crp-cat-chk" value="${c}" checked>
                 <span>${c}</span>
+            </label>
+        `).join('');
+    }
+
+    // 3. Populate Clone Source Dropdown
+    const cloneSourceSelect = document.getElementById('crp-clone-source');
+    if (cloneSourceSelect) {
+        const sourceCats = categories.filter(cat => {
+            const m = channexMap.find(x => x.pmsCategory === cat);
+            if (!m || !m.channexId) return false;
+            return allPlans.some(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === m.channexId);
+        });
+
+        cloneSourceSelect.innerHTML = `<option value="">-- Select Source Category --</option>` + sourceCats.map(cat => {
+            const m = channexMap.find(x => x.pmsCategory === cat);
+            const count = allPlans.filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === m.channexId).length;
+            return `<option value="${cat}">${cat} (${count} Plans)</option>`;
+        }).join('');
+    }
+
+    // 4. Populate Batch Rate Plan Suite Checklist
+    const batchListEl = document.getElementById('crp-batch-plans-list');
+    if (batchListEl) {
+        batchListEl.innerHTML = BATCH_RATE_TEMPLATES.map((tpl, i) => `
+            <label class="flex items-center justify-between p-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer">
+                <div class="flex items-center gap-2 truncate">
+                    <input type="checkbox" class="crp-batch-tpl-chk" data-idx="${i}" ${tpl.checked ? 'checked' : ''}>
+                    <span class="font-bold text-slate-800 text-[11px] truncate">${tpl.titleTpl}</span>
+                </div>
+                <div class="flex items-center gap-1 shrink-0 text-[9px] font-black uppercase">
+                    <span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">${tpl.channel}</span>
+                    <span class="px-1.5 py-0.2 rounded ${tpl.isEvent ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}">${tpl.policy}</span>
+                </div>
             </label>
         `).join('');
     }
@@ -356,6 +400,10 @@ export function toggleAllTargetRoomTypes(mode = 'all') {
 
 export function toggleAllTargetRooms(checked) {
     document.querySelectorAll('.crp-cat-chk').forEach(chk => chk.checked = checked);
+}
+
+export function toggleBatchPresetPlans(checked) {
+    document.querySelectorAll('.crp-batch-tpl-chk').forEach(chk => chk.checked = checked);
 }
 
 export function applyRatePlanPreset(title) {
@@ -439,7 +487,200 @@ export async function executeCreateAndPushRoomTypes() {
     }
 }
 
-// Push Rate Plans linked to mapped categories
+// Option A: Clone All Rate Plans from a Source Category
+export async function executeCloneRatePlans() {
+    const sourceCat = document.getElementById('crp-clone-source')?.value;
+    if (!sourceCat) return customAlert("Input Required", "Please select a source category to clone plans from.");
+
+    const targetCats = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
+    if (targetCats.length === 0) return customAlert("Input Required", "Select at least one target room category.");
+
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
+    const currency = document.getElementById('prop-currency')?.value || window.currentPropertyConfig?.currency || 'THB';
+
+    if (!apiKey || !propId) {
+        return customAlert("Credentials Required", "Enter both Channex API Key and Property UUID.");
+    }
+
+    const srcMap = (window.channexMap || []).find(m => m.pmsCategory === sourceCat);
+    if (!srcMap?.channexId) {
+        return customAlert("Error", `Source category "${sourceCat}" is not mapped to a Channex Room Type.`);
+    }
+
+    const allPlans = window.channexRatePlans || [];
+    const sourcePlans = allPlans.filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === srcMap.channexId);
+
+    if (sourcePlans.length === 0) {
+        return customAlert("No Plans", `No primary rate plans found under source category "${sourceCat}".`);
+    }
+
+    const unmappedTargets = targetCats.filter(cat => {
+        const m = (window.channexMap || []).find(x => x.pmsCategory === cat);
+        return !m || !m.channexId;
+    });
+
+    if (unmappedTargets.length > 0) {
+        return customAlert("Target Not Mapped", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmappedTargets.join('\n• ')}`);
+    }
+
+    try {
+        const totalOps = targetCats.length * sourcePlans.length;
+        customAlert("Cloning...", `Pushing ${totalOps} rate plan(s) to Channex...`);
+        let createdCount = 0;
+
+        for (const tgtCat of targetCats) {
+            const tgtMap = window.channexMap.find(m => m.pmsCategory === tgtCat);
+
+            for (const sp of sourcePlans) {
+                const spTitle = sp.attributes?.title || sp.id;
+                const spMap = (window.channexRateMap || []).find(r => r.ratePlanId === sp.id) || {};
+
+                let newTitle = spTitle;
+                const escSource = sourceCat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                if (new RegExp(escSource, 'i').test(newTitle)) {
+                    newTitle = newTitle.replace(new RegExp(escSource, 'gi'), tgtCat);
+                } else {
+                    newTitle = `${tgtCat} - ${newTitle}`;
+                }
+
+                const payload = {
+                    rate_plan: {
+                        title: newTitle,
+                        property_id: propId,
+                        room_type_id: tgtMap.channexId,
+                        currency: currency,
+                        options: sp.attributes?.options || [{ occupancy: 1, is_primary: true, rate: 0 }]
+                    }
+                };
+
+                const res = await ChannexClient.request('/rate_plans', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                }, apiKey);
+
+                if (res?.data) {
+                    window.channexRatePlans = window.channexRatePlans || [];
+                    window.channexRatePlans.push(res.data);
+
+                    window.channexRateMap = window.channexRateMap || [];
+                    window.channexRateMap.push({
+                        ratePlanId: res.data.id,
+                        pmsCategory: tgtCat,
+                        channexRoomId: tgtMap.channexId,
+                        ratePlanTitle: newTitle,
+                        channel: spMap.channel || 'DEFAULT',
+                        policy: spMap.policy || 'non-ref',
+                        rateType: spMap.rateType || spMap.policy || 'non-ref',
+                        isEvent: !!spMap.isEvent
+                    });
+
+                    createdCount++;
+                }
+            }
+        }
+
+        if (typeof window.savePropertyToDatabase === 'function') {
+            await window.savePropertyToDatabase(false);
+        }
+
+        closeCreateRatePlanModal();
+        renderStep3UnifiedMapping();
+        customAlert("Success", `Cloned and mapped ${createdCount} rate plan(s) from "${sourceCat}".`);
+    } catch (err) {
+        console.error("[Clone Rate Plans Error]:", err);
+        customAlert("Cloning Failed", err.message);
+    }
+}
+
+// Option B: Batch Create Rate Plan Suite
+export async function executeBatchCreateRatePlans() {
+    const targetCats = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
+    if (targetCats.length === 0) return customAlert("Input Required", "Select at least one target room category.");
+
+    const chkIndices = Array.from(document.querySelectorAll('.crp-batch-tpl-chk:checked')).map(c => parseInt(c.dataset.idx, 10));
+    if (chkIndices.length === 0) return customAlert("Input Required", "Select at least one rate plan template to create.");
+
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
+    const currency = document.getElementById('prop-currency')?.value || window.currentPropertyConfig?.currency || 'THB';
+
+    if (!apiKey || !propId) {
+        return customAlert("Credentials Required", "Enter both Channex API Key and Property UUID.");
+    }
+
+    const unmappedTargets = targetCats.filter(cat => {
+        const m = (window.channexMap || []).find(x => x.pmsCategory === cat);
+        return !m || !m.channexId;
+    });
+
+    if (unmappedTargets.length > 0) {
+        return customAlert("Target Not Mapped", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmappedTargets.join('\n• ')}\n\nUse the 'Room Types' tab to push them first.`);
+    }
+
+    const selectedTemplates = chkIndices.map(i => BATCH_RATE_TEMPLATES[i]);
+    const totalOps = targetCats.length * selectedTemplates.length;
+
+    try {
+        customAlert("Pushing Suite...", `Creating ${totalOps} rate plan(s) across ${targetCats.length} category(ies)...`);
+        let createdCount = 0;
+
+        for (const tgtCat of targetCats) {
+            const tgtMap = window.channexMap.find(m => m.pmsCategory === tgtCat);
+
+            for (const tpl of selectedTemplates) {
+                const finalTitle = tpl.titleTpl.replace(/{CAT}/g, tgtCat);
+
+                const payload = {
+                    rate_plan: {
+                        title: finalTitle,
+                        property_id: propId,
+                        room_type_id: tgtMap.channexId,
+                        currency: currency,
+                        options: [{ occupancy: 1, is_primary: true, rate: 0 }]
+                    }
+                };
+
+                const res = await ChannexClient.request('/rate_plans', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                }, apiKey);
+
+                if (res?.data) {
+                    window.channexRatePlans = window.channexRatePlans || [];
+                    window.channexRatePlans.push(res.data);
+
+                    window.channexRateMap = window.channexRateMap || [];
+                    window.channexRateMap.push({
+                        ratePlanId: res.data.id,
+                        pmsCategory: tgtCat,
+                        channexRoomId: tgtMap.channexId,
+                        ratePlanTitle: finalTitle,
+                        channel: tpl.channel,
+                        policy: tpl.policy,
+                        rateType: tpl.policy,
+                        isEvent: tpl.isEvent
+                    });
+
+                    createdCount++;
+                }
+            }
+        }
+
+        if (typeof window.savePropertyToDatabase === 'function') {
+            await window.savePropertyToDatabase(false);
+        }
+
+        closeCreateRatePlanModal();
+        renderStep3UnifiedMapping();
+        customAlert("Success", `Created and mapped ${createdCount} rate plan(s) across selected categories.`);
+    } catch (err) {
+        console.error("[Batch Create Rate Plans Error]:", err);
+        customAlert("Creation Failed", err.message);
+    }
+}
+
+// Option C: Push Single Custom Rate Plan
 export async function executeCreateAndPushRatePlan() {
     const title = document.getElementById('crp-title')?.value.trim();
     if (!title) return customAlert("Input Required", "Enter a rate plan title.");
@@ -549,7 +790,10 @@ if (typeof window !== 'undefined') {
     window.closeCreateRatePlanModal = closeCreateRatePlanModal;
     window.toggleAllTargetRoomTypes = toggleAllTargetRoomTypes;
     window.toggleAllTargetRooms = toggleAllTargetRooms;
+    window.toggleBatchPresetPlans = toggleBatchPresetPlans;
     window.applyRatePlanPreset = applyRatePlanPreset;
     window.executeCreateAndPushRoomTypes = executeCreateAndPushRoomTypes;
+    window.executeCloneRatePlans = executeCloneRatePlans;
+    window.executeBatchCreateRatePlans = executeBatchCreateRatePlans;
     window.executeCreateAndPushRatePlan = executeCreateAndPushRatePlan;
 }
