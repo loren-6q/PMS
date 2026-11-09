@@ -345,9 +345,9 @@
                             Fetch Channex Data
                         </button>
                     </div>
-                    <div class="flex items-end">
-                        <button type="button" onclick="window.openCreateRatePlanModal()" class="w-full py-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9.5px] uppercase rounded transition-colors shadow-xs cursor-pointer h-[22px]">
-                            + Create & Push Plan
+                   <div class="flex items-end">
+                        <button type="button" onclick="window.openCreateRatePlanModal('rooms')" class="w-full py-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9.5px] uppercase rounded transition-colors shadow-xs cursor-pointer h-[22px]">
+                            + Create & Push Rooms / Rates
                         </button>
                     </div>
                 </div>
@@ -816,30 +816,74 @@
         </div>
     </div>
 
-    <!-- 7. Create Rate Plan Modal -->
+    <!-- 7. Create & Push to Channex Modal (Rooms & Rates) -->
     <div id="create-rate-plan-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 hidden" onclick="if(event.target === this) window.closeCreateRatePlanModal()">
-        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-3.5 border border-slate-300">
-            <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-3.5 border border-slate-300 text-xs">
+            <!-- Header -->
+            <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-200">
                 <h4 class="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
-                    <i data-lucide="tags" size="14" class="text-emerald-600"></i> Create & Push Rate Plan
+                    <i data-lucide="cloud-upload" size="14" class="text-indigo-600"></i> Create & Push to Channex
                 </h4>
                 <button type="button" onclick="window.closeCreateRatePlanModal()" class="text-slate-400 hover:text-black cursor-pointer"><i data-lucide="x" size="15"></i></button>
             </div>
 
-            <div class="mb-2 p-1.5 bg-slate-50 rounded border border-slate-200">
-                <span class="text-[9px] font-black uppercase text-slate-500 block mb-0.5">Quick Presets:</span>
-                <div class="flex flex-wrap gap-1">
-                    <button type="button" onclick="window.applyRatePlanPreset('Standard Non-Refundable', 'DEFAULT', 'non-ref')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer">Non-Ref</button>
-                    <button type="button" onclick="window.applyRatePlanPreset('Standard Flexible', 'DEFAULT', 'ref')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer">Flexible</button>
-                    <button type="button" onclick="window.applyRatePlanPreset('Event Rate', 'DEFAULT', 'non-ref')" class="px-1.5 py-0.5 rounded bg-pink-50 hover:bg-pink-100 border border-pink-300 text-[9px] font-bold text-pink-800 cursor-pointer">Event Rate</button>
+            <!-- Tab Switcher -->
+            <div class="flex border-b border-slate-200 mb-2.5">
+                <button type="button" id="tab-btn-create-rooms" onclick="window.switchCreateModalTab('rooms')" class="flex-1 py-1 text-center font-black text-[10.5px] uppercase border-b-2 border-indigo-600 text-indigo-700 cursor-pointer transition-colors">
+                    Room Types (Step 2 Categories)
+                </button>
+                <button type="button" id="tab-btn-create-rates" onclick="window.switchCreateModalTab('rates')" class="flex-1 py-1 text-center font-bold text-[10.5px] uppercase border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer transition-colors">
+                    Rate Plans
+                </button>
+            </div>
+
+            <!-- PANE 1: ROOM TYPES PANE -->
+            <div id="create-modal-pane-rooms" class="space-y-2">
+                <p class="text-[10px] text-slate-500 font-semibold leading-relaxed">
+                    Select your Step 2 room categories to create as official <strong>Room Types</strong> in Channex. Cap and occupancy are automatically compiled from your bed rules.
+                </p>
+
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="label-base mb-0">Select Categories to Push:</label>
+                        <div class="flex gap-1.5 text-[9px] font-black uppercase text-indigo-700">
+                            <button type="button" onclick="window.toggleAllTargetRoomTypes('unmapped')" class="hover:underline cursor-pointer">Unmapped Only</button>
+                            <span>•</span>
+                            <button type="button" onclick="window.toggleAllTargetRoomTypes('all')" class="hover:underline cursor-pointer">All</button>
+                            <span>•</span>
+                            <button type="button" onclick="window.toggleAllTargetRoomTypes('none')" class="hover:underline cursor-pointer">None</button>
+                        </div>
+                    </div>
+                    <div id="crp-roomtype-checklist" class="max-h-48 overflow-y-auto border border-slate-200 rounded p-1 bg-slate-50 space-y-1"></div>
+                </div>
+
+                <div class="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-200">
+                    <button type="button" onclick="window.closeCreateRatePlanModal()" class="px-2.5 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[9.5px] font-black uppercase cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="button" onclick="window.executeCreateAndPushRoomTypes()" class="px-3.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-black uppercase shadow-xs cursor-pointer flex items-center gap-1">
+                        <i data-lucide="door-closed" size="12"></i>
+                        <span>Push & Pair Room Types</span>
+                    </button>
                 </div>
             </div>
 
-            <div class="space-y-2 text-xs">
+            <!-- PANE 2: RATE PLANS PANE -->
+            <div id="create-modal-pane-rates" class="space-y-2 hidden">
+                <div class="p-1.5 bg-slate-50 rounded border border-slate-200">
+                    <span class="text-[9px] font-black uppercase text-slate-500 block mb-0.5">Quick Presets:</span>
+                    <div class="flex flex-wrap gap-1">
+                        <button type="button" onclick="window.applyRatePlanPreset('Standard Non-Refundable')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer">Non-Ref</button>
+                        <button type="button" onclick="window.applyRatePlanPreset('Standard Flexible')" class="px-1.5 py-0.5 rounded bg-white hover:bg-indigo-50 border border-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer">Flexible</button>
+                        <button type="button" onclick="window.applyRatePlanPreset('Event Rate')" class="px-1.5 py-0.5 rounded bg-pink-50 hover:bg-pink-100 border border-pink-300 text-[9px] font-bold text-pink-800 cursor-pointer">Event Rate</button>
+                    </div>
+                </div>
+
                 <div>
                     <label class="label-base">Rate Plan Title</label>
                     <input type="text" id="crp-title" class="table-input font-bold" value="Standard Non-Refundable">
                 </div>
+
                 <div>
                     <div class="flex items-center justify-between mb-0.5">
                         <label class="label-base mb-0">Push To Which Categories?</label>
@@ -851,16 +895,16 @@
                     </div>
                     <div id="crp-room-checklist" class="max-h-28 overflow-y-auto border border-slate-200 rounded p-1 bg-slate-50 space-y-0.5"></div>
                 </div>
-            </div>
 
-            <div class="flex items-center justify-end gap-1.5 mt-3 pt-1.5 border-t border-slate-200">
-                <button type="button" onclick="window.closeCreateRatePlanModal()" class="px-2.5 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[9.5px] font-black uppercase cursor-pointer">
-                    Cancel
-                </button>
-                <button type="button" onclick="window.executeCreateAndPushRatePlan()" class="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-black uppercase shadow-xs cursor-pointer flex items-center gap-1">
-                    <i data-lucide="cloud-upload" size="12"></i>
-                    <span>Create & Map</span>
-                </button>
+                <div class="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-200">
+                    <button type="button" onclick="window.closeCreateRatePlanModal()" class="px-2.5 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 text-[9.5px] font-black uppercase cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="button" onclick="window.executeCreateAndPushRatePlan()" class="px-3.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-black uppercase shadow-xs cursor-pointer flex items-center gap-1">
+                        <i data-lucide="cloud-upload" size="12"></i>
+                        <span>Create & Map Rate Plans</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
