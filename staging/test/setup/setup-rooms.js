@@ -50,7 +50,11 @@ export function compileRoomsFromDefinitions() {
         const total = Math.max(1, parseInt(def.beds || def.units || 1, 10));
         const rule = def.rule || 'private';
         const floor = def.floor || '1';
-        const baseId = (def.id || rawName).trim();
+        // Ensure every room has an immutable permanent ID
+        if (!def.id || def.id.startsWith('room_')) {
+            def.id = (rawName || `rm_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 5)}`).trim();
+        }
+        const baseId = def.id.trim();
         const isInactive = !!def.inactive;
 
         if (rule === 'private') {
@@ -163,7 +167,7 @@ export function renderRoomDefinitionsTable() {
                     </div>
                 </div>
             </td>
-            <td><input type="text" value="${room.name || ''}" class="table-input font-bold" onchange="window.roomDefinitions[${idx}].name = this.value; window.roomDefinitions[${idx}].id = this.value; window.compileRoomsFromDefinitions();"></td>
+            <td><input type="text" value="${room.name || ''}" class="table-input font-bold" onchange="window.roomDefinitions[${idx}].name = this.value.trim(); window.compileRoomsFromDefinitions();"></td>
             <td><input type="text" list="setup-category-datalist" value="${room.category || ''}" class="table-input font-bold" onchange="window.roomDefinitions[${idx}].category = this.value; window.renderRoomDefinitionsTable();"></td>
             <td class="text-center"><input type="number" min="1" max="60" value="${room.beds || room.units || 1}" class="table-input text-center font-black" onchange="const v = parseInt(this.value, 10) || 1; window.roomDefinitions[${idx}].beds = v; window.roomDefinitions[${idx}].units = v; window.compileRoomsFromDefinitions();"></td>
             <td class="text-center"><input type="text" value="${room.floor || '1'}" class="table-input text-center font-bold" onchange="window.roomDefinitions[${idx}].floor = this.value"></td>
@@ -716,9 +720,10 @@ export function executeWizardGenerate() {
     window.roomDefinitions = window.roomDefinitions || [];
 
     names.forEach(name => {
+        const uniqueId = `rm_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 6)}`;
         window.roomDefinitions.push({
-            id: name,
-            name: name,
+            id: uniqueId,
+            name: name.trim(),
             category: cat,
             beds: beds,
             units: beds,
