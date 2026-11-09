@@ -16,25 +16,17 @@ import { renderPricingConfig } from './setup-pricing.js';
 
 export let currentStep = 1;
 
-// --- 5-Step Stepper Router ---
+// --- 5-Step Stepper Router (Powered by style.css .step-pill) ---
 export function jumpStep(stepNum) {
     currentStep = Math.max(1, Math.min(5, parseInt(stepNum, 10) || 1));
 
     for (let i = 1; i <= 5; i++) {
         const pill = document.getElementById(`pill-step-${i}`);
-        const badge = document.getElementById(`badge-step-${i}`);
         const content = document.getElementById(`step-content-${i}`);
 
         if (pill) {
             pill.classList.toggle('active', i === currentStep);
             pill.classList.toggle('completed', i < currentStep);
-        }
-        if (badge) {
-            badge.className = i === currentStep
-                ? "w-5 h-5 rounded bg-white text-indigo-700 font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs"
-                : (i < currentStep
-                    ? "w-5 h-5 rounded bg-emerald-100 text-emerald-800 font-black text-[10px] flex items-center justify-center shrink-0 border border-emerald-300"
-                    : "w-5 h-5 rounded bg-slate-100 text-slate-600 font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-200");
         }
         if (content) content.classList.toggle('hidden', i !== currentStep);
     }
@@ -119,10 +111,7 @@ export async function loadPropertyData(propId) {
             updateLogoPreview('icon', data.iconUrl);
 
             window.roomDefinitions = Array.isArray(data.roomDefinitions) ? data.roomDefinitions : [];
-            
-            // Normalized via setup-profile.js engine on load
             window.paymentMethods = normalizePaymentMethods(Array.isArray(data.payments) ? data.payments : []);
-            
             window.addonsList = Array.isArray(data.addons) && data.addons.length > 0 ? data.addons : null;
             window.channexRooms = Array.isArray(data.channexRooms) ? data.channexRooms : [];
             window.channexRatePlans = Array.isArray(data.channexRatePlans) ? data.channexRatePlans : [];
@@ -149,8 +138,8 @@ export async function loadPropertyData(propId) {
 export async function savePropertyToDatabase(notify = true) {
     const btn = document.getElementById('btn-save-header');
     const btnFooter = document.getElementById('btn-save-footer');
-    if (btn) { btn.disabled = true; btn.innerText = "SAVING..."; }
-    if (btnFooter) btnFooter.disabled = true;
+    if (btn) { btn.disabled = true; btn.innerHTML = `<i data-lucide="save" size="13"></i> <span>SAVING...</span>`; }
+    if (btnFooter) { btnFooter.disabled = true; btnFooter.innerHTML = `<i data-lucide="save" size="12"></i> <span>SAVING...</span>`; }
 
     try {
         const propId = window.currentPropertyId || 'swims_resort';
@@ -164,7 +153,7 @@ export async function savePropertyToDatabase(notify = true) {
             savedAt: new Date().toISOString()
         });
 
-        // 2. Persist Property Document with Normalized Payments
+        // 2. Persist Property Document
         const propData = {
             id: propId,
             name: document.getElementById('prop-name')?.value.trim() || propId,
@@ -210,15 +199,14 @@ export async function savePropertyToDatabase(notify = true) {
         console.error("[Setup Save Error]:", err);
         customAlert("Save Error", err.message);
     } finally {
-        if (btn) { btn.disabled = false; btn.innerText = "SAVE"; }
-        if (btnFooter) btnFooter.disabled = false;
+        if (btn) { btn.disabled = false; btn.innerHTML = `<i data-lucide="save" size="13"></i> <span>SAVE</span>`; }
+        if (btnFooter) { btnFooter.disabled = false; btnFooter.innerHTML = `<i data-lucide="save" size="12"></i> <span>SAVE</span>`; }
         if (window.lucide && typeof window.lucide.createIcons === 'function') {
             window.lucide.createIcons();
         }
     }
 }
 
-// --- New Property Modal ---
 export function openNewPropertyModal() {
     const modal = document.getElementById('new-property-modal');
     if (modal) {
@@ -265,7 +253,6 @@ export async function confirmCreateNewProperty() {
     }
 }
 
-// --- Master Setup Bootstrapper ---
 export async function initSetup() {
     try {
         await signInAnonymously(auth);
@@ -283,7 +270,6 @@ export async function initSetup() {
     }
 }
 
-// Global Exports
 if (typeof window !== 'undefined') {
     window.jumpStep = jumpStep;
     window.nextStep = nextStep;
@@ -301,7 +287,6 @@ if (typeof window !== 'undefined') {
     };
 }
 
-// Guaranteed Zero-Race Execution
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSetup);
 } else {
