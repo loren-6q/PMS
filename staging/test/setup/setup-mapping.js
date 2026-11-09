@@ -785,11 +785,70 @@ export async function executeBatchCreateRatePlans() {
     }
 }
 
-// Option C: Push Single Custom Rate Plan: Formats as [Prefix] [Room]
-export async function executeCreateAndPushRatePlan() {
-    const rawTitle = document.getElementById('crp-title')?.value.trim();
-    if (!rawTitle) return customAlert("Input Required", "Enter a rate plan title or prefix.");
+// --- Option C Builder State & Live Controller ---
+window.crpCustomChannel = 'DEFAULT';
+window.crpCustomPolicy = 'non-ref';
 
+export function setOptionCChannel(chan) {
+    window.crpCustomChannel = chan;
+    document.querySelectorAll('.crp-c-chan-btn').forEach(btn => {
+        const isSel = btn.dataset.val === chan;
+        btn.className = `crp-c-chan-btn px-2 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer border ${
+            isSel ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700'
+        }`;
+    });
+    updateOptionCPreview();
+}
+
+export function setOptionCPolicy(pol) {
+    window.crpCustomPolicy = pol;
+    document.querySelectorAll('.crp-c-pol-btn').forEach(btn => {
+        const isSel = btn.dataset.val === pol;
+        btn.className = `crp-c-pol-btn px-2 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer border ${
+            isSel ? 'border-emerald-600 bg-emerald-600 text-white shadow-xs' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700'
+        }`;
+    });
+    updateOptionCPreview();
+}
+
+export function getOptionCChannelPrefix(chan) {
+    switch (chan) {
+        case 'Booking.com': return 'BDC';
+        case 'Hostelworld': return 'HW';
+        case 'Agoda': return 'Agoda';
+        case 'Expedia': return 'Expedia';
+        case 'Airbnb': return 'Airbnb';
+        case 'Direct': return 'Direct';
+        default: return '';
+    }
+}
+
+export function getOptionCPolicyLabel(pol) {
+    switch (pol) {
+        case 'ref': return 'Refundable';
+        case 'event-non-ref': return 'Event Non-Refundable';
+        case 'event-ref': return 'Event Refundable';
+        default: return 'Non-Refundable';
+    }
+}
+
+export function updateOptionCPreview() {
+    const previewEl = document.getElementById('crp-custom-preview-text');
+    if (!previewEl) return;
+
+    const chan = window.crpCustomChannel || 'DEFAULT';
+    const pol = window.crpCustomPolicy || 'non-ref';
+    const customSuffix = document.getElementById('crp-custom-name')?.value.trim() || '';
+
+    const prefix = getOptionCChannelPrefix(chan);
+    const policyLabel = getOptionCPolicyLabel(pol);
+
+    const parts = [prefix, policyLabel, customSuffix].filter(Boolean);
+    previewEl.innerText = `${parts.join(' ')} [Room]`;
+}
+
+// Option C: Push Single Custom Rate Plan using the Section Builder
+export async function executeCreateAndPushRatePlan() {
     const chks = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
     if (chks.length === 0) return customAlert("Input Required", "Select at least one room category.");
 
@@ -810,18 +869,22 @@ export async function executeCreateAndPushRatePlan() {
         return customAlert("Mapping Required", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmapped.join('\n• ')}\n\nUse the 'Room Types' tab to create them first.`);
     }
 
+    const channel = window.crpCustomChannel || 'DEFAULT';
+    const policy = window.crpCustomPolicy || 'non-ref';
+    const customSuffix = document.getElementById('crp-custom-name')?.value.trim() || '';
+
+    const prefix = getOptionCChannelPrefix(channel);
+    const policyLabel = getOptionCPolicyLabel(policy);
+    const matchedPolicyId = await resolveChannexPolicyId(policy, propId, apiKey);
+
     try {
         customAlert("Pushing to Channex...", `Creating ${chks.length} rate plan(s) in Channex...`);
         let createdCount = 0;
-
         const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
 
         for (const cat of chks) {
             const currentMap = window.channexMap.find(m => m.pmsCategory === cat);
-            const finalTitle = (rawTitle.includes('{CAT}') ? rawTitle.replace(/{CAT}/gi, cat) : `${rawTitle} ${cat}`).trim();
-
-            const isFlex = !/\b(non[-_\s]?ref|nr\b)/i.test(finalTitle) && /\b(flex|ref|free)/i.test(finalTitle);
-            const matchedPolicyId = await resolveChannexPolicyId(isFlex ? 'ref' : 'non-ref', propId, apiKey);
+            const finalTitle = [prefix, policyLabel, customSuffix, cat].filter(Boolean).join(' ').trim();
 
             const sameCat = defs.filter(r => r.category === cat);
             const isDorm = sameCat.some(r => r.rule !== 'private');
@@ -847,6 +910,20 @@ export async function executeCreateAndPushRatePlan() {
             if (res?.data) {
                 window.channexRatePlans = window.channexRatePlans || [];
                 window.channexRatePlans.push(res.data);
+
+                // Auto-map with exact channel and policy
+                window.channexRateMap = window.channexRateMap || [];
+                window.channexRateMap.push({
+                    ratePlanId: res.data.id,
+                    pmsCategory: cat,
+                    channexRoomId: currentMap.channexId,
+                    ratePlanTitle: finalTitle,
+                    channel: channel,
+                    policy: policy,
+                    rateType: policy,
+                    isEvent: policy.startsWith('event')
+                });
+
                 createdCount++;
             }
         }
@@ -914,4 +991,7 @@ if (typeof window !== 'undefined') {
     window.executeCloneRatePlans = executeCloneRatePlans;
     window.executeBatchCreateRatePlans = executeBatchCreateRatePlans;
     window.executeCreateAndPushRatePlan = executeCreateAndPushRatePlan;
+    window.setOptionCChannel = setOptionCChannel;
+    window.setOptionCPolicy = setOptionCPolicy;
+    window.updateOptionCPreview = updateOptionCPreview;
 }
