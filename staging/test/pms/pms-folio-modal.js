@@ -388,7 +388,7 @@ export const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = nul
 
         if (sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) {
             rList.forEach(r => {
-                if (r) occ.add(r);
+                if (r) occ.add(String(r).trim().toUpperCase());
             });
         }
     });
@@ -405,7 +405,7 @@ export const updateAvailableRooms = () => {
         const cur = sel.value;
         Array.from(sel.options).forEach(opt => {
             if (!opt.value) return;
-            if (occ.has(opt.value)) {
+            if (occ.has(String(opt.value).trim().toUpperCase())) {
                 opt.disabled = true;
                 if (!opt.text.includes('(OCCUPIED)')) {
                     opt.text = opt.text + ' (OCCUPIED)';
