@@ -1,7 +1,7 @@
 {
   "system": "Wild & Wandering PMS Backlog & Feature Registry",
-  "version": "2.0.0",
-  "lastAudited": "2026-11-02",
+  "version": "2.1.0",
+  "lastAudited": "2026-11-10",
   "features": [
     {
       "id": "FEAT-001",
@@ -85,6 +85,13 @@
       "category": "Operations & Guest Communications",
       "title": "Configurable Operational Lifecycle & Event Confirmation Pills",
       "description": "Convert hardcoded event buttons (SENT: FMP, PRE/POST: CONF) into property-configurable custom lifecycle pills in Setup Wizard Step 1 for festivals, surf camps, and high-demand events.",
+      "status": "planned"
+    },
+    {
+      "id": "FEAT-013",
+      "category": "Operations & Owner Oversight",
+      "title": "Clean Operational Booking Notifications & Owner Pulse Digest",
+      "description": "Ultra-concise instant alerts (Telegram / Email / Web Push) for new, modified, and cancelled bookings capturing essential fields (property, guest name, dates, net price, policy, room type) alongside low-inventory warnings, with configurable daily morning digests.",
       "status": "planned"
     }
   ]
