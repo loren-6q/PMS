@@ -23,6 +23,15 @@ export async function fetchChannexData() {
         const pJson = await ChannexClient.request(`/rate_plans?filter[property_id]=${propId}&pagination[limit]=100`, {}, apiKey);
         const allPlans = pJson.data || [];
 
+        // Fetch cancellation policies registered to this property in Channex
+        try {
+            const cpJson = await ChannexClient.request(`/cancellation_policies?filter[property_id]=${propId}&pagination[limit]=50`, {}, apiKey);
+            window.channexPolicies = cpJson.data || [];
+        } catch (cpErr) {
+            console.warn("[Channex] Could not fetch cancellation policies:", cpErr);
+            window.channexPolicies = window.channexPolicies || [];
+        }
+
         // Primary base plans only
         window.channexRatePlans = allPlans.filter(p => {
             const attr = p.attributes || {};
@@ -33,8 +42,8 @@ export async function fetchChannexData() {
         });
 
         renderStep3UnifiedMapping();
-        customAlert("Fetched", `Loaded ${window.channexRooms.length} room types and ${window.channexRatePlans.length} primary rate plans.`);
-
+        customAlert("Fetched", `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} rate plans, and ${window.channexPolicies.length} cancellation policies.`);
+        
     } catch (err) {
         console.error("[Channex Fetch Error]:", err);
         customAlert("Fetch Failed", err.message);
@@ -120,23 +129,32 @@ export function renderStep3UnifiedMapping() {
                                     let mapping = window.channexRateMap.find(r => r.ratePlanId === plan.id);
 
                                    if (!mapping) {
+                                        // 1. Channel Detection (Fuzzy patterns for all major OTAs)
                                         let detectedChannel = "DEFAULT";
-                                        if (/booking\.com|bdc\b/i.test(title)) detectedChannel = "Booking.com";
-                                        else if (/hostelworld|hw\b/i.test(title)) detectedChannel = "Hostelworld";
-                                        else if (/agoda\b/i.test(title)) detectedChannel = "Agoda";
-                                        else if (/expedia\b/i.test(title)) detectedChannel = "Expedia";
-                                        else if (/airbnb\b/i.test(title)) detectedChannel = "Airbnb";
-                                        else if (/direct\b/i.test(title)) detectedChannel = "Direct";
+                                        if (/\b(booking(\.com)?|bdc)\b/i.test(title)) detectedChannel = "Booking.com";
+                                        else if (/\b(hostelworld|hw)\b/i.test(title)) detectedChannel = "Hostelworld";
+                                        else if (/\b(agoda)\b/i.test(title)) detectedChannel = "Agoda";
+                                        else if (/\b(expedia|exp)\b/i.test(title)) detectedChannel = "Expedia";
+                                        else if (/\b(airbnb|abnb)\b/i.test(title)) detectedChannel = "Airbnb";
+                                        else if (/\b(direct|web(site)?)\b/i.test(title)) detectedChannel = "Direct";
 
-                                        const isNonRef = /non-ref|nonref|non refundable/i.test(title);
-                                        const isFlex = !isNonRef && /flex|ref|refundable/i.test(title);
-                                        const isEvt = /event|peak|pkg/i.test(title);
+                                        // 2. Cancellation Policy Detection (Guards against "Non-Ref" triggering "Ref")
+                                        const isEvt = /\b(event|peak|full[-_\s]?moon|fmp|pkg|package)\b/i.test(title);
+                                        const isNonRef = /\b(non[-_\s]?ref(undable)?|nr\b|n[-_]?ref|no[-_\s]?refund|nonrefundable)\b/i.test(title);
+                                        const isExplicitFlex = !isNonRef && /\b(flex(ible)?|ref(undable)?|free[-_\s]?cancel(lation)?|standard|std)\b/i.test(title);
 
+                                        // 3. Fallback: Check Channex policy object if title is ambiguous
                                         let detectedPolicy = "non-ref";
-                                        if (isEvt) {
-                                            detectedPolicy = isFlex ? "event-ref" : "event-non-ref";
+                                        const planPolicyId = plan.attributes?.cancellation_policy_id || plan.relationships?.cancellation_policy?.data?.id;
+                                        const linkedChannexPolicy = (window.channexPolicies || []).find(cp => cp.id === planPolicyId);
+                                        const channexPolicyTitle = linkedChannexPolicy?.attributes?.title || '';
+
+                                        if (isNonRef) {
+                                            detectedPolicy = isEvt ? "event-non-ref" : "non-ref";
+                                        } else if (isExplicitFlex || /\b(flex|free|standard)\b/i.test(channexPolicyTitle)) {
+                                            detectedPolicy = isEvt ? "event-ref" : "ref";
                                         } else {
-                                            detectedPolicy = isFlex ? "ref" : "non-ref";
+                                            detectedPolicy = isEvt ? "event-non-ref" : "non-ref";
                                         }
 
                                         mapping = {
@@ -479,6 +497,39 @@ export function applyRatePlanPreset(title) {
     if (titleInput) titleInput.value = title;
 }
 
+// Resolves the corresponding Channex Cancellation Policy ID from the property
+async function resolveChannexPolicyId(targetPolicyType, propId, apiKey) {
+    if (!window.channexPolicies || window.channexPolicies.length === 0) {
+        try {
+            const res = await ChannexClient.request(`/cancellation_policies?filter[property_id]=${propId}&pagination[limit]=50`, {}, apiKey);
+            window.channexPolicies = res.data || [];
+        } catch (e) {
+            console.warn("[Channex] Policy fetch fallback failed:", e);
+        }
+    }
+
+    const policies = window.channexPolicies || [];
+    if (policies.length === 0) return null;
+
+    const isFlex = targetPolicyType === 'ref' || targetPolicyType === 'event-ref';
+
+    if (isFlex) {
+        const flexPolicy = policies.find(p => {
+            const t = (p.attributes?.title || '').toLowerCase();
+            const logic = (p.attributes?.logic || '').toLowerCase();
+            return !t.includes('non') && (t.includes('flex') || t.includes('free') || t.includes('standard') || logic !== 'non_refundable');
+        });
+        return flexPolicy ? flexPolicy.id : policies[0].id;
+    } else {
+        const nonRefPolicy = policies.find(p => {
+            const t = (p.attributes?.title || '').toLowerCase();
+            const logic = (p.attributes?.logic || '').toLowerCase();
+            return t.includes('non') || logic === 'non_refundable';
+        });
+        return nonRefPolicy ? nonRefPolicy.id : policies[0].id;
+    }
+}
+
 // Push Step 2 categories as official Channex Room Types
 export async function executeCreateAndPushRoomTypes() {
     const chks = Array.from(document.querySelectorAll('.crp-roomtype-chk:checked')).map(c => c.value);
@@ -614,12 +665,19 @@ export async function executeCloneRatePlans() {
                 // Strip any accidental "Rate" suffix
                 newTitle = newTitle.replace(/\s+Rate\b/gi, '').trim();
 
+                const sourcePolicyId = sp.attributes?.cancellation_policy_id || sp.relationships?.cancellation_policy?.data?.id;
+                const matchedPolicyId = sourcePolicyId || await resolveChannexPolicyId(spMap.policy || 'non-ref', propId, apiKey);
+                const sourceSellMode = sp.attributes?.sell_mode || 'per_room';
+
                 const payload = {
                     rate_plan: {
                         title: newTitle,
                         property_id: propId,
                         room_type_id: tgtMap.channexId,
                         currency: currency,
+                        sell_mode: sourceSellMode,
+                        meal_type: sp.attributes?.meal_type || 'none',
+                        ...(matchedPolicyId ? { cancellation_policy_id: matchedPolicyId } : {}),
                         options: sp.attributes?.options || [{ occupancy: 1, is_primary: true, rate: 0 }]
                     }
                 };
@@ -697,8 +755,13 @@ export async function executeBatchCreateRatePlans() {
         for (const tgtCat of targetCats) {
             const tgtMap = window.channexMap.find(m => m.pmsCategory === tgtCat);
 
+            const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
+            const sameCat = defs.filter(r => r.category === tgtCat);
+            const isDorm = sameCat.some(r => r.rule !== 'private');
+
             for (const tpl of selectedTemplates) {
                 const finalTitle = tpl.titleTpl.replace(/{CAT}/g, tgtCat).trim();
+                const matchedPolicyId = await resolveChannexPolicyId(tpl.policy, propId, apiKey);
 
                 const payload = {
                     rate_plan: {
@@ -706,6 +769,9 @@ export async function executeBatchCreateRatePlans() {
                         property_id: propId,
                         room_type_id: tgtMap.channexId,
                         currency: currency,
+                        sell_mode: isDorm ? 'per_person' : 'per_room',
+                        meal_type: 'none',
+                        ...(matchedPolicyId ? { cancellation_policy_id: matchedPolicyId } : {}),
                         options: [{ occupancy: 1, is_primary: true, rate: 0 }]
                     }
                 };
@@ -778,16 +844,27 @@ export async function executeCreateAndPushRatePlan() {
         customAlert("Pushing to Channex...", `Creating ${chks.length} rate plan(s) in Channex...`);
         let createdCount = 0;
 
+        const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
+
         for (const cat of chks) {
             const currentMap = window.channexMap.find(m => m.pmsCategory === cat);
-            const finalTitle = rawTitle.includes('{CAT}') ? rawTitle.replace(/{CAT}/gi, cat) : `${rawTitle} ${cat}`;
+            const finalTitle = (rawTitle.includes('{CAT}') ? rawTitle.replace(/{CAT}/gi, cat) : `${rawTitle} ${cat}`).trim();
+
+            const isFlex = !/\b(non[-_\s]?ref|nr\b)/i.test(finalTitle) && /\b(flex|ref|free)/i.test(finalTitle);
+            const matchedPolicyId = await resolveChannexPolicyId(isFlex ? 'ref' : 'non-ref', propId, apiKey);
+
+            const sameCat = defs.filter(r => r.category === cat);
+            const isDorm = sameCat.some(r => r.rule !== 'private');
 
             const payload = {
                 rate_plan: {
-                    title: finalTitle.trim(),
+                    title: finalTitle,
                     property_id: propId,
                     room_type_id: currentMap.channexId,
                     currency: currency,
+                    sell_mode: isDorm ? 'per_person' : 'per_room',
+                    meal_type: 'none',
+                    ...(matchedPolicyId ? { cancellation_policy_id: matchedPolicyId } : {}),
                     options: [{ occupancy: 1, is_primary: true, rate: 0 }]
                 }
             };
