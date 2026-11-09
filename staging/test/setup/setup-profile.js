@@ -5,7 +5,6 @@
 
 import { customAlert } from '../core/ui-dialogs.js';
 
-// --- Base Direct Settlement Methods (Always active & on top) ---
 export const BASE_DIRECT_PAYMENTS = [
     { key: "cash", label: "Cash", type: "revenue", isBase: true, active: true },
     { key: "scan", label: "PromptPay / QR Scan", type: "revenue", isBase: true, active: true },
@@ -14,7 +13,6 @@ export const BASE_DIRECT_PAYMENTS = [
     { key: "card-kp", label: "Credit Card Fee / Commission", type: "commission", isBase: true, channel: "card", channelName: "Credit Card", active: true }
 ];
 
-// --- Standard Known OTA Channels ---
 export const STANDARD_OTA_REGISTRY = [
     { code: "bdc", name: "Booking.com" },
     { code: "hw", name: "Hostelworld" },
@@ -24,7 +22,6 @@ export const STANDARD_OTA_REGISTRY = [
     { code: "trip", name: "Trip.com" }
 ];
 
-// Helper: Generates a pair of -PAY and -KP methods
 export function createOtaPaymentPair(code, name, isActive = true) {
     const cleanCode = code.toLowerCase().replace(/[^a-z0-9]/g, '');
     return [
@@ -33,7 +30,6 @@ export function createOtaPaymentPair(code, name, isActive = true) {
     ];
 }
 
-// Generate the initial default payment methods
 export function buildDefaultPaymentMethods() {
     const list = [...BASE_DIRECT_PAYMENTS];
     list.push(...createOtaPaymentPair("bdc", "Booking.com", true));
@@ -53,11 +49,6 @@ export const DEFAULT_ADDONS = [
 
 const BASE_SORT_ORDER = ['cash', 'scan', 'transfer', 'card', 'card-kp'];
 
-/**
- * Sorts payment methods:
- * 1. Base Direct Methods locked at the top in exact sequence
- * 2. OTA Channels grouped together alphabetically, with -pay immediately followed by -kp
- */
 export function sortPaymentMethods(list = []) {
     return [...list].sort((a, b) => {
         const aBaseIdx = BASE_SORT_ORDER.indexOf(a.key);
@@ -80,13 +71,6 @@ export function sortPaymentMethods(list = []) {
     });
 }
 
-/**
- * Normalizes, deduplicates, and auto-heals payment methods:
- * 1. Migrates legacy 'qr' to 'scan'.
- * 2. Deduplicates by key (purges duplicate -kp entries).
- * 3. Auto-heals: If an orphan -kp exists without a -pay, creates the matching -pay.
- * 4. Ensures all BASE_DIRECT_PAYMENTS exist.
- */
 export function normalizePaymentMethods(methods = []) {
     if (!Array.isArray(methods) || methods.length === 0) {
         return [...DEFAULT_PAYMENT_METHODS];
@@ -104,13 +88,11 @@ export function normalizePaymentMethods(methods = []) {
         if (!obj.key) return;
         obj.key = String(obj.key).trim().toLowerCase();
 
-        // Migrate legacy 'qr' key to 'scan'
         if (obj.key === 'qr') {
             obj.key = 'scan';
             obj.label = 'PromptPay / QR Scan';
         }
 
-        // Convert bare OTA key (e.g. 'hw') into canonical 'hw-pay'
         const otaDirectMatch = STANDARD_OTA_REGISTRY.find(o => o.code === obj.key);
         if (otaDirectMatch) {
             obj.key = `${otaDirectMatch.code}-pay`;
@@ -142,7 +124,6 @@ export function normalizePaymentMethods(methods = []) {
         }
     });
 
-    // Ensure all 5 standard base direct settlement methods are present
     BASE_DIRECT_PAYMENTS.forEach(baseItem => {
         if (!seenKeys.has(baseItem.key)) {
             seenKeys.add(baseItem.key);
@@ -150,7 +131,6 @@ export function normalizePaymentMethods(methods = []) {
         }
     });
 
-    // Auto-heal: Ensure every -kp has a matching -pay, and every -pay has a matching -kp
     const toAdd = [];
     normalized.forEach(m => {
         if (m.key.endsWith('-kp') && m.key !== 'card-kp') {
@@ -192,8 +172,6 @@ export function normalizePaymentMethods(methods = []) {
     return sortPaymentMethods(normalized);
 }
 
-// --- 1. BRANDING & ASSET PREVIEWS ---
-
 export function toggleCardSection(contentId, chevronId) {
     const el = document.getElementById(contentId);
     const ch = document.getElementById(chevronId);
@@ -210,7 +188,6 @@ export function toggleCardSection(contentId, chevronId) {
     }
 }
 
-// Preview uses the passed URL, input value, or property config, supporting HTTP, Data URIs & Blobs
 export function updateLogoPreview(type, url) {
     const previewEl = document.getElementById(`preview-logo-${type}`) ||
                       document.getElementById(`logo-preview-${type}`) ||
@@ -300,8 +277,6 @@ export async function handleLogoFileUpload(event, type) {
     }
 }
 
-// --- 2. PAYMENT METHODS & AUTO-PAIRED OTA SETTLEMENT ---
-
 export function renderPaymentMethodsTable(payments = null) {
     const tbody = document.getElementById('payment-methods-table-body');
     const togglesContainer = document.getElementById('ota-channel-toggles-container');
@@ -310,7 +285,7 @@ export function renderPaymentMethodsTable(payments = null) {
 
     window.paymentMethods = normalizePaymentMethods(payments || window.paymentMethods || [...DEFAULT_PAYMENT_METHODS]);
 
-    // 1. Render Quick Channel Toggle Pills
+    // 1. Quick Channel Toggle Pills
     if (togglesContainer) {
         const activeChannels = new Set(
             window.paymentMethods
@@ -355,7 +330,7 @@ export function renderPaymentMethodsTable(payments = null) {
                 ${m.isBase 
                     ? `<span class="text-[9px] text-slate-300 font-bold uppercase select-none">CORE</span>`
                     : `<button type="button" onclick="window.archivePaymentMethodRow('${m.key}')" class="text-slate-400 hover:text-amber-600 cursor-pointer text-[10px] font-bold" title="Deactivate / Archive Channel">
-                           Archive
+                            Archive
                        </button>`
                 }
             </td>
@@ -366,14 +341,14 @@ export function renderPaymentMethodsTable(payments = null) {
     // 3. Render Collapsible Archived / Historical Methods Tray
     if (archivedMethods.length > 0) {
         const archHeader = document.createElement('tr');
-        archHeader.className = "bg-slate-800 text-slate-300 cursor-pointer select-none";
+        archHeader.className = "bg-slate-100 border-y border-slate-300 text-slate-600 cursor-pointer select-none";
         archHeader.onclick = () => window.toggleArchivedPaymentRows();
         archHeader.innerHTML = `
             <td colspan="4" class="p-1.5 px-2 text-[9.5px] font-black uppercase tracking-wider">
                 <div class="flex items-center justify-between">
-                    <span class="text-amber-300 flex items-center gap-1.5">
+                    <span class="text-amber-800 flex items-center gap-1.5">
                         <i data-lucide="archive" size="12"></i> Archived / Disconnected Channels (${archivedMethods.length / 2} OTAs)
-                        <span class="text-slate-400 normal-case font-normal">(Preserved for historical booking balance & commission reporting)</span>
+                        <span class="text-slate-500 normal-case font-normal">(Preserved for historical booking balance & commission reporting)</span>
                     </span>
                     <i data-lucide="chevron-down" id="archived-pay-chevron" size="12" class="transition-transform duration-200 rotate-[-90deg]"></i>
                 </div>
@@ -496,8 +471,6 @@ export function restoreDefaultAddonsAndPayments() {
     customAlert("Restored", "Default direct payments, OTA pairs, and add-on services restored.");
 }
 
-// --- 3. ADD-ONS SERVICE CATALOGUE ---
-
 export function renderAddonsTable(addons = null) {
     const tbody = document.getElementById('addon-list-body');
     if (!tbody) return;
@@ -557,7 +530,6 @@ export function deleteAddonRow(idx) {
     renderAddonsTable(window.addonsList);
 }
 
-// Global Window Exports
 if (typeof window !== 'undefined') {
     window.normalizePaymentMethods = normalizePaymentMethods;
     window.sortPaymentMethods = sortPaymentMethods;
