@@ -14,9 +14,6 @@ export function formatDormBedId(parentRoomName, bedNumber) {
     return `${cleanParent} № ${paddedNum}`;
 }
 
-/**
- * Clusters definitions so all rooms with the same category stay contiguous.
- */
 export function clusterDefinitionsByCategory(defs = null) {
     const source = defs || window.roomDefinitions || [];
     const categoryOrder = [];
@@ -50,7 +47,8 @@ export function compileRoomsFromDefinitions() {
         const total = Math.max(1, parseInt(def.beds || def.units || 1, 10));
         const rule = def.rule || 'private';
         const floor = def.floor || '1';
-        // Ensure every room has an immutable permanent ID
+
+        // Guardrail: Ensure every room has an immutable permanent ID
         if (!def.id || def.id.startsWith('room_')) {
             def.id = (rawName || `rm_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 5)}`).trim();
         }
@@ -105,8 +103,8 @@ export function compileRoomsFromDefinitions() {
     const activeDefs = definitions.filter(r => !r.inactive);
     const activeBeds = compiled.filter(r => !r.inactive);
 
-    if (rBadge) rBadge.innerText = `${activeDefs.length} Active Rooms`;
-    if (uBadge) uBadge.innerText = `${activeBeds.length} Active Beds`;
+    if (rBadge) rBadge.innerText = `${activeDefs.length} Rooms`;
+    if (uBadge) uBadge.innerText = `${activeBeds.length} Beds Total`;
 
     return compiled;
 }
@@ -130,20 +128,26 @@ export function renderRoomDefinitionsTable() {
         if (room.inactive) return;
         rowIndex++;
 
+        // Folder Category Header matching Screenshot 3
         if (room.category !== currentCat) {
             currentCat = room.category;
             const sameCat = definitions.filter(r => !r.inactive && r.category === currentCat);
             const isDorm = sameCat.some(r => r.rule !== 'private');
-            const totalBeds = sameCat.reduce((s, r) => s + parseInt(r.beds || r.units || 1, 10), 0);
+            const totalUnits = isDorm
+                ? sameCat.reduce((s, r) => s + parseInt(r.beds || r.units || 1, 10), 0)
+                : sameCat.length;
 
             const banner = document.createElement('tr');
-            banner.className = `setup-cat-banner ${isDorm ? 'setup-cat-banner-dorm' : ''} border-y-2 border-slate-300 font-black text-xs uppercase`;
+            banner.className = "setup-cat-banner";
             banner.innerHTML = `
-                <td colspan="7" class="py-1.5 px-3 bg-slate-200">
+                <td colspan="7" class="py-1 px-2.5 bg-slate-100 border-y border-slate-200">
                     <div class="flex items-center justify-between">
-                        <span class="tracking-wider text-slate-800 font-black">${currentCat}</span>
-                        <span class="text-[10px] bg-slate-300 text-slate-700 px-2 py-0.5 rounded font-bold border border-slate-400/60 shadow-2xs">
-                            ${sameCat.length} Rooms • ${totalBeds} Beds (${isDorm ? 'DORM' : 'PRIVATE'})
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="folder" size="14" class="text-slate-500"></i>
+                            <span class="tracking-wide text-slate-900 font-black text-xs uppercase">${currentCat}</span>
+                        </div>
+                        <span class="text-[9.5px] bg-white text-slate-600 px-2 py-0.5 rounded-full font-bold border border-slate-200 shadow-2xs">
+                            ${sameCat.length} ROOMS • ${totalUnits} TOTAL UNITS
                         </span>
                     </div>
                 </td>`;
@@ -156,7 +160,7 @@ export function renderRoomDefinitionsTable() {
         const isLastInCat = posInCat === sameCatActive.length - 1;
 
         const tr = document.createElement('tr');
-        tr.className = "bg-white hover:bg-slate-50 transition-colors border-b border-slate-200 text-xs";
+        tr.className = "bg-white hover:bg-slate-50/60 transition-colors border-b border-slate-200 text-xs";
         tr.innerHTML = `
             <td class="text-center py-1 px-1.5 font-mono text-[10px] text-slate-500">
                 <div class="flex items-center justify-center gap-1">
@@ -191,13 +195,13 @@ export function renderRoomDefinitionsTable() {
     const inactive = definitions.filter(r => r.inactive);
     if (inactive.length > 0) {
         const headerTr = document.createElement('tr');
-        headerTr.className = "bg-slate-800 text-slate-200 cursor-pointer select-none";
+        headerTr.className = "bg-slate-100 border-y border-slate-300 text-slate-700 cursor-pointer select-none";
         headerTr.onclick = () => window.toggleInactiveRows();
         headerTr.innerHTML = `
-            <td colspan="7" class="p-2 px-3 font-black text-xs uppercase tracking-wider">
+            <td colspan="7" class="p-1.5 px-3 font-black text-xs uppercase tracking-wider">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
-                        <i data-lucide="archive" size="14" class="text-amber-400"></i>
+                        <i data-lucide="archive" size="14" class="text-amber-600"></i>
                         <span>ARCHIVED / INACTIVE ROOMS (${inactive.length})</span>
                     </div>
                     <i data-lucide="chevron-down" id="inactive-chevron" size="14" class="transition-transform duration-200 rotate-[-90deg]"></i>
@@ -208,7 +212,7 @@ export function renderRoomDefinitionsTable() {
         definitions.forEach((room, idx) => {
             if (!room.inactive) return;
             const tr = document.createElement('tr');
-            tr.className = "inactive-room-row hidden bg-slate-100/90 border-b border-slate-300 text-slate-500";
+            tr.className = "inactive-room-row hidden bg-slate-50 border-b border-slate-200 text-slate-500";
             tr.innerHTML = `
                 <td class="text-center font-mono font-bold text-rose-500 text-[10px]">OFF</td>
                 <td><span class="font-bold line-through px-2">${room.name}</span></td>
@@ -217,7 +221,7 @@ export function renderRoomDefinitionsTable() {
                 <td class="text-center">Floor ${room.floor || '1'}</td>
                 <td class="text-center"><span class="font-mono text-[10px] uppercase">${room.rule || 'private'}</span></td>
                 <td class="text-center">
-                    <button type="button" onclick="window.reactivateRoomDef(${idx})" class="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[9px] uppercase cursor-pointer shadow-xs">
+                    <button type="button" onclick="window.reactivateRoomDef(${idx})" class="btn-setup-save !py-0.5 !px-2 !text-[9px]">
                         RESTORE
                     </button>
                 </td>`;
@@ -270,8 +274,6 @@ export function reactivateRoomDef(index) {
     renderRoomDefinitionsTable();
 }
 
-// --- DELETION & AUDIT GUARD ---
-
 let pendingDeleteAction = null;
 
 export async function deleteRoomDef(index) {
@@ -309,7 +311,7 @@ export async function deleteRoomDef(index) {
             if (msgEl) msgEl.innerText = `"${def.name}" has ${pastBookings.length} historical booking(s). To preserve reports and past ledgers, this room will be marked ARCHIVED (INACTIVE) instead of permanently deleted.`;
             if (btnEl) {
                 btnEl.innerText = "Archive Room";
-                btnEl.className = "px-3 py-1.5 text-white bg-amber-600 hover:bg-amber-700 rounded font-black uppercase text-[10px] shadow-xs cursor-pointer";
+                btnEl.className = "btn-setup-save !bg-amber-600 hover:!bg-amber-700 !text-[10px]";
             }
             pendingDeleteAction = () => {
                 def.inactive = true;
@@ -320,7 +322,7 @@ export async function deleteRoomDef(index) {
             if (msgEl) msgEl.innerText = `Permanently delete "${def.name}"? This room has 0 bookings and will be removed immediately.`;
             if (btnEl) {
                 btnEl.innerText = "Delete Permanently";
-                btnEl.className = "px-3 py-1.5 text-white bg-rose-600 hover:bg-rose-700 rounded font-black uppercase text-[10px] shadow-xs cursor-pointer";
+                btnEl.className = "btn-setup-save !bg-rose-600 hover:!bg-rose-700 !text-[10px]";
             }
             pendingDeleteAction = () => {
                 window.roomDefinitions.splice(index, 1);
@@ -421,8 +423,6 @@ export async function executeBookingRelocation(roomName, hasPast) {
     }
 }
 
-// --- CATEGORY REORDER MODAL ---
-
 export function openReorderCategoriesModal() {
     const modal = document.getElementById('reorder-categories-modal');
     const listEl = document.getElementById('reorder-cat-list');
@@ -471,8 +471,6 @@ export function moveCategory(idx, dir) {
     renderRoomDefinitionsTable();
     openReorderCategoriesModal();
 }
-
-// --- ALL BEDS PREVIEW DRAWER (Alternating Colors, Clean Bunk Labels) ---
 
 export function toggleBedPreviewDrawer() {
     const drawer = document.getElementById('bed-preview-drawer-modal');
@@ -567,8 +565,6 @@ export function closeBedPreviewDrawer() {
         drawer.style.display = 'none';
     }
 }
-
-// --- UNIFIED ROOM CREATOR WIZARD CONTROLLER ---
 
 let wizardState = {
     type: 'private',
@@ -749,7 +745,7 @@ export function clearAllRoomDefs() {
     if (msgEl) msgEl.innerText = "Permanently wipe all room definitions? This cannot be undone.";
     if (btnEl) {
         btnEl.innerText = "Wipe All Rooms";
-        btnEl.className = "px-3 py-1.5 text-white bg-rose-600 hover:bg-rose-700 rounded font-black uppercase text-[10px] shadow-xs cursor-pointer";
+        btnEl.className = "btn-setup-save !bg-rose-600 hover:!bg-rose-700 !text-[10px]";
     }
     pendingDeleteAction = () => {
         window.roomDefinitions = [];
@@ -762,7 +758,6 @@ export function clearAllRoomDefs() {
     }
 }
 
-// Global Window Exports
 if (typeof window !== 'undefined') {
     window.formatDormBedId = formatDormBedId;
     window.compileRoomsFromDefinitions = compileRoomsFromDefinitions;
@@ -790,7 +785,6 @@ if (typeof window !== 'undefined') {
     window.executeWizardGenerate = executeWizardGenerate;
     window.clearAllRoomDefs = clearAllRoomDefs;
 
-    // Guaranteed Modal Dismissal via Escape Key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeBedPreviewDrawer();
