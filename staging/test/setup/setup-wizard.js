@@ -117,8 +117,18 @@ export async function loadPropertyData(propId) {
             window.channexRatePlans = Array.isArray(data.channexRatePlans) ? data.channexRatePlans : [];
             window.channexMap = Array.isArray(data.channexMap) ? data.channexMap : [];
             window.channexRateMap = Array.isArray(data.channexRateMap) ? data.channexRateMap : [];
-            window.pricingRules = data.pricingRules || {};
-            window.masterPricing = data.masterPricing || {};
+            // Auto-parse if Firestore stored pricing as stringified JSON
+            let parsedMasterPricing = data.masterPricing || {};
+            if (typeof parsedMasterPricing === 'string') {
+                try { parsedMasterPricing = JSON.parse(parsedMasterPricing); } catch (e) { parsedMasterPricing = {}; }
+            }
+            window.masterPricing = parsedMasterPricing;
+
+            let parsedPricingRules = data.pricingRules || {};
+            if (typeof parsedPricingRules === 'string') {
+                try { parsedPricingRules = JSON.parse(parsedPricingRules); } catch (e) { parsedPricingRules = {}; }
+            }
+            window.pricingRules = parsedPricingRules;
 
             setVal('chan-api-key', data.channex?.apiKey);
             setVal('chan-prop-id', data.channex?.propId);
