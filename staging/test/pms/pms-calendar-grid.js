@@ -162,9 +162,11 @@ export const formatBedDisplayLabel = id => {
 
 export const matchesRoom = (assignedRoom, targetRoomId) => {
     if (!assignedRoom || !targetRoomId) return false;
-    if (String(assignedRoom).trim() === String(targetRoomId).trim()) return true;
-    const cleanA = String(assignedRoom).replace(/[№#\-_:\s]/g, '').toUpperCase();
-    const cleanB = String(targetRoomId).replace(/[№#\-_:\s]/g, '').toUpperCase();
+    const strA = String(assignedRoom).trim().toUpperCase();
+    const strB = String(targetRoomId).trim().toUpperCase();
+    if (strA === strB) return true;
+    const cleanA = strA.replace(/[№#\-_:\s]/g, '');
+    const cleanB = strB.replace(/[№#\-_:\s]/g, '');
     return cleanA === cleanB;
 };
 
