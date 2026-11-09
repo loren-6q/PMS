@@ -470,16 +470,20 @@ export function addRoomSelect(val = "", isManualAdd = false) {
     });
 
     if (val) {
-        const exists = Array.from(sel.options).some(o => o.value === val);
-        if (!exists) {
+        const valUpper = String(val).trim().toUpperCase();
+        const existingOpt = Array.from(sel.options).find(o => o.value && String(o.value).trim().toUpperCase() === valUpper);
+        if (existingOpt) {
+            sel.value = existingOpt.value;
+        } else {
             const legacyOpt = document.createElement('option');
             legacyOpt.value = val;
             legacyOpt.innerText = `⚠️ ${val} (Historical / Preserved)`;
             sel.appendChild(legacyOpt);
+            sel.value = val;
         }
+    } else {
+        sel.value = "";
     }
-
-    sel.value = val || "";
     const del = document.createElement('button');
     del.type = "button";
     del.className = "w-6 flex justify-center items-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 flex-shrink-0 shadow-sm transition-colors cursor-pointer";
@@ -695,12 +699,18 @@ export const togglePropertyPicker = () => {
         return;
     }
 
-    const switcher = document.getElementById('main-property-switcher');
-    const options = switcher ? Array.from(switcher.options) : [];
-    const curVal = switcher ? switcher.value : (window.currentPropertyId || '');
+    // Delegate directly to universal core/nav.js property catalog
+    if (typeof window.renderPropertyPickerList === 'function') {
+        window.renderPropertyPickerList();
+        dropdown.classList.remove('hidden');
+        return;
+    }
 
-    if (options.length === 0) {
-        dropdown.innerHTML = `<div class="p-3 text-xs text-slate-500 font-bold">No properties loaded.</div>`;
+    const props = window.availableProperties || [];
+    const curVal = (window.currentPropertyId || '').toLowerCase();
+
+    if (props.length === 0) {
+        dropdown.innerHTML = `<div class="p-3 text-xs text-slate-500 font-bold">Loading properties from database...</div>`;
     } else {
         let html = `
             <div class="bg-slate-900 text-white text-[10px] font-black uppercase px-3 py-2 flex justify-between items-center">
@@ -709,11 +719,11 @@ export const togglePropertyPicker = () => {
             </div>
             <div class="p-1 space-y-0.5 max-h-64 overflow-y-auto">
         `;
-        options.forEach(opt => {
-            const isSelected = opt.value === curVal;
+        props.forEach(p => {
+            const isSelected = (p.id || '').toLowerCase() === curVal;
             html += `
-                <button type="button" onclick="if(window.handlePropertySwitch) window.handlePropertySwitch('${opt.value}'); window.togglePropertyPicker();" class="w-full text-left px-3 py-2 rounded text-xs font-bold uppercase transition-colors flex items-center justify-between cursor-pointer ${isSelected ? 'bg-blue-600 text-white font-black shadow-sm' : 'text-slate-700 hover:bg-slate-100'}">
-                    <span>${opt.text}</span>
+                <button type="button" onclick="if(window.switchProperty) window.switchProperty('${p.id}'); window.togglePropertyPicker();" class="w-full text-left px-3 py-2 rounded text-xs font-bold uppercase transition-colors flex items-center justify-between cursor-pointer ${isSelected ? 'bg-indigo-600 text-white font-black shadow-sm' : 'text-slate-700 hover:bg-slate-100'}">
+                    <span>${p.name || p.id}</span>
                     ${isSelected ? '<span class="text-xs font-black">✓</span>' : ''}
                 </button>
             `;
@@ -748,6 +758,7 @@ window.closeModal = closeModal;
 window.openExtractModal = openExtractModal;
 window.toggleSection = toggleSection;
 window.showAuditHistory = showAuditHistory;
+window.closeAlert = closeAlert;
 window.updateHeaderName = updateHeaderName;
 window.checkEmailProxy = checkEmailProxy;
 window.cycleStatus = cycleStatus;
