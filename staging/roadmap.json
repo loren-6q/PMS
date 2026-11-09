@@ -1,7 +1,7 @@
 {
   "system": "Wild & Wandering PMS Architecture Contract",
-  "version": "2.0.0",
-  "lastAudited": "2026-11-02",
+  "version": "2.1.0",
+  "lastAudited": "2026-11-10",
   "designPrinciple": "1-File / 1-Domain Strict Responsibility Matrix. Zero Hardcoding. Single Source of Truth.",
   "modules": {
     "core": {
@@ -17,6 +17,16 @@
           "signInAnonymously()",
           "signOutUser()"
         ]
+      },
+      "core/channels.js": {
+        "responsibility": "Canonical 3-letter OTA channel registry (Channex standard), code normalization, display resolvers, and accounting key derivation.",
+        "functions": [
+          "resolveChannelCode(rawString)",
+          "getChannelByCode(code)",
+          "getOtaPaymentPair(code)",
+          "normalizeChannelRules(rawRules)"
+        ],
+        "constants": ["CHANNELS", "CANONICAL_OTA_LIST"]
       },
       "core/dates.js": {
         "responsibility": "Zero-drift UTC day parsing, local YMD formatters, date arithmetic, and calendar labels.",
