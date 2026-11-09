@@ -285,37 +285,7 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     renderStep3UnifiedMapping();
 }
 
-export function switchCreateModalTab(tab = 'rooms') {
-    const btnRooms = document.getElementById('tab-btn-create-rooms');
-    const btnRates = document.getElementById('tab-btn-create-rates');
-    const paneRooms = document.getElementById('create-modal-pane-rooms');
-    const paneRates = document.getElementById('create-modal-pane-rates');
 
-    const isRooms = tab === 'rooms';
-
-    if (btnRooms && btnRates) {
-        btnRooms.className = isRooms
-            ? "flex-1 py-1 text-center font-black text-[10.5px] uppercase border-b-2 border-indigo-600 text-indigo-700 cursor-pointer transition-colors"
-            : "flex-1 py-1 text-center font-bold text-[10.5px] uppercase border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer transition-colors";
-
-        btnRates.className = !isRooms
-            ? "flex-1 py-1 text-center font-black text-[10.5px] uppercase border-b-2 border-indigo-600 text-indigo-700 cursor-pointer transition-colors"
-            : "flex-1 py-1 text-center font-bold text-[10.5px] uppercase border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer transition-colors";
-    }
-
-    if (paneRooms) paneRooms.classList.toggle('hidden', !isRooms);
-    if (paneRates) paneRates.classList.toggle('hidden', isRooms);
-}
-
-// Rate Plan Templates for Batch Suite Creation
-const BATCH_RATE_TEMPLATES = [
-    { id: 'def_non_ref', titleTpl: '{CAT} - Non-Refundable Rate', channel: 'DEFAULT', policy: 'non-ref', checked: true, isEvent: false },
-    { id: 'def_ref', titleTpl: '{CAT} - Refundable Rate', channel: 'DEFAULT', policy: 'ref', checked: true, isEvent: false },
-    { id: 'bdc_non_ref', titleTpl: 'BDC Non-Refundable {CAT}', channel: 'Booking.com', policy: 'non-ref', checked: true, isEvent: false },
-    { id: 'bdc_ref', titleTpl: 'BDC Refundable {CAT}', channel: 'Booking.com', policy: 'ref', checked: true, isEvent: false },
-    { id: 'evt_non_ref', titleTpl: '{CAT} - Event Non-Refundable', channel: 'DEFAULT', policy: 'event-non-ref', checked: false, isEvent: true },
-    { id: 'evt_ref', titleTpl: '{CAT} - Event Refundable', channel: 'DEFAULT', policy: 'event-ref', checked: false, isEvent: true }
-];
 
 // Rate Plan Templates for Batch Suite: [OTA / Event] [Policy] [Room] (No redundant word "Rate")
 const BATCH_RATE_TEMPLATES = [
