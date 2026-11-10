@@ -5,7 +5,7 @@
 
 import { customAlert } from '../core/ui-dialogs.js';
 import { ChannexClient } from '../channex.js';
-import { CANONICAL_OTA_LIST, resolveChannelCode } from '../core/channels.js';
+import { CANONICAL_OTA_LIST, getChannelByCode, resolveChannelCode } from '../core/channels.js';
 
 export async function fetchChannexData() {
     const apiKey = document.getElementById('chan-api-key')?.value.trim();
@@ -24,7 +24,7 @@ export async function fetchChannexData() {
         const pJson = await ChannexClient.request(`/rate_plans?filter[property_id]=${propId}&pagination[limit]=100`, {}, apiKey);
         const allPlans = pJson.data || [];
 
-        // Fetch cancellation policies registered to this property in Channex
+        // Fetch cancellation policies
         try {
             const cpJson = await ChannexClient.request(`/cancellation_policies?filter[property_id]=${propId}&pagination[limit]=50`, {}, apiKey);
             window.channexPolicies = cpJson.data || [];
@@ -52,7 +52,7 @@ export async function fetchChannexData() {
         });
 
         renderStep3UnifiedMapping();
-        customAlert("Fetched", `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} rate plans, and ${window.channexPolicies.length} policies.`);
+        customAlert("Fetched", `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} rate plans, and ${window.channexConnectedChannels.length} connected channels.`);
         
     } catch (err) {
         console.error("[Channex Fetch Error]:", err);
@@ -60,11 +60,12 @@ export async function fetchChannexData() {
     }
 }
 
+// Generates Type-to-Jump friendly channel options
 export function getAvailableMappingChannels() {
     return [
-        { val: "DEF", label: "DEF (DEFAULT Pipe)" },
-        { val: "WEB", label: "WEB (Direct Website)" },
-        ...CANONICAL_OTA_LIST.map(ch => ({ val: ch.code, label: `${ch.code} (${ch.name})` }))
+        { val: "DEF", label: "DEF - Standard OTA Pipe" },
+        { val: "WEB", label: "WEB - Direct Website" },
+        ...CANONICAL_OTA_LIST.map(ch => ({ val: ch.code, label: `${ch.code} - ${ch.name}` }))
     ];
 }
 
@@ -76,7 +77,7 @@ const AVAILABLE_POLICIES = [
     { val: "ignore", label: "-- Ignore / Do Not Sync --" }
 ];
 
-// Fuzzy Classifier Helper for Canonical OTA Channel and Refundability Policy
+// Precedence Classifier: Starts-with-3-letters -> Brand words -> Default
 export function detectRatePlanClassification(title, plan = null) {
     const channel = resolveChannelCode(title);
 
@@ -204,14 +205,14 @@ export function renderStep3UnifiedMapping() {
                                                 <div class="font-mono text-[9.5px] text-slate-400 mt-0.5">ID: ...${plan.id.slice(-8)}</div>
                                             </td>
                                             <td class="py-1.5 px-2">
-                                                <select class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'channel', this.value, this)">
+                                                <select tabindex="0" class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'channel', this.value, this)">
                                                     ${availableChannels.map(ch => `
                                                         <option value="${ch.val}" ${mapping.channel === ch.val ? 'selected' : ''}>${ch.label}</option>
                                                     `).join('')}
                                                 </select>
                                             </td>
                                             <td class="py-1.5 px-2">
-                                                <select class="${policySelectClass}" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'policy', this.value, this)">
+                                                <select tabindex="0" class="${policySelectClass}" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'policy', this.value, this)">
                                                     ${AVAILABLE_POLICIES.map(pol => `
                                                         <option value="${pol.val}" ${mapping.policy === pol.val ? 'selected' : ''}>${pol.label}</option>
                                                     `).join('')}
@@ -298,22 +299,33 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     renderStep3UnifiedMapping();
 }
 
-// Canonical 3-Letter Batch Suite Templates
-const BATCH_RATE_TEMPLATES = [
-    { id: 'def_non_ref', titleTpl: 'Non-Refundable {CAT}', channel: 'DEF', policy: 'non-ref', checked: true, isEvent: false },
-    { id: 'def_ref', titleTpl: 'Refundable {CAT}', channel: 'DEF', policy: 'ref', checked: true, isEvent: false },
-    { id: 'bdc_non_ref', titleTpl: '[BDC] Non-Refundable {CAT}', channel: 'BDC', policy: 'non-ref', checked: true, isEvent: false },
-    { id: 'bdc_ref', titleTpl: '[BDC] Refundable {CAT}', channel: 'BDC', policy: 'ref', checked: true, isEvent: false },
-    { id: 'hw_non_ref', titleTpl: '[HWL] Non-Refundable {CAT}', channel: 'HWL', policy: 'non-ref', checked: false, isEvent: false },
-    { id: 'hw_ref', titleTpl: '[HWL] Refundable {CAT}', channel: 'HWL', policy: 'ref', checked: false, isEvent: false },
-    { id: 'agoda_non_ref', titleTpl: '[AGO] Non-Refundable {CAT}', channel: 'AGO', policy: 'non-ref', checked: false, isEvent: false },
-    { id: 'agoda_ref', titleTpl: '[AGO] Refundable {CAT}', channel: 'AGO', policy: 'ref', checked: false, isEvent: false },
-    { id: 'exp_non_ref', titleTpl: '[EXP] Non-Refundable {CAT}', channel: 'EXP', policy: 'non-ref', checked: false, isEvent: false },
-    { id: 'exp_ref', titleTpl: '[EXP] Refundable {CAT}', channel: 'EXP', policy: 'ref', checked: false, isEvent: false },
-    { id: 'air_std', titleTpl: '[ABB] Standard {CAT}', channel: 'ABB', policy: 'non-ref', checked: false, isEvent: false },
-    { id: 'evt_non_ref', titleTpl: 'Event Non-Refundable {CAT}', channel: 'DEF', policy: 'event-non-ref', checked: false, isEvent: true },
-    { id: 'evt_ref', titleTpl: 'Event Refundable {CAT}', channel: 'DEF', policy: 'event-ref', checked: false, isEvent: true }
-];
+// Dynamically builds Batch Suite templates based on property's connected channels
+export function getDynamicBatchRateTemplates() {
+    const connectedCodes = new Set(
+        (window.channexConnectedChannels || []).map(c => resolveChannelCode(c.attributes?.channel || c.attributes?.title))
+    );
+
+    const activeCodes = Array.from(new Set(['BDC', ...connectedCodes])).filter(c => c !== 'DEF' && c !== 'WEB');
+
+    const templates = [
+        { id: 'def_non_ref', titleTpl: 'Non-Refundable {CAT}', channel: 'DEF', policy: 'non-ref', checked: true, isEvent: false },
+        { id: 'def_ref', titleTpl: 'Refundable {CAT}', channel: 'DEF', policy: 'ref', checked: true, isEvent: false }
+    ];
+
+    activeCodes.forEach(code => {
+        templates.push(
+            { id: `${code.toLowerCase()}_non_ref`, titleTpl: `[${code}] Non-Refundable {CAT}`, channel: code, policy: 'non-ref', checked: true, isEvent: false },
+            { id: `${code.toLowerCase()}_ref`, titleTpl: `[${code}] Refundable {CAT}`, channel: code, policy: 'ref', checked: true, isEvent: false }
+        );
+    });
+
+    templates.push(
+        { id: 'evt_non_ref', titleTpl: 'Event Non-Refundable {CAT}', channel: 'DEF', policy: 'event-non-ref', checked: false, isEvent: true },
+        { id: 'evt_ref', titleTpl: 'Event Refundable {CAT}', channel: 'DEF', policy: 'event-ref', checked: false, isEvent: true }
+    );
+
+    return templates;
+}
 
 export function switchCreateModalTab(tab = 'rooms') {
     const btnRooms = document.getElementById('tab-btn-create-rooms');
@@ -405,10 +417,11 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
         }).join('');
     }
 
-    // 4. Populate Batch Rate Plan Suite Checklist
+    // 4. Populate Dynamic Batch Rate Plan Suite Checklist
     const batchListEl = document.getElementById('crp-batch-plans-list');
+    window.currentBatchTemplates = getDynamicBatchRateTemplates();
     if (batchListEl) {
-        batchListEl.innerHTML = BATCH_RATE_TEMPLATES.map((tpl, i) => `
+        batchListEl.innerHTML = window.currentBatchTemplates.map((tpl, i) => `
             <label class="flex items-center justify-between p-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer">
                 <div class="flex items-center gap-1.5 truncate">
                     <input type="checkbox" class="crp-batch-tpl-chk" data-idx="${i}" ${tpl.checked ? 'checked' : ''}>
@@ -549,7 +562,7 @@ export async function executeCreateAndPushRoomTypes() {
                     window.channexMap[existIdx].channexId = res.data.id;
                     window.channexMap[existIdx].channexTitle = cat;
                 } else {
-                    window.channexMap.push({ pmsCategory: cat, channexId: res.data.id, channexTitle: cat });
+                    window.channexMap.push({ pmsCategory, channexId, res.data.id, channexTitle: cat });
                 }
                 createdCount++;
             }
@@ -680,6 +693,7 @@ export async function executeCloneRatePlans() {
     }
 }
 
+// Option B: Executes Dynamic Suite
 export async function executeBatchCreateRatePlans() {
     const targetCats = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
     if (targetCats.length === 0) return customAlert("Input Required", "Select at least one target room category.");
@@ -704,7 +718,8 @@ export async function executeBatchCreateRatePlans() {
         return customAlert("Target Not Mapped", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmappedTargets.join('\n• ')}\n\nUse the 'Room Types' tab to push them first.`);
     }
 
-    const selectedTemplates = chkIndices.map(i => BATCH_RATE_TEMPLATES[i]);
+    const templates = window.currentBatchTemplates || getDynamicBatchRateTemplates();
+    const selectedTemplates = chkIndices.map(i => templates[i]);
     const totalOps = targetCats.length * selectedTemplates.length;
 
     try {
@@ -773,7 +788,7 @@ export async function executeBatchCreateRatePlans() {
     }
 }
 
-// --- Option C Builder State & Live Controller ---
+// --- Option C Dynamic Builder Controller ---
 window.crpCustomChannel = 'DEF';
 window.crpCustomPolicy = 'non-ref';
 
@@ -781,11 +796,13 @@ export function renderOptionCChannelPills() {
     const container = document.getElementById('crp-channel-pills');
     if (!container) return;
 
-    // Use primary channels: DEF, WEB, and active/configured OTAs
-    const popular = ['DEF', 'WEB', 'BDC', 'HWL', 'AGO', 'EXP', 'ABB', 'TRP'];
+    const connectedCodes = (window.channexConnectedChannels || []).map(c => resolveChannelCode(c.attributes?.channel || c.attributes?.title));
+    const configuredCodes = (window.pricingRules?.channelRules || []).map(r => r.code);
+
+    const primaryList = Array.from(new Set(['DEF', 'WEB', ...connectedCodes, ...configuredCodes, 'BDC', 'HWL', 'EXP'])).filter(Boolean);
     const active = window.crpCustomChannel || 'DEF';
 
-    container.innerHTML = popular.map(code => {
+    let html = primaryList.map(code => {
         const isSel = (active === code);
         return `
             <button type="button" onclick="window.setOptionCChannel('${code}')" class="crp-c-chan-btn px-2 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer border ${
@@ -794,10 +811,26 @@ export function renderOptionCChannelPills() {
         `;
     }).join('');
 
+    const otherOtas = CANONICAL_OTA_LIST.filter(ch => !primaryList.includes(ch.code));
+    const isOtherSelected = !primaryList.includes(active);
+
+    html += `
+        <select id="crp-channel-dropdown" onchange="window.setOptionCChannel(this.value)" class="table-input font-bold text-[10px] !w-32 ml-1 ${
+            isOtherSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : ''
+        }">
+            <option value="">+ More OTAs (${otherOtas.length})</option>
+            ${otherOtas.map(ch => `
+                <option value="${ch.code}" ${active === ch.code ? 'selected' : ''}>${ch.code} - ${ch.name}</option>
+            `).join('')}
+        </select>
+    `;
+
+    container.innerHTML = html;
     updateOptionCPreview();
 }
 
 export function setOptionCChannel(chan) {
+    if (!chan) return;
     window.crpCustomChannel = chan;
     document.querySelectorAll('.crp-c-chan-btn').forEach(btn => {
         const isSel = btn.dataset.val === chan;
@@ -805,6 +838,14 @@ export function setOptionCChannel(chan) {
             isSel ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700'
         }`;
     });
+
+    const dd = document.getElementById('crp-channel-dropdown');
+    if (dd) {
+        dd.value = chan;
+        const isOther = Array.from(dd.options).some(o => o.value === chan && o.value !== "");
+        dd.className = `table-input font-bold text-[10px] !w-32 ml-1 ${isOther ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : ''}`;
+    }
+
     updateOptionCPreview();
 }
 
@@ -939,6 +980,7 @@ export async function executeCreateAndPushRatePlan() {
     }
 }
 
+// Surgical update preserves focus and Tab key navigation
 export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoomId, ratePlanTitle, field, value, selectEl = null) {
     window.channexRateMap = window.channexRateMap || [];
     let mapping = window.channexRateMap.find(r => r.ratePlanId === ratePlanId);
