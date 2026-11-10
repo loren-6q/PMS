@@ -4,7 +4,7 @@
 // ==========================================================================
 
 import { customAlert } from '../core/ui-dialogs.js';
-import { CHANNELS, CANONICAL_OTA_LIST, getChannelByCode, normalizeChannelRules } from '../core/channels.js';
+import { CANONICAL_OTA_LIST, getChannelByCode, normalizeChannelRules, resolveChannelCode } from '../core/channels.js';
 
 const parseJson = v => (typeof v === 'string' ? JSON.parse(v || '{}') : (v || {}));
 
@@ -15,17 +15,16 @@ export function renderPricingConfig() {
     window.masterPricing.relationships = window.masterPricing.relationships || window.pricingRules.relationships || [];
     window.pricingRules.relationships = window.masterPricing.relationships;
 
+    window.pricingRules.channelRules = normalizeChannelRules(window.pricingRules.channelRules);
+
     const rules = window.pricingRules;
     const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
     const categories = Array.from(new Set(defs.map(r => r.category).filter(Boolean)));
 
-    // 1. Master Driver & Anchors
-    const md = document.getElementById('rule-master-driver');
-    if (md) {
-        if (rules.masterDriver) md.value = rules.masterDriver;
-        md.onchange = () => { rules.masterDriver = md.value; renderChannelRulesList(); };
-    }
+    // 1. Dynamic Master Anchor Channel Dropdown (Generated from this property's actual channels)
+    renderMasterDriverSelect();
 
+    // 2. Room Anchors (Dorm & Private)
     const dormSel = document.getElementById('anchor-dorm-select');
     const privSel = document.getElementById('anchor-private-select');
     const dormCats = Array.from(new Set(defs.filter(r => r.rule !== 'private').map(r => r.category)));
@@ -45,7 +44,7 @@ export function renderPricingConfig() {
         privSel.onchange = () => { rules.anchorPrivate = privSel.value; renderEventPricingMatrix(); };
     }
 
-    // 2. Refundable Markups
+    // 3. Refundable Markups
     const stdRef = document.getElementById('rule-std-ref');
     const evtRef = document.getElementById('rule-evt-ref');
     if (stdRef) {
@@ -60,6 +59,28 @@ export function renderPricingConfig() {
     renderRelationshipsTable(categories);
     renderChannelRulesList();
     renderEventPricingMatrix();
+}
+
+/**
+ * Dynamically populates the Master Anchor Driver dropdown based on channels configured for this property.
+ */
+export function renderMasterDriverSelect() {
+    const md = document.getElementById('rule-master-driver');
+    if (!md) return;
+
+    const rules = window.pricingRules || {};
+    const configuredChannels = rules.channelRules || [];
+    const currentMaster = rules.masterDriver || 'WEB';
+
+    md.innerHTML = configuredChannels.map(c => {
+        const isSelected = (currentMaster === c.code || currentMaster === c.name);
+        return `<option value="${c.code}" ${isSelected ? 'selected' : ''}>${c.code} (${c.name})</option>`;
+    }).join('');
+
+    md.onchange = () => {
+        rules.masterDriver = md.value;
+        renderChannelRulesList();
+    };
 }
 
 // --- Bidirectional Pricing Links ---
@@ -210,11 +231,15 @@ export function updateChannelOp(idx, value, selectEl) {
     if (input) input.disabled = (value === 'sync');
 }
 
-// Canonical Channel Modal Trigger
 export function addVerifiedChannelRule() {
     openAddChannelModal();
 }
 
+/**
+ * Opens modal populated with:
+ * 1. Channels currently active in Channex for this property (if fetched).
+ * 2. Full official catalog from core/channels.js (excluding already configured channels).
+ */
 export function openAddChannelModal() {
     const modal = document.getElementById('add-channel-modal');
     const select = document.getElementById('add-channel-select');
@@ -223,19 +248,33 @@ export function openAddChannelModal() {
     window.pricingRules = parseJson(window.pricingRules);
     const existingCodes = new Set((window.pricingRules.channelRules || []).map(r => r.code));
 
-    // Offer only canonical channels that haven't already been added
+    // 1. Check for channels connected in Channex for this property
+    const connectedChannexCodes = new Set(
+        (window.channexConnectedChannels || []).map(c => resolveChannelCode(c.attributes?.channel || c.attributes?.title))
+    );
+
+    // 2. Filter available canonical channels
     const available = CANONICAL_OTA_LIST.filter(ch => !existingCodes.has(ch.code));
 
     if (available.length === 0) {
         return customAlert("All Channels Added", "All supported OTA channels are already configured.");
     }
 
-    select.innerHTML = '<option value="">-- Choose an OTA Channel --</option>' +
-        available.map(ch => `<option value="${ch.code}">${ch.name} (${ch.code} • ${ch.sub})</option>`).join('');
+    // Sort: channels connected in Channex appear at the very top
+    available.sort((a, b) => {
+        const aConn = connectedChannexCodes.has(a.code) ? 1 : 0;
+        const bConn = connectedChannexCodes.has(b.code) ? 1 : 0;
+        return bConn - aConn;
+    });
+
+    select.innerHTML = '<option value="">-- Choose Channel --</option>' +
+        available.map(ch => {
+            const isConn = connectedChannexCodes.has(ch.code);
+            return `<option value="${ch.code}">${isConn ? '★ ' : ''}${ch.name} (${ch.code})</option>`;
+        }).join('');
 
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
-    if (window.lucide) window.lucide.createIcons();
 }
 
 export function closeAddChannelModal() {
@@ -265,12 +304,14 @@ export function confirmAddChannel() {
 
     closeAddChannelModal();
     renderChannelRulesList();
+    renderMasterDriverSelect(); // Instantly update Master Anchor dropdown with the new channel
 }
 
 export function deleteChannelRule(idx) {
     if (!window.pricingRules?.channelRules) return;
     window.pricingRules.channelRules.splice(idx, 1);
     renderChannelRulesList();
+    renderMasterDriverSelect(); // Instantly update Master Anchor dropdown
 }
 
 // --- Seasonal & Event Dual-Curve Panel (Master Anchors Only) ---
@@ -312,7 +353,6 @@ export function renderEventPricingMatrix() {
         th += '</tr>';
         pThead.innerHTML = th;
 
-        // Ripple from Master Anchors (Dorm & Private) only
         const anchors = [
             window.pricingRules?.anchorDorm || 'Standard Dorm',
             window.pricingRules?.anchorPrivate || 'Deluxe Private King'
@@ -350,6 +390,7 @@ export function renderEventPricingMatrix() {
 
 if (typeof window !== 'undefined') {
     window.renderPricingConfig = renderPricingConfig;
+    window.renderMasterDriverSelect = renderMasterDriverSelect;
     window.renderRelationshipsTable = renderRelationshipsTable;
     window.updateRelRule = updateRelRule;
     window.addRelationshipRow = addRelationshipRow;
