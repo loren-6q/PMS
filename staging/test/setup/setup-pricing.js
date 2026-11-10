@@ -246,6 +246,7 @@ export function openAddChannelModal() {
     window.pricingRules = parseJson(window.pricingRules);
     const existingCodes = new Set((window.pricingRules.channelRules || []).map(r => r.code));
 
+    // Resolves Channex channel adapter codes including BookingCom -> BDC
     const connectedCodes = new Set(
         (window.channexConnectedChannels || []).map(c => resolveChannelCode(c.attributes?.channel || c.attributes?.title))
     );
