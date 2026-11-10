@@ -5,6 +5,7 @@
 
 import { parseYMD } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
+import { resolveChannelCode } from '../core/channels.js';
 
 export function applyMath(baseVal, type, modifier, isReverse = false) {
     if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
@@ -57,20 +58,29 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     if (basePrice === undefined || basePrice === "" || isNaN(parseFloat(basePrice))) return null;
     let computed = parseFloat(basePrice);
 
-    // 2. Channel Multiplier (Default is base rate 1:1)
-    const channelName = ratePlan.channel || 'Default';
-    const isDefault = !channelName || channelName === 'Default' || channelName.toLowerCase().includes('default');
+    // 2. Canonical Channel Multiplier / Adjustment
+    const rawChan = ratePlan.channel || 'DEF';
+    const chanCode = resolveChannelCode(rawChan);
+    const masterDriver = window.pricingRules?.masterDriver || 'WEB';
+    const isMaster = (chanCode === masterDriver);
 
-    if (!isDefault) {
-        const chRule = window.pricingRules?.channels?.[channelName] || { type: '=', val: 0 };
-        computed = applyMath(computed, chRule.type || '=', chRule.val || 0);
+    if (!isMaster) {
+        const rulesList = window.pricingRules?.channelRules || [];
+        const rule = rulesList.find(r => r.code === chanCode) 
+                  || window.pricingRules?.channels?.[rawChan] 
+                  || { op: 'sync', val: 0 };
+
+        const op = rule.op || rule.type || 'sync';
+        const val = rule.val ?? (rule.markupPct || 0);
+        computed = applyMath(computed, op, val);
     }
 
     // 3. Refundable Policy Markup
     if (isRefPolicy) {
-        const rType = (isEvtProduct && isEvents) ? (window.pricingRules?.evtRefType || '+%') : (window.pricingRules?.stdRefType || '+%');
-        const rVal = (isEvtProduct && isEvents) ? (window.pricingRules?.evtRefVal || 25) : (window.pricingRules?.stdRefVal || 25);
-        computed = applyMath(computed, rType, rVal);
+        const rVal = (isEvtProduct && isEvents) 
+            ? (window.pricingRules?.evtRefundableMarkup ?? 25) 
+            : (window.pricingRules?.stdRefundableMarkup ?? 25);
+        computed = applyMath(computed, '+%', rVal);
     }
 
     // 4. OTA Promo Margin Preserver
@@ -146,7 +156,6 @@ export function rippleDay(dateStr, startRoom, forceRipple = false) {
     }
 }
 
-// Global Window Exports
 if (typeof window !== 'undefined') {
     window.applyMath = applyMath;
     window.getNearestEvent = getNearestEvent;
