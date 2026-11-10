@@ -21,7 +21,7 @@ export function renderPricingConfig() {
     const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
     const categories = Array.from(new Set(defs.map(r => r.category).filter(Boolean)));
 
-    // 1. Dynamic Master Anchor Channel Dropdown (Generated from this property's actual channels)
+    // 1. Dynamic Master Anchor Channel Dropdown
     renderMasterDriverSelect();
 
     // 2. Room Anchors (Dorm & Private)
@@ -61,9 +61,6 @@ export function renderPricingConfig() {
     renderEventPricingMatrix();
 }
 
-/**
- * Dynamically populates the Master Anchor Driver dropdown based on channels configured for this property.
- */
 export function renderMasterDriverSelect() {
     const md = document.getElementById('rule-master-driver');
     if (!md) return;
@@ -73,7 +70,7 @@ export function renderMasterDriverSelect() {
     const currentMaster = rules.masterDriver || 'WEB';
 
     md.innerHTML = configuredChannels.map(c => {
-        const isSelected = (currentMaster === c.code || currentMaster === c.name);
+        const isSelected = (currentMaster === c.code);
         return `<option value="${c.code}" ${isSelected ? 'selected' : ''}>${c.code} (${c.name})</option>`;
     }).join('');
 
@@ -192,24 +189,30 @@ export function renderChannelRulesList() {
     window.pricingRules = parseJson(window.pricingRules);
     window.pricingRules.channelRules = normalizeChannelRules(window.pricingRules.channelRules);
 
+    const masterCode = window.pricingRules.masterDriver || 'WEB';
+
     window.pricingRules.channelRules.forEach((cr, idx) => {
-        const isLocked = cr.locked || cr.code === 'DEF' || cr.code === 'DIR' || cr.code === 'WEB';
+        const isMaster = (cr.code === masterCode);
+        const isBase = cr.code === 'DEF' || cr.code === 'DIR' || cr.code === 'WEB';
+        const isLocked = isMaster || isBase;
+
         const row = document.createElement('div');
         row.className = "flex items-center justify-between p-1.5 px-2 bg-white border border-slate-200 rounded text-xs hover:bg-slate-50 transition-colors";
         row.innerHTML = `
             <div>
                 <span class="font-black text-slate-800 text-xs">${cr.name}</span>
+                ${isMaster ? '<span class="ml-1 text-[8px] bg-indigo-100 text-indigo-700 font-black px-1.5 py-0.2 rounded uppercase">Master Driver (1:1)</span>' : ''}
                 <span class="block text-[9px] text-slate-400 font-semibold uppercase">${cr.sub || cr.code}</span>
             </div>
             <div class="flex items-center gap-1.5">
                 <select class="table-input font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateChannelOp(${idx}, this.value, this)" ${isLocked ? 'disabled' : ''}>
-                    <option value="sync" ${cr.op === 'sync' ? 'selected' : ''}>SYNC (==)</option>
-                    <option value="+%" ${cr.op === '+%' ? 'selected' : ''}>+ %</option>
-                    <option value="-%" ${cr.op === '-%' ? 'selected' : ''}>- %</option>
-                    <option value="+$" ${cr.op === '+$' ? 'selected' : ''}>+ $</option>
-                    <option value="-$" ${cr.op === '-$' ? 'selected' : ''}>- $</option>
+                    <option value="sync" ${cr.op === 'sync' || isMaster ? 'selected' : ''}>SYNC (==)</option>
+                    <option value="+%" ${cr.op === '+%' && !isMaster ? 'selected' : ''}>+ %</option>
+                    <option value="-%" ${cr.op === '-%' && !isMaster ? 'selected' : ''}>- %</option>
+                    <option value="+$" ${cr.op === '+$' && !isMaster ? 'selected' : ''}>+ $</option>
+                    <option value="-$" ${cr.op === '-$' && !isMaster ? 'selected' : ''}>- $</option>
                 </select>
-                <input type="number" class="table-input font-black text-center !w-16" value="${cr.val || 0}" oninput="window.pricingRules.channelRules[${idx}].val = parseFloat(this.value) || 0" ${isLocked || cr.op === 'sync' ? 'disabled' : ''}>
+                <input type="number" class="table-input font-black text-center !w-16" value="${isMaster ? 0 : (cr.val || 0)}" oninput="window.pricingRules.channelRules[${idx}].val = parseFloat(this.value) || 0" ${isLocked || cr.op === 'sync' ? 'disabled' : ''}>
                 ${isLocked ? '<span class="w-4"></span>' : `
                     <button type="button" onclick="window.deleteChannelRule(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5 ml-1" title="Delete Channel">
                         <i data-lucide="trash-2" size="13"></i>
@@ -235,11 +238,6 @@ export function addVerifiedChannelRule() {
     openAddChannelModal();
 }
 
-/**
- * Opens modal populated with:
- * 1. Channels currently active in Channex for this property (if fetched).
- * 2. Full official catalog from core/channels.js (excluding already configured channels).
- */
 export function openAddChannelModal() {
     const modal = document.getElementById('add-channel-modal');
     const select = document.getElementById('add-channel-select');
@@ -248,28 +246,25 @@ export function openAddChannelModal() {
     window.pricingRules = parseJson(window.pricingRules);
     const existingCodes = new Set((window.pricingRules.channelRules || []).map(r => r.code));
 
-    // 1. Check for channels connected in Channex for this property
-    const connectedChannexCodes = new Set(
+    const connectedCodes = new Set(
         (window.channexConnectedChannels || []).map(c => resolveChannelCode(c.attributes?.channel || c.attributes?.title))
     );
 
-    // 2. Filter available canonical channels
     const available = CANONICAL_OTA_LIST.filter(ch => !existingCodes.has(ch.code));
 
     if (available.length === 0) {
         return customAlert("All Channels Added", "All supported OTA channels are already configured.");
     }
 
-    // Sort: channels connected in Channex appear at the very top
     available.sort((a, b) => {
-        const aConn = connectedChannexCodes.has(a.code) ? 1 : 0;
-        const bConn = connectedChannexCodes.has(b.code) ? 1 : 0;
+        const aConn = connectedCodes.has(a.code) ? 1 : 0;
+        const bConn = connectedCodes.has(b.code) ? 1 : 0;
         return bConn - aConn;
     });
 
     select.innerHTML = '<option value="">-- Choose Channel --</option>' +
         available.map(ch => {
-            const isConn = connectedChannexCodes.has(ch.code);
+            const isConn = connectedCodes.has(ch.code);
             return `<option value="${ch.code}">${isConn ? '★ ' : ''}${ch.name} (${ch.code})</option>`;
         }).join('');
 
@@ -304,14 +299,14 @@ export function confirmAddChannel() {
 
     closeAddChannelModal();
     renderChannelRulesList();
-    renderMasterDriverSelect(); // Instantly update Master Anchor dropdown with the new channel
+    renderMasterDriverSelect();
 }
 
 export function deleteChannelRule(idx) {
     if (!window.pricingRules?.channelRules) return;
     window.pricingRules.channelRules.splice(idx, 1);
     renderChannelRulesList();
-    renderMasterDriverSelect(); // Instantly update Master Anchor dropdown
+    renderMasterDriverSelect();
 }
 
 // --- Seasonal & Event Dual-Curve Panel (Master Anchors Only) ---
