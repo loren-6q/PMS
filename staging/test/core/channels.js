@@ -5,11 +5,11 @@
 
 export const CHANNELS = Object.freeze({
     // Internal Base & Direct Operational Channels (Strict 3-Letter)
-    DEF: { code: "DEF", name: "DEFAULT", label: "DEFAULT (General OTAs)", sub: "Standard OTA Pipe", isBase: true },
-    WEB: { code: "WEB", name: "Direct Website", label: "Website Engine", sub: "Direct Booking Engine", isBase: true },
+    DEF: { code: "DEF", name: "DEFAULT", label: "DEFAULT", sub: "Default Rate", isBase: true },
+    WEB: { code: "WEB", name: "Direct Website", label: "Direct (Website)", sub: "Direct Engine", isBase: true },
     WLK: { code: "WLK", name: "Walk-In", label: "Front Desk Walk-In", sub: "On-Site Direct", isBase: true },
-    MSG: { code: "MSG", name: "Direct Message", label: "WhatsApp / Direct MSG", sub: "Social / Direct Messaging", isBase: true },
-    PHN: { code: "PHN", name: "Phone", label: "Phone Reservation", sub: "Direct Phone Call", isBase: true },
+    MSG: { code: "MSG", name: "Direct Message", label: "WhatsApp / Direct MSG", sub: "Social / Messaging", isBase: true },
+    PHN: { code: "PHN", name: "Phone", label: "Phone Reservation", sub: "Direct Phone", isBase: true },
 
     // Global Major OTAs (Official Channex 3-Letter Shortcodes)
     BDC: { code: "BDC", name: "Booking.com", label: "Booking.com", sub: "BDC Channel", isBase: false },
@@ -41,7 +41,7 @@ export const CHANNELS = Object.freeze({
     TRA: { code: "TRA", name: "Traum-Ferienwohnungen", label: "Traum", sub: "Vacation Rental Channel", isBase: false },
     SZP: { code: "SZP", name: "Szallas", label: "Szallas.hu", sub: "CEE Channel", isBase: false },
     BKG: { code: "BKG", name: "Bookeasy", label: "Bookeasy", sub: "Visitor Centre Channel", isBase: false },
-    RVE: { code: "RVE", name: "Roiback", label: "Roiback Direct", sub: "Direct Booking Engine", isBase: false },
+    RVE: { code: "RVE", name: "Roiback", label: "Roiback Direct", sub: "Direct Engine", isBase: false },
     SBR: { code: "SBR", name: "Sabre", label: "Sabre SynXis", sub: "GDS Channel", isBase: false },
     AMB: { code: "AMB", name: "Amadeus", label: "Amadeus GDS", sub: "GDS Channel", isBase: false },
     TPO: { code: "TPO", name: "Travelport", label: "Travelport / Galileo", sub: "GDS Channel", isBase: false }
@@ -51,39 +51,34 @@ export const CANONICAL_OTA_LIST = Object.freeze(
     Object.values(CHANNELS).filter(ch => !ch.isBase)
 );
 
-/**
- * Normalizes any string, code, or rate plan title to its strict 3-letter Channex code.
- */
 export function resolveChannelCode(rawString) {
     if (!rawString) return "WEB";
     const str = String(rawString).trim();
     const clean = str.toUpperCase();
 
-    // Direct hit on exact code or legacy direct strings
     if (CHANNELS[clean]) return clean;
     if (clean === "DIR" || clean === "DIRECT") return "WEB";
 
-    // Dynamic local cache check
     try {
         const cached = JSON.parse(localStorage.getItem('channex_dynamic_channels') || '{}');
         if (cached[clean]) return clean;
     } catch (e) {}
 
-    // PRECEDENCE 1: Bracketed 3-letter code (e.g. "[BDC] Non-Refundable")
+    // PRECEDENCE 1: Bracketed 3-letter code: "[BDC] Non-Refundable" -> "BDC"
     const bracketMatch = str.match(/^\[([A-Za-z0-9]{3})\]/);
     if (bracketMatch) {
         const code = bracketMatch[1].toUpperCase();
         if (CHANNELS[code]) return code;
     }
 
-    // PRECEDENCE 2: Title STARTS with 3-letter code followed by space, hyphen, or word boundary
+    // PRECEDENCE 2: Title starts with 3-letter code followed by space or delimiter: "BDC Non-Refundable" -> "BDC"
     const startMatch = str.match(/^([A-Za-z0-9]{3})(?:\b|[\s\-_]|$)/);
     if (startMatch) {
         const code = startMatch[1].toUpperCase();
         if (CHANNELS[code]) return code;
     }
 
-    // PRECEDENCE 3: Known Channex adapter codes & brand strings (including BookingCom, TripCom)
+    // PRECEDENCE 3: Known brand rules and Channex adapter identifiers (including BookingCom)
     const BRAND_RULES = [
         [/\b(BDC|BOOKING(COM|\.COM)?)\b/i, "BDC"],
         [/\b(HWL|HOSTELWORLD|HW)\b/i, "HWL"],
@@ -105,14 +100,12 @@ export function resolveChannelCode(rawString) {
         }
     }
 
-    // PRECEDENCE 4: Exact match against full display name
     for (const ch of Object.values(CHANNELS)) {
         if (ch.name.toUpperCase() === clean || (ch.label && ch.label.toUpperCase() === clean)) {
             return ch.code;
         }
     }
 
-    // PRECEDENCE 5: Isolated occurrence of any canonical code in the title
     for (const code of Object.keys(CHANNELS)) {
         const re = new RegExp(`\\b${code}\\b`, 'i');
         if (re.test(str)) {
@@ -162,8 +155,8 @@ export function getOtaPaymentPair(channelCode, isActive = true) {
 
 export function normalizeChannelRules(rawRules = []) {
     const defaultRules = [
-        { code: "DEF", name: "DEFAULT", sub: "Standard OTA Pipe", op: "sync", val: 0, locked: true },
-        { code: "WEB", name: "DIRECT", sub: "Direct Website Engine", op: "sync", val: 0, locked: true }
+        { code: "DEF", name: "DEFAULT", sub: "Default Rate", op: "sync", val: 0, locked: true },
+        { code: "WEB", name: "DIRECT", sub: "Direct Engine", op: "sync", val: 0, locked: true }
     ];
 
     if (!Array.isArray(rawRules) || rawRules.length === 0) {
@@ -182,7 +175,7 @@ export function normalizeChannelRules(rawRules = []) {
     result.push({
         code: "DEF",
         name: "DEFAULT",
-        sub: "Standard OTA Pipe",
+        sub: "Default Rate",
         op: rawDef?.op || "sync",
         val: rawDef?.val ?? 0,
         locked: true
@@ -192,7 +185,7 @@ export function normalizeChannelRules(rawRules = []) {
     result.push({
         code: "WEB",
         name: "DIRECT",
-        sub: "Direct Website Engine",
+        sub: "Direct Engine",
         op: rawWeb?.op || "sync",
         val: rawWeb?.val ?? 0,
         locked: true
