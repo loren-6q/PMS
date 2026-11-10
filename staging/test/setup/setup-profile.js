@@ -4,6 +4,7 @@
 // ==========================================================================
 
 import { customAlert } from '../core/ui-dialogs.js';
+import { CANONICAL_OTA_LIST, getChannelByCode, getOtaPaymentPair, resolveChannelCode } from '../core/channels.js';
 
 export const BASE_DIRECT_PAYMENTS = [
     { key: "cash", label: "Cash", type: "revenue", isBase: true, active: true },
@@ -13,27 +14,10 @@ export const BASE_DIRECT_PAYMENTS = [
     { key: "card-kp", label: "Credit Card Fee / Commission", type: "commission", isBase: true, channel: "card", channelName: "Credit Card", active: true }
 ];
 
-export const STANDARD_OTA_REGISTRY = [
-    { code: "bdc", name: "Booking.com" },
-    { code: "hw", name: "Hostelworld" },
-    { code: "agoda", name: "Agoda" },
-    { code: "airbnb", name: "Airbnb" },
-    { code: "expedia", name: "Expedia" },
-    { code: "trip", name: "Trip.com" }
-];
-
-export function createOtaPaymentPair(code, name, isActive = true) {
-    const cleanCode = code.toLowerCase().replace(/[^a-z0-9]/g, '');
-    return [
-        { key: `${cleanCode}-pay`, label: `${name} Payout / Collect`, type: "revenue", channel: cleanCode, channelName: name, active: isActive },
-        { key: `${cleanCode}-kp`, label: `${name} Commission (Withheld)`, type: "commission", channel: cleanCode, channelName: name, active: isActive }
-    ];
-}
-
 export function buildDefaultPaymentMethods() {
     const list = [...BASE_DIRECT_PAYMENTS];
-    list.push(...createOtaPaymentPair("bdc", "Booking.com", true));
-    list.push(...createOtaPaymentPair("hw", "Hostelworld", true));
+    list.push(...getOtaPaymentPair("BDC", true));
+    list.push(...getOtaPaymentPair("HWL", true));
     return list;
 }
 
@@ -93,13 +77,6 @@ export function normalizePaymentMethods(methods = []) {
             obj.label = 'PromptPay / QR Scan';
         }
 
-        const otaDirectMatch = STANDARD_OTA_REGISTRY.find(o => o.code === obj.key);
-        if (otaDirectMatch) {
-            obj.key = `${otaDirectMatch.code}-pay`;
-            obj.channel = otaDirectMatch.code;
-            obj.channelName = otaDirectMatch.name;
-        }
-
         const baseDirect = BASE_DIRECT_PAYMENTS.find(b => b.key === obj.key);
         if (baseDirect) {
             obj.label = obj.label || baseDirect.label;
@@ -109,13 +86,15 @@ export function normalizePaymentMethods(methods = []) {
             if (baseDirect.channelName) obj.channelName = baseDirect.channelName;
         }
 
+        // Canonical 3-letter channel assignment
         if (!obj.channel && (obj.key.endsWith('-pay') || obj.key.endsWith('-kp'))) {
-            obj.channel = obj.key.replace(/-(pay|kp)$/, '');
+            const rawPrefix = obj.key.replace(/-(pay|kp)$/, '');
+            obj.channel = resolveChannelCode(rawPrefix);
         }
 
         if (obj.channel && !obj.channelName) {
-            const reg = STANDARD_OTA_REGISTRY.find(o => o.code === obj.channel.toLowerCase());
-            obj.channelName = reg ? reg.name : obj.channel.toUpperCase();
+            const meta = getChannelByCode(obj.channel);
+            obj.channelName = meta.name;
         }
 
         if (!seenKeys.has(obj.key)) {
@@ -131,37 +110,36 @@ export function normalizePaymentMethods(methods = []) {
         }
     });
 
+    // Ensure every -pay has a matching -kp and vice versa
     const toAdd = [];
     normalized.forEach(m => {
         if (m.key.endsWith('-kp') && m.key !== 'card-kp') {
-            const baseCode = m.channel || m.key.slice(0, -3);
-            const payKey = `${baseCode}-pay`;
+            const chanCode = m.channel || resolveChannelCode(m.key.slice(0, -3));
+            const payKey = `${chanCode.toLowerCase()}-pay`;
             if (!seenKeys.has(payKey)) {
                 seenKeys.add(payKey);
-                const reg = STANDARD_OTA_REGISTRY.find(o => o.code === baseCode);
-                const name = m.channelName || (reg ? reg.name : baseCode.toUpperCase());
+                const meta = getChannelByCode(chanCode);
                 toAdd.push({
                     key: payKey,
-                    label: `${name} Payout / Collect`,
+                    label: `${meta.name} Payout / Collect`,
                     type: "revenue",
-                    channel: baseCode,
-                    channelName: name,
+                    channel: meta.code,
+                    channelName: meta.name,
                     active: m.active !== false
                 });
             }
         } else if (m.key.endsWith('-pay')) {
-            const baseCode = m.channel || m.key.slice(0, -4);
-            const kpKey = `${baseCode}-kp`;
+            const chanCode = m.channel || resolveChannelCode(m.key.slice(0, -4));
+            const kpKey = `${chanCode.toLowerCase()}-kp`;
             if (!seenKeys.has(kpKey)) {
                 seenKeys.add(kpKey);
-                const reg = STANDARD_OTA_REGISTRY.find(o => o.code === baseCode);
-                const name = m.channelName || (reg ? reg.name : baseCode.toUpperCase());
+                const meta = getChannelByCode(chanCode);
                 toAdd.push({
                     key: kpKey,
-                    label: `${name} Commission (Withheld)`,
+                    label: `${meta.name} Commission (Withheld)`,
                     type: "commission",
-                    channel: baseCode,
-                    channelName: name,
+                    channel: meta.code,
+                    channelName: meta.name,
                     active: m.active !== false
                 });
             }
@@ -285,16 +263,18 @@ export function renderPaymentMethodsTable(payments = null) {
 
     window.paymentMethods = normalizePaymentMethods(payments || window.paymentMethods || [...DEFAULT_PAYMENT_METHODS]);
 
-    // 1. Quick Channel Toggle Pills
+    // Quick Channel Toggle Pills (Primary OTAs)
     if (togglesContainer) {
         const activeChannels = new Set(
             window.paymentMethods
                 .filter(m => m.channel && m.channel !== 'card' && m.active !== false)
-                .map(m => m.channel.toLowerCase())
+                .map(m => m.channel.toUpperCase())
         );
 
-        togglesContainer.innerHTML = STANDARD_OTA_REGISTRY.map(ota => {
-            const isToggled = activeChannels.has(ota.code.toLowerCase());
+        const primaryOtas = CANONICAL_OTA_LIST.slice(0, 8);
+
+        togglesContainer.innerHTML = primaryOtas.map(ota => {
+            const isToggled = activeChannels.has(ota.code);
             return `
                 <button type="button" onclick="window.toggleOtaChannel('${ota.code}', '${ota.name}')" class="px-2 py-0.5 rounded font-black text-[9px] uppercase border cursor-pointer transition-colors ${
                     isToggled ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
@@ -308,7 +288,7 @@ export function renderPaymentMethodsTable(payments = null) {
     const activeMethods = window.paymentMethods.filter(m => m.active !== false);
     const archivedMethods = window.paymentMethods.filter(m => m.active === false);
 
-    // 2. Render Active Rows
+    // Active Rows
     activeMethods.forEach((m) => {
         const actualIdx = window.paymentMethods.findIndex(x => x.key === m.key);
         const tr = document.createElement('tr');
@@ -338,7 +318,7 @@ export function renderPaymentMethodsTable(payments = null) {
         tbody.appendChild(tr);
     });
 
-    // 3. Render Collapsible Archived / Historical Methods Tray
+    // Archived Tray
     if (archivedMethods.length > 0) {
         const archHeader = document.createElement('tr');
         archHeader.className = "bg-slate-100 border-y border-slate-300 text-slate-600 cursor-pointer select-none";
@@ -380,9 +360,9 @@ export function renderPaymentMethodsTable(payments = null) {
 
 export function toggleOtaChannel(code, name) {
     window.paymentMethods = normalizePaymentMethods(window.paymentMethods || []);
-    const cleanCode = code.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const payKey = `${cleanCode}-pay`;
-    const kpKey = `${cleanCode}-kp`;
+    const canonCode = resolveChannelCode(code);
+    const payKey = `${canonCode.toLowerCase()}-pay`;
+    const kpKey = `${canonCode.toLowerCase()}-kp`;
 
     const payEntry = window.paymentMethods.find(m => m.key === payKey);
     const kpEntry = window.paymentMethods.find(m => m.key === kpKey);
@@ -392,14 +372,11 @@ export function toggleOtaChannel(code, name) {
         payEntry.active = nextState;
         kpEntry.active = nextState;
     } else {
-        const pair = createOtaPaymentPair(cleanCode, name, true);
+        const pair = getOtaPaymentPair(canonCode, true);
         pair.forEach(item => {
             const existing = window.paymentMethods.find(m => m.key === item.key);
-            if (existing) {
-                existing.active = true;
-            } else {
-                window.paymentMethods.push(item);
-            }
+            if (existing) existing.active = true;
+            else window.paymentMethods.push(item);
         });
     }
 
@@ -444,13 +421,12 @@ export function toggleArchivedPaymentRows() {
 }
 
 export function addCustomOtaChannelPair() {
-    const name = prompt("Enter OTA Channel Name (e.g. Tiket, Traveloka, Ctrip):");
+    const name = prompt("Enter OTA Channel Name (e.g. Tiket, Traveloka, Despegar):");
     if (!name || !name.trim()) return;
 
-    const code = prompt("Enter Short Prefix Code (e.g. tiket, traveloka, ctrip):", name.toLowerCase().replace(/[^a-z0-9]/g, ''));
-    if (!code || !code.trim()) return;
+    const code = resolveChannelCode(name.trim());
+    const pair = getOtaPaymentPair(code, true);
 
-    const pair = createOtaPaymentPair(code.trim(), name.trim(), true);
     window.paymentMethods = window.paymentMethods || [];
 
     pair.forEach(item => {
