@@ -86,7 +86,6 @@ export function normalizePaymentMethods(methods = []) {
             if (baseDirect.channelName) obj.channelName = baseDirect.channelName;
         }
 
-        // Canonical 3-letter channel assignment
         if (!obj.channel && (obj.key.endsWith('-pay') || obj.key.endsWith('-kp'))) {
             const rawPrefix = obj.key.replace(/-(pay|kp)$/, '');
             obj.channel = resolveChannelCode(rawPrefix);
@@ -110,7 +109,6 @@ export function normalizePaymentMethods(methods = []) {
         }
     });
 
-    // Ensure every -pay has a matching -kp and vice versa
     const toAdd = [];
     normalized.forEach(m => {
         if (m.key.endsWith('-kp') && m.key !== 'card-kp') {
@@ -263,23 +261,31 @@ export function renderPaymentMethodsTable(payments = null) {
 
     window.paymentMethods = normalizePaymentMethods(payments || window.paymentMethods || [...DEFAULT_PAYMENT_METHODS]);
 
-    // Quick Channel Toggle Pills (Primary OTAs)
+    // Dynamic Quick Toggle Pills: Core OTAs + Any currently added OTAs
     if (togglesContainer) {
+        const configuredCodes = Array.from(new Set(
+            window.paymentMethods
+                .filter(m => m.channel && m.channel !== 'card')
+                .map(m => resolveChannelCode(m.channel))
+        ));
+
+        const coreCodes = ['BDC', 'HWL', 'AGO', 'EXP', 'ABB', 'TRP'];
+        const displayCodes = Array.from(new Set([...coreCodes, ...configuredCodes]));
+
         const activeChannels = new Set(
             window.paymentMethods
                 .filter(m => m.channel && m.channel !== 'card' && m.active !== false)
-                .map(m => m.channel.toUpperCase())
+                .map(m => resolveChannelCode(m.channel))
         );
 
-        const primaryOtas = CANONICAL_OTA_LIST.slice(0, 8);
-
-        togglesContainer.innerHTML = primaryOtas.map(ota => {
-            const isToggled = activeChannels.has(ota.code);
+        togglesContainer.innerHTML = displayCodes.map(code => {
+            const meta = getChannelByCode(code);
+            const isToggled = activeChannels.has(code);
             return `
-                <button type="button" onclick="window.toggleOtaChannel('${ota.code}', '${ota.name}')" class="px-2 py-0.5 rounded font-black text-[9px] uppercase border cursor-pointer transition-colors ${
+                <button type="button" onclick="window.toggleOtaChannel('${code}', '${meta.name}')" class="px-2 py-0.5 rounded font-black text-[9px] uppercase border cursor-pointer transition-colors ${
                     isToggled ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
                 }">
-                    ${isToggled ? '✓ ' : ''}${ota.name}
+                    ${isToggled ? '✓ ' : ''}${meta.name}
                 </button>
             `;
         }).join('');
@@ -420,13 +426,46 @@ export function toggleArchivedPaymentRows() {
     if (ch) ch.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
 }
 
-export function addCustomOtaChannelPair() {
-    const name = prompt("Enter OTA Channel Name (e.g. Tiket, Traveloka, Despegar):");
-    if (!name || !name.trim()) return;
+// IN-APP PICKER MODAL (Replaces prompt())
+export function openAddOtaPaymentModal() {
+    const modal = document.getElementById('add-ota-payment-modal');
+    const select = document.getElementById('add-ota-payment-select');
+    if (!modal || !select) return;
 
-    const code = resolveChannelCode(name.trim());
+    window.paymentMethods = normalizePaymentMethods(window.paymentMethods || []);
+    const existingChannels = new Set(
+        window.paymentMethods
+            .filter(m => m.channel && m.channel !== 'card')
+            .map(m => resolveChannelCode(m.channel))
+    );
+
+    const available = CANONICAL_OTA_LIST.filter(ch => !existingChannels.has(ch.code));
+
+    if (available.length === 0) {
+        return customAlert("All Channels Added", "All supported OTA channels are already configured.");
+    }
+
+    select.innerHTML = '<option value="">-- Choose Channel --</option>' +
+        available.map(ch => `<option value="${ch.code}">${ch.code} - ${ch.name}</option>`).join('');
+
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+}
+
+export function closeAddOtaPaymentModal() {
+    const modal = document.getElementById('add-ota-payment-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
+}
+
+export function confirmAddOtaPayment() {
+    const select = document.getElementById('add-ota-payment-select');
+    const code = select?.value;
+    if (!code) return customAlert("Selection Required", "Please select a channel to add.");
+
     const pair = getOtaPaymentPair(code, true);
-
     window.paymentMethods = window.paymentMethods || [];
 
     pair.forEach(item => {
@@ -435,8 +474,8 @@ export function addCustomOtaChannelPair() {
         else window.paymentMethods.push(item);
     });
 
-    renderPaymentMethodsTable(window.paymentMethods);
-    customAlert("Channel Added", `Added ${pair[0].key} and ${pair[1].key} to payment methods.`);
+    closeAddOtaPaymentModal();
+    renderPaymentMethodsTable();
 }
 
 export function restoreDefaultAddonsAndPayments() {
@@ -518,7 +557,10 @@ if (typeof window !== 'undefined') {
     window.archivePaymentMethodRow = archivePaymentMethodRow;
     window.reactivatePaymentMethodRow = reactivatePaymentMethodRow;
     window.toggleArchivedPaymentRows = toggleArchivedPaymentRows;
-    window.addCustomOtaChannelPair = addCustomOtaChannelPair;
+    window.openAddOtaPaymentModal = openAddOtaPaymentModal;
+    window.closeAddOtaPaymentModal = closeAddOtaPaymentModal;
+    window.confirmAddOtaPayment = confirmAddOtaPayment;
+    window.addCustomOtaChannelPair = openAddOtaPaymentModal;
     window.restoreDefaultAddonsAndPayments = restoreDefaultAddonsAndPayments;
     window.renderAddonsTable = renderAddonsTable;
     window.moveAddonRow = moveAddonRow;
