@@ -4,16 +4,7 @@
 // ==========================================================================
 
 import { customAlert } from '../core/ui-dialogs.js';
-
-export const DEFAULT_CHANNELS = [
-    { name: "DEFAULT", sub: "Standard OTA Pipe", op: "sync", val: 0, locked: true },
-    { name: "DIRECT", sub: "Direct Website Engine", op: "sync", val: 0, locked: true },
-    { name: "Booking.com", sub: "BDC Channel", op: "+%", val: 0, locked: false },
-    { name: "Hostelworld", sub: "HW Channel", op: "+%", val: 0, locked: false },
-    { name: "Agoda", sub: "Agoda Channel", op: "+%", val: 0, locked: false },
-    { name: "Direct Website", sub: "Custom Channel", op: "-%", val: 10, locked: false },
-    { name: "Expedia", sub: "Custom Channel", op: "+%", val: 0, locked: false }
-];
+import { CHANNELS, CANONICAL_OTA_LIST, getChannelByCode, normalizeChannelRules } from '../core/channels.js';
 
 const parseJson = v => (typeof v === 'string' ? JSON.parse(v || '{}') : (v || {}));
 
@@ -178,18 +169,16 @@ export function renderChannelRulesList() {
     container.innerHTML = '';
 
     window.pricingRules = parseJson(window.pricingRules);
-    if (!Array.isArray(window.pricingRules.channelRules) || !window.pricingRules.channelRules.length) {
-        window.pricingRules.channelRules = JSON.parse(JSON.stringify(DEFAULT_CHANNELS));
-    }
+    window.pricingRules.channelRules = normalizeChannelRules(window.pricingRules.channelRules);
 
     window.pricingRules.channelRules.forEach((cr, idx) => {
-        const isLocked = cr.locked || cr.name === 'DEFAULT' || cr.name === 'DIRECT';
+        const isLocked = cr.locked || cr.code === 'DEF' || cr.code === 'DIR' || cr.code === 'WEB';
         const row = document.createElement('div');
         row.className = "flex items-center justify-between p-1.5 px-2 bg-white border border-slate-200 rounded text-xs hover:bg-slate-50 transition-colors";
         row.innerHTML = `
             <div>
                 <span class="font-black text-slate-800 text-xs">${cr.name}</span>
-                <span class="block text-[9px] text-slate-400 font-semibold uppercase">${cr.sub || 'Custom Channel'}</span>
+                <span class="block text-[9px] text-slate-400 font-semibold uppercase">${cr.sub || cr.code}</span>
             </div>
             <div class="flex items-center gap-1.5">
                 <select class="table-input font-bold text-[10px] !w-24 text-center cursor-pointer" onchange="window.updateChannelOp(${idx}, this.value, this)" ${isLocked ? 'disabled' : ''}>
@@ -221,18 +210,60 @@ export function updateChannelOp(idx, value, selectEl) {
     if (input) input.disabled = (value === 'sync');
 }
 
+// Canonical Channel Modal Trigger
 export function addVerifiedChannelRule() {
-    window.pricingRules = parseJson(window.pricingRules);
-    window.pricingRules.channelRules = window.pricingRules.channelRules || [];
-    const name = prompt("Enter sales channel name (e.g. Traveloka, Trip.com, Airbnb):");
-    if (!name || !name.trim()) return;
+    openAddChannelModal();
+}
 
-    const trimmed = name.trim();
-    if (window.pricingRules.channelRules.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
-        return customAlert("Duplicate Channel", `"${trimmed}" is already configured.`);
+export function openAddChannelModal() {
+    const modal = document.getElementById('add-channel-modal');
+    const select = document.getElementById('add-channel-select');
+    if (!modal || !select) return;
+
+    window.pricingRules = parseJson(window.pricingRules);
+    const existingCodes = new Set((window.pricingRules.channelRules || []).map(r => r.code));
+
+    // Offer only canonical channels that haven't already been added
+    const available = CANONICAL_OTA_LIST.filter(ch => !existingCodes.has(ch.code));
+
+    if (available.length === 0) {
+        return customAlert("All Channels Added", "All supported OTA channels are already configured.");
     }
 
-    window.pricingRules.channelRules.push({ name: trimmed, sub: 'Custom Channel', op: '+%', val: 0, locked: false });
+    select.innerHTML = '<option value="">-- Choose an OTA Channel --</option>' +
+        available.map(ch => `<option value="${ch.code}">${ch.name} (${ch.code} • ${ch.sub})</option>`).join('');
+
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    if (window.lucide) window.lucide.createIcons();
+}
+
+export function closeAddChannelModal() {
+    const modal = document.getElementById('add-channel-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
+}
+
+export function confirmAddChannel() {
+    const select = document.getElementById('add-channel-select');
+    const code = select?.value;
+    if (!code) return customAlert("Selection Required", "Please select a channel to add.");
+
+    const meta = getChannelByCode(code);
+    window.pricingRules = parseJson(window.pricingRules);
+    window.pricingRules.channelRules = window.pricingRules.channelRules || [];
+    window.pricingRules.channelRules.push({
+        code: meta.code,
+        name: meta.name,
+        sub: meta.sub || "Custom Channel",
+        op: '+%',
+        val: 0,
+        locked: false
+    });
+
+    closeAddChannelModal();
     renderChannelRulesList();
 }
 
@@ -281,7 +312,7 @@ export function renderEventPricingMatrix() {
         th += '</tr>';
         pThead.innerHTML = th;
 
-        // Rippling Engine: Only display the Master Anchors (Dorm & Private)
+        // Ripple from Master Anchors (Dorm & Private) only
         const anchors = [
             window.pricingRules?.anchorDorm || 'Standard Dorm',
             window.pricingRules?.anchorPrivate || 'Deluxe Private King'
@@ -326,6 +357,9 @@ if (typeof window !== 'undefined') {
     window.renderChannelRulesList = renderChannelRulesList;
     window.updateChannelOp = updateChannelOp;
     window.addVerifiedChannelRule = addVerifiedChannelRule;
+    window.openAddChannelModal = openAddChannelModal;
+    window.closeAddChannelModal = closeAddChannelModal;
+    window.confirmAddChannel = confirmAddChannel;
     window.deleteChannelRule = deleteChannelRule;
     window.toggleEventSettings = toggleEventSettings;
     window.cycleRatesSpan = cycleRatesSpan;
