@@ -1,5 +1,5 @@
 // ==========================================================================
-// core/channels.js - Canonical OTA Registry & Channex 3-Letter Adapter Contract
+// core/channels.js - Canonical OTA Registry & 3-Letter Channel Contract
 // Wild & Wandering Property Management System
 // ==========================================================================
 
@@ -29,7 +29,7 @@ export const CHANNELS = Object.freeze({
     MKP: { code: "MKP", name: "MakeMyTrip", label: "MakeMyTrip / Goibibo", sub: "MMT Channel", isBase: false },
     PGI: { code: "PGI", name: "PegiPegi", label: "PegiPegi", sub: "PegiPegi Channel", isBase: false },
 
-    // European, American & Specialty OTAs (Channex Catalog)
+    // European, Corporate & GDS Channels
     CTZ: { code: "CTZ", name: "CultBooking", label: "CultBooking", sub: "CultBooking Channel", isBase: false },
     DDC: { code: "DDC", name: "Despegar", label: "Despegar / Decolar", sub: "LATAM Channel", isBase: false },
     OVK: { code: "OVK", name: "Ostrovok", label: "Ostrovok / Emerging Travel", sub: "Ostrovok Channel", isBase: false },
@@ -47,40 +47,82 @@ export const CHANNELS = Object.freeze({
     TPO: { code: "TPO", name: "Travelport", label: "Travelport / Galileo", sub: "GDS Channel", isBase: false }
 });
 
-// Full ordered list of external OTAs (for modals and selectors)
 export const CANONICAL_OTA_LIST = Object.freeze(
     Object.values(CHANNELS).filter(ch => !ch.isBase)
 );
 
 /**
- * Normalizes any string to its strict uppercase 3-letter Channex code.
+ * Normalizes any string, code, or rate plan title to its strict 3-letter Channex code.
  */
 export function resolveChannelCode(rawString) {
-    if (!rawString) return "DIR";
-    const clean = String(rawString).trim().toUpperCase();
+    if (!rawString) return "WEB";
+    const str = String(rawString).trim();
+    const clean = str.toUpperCase();
 
-    // Direct 3-letter hit
+    // Direct hit on exact code or legacy direct strings
     if (CHANNELS[clean]) return clean;
+    if (clean === "DIR" || clean === "DIRECT") return "WEB";
 
-    // Check dynamic local cache from Channex API
+    // Dynamic local cache check
     try {
         const cached = JSON.parse(localStorage.getItem('channex_dynamic_channels') || '{}');
         if (cached[clean]) return clean;
     } catch (e) {}
 
-    // Match by display name
+    // PRECEDENCE 1: Bracketed 3-letter code (e.g. "[BDC] Non-Refundable")
+    const bracketMatch = str.match(/^\[([A-Za-z0-9]{3})\]/);
+    if (bracketMatch) {
+        const code = bracketMatch[1].toUpperCase();
+        if (CHANNELS[code]) return code;
+    }
+
+    // PRECEDENCE 2: Title STARTS with 3-letter code followed by space, hyphen, or word boundary
+    const startMatch = str.match(/^([A-Za-z0-9]{3})(?:\b|[\s\-_]|$)/);
+    if (startMatch) {
+        const code = startMatch[1].toUpperCase();
+        if (CHANNELS[code]) return code;
+    }
+
+    // PRECEDENCE 3: Known Channex adapter codes & brand strings (including BookingCom, TripCom)
+    const BRAND_RULES = [
+        [/\b(BDC|BOOKING(COM|\.COM)?)\b/i, "BDC"],
+        [/\b(HWL|HOSTELWORLD|HW)\b/i, "HWL"],
+        [/\b(AGO|AGODA|YCS)\b/i, "AGO"],
+        [/\b(EXP|EXPEDIA|EPC)\b/i, "EXP"],
+        [/\b(ABB|AIRBNB|ABNB)\b/i, "ABB"],
+        [/\b(TRP|TRIP(COM|\.COM)?|CTRIP)\b/i, "TRP"],
+        [/\b(VRB|VRBO|HOMEAWAY)\b/i, "VRB"],
+        [/\b(GGL|GOOGLE)\b/i, "GGL"],
+        [/\b(TKT|TIKET(COM|\.COM)?)\b/i, "TKT"],
+        [/\b(TVL|TRAVELOKA)\b/i, "TVL"],
+        [/\b(WEB|DIRECT|WEBSITE|WALKIN|WALK-IN)\b/i, "WEB"],
+        [/\b(DEF|DEFAULT)\b/i, "DEF"]
+    ];
+
+    for (const [pattern, code] of BRAND_RULES) {
+        if (pattern.test(str)) {
+            return code;
+        }
+    }
+
+    // PRECEDENCE 4: Exact match against full display name
     for (const ch of Object.values(CHANNELS)) {
-        if (ch.name.toUpperCase() === clean || ch.label.toUpperCase() === clean) {
+        if (ch.name.toUpperCase() === clean || (ch.label && ch.label.toUpperCase() === clean)) {
             return ch.code;
+        }
+    }
+
+    // PRECEDENCE 5: Isolated occurrence of any canonical code in the title
+    for (const code of Object.keys(CHANNELS)) {
+        const re = new RegExp(`\\b${code}\\b`, 'i');
+        if (re.test(str)) {
+            return code;
         }
     }
 
     return clean.length === 3 ? clean : "DEF";
 }
 
-/**
- * Returns the channel metadata object for any 3-letter code.
- */
 export function getChannelByCode(code) {
     const canonical = resolveChannelCode(code);
     if (CHANNELS[canonical]) {
@@ -90,14 +132,11 @@ export function getChannelByCode(code) {
         code: canonical,
         name: canonical,
         label: canonical,
-        sub: "Custom / Dynamic Channel",
+        sub: "Custom Channel",
         isBase: false
     };
 }
 
-/**
- * Returns official -PAY and -KP accounting ledger pairs.
- */
 export function getOtaPaymentPair(channelCode, isActive = true) {
     const channel = getChannelByCode(channelCode);
     const codeLower = channel.code.toLowerCase();
@@ -121,14 +160,10 @@ export function getOtaPaymentPair(channelCode, isActive = true) {
     ];
 }
 
-/**
- * Normalizes pricing channel rules into canonical schema:
- * [{ code: "BDC", name: "Booking.com", sub: "BDC Channel", op: "+%", val: 18, locked: false }]
- */
 export function normalizeChannelRules(rawRules = []) {
     const defaultRules = [
         { code: "DEF", name: "DEFAULT", sub: "Standard OTA Pipe", op: "sync", val: 0, locked: true },
-        { code: "DIR", name: "DIRECT", sub: "Direct Website Engine", op: "sync", val: 0, locked: true }
+        { code: "WEB", name: "DIRECT", sub: "Direct Website Engine", op: "sync", val: 0, locked: true }
     ];
 
     if (!Array.isArray(rawRules) || rawRules.length === 0) {
@@ -139,7 +174,10 @@ export function normalizeChannelRules(rawRules = []) {
     const result = [];
 
     const rawDef = rawRules.find(r => resolveChannelCode(r.code || r.name || r.channel) === "DEF");
-    const rawDir = rawRules.find(r => resolveChannelCode(r.code || r.name || r.channel) === "DIR" || resolveChannelCode(r.code || r.name || r.channel) === "WEB");
+    const rawWeb = rawRules.find(r => {
+        const c = resolveChannelCode(r.code || r.name || r.channel);
+        return c === "WEB" || c === "DIR";
+    });
 
     result.push({
         code: "DEF",
@@ -152,14 +190,14 @@ export function normalizeChannelRules(rawRules = []) {
     seen.add("DEF");
 
     result.push({
-        code: "DIR",
+        code: "WEB",
         name: "DIRECT",
         sub: "Direct Website Engine",
-        op: rawDir?.op || "sync",
-        val: rawDir?.val ?? 0,
+        op: rawWeb?.op || "sync",
+        val: rawWeb?.val ?? 0,
         locked: true
     });
-    seen.add("DIR");
+    seen.add("WEB");
 
     rawRules.forEach(rule => {
         const rawIdentifier = rule.code || rule.name || rule.channel;
