@@ -176,8 +176,8 @@
                         <span class="setup-card-subtitle">Configure payment channels. OTA payouts pair automatically with commission splits.</span>
                     </div>
                     <div class="flex items-center gap-1.5">
-                        <button type="button" onclick="event.stopPropagation(); window.addCustomOtaChannelPair()" class="btn-setup-prev !text-[9.5px] !py-0.5">
-                            <i data-lucide="plus" size="10"></i> Custom OTA
+                        <button type="button" onclick="event.stopPropagation(); window.openAddOtaPaymentModal()" class="btn-setup-prev !text-[9.5px] !py-0.5">
+                            <i data-lucide="plus" size="10"></i> Add OTA
                         </button>
                         <button type="button" onclick="event.stopPropagation(); window.restoreDefaultAddonsAndPayments()" class="btn-setup-prev !text-[9.5px] !py-0.5">
                             Restore Defaults
@@ -192,8 +192,8 @@
                             <span class="text-[9px] font-black uppercase text-slate-500 mr-1">Active OTA Channels:</span>
                             <div id="ota-channel-toggles-container" class="flex flex-wrap gap-1"></div>
                         </div>
-                        <button type="button" onclick="window.addCustomOtaChannelPair()" class="btn-setup-prev !text-[9px] !py-0.5">
-                            <i data-lucide="plus" size="10"></i> + Custom OTA
+                        <button type="button" onclick="window.openAddOtaPaymentModal()" class="btn-setup-prev !text-[9px] !py-0.5">
+                            <i data-lucide="plus" size="10"></i> + Add OTA
                         </button>
                     </div>
 
@@ -935,7 +935,7 @@
         </div>
     </div>
 
-     <!-- 8. Add OTA Channel Modal -->
+     <!-- 8. Add Sales Channel Modal (Step 4 Pricing) -->
     <div id="add-channel-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden" onclick="if(event.target === this) window.closeAddChannelModal()">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-4 border border-slate-300 text-xs flex flex-col">
             <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-200">
@@ -956,7 +956,29 @@
             </div>
         </div>
     </div>
-     
+
+    <!-- 9. Add OTA Payment Method Modal (Step 1 Payments Picker) -->
+    <div id="add-ota-payment-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden" onclick="if(event.target === this) window.closeAddOtaPaymentModal()">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-4 border border-slate-300 text-xs flex flex-col">
+            <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-200">
+                <h4 class="text-xs font-black uppercase text-slate-900 flex items-center gap-1.5">
+                    <i data-lucide="credit-card" size="14" class="text-indigo-600"></i> Add OTA Payment Method
+                </h4>
+                <button type="button" onclick="window.closeAddOtaPaymentModal()" class="text-slate-400 hover:text-black cursor-pointer leading-none text-base">&times;</button>
+            </div>
+            <div>
+                <label class="block font-black uppercase text-[10px] text-slate-500 mb-1">Select OTA Channel</label>
+                <select id="add-ota-payment-select" class="table-input font-bold w-full bg-white"></select>
+            </div>
+            <div class="flex items-center justify-end gap-2 mt-4 pt-2 border-t border-slate-200">
+                <button type="button" onclick="window.closeAddOtaPaymentModal()" class="btn-setup-prev !text-[10px] !py-1">Cancel</button>
+                <button type="button" onclick="window.confirmAddOtaPayment()" class="btn-setup-save !bg-indigo-600 hover:!bg-indigo-700 !text-[10px] !py-1">
+                    <i data-lucide="plus" size="12"></i> Add Channel
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ENTRY POINT -->
     <script type="module" src="core/nav.js"></script>
     <script type="module" src="setup/setup-wizard.js"></script>
