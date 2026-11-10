@@ -5,6 +5,7 @@
 
 import { customAlert } from '../core/ui-dialogs.js';
 import { ChannexClient } from '../channex.js';
+import { CANONICAL_OTA_LIST, resolveChannelCode } from '../core/channels.js';
 
 export async function fetchChannexData() {
     const apiKey = document.getElementById('chan-api-key')?.value.trim();
@@ -15,7 +16,7 @@ export async function fetchChannexData() {
     }
 
     try {
-        customAlert("Connecting...", "Fetching room types and primary rate plans from Channex...");
+        customAlert("Connecting...", "Fetching room types, rate plans, and connected channels from Channex...");
         
         const rJson = await ChannexClient.request(`/room_types?filter[property_id]=${propId}&pagination[limit]=100`, {}, apiKey);
         window.channexRooms = rJson.data || [];
@@ -32,6 +33,15 @@ export async function fetchChannexData() {
             window.channexPolicies = window.channexPolicies || [];
         }
 
+        // Fetch active channels connected to this property in Channex
+        try {
+            const cJson = await ChannexClient.request(`/channels?filter[property_id]=${propId}&pagination[limit]=100`, {}, apiKey);
+            window.channexConnectedChannels = cJson.data || [];
+        } catch (cErr) {
+            console.warn("[Channex] Could not fetch connected channels:", cErr);
+            window.channexConnectedChannels = window.channexConnectedChannels || [];
+        }
+
         // Primary base plans only
         window.channexRatePlans = allPlans.filter(p => {
             const attr = p.attributes || {};
@@ -42,7 +52,7 @@ export async function fetchChannexData() {
         });
 
         renderStep3UnifiedMapping();
-        customAlert("Fetched", `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} rate plans, and ${window.channexPolicies.length} cancellation policies.`);
+        customAlert("Fetched", `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} rate plans, and ${window.channexPolicies.length} policies.`);
         
     } catch (err) {
         console.error("[Channex Fetch Error]:", err);
@@ -50,15 +60,13 @@ export async function fetchChannexData() {
     }
 }
 
-const AVAILABLE_CHANNELS = [
-    { val: "DEFAULT", label: "DEFAULT (General OTAs)" },
-    { val: "Booking.com", label: "Booking.com" },
-    { val: "Hostelworld", label: "Hostelworld" },
-    { val: "Agoda", label: "Agoda" },
-    { val: "Airbnb", label: "Airbnb" },
-    { val: "Expedia", label: "Expedia" },
-    { val: "Direct", label: "Direct (Website)" }
-];
+export function getAvailableMappingChannels() {
+    return [
+        { val: "DEF", label: "DEF (DEFAULT Pipe)" },
+        { val: "WEB", label: "WEB (Direct Website)" },
+        ...CANONICAL_OTA_LIST.map(ch => ({ val: ch.code, label: `${ch.code} (${ch.name})` }))
+    ];
+}
 
 const AVAILABLE_POLICIES = [
     { val: "non-ref", label: "Non-Refundable" },
@@ -68,15 +76,9 @@ const AVAILABLE_POLICIES = [
     { val: "ignore", label: "-- Ignore / Do Not Sync --" }
 ];
 
-// Fuzzy Classifier Helper for OTA Channel and Refundability Policy
+// Fuzzy Classifier Helper for Canonical OTA Channel and Refundability Policy
 export function detectRatePlanClassification(title, plan = null) {
-    let channel = "DEFAULT";
-    if (/\b(booking(\.com)?|bdc)\b/i.test(title)) channel = "Booking.com";
-    else if (/\b(hostelworld|hw)\b/i.test(title)) channel = "Hostelworld";
-    else if (/\b(agoda)\b/i.test(title)) channel = "Agoda";
-    else if (/\b(expedia|exp)\b/i.test(title)) channel = "Expedia";
-    else if (/\b(airbnb|abnb)\b/i.test(title)) channel = "Airbnb";
-    else if (/\b(direct|web(site)?)\b/i.test(title)) channel = "Direct";
+    const channel = resolveChannelCode(title);
 
     const isEvt = /\b(event|peak|full[-_\s]?moon|fmp|pkg|package)\b/i.test(title);
     const isNonRef = /\b(non[-_\s]?ref(undable)?|nr\b|n[-_]?ref|no[-_\s]?refund|nonrefundable)\b/i.test(title);
@@ -113,6 +115,8 @@ export function renderStep3UnifiedMapping() {
 
     window.channexMap = window.channexMap || [];
     window.channexRateMap = window.channexRateMap || [];
+
+    const availableChannels = getAvailableMappingChannels();
 
     pmsCategories.forEach(cat => {
         const currentMap = window.channexMap.find(m => m.pmsCategory === cat);
@@ -153,7 +157,6 @@ export function renderStep3UnifiedMapping() {
                                 ${matchingPlans.map(plan => {
                                     const title = plan.attributes?.title || plan.id;
                                     let mapping = window.channexRateMap.find(r => r.ratePlanId === plan.id);
-
                                     const detected = detectRatePlanClassification(title, plan);
 
                                     if (!mapping) {
@@ -169,8 +172,8 @@ export function renderStep3UnifiedMapping() {
                                         };
                                         window.channexRateMap.push(mapping);
                                     } else {
-                                        if (!mapping.channel || mapping.channel === "DEFAULT") {
-                                            if (detected.channel !== "DEFAULT") mapping.channel = detected.channel;
+                                        if (!mapping.channel || mapping.channel === "DEF" || mapping.channel === "DEFAULT") {
+                                            if (detected.channel !== "DEF") mapping.channel = detected.channel;
                                         }
                                         if (!mapping.policy || mapping.policy === "non-ref") {
                                             if (detected.policy !== "non-ref") {
@@ -202,7 +205,7 @@ export function renderStep3UnifiedMapping() {
                                             </td>
                                             <td class="py-1.5 px-2">
                                                 <select class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'channel', this.value, this)">
-                                                    ${AVAILABLE_CHANNELS.map(ch => `
+                                                    ${availableChannels.map(ch => `
                                                         <option value="${ch.val}" ${mapping.channel === ch.val ? 'selected' : ''}>${ch.label}</option>
                                                     `).join('')}
                                                 </select>
@@ -256,8 +259,6 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     window.channexRateMap = window.channexRateMap || [];
 
     const idx = window.channexMap.findIndex(m => m.pmsCategory === pmsCategory);
-
-    // Clear previous rate plan bindings for this category
     window.channexRateMap = window.channexRateMap.filter(r => r.pmsCategory !== pmsCategory);
 
     if (!channexId) {
@@ -273,7 +274,6 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
             window.channexMap.push({ pmsCategory, channexId, channexTitle: title });
         }
 
-        // Auto-bind all primary rate plans with auto-detected channel & policy
         const matchingPlans = (window.channexRatePlans || []).filter(p => {
             const rId = p.attributes?.room_type_id || p.relationships?.room_type?.data?.id;
             return rId === channexId;
@@ -298,21 +298,21 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     renderStep3UnifiedMapping();
 }
 
-// Rate Plan Templates for Batch Suite: [OTA / Event] [Policy] [Room]
+// Canonical 3-Letter Batch Suite Templates
 const BATCH_RATE_TEMPLATES = [
-    { id: 'def_non_ref', titleTpl: 'Non-Refundable {CAT}', channel: 'DEFAULT', policy: 'non-ref', checked: true, isEvent: false },
-    { id: 'def_ref', titleTpl: 'Refundable {CAT}', channel: 'DEFAULT', policy: 'ref', checked: true, isEvent: false },
-    { id: 'bdc_non_ref', titleTpl: 'BDC Non-Refundable {CAT}', channel: 'Booking.com', policy: 'non-ref', checked: true, isEvent: false },
-    { id: 'bdc_ref', titleTpl: 'BDC Refundable {CAT}', channel: 'Booking.com', policy: 'ref', checked: true, isEvent: false },
-    { id: 'hw_non_ref', titleTpl: 'HW Non-Refundable {CAT}', channel: 'Hostelworld', policy: 'non-ref', checked: false, isEvent: false },
-    { id: 'hw_ref', titleTpl: 'HW Refundable {CAT}', channel: 'Hostelworld', policy: 'ref', checked: false, isEvent: false },
-    { id: 'agoda_non_ref', titleTpl: 'Agoda Non-Refundable {CAT}', channel: 'Agoda', policy: 'non-ref', checked: false, isEvent: false },
-    { id: 'agoda_ref', titleTpl: 'Agoda Refundable {CAT}', channel: 'Agoda', policy: 'ref', checked: false, isEvent: false },
-    { id: 'exp_non_ref', titleTpl: 'Expedia Non-Refundable {CAT}', channel: 'Expedia', policy: 'non-ref', checked: false, isEvent: false },
-    { id: 'exp_ref', titleTpl: 'Expedia Refundable {CAT}', channel: 'Expedia', policy: 'ref', checked: false, isEvent: false },
-    { id: 'air_std', titleTpl: 'Airbnb Standard {CAT}', channel: 'Airbnb', policy: 'non-ref', checked: false, isEvent: false },
-    { id: 'evt_non_ref', titleTpl: 'Event Non-Refundable {CAT}', channel: 'DEFAULT', policy: 'event-non-ref', checked: false, isEvent: true },
-    { id: 'evt_ref', titleTpl: 'Event Refundable {CAT}', channel: 'DEFAULT', policy: 'event-ref', checked: false, isEvent: true }
+    { id: 'def_non_ref', titleTpl: 'Non-Refundable {CAT}', channel: 'DEF', policy: 'non-ref', checked: true, isEvent: false },
+    { id: 'def_ref', titleTpl: 'Refundable {CAT}', channel: 'DEF', policy: 'ref', checked: true, isEvent: false },
+    { id: 'bdc_non_ref', titleTpl: '[BDC] Non-Refundable {CAT}', channel: 'BDC', policy: 'non-ref', checked: true, isEvent: false },
+    { id: 'bdc_ref', titleTpl: '[BDC] Refundable {CAT}', channel: 'BDC', policy: 'ref', checked: true, isEvent: false },
+    { id: 'hw_non_ref', titleTpl: '[HWL] Non-Refundable {CAT}', channel: 'HWL', policy: 'non-ref', checked: false, isEvent: false },
+    { id: 'hw_ref', titleTpl: '[HWL] Refundable {CAT}', channel: 'HWL', policy: 'ref', checked: false, isEvent: false },
+    { id: 'agoda_non_ref', titleTpl: '[AGO] Non-Refundable {CAT}', channel: 'AGO', policy: 'non-ref', checked: false, isEvent: false },
+    { id: 'agoda_ref', titleTpl: '[AGO] Refundable {CAT}', channel: 'AGO', policy: 'ref', checked: false, isEvent: false },
+    { id: 'exp_non_ref', titleTpl: '[EXP] Non-Refundable {CAT}', channel: 'EXP', policy: 'non-ref', checked: false, isEvent: false },
+    { id: 'exp_ref', titleTpl: '[EXP] Refundable {CAT}', channel: 'EXP', policy: 'ref', checked: false, isEvent: false },
+    { id: 'air_std', titleTpl: '[ABB] Standard {CAT}', channel: 'ABB', policy: 'non-ref', checked: false, isEvent: false },
+    { id: 'evt_non_ref', titleTpl: 'Event Non-Refundable {CAT}', channel: 'DEF', policy: 'event-non-ref', checked: false, isEvent: true },
+    { id: 'evt_ref', titleTpl: 'Event Refundable {CAT}', channel: 'DEF', policy: 'event-ref', checked: false, isEvent: true }
 ];
 
 export function switchCreateModalTab(tab = 'rooms') {
@@ -346,7 +346,7 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
     const channexMap = window.channexMap || [];
     const allPlans = window.channexRatePlans || [];
 
-    // 1. Populate Room Types Pane Checklist (Step 2 Categories)
+    // 1. Populate Room Types Checklist
     const roomTypeChecklist = document.getElementById('crp-roomtype-checklist');
     if (roomTypeChecklist) {
         roomTypeChecklist.innerHTML = categories.map(cat => {
@@ -378,7 +378,7 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
         }).join('');
     }
 
-    // 2. Populate Target Categories Checklist for Rate Plans
+    // 2. Populate Target Categories Checklist
     const rateChecklist = document.getElementById('crp-room-checklist');
     if (rateChecklist) {
         rateChecklist.innerHTML = categories.map(c => `
@@ -405,7 +405,7 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
         }).join('');
     }
 
-    // 4. Populate Batch Rate Plan Suite Checklist (Grid)
+    // 4. Populate Batch Rate Plan Suite Checklist
     const batchListEl = document.getElementById('crp-batch-plans-list');
     if (batchListEl) {
         batchListEl.innerHTML = BATCH_RATE_TEMPLATES.map((tpl, i) => `
@@ -421,6 +421,9 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
             </label>
         `).join('');
     }
+
+    // 5. Populate Dynamic Channel Pills for Option C
+    renderOptionCChannelPills();
 
     switchCreateModalTab(initialTab);
 
@@ -460,12 +463,6 @@ export function toggleBatchPresetPlans(checked) {
     document.querySelectorAll('.crp-batch-tpl-chk').forEach(chk => chk.checked = checked);
 }
 
-export function applyRatePlanPreset(title) {
-    const titleInput = document.getElementById('crp-title');
-    if (titleInput) titleInput.value = title;
-}
-
-// Resolves the corresponding Channex Cancellation Policy ID from the property
 async function resolveChannexPolicyId(targetPolicyType, propId, apiKey) {
     if (!window.channexPolicies || window.channexPolicies.length === 0) {
         try {
@@ -498,7 +495,6 @@ async function resolveChannexPolicyId(targetPolicyType, propId, apiKey) {
     }
 }
 
-// Push Step 2 categories as official Channex Room Types
 export async function executeCreateAndPushRoomTypes() {
     const chks = Array.from(document.querySelectorAll('.crp-roomtype-chk:checked')).map(c => c.value);
     if (chks.length === 0) return customAlert("Input Required", "Select at least one room category to push.");
@@ -572,7 +568,6 @@ export async function executeCreateAndPushRoomTypes() {
     }
 }
 
-// Option A: Clone All Rate Plans from a Source Category (Preserves [OTA/Policy] [Room] order)
 export async function executeCloneRatePlans() {
     const sourceCat = document.getElementById('crp-clone-source')?.value;
     if (!sourceCat) return customAlert("Input Required", "Please select a source category to clone plans from.");
@@ -621,7 +616,6 @@ export async function executeCloneRatePlans() {
                 const spTitle = sp.attributes?.title || sp.id;
                 const spMap = (window.channexRateMap || []).find(r => r.ratePlanId === sp.id) || {};
 
-                // Replaces source room name with target room name; otherwise appends tgtCat at the end: [OTA/Policy] [TargetRoom]
                 let newTitle = spTitle;
                 const escSource = sourceCat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 if (new RegExp(escSource, 'i').test(newTitle)) {
@@ -630,7 +624,6 @@ export async function executeCloneRatePlans() {
                     newTitle = `${newTitle} ${tgtCat}`;
                 }
 
-                // Strip any accidental "Rate" suffix
                 newTitle = newTitle.replace(/\s+Rate\b/gi, '').trim();
 
                 const sourcePolicyId = sp.attributes?.cancellation_policy_id || sp.relationships?.cancellation_policy?.data?.id;
@@ -657,14 +650,13 @@ export async function executeCloneRatePlans() {
 
                 if (res?.data) {
                     window.channexRatePlans.push(res.data);
-
                     window.channexRateMap = window.channexRateMap || [];
                     window.channexRateMap.push({
                         ratePlanId: res.data.id,
                         pmsCategory: tgtCat,
                         channexRoomId: tgtMap.channexId,
                         ratePlanTitle: newTitle,
-                        channel: spMap.channel || 'DEFAULT',
+                        channel: spMap.channel || 'DEF',
                         policy: spMap.policy || 'non-ref',
                         rateType: spMap.rateType || spMap.policy || 'non-ref',
                         isEvent: !!spMap.isEvent
@@ -688,7 +680,6 @@ export async function executeCloneRatePlans() {
     }
 }
 
-// Option B: Batch Create Rate Plan Suite: Formats as [OTA / Event] [Policy] [Room]
 export async function executeBatchCreateRatePlans() {
     const targetCats = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
     if (targetCats.length === 0) return customAlert("Input Required", "Select at least one target room category.");
@@ -722,7 +713,6 @@ export async function executeBatchCreateRatePlans() {
 
         for (const tgtCat of targetCats) {
             const tgtMap = window.channexMap.find(m => m.pmsCategory === tgtCat);
-
             const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
             const sameCat = defs.filter(r => r.category === tgtCat);
             const isDorm = sameCat.some(r => r.rule !== 'private');
@@ -784,8 +774,28 @@ export async function executeBatchCreateRatePlans() {
 }
 
 // --- Option C Builder State & Live Controller ---
-window.crpCustomChannel = 'DEFAULT';
+window.crpCustomChannel = 'DEF';
 window.crpCustomPolicy = 'non-ref';
+
+export function renderOptionCChannelPills() {
+    const container = document.getElementById('crp-channel-pills');
+    if (!container) return;
+
+    // Use primary channels: DEF, WEB, and active/configured OTAs
+    const popular = ['DEF', 'WEB', 'BDC', 'HWL', 'AGO', 'EXP', 'ABB', 'TRP'];
+    const active = window.crpCustomChannel || 'DEF';
+
+    container.innerHTML = popular.map(code => {
+        const isSel = (active === code);
+        return `
+            <button type="button" onclick="window.setOptionCChannel('${code}')" class="crp-c-chan-btn px-2 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer border ${
+                isSel ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700'
+            }" data-val="${code}">${code}</button>
+        `;
+    }).join('');
+
+    updateOptionCPreview();
+}
 
 export function setOptionCChannel(chan) {
     window.crpCustomChannel = chan;
@@ -810,15 +820,7 @@ export function setOptionCPolicy(pol) {
 }
 
 export function getOptionCChannelPrefix(chan) {
-    switch (chan) {
-        case 'Booking.com': return 'BDC';
-        case 'Hostelworld': return 'HW';
-        case 'Agoda': return 'Agoda';
-        case 'Expedia': return 'Expedia';
-        case 'Airbnb': return 'Airbnb';
-        case 'Direct': return 'Direct';
-        default: return '';
-    }
+    return (chan === 'DEF' || !chan) ? '' : `[${chan}]`;
 }
 
 export function getOptionCPolicyLabel(pol) {
@@ -834,7 +836,7 @@ export function updateOptionCPreview() {
     const previewEl = document.getElementById('crp-custom-preview-text');
     if (!previewEl) return;
 
-    const chan = window.crpCustomChannel || 'DEFAULT';
+    const chan = window.crpCustomChannel || 'DEF';
     const pol = window.crpCustomPolicy || 'non-ref';
     const customSuffix = document.getElementById('crp-custom-name')?.value.trim() || '';
 
@@ -845,7 +847,6 @@ export function updateOptionCPreview() {
     previewEl.innerText = `${parts.join(' ')} [Room]`;
 }
 
-// Option C: Push Single Custom Rate Plan using the Section Builder
 export async function executeCreateAndPushRatePlan() {
     const chks = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
     if (chks.length === 0) return customAlert("Input Required", "Select at least one room category.");
@@ -867,7 +868,7 @@ export async function executeCreateAndPushRatePlan() {
         return customAlert("Mapping Required", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmapped.join('\n• ')}\n\nUse the 'Room Types' tab to create them first.`);
     }
 
-    const channel = window.crpCustomChannel || 'DEFAULT';
+    const channel = window.crpCustomChannel || 'DEF';
     const policy = window.crpCustomPolicy || 'non-ref';
     const customSuffix = document.getElementById('crp-custom-name')?.value.trim() || '';
 
@@ -909,7 +910,6 @@ export async function executeCreateAndPushRatePlan() {
                 window.channexRatePlans = window.channexRatePlans || [];
                 window.channexRatePlans.push(res.data);
 
-                // Auto-map with exact channel and policy
                 window.channexRateMap = window.channexRateMap || [];
                 window.channexRateMap.push({
                     ratePlanId: res.data.id,
@@ -953,7 +953,7 @@ export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoo
                 pmsCategory,
                 channexRoomId,
                 ratePlanTitle,
-                channel: 'DEFAULT',
+                channel: 'DEF',
                 policy: 'non-ref',
                 rateType: 'non-ref',
                 isEvent: false
@@ -968,7 +968,6 @@ export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoo
         }
     }
 
-    // Surgical in-place DOM update prevents focus loss and stops Tab from jumping to top of page
     if (selectEl) {
         const tr = selectEl.closest('tr');
         if (tr) {
@@ -1001,7 +1000,6 @@ if (typeof window !== 'undefined') {
     window.toggleAllTargetRoomTypes = toggleAllTargetRoomTypes;
     window.toggleAllTargetRooms = toggleAllTargetRooms;
     window.toggleBatchPresetPlans = toggleBatchPresetPlans;
-    window.applyRatePlanPreset = applyRatePlanPreset;
     window.executeCreateAndPushRoomTypes = executeCreateAndPushRoomTypes;
     window.executeCloneRatePlans = executeCloneRatePlans;
     window.executeBatchCreateRatePlans = executeBatchCreateRatePlans;
