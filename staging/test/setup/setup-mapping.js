@@ -63,7 +63,7 @@ export async function fetchChannexData() {
 // Generates Type-to-Jump friendly channel options
 export function getAvailableMappingChannels() {
     return [
-        { val: "DEF", label: "DEF - Standard OTA Pipe" },
+        { val: "DEF", label: "DEF - Default Rate" },
         { val: "WEB", label: "WEB - Direct Website" },
         ...CANONICAL_OTA_LIST.map(ch => ({ val: ch.code, label: `${ch.code} - ${ch.name}` }))
     ];
@@ -299,7 +299,7 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     renderStep3UnifiedMapping();
 }
 
-// Dynamically builds Batch Suite templates based on property's connected channels
+// Dynamically builds Batch Suite templates based on connected channels
 export function getDynamicBatchRateTemplates() {
     const connectedCodes = new Set(
         (window.channexConnectedChannels || []).map(c => resolveChannelCode(c.attributes?.channel || c.attributes?.title))
@@ -562,7 +562,11 @@ export async function executeCreateAndPushRoomTypes() {
                     window.channexMap[existIdx].channexId = res.data.id;
                     window.channexMap[existIdx].channexTitle = cat;
                 } else {
-                    window.channexMap.push({ pmsCategory, channexId, res.data.id, channexTitle: cat });
+                    window.channexMap.push({
+                        pmsCategory: cat,
+                        channexId: res.data.id,
+                        channexTitle: cat
+                    });
                 }
                 createdCount++;
             }
@@ -980,7 +984,7 @@ export async function executeCreateAndPushRatePlan() {
     }
 }
 
-// Surgical update preserves focus and Tab key navigation
+// In-place updates avoid re-rendering and keep input focus intact
 export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoomId, ratePlanTitle, field, value, selectEl = null) {
     window.channexRateMap = window.channexRateMap || [];
     let mapping = window.channexRateMap.find(r => r.ratePlanId === ratePlanId);
