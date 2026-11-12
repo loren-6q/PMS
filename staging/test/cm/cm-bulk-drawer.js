@@ -20,7 +20,6 @@ export function toggleQuickBulk(forceClose = false) {
     if (!panel) return;
 
     if (!forceClose && panel.classList.contains('hidden')) {
-        // Close curve panel if open
         const curvePanel = document.getElementById('quick-curve-panel');
         if (curvePanel) {
             curvePanel.classList.add('hidden');
@@ -215,7 +214,6 @@ export function applyBulkGrid(isClear = false) {
         window.dirtyDates.add(dateStr);
         window.syncedDates.delete(dateStr);
 
-        // 1. Apply Global Restrictions
         if (globalRule) {
             dObj['GLOBAL'] = dObj['GLOBAL'] || { isOverride: {} };
             if (isClear) {
@@ -238,7 +236,6 @@ export function applyBulkGrid(isClear = false) {
             }
         }
 
-        // 2. Apply Room Lines
         roomUpdates.forEach(r => {
             const rt = r.id;
             dObj[rt] = dObj[rt] || { isOverride: {} };
@@ -360,9 +357,12 @@ export function handleCurveEventSelect(selectedDateStr) {
     const inptCls = "w-full text-center text-xs font-black bg-slate-900 border border-slate-700 text-white rounded p-1 outline-none";
     const peakInptCls = "w-full text-center text-xs font-black bg-amber-950/60 border border-amber-500 text-amber-300 rounded p-1 outline-none";
 
+    const labelP = window.displayAbbrev?.[anchorP] || anchorP;
+    const labelD = window.displayAbbrev?.[anchorD] || anchorD;
+
     body.innerHTML = `
         <tr class="bg-indigo-950/20 text-white" data-segment="p" data-anchor="${anchorP}">
-            <td class="p-2 text-left border-r border-slate-800 text-indigo-300 font-bold truncate">${anchorP}</td>
+            <td class="p-2 text-left border-r border-slate-800 text-indigo-300 font-bold truncate" title="${anchorP}">${labelP}</td>
             <td class="p-1 border-r border-slate-800"><input type="number" id="ct-p-base" class="${inptCls}" value="${b.p_base || 899}" onchange="window.recalcCurveTunerShoulders('p')"></td>
             <td class="p-1 border-r border-slate-800"><input type="number" id="ct-p-pkg" class="${inptCls} !text-pink-400" value="${getTimelineVal(-1, anchorP, 'fmp', 'p_pkg', 1000)}"></td>
             <td class="p-1 border-r border-slate-800"><input type="number" id="ct-p-m2" class="${inptCls}" value="${getTimelineVal(-2, anchorP, 'std', 'p_m2', 1099)}"></td>
@@ -372,7 +372,7 @@ export function handleCurveEventSelect(selectedDateStr) {
             <td class="p-1"><input type="number" id="ct-p-p2" class="${inptCls}" value="${getTimelineVal(2, anchorP, 'std', 'p_p2', 1099)}"></td>
         </tr>
         <tr class="bg-orange-950/20 text-white" data-segment="d" data-anchor="${anchorD}">
-            <td class="p-2 text-left border-r border-slate-800 text-orange-300 font-bold truncate">${anchorD}</td>
+            <td class="p-2 text-left border-r border-slate-800 text-orange-300 font-bold truncate" title="${anchorD}">${labelD}</td>
             <td class="p-1 border-r border-slate-800"><input type="number" id="ct-d-base" class="${inptCls}" value="${b.d_base || 199}" onchange="window.recalcCurveTunerShoulders('d')"></td>
             <td class="p-1 border-r border-slate-800"><input type="number" id="ct-d-pkg" class="${inptCls} !text-pink-400" value="${getTimelineVal(-1, anchorD, 'fmp', 'd_pkg', 200)}"></td>
             <td class="p-1 border-r border-slate-800"><input type="number" id="ct-d-m2" class="${inptCls}" value="${getTimelineVal(-2, anchorD, 'std', 'd_m2', 299)}"></td>
@@ -428,6 +428,9 @@ export function applyCurveTuner() {
 
     const getVal = id => parseFloat(document.getElementById(id)?.value) || 0;
 
+    const p_pkg = getVal('ct-p-pkg') || 1000;
+    const d_pkg = getVal('ct-d-pkg') || 200;
+
     const p_rates = { [-2]: getVal('ct-p-m2'), [-1]: getVal('ct-p-m1'), [0]: getVal('ct-p-0'), [1]: getVal('ct-p-p1'), [2]: getVal('ct-p-p2') };
     const d_rates = { [-2]: getVal('ct-d-m2'), [-1]: getVal('ct-d-m1'), [0]: getVal('ct-d-0'), [1]: getVal('ct-d-p1'), [2]: getVal('ct-d-p2') };
 
@@ -437,20 +440,23 @@ export function applyCurveTuner() {
     offsets.forEach(off => {
         const dStr = getLocalYMD(new Date(peakMs + (off * 86400000)));
         window.masterPricing.timeline[dStr] = window.masterPricing.timeline[dStr] || {};
+        const isPeak = (off === 0);
 
         if (anchorP) {
             window.masterPricing.timeline[dStr][anchorP] = window.masterPricing.timeline[dStr][anchorP] || { isOverride: {} };
             window.masterPricing.timeline[dStr][anchorP].std = p_rates[off];
-            window.masterPricing.timeline[dStr][anchorP].fmp = p_rates[off];
+            window.masterPricing.timeline[dStr][anchorP].fmp = isPeak ? p_rates[off] : p_pkg;
             window.masterPricing.timeline[dStr][anchorP].isOverride.std = true;
+            window.masterPricing.timeline[dStr][anchorP].isOverride.fmp = true;
             rippleDay(dStr, anchorP, true);
         }
 
         if (anchorD) {
             window.masterPricing.timeline[dStr][anchorD] = window.masterPricing.timeline[dStr][anchorD] || { isOverride: {} };
             window.masterPricing.timeline[dStr][anchorD].std = d_rates[off];
-            window.masterPricing.timeline[dStr][anchorD].fmp = d_rates[off];
+            window.masterPricing.timeline[dStr][anchorD].fmp = isPeak ? d_rates[off] : d_pkg;
             window.masterPricing.timeline[dStr][anchorD].isOverride.std = true;
+            window.masterPricing.timeline[dStr][anchorD].isOverride.fmp = true;
             rippleDay(dStr, anchorD, true);
         }
 
