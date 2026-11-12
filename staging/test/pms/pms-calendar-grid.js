@@ -29,7 +29,6 @@ const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 // 1. TIMELINE GROUPING & CATEGORY ACCORDION CONTROLLERS
 // --------------------------------------------------------------------------
 
-// --- Master Toggle All Room Categories ---
 export const toggleAllGroups = () => {
     window.masterState = ((window.masterState || 0) + 1) % 4;
     const g = new Set();
@@ -37,7 +36,6 @@ export const toggleAllGroups = () => {
     g.forEach(grp => window.toggleGroup(grp, window.masterState));
 };
 
-// --- Category Accordion State Switcher ---
 export const toggleGroup = (grp, stateIdx = -1) => {
     const h = $(`icon-${grp}`);
     const rws = $$(`.group-${grp}`);
@@ -45,7 +43,6 @@ export const toggleGroup = (grp, stateIdx = -1) => {
     const aR = $$(`.avail-row-${grp}`);
     if (!h) return;
 
-    // Dedicated Unassigned Tray Accordion Toggle
     if (grp === 'unassigned-unconfirmed') {
         window.isUnassignedTrayOpen = !window.isUnassignedTrayOpen;
         rws.forEach(r => {
@@ -261,16 +258,31 @@ export const render = () => {
     const tRows = [];
     const uConf = [];
 
+    // Render each unassigned slot in s.rooms (supports mixed ['305', ''] and multiple unassigned ['', ''])
     actStaff.forEach(s => {
         if (s.status === 'cancelled') return;
-        const rList = getRooms(s).filter(Boolean);
-        const isUnassignedStatus = ['unconfirmed', 'charged', 'to-charge', 'tocharge', 'no-show', 'noshow', 'vol'].includes(s.status);
-        const hasAssignedRoom = rList.length > 0 && rList[0] !== "" && rList.some(rName => hotelRooms.some(hr => matchesRoom(rName, hr.id)));
-        const isUnassigned = isUnassignedStatus || !hasAssignedRoom;
+        if (window.parseYMD(s.checkIn) > veUTC || window.parseYMD(s.checkOut) < vsUTC) return;
 
-        if (isUnassigned && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC) {
-            uConf.push(s);
+        const rawList = getRooms(s);
+        const isUnassignedStatus = ['unconfirmed', 'charged', 'to-charge', 'tocharge', 'no-show', 'noshow', 'vol'].includes(s.status);
+
+        if (isUnassignedStatus) {
+            const slotCount = Math.max(1, rawList.length);
+            for (let k = 0; k < slotCount; k++) uConf.push(s);
+            return;
         }
+
+        if (rawList.length === 0) {
+            uConf.push(s);
+            return;
+        }
+
+        rawList.forEach(rName => {
+            const isSlotAssigned = rName && hotelRooms.some(hr => matchesRoom(rName, hr.id));
+            if (!isSlotAssigned) {
+                uConf.push(s);
+            }
+        });
     });
 
     if (window.isUnassignedTrayOpen === undefined) {
@@ -323,7 +335,7 @@ export const render = () => {
 
             const isAssignedToThisRoom = s => {
                 if (['unconfirmed', 'charged', 'to-charge', 'tocharge', 'no-show', 'noshow', 'vol', 'cancelled'].includes(s.status)) return false;
-                const rList = getRooms(s);
+                const rList = getRooms(s).filter(Boolean);
                 return rList.some(rm => matchesRoom(rm, r.id)) && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
             };
 
@@ -365,7 +377,7 @@ export const render = () => {
         tRows.push({ isDivider: true, label: "ARCHIVED / CLOSED ROOMS (PAST DATA)", isArchivedZone: true });
         archivedHotelRooms.forEach(r => {
             const isAssigned = s => {
-                const rList = getRooms(s);
+                const rList = getRooms(s).filter(Boolean);
                 return rList.some(rm => matchesRoom(rm, r.id)) && isOccupyingBooking(s.status, true) && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
             };
 
@@ -414,7 +426,7 @@ export const render = () => {
                 actStaff.forEach(s => {
                     if (!isOccupyingBooking(s.status, true)) return;
                     if (dT >= window.parseYMD(s.checkIn) && dT < window.parseYMD(s.checkOut)) {
-                        getRooms(s).forEach(r => {
+                        getRooms(s).filter(Boolean).forEach(r => {
                             const uiR = window.dbToUiRoom ? window.dbToUiRoom(r) : r;
                             if (r && (tRIds.some(tId => matchesRoom(r, tId)) || tRIds.some(tId => matchesRoom(uiR, tId)))) occ.add(uiR || r);
                         });
@@ -545,9 +557,7 @@ export const toggleLegendDrawer = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-// --- Mount SVG Icons and Canonical Status Pills into Legend Drawer ---
 export const mountLegendSvgs = () => {
-    // 1. Mount Status Pills from Canonical Palette
     const pillContainer = document.getElementById('legend-status-pills');
     if (pillContainer) {
         pillContainer.innerHTML = STATUS_CYCLE.map(s => 
@@ -555,7 +565,6 @@ export const mountLegendSvgs = () => {
         ).join('');
     }
 
-    // 2. Mount SVGs
     if (!SVGS) return false;
     const keys = ['upFree', 'upPaid', 'ext', 'link', 'mailConf', 'mailNotFmp', 'mailPre', 'mailPreConf', 'mailSpec', 'fbGood', 'fbBad'];
     keys.forEach(k => {
