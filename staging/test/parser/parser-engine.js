@@ -25,7 +25,6 @@ export function parseFlexibleDate(rawStr) {
 
     const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
     
-    // Match "Mon 23 Nov 2026" or "23 Nov 2026"
     const textMatch = str.match(/(?:[A-Za-z]+,?\s+)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/);
     if (textMatch) {
         const d = String(textMatch[1]).padStart(2, '0');
@@ -65,14 +64,15 @@ export function parseOtaClipboardText(rawText) {
                    parseExpedia(rawText);
 
     if (result) {
-        // Resolve active property rooms reliably
         const activeRooms = (window.hotelRooms && window.hotelRooms.length)
             ? window.hotelRooms
             : (window.rooms || window.currentPropertyConfig?.rooms || []);
 
-        const availableCategories = [...new Set(activeRooms.filter(r => !r.inactive).map(r => r.category || r.type).filter(Boolean))];
+        // Collect both r.category and r.type so neither field is missed
+        const availableCategories = [...new Set(
+            activeRooms.filter(r => !r.inactive).flatMap(r => [r.category, r.type]).filter(Boolean)
+        )];
 
-        // Normalize per-unit bookedTypes array against active property categories
         if (Array.isArray(result.bookedTypes) && result.bookedTypes.length > 0) {
             if (availableCategories.length > 0) {
                 result.bookedTypes = result.bookedTypes.map(bt => matchCategoryName(bt, availableCategories));
@@ -84,7 +84,6 @@ export function parseOtaClipboardText(rawText) {
             result.bookedTypes = Array(result.unitCount || 1).fill(result.bookedType);
         }
 
-        // Net Price fallback calculation
         if (result.netPrice === null && result.totalPrice > 0) {
             const commissions = window.currentPropertyConfig?.commissions || {};
             const channelRate = parseFloat(commissions[result.source] || commissions.default || 0);
@@ -94,7 +93,6 @@ export function parseOtaClipboardText(rawText) {
             }
         }
 
-        // Ensure prepaid payments use the net payout
         if (result.netPrice !== null && Array.isArray(result.payments)) {
             result.payments.forEach(p => {
                 if (['bdc-pay', 'ago-pay', 'agoda-pay', 'exp-pay', 'expedia-pay'].includes(p.method)) {
@@ -103,18 +101,18 @@ export function parseOtaClipboardText(rawText) {
             });
         }
 
-        // Booking date fallback
         if (!result.bookDate) {
             result.bookDate = getLocalYMD(new Date());
             result.bookDateIsEstimated = true;
         }
 
-        // Intelligent Room Assignment (Per-Unit Multi-Room & Event Tetris)
+        // Intelligent Room Assignment (Per-Unit Multi-Room + Room Hints + Event Tetris)
         const assignedRooms = suggestRoomsForBooking({
             checkIn: result.checkIn,
             checkOut: result.checkOut,
             bookedType: result.bookedType,
             bookedTypes: result.bookedTypes,
+            roomHintsList: result.roomHintsList,
             unitCount: result.unitCount || 1
         });
 
