@@ -22,7 +22,7 @@ export function applyMath(baseVal, type, modifier, isReverse = false) {
         if (type === '-%' || type === 'sub_pct') res = Math.max(0, val * (1 - (mod / 100)));
     } else {
         if (type === '+' || type === 'add') res = Math.max(0, val - mod);
-        if (type === '-' || type === 'sub') res = Math.max(0, val - mod);
+        if (type === '-' || type === 'sub') res = Math.max(0, val + mod);
         if (type === '+%' || type === 'add_pct') res = val / (1 + (mod / 100));
         if (type === '-%' || type === 'sub_pct') res = Math.max(0, val * (1 - (mod / 100)));
     }
@@ -47,7 +47,7 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     const roomObj = dayObj[room] || {};
     const isEvents = typeof window.isEventPricingEnabled === 'function' ? window.isEventPricingEnabled() : false;
 
-    const isEvtProduct = (ratePlan.product === 'evt') || (ratePlan.rateSource === 'evt') || /evt|fmp|event/i.test(ratePlan.ratePlanTitle || '');
+    const isEvtProduct = (ratePlan.product === 'evt') || (ratePlan.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(ratePlan.ratePlanTitle || '');
     const isRefPolicy = (ratePlan.policy === 'ref') || (/ref|refundable/i.test(ratePlan.ratePlanTitle || '') && !/non-?ref/i.test(ratePlan.ratePlanTitle || ''));
 
     // 1. Base Rate
@@ -61,7 +61,7 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     // 2. Canonical Channel Multiplier / Adjustment
     const rawChan = ratePlan.channel || 'DEF';
     const chanCode = resolveChannelCode(rawChan);
-    const masterDriver = window.pricingRules?.masterDriver || 'WEB';
+    const masterDriver = resolveChannelCode(window.pricingRules?.masterDriver || 'WEB');
     const isMaster = (chanCode === masterDriver);
 
     if (!isMaster) {
@@ -77,15 +77,18 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
 
     // 3. Refundable Policy Markup
     if (isRefPolicy) {
+        const rType = (isEvtProduct && isEvents)
+            ? (window.pricingRules?.evtRefType || '+%')
+            : (window.pricingRules?.stdRefType || '+%');
         const rVal = (isEvtProduct && isEvents) 
-            ? (window.pricingRules?.evtRefundableMarkup ?? 25) 
-            : (window.pricingRules?.stdRefundableMarkup ?? 25);
-        computed = applyMath(computed, '+%', rVal);
+            ? (window.pricingRules?.evtRefVal ?? window.pricingRules?.evtRefundableMarkup ?? 25) 
+            : (window.pricingRules?.stdRefVal ?? window.pricingRules?.stdRefundableMarkup ?? 25);
+        computed = applyMath(computed, rType, rVal);
     }
 
     // 4. OTA Promo Margin Preserver
     (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
-        const isChanMatch = pr.channel === 'ALL' || ratePlan.ratePlanTitle.toLowerCase().includes(pr.channel.toLowerCase());
+        const isChanMatch = pr.channel === 'ALL' || resolveChannelCode(pr.channel) === chanCode;
         const isScopeMatch = pr.scope === 'ALL' || pr.scope === room;
         const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dateStr >= pr.startDate && dateStr <= pr.endDate);
 
