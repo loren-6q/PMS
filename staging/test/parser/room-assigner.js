@@ -5,7 +5,6 @@
 
 import { parseYMD, getLocalYMD } from '../core/dates.js';
 
-// --- Helper: Extract Base Room ID (e.g., "303-1" -> "303", "303 № 2" -> "303") ---
 export function getBaseRoomId(roomOrId) {
     if (!roomOrId) return '';
     if (typeof roomOrId === 'object') {
@@ -20,7 +19,6 @@ export function getBaseRoomId(roomOrId) {
     return str.replace(/\s*(?:bed|bunk).*$/i, '').trim();
 }
 
-// --- Helper: Fuzzy Match OTA Category Name to Active PMS Category ---
 export function matchCategoryName(rawCat, availableCategories = []) {
     if (!rawCat || !Array.isArray(availableCategories) || availableCategories.length === 0) {
         return rawCat;
@@ -29,18 +27,15 @@ export function matchCategoryName(rawCat, availableCategories = []) {
     const cats = [...new Set(availableCategories.filter(Boolean))].sort((a, b) => b.length - a.length);
     const lowerRaw = rawCat.trim().toLowerCase();
 
-    // 1. Exact case-insensitive match
     for (const c of cats) {
         if (c.trim().toLowerCase() === lowerRaw) return c;
     }
 
-    // 2. Substring match ("gardenview twin room" includes "gardenview twin")
     for (const c of cats) {
         const lowerC = c.trim().toLowerCase();
         if (lowerRaw.includes(lowerC) || lowerC.includes(lowerRaw)) return c;
     }
 
-    // 3. Space/hyphen/filler-word normalized match ("Gardenview Twin Room" -> "Garden View Twin")
     const normalize = (s) => s.toLowerCase()
         .replace(/\b(rooms?|with|balcony|terrace|the|a|an)\b/g, '')
         .replace(/[\s\-_]+/g, '');
@@ -59,18 +54,16 @@ export function matchCategoryName(rawCat, availableCategories = []) {
 }
 
 export function suggestRoomsForBooking(bookingParams) {
-    const { checkIn, checkOut, bookedType, bookedTypes, unitCount = 1 } = bookingParams;
+    const { checkIn, checkOut, bookedType, bookedTypes, roomHintsList, unitCount = 1 } = bookingParams;
     const rawRooms = (window.hotelRooms && window.hotelRooms.length)
         ? window.hotelRooms
         : (window.rooms || window.currentPropertyConfig?.rooms || []);
 
     const staffBookings = window.staff || [];
     
-    // Canonical Property ID matching
     const rawProp = window.currentPropertyId;
     const curProp = window.toCanonicalPropId ? window.toCanonicalPropId(rawProp) : (rawProp || '');
 
-    // Filter rooms to active property if property tag exists on room objects
     const hotelRooms = rawRooms.filter(r => {
         if (r.inactive) return false;
         if (r.property && curProp) {
@@ -84,7 +77,6 @@ export function suggestRoomsForBooking(bookingParams) {
         return Array(unitCount).fill("");
     }
 
-    // Build per-slot category targets (supports multi-room mixed categories)
     const slotTargets = [];
     for (let i = 0; i < unitCount; i++) {
         if (Array.isArray(bookedTypes) && bookedTypes[i]) {
@@ -96,14 +88,30 @@ export function suggestRoomsForBooking(bookingParams) {
         }
     }
 
-    if (slotTargets.every(t => !t)) {
-        return Array(unitCount).fill("");
-    }
-
     const sIn = parseYMD(checkIn);
     const sOut = parseYMD(checkOut);
 
-    // Determine if stay falls within an active Property Event Peak
+    // Precompute occupied room IDs (uppercase) matching pms-folio-modal.js getOccupiedRooms()
+    const occupiedSet = new Set();
+    staffBookings.forEach(b => {
+        const bProp = window.toCanonicalPropId ? window.toCanonicalPropId(b.property) : b.property;
+        if (bProp !== curProp) return;
+
+        const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
+        const isUnassigned = rList.length === 0 || rList[0] === "";
+        const isOccupying = window.isOccupyingBooking
+            ? window.isOccupyingBooking(b.status, isUnassigned)
+            : (b.status !== 'cancelled' && b.status !== 'noshow');
+
+        if (!isOccupying) return;
+
+        if (sIn < parseYMD(b.checkOut) && parseYMD(b.checkIn) < sOut) {
+            rList.forEach(rid => {
+                if (rid) occupiedSet.add(String(rid).trim().toUpperCase());
+            });
+        }
+    });
+
     const propertyEvents = window.currentPropertyConfig?.events || window.fmpDates || [];
     let isEventStay = false;
     for (let d = new Date(sIn); d < new Date(sOut); d.setDate(d.getDate() + 1)) {
@@ -113,7 +121,6 @@ export function suggestRoomsForBooking(bookingParams) {
         }
     }
 
-    // Helper: Retrieve active roommate bookings in the same physical dorm room
     const getRoommateBookings = (room) => {
         const baseRoom = getBaseRoomId(room);
         return staffBookings.filter(b => {
@@ -130,46 +137,48 @@ export function suggestRoomsForBooking(bookingParams) {
         });
     };
 
-    const availableCategories = [...new Set(hotelRooms.map(r => r.category || r.type).filter(Boolean))];
+    const availableCategories = [...new Set(
+        hotelRooms.flatMap(r => [r.category, r.type]).filter(Boolean)
+    )];
+
     const alreadyClaimedInBooking = new Set();
     const allocated = [];
 
     for (let i = 0; i < unitCount; i++) {
-        const rawTarget = slotTargets[i];
-        if (!rawTarget) {
-            allocated.push("");
-            continue;
+        const rawTarget = slotTargets[i] || "";
+        const slotHints = (Array.isArray(roomHintsList) && Array.isArray(roomHintsList[i]))
+            ? roomHintsList[i].map(h => String(h).trim().toUpperCase())
+            : [];
+
+        let matchingRooms = [];
+
+        // 1. Match by resolved category or room type
+        if (rawTarget) {
+            const resolvedTarget = matchCategoryName(rawTarget, availableCategories).trim().toLowerCase();
+            matchingRooms = hotelRooms.filter(r => {
+                const c1 = (r.category || '').trim().toLowerCase();
+                const c2 = (r.type || '').trim().toLowerCase();
+                return (c1 && (c1 === resolvedTarget || c1.includes(resolvedTarget) || resolvedTarget.includes(c1))) ||
+                       (c2 && (c2 === resolvedTarget || c2.includes(resolvedTarget) || resolvedTarget.includes(c2)));
+            });
         }
 
-        const resolvedTarget = matchCategoryName(rawTarget, availableCategories).trim().toLowerCase();
-
-        // 1. Filter rooms matching this slot's category
-        const matchingRooms = hotelRooms.filter(r => {
-            const cat = (r.category || r.type || '').trim().toLowerCase();
-            return cat === resolvedTarget || cat.includes(resolvedTarget) || resolvedTarget.includes(cat);
-        });
+        // 2. Fallback: Match directly via parenthetical room number hints e.g. ['305', '307', '308', '309', '310']
+        if (matchingRooms.length === 0 && slotHints.length > 0) {
+            const hintSet = new Set(slotHints);
+            matchingRooms = hotelRooms.filter(r => hintSet.has(String(r.id).trim().toUpperCase()));
+        }
 
         if (matchingRooms.length === 0) {
             allocated.push("");
             continue;
         }
 
-        // 2. Filter candidate rooms free of date collisions AND not already claimed by an earlier slot in this booking
+        // 3. Filter candidate rooms free of date collisions and not yet claimed by an earlier slot
         const availableRooms = matchingRooms.filter(room => {
-            if (alreadyClaimedInBooking.has(room.id)) return false;
-
-            const hasCollision = staffBookings.some(b => {
-                const bProp = window.toCanonicalPropId ? window.toCanonicalPropId(b.property) : b.property;
-                if (bProp !== curProp || b.status === 'cancelled' || b.status === 'noshow') return false;
-                
-                const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
-                if (!rList.includes(room.id)) return false;
-
-                const bIn = parseYMD(b.checkIn);
-                const bOut = parseYMD(b.checkOut);
-                return (sIn < bOut && bIn < sOut);
-            });
-            return !hasCollision;
+            const upperId = String(room.id).trim().toUpperCase();
+            if (alreadyClaimedInBooking.has(upperId)) return false;
+            return !occupiedSet.has(upperId);
         });
 
         if (availableRooms.length === 0) {
@@ -177,9 +186,8 @@ export function suggestRoomsForBooking(bookingParams) {
             continue;
         }
 
-        const isDormCategory = resolvedTarget.includes('dorm') || availableRooms.some(r => r.isDorm);
+        const isDormCategory = rawTarget.toLowerCase().includes('dorm') || availableRooms.some(r => r.isDorm);
 
-        // 3. Score candidate rooms
         availableRooms.sort((a, b) => {
             let scoreA = 0;
             let scoreB = 0;
@@ -218,7 +226,7 @@ export function suggestRoomsForBooking(bookingParams) {
         });
 
         const chosen = availableRooms[0];
-        alreadyClaimedInBooking.add(chosen.id);
+        alreadyClaimedInBooking.add(String(chosen.id).trim().toUpperCase());
         allocated.push(chosen.id);
     }
 
