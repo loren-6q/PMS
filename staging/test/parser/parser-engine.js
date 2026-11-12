@@ -8,7 +8,7 @@ import { parseAgoda } from './ota-agoda.js';
 import { parseHostelworld } from './ota-hostelworld.js';
 import { parseAirbnb } from './ota-airbnb.js';
 import { parseExpedia } from './ota-expedia.js';
-import { suggestRoomsForBooking } from './room-assigner.js';
+import { suggestRoomsForBooking, matchCategoryName } from './room-assigner.js';
 import { openGuestModal } from '../pms/pms-folio-modal.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { getLocalYMD } from '../core/dates.js';
@@ -17,7 +17,6 @@ import { getLocalYMD } from '../core/dates.js';
 // 1. DATE NORMALIZATION & CALENDAR NAVIGATION UTILITIES
 // --------------------------------------------------------------------------
 
-// --- Universal Date Normalizer (Zero-Drift YYYY-MM-DD) ---
 export function parseFlexibleDate(rawStr) {
     if (!rawStr) return '';
     const str = rawStr.trim();
@@ -56,7 +55,6 @@ export function parseFlexibleDate(rawStr) {
 // 2. MASTER MULTI-CHANNEL OTA ROUTER
 // --------------------------------------------------------------------------
 
-// --- Master Multi-Channel OTA Router ---
 export function parseOtaClipboardText(rawText) {
     if (!rawText || typeof rawText !== 'string') return null;
 
@@ -67,19 +65,23 @@ export function parseOtaClipboardText(rawText) {
                    parseExpedia(rawText);
 
     if (result) {
-        // Resolve matching category in active property (longest string first)
-        if (result.bookedType && window.hotelRooms) {
-            const types = [...new Set(window.hotelRooms.map(r => r.category || r.type).filter(Boolean))];
-            types.sort((a, b) => b.length - a.length);
+        // Resolve active property rooms reliably
+        const activeRooms = (window.hotelRooms && window.hotelRooms.length)
+            ? window.hotelRooms
+            : (window.rooms || window.currentPropertyConfig?.rooms || []);
 
-            const lowerBooked = result.bookedType.toLowerCase();
-            const matched = types.find(t => {
-                const lowerT = t.toLowerCase();
-                return lowerBooked.includes(lowerT) || lowerT.includes(lowerBooked);
-            });
-            if (matched) {
-                result.bookedType = matched;
+        const availableCategories = [...new Set(activeRooms.filter(r => !r.inactive).map(r => r.category || r.type).filter(Boolean))];
+
+        // Normalize per-unit bookedTypes array against active property categories
+        if (Array.isArray(result.bookedTypes) && result.bookedTypes.length > 0) {
+            if (availableCategories.length > 0) {
+                result.bookedTypes = result.bookedTypes.map(bt => matchCategoryName(bt, availableCategories));
             }
+            const uniqueMatched = Array.from(new Set(result.bookedTypes.filter(Boolean)));
+            result.bookedType = uniqueMatched.join(' + ');
+        } else if (result.bookedType && availableCategories.length > 0) {
+            result.bookedType = matchCategoryName(result.bookedType, availableCategories);
+            result.bookedTypes = Array(result.unitCount || 1).fill(result.bookedType);
         }
 
         // Net Price fallback calculation
@@ -95,7 +97,7 @@ export function parseOtaClipboardText(rawText) {
         // Ensure prepaid payments use the net payout
         if (result.netPrice !== null && Array.isArray(result.payments)) {
             result.payments.forEach(p => {
-                if (['bdc-pay', 'agoda-pay', 'expedia-pay'].includes(p.method)) {
+                if (['bdc-pay', 'ago-pay', 'agoda-pay', 'exp-pay', 'expedia-pay'].includes(p.method)) {
                     p.amt = result.netPrice;
                 }
             });
@@ -107,11 +109,12 @@ export function parseOtaClipboardText(rawText) {
             result.bookDateIsEstimated = true;
         }
 
-        // Intelligent Room Assignment (Event Tetris & Dorm Clustering)
+        // Intelligent Room Assignment (Per-Unit Multi-Room & Event Tetris)
         const assignedRooms = suggestRoomsForBooking({
             checkIn: result.checkIn,
             checkOut: result.checkOut,
             bookedType: result.bookedType,
+            bookedTypes: result.bookedTypes,
             unitCount: result.unitCount || 1
         });
 
@@ -128,7 +131,6 @@ export function parseOtaClipboardText(rawText) {
 // 3. CLIPBOARD & MANUAL PASTE ACTION CONTROLLERS
 // --------------------------------------------------------------------------
 
-// --- Clipboard Action Trigger ---
 export async function processAndImportClipboard() {
     let text = '';
     try {
@@ -166,7 +168,6 @@ export async function processAndImportClipboard() {
     }
 }
 
-// --- Manual Modal Parser Handler ---
 export function parseBooking() {
     const textarea = document.getElementById('parse-textarea');
     const text = textarea?.value?.trim();
