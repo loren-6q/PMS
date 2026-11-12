@@ -6,7 +6,8 @@
 import { parseYMD, getLocalYMD, mNames } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
 import { isOccupyingBooking } from '../core/occupancy.js';
-import { rippleDay, computeDynamicPlanRate, getNearestEvent } from './cm-ripple.js';
+import { resolveChannelCode } from '../core/channels.js';
+import { rippleDay, applyMath, computeDynamicPlanRate, getNearestEvent } from './cm-ripple.js';
 
 export let drillLevel = 'room'; // 'master' | 'room' | 'event' | 'rates'
 export let viewDensity = 'full'; // 'avail' | 'price' | 'compact' | 'minmax' | 'full'
@@ -24,6 +25,28 @@ export function formatMinStayInput(val) {
     }
     const match = clean.match(/(\d+)/);
     return match ? match[1] : clean;
+}
+
+export function showCmTooltip(e, text) {
+    const tt = document.getElementById('cm-tooltip');
+    if (!tt || !text) return;
+    tt.innerText = text;
+    tt.classList.remove('hidden');
+
+    const pad = 12;
+    let left = e.clientX + pad;
+    let top = e.clientY + pad;
+
+    if (left + 220 > window.innerWidth) left = e.clientX - 230;
+    if (top + 60 > window.innerHeight) top = e.clientY - 70;
+
+    tt.style.left = `${Math.max(10, left)}px`;
+    tt.style.top = `${Math.max(10, top)}px`;
+}
+
+export function hideCmTooltip() {
+    const tt = document.getElementById('cm-tooltip');
+    if (tt) tt.classList.add('hidden');
 }
 
 export function calculateLiveInventory() {
@@ -52,29 +75,37 @@ export function calculateLiveInventory() {
                 const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
                 if (sProp && curProp && sProp !== curProp) continue;
 
-                const rList = s.rooms?.length ? s.rooms : (s.room ? [s.room] : []);
-                const isUnassigned = rList.length === 0 || rList[0] === "";
+                const rawSlots = Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : [""]);
+                const assignedSlots = rawSlots.filter(Boolean);
+                const isUnassigned = assignedSlots.length === 0;
 
-                if (typeof isOccupyingBooking === 'function' && !isOccupyingBooking(s.status, isUnassigned)) continue;
+                if (typeof isOccupyingBooking === 'function' && !isOccupyingBooking(s.status, !isUnassigned)) continue;
 
                 const cIn = s.checkIn;
                 const cOut = s.checkOut;
 
                 if (cIn && cOut && dStr >= cIn && dStr < cOut) {
-                    let cat = null;
-                    if (!isUnassigned && rList.length > 0) {
-                        const hRoom = (window.hotelRooms || []).find(hr => hr.id === rList[0]);
-                        if (hRoom && hRoom.type) cat = hRoom.type;
-                    }
-                    if (!cat) cat = s.bookedType || s.category || s.roomType;
+                    // Deduct 1 unit per assigned room in its own category
+                    assignedSlots.forEach(rId => {
+                        const hRoom = (window.hotelRooms || []).find(hr => String(hr.id).trim().toUpperCase() === String(rId).trim().toUpperCase());
+                        const cat = hRoom ? (hRoom.category || hRoom.type) : (s.bookedType || s.category || s.roomType);
+                        if (cat) {
+                            const matchedRt = roomTypes.find(rt => rt.toLowerCase() === cat.toLowerCase());
+                            if (matchedRt) {
+                                occupied[matchedRt] = (occupied[matchedRt] || 0) + 1;
+                            }
+                        }
+                    });
 
-                    if (cat) {
-                        const matchedRt = roomTypes.find(rt => rt.toLowerCase() === cat.toLowerCase());
-                        if (matchedRt) {
-                            if (matchedRt.toLowerCase().includes('dorm')) {
-                                occupied[matchedRt] = (occupied[matchedRt] || 0) + parseInt(s.pax || s.bedCount || 1, 10);
-                            } else {
-                                occupied[matchedRt] = (occupied[matchedRt] || 0) + Math.max(1, rList.length);
+                    // Deduct any remaining unassigned slots from bookedTypes/bookedType
+                    const unassignedCount = Math.max(0, rawSlots.length - assignedSlots.length);
+                    if (unassignedCount > 0) {
+                        const fallbackCat = s.bookedType || s.category || s.roomType;
+                        if (fallbackCat) {
+                            const matchedRt = roomTypes.find(rt => rt.toLowerCase() === fallbackCat.toLowerCase());
+                            if (matchedRt) {
+                                const unitDed = matchedRt.toLowerCase().includes('dorm') ? parseInt(s.pax || 1, 10) : unassignedCount;
+                                occupied[matchedRt] = (occupied[matchedRt] || 0) + unitDed;
                             }
                         }
                     }
@@ -156,7 +187,7 @@ export function handleCellEdit(dateStr, room, field, val, isEvt = false) {
 
     const pfx = isEvt ? 'evt_' : '';
 
-    if (field === 'min_hybrid') {
+    if (field === 'min_hybrid' || field === 'min') {
         const clean = String(val).trim();
         if (!clean || clean === "-" || clean === "0") {
             delete rData[`${pfx}min`];
@@ -306,10 +337,30 @@ export function getUnifiedRestrictionBadgeHtml(cta, ctd, stop) {
     return '<span class="w-1.5 h-1.5 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>';
 }
 
+function getCanonicalChannelBadgeHtml(code) {
+    const c = resolveChannelCode(code);
+    const colors = {
+        BDC: 'bg-[#003580] text-white',
+        HWL: 'bg-[#F15A24] text-white',
+        AGO: 'bg-[#87B2D6] text-white',
+        EXP: 'bg-[#facc15] text-[#003580]',
+        ABB: 'bg-[#FF5A5F] text-white',
+        TRP: 'bg-[#287DFA] text-white',
+        WEB: 'bg-indigo-600 text-white'
+    };
+    const cls = colors[c] || 'bg-emerald-600 text-white';
+    return `<span class="${cls} px-1 py-0.2 text-[8px] font-black rounded shrink-0">${c}</span>`;
+}
+
 export function unlockCellOverride(dateStr, room, ratePlanId = null) {
     if (ratePlanId) {
         if (window.masterPricing.timeline[dateStr]?.otaOverrides) {
             delete window.masterPricing.timeline[dateStr].otaOverrides[ratePlanId];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_min`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_max`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_cta`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_ctd`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_stop`];
         }
     } else {
         const rData = window.masterPricing.timeline[dateStr]?.[room];
@@ -317,6 +368,7 @@ export function unlockCellOverride(dateStr, room, ratePlanId = null) {
             if (rData.isOverride) {
                 delete rData.isOverride.std;
                 delete rData.isOverride.fmp;
+                delete rData.isOverride.fmp_ref;
             }
             if (rData._syncedStd !== undefined && rData._syncedStd !== "" && !isNaN(rData._syncedStd)) {
                 rData.std = rData._syncedStd;
@@ -363,6 +415,25 @@ export function toggleRoomExpand(room) {
     if (expandedRooms.has(room)) expandedRooms.delete(room);
     else expandedRooms.add(room);
     renderRateMatrix();
+}
+
+export function restoreGridFocus(focusReq) {
+    if (!focusReq) return;
+    const body = document.getElementById('grid-body');
+    if (!body) return;
+
+    let elToFocus = focusReq.id ? document.getElementById(focusReq.id) : null;
+    if (!elToFocus && focusReq.rowIdx !== undefined && focusReq.colIdx !== undefined) {
+        const tr = body.children[focusReq.rowIdx];
+        const td = tr?.children[focusReq.colIdx];
+        if (td) {
+            elToFocus = (focusReq.selector && td.querySelector(focusReq.selector)) || td.querySelector('input:not([disabled])');
+        }
+    }
+    if (elToFocus) {
+        elToFocus.focus({ preventScroll: true });
+        if (typeof elToFocus.select === 'function') elToFocus.select();
+    }
 }
 
 export function renderRateMatrix() {
@@ -417,6 +488,7 @@ export function renderRateMatrix() {
         if (targetRooms.length === 0 && (window.roomTypes || []).length > 0) targetRooms = [window.roomTypes[0]];
     }
 
+    const activePreviewFilter = window.channelPreviewFilter || channelPreviewFilter || 'ALL';
     let allRowsHtml = '';
 
     targetRooms.forEach((room, idx) => {
@@ -424,17 +496,25 @@ export function renderRateMatrix() {
         const displayName = window.displayAbbrev?.[room] || room;
         const allMappedRates = (window.channexRateMap || []).filter(m => m.pmsCategory === room);
 
-        const isExpanded = (drillLevel === 'rates') || expandedRooms.has(room);
+        let mappedRates = allMappedRates;
+        if (drillLevel === 'event') {
+            mappedRates = mappedRates.filter(r => (r.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(r.ratePlanTitle || ''));
+        }
+        if (activePreviewFilter !== 'ALL') {
+            mappedRates = mappedRates.filter(r => resolveChannelCode(r.channel || r.ratePlanTitle) === activePreviewFilter);
+        }
+
+        const isExpanded = (drillLevel === 'rates') || (drillLevel === 'event') || expandedRooms.has(room);
 
         // A. Availability Row
         if (density !== 'price') {
             let trAvail = `<tr class="${groupClass} border-b border-slate-200">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
                     <div class="w-[140px] flex items-center justify-between px-1.5 h-full font-black text-slate-800 text-[11px]">
-                        <span class="truncate">${displayName}</span>
+                        <span class="truncate" title="${room}">${displayName}</span>
                         <div class="flex items-center gap-1">
                             ${allMappedRates.length > 0 && drillLevel !== 'rates' ? `
-                            <button onclick="window.toggleRoomExpand('${room}')" class="text-slate-400 hover:text-indigo-600 p-0.5 cursor-pointer">
+                            <button type="button" onclick="window.toggleRoomExpand('${room}')" class="text-slate-400 hover:text-indigo-600 p-0.5 cursor-pointer" title="Expand/Collapse Rate Plans">
                                 <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" size="12"></i>
                             </button>` : ''}
                             <span class="text-[8px] font-bold text-slate-400">AVL</span>
@@ -452,7 +532,7 @@ export function renderRateMatrix() {
                 const availColor = displayVal === 0 ? 'text-rose-600 font-black' : (displayVal <= 2 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold');
 
                 trAvail += `<td class="p-0 border-r border-slate-200 ${otaAvail !== undefined ? '!bg-amber-100' : 'bg-slate-50/80'} text-center" style="width: 31px; min-width: 31px; max-width: 31px;">
-                    <input type="number" class="w-full text-center outline-none bg-transparent text-[10px] ${availColor} font-bold px-0 py-1" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
+                    <input type="number" class="cell-avail-input w-full text-center outline-none bg-transparent text-[10px] ${availColor} font-bold px-0 py-1" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
                 </td>`;
             }
             trAvail += `</tr>`;
@@ -487,15 +567,15 @@ export function renderRateMatrix() {
 
             let cellClass = `p-0 border-r border-slate-200 text-center relative ${isPinned ? 'rate-cell-pinned !bg-amber-100' : ''}`;
 
-            trRate += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')">
+            trRate += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice || '--'}${isPinned ? ' (Custom Override - Double-click to revert)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
                 ${showTop ? `
                 <div class="flex items-center w-full h-[14px] border-b border-slate-200/70 overflow-hidden leading-none">
-                    <input type="text" class="w-1/2 text-center bg-transparent border-none text-[8px] font-black text-slate-600 outline-none p-0" value="${minVal}" placeholder="-" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)">
-                    <input type="text" class="w-1/2 text-center bg-transparent border-none text-[8px] text-slate-400 outline-none p-0 border-l border-slate-200" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)">
+                    <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none text-[8px] font-black text-slate-600 outline-none p-0" value="${minVal}" placeholder="-" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)">
+                    <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-[8px] text-slate-400 outline-none p-0 border-l border-slate-200" value="${maxVal}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)">
                 </div>` : ''}
 
                 <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[17px]'} flex items-center justify-center">
-                    <input type="number" class="w-full text-center outline-none bg-transparent font-black text-[10px] ${isPinned ? '!text-amber-900' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}')">
+                    <input type="number" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] ${isPinned ? '!text-amber-900' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}')">
                 </div>
 
                 ${showBottom ? `
@@ -529,22 +609,62 @@ export function renderRateMatrix() {
 
                 trEvt += `<td class="p-0 border-r border-pink-200 text-center relative ${isPinnedFmp ? 'rate-cell-pinned !bg-amber-100' : ''}" style="width: 31px; min-width: 31px; max-width: 31px;">
                     <div class="h-[22px] flex items-center justify-center">
-                        <input type="number" class="w-full text-center outline-none bg-transparent font-black text-[10px] text-pink-800 px-0" value="${displayFmp}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp', this.value, true)">
+                        <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-pink-800 px-0" value="${displayFmp}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp', this.value, true)">
                     </div>
                 </td>`;
             }
             trEvt += `</tr>`;
             allRowsHtml += trEvt;
+
+            // EVT Refundable (+%)
+            let trEvtRef = `<tr class="${groupClass} border-b-2 border-slate-400 bg-pink-100/30">
+                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 bg-pink-100/70">
+                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
+                        <span class="text-[10px] font-black text-pink-900 truncate">EVT Ref (+%)</span>
+                        <span class="text-[7px] font-black uppercase text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded border border-emerald-300">EVT REF</span>
+                    </div>
+                </td>`;
+
+            const eType = window.pricingRules?.evtRefType || '+%';
+            const eVal = window.pricingRules?.evtRefVal ?? window.pricingRules?.evtRefundableMarkup ?? 25;
+
+            for (let i = 0; i < daysToRender; i++) {
+                const cur = new Date(dObj);
+                cur.setUTCDate(cur.getUTCDate() + i);
+                const dateStr = getLocalYMD(cur);
+                const rData = window.masterPricing?.timeline?.[dateStr]?.[room] || {};
+                let calcRef = rData.fmp_ref;
+                if (calcRef === undefined && rData.fmp !== undefined && rData.fmp !== "") {
+                    calcRef = applyMath(rData.fmp, eType, eVal);
+                }
+                const displayFmpRef = calcRef !== undefined && calcRef !== "" && !isNaN(calcRef) ? calcRef : "";
+                const isPinnedRef = !!rData.isOverride?.fmp_ref;
+
+                trEvtRef += `<td class="p-0 border-r border-pink-200 text-center relative ${isPinnedRef ? 'rate-cell-pinned !bg-amber-100' : ''}" style="width: 31px; min-width: 31px; max-width: 31px;">
+                    <div class="h-[22px] flex items-center justify-center">
+                        <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-pink-900 px-0" value="${displayFmpRef}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp_ref', this.value, true)">
+                    </div>
+                </td>`;
+            }
+            trEvtRef += `</tr>`;
+            allRowsHtml += trEvtRef;
         }
 
         // D. Mapped OTA Rate Plans (When expanded)
-        if (isExpanded && allMappedRates.length > 0 && density !== 'avail') {
-            allMappedRates.forEach(rate => {
+        if (isExpanded && mappedRates.length > 0 && density !== 'avail') {
+            mappedRates.forEach(rate => {
+                const chanCode = resolveChannelCode(rate.channel || rate.ratePlanTitle);
+                const badgeHtml = getCanonicalChannelBadgeHtml(chanCode);
+                const showTop = density === 'minmax' || density === 'full';
+                const showBottom = density === 'full';
+
                 let trOta = `<tr class="bg-indigo-50/40 border-b border-indigo-100">
                     <td class="frozen-col !p-0 z-20 border-r-2 border-slate-400 bg-indigo-50/70">
-                        <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left truncate">
-                            <span class="text-[9px] font-black text-indigo-950 truncate">${rate.ratePlanTitle}</span>
-                            <span class="text-[7px] font-black uppercase text-indigo-600 bg-indigo-100 px-1 py-0.2 rounded shrink-0">OTA</span>
+                        <div class="w-[140px] flex items-center justify-between gap-1 px-1.5 h-full text-left truncate" title="${rate.ratePlanTitle}">
+                            <div class="flex items-center gap-1 min-w-0">
+                                ${badgeHtml}
+                                <span class="text-[9px] font-black text-indigo-950 truncate">${rate.ratePlanTitle}</span>
+                            </div>
                         </div>
                     </td>`;
 
@@ -556,8 +676,28 @@ export function renderRateMatrix() {
                     const otaOverride = dayObj.otaOverrides?.[rate.ratePlanId];
                     const computed = otaOverride !== undefined ? otaOverride : (computeDynamicPlanRate ? computeDynamicPlanRate(dateStr, room, rate) : "");
 
-                    trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : ''}" style="width: 31px; min-width: 31px; max-width: 31px;">
-                        <input type="number" class="w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${computed}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'rate', this.value)">
+                    const otaMin = dayObj.otaOverrides?.[`${rate.ratePlanId}_min`] || '';
+                    const otaMax = dayObj.otaOverrides?.[`${rate.ratePlanId}_max`] || '';
+                    const otaStop = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_stop`];
+                    const otaCta = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_cta`];
+                    const otaCtd = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_ctd`];
+                    const otaPillHtml = getUnifiedRestrictionBadgeHtml(otaCta, otaCtd, otaStop);
+
+                    trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : ''}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}', '${rate.ratePlanId}')">
+                        ${showTop ? `
+                        <div class="flex items-center w-full h-[14px] border-b border-indigo-100/70 overflow-hidden leading-none">
+                            <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none text-[7.5px] font-bold text-indigo-700 outline-none p-0" value="${otaMin}" placeholder="-" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'min', this.value)">
+                            <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-[7.5px] text-indigo-400 outline-none p-0 border-l border-indigo-100" value="${otaMax}" placeholder="-" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'max', this.value)">
+                        </div>` : ''}
+                        <div class="${(density === 'compact' || density === 'price') ? 'h-[22px]' : 'h-[16px]'} flex items-center justify-center">
+                            <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${computed}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'rate', this.value)">
+                        </div>
+                        ${showBottom ? `
+                        <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[10px] pb-0.5">
+                            <button type="button" onclick="window.cycleUnifiedRestriction('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer w-full flex items-center justify-center">
+                                ${otaPillHtml}
+                            </button>
+                        </div>` : ''}
                     </td>`;
                 }
                 trOta += `</tr>`;
@@ -566,8 +706,97 @@ export function renderRateMatrix() {
         }
     });
 
+    // 3. GLOBAL Restrictions Row
+    if (density === 'minmax' || density === 'full') {
+        let globalTr = `<tr class="bg-slate-800 text-white border-t-2 border-slate-900">
+            <td class="frozen-col !p-0 z-20 bg-slate-900 border-r-2 border-slate-600 px-2 py-1 flex items-center justify-between">
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-200">GLOBAL</span>
+                <span class="text-[8px] font-black text-slate-400 uppercase bg-slate-800 px-1 py-0.2 rounded">RESTR</span>
+            </td>`;
+
+        for (let i = 0; i < daysToRender; i++) {
+            const cur = new Date(dObj);
+            cur.setUTCDate(cur.getUTCDate() + i);
+            const dateStr = getLocalYMD(cur);
+            const gData = window.masterPricing?.timeline?.[dateStr]?.GLOBAL || {};
+
+            globalTr += `<td class="p-0 border-r border-slate-700 text-center" style="width: 31px; min-width: 31px; max-width: 31px;">
+                <div class="flex items-center w-full h-[18px] px-0.5 leading-none overflow-hidden">
+                    <input type="text" class="cell-min-input w-1/2 bg-slate-700 rounded-l text-center text-[8px] font-black text-white outline-none p-0" value="${gData.min || ''}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min', this.value)">
+                    <input type="text" class="cell-max-input w-1/2 bg-slate-700 rounded-r text-center text-[8px] font-black text-slate-400 outline-none p-0 border-l border-slate-600" value="${gData.max || ''}" placeholder="-" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'max', this.value)">
+                </div>
+            </td>`;
+        }
+        globalTr += `</tr>`;
+        allRowsHtml += globalTr;
+    }
+
     body.innerHTML = allRowsHtml;
     if (window.lucide) window.lucide.createIcons();
+
+    if (window._pendingGridFocus) {
+        const req = window._pendingGridFocus;
+        window._pendingGridFocus = null;
+        restoreGridFocus(req);
+    }
+}
+
+// Horizontal Tab Navigation across Date Columns
+if (typeof document !== 'undefined') {
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Tab') return;
+        const target = e.target;
+        if (!target || target.tagName !== 'INPUT') return;
+
+        let selector = '';
+        if (target.classList.contains('cell-price-text')) selector = '.cell-price-text';
+        else if (target.classList.contains('cell-min-input')) selector = '.cell-min-input';
+        else if (target.classList.contains('cell-max-input')) selector = '.cell-max-input';
+        else if (target.classList.contains('cell-avail-input')) selector = '.cell-avail-input';
+        if (!selector) return;
+
+        const tbody = document.getElementById('grid-body');
+        const currentRow = target.closest('tr');
+        if (!tbody || !currentRow) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const rowInputs = Array.from(currentRow.querySelectorAll(selector)).filter(i => !i.disabled && i.offsetParent !== null);
+        const idxInRow = rowInputs.indexOf(target);
+        let nextEl = null;
+
+        if (idxInRow !== -1) {
+            if (!e.shiftKey && idxInRow + 1 < rowInputs.length) nextEl = rowInputs[idxInRow + 1];
+            else if (e.shiftKey && idxInRow - 1 >= 0) nextEl = rowInputs[idxInRow - 1];
+        }
+
+        if (!nextEl) {
+            const allInputs = Array.from(tbody.querySelectorAll(selector)).filter(i => !i.disabled && i.offsetParent !== null);
+            const gIdx = allInputs.indexOf(target);
+            if (gIdx !== -1) {
+                nextEl = allInputs[e.shiftKey ? (gIdx - 1 + allInputs.length) % allInputs.length : (gIdx + 1) % allInputs.length];
+            }
+        }
+        if (!nextEl) return;
+
+        const nextTr = nextEl.closest('tr');
+        const nextTd = nextEl.closest('td');
+        window._pendingGridFocus = {
+            id: nextEl.id || null,
+            selector,
+            rowIdx: Array.from(tbody.children).indexOf(nextTr),
+            colIdx: Array.from(nextTr.children).indexOf(nextTd)
+        };
+
+        target.blur();
+
+        if (window._pendingGridFocus) {
+            const req = window._pendingGridFocus;
+            window._pendingGridFocus = null;
+            restoreGridFocus(req);
+        }
+    }, true);
 }
 
 // Global Aliases & Bridges
@@ -575,6 +804,8 @@ if (typeof window !== 'undefined') {
     window.renderRateMatrix = renderRateMatrix;
     window.renderGrid = renderRateMatrix;
     window.formatMinStayInput = formatMinStayInput;
+    window.showCmTooltip = showCmTooltip;
+    window.hideCmTooltip = hideCmTooltip;
     window.calculateLiveInventory = calculateLiveInventory;
     window.handleAvailEdit = handleAvailEdit;
     window.handleCellPriceChange = handleCellPriceChange;
