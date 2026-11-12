@@ -35,7 +35,7 @@
     </div>
 
     <!-- Desktop Tooltip -->
-    <div id="cm-tooltip" class="fixed hidden z-[10000] bg-slate-900/95 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-2xl border border-slate-700 max-w-xs leading-snug pointer-events-none"></div>
+    <div id="cm-tooltip" class="fixed hidden z-[10000] bg-slate-900/95 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-2xl border border-slate-700 max-w-xs leading-snug pointer-events-none whitespace-pre-line"></div>
 
     <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
         <!-- UNIVERSAL TOP NAVBAR (Self-Mounts via core/nav.js) -->
@@ -120,8 +120,8 @@
                             <span class="text-[9px] font-black text-slate-400 uppercase mr-1">PREVIEW:</span>
                             <select id="channel-preview-select" onchange="window.channelPreviewFilter = this.value; window.renderRateMatrix();" class="bg-transparent font-black text-xs text-indigo-700 outline-none cursor-pointer">
                                 <option value="ALL">All Rates</option>
-                                <option value="DEFAULT">Default Channel</option>
-                                <option value="BDC">Booking.com</option>
+                                <option value="DEF">DEF - Default Rate</option>
+                                <option value="BDC">BDC - Booking.com</option>
                             </select>
                         </div>
                         <button type="button" id="btn-curve-tuner" onclick="window.toggleCurveTuner()" class="view-btn !bg-pink-50 text-pink-700 !border-pink-300 hover:bg-pink-100 cursor-pointer font-black text-xs px-2.5 py-1 rounded flex items-center gap-1">
@@ -298,15 +298,28 @@
                 <textarea id="audit-text" class="w-full h-20 bg-slate-50 border border-slate-300 rounded p-2 text-xs font-mono outline-none resize-none" placeholder="Paste Booking.com, Hostelworld, or Airbnb extranet list data here..." oninput="window.checkMissing()"></textarea>
                 <div id="audit-result"></div>
 
-                <div class="mt-2 border-t border-slate-200 pt-2 flex justify-between items-center">
+                <div class="mt-2 border-t border-slate-200 pt-2 flex flex-wrap justify-between items-center gap-2">
                     <span class="text-xs font-black uppercase text-slate-700">Live Inventory Baseline</span>
-                    <button type="button" onclick="window.markSynced()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase cursor-pointer">Mark Synced</button>
+                    <div class="flex items-center gap-2">
+                        <select id="grid-filter" class="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-700 outline-none cursor-pointer" onchange="window.renderManualGrid()">
+                            <option value="changes">Show Changes Only</option>
+                            <option value="urgent">Show Urgent Only (0-2 left)</option>
+                            <option value="all">Show All Dates</option>
+                        </select>
+                        <button type="button" onclick="window.markSynced()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase cursor-pointer">Mark Synced</button>
+                    </div>
                 </div>
-                <div class="flex-1 overflow-auto border border-slate-200 rounded">
+                <div class="flex-1 overflow-auto border border-slate-200 rounded relative min-h-[220px]">
                     <table class="sync-table w-full text-left border-collapse text-xs" id="sync-table">
                         <thead id="sync-head"></thead>
                         <tbody id="sync-body"></tbody>
                     </table>
+                    <div id="no-changes-msg" class="hidden absolute inset-0 flex items-center justify-center bg-slate-50/95 z-20">
+                        <div class="text-center p-5 bg-white rounded-xl shadow-md border border-slate-200">
+                            <h3 id="no-data-title" class="text-sm font-black text-slate-800 uppercase">Everything is Synced</h3>
+                            <p id="no-data-desc" class="text-xs font-bold text-slate-500 mt-1">No changes detected since your last sync.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -324,7 +337,6 @@
                 <div>
                     <label class="label-base">Channel</label>
                     <select id="promo-channel" class="input-base">
-                        <option value="Booking.com">Booking.com</option>
                         <option value="ALL">All Channels</option>
                     </select>
                 </div>
