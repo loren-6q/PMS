@@ -5,6 +5,7 @@
 
 import { db, appId } from '../core/config.js';
 import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { CANONICAL_OTA_LIST, getChannelByCode, resolveChannelCode } from '../core/channels.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
 
@@ -13,6 +14,19 @@ export function populatePromoScopeDropdown() {
     if (scopeEl) {
         scopeEl.innerHTML = `<option value="ALL">All Categories</option>` +
             (window.roomTypes || []).map(t => `<option value="${t}">${t}</option>`).join('');
+    }
+
+    const chanEl = document.getElementById('promo-channel');
+    if (chanEl) {
+        const activeCodes = new Set(
+            (window.channexRateMap || []).map(r => resolveChannelCode(r.channel)).filter(c => c !== 'DEF' && c !== 'WEB')
+        );
+        const primaryOtas = CANONICAL_OTA_LIST.filter(o => activeCodes.has(o.code));
+        const otherOtas = CANONICAL_OTA_LIST.filter(o => !activeCodes.has(o.code));
+
+        chanEl.innerHTML = `<option value="ALL">All Channels</option>` +
+            primaryOtas.map(o => `<option value="${o.code}">${o.code} - ${o.name}</option>`).join('') +
+            otherOtas.map(o => `<option value="${o.code}">${o.code} - ${o.name}</option>`).join('');
     }
 }
 
@@ -108,11 +122,12 @@ export function renderPromoRulesTable() {
     rules.forEach((r, idx) => {
         const markup = ((1 / (1 - (r.discountPct / 100))) - 1) * 100;
         const dateDisplay = r.isAlways ? '<span class="text-blue-600">ALWAYS ACTIVE</span>' : `${r.startDate || '--'} → ${r.endDate || '--'}`;
+        const chanLabel = r.channel === 'ALL' ? 'ALL' : `${resolveChannelCode(r.channel)} - ${getChannelByCode(r.channel).name}`;
 
         const tr = document.createElement('tr');
         tr.className = "border-b border-slate-200 text-xs";
         tr.innerHTML = `
-            <td class="p-2 font-bold text-indigo-700">${r.channel}</td>
+            <td class="p-2 font-bold text-indigo-700">${chanLabel}</td>
             <td class="p-2 font-black text-slate-800">${r.name}</td>
             <td class="p-2 font-mono text-[11px]">${dateDisplay}</td>
             <td class="p-2 text-center text-rose-600 font-black">${r.discountPct}%</td>
