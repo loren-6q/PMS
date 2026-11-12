@@ -32,16 +32,17 @@ const COUNTRY_ISO_MAP = {
     'UY': 'URUGUAY', 'UZ': 'UZBEKISTAN', 'VN': 'VIETNAM', 'ZW': 'ZIMBABWE'
 };
 
-// --- Helper: Extract Exact PMS Room Category from Parentheses ---
+// --- Helper: Extract Exact PMS Room Category from Parentheses & Strip Bullet Index ---
 function cleanCategoryString(raw) {
     if (!raw) return '';
-    const str = raw.replace(/^[-•]\s*/, '').trim();
+    // Strip leading bullet ("- ") and optional unit index ("1 ", "2 ")
+    const str = raw.replace(/^[-•]\s*(?:\d+\s+)?/, '').trim();
 
-    // Match outer parentheses: "Deluxe Double Room with Side Sea View (Partial Oceanview King Room (A5,7,9,11))"
-    // -> captures "Partial Oceanview King Room (A5,7,9,11)"
+    // Match outer parentheses: "Twin Room with Balcony (Gardenview Twin Room (B17-22, 201-2))"
+    // -> captures "Gardenview Twin Room (B17-22, 201-2)"
     const pMatch = str.match(/\((.+)\)\s*$/);
     if (pMatch && pMatch[1]) {
-        // Strip trailing room-allocation numbers: "(A5,7,9,11)" -> "Partial Oceanview King Room"
+        // Strip trailing room-allocation numbers: "(B17-22, 201-2)" -> "Gardenview Twin Room"
         const stripped = pMatch[1].replace(/\s*\([^)]*\)\s*$/, '').trim();
         return stripped || pMatch[1].trim();
     }
@@ -74,7 +75,8 @@ export function parseBookingCom(rawText) {
     let email = '';
     let phone = '';
     let isProxyEmail = false;
-    let bookedType = '';
+    const unitRoomTypes = [];
+    const policyRoomTypes = [];
     let refundability = 'unknown';
     let isPrepaid = false;
     let specialRequests = '';
@@ -93,25 +95,25 @@ export function parseBookingCom(rawText) {
             checkOut = parseFlexibleDate(lines[i + 1]);
         }
 
-        // 3. Headcount (Total guests: \n 1)
+        // 3. Headcount (Total guests: \n 5 adults)
         if (/^Total\s*guests:?$/i.test(line) && i + 1 < lines.length) {
             const p = parseInt(lines[i + 1], 10);
             if (!isNaN(p) && p > 0) pax = p;
         }
 
-        // 4. Unit Count (Total units \n 1)
+        // 4. Unit Count (Total units \n 2)
         if (/^Total\s*units:?$/i.test(line) && i + 1 < lines.length) {
             const u = parseInt(lines[i + 1], 10);
             if (!isNaN(u) && u > 0) unitCount = u;
         }
 
-        // 5. Total Price (Total price \n THB 6,191.28)
+        // 5. Total Price (Total price \n THB 13,855.80)
         if (/^Total\s*price$/i.test(line) && i + 1 < lines.length) {
             const m = lines[i + 1].match(/([0-9,]+(?:\.[0-9]{2})?)/);
             if (m) totalPrice = parseFloat(m[1].replace(/,/g, '')) || 0;
         }
 
-        // 6. Guest Name & Contact Details (Guest name: \n Ashraf Idrissou \n gb)
+        // 6. Guest Name & Contact Details
         if (/^Guest\s*name:?$/i.test(line) && i + 1 < lines.length) {
             const nameLine = lines[i + 1];
             const parts = nameLine.split(' ').map(p => p.trim()).filter(Boolean);
@@ -137,18 +139,18 @@ export function parseBookingCom(rawText) {
             }
         }
 
-        // 7. Booking Number (Booking number: \n 6504048867)
+        // 7. Booking Number
         if (/^Booking\s*number:?$/i.test(line) && i + 1 < lines.length) {
             const m = lines[i + 1].match(/\b([0-9]{8,15})\b/);
             if (m) bookId = m[1];
         }
 
-        // 8. Received Date (Received \n Sat 19 Sept 2026)
+        // 8. Received Date
         if (/^Received$/i.test(line) && i + 1 < lines.length) {
             bookDate = parseFlexibleDate(lines[i + 1]);
         }
 
-        // 9. Commission and Charges (Commission and charges: \n THB 1,258.89)
+        // 9. Commission and Charges
         if (/^Commission\s*and\s*charges:?$/i.test(line) && i + 1 < lines.length) {
             const m = lines[i + 1].match(/([0-9,]+(?:\.[0-9]{2})?)/);
             if (m) commissionAmt = parseFloat(m[1].replace(/,/g, '')) || 0;
@@ -159,24 +161,31 @@ export function parseBookingCom(rawText) {
             isPrepaid = true;
         }
 
-        // 11. Room Category (Target A: Line directly above "Cancellation")
+        // 11a. Room Categories (Target A: Every line directly above "Cancellation")
         if (i + 1 < lines.length && /^Cancellation$/i.test(lines[i + 1])) {
-            bookedType = cleanCategoryString(line);
+            const cat = cleanCategoryString(line);
+            if (cat) policyRoomTypes.push(cat);
         }
 
-        // 11b. Room Category (Target B: Bullet line under payment details)
-        if (!bookedType && /^[-•]\s*(.+)/.test(line)) {
+        // 11b. Per-Unit Room Categories (Target B: Bullet lines under payment details, e.g. "- 1 Twin Room...", "- 2 Standard Triple...")
+        if (/^[-•]\s*(.+)/.test(line)) {
             const raw = line.replace(/^[-•]\s*/, '').trim();
+            const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
+            const hasParens = /\(.+\)/.test(raw);
+            const nextIsPriceOrDate = /^[-•]?\s*(?:THB|฿|\$|€|£|Mon|Tue|Wed|Thu|Fri|Sat|Sun|[0-9,.]+)/i.test(nextLine);
+
             if (raw.length > 5 &&
+                (hasParens || nextIsPriceOrDate) &&
                 !/^(?:THB|฿|\$|€|£|[0-9,.]+$)/i.test(raw) &&
-                !/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)/i.test(raw) &&
-                !/Conversation with guest/i.test(raw) &&
-                !/^(?:Home|Rates|Promotions|Reservations|Property|Inbox|Finance|Analytics)/i.test(raw)) {
-                bookedType = cleanCategoryString(raw);
+                !/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/i.test(raw) &&
+                !/Conversation with guest|sold out|Your Check-in|Your Check-out|Before Check-in|Responses in this chat|Privacy and Cookie/i.test(raw) &&
+                !/^(?:Home|Rates|Promotions|Reservations|Property|Inbox|Finance|Analytics|Images|Templates|Send)\b/i.test(raw)) {
+                const cat = cleanCategoryString(raw);
+                if (cat) unitRoomTypes.push(cat);
             }
         }
 
-        // 12. Cancellation Policy (Cancellation \n The guest will be charged the total price...)
+        // 12. Cancellation Policy
         if (/^Cancellation$/i.test(line) && i + 1 < lines.length) {
             const policyText = lines[i + 1];
             if (/charged\s+the\s+total\s+price|cancel\s+at\s+any\s+time|non-refundable/i.test(policyText)) {
@@ -194,7 +203,25 @@ export function parseBookingCom(rawText) {
         }
     }
 
-    if (!unitCount || unitCount < 1) unitCount = pax;
+    if (!unitCount || unitCount < 1) {
+        unitCount = Math.max(unitRoomTypes.length, policyRoomTypes.length, pax);
+    }
+
+    // Build ordered per-unit room types array
+    let bookedTypes = [];
+    if (unitRoomTypes.length > 0) {
+        bookedTypes = [...unitRoomTypes];
+    } else if (policyRoomTypes.length > 0) {
+        bookedTypes = [...policyRoomTypes];
+    }
+
+    // Pad bookedTypes to match unitCount if needed
+    while (bookedTypes.length > 0 && bookedTypes.length < unitCount) {
+        bookedTypes.push(bookedTypes[bookedTypes.length - 1]);
+    }
+
+    const uniqueBookedTypes = Array.from(new Set(bookedTypes.filter(Boolean)));
+    const bookedType = uniqueBookedTypes.join(' + ');
 
     // Financial Reconciliation
     if (totalPrice > 0) {
@@ -202,7 +229,7 @@ export function parseBookingCom(rawText) {
             explicitNet = Number((totalPrice - commissionAmt).toFixed(2));
         } else {
             const defaultRate = parseFloat(window.currentPropertyConfig?.commissions?.['booking.com'] || 18);
-            commissionAmt = Number((totalPrice * (commRate / 100)).toFixed(2));
+            commissionAmt = Number((totalPrice * (defaultRate / 100)).toFixed(2));
             explicitNet = Number((totalPrice - commissionAmt).toFixed(2));
         }
     }
@@ -249,6 +276,7 @@ export function parseBookingCom(rawText) {
 
     return {
         source: 'booking.com',
+        ota: 'BDC',
         bookId,
         firstName: firstName.toUpperCase(),
         lastName: lastName.toUpperCase(),
@@ -264,6 +292,7 @@ export function parseBookingCom(rawText) {
         nightlyRates: [],
         isAverageRate: true,
         bookedType,
+        bookedTypes,
         phone,
         email,
         isProxyEmail,
