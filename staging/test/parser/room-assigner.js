@@ -19,6 +19,28 @@ export function getBaseRoomId(roomOrId) {
     return str.replace(/\s*(?:bed|bunk).*$/i, '').trim();
 }
 
+const TIER_MODIFIERS = [
+    'partial', 'side', 'semi', 'garden', 'ocean', 'sea', 'beach', 'beachfront',
+    'pool', 'mountain', 'deluxe', 'standard', 'superior', 'budget', 'economy', 'family', 'suite'
+];
+
+function normalizeCategoryString(str) {
+    return String(str || '').toLowerCase()
+        .replace(/\b(rooms?|with|balcony|terrace|the|a|an)\b/g, '')
+        .replace(/[\s\-_]+/g, '')
+        .trim();
+}
+
+function hasModifierMismatch(a, b) {
+    const la = String(a || '').toLowerCase();
+    const lb = String(b || '').toLowerCase();
+    for (const mod of TIER_MODIFIERS) {
+        const re = new RegExp(`\\b${mod}`, 'i');
+        if (re.test(la) !== re.test(lb)) return true;
+    }
+    return false;
+}
+
 export function matchCategoryName(rawCat, availableCategories = []) {
     if (!rawCat || !Array.isArray(availableCategories) || availableCategories.length === 0) {
         return rawCat;
@@ -27,24 +49,32 @@ export function matchCategoryName(rawCat, availableCategories = []) {
     const cats = [...new Set(availableCategories.filter(Boolean))].sort((a, b) => b.length - a.length);
     const lowerRaw = rawCat.trim().toLowerCase();
 
+    // 1. Exact case-insensitive match
     for (const c of cats) {
         if (c.trim().toLowerCase() === lowerRaw) return c;
     }
 
+    // 2. Exact space/filler-normalized match ("Partial Oceanview King Room" == "Partial Ocean View King")
+    const normRaw = normalizeCategoryString(rawCat);
+    if (normRaw) {
+        for (const c of cats) {
+            if (normalizeCategoryString(c) === normRaw) return c;
+        }
+    }
+
+    // 3. Safe substring match (blocks modifier mismatches like Partial vs Oceanview)
     for (const c of cats) {
+        if (hasModifierMismatch(rawCat, c)) continue;
         const lowerC = c.trim().toLowerCase();
         if (lowerRaw.includes(lowerC) || lowerC.includes(lowerRaw)) return c;
     }
 
-    const normalize = (s) => s.toLowerCase()
-        .replace(/\b(rooms?|with|balcony|terrace|the|a|an)\b/g, '')
-        .replace(/[\s\-_]+/g, '');
-
-    const normRaw = normalize(rawCat);
+    // 4. Safe normalized substring match
     if (normRaw) {
         for (const c of cats) {
-            const normC = normalize(c);
-            if (normC && (normRaw === normC || normRaw.includes(normC) || normC.includes(normRaw))) {
+            if (hasModifierMismatch(rawCat, c)) continue;
+            const normC = normalizeCategoryString(c);
+            if (normC && (normRaw.includes(normC) || normC.includes(normRaw))) {
                 return c;
             }
         }
@@ -91,7 +121,7 @@ export function suggestRoomsForBooking(bookingParams) {
     const sIn = parseYMD(checkIn);
     const sOut = parseYMD(checkOut);
 
-    // Precompute occupied room IDs (uppercase) matching pms-folio-modal.js getOccupiedRooms()
+    // Precompute occupied room IDs (uppercase)
     const occupiedSet = new Set();
     staffBookings.forEach(b => {
         const bProp = window.toCanonicalPropId ? window.toCanonicalPropId(b.property) : b.property;
@@ -152,18 +182,25 @@ export function suggestRoomsForBooking(bookingParams) {
 
         let matchingRooms = [];
 
-        // 1. Match by resolved category or room type
+        // 1. Strict match against the resolved canonical PMS category
         if (rawTarget) {
-            const resolvedTarget = matchCategoryName(rawTarget, availableCategories).trim().toLowerCase();
+            const matchedCat = matchCategoryName(rawTarget, availableCategories);
+            const resolvedLower = matchedCat.trim().toLowerCase();
+            const resolvedNorm = normalizeCategoryString(matchedCat);
+
             matchingRooms = hotelRooms.filter(r => {
                 const c1 = (r.category || '').trim().toLowerCase();
                 const c2 = (r.type || '').trim().toLowerCase();
-                return (c1 && (c1 === resolvedTarget || c1.includes(resolvedTarget) || resolvedTarget.includes(c1))) ||
-                       (c2 && (c2 === resolvedTarget || c2.includes(resolvedTarget) || resolvedTarget.includes(c2)));
+                if (c1 === resolvedLower || c2 === resolvedLower) return true;
+                if (resolvedNorm) {
+                    if (c1 && !hasModifierMismatch(matchedCat, c1) && normalizeCategoryString(c1) === resolvedNorm) return true;
+                    if (c2 && !hasModifierMismatch(matchedCat, c2) && normalizeCategoryString(c2) === resolvedNorm) return true;
+                }
+                return false;
             });
         }
 
-        // 2. Fallback: Match directly via parenthetical room number hints e.g. ['305', '307', '308', '309', '310']
+        // 2. Fallback: Match directly via parenthetical room number hints
         if (matchingRooms.length === 0 && slotHints.length > 0) {
             const hintSet = new Set(slotHints);
             matchingRooms = hotelRooms.filter(r => hintSet.has(String(r.id).trim().toUpperCase()));
