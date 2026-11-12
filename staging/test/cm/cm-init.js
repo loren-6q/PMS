@@ -7,10 +7,13 @@ import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, getDoc, setDoc, collection, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { loadPropertiesCatalog, toCanonicalPropId } from '../core/properties.js';
+import { normalizeChannelRules, resolveChannelCode, getChannelByCode } from '../core/channels.js';
+import { getLocalYMD } from '../core/dates.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
 import { loadPropertyBaseline, checkMissing, renderManualGrid } from './cm-auditor.js';
 import { renderPromoRulesTable } from './cm-promos.js';
+import './cm-bulk-drawer.js';
 import { pushToChannexAPI, saveAndSync } from '../channex.js';
 
 export let hasUnsavedChanges = false;
@@ -23,6 +26,9 @@ export async function initCm() {
     try {
         await signInAnonymously(auth);
 
+        const tapeInput = document.getElementById('tape-start');
+        if (tapeInput && !tapeInput.value) tapeInput.value = getLocalYMD(new Date());
+
         const props = await loadPropertiesCatalog();
         const urlParams = new URLSearchParams(window.location.search);
         const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || 'swims_resort';
@@ -30,16 +36,18 @@ export async function initCm() {
 
         const activeProp = props.find(p => p.id === window.currentPropertyId) || props[0];
         window.currentPropertyConfig = activeProp || {};
+        window.hotelRooms = (activeProp?.rooms || []).filter(r => !r.inactive);
 
-        window.roomTypes = Array.from(new Set((activeProp?.rooms || []).map(r => r.type || r.category).filter(Boolean)));
+        window.roomTypes = Array.from(new Set(window.hotelRooms.map(r => r.category || r.type).filter(Boolean)));
         window.displayAbbrev = {};
-        (activeProp?.rooms || []).forEach(r => {
-            if (r.type && r.short) window.displayAbbrev[r.type] = r.short;
+        window.hotelRooms.forEach(r => {
+            const cat = r.category || r.type;
+            if (cat && r.short) window.displayAbbrev[cat] = r.short;
         });
 
         window.totalRoomsByType = {};
-        (activeProp?.rooms || []).forEach(r => {
-            const cat = r.type || r.category;
+        window.hotelRooms.forEach(r => {
+            const cat = r.category || r.type;
             if (cat) window.totalRoomsByType[cat] = (window.totalRoomsByType[cat] || 0) + 1;
         });
 
@@ -50,29 +58,47 @@ export async function initCm() {
 
         window.channexConfig = activeProp?.channex || {};
         window.channexMap = activeProp?.channexMap || [];
-        window.channexRateMap = activeProp?.channexRateMap || [];
+        window.channexRateMap = (activeProp?.channexRateMap || []).map(rm => ({
+            ...rm,
+            channel: resolveChannelCode(rm.channel || rm.ratePlanTitle)
+        }));
         window.promoRules = activeProp?.promoRules || [];
         window.dirtyDates = new Set();
         window.syncedDates = new Set();
         window.editMode = 'ripple';
 
         // Load Pricing Matrix from Firestore
-        const canonId = window.toCanonicalPropId(window.currentPropertyId);
+        const canonId = toCanonicalPropId(window.currentPropertyId);
         const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`));
-        if (pricingSnap.exists()) {
-            const pData = pricingSnap.data();
-            window.masterPricing = {
-                timeline: pData.timeline || {},
-                relationships: pData.relationships || [],
-                baseRates: pData.baseRates || {}
-            };
-            window.pricingRules = pData.pricingRules || { channels: {} };
-            window.savedAutofillBaselines = pData.autofillBaselines || {};
-        } else {
-            window.masterPricing = { timeline: {}, relationships: [], baseRates: {} };
-            window.pricingRules = { channels: {} };
-        }
+        const pData = pricingSnap.exists() ? pricingSnap.data() : {};
 
+        window.masterPricing = {
+            timeline: pData.timeline || {},
+            relationships: (activeProp?.masterPricing?.relationships?.length ? activeProp.masterPricing.relationships : pData.relationships) || [],
+            baseRates: pData.baseRates || {}
+        };
+
+        const mergedRules = {
+            ...(pData.pricingRules || {}),
+            ...(activeProp?.pricingRules || {})
+        };
+        mergedRules.masterDriver = resolveChannelCode(mergedRules.masterDriver || 'WEB');
+        mergedRules.channelRules = normalizeChannelRules(mergedRules.channelRules);
+        window.pricingRules = mergedRules;
+
+        window.savedAutofillBaselines = pData.autofillBaselines || {};
+
+        Object.values(window.masterPricing.timeline).forEach(dayObj => {
+            if (dayObj && typeof dayObj === 'object') {
+                Object.values(dayObj).forEach(rData => {
+                    if (rData && typeof rData === 'object' && rData.std !== undefined && rData.std !== "") {
+                        rData._syncedStd = rData.std;
+                    }
+                });
+            }
+        });
+
+        populateChannelPreviewFilter();
         hasLoadedPricingFromCloud = true;
         updateEventPricingToggleUI();
 
@@ -94,18 +120,32 @@ export async function initCm() {
     }
 }
 
+export function populateChannelPreviewFilter() {
+    const sel = document.getElementById('channel-preview-select');
+    if (!sel) return;
+
+    const codes = new Set(['DEF', 'WEB']);
+    (window.channexRateMap || []).forEach(r => {
+        if (r.channel) codes.add(resolveChannelCode(r.channel));
+    });
+    (window.pricingRules?.channelRules || []).forEach(r => {
+        if (r.code) codes.add(resolveChannelCode(r.code));
+    });
+
+    sel.innerHTML = `<option value="ALL">All Rates</option>` +
+        Array.from(codes).map(code => {
+            const meta = getChannelByCode(code);
+            return `<option value="${code}">${code} - ${meta.name}</option>`;
+        }).join('');
+}
+
 export function isEventPricingEnabled() {
-    const canon = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
-    if (canon === 'loud_samui' || canon === 'big_c') return false;
-    return window.enableEventRates !== undefined ? !!window.enableEventRates : ((window.eventDates || []).length > 0);
+    return window.enableEventRates !== undefined 
+        ? !!window.enableEventRates 
+        : ((window.eventDates || []).length > 0);
 }
 
 export async function togglePropertyEventRates() {
-    const canon = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
-    if (canon === 'loud_samui') {
-        return customAlert("Notice", "Event Pricing is not active for LOUD Hostels Samui.");
-    }
-
     const nextState = !isEventPricingEnabled();
     window.enableEventRates = nextState;
     updateEventPricingToggleUI();
@@ -199,7 +239,7 @@ export async function savePricingToCloud(silent = false) {
     }
 
     try {
-        const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
+        const canonId = toCanonicalPropId(window.currentPropertyId);
 
         // 1. Immutable Rolling Backup
         const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing_backups', `${canonId}_${Date.now()}`);
@@ -270,9 +310,9 @@ if (typeof window !== 'undefined') {
     window.isEventPricingEnabled = isEventPricingEnabled;
     window.togglePropertyEventRates = togglePropertyEventRates;
     window.toggleEditMode = toggleEditMode;
+    window.reloadSettingsConfig = initCm;
 }
 
-// DOM & Interaction Locks
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initCm);
 } else {
