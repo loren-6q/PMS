@@ -67,15 +67,17 @@ export const saveBooking = async (keepOpen = false) => {
             }
         }
 
-        const rL = Array.from($$('.assigned-room-select') || []).map(sel => sel.value).filter(Boolean);
+        const rawRooms = Array.from($$('.assigned-room-select') || []).map(sel => sel.value.trim());
+        const rL = rawRooms.length > 0 ? rawRooms : [""];
+        const assignedRooms = rL.filter(Boolean);
         const rawStat = $('guest-status-hidden')?.value || 'future';
         const stat = rawStat === 'noshow' ? 'no-show' : rawStat;
 
         // Room Overlap Collision Guard
-        if (isOccupyingBooking(stat, rL.length > 0)) {
+        if (assignedRooms.length > 0 && isOccupyingBooking(stat, true)) {
             const occupiedNow = window.getOccupiedRooms ? window.getOccupiedRooms(cI, cO, id) : new Set();
-            for (let r of rL) {
-                if (occupiedNow.has(r)) {
+            for (let r of assignedRooms) {
+                if (occupiedNow.has(r.toUpperCase())) {
                     const conflict = getStaff().find(s => {
                         if (s.id === id || toCanonicalPropId(s.property) !== curProp) return false;
                         if (!isOccupyingBooking(s.status, true)) return false;
@@ -103,7 +105,7 @@ export const saveBooking = async (keepOpen = false) => {
             lastName: $('last-name')?.value.trim().toUpperCase() || '',
             status: stat,
             bookedType: $('booked-type')?.value || '',
-            room: rL[0] || "",
+            room: assignedRooms[0] || "",
             rooms: rL,
             checkIn: cI,
             checkOut: cO,
@@ -147,7 +149,7 @@ export const saveBooking = async (keepOpen = false) => {
 
         const hotelRooms = getHotelRooms();
         const bookingRoomTypes = Array.from(new Set([
-            ...rL.map(rId => hotelRooms.find(hr => hr.id === rId)?.type).filter(Boolean),
+            ...assignedRooms.map(rId => { const hr = hotelRooms.find(h => h.id === rId); return hr?.category || hr?.type; }).filter(Boolean),
             $('booked-type')?.value,
             ext?.bookedType
         ])).filter(Boolean);
