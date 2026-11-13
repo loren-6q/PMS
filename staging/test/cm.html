@@ -275,7 +275,7 @@
                                         <th class="p-2 text-center text-pink-300">Markup Required</th>
                                         <th class="p-2">Scope</th>
                                         <th class="p-2 text-center">Status</th>
-                                        <th class="p-2 text-center">Del</th>
+                                        <th class="p-2 text-center">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="promo-table-body" class="bg-white font-bold"></tbody>
@@ -325,14 +325,14 @@
         </main>
     </div>
 
-    <!-- MODAL: ADD PROMO -->
+    <!-- MODAL: ADD / EDIT PROMO -->
     <div id="promo-modal" class="alert-modal-overlay hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[9999] flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full border-2 border-slate-800 flex flex-col overflow-hidden text-xs">
             <div class="bg-slate-900 p-2.5 text-white font-bold uppercase flex justify-between items-center">
-                <span>Add OTA Promotion</span>
+                <span id="promo-modal-title">Add OTA Promotion</span>
                 <button type="button" onclick="document.getElementById('promo-modal').classList.add('hidden')" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
             </div>
-            <div class="p-3 space-y-2">
+            <div class="p-3 space-y-2.5">
                 <input type="hidden" id="promo-rule-id">
                 <div>
                     <label class="label-base">Channel</label>
@@ -342,16 +342,34 @@
                 </div>
                 <div>
                     <label class="label-base">Campaign Name</label>
-                    <input type="text" id="promo-name" placeholder="e.g. Genius 15%" class="input-base uppercase font-bold">
+                    <input type="text" id="promo-name" placeholder="e.g. Genius 15%, Early Bird" class="input-base uppercase font-bold">
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label class="label-base">Discount (%)</label>
-                        <input type="number" id="promo-discount-pct" value="15" oninput="window.updatePromoModalMath()" class="input-base font-black text-pink-600">
+                        <input type="number" id="promo-discount-pct" value="15" min="1" max="99" oninput="window.updatePromoModalMath()" class="input-base font-black text-pink-600">
                     </div>
                     <div>
                         <label class="label-base">Markup Required</label>
                         <input type="text" id="promo-calculated-markup" readonly class="input-base bg-slate-100 font-black text-emerald-700 text-center">
+                    </div>
+                </div>
+                <div class="space-y-1 pt-1 border-t border-slate-200">
+                    <div class="flex items-center justify-between">
+                        <label class="label-base mb-0">Date Window</label>
+                        <label class="text-[10px] font-bold text-slate-600 flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="promo-always-active" onchange="window.togglePromoDateInputs(this.checked)" class="row-checkbox"> Always Active
+                        </label>
+                    </div>
+                    <div id="promo-date-wrap" class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="label-base">Start Date</label>
+                            <input type="date" id="promo-start-date" class="input-base">
+                        </div>
+                        <div>
+                            <label class="label-base">End Date</label>
+                            <input type="date" id="promo-end-date" class="input-base">
+                        </div>
                     </div>
                 </div>
                 <div>
@@ -359,6 +377,12 @@
                     <select id="promo-room-scope" class="input-base">
                         <option value="ALL">All Categories</option>
                     </select>
+                </div>
+                <div class="flex items-center gap-2 pt-1 border-t border-slate-200">
+                    <input type="checkbox" id="promo-active-toggle" checked class="row-checkbox">
+                    <label for="promo-active-toggle" class="text-[11px] font-black uppercase text-slate-700 cursor-pointer">
+                        Rule Active
+                    </label>
                 </div>
                 <div class="pt-2 flex justify-end gap-2 border-t border-slate-200">
                     <button type="button" onclick="document.getElementById('promo-modal').classList.add('hidden')" class="px-3 py-1 bg-slate-200 rounded font-bold uppercase cursor-pointer">Cancel</button>
