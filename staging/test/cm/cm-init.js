@@ -12,7 +12,7 @@ import { getLocalYMD } from '../core/dates.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
 import { loadPropertyBaseline, checkMissing, renderManualGrid } from './cm-auditor.js';
-import { renderPromoRulesTable } from './cm-promos.js';
+import { renderPromoRulesTable, detectPromoScheduleShifts } from './cm-promos.js';
 import './cm-bulk-drawer.js';
 import { pushToChannexAPI, saveAndSync } from '../channex.js';
 
@@ -110,6 +110,7 @@ export async function initCm() {
 
         renderRateMatrix();
         renderPromoRulesTable();
+        detectPromoScheduleShifts(activeProp?.lastPromoSyncDate);
         loadPropertyBaseline();
 
         if (loader) loader.style.display = 'none';
@@ -257,10 +258,17 @@ export async function savePricingToCloud(silent = false) {
             updatedAt: new Date().toISOString()
         }, { merge: true });
 
+        const todayStr = getLocalYMD(new Date());
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', window.currentPropertyId), {
+            lastPromoSyncDate: todayStr
+        });
+        const shiftBanner = document.getElementById('promo-shift-banner');
+        if (shiftBanner) shiftBanner.classList.add('hidden');
+
         hasUnsavedChanges = false;
         updateSaveIndicator();
         if (!silent) customAlert("Success", "Master pricing matrix safely saved and backed up.");
-
+        
     } catch (err) {
         console.error("[Pricing Save Error]:", err);
         customAlert("Save Failed", err.message);
