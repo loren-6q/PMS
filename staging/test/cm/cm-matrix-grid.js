@@ -9,11 +9,31 @@ import { isOccupyingBooking } from '../core/occupancy.js';
 import { resolveChannelCode } from '../core/channels.js';
 import { rippleDay, applyMath, computeDynamicPlanRate, getNearestEvent } from './cm-ripple.js';
 
-export let drillLevel = 'room'; // 'master' | 'room' | 'event' | 'rates'
-export let viewDensity = 'full'; // 'avail' | 'price' | 'compact' | 'minmax' | 'full'
+export let roomLevel = 'all';      // 'anchors' | 'all' | 'dorms' | 'privates'
+export let rateLevel = 'min';      // 'min' | 'default' | 'all'
+export let showEventRows = true;   // toggled via EVENTS button when Setup enables event rates
+export let viewDensity = 'full';   // 'avail' | 'price' | 'compact' | 'minmax' | 'full'
 export let channelPreviewFilter = 'ALL';
 export const expandedRooms = new Set();
 export const daysToRender = 42;
+
+function getClassifiedRooms() {
+    const all = [...(window.roomTypes || [])];
+    const hotelRooms = window.hotelRooms || [];
+    const dormSet = new Set();
+    const privSet = new Set();
+
+    hotelRooms.forEach(hr => {
+        const cat = hr.category || hr.type;
+        if (!cat) return;
+        if (hr.rule === 'private') privSet.add(cat);
+        else if (hr.rule) dormSet.add(cat);
+    });
+
+    const dorms = all.filter(rt => dormSet.has(rt) || (!privSet.has(rt) && /dorm|bed|bunk/i.test(rt)));
+    const privates = all.filter(rt => !dorms.includes(rt));
+    return { all, dorms, privates };
+}
 
 export function formatMinStayInput(val) {
     if (!val) return "";
@@ -401,15 +421,36 @@ export function unlockCellOverride(dateStr, room, ratePlanId = null) {
     renderRateMatrix();
 }
 
-export function setDrillLevel(level) {
-    drillLevel = level;
-    window.drillLevel = level;
-    ['master', 'room', 'event', 'rates'].forEach(l => {
-        const btn = document.getElementById(`depth-${l}`);
-        if (btn) btn.className = l === level 
-            ? "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black"
-            : "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
+export function setRoomLevel(level) {
+    roomLevel = level;
+    window.roomLevel = level;
+    ['anchors', 'all', 'dorms', 'privates'].forEach(l => {
+        const btn = document.getElementById(`rlevel-${l}`);
+        if (btn) {
+            const isHidden = btn.classList.contains('hidden');
+            btn.className = `${isHidden ? 'hidden ' : ''}px-2 py-0.5 rounded cursor-pointer transition-colors ${l === level ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}`;
+        }
     });
+    renderRateMatrix();
+}
+
+export function setRateLevel(level) {
+    rateLevel = level;
+    window.rateLevel = level;
+    ['min', 'default', 'all'].forEach(l => {
+        const btn = document.getElementById(`ratelevel-${l}`);
+        if (btn) {
+            btn.className = l === level
+                ? "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black"
+                : "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
+        }
+    });
+    renderRateMatrix();
+}
+
+export function toggleEventRows() {
+    showEventRows = !showEventRows;
+    window.showEventRows = showEventRows;
     renderRateMatrix();
 }
 
@@ -492,17 +533,45 @@ export function renderRateMatrix() {
     trHead += `</tr>`;
     head.innerHTML = trHead;
 
+    // Sync conditional EVENTS toggle & dynamic Dorms/Privates room buttons
+    const evtToggleBtn = document.getElementById('btn-toggle-evt-rows');
+    const evtToggleLbl = document.getElementById('lbl-toggle-evt-rows');
+    if (evtToggleBtn) {
+        evtToggleBtn.classList.toggle('hidden', !isEvents);
+        if (isEvents) {
+            evtToggleBtn.className = showEventRows
+                ? "px-2 py-1 rounded border text-[10px] font-black uppercase cursor-pointer transition-colors flex items-center gap-1 bg-pink-600 text-white border-pink-600 shadow-2xs"
+                : "px-2 py-1 rounded border text-[10px] font-black uppercase cursor-pointer transition-colors flex items-center gap-1 bg-slate-100 text-slate-600 border-slate-300 hover:bg-pink-50";
+            if (evtToggleLbl) evtToggleLbl.innerText = showEventRows ? 'Events: On' : 'Events: Off';
+        }
+    }
+
+    const { all: allRoomCats, dorms: dormCats, privates: privCats } = getClassifiedRooms();
+    const hasMixedCategories = dormCats.length > 0 && privCats.length > 0;
+    const dormBtn = document.getElementById('rlevel-dorms');
+    const privBtn = document.getElementById('rlevel-privates');
+    if (dormBtn) dormBtn.classList.toggle('hidden', !hasMixedCategories);
+    if (privBtn) privBtn.classList.toggle('hidden', !hasMixedCategories);
+    if (!hasMixedCategories && (roomLevel === 'dorms' || roomLevel === 'privates')) {
+        roomLevel = 'all';
+    }
+
     // 2. Room Category Iteration
-    let targetRooms = [...(window.roomTypes || [])];
+    let targetRooms = [...allRoomCats];
     const anchorP = window.pricingRules?.anchorPrivate;
     const anchorD = window.pricingRules?.anchorDorm;
 
-    if (drillLevel === 'master') {
-        targetRooms = [anchorP, anchorD].filter(Boolean);
-        if (targetRooms.length === 0 && (window.roomTypes || []).length > 0) targetRooms = [window.roomTypes[0]];
+    if (roomLevel === 'anchors') {
+        targetRooms = Array.from(new Set([anchorP, anchorD].filter(Boolean)));
+        if (targetRooms.length === 0 && allRoomCats.length > 0) targetRooms = [allRoomCats[0]];
+    } else if (roomLevel === 'dorms') {
+        targetRooms = dormCats;
+    } else if (roomLevel === 'privates') {
+        targetRooms = privCats;
     }
 
     const activePreviewFilter = window.channelPreviewFilter || channelPreviewFilter || 'ALL';
+    const renderEventsLayer = isEvents && showEventRows;
     let allRowsHtml = '';
 
     targetRooms.forEach((room, idx) => {
@@ -510,26 +579,45 @@ export function renderRateMatrix() {
         const displayName = window.displayAbbrev?.[room] || room;
         const allMappedRates = (window.channexRateMap || []).filter(m => m.pmsCategory === room);
 
-        let mappedRates = allMappedRates;
-        if (drillLevel === 'event') {
-            mappedRates = mappedRates.filter(r => (r.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(r.ratePlanTitle || ''));
-        }
-        if (activePreviewFilter !== 'ALL') {
-            mappedRates = mappedRates.filter(r => resolveChannelCode(r.channel || r.ratePlanTitle) === activePreviewFilter);
-        }
+        const isRoomManuallyExpanded = expandedRooms.has(room);
+        const effectiveRateLevel = isRoomManuallyExpanded && rateLevel === 'min' ? 'all' : rateLevel;
 
-        const isExpanded = (drillLevel === 'rates') || (drillLevel === 'event') || expandedRooms.has(room);
+        let mappedRates = allMappedRates.filter(r => {
+            const chanCode = resolveChannelCode(r.channel || r.ratePlanTitle);
+            const isEvtPlan = (r.product === 'evt') || (r.rateSource === 'evt') || /\b(evt|fmp|event|pkg)\b/i.test(r.ratePlanTitle || '');
+            const isRefPlan = (r.policy === 'ref') || (/ref|refundable/i.test(r.ratePlanTitle || '') && !/non-?ref/i.test(r.ratePlanTitle || ''));
 
-        // A. Availability Row
+            // Hide all event plans when Events layer is OFF
+            if (isEvtPlan && !renderEventsLayer) return false;
+
+            // Suppress duplicate DEF Non-Ref & DEF Event Non-Ref plans (already rendered as the master rows)
+            if (chanCode === 'DEF' && !isRefPlan) return false;
+
+            // Channel preview filter
+            if (activePreviewFilter !== 'ALL' && chanCode !== activePreviewFilter) return false;
+
+            // Rate level filter
+            if (effectiveRateLevel === 'min') return false;
+            if (effectiveRateLevel === 'default') return chanCode === 'DEF';
+            return true;
+        });
+
+        const hasExpandablePlans = allMappedRates.some(r => {
+            const c = resolveChannelCode(r.channel || r.ratePlanTitle);
+            const isRef = (r.policy === 'ref') || (/ref|refundable/i.test(r.ratePlanTitle || '') && !/non-?ref/i.test(r.ratePlanTitle || ''));
+            return c !== 'DEF' || isRef;
+        });
+
+        // A. Availability Row (Hidden in PRICE view so there is no blank row)
         if (density !== 'price') {
             let trAvail = `<tr class="${groupClass} border-b border-slate-200">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
                     <div class="w-[140px] flex items-center justify-between px-1.5 h-full font-black text-slate-800 text-[11px]">
                         <span class="truncate" title="${room}">${displayName}</span>
                         <div class="flex items-center gap-1">
-                            ${allMappedRates.length > 0 && drillLevel !== 'rates' ? `
+                            ${hasExpandablePlans && rateLevel !== 'all' ? `
                             <button type="button" onclick="window.toggleRoomExpand('${room}')" class="text-slate-400 hover:text-indigo-600 p-0.5 cursor-pointer" title="Expand/Collapse Rate Plans">
-                                <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" size="12"></i>
+                                <i data-lucide="${isRoomManuallyExpanded ? 'chevron-down' : 'chevron-right'}" size="12"></i>
                             </button>` : ''}
                             <span class="text-[8px] font-bold text-slate-400">AVL</span>
                         </div>
@@ -555,12 +643,25 @@ export function renderRateMatrix() {
 
         if (density === 'avail') return;
 
-        // B. Base Rate Row
+        // B. DEF Non-Ref Row (Shows Room Name directly on this row when in PRICE view)
+        const baseRowLabel = density === 'price'
+            ? `<span class="text-[11px] font-black text-slate-800 truncate" title="${room}">${displayName}</span>`
+            : `<span class="text-[10px] font-black text-slate-700 truncate">DEF Non-Ref</span>`;
+
+        const baseExpandBtn = (density === 'price' && hasExpandablePlans && rateLevel !== 'all')
+            ? `<button type="button" onclick="window.toggleRoomExpand('${room}')" class="text-slate-400 hover:text-indigo-600 p-0.5 cursor-pointer" title="Expand/Collapse Rate Plans">
+                    <i data-lucide="${isRoomManuallyExpanded ? 'chevron-down' : 'chevron-right'}" size="12"></i>
+               </button>`
+            : '';
+
         let trRate = `<tr class="${groupClass} border-b border-slate-300">
             <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
                 <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                    <span class="text-[10px] font-black text-slate-700 truncate">Base Rate</span>
-                    <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200">STD</span>
+                    ${baseRowLabel}
+                    <div class="flex items-center gap-0.5 shrink-0">
+                        ${baseExpandBtn}
+                        <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200">DEF</span>
+                    </div>
                 </div>
             </td>`;
 
@@ -581,7 +682,7 @@ export function renderRateMatrix() {
 
             let cellClass = `p-0 border-r border-slate-200 text-center relative ${isPinned ? 'rate-cell-pinned !bg-amber-100' : ''}`;
 
-            trRate += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nPrice: ฿${displayPrice || '--'}${isPinned ? ' (Custom Override - Double-click to revert)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
+            trRate += `<td class="${cellClass}" style="width: 31px; min-width: 31px; max-width: 31px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nDEF Non-Ref: ฿${displayPrice || '--'}${isPinned ? ' (Custom Override - Double-click to revert)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
                 ${showTop ? `
                 <div class="flex items-center w-full h-[14px] border-b border-slate-200/70 overflow-hidden leading-none">
                     <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none text-[8px] font-black text-slate-600 outline-none p-0" value="${minVal}" placeholder="-" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)">
@@ -603,13 +704,13 @@ export function renderRateMatrix() {
         trRate += `</tr>`;
         allRowsHtml += trRate;
 
-        // C. Dual Event Rates (Rendered ONLY if event pricing is active)
-        if (isEvents && density !== 'avail') {
-            let trEvt = `<tr class="${groupClass} border-b border-pink-200 bg-pink-50/40">
-                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 bg-pink-50/80">
+        // C. DEF Event Non-Ref Row (Rendered ONLY when Events layer is ON)
+        if (renderEventsLayer && density !== 'avail') {
+            let trEvt = `<tr class="${groupClass} border-b-2 border-slate-400 bg-pink-50/40">
+                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 bg-pink-50/90">
                     <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                        <span class="text-[10px] font-black text-pink-800 truncate">EVT Non-Ref</span>
-                        <span class="text-[7px] font-black uppercase text-pink-700 bg-pink-100 px-1 py-0.5 rounded border border-pink-300">EVT BASE</span>
+                        <span class="text-[10px] font-black text-pink-800 truncate">DEF Event Non-Ref</span>
+                        <span class="text-[7px] font-black uppercase text-pink-700 bg-pink-100 px-1 py-0.5 rounded border border-pink-300 shrink-0">DEF EVT</span>
                     </div>
                 </td>`;
 
@@ -629,43 +730,10 @@ export function renderRateMatrix() {
             }
             trEvt += `</tr>`;
             allRowsHtml += trEvt;
-
-            // EVT Refundable (+%)
-            let trEvtRef = `<tr class="${groupClass} border-b-2 border-slate-400 bg-pink-100/30">
-                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 bg-pink-100/70">
-                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                        <span class="text-[10px] font-black text-pink-900 truncate">EVT Ref (+%)</span>
-                        <span class="text-[7px] font-black uppercase text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded border border-emerald-300">EVT REF</span>
-                    </div>
-                </td>`;
-
-            const eType = window.pricingRules?.evtRefType || '+%';
-            const eVal = window.pricingRules?.evtRefVal ?? window.pricingRules?.evtRefundableMarkup ?? 25;
-
-            for (let i = 0; i < daysToRender; i++) {
-                const cur = new Date(dObj);
-                cur.setUTCDate(cur.getUTCDate() + i);
-                const dateStr = getLocalYMD(cur);
-                const rData = window.masterPricing?.timeline?.[dateStr]?.[room] || {};
-                let calcRef = rData.fmp_ref;
-                if (calcRef === undefined && rData.fmp !== undefined && rData.fmp !== "") {
-                    calcRef = applyMath(rData.fmp, eType, eVal);
-                }
-                const displayFmpRef = calcRef !== undefined && calcRef !== "" && !isNaN(calcRef) ? calcRef : "";
-                const isPinnedRef = !!rData.isOverride?.fmp_ref;
-
-                trEvtRef += `<td class="p-0 border-r border-pink-200 text-center relative ${isPinnedRef ? 'rate-cell-pinned !bg-amber-100' : ''}" style="width: 31px; min-width: 31px; max-width: 31px;">
-                    <div class="h-[22px] flex items-center justify-center">
-                        <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-pink-900 px-0" value="${displayFmpRef}" onfocus="this.select()" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp_ref', this.value, true)">
-                    </div>
-                </td>`;
-            }
-            trEvtRef += `</tr>`;
-            allRowsHtml += trEvtRef;
         }
 
-        // D. Mapped OTA Rate Plans (When expanded)
-        if (isExpanded && mappedRates.length > 0 && density !== 'avail') {
+        // D. Mapped Rate Plans (Filtered by RATES level & EVENTS toggle)
+        if (mappedRates.length > 0 && density !== 'avail') {
             mappedRates.forEach(rate => {
                 const chanCode = resolveChannelCode(rate.channel || rate.ratePlanTitle);
                 const badgeHtml = getCanonicalChannelBadgeHtml(chanCode);
@@ -827,7 +895,9 @@ if (typeof window !== 'undefined') {
     window.handleOtaEdit = handleOtaEdit;
     window.cycleUnifiedRestriction = cycleUnifiedRestriction;
     window.unlockCellOverride = unlockCellOverride;
-    window.setDrillLevel = setDrillLevel;
+    window.setRoomLevel = setRoomLevel;
+    window.setRateLevel = setRateLevel;
+    window.toggleEventRows = toggleEventRows;
     window.setViewDensity = setViewDensity;
     window.toggleRoomExpand = toggleRoomExpand;
 }
