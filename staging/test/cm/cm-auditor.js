@@ -12,9 +12,87 @@ import { calculateLiveInventory } from './cm-matrix-grid.js';
 
 export let snapshotData = {};
 export let dismissedIds = [];
+export let excludedAuditorRooms = new Set();
 
 const getPropId = () => window.currentPropertyId || 'swims_resort';
 const getBaselineDocId = () => `baseline_${getPropId()}`;
+const getExcludedStorageKey = () => `ww_auditor_excl_${getPropId()}`;
+
+function loadLocalExcludedRooms() {
+    try {
+        const raw = localStorage.getItem(getExcludedStorageKey());
+        if (raw) excludedAuditorRooms = new Set(JSON.parse(raw));
+    } catch (e) { /* ignore */ }
+}
+
+function saveLocalExcludedRooms() {
+    try {
+        localStorage.setItem(getExcludedStorageKey(), JSON.stringify(Array.from(excludedAuditorRooms)));
+    } catch (e) { /* ignore */ }
+}
+
+export function renderAuditorRoomFilters() {
+    const container = document.getElementById('sync-room-filters');
+    if (!container) return;
+
+    const allTypes = window.roomTypes || [];
+    if (allTypes.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const pillsHtml = allTypes.map(t => {
+        const isChecked = !excludedAuditorRooms.has(t);
+        const label = window.displayAbbrev?.[t] || t;
+        return `<button type="button" data-room="${t}" onclick="window.toggleAuditorRoomFilter(this.dataset.room)" class="px-2 py-0.5 rounded border font-bold cursor-pointer transition-colors flex items-center gap-1 ${isChecked ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 text-slate-400 border-slate-300 line-through hover:text-slate-600'}" title="${t}">
+            <span>${isChecked ? '✓' : '✕'}</span><span>${label}</span>
+        </button>`;
+    }).join('');
+
+    container.innerHTML = `
+        <span class="font-black uppercase text-slate-400 text-[9px] mr-1">Rooms Checked:</span>
+        ${pillsHtml}
+        <button type="button" onclick="window.setAllAuditorRoomFilters(true)" class="ml-1 text-[9px] font-black uppercase text-indigo-600 hover:underline cursor-pointer">All</button>
+        <span class="text-slate-300">•</span>
+        <button type="button" onclick="window.setAllAuditorRoomFilters(false)" class="text-[9px] font-black uppercase text-slate-500 hover:underline cursor-pointer">None</button>
+    `;
+}
+
+export async function toggleAuditorRoomFilter(roomType) {
+    if (!roomType) return;
+    if (excludedAuditorRooms.has(roomType)) excludedAuditorRooms.delete(roomType);
+    else excludedAuditorRooms.add(roomType);
+
+    saveLocalExcludedRooms();
+    renderAuditorRoomFilters();
+    renderManualGrid();
+
+    try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', getBaselineDocId()), {
+            excludedRooms: Array.from(excludedAuditorRooms),
+            property: getPropId(),
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+    } catch (e) { /* non-blocking */ }
+}
+
+export async function setAllAuditorRoomFilters(includeAll) {
+    const allTypes = window.roomTypes || [];
+    if (includeAll) excludedAuditorRooms.clear();
+    else allTypes.forEach(t => excludedAuditorRooms.add(t));
+
+    saveLocalExcludedRooms();
+    renderAuditorRoomFilters();
+    renderManualGrid();
+
+    try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', getBaselineDocId()), {
+            excludedRooms: Array.from(excludedAuditorRooms),
+            property: getPropId(),
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+    } catch (e) { /* non-blocking */ }
+}
 
 // --- 1. DISMISSED BOOKINGS CONTROLLERS ---
 
@@ -35,10 +113,16 @@ export async function loadPropertyBaseline() {
             baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'));
         }
 
+        loadLocalExcludedRooms();
+
         if (baselineSnap.exists()) {
             const data = baselineSnap.data();
             snapshotData = data.matrix || {};
             dismissedIds = data.dismissed || [];
+            if (Array.isArray(data.excludedRooms)) {
+                excludedAuditorRooms = new Set(data.excludedRooms);
+                saveLocalExcludedRooms();
+            }
         } else {
             snapshotData = {};
             dismissedIds = [];
@@ -48,6 +132,7 @@ export async function loadPropertyBaseline() {
         window.dismissedIds = dismissedIds;
 
         updateDismissedUI();
+        renderAuditorRoomFilters();
         renderManualGrid();
     } catch (baseErr) {
         console.warn("[Auditor Baseline Load Notice]:", baseErr);
@@ -336,7 +421,10 @@ export function renderManualGrid() {
         calculateLiveInventory();
     }
 
-    const rawTypes = window.roomTypes || [];
+    renderAuditorRoomFilters();
+
+    const allTypes = window.roomTypes || [];
+    const rawTypes = allTypes.filter(t => !excludedAuditorRooms.has(t));
     const totalRoomsByType = window.totalRoomsByType || {};
     const liveInventory = window.liveInventory || {};
     const currentSnapshot = snapshotData || {};
@@ -354,7 +442,7 @@ export function renderManualGrid() {
     viewDates.forEach(d => {
         let show = false;
         if (filter === 'all') {
-            show = true;
+            show = rawTypes.length > 0;
         } else {
             rawTypes.forEach(t => {
                 let live = (liveInventory[d] && liveInventory[d][t] !== undefined) ? liveInventory[d][t] : 0;
@@ -398,13 +486,13 @@ export function renderManualGrid() {
         finalCols.push({ type: 'date', val: colsToShowRaw[i] });
     }
 
-    let trHead = `<tr class="frozen-row bg-slate-800 text-white"><th class="frozen-corner w-32 min-w-[8rem] text-[10px] text-left px-2 py-1 uppercase font-black">ROOM TYPE</th>`;
+    let trHead = `<tr class="frozen-row bg-slate-800 text-white"><th class="frozen-corner sticky left-0 z-20 bg-slate-900 w-36 min-w-[9rem] text-[10px] text-left px-2 py-1 uppercase font-black border-r border-slate-700">ROOM TYPE</th>`;
     finalCols.forEach(col => {
         if (col.type === 'gap') {
             trHead += `<th class="w-2 min-w-[8px] bg-amber-400 border-x border-slate-700" title="Skipped Dates"></th>`;
         } else {
             const dt = new Date(col.val + "T12:00:00Z");
-            trHead += `<th class="w-[32px] min-w-[32px] px-0 py-1 leading-tight text-center border-b border-slate-700">
+            trHead += `<th class="w-[38px] min-w-[38px] px-0.5 py-1 leading-tight text-center border-b border-slate-700 border-r border-slate-700/60">
                 <span class="text-blue-300 text-[9px] uppercase font-bold tracking-tight block">${mNames[dt.getUTCMonth()]}</span>
                 <span class="text-xs font-black">${dt.getUTCDate()}</span>
             </th>`;
@@ -417,33 +505,50 @@ export function renderManualGrid() {
         let rowBg = index % 2 === 0 ? 'bg-white' : 'bg-slate-50';
         let shortName = window.displayAbbrev?.[t] || t;
 
-        let tr = `<tr class="${rowBg} hover:bg-slate-100 transition-colors border-b border-slate-200">
-            <td class="font-black text-xs leading-snug px-2 py-1 whitespace-normal border-r border-slate-300 ${rowBg}" title="${t}">
+        let tr = `<tr class="${rowBg} border-b border-slate-200">
+            <td class="sticky left-0 z-10 font-black text-xs leading-snug px-2 py-1 whitespace-normal border-r-2 border-slate-300 ${rowBg}" title="${t}">
                 ${shortName}<br>
                 <span class="text-slate-400 font-bold text-[8px] uppercase tracking-widest">CAP: ${totalRoomsByType[t] || 0}</span>
             </td>`;
 
         finalCols.forEach(col => {
             if (col.type === 'gap') {
-                tr += `<td class="bg-amber-200 border-x border-slate-300"></td>`;
+                tr += `<td class="bg-amber-300 border-x border-slate-400"></td>`;
             } else {
                 let d = col.val;
                 let live = (liveInventory[d] && liveInventory[d][t] !== undefined) ? liveInventory[d][t] : 0;
                 let snap = currentSnapshot[d] && currentSnapshot[d][t] !== undefined ? currentSnapshot[d][t] : totalRoomsByType[t];
                 let isUrgent = live <= 2 && (totalRoomsByType[t] || 0) > 2;
 
-                let content = `<span class="font-bold text-xs text-slate-700">${live}</span>`;
+                let tdBg = '';
+                let content = `<span class="font-bold text-xs text-slate-500">${live}</span>`;
 
                 if (live !== snap) {
-                    content = `<div class="flex flex-col items-center justify-center leading-none">
-                        <span class="text-[9px] font-bold text-red-400 line-through">${snap}</span>
-                        <span class="font-black text-red-600 text-xs">${live}</span>
-                    </div>`;
+                    if (live === 0) {
+                        tdBg = 'bg-rose-600';
+                        content = `<div class="flex flex-col items-center justify-center leading-tight">
+                            <span class="text-[9px] font-bold text-rose-200 line-through">${snap}</span>
+                            <span class="font-black text-white text-xs">0</span>
+                        </div>`;
+                    } else if (live < snap) {
+                        tdBg = 'bg-amber-200';
+                        content = `<div class="flex flex-col items-center justify-center leading-tight">
+                            <span class="text-[9px] font-bold text-amber-800/80 line-through">${snap}</span>
+                            <span class="font-black text-slate-950 text-xs">${live}</span>
+                        </div>`;
+                    } else {
+                        tdBg = 'bg-emerald-200';
+                        content = `<div class="flex flex-col items-center justify-center leading-tight">
+                            <span class="text-[9px] font-bold text-emerald-800/80 line-through">${snap}</span>
+                            <span class="font-black text-emerald-950 text-xs">${live}</span>
+                        </div>`;
+                    }
                 } else if (filter === 'urgent' && isUrgent) {
-                    content = `<span class="font-black text-orange-600 text-xs">${live}</span>`;
+                    tdBg = live === 0 ? 'bg-rose-100' : 'bg-orange-100';
+                    content = `<span class="font-black text-orange-800 text-xs">${live}</span>`;
                 }
 
-                tr += `<td class="text-center p-1 border-r border-slate-200">${content}</td>`;
+                tr += `<td class="text-center p-1 border-r border-slate-200 ${tdBg}">${content}</td>`;
             }
         });
         tr += `</tr>`;
@@ -455,6 +560,9 @@ export function renderManualGrid() {
 
 // Global Window Exports
 if (typeof window !== 'undefined') {
+    window.renderAuditorRoomFilters = renderAuditorRoomFilters;
+    window.toggleAuditorRoomFilter = toggleAuditorRoomFilter;
+    window.setAllAuditorRoomFilters = setAllAuditorRoomFilters;
     window.updateDismissedUI = updateDismissedUI;
     window.loadPropertyBaseline = loadPropertyBaseline;
     window.dismissBooking = dismissBooking;
