@@ -3,7 +3,7 @@
 // Wild & Wandering Channel Manager
 // ==========================================================================
 
-import { parseYMD } from '../core/dates.js';
+import { parseYMD, getLocalYMD } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
 import { resolveChannelCode } from '../core/channels.js';
 
@@ -86,19 +86,99 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
         computed = applyMath(computed, rType, rVal);
     }
 
-    // 4. OTA Promo Margin Preserver
-    (window.promoRules || []).filter(pr => pr.active).forEach(pr => {
-        const isChanMatch = pr.channel === 'ALL' || resolveChannelCode(pr.channel) === chanCode;
-        const isScopeMatch = pr.scope === 'ALL' || pr.scope === room;
-        const isDateMatch = pr.isAlways || (pr.startDate && pr.endDate && dateStr >= pr.startDate && dateStr <= pr.endDate);
+    // 4. OTA Promo Margin Preserver (Bookable Window + Lead Time + Exclusions + Two-Bucket Stacking)
+    const { multiplier } = evaluatePromoStack(dateStr, chanCode, room);
+    computed *= multiplier;
 
-        if (isChanMatch && isScopeMatch && isDateMatch) {
-            const disc = pr.discountPct / 100;
-            if (disc > 0 && disc < 1) computed *= (1 / (1 - disc));
+    return roundCurrency(computed);
+}
+
+export function evaluatePromoStack(dateStr, chanCode, room, asOfDateStr = null) {
+    const resolvedChan = resolveChannelCode(chanCode);
+    const asOf = asOfDateStr || getLocalYMD(new Date());
+    const eventsSet = new Set(window.eventDates || []);
+
+    const matching = (window.promoRules || []).filter(pr => {
+        if (!pr || !pr.active) return false;
+
+        // A. Channel match
+        const isChanMatch = pr.channel === 'ALL' || resolveChannelCode(pr.channel) === resolvedChan;
+        if (!isChanMatch) return false;
+
+        // B. Room scope match (supports multi-room scopes[] and legacy scope)
+        const scopes = Array.isArray(pr.scopes) && pr.scopes.length ? pr.scopes : [pr.scope || 'ALL'];
+        const isScopeMatch = scopes.includes('ALL') || (room && scopes.includes(room));
+        if (!isScopeMatch) return false;
+
+        // C. Bookable period (sales window relative to asOf date)
+        const hasBookBounds = !!(pr.bookStart || pr.bookEnd);
+        const bookAlw = pr.bookAlways !== undefined ? !!pr.bookAlways : !hasBookBounds;
+        if (!bookAlw) {
+            if (pr.bookStart && asOf < pr.bookStart) return false;
+            if (pr.bookEnd && asOf > pr.bookEnd) return false;
+        }
+
+        // D. Advance purchase / lead time (e.g., 30+ days before check-in)
+        const minAdv = parseInt(pr.minAdvanceDays, 10) || 0;
+        if (minAdv > 0) {
+            const leadDays = Math.round((parseYMD(dateStr) - parseYMD(asOf)) / 86400000);
+            if (leadDays < minAdv) return false;
+        }
+
+        // E. Stay date window (supports stayStart/stayEnd and legacy startDate/endDate)
+        const stayAlw = pr.stayAlways !== undefined ? !!pr.stayAlways : !!pr.isAlways;
+        const sStart = pr.stayStart || pr.startDate || '';
+        const sEnd = pr.stayEnd || pr.endDate || '';
+        if (!stayAlw) {
+            if (sStart && dateStr < sStart) return false;
+            if (sEnd && dateStr > sEnd) return false;
+        }
+
+        // F. Excluded stay dates (Peak/Event dates & custom blackouts)
+        if (pr.excludeEvents && eventsSet.has(dateStr)) return false;
+        if (Array.isArray(pr.excludedDates) && pr.excludedDates.includes(dateStr)) return false;
+
+        return true;
+    });
+
+    const nonStacking = matching.filter(pr => !pr.stackable);
+    const stackable = matching.filter(pr => !!pr.stackable);
+
+    let winner = null;
+    const superseded = [];
+    nonStacking.forEach(pr => {
+        if (!winner || (parseFloat(pr.discountPct) || 0) > (parseFloat(winner.discountPct) || 0)) {
+            if (winner) superseded.push(winner);
+            winner = pr;
+        } else {
+            superseded.push(pr);
         }
     });
 
-    return roundCurrency(computed);
+    const applied = [
+        ...(winner ? [winner] : []),
+        ...stackable
+    ];
+
+    let multiplier = 1;
+    let remainingFactor = 1;
+    applied.forEach(pr => {
+        const disc = (parseFloat(pr.discountPct) || 0) / 100;
+        if (disc > 0 && disc < 1) {
+            multiplier *= (1 / (1 - disc));
+            remainingFactor *= (1 - disc);
+        }
+    });
+
+    return {
+        applied,
+        winner,
+        superseded,
+        stackable,
+        multiplier,
+        effectiveDiscountPct: (1 - remainingFactor) * 100,
+        totalMarkupPct: (multiplier - 1) * 100
+    };
 }
 
 export function rippleDay(dateStr, startRoom, forceRipple = false) {
@@ -163,5 +243,6 @@ if (typeof window !== 'undefined') {
     window.applyMath = applyMath;
     window.getNearestEvent = getNearestEvent;
     window.computeDynamicPlanRate = computeDynamicPlanRate;
+    window.evaluatePromoStack = evaluatePromoStack;
     window.rippleDay = rippleDay;
 }
