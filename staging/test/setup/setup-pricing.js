@@ -11,10 +11,10 @@ const parseJson = v => (typeof v === 'string' ? JSON.parse(v || '{}') : (v || {}
 export function renderPricingConfig() {
     window.masterPricing = parseJson(window.masterPricing);
     window.pricingRules = parseJson(window.pricingRules);
+    window.savedAutofillBaselines = parseJson(window.savedAutofillBaselines);
 
     window.masterPricing.relationships = window.masterPricing.relationships || window.pricingRules.relationships || [];
     window.pricingRules.relationships = window.masterPricing.relationships;
-
     window.pricingRules.channelRules = normalizeChannelRules(window.pricingRules.channelRules);
 
     const rules = window.pricingRules;
@@ -34,14 +34,22 @@ export function renderPricingConfig() {
         const list = dormCats.length ? dormCats : categories;
         dormSel.innerHTML = '<option value="">-- Select Master Dorm --</option>' +
             list.map(c => `<option value="${c}" ${rules.anchorDorm === c ? 'selected' : ''}>${c}</option>`).join('');
-        dormSel.onchange = () => { rules.anchorDorm = dormSel.value; renderEventPricingMatrix(); };
+        dormSel.onchange = () => {
+            rules.anchorDorm = dormSel.value;
+            window.savedAutofillBaselines.anchor_d = dormSel.value;
+            renderEventPricingMatrix();
+        };
     }
 
     if (privSel) {
         const list = privCats.length ? privCats : categories;
         privSel.innerHTML = '<option value="">-- Select Master Private --</option>' +
             list.map(c => `<option value="${c}" ${rules.anchorPrivate === c ? 'selected' : ''}>${c}</option>`).join('');
-        privSel.onchange = () => { rules.anchorPrivate = privSel.value; renderEventPricingMatrix(); };
+        privSel.onchange = () => {
+            rules.anchorPrivate = privSel.value;
+            window.savedAutofillBaselines.anchor_p = privSel.value;
+            renderEventPricingMatrix();
+        };
     }
 
     // 3. Refundable Markups
@@ -55,6 +63,16 @@ export function renderPricingConfig() {
         evtRef.value = rules.evtRefundableMarkup ?? 25;
         evtRef.oninput = () => { rules.evtRefundableMarkup = parseFloat(evtRef.value) || 0; };
     }
+
+    // 4. Sync Event Pricing Toggle & Curves
+    const evtToggle = document.getElementById('toggle-events');
+    const isEventsOn = window.enableEventRates !== undefined
+        ? !!window.enableEventRates
+        : ((window.currentPropertyConfig?.events || []).length > 0);
+    window.enableEventRates = isEventsOn;
+
+    if (evtToggle) evtToggle.checked = isEventsOn;
+    toggleEventSettings(isEventsOn, false);
 
     renderRelationshipsTable(categories);
     renderChannelRulesList();
@@ -246,7 +264,6 @@ export function openAddChannelModal() {
     window.pricingRules = parseJson(window.pricingRules);
     const existingCodes = new Set((window.pricingRules.channelRules || []).map(r => r.code));
 
-    // Resolves Channex channel adapter codes including BookingCom -> BDC
     const connectedCodes = new Set(
         (window.channexConnectedChannels || []).map(c => resolveChannelCode(c.attributes?.channel || c.attributes?.title))
     );
@@ -310,14 +327,26 @@ export function deleteChannelRule(idx) {
     renderMasterDriverSelect();
 }
 
-// --- Seasonal & Event Dual-Curve Panel (Master Anchors Only) ---
+// --- Seasonal & Event Dual-Curve Panel (Master Anchors & Full Restrictions) ---
 let ratesSpanDays = 2;
-let restrSpanDays = 6;
+let restrSpanDays = 7;
 
-export function toggleEventSettings(enabled) {
+const offsetTag = off => (off < 0 ? `m${Math.abs(off)}` : (off === 0 ? '0' : `p${off}`));
+
+export function updateEventBaseline(key, value) {
+    window.savedAutofillBaselines = parseJson(window.savedAutofillBaselines);
+    if (value === "" || value === null || value === undefined) {
+        delete window.savedAutofillBaselines[key];
+    } else {
+        window.savedAutofillBaselines[key] = value;
+    }
+}
+
+export function toggleEventSettings(enabled, shouldRender = true) {
+    window.enableEventRates = !!enabled;
     const panel = document.getElementById('event-curve-panel');
     if (panel) panel.classList.toggle('hidden', !enabled);
-    if (enabled) renderEventPricingMatrix();
+    if (enabled && shouldRender) renderEventPricingMatrix();
 }
 
 export function cycleRatesSpan() {
@@ -328,59 +357,117 @@ export function cycleRatesSpan() {
 }
 
 export function cycleRestrSpan() {
-    restrSpanDays = restrSpanDays === 6 ? 4 : (restrSpanDays === 4 ? 8 : 6);
+    restrSpanDays = restrSpanDays === 7 ? 4 : (restrSpanDays === 4 ? 2 : 7);
     const pill = document.getElementById('restr-span-pill');
     if (pill) pill.innerText = `±${restrSpanDays} Days`;
     renderEventPricingMatrix();
 }
 
 export function renderEventPricingMatrix() {
+    window.savedAutofillBaselines = parseJson(window.savedAutofillBaselines);
+    const b = window.savedAutofillBaselines;
+
+    const ratesPill = document.getElementById('rates-span-pill');
+    if (ratesPill) ratesPill.innerText = `±${ratesSpanDays} Days`;
+
+    const restrPill = document.getElementById('restr-span-pill');
+    if (restrPill) restrPill.innerText = `±${restrSpanDays} Days`;
+
     const pThead = document.getElementById('event-price-thead');
     const pTbody = document.getElementById('event-price-tbody');
     const rThead = document.getElementById('event-restr-thead');
     const rTbody = document.getElementById('event-restr-tbody');
 
+    // 1. Peak Pricing Curve Table (Std Base + EVT Pkg + Offset Curve)
     if (pThead && pTbody) {
-        let th = '<tr><th class="p-1 text-slate-500 uppercase text-[9px] text-left">Master Anchor</th>';
+        let th = `<tr>
+            <th class="p-1 text-slate-500 uppercase text-[9px] text-left">Master Anchor</th>
+            <th class="p-1 text-[9px] font-black text-slate-600 uppercase">Std Base</th>
+            <th class="p-1 text-[9px] font-black text-pink-700 bg-pink-50 uppercase">EVT Pkg</th>`;
         for (let i = -ratesSpanDays; i <= ratesSpanDays; i++) {
-            const label = i === 0 ? 'PEAK' : (i > 0 ? `+${i}d` : `${i}d`);
-            th += `<th class="p-1 text-[9px] font-black ${i === 0 ? 'text-pink-700 bg-pink-100' : 'text-slate-700'}">${label}</th>`;
+            const label = i === 0 ? 'PEAK (0)' : (i > 0 ? `+${i}d` : `${i}d`);
+            th += `<th class="p-1 text-[9px] font-black ${i === 0 ? 'text-amber-800 bg-amber-100' : 'text-slate-700'}">${label}</th>`;
         }
         th += '</tr>';
         pThead.innerHTML = th;
 
-        const anchors = [
-            window.pricingRules?.anchorDorm || 'Standard Dorm',
-            window.pricingRules?.anchorPrivate || 'Deluxe Private King'
-        ].filter(Boolean);
+        const segments = [
+            { seg: 'd', cat: window.pricingRules?.anchorDorm || 'Standard Dorm', badge: 'DORM', defBase: 199, defPkg: 200, defPeak: 2499 },
+            { seg: 'p', cat: window.pricingRules?.anchorPrivate || 'Deluxe Private King', badge: 'PRIV', defBase: 899, defPkg: 1000, defPeak: 5999 }
+        ];
 
-        pTbody.innerHTML = anchors.map(cat => {
-            let row = `<tr><td class="p-1 font-bold text-slate-800 text-left text-xs">${cat} <span class="text-[9px] text-indigo-600 uppercase font-black">(Anchor)</span></td>`;
+        pTbody.innerHTML = segments.map(({ seg, cat, badge, defBase, defPkg, defPeak }) => {
+            const baseVal = b[`${seg}_base`] !== undefined ? b[`${seg}_base`] : defBase;
+            const pkgVal = b[`${seg}_pkg`] !== undefined ? b[`${seg}_pkg`] : defPkg;
+
+            let row = `<tr>
+                <td class="p-1 font-bold text-slate-800 text-left text-xs whitespace-nowrap">${cat} <span class="text-[8px] text-indigo-600 uppercase font-black">(${badge})</span></td>
+                <td class="p-1"><input type="number" class="table-input !w-14 text-center font-bold" value="${baseVal}" oninput="window.updateEventBaseline('${seg}_base', parseFloat(this.value) || 0)"></td>
+                <td class="p-1 bg-pink-50/50"><input type="number" class="table-input table-input-pink !w-14 text-center font-black" value="${pkgVal}" oninput="window.updateEventBaseline('${seg}_pkg', parseFloat(this.value) || 0)"></td>`;
+
             for (let i = -ratesSpanDays; i <= ratesSpanDays; i++) {
                 const isPeak = (i === 0);
-                row += `<td class="p-1"><input type="number" class="table-input !w-12 text-center font-black ${isPeak ? 'table-input-pink' : ''}" value="${isPeak ? 1200 : 800}"></td>`;
+                const key = `${seg}_${offsetTag(i)}`;
+                const fallback = isPeak ? defPeak : (Math.abs(i) === 1 ? Math.round((defBase + defPeak) * 0.35) : Math.round((defBase + defPeak) * 0.2));
+                const val = b[key] !== undefined ? b[key] : fallback;
+                row += `<td class="p-1 ${isPeak ? 'bg-amber-50' : ''}"><input type="number" class="table-input !w-14 text-center font-black ${isPeak ? '!border-amber-400 !text-amber-900' : ''}" value="${val}" oninput="window.updateEventBaseline('${key}', parseFloat(this.value) || 0)"></td>`;
             }
             row += '</tr>';
             return row;
         }).join('');
     }
 
+    // 2. Peak Stay Restrictions Curve Table (Min, Min on Arrival, Max, CTA, CTD)
     if (rThead && rTbody) {
-        let th = '<tr><th class="p-1 text-slate-500 uppercase text-[9px] text-left">Restriction</th>';
-        for (let i = -restrSpanDays; i <= restrSpanDays; i++) {
-            const label = i === 0 ? 'PEAK' : (i > 0 ? `+${i}d` : `${i}d`);
-            th += `<th class="p-1 text-[9px] font-black ${i === 0 ? 'text-indigo-700 bg-indigo-100' : 'text-slate-700'}">${label}</th>`;
-        }
+        const offsets = [];
+        for (let i = -restrSpanDays; i <= restrSpanDays; i++) offsets.push(i);
+
+        let th = '<tr><th class="p-1 text-slate-500 uppercase text-[9px] text-left">Restriction Rule</th>';
+        offsets.forEach(off => {
+            const label = off === 0 ? 'PEAK (0)' : (off > 0 ? `+${off}d` : `${off}d`);
+            th += `<th class="p-1 text-[9px] font-black ${off === 0 ? 'text-indigo-700 bg-indigo-100' : 'text-slate-700'}">${label}</th>`;
+        });
         th += '</tr>';
         rThead.innerHTML = th;
 
-        let tr = '<tr><td class="p-1 font-bold text-slate-800 text-left">Min Stay (Nts)</td>';
-        for (let i = 0; i <= restrSpanDays * 2; i++) {
-            const val = Math.abs(i - restrSpanDays) <= 1 ? 3 : 1;
-            tr += `<td class="p-1"><input type="number" class="table-input !w-10 text-center font-black" value="${val}"></td>`;
-        }
-        tr += '</tr>';
-        rTbody.innerHTML = tr;
+        const numRows = [
+            { prefix: 'r_min', label: 'Min Stay (Through)', cls: 'text-pink-800' },
+            { prefix: 'r_minarr', label: 'Min on Arrival', cls: 'text-amber-700' },
+            { prefix: 'r_max', label: 'Max Stay (Nts)', cls: 'text-slate-700' }
+        ];
+
+        const boolRows = [
+            { prefix: 'r_cta', label: 'Close to Arrival (CTA)' },
+            { prefix: 'r_ctd', label: 'Close to Departure (CTD)' }
+        ];
+
+        let html = numRows.map(r => {
+            let tr = `<tr><td class="p-1 font-bold text-slate-800 text-left whitespace-nowrap">${r.label}</td>`;
+            offsets.forEach(off => {
+                const key = `${r.prefix}_${offsetTag(off)}`;
+                const val = b[key] !== undefined && b[key] !== '' ? b[key] : '';
+                tr += `<td class="p-1 ${off === 0 ? 'bg-indigo-50/40' : ''}">
+                    <input type="number" min="1" class="table-input !w-10 text-center font-black ${r.cls}" value="${val}" placeholder="--" oninput="window.updateEventBaseline('${key}', this.value === '' ? '' : (parseInt(this.value, 10) || ''))">
+                </td>`;
+            });
+            tr += '</tr>';
+            return tr;
+        }).join('');
+
+        html += boolRows.map(r => {
+            let tr = `<tr><td class="p-1 font-bold text-slate-800 text-left whitespace-nowrap">${r.label}</td>`;
+            offsets.forEach(off => {
+                const key = `${r.prefix}_${offsetTag(off)}`;
+                const checked = !!b[key];
+                tr += `<td class="p-1 ${off === 0 ? 'bg-indigo-50/40' : ''}">
+                    <input type="checkbox" class="row-checkbox cursor-pointer" ${checked ? 'checked' : ''} onchange="window.updateEventBaseline('${key}', this.checked)">
+                </td>`;
+            });
+            tr += '</tr>';
+            return tr;
+        }).join('');
+
+        rTbody.innerHTML = html;
     }
 }
 
@@ -398,6 +485,7 @@ if (typeof window !== 'undefined') {
     window.closeAddChannelModal = closeAddChannelModal;
     window.confirmAddChannel = confirmAddChannel;
     window.deleteChannelRule = deleteChannelRule;
+    window.updateEventBaseline = updateEventBaseline;
     window.toggleEventSettings = toggleEventSettings;
     window.cycleRatesSpan = cycleRatesSpan;
     window.cycleRestrSpan = cycleRestrSpan;
