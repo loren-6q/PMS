@@ -499,10 +499,12 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
         // 2. Restrictions & Rates Payload
         const rawRestrEntries = [];
         const validRatePlans = (window.channexRateMap || []).filter(r => r.ratePlanId && r.pmsCategory);
+        const isEventsActive = typeof window.isEventPricingEnabled === 'function' ? window.isEventPricingEnabled() : false;
 
         validRatePlans.forEach(plan => {
             const pmsCat = plan.pmsCategory;
             const ratePlanId = plan.ratePlanId;
+            const isEvtRate = isEventsActive && ((plan.product === 'evt') || (plan.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(plan.ratePlanTitle || ''));
 
             datesToProcess.forEach(dStr => {
                 const dayObj = window.masterPricing?.timeline?.[dStr] || {};
@@ -511,13 +513,18 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
 
                 let computedPrice = null;
                 const otaPriceOverride = dayObj.otaOverrides?.[ratePlanId];
+                const isBlankEvtWindow = isEvtRate
+                    && (roomObj.fmp === undefined || roomObj.fmp === "")
+                    && (otaPriceOverride === undefined || otaPriceOverride === "");
 
-                if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
-                    computedPrice = Number(otaPriceOverride);
-                } else if (typeof window.computeDynamicPlanRate === 'function') {
-                    computedPrice = window.computeDynamicPlanRate(dStr, pmsCat, plan);
-                } else {
-                    computedPrice = roomObj.std || 100;
+                if (!isBlankEvtWindow) {
+                    if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
+                        computedPrice = Number(otaPriceOverride);
+                    } else if (typeof window.computeDynamicPlanRate === 'function') {
+                        computedPrice = window.computeDynamicPlanRate(dStr, pmsCat, plan);
+                    } else {
+                        computedPrice = roomObj.std || 100;
+                    }
                 }
 
                 const item = {
@@ -534,6 +541,10 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
                 const getRestrVal = (field) => {
                     const otaVal = dayObj.otaOverrides?.[`${ratePlanId}_${field}`];
                     if (otaVal !== undefined && otaVal !== "") return otaVal;
+                    if (isEvtRate) {
+                        if (roomObj[`evt_${field}`] !== undefined && roomObj[`evt_${field}`] !== "") return roomObj[`evt_${field}`];
+                        if (dayObj.evtRestrictions?.[field] !== undefined && dayObj.evtRestrictions[field] !== "") return dayObj.evtRestrictions[field];
+                    }
                     if (roomObj[field] !== undefined && roomObj[field] !== "") return roomObj[field];
                     if (globObj[field] !== undefined && globObj[field] !== "") return globObj[field];
                     return null;
@@ -543,7 +554,8 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
                 const minArr = getRestrVal('min_arr');
                 if (minArr !== null && minArr !== "") {
                     item.min_stay_arrival = parseInt(String(minArr), 10) || 1;
-                } else if (minS !== null && minS !== "") {
+                }
+                if (minS !== null && minS !== "") {
                     item.min_stay_through = parseInt(String(minS), 10) || 1;
                 }
 
@@ -557,7 +569,11 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
                 if (ctd !== null) item.closed_to_departure = !!ctd;
 
                 const stop = getRestrVal('stop') || getRestrVal('stopSell');
-                if (stop !== null) item.stop_sell = !!stop;
+                if (isBlankEvtWindow) {
+                    item.stop_sell = true;
+                } else if (stop !== null) {
+                    item.stop_sell = !!stop;
+                }
 
                 rawRestrEntries.push(item);
             });
