@@ -328,16 +328,19 @@
                 <textarea id="audit-text" class="w-full h-20 bg-slate-50 border border-slate-300 rounded p-2 text-xs font-mono outline-none resize-none" placeholder="Paste Booking.com, Hostelworld, or Airbnb extranet list data here..." oninput="window.checkMissing()"></textarea>
                 <div id="audit-result"></div>
 
-                <div class="mt-2 border-t border-slate-200 pt-2 flex flex-wrap justify-between items-center gap-2">
-                    <span class="text-xs font-black uppercase text-slate-700">Live Inventory Baseline</span>
-                    <div class="flex items-center gap-2">
-                        <select id="grid-filter" class="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-700 outline-none cursor-pointer" onchange="window.renderManualGrid()">
-                            <option value="changes">Show Changes Only</option>
-                            <option value="urgent">Show Urgent Only (0-2 left)</option>
-                            <option value="all">Show All Dates</option>
-                        </select>
-                        <button type="button" onclick="window.markSynced()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase cursor-pointer">Mark Synced</button>
+                <div class="mt-2 border-t border-slate-200 pt-2 flex flex-col gap-1.5">
+                    <div class="flex flex-wrap justify-between items-center gap-2">
+                        <span class="text-xs font-black uppercase text-slate-700">Live Inventory Baseline</span>
+                        <div class="flex items-center gap-2">
+                            <select id="grid-filter" class="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-700 outline-none cursor-pointer" onchange="window.renderManualGrid()">
+                                <option value="changes">Show Changes Only</option>
+                                <option value="urgent">Show Urgent Only (0-2 left)</option>
+                                <option value="all">Show All Dates</option>
+                            </select>
+                            <button type="button" onclick="window.markSynced()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase cursor-pointer">Mark Synced</button>
+                        </div>
                     </div>
+                    <div id="sync-room-filters" class="flex flex-wrap items-center gap-1 text-[10px]"></div>
                 </div>
                 <div class="flex-1 overflow-auto border border-slate-200 rounded relative min-h-[220px]">
                     <table class="sync-table w-full text-left border-collapse text-xs" id="sync-table">
