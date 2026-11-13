@@ -49,6 +49,8 @@ export function hideCmTooltip() {
     if (tt) tt.classList.add('hidden');
 }
 
+const cleanBedId = id => String(id || '').trim().toUpperCase().replace(/[№#\-_:\s]/g, '');
+
 export function calculateLiveInventory() {
     window.liveInventory = window.liveInventory || {};
     const curProp = window.currentPropertyId;
@@ -56,12 +58,24 @@ export function calculateLiveInventory() {
     const roomTypes = window.roomTypes || [];
     const totalRoomsByType = window.totalRoomsByType || {};
 
-    const startInput = document.getElementById('tape-start')?.value || getLocalYMD(new Date());
-    const startMs = parseYMD(startInput) || Date.now();
+    const roomLookup = new Map();
+    (window.hotelRooms || []).forEach(hr => {
+        if (!hr || !hr.id) return;
+        const cat = hr.category || hr.type;
+        if (cat) {
+            roomLookup.set(String(hr.id).trim().toUpperCase(), cat);
+            roomLookup.set(cleanBedId(hr.id), cat);
+        }
+    });
 
-    for (let i = -7; i < 90; i++) {
-        const curD = new Date(startMs + (i * 86400000));
-        const dStr = getLocalYMD(curD);
+    const todayMs = parseYMD(getLocalYMD(new Date()));
+    const startInput = document.getElementById('tape-start')?.value || getLocalYMD(new Date());
+    const tapeMs = parseYMD(startInput) || todayMs;
+    const rangeStartMs = Math.min(todayMs, tapeMs) - (7 * 86400000);
+    const rangeEndMs = Math.max(tapeMs + (90 * 86400000), todayMs + (250 * 86400000));
+
+    for (let curMs = rangeStartMs; curMs <= rangeEndMs; curMs += 86400000) {
+        const dStr = getLocalYMD(new Date(curMs));
         window.liveInventory[dStr] = window.liveInventory[dStr] || {};
 
         const occupied = {};
@@ -85,26 +99,26 @@ export function calculateLiveInventory() {
                 const cOut = s.checkOut;
 
                 if (cIn && cOut && dStr >= cIn && dStr < cOut) {
-                    // Deduct 1 unit per assigned room in its own category
+                    // Deduct 1 unit per assigned room/bed in its own category
                     assignedSlots.forEach(rId => {
-                        const hRoom = (window.hotelRooms || []).find(hr => String(hr.id).trim().toUpperCase() === String(rId).trim().toUpperCase());
-                        const cat = hRoom ? (hRoom.category || hRoom.type) : (s.bookedType || s.category || s.roomType);
+                        const up = String(rId).trim().toUpperCase();
+                        const cat = roomLookup.get(up) || roomLookup.get(cleanBedId(up)) || s.bookedType || s.category || s.roomType;
                         if (cat) {
-                            const matchedRt = roomTypes.find(rt => rt.toLowerCase() === cat.toLowerCase());
+                            const matchedRt = roomTypes.find(rt => rt.toLowerCase() === String(cat).toLowerCase());
                             if (matchedRt) {
                                 occupied[matchedRt] = (occupied[matchedRt] || 0) + 1;
                             }
                         }
                     });
 
-                    // Deduct any remaining unassigned slots from bookedTypes/bookedType
+                    // Deduct any remaining unassigned slots
                     const unassignedCount = Math.max(0, rawSlots.length - assignedSlots.length);
                     if (unassignedCount > 0) {
                         const fallbackCat = s.bookedType || s.category || s.roomType;
                         if (fallbackCat) {
-                            const matchedRt = roomTypes.find(rt => rt.toLowerCase() === fallbackCat.toLowerCase());
+                            const matchedRt = roomTypes.find(rt => rt.toLowerCase() === String(fallbackCat).toLowerCase());
                             if (matchedRt) {
-                                const unitDed = matchedRt.toLowerCase().includes('dorm') ? parseInt(s.pax || 1, 10) : unassignedCount;
+                                const unitDed = matchedRt.toLowerCase().includes('dorm') ? Math.max(unassignedCount, parseInt(s.pax || 1, 10)) : unassignedCount;
                                 occupied[matchedRt] = (occupied[matchedRt] || 0) + unitDed;
                             }
                         }
@@ -114,7 +128,7 @@ export function calculateLiveInventory() {
         }
 
         roomTypes.forEach(rt => {
-            const cap = totalRoomsByType[rt] || 1;
+            const cap = totalRoomsByType[rt] || 0;
             const occ = occupied[rt] || 0;
             window.liveInventory[dStr][rt] = Math.max(0, cap - occ);
         });
