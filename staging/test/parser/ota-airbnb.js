@@ -20,7 +20,9 @@ export function parseAirbnb(rawText) {
     // 2. Guest Name
     let firstName = '';
     let lastName = 'GUEST';
-    const nameMatch = text.match(/(?:guest|guest\s*name|hosted)[\s:#]*([A-Za-z\s\.\-\'\`]+)(?:\n|$)/i);
+    const nameMatch = text.match(/([^\n\r]+)\n\s*Identity verified/i) ||
+                      text.match(/Reservation confirmed\s*[-–—]\s*([^\n\r]+?)\s+arrives\b/i) ||
+                      text.match(/(?:^|\n)\s*(?:guest\s*name|booked\s*by|primary\s*guest)[\s:#]+([^\n\r]+)/i);
     if (nameMatch) {
         const parts = nameMatch[1].trim().replace(/\s+/g, ' ').split(' ');
         firstName = parts[0] || '';
@@ -29,18 +31,21 @@ export function parseAirbnb(rawText) {
 
     // 3. Country / Location
     let country = '';
-    const locMatch = text.match(/(?:lives\s*in|from|country)[\s:#]*([A-Za-z\s,]+)(?:\n|$)/i);
-    if (locMatch) {
+    const idVerLocMatch = text.match(/Identity verified\s*\n\s*([^\n\r]+)/i);
+    const locMatch = text.match(/(?:lives\s*in|from|country)[\s:#]+([A-Za-z\s,]+)(?:\n|$)/i);
+    if (idVerLocMatch && idVerLocMatch[1].includes(',') && !/send\s+.+\s+message/i.test(idVerLocMatch[1])) {
+        country = idVerLocMatch[1].trim().split(',').pop().trim().toUpperCase();
+    } else if (locMatch) {
         country = locMatch[1].trim().split(',').pop().trim().toUpperCase();
     }
 
     // 4. Dates
     let checkIn = '';
     let checkOut = '';
-    const inMatch = text.match(/(?:check-in|arrive)[\s:#]*([^\n\r]+)/i);
-    const outMatch = text.match(/(?:checkout|check-out|depart)[\s:#]*([^\n\r]+)/i);
+    const inMatch = text.match(/(?:^|\n)\s*(?:check-in|arrive)\s*[:#]?\s*\n?\s*([^\n\r]+)/i);
+    const outMatch = text.match(/(?:^|\n)\s*(?:checkout|check-out|depart)\s*[:#]?\s*\n?\s*([^\n\r]+)/i);
     if (inMatch) checkIn = parseFlexibleDate(inMatch[1]);
-    if (outMatch) checkOut = parseFlexibleDate(outMatch[1]);
+    if (outMatch) checkOut = parseFlexibleDate(outMatch[1], checkIn || null);
 
     // 5. Booking Date
     let bookDate = '';
@@ -50,23 +55,31 @@ export function parseAirbnb(rawText) {
     // 6. Units & Headcount (Pax)
     let pax = 1;
     let unitCount = 1;
+    const adultMatch = text.match(/(\d+)\s*adults?\b/i);
+    const childMatch = text.match(/(\d+)\s*child(?:ren)?\b/i);
     const paxMatch = text.match(/(\d+)\s*guests?\b/i) ||
-                     text.match(/(?:number\s*of\s*guests|guests|adults)[\s:#]*(\d+)/i);
-    if (paxMatch) pax = parseInt(paxMatch[1], 10) || 1;
+                     text.match(/(?:number\s*of\s*guests|guests)\s*[:#]?\s*\n?\s*(\d+)/i);
+    if (adultMatch) {
+        pax = (parseInt(adultMatch[1], 10) || 1) + (childMatch ? (parseInt(childMatch[1], 10) || 0) : 0);
+    } else if (paxMatch) {
+        pax = parseInt(paxMatch[1], 10) || 1;
+    }
 
     // 7. Pricing & Payout
     let totalPrice = 0;
     let explicitNet = null;
     let commissionAmt = 0;
 
-    const payoutMatch = text.match(/(?:host\s*payout|payout|you\s*earn|total\s*payout)[\s:#]*(?:THB|฿|[A-Z]{3})?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+    const payoutMatch = text.match(/(?:you\s*earn|total\s*payout)[\s:#]*\n?\s*(?:THB|฿|[A-Z]{3}|\$)?\s*([0-9,]+(?:\.[0-9]{2})?)/i) ||
+                        text.match(/host\s*payout[\s:#]*\n?\s*(?:THB|฿|[A-Z]{3}|\$)\s*([0-9,]+(?:\.[0-9]{2})?)/i);
     if (payoutMatch) explicitNet = parseFloat(payoutMatch[1].replace(/,/g, ''));
 
-    const totalMatch = text.match(/(?:total\s*price|total|guest\s*paid)[\s:#]*(?:THB|฿|[A-Z]{3})?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+    const totalMatch = text.match(/total\s*\([A-Z]{3}\)[\s:#]*\n?\s*(?:THB|฿|[A-Z]{3}|\$)?\s*([0-9,]+(?:\.[0-9]{2})?)/i) ||
+                       text.match(/total\s*price[\s:#]*\n?\s*(?:THB|฿|[A-Z]{3}|\$)?\s*([0-9,]+(?:\.[0-9]{2})?)/i) ||
+                       text.match(/guest\s*paid[\s:#]*\n?\s*(?:THB|฿|[A-Z]{3}|\$)\s*([0-9,]+(?:\.[0-9]{2})?)(?!\s*x\s*\d)/i);
     if (totalMatch) totalPrice = parseFloat(totalMatch[1].replace(/,/g, '')) || 0;
 
     if (totalPrice === 0 && explicitNet !== null) {
-        // Airbnb host-only fee ~3-15%
         totalPrice = explicitNet;
     }
     if (explicitNet === null && totalPrice > 0) {
@@ -78,7 +91,8 @@ export function parseAirbnb(rawText) {
 
     // 8. Room / Listing Name
     let bookedType = '';
-    const listMatch = text.match(/(?:entire\s*place|private\s*room|listing|room)[\s:#]*([^\n\r]+)/i);
+    const listMatch = text.match(/(?:^|\n)\s*([^\n\r]+)\n\s*(?:Room|Private room|Entire place|Entire home\/apt|Shared room|Hotel room)\s*(?:\n|$)/i) ||
+                      text.match(/(?:^|\n)\s*(?:listing|accommodation)[\s:#]+([^\n\r]+)/i);
     if (listMatch) {
         bookedType = listMatch[1].replace(/^[-•]\s*/, '').trim();
     }
@@ -113,10 +127,15 @@ export function parseAirbnb(rawText) {
     const phoneMatch = text.match(/(\+\d[\d\s\-\(\)]{7,20})/);
     if (phoneMatch) phone = phoneMatch[1].trim();
 
-    // 12. Special Requests
+    // 12. Special Requests / Guest Message
     let specialRequests = '';
-    const reqMatch = text.match(/(?:message\s*from\s*guest|note)[\s:#]*\n?([^\n\r]+)/i);
-    if (reqMatch) specialRequests = reqMatch[1].trim();
+    const msgBlockMatch = text.match(/Identity verified\s*\n(?:[^\n\r]+,\s*[^\n\r]+\n)?\s*([\s\S]*?)\n\s*Send\s+.+?\s+a\s+Message/i);
+    const reqMatch = text.match(/(?:message\s*from\s*guest|guest\s*message)[\s:#]*\n?([^\n\r]+)/i);
+    if (msgBlockMatch && msgBlockMatch[1].trim()) {
+        specialRequests = msgBlockMatch[1].trim().replace(/\s+/g, ' ');
+    } else if (reqMatch) {
+        specialRequests = reqMatch[1].trim();
+    }
 
     // Duration & Average Daily Rate
     let nights = 1;
