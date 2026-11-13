@@ -92,18 +92,32 @@
                         <button type="button" onclick="window.shiftTape(7)" class="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"><i data-lucide="chevron-right" size="15"></i></button>
                     </div>
 
-                    <!-- Depth & Density Selectors -->
+                    <!-- 4-Control Matrix Filters: ROOMS | RATES | EVENTS | VIEW -->
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
-                            <span class="px-1.5 text-slate-400">DEPTH:</span>
-                            <button type="button" onclick="window.setDrillLevel('master')" id="depth-master" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Master</button>
-                            <button type="button" onclick="window.setDrillLevel('room')" id="depth-room" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black">Room</button>
-                            <button type="button" onclick="window.setDrillLevel('event')" id="depth-event" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Event</button>
-                            <button type="button" onclick="window.setDrillLevel('rates')" id="depth-rates" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">All Rates</button>
+                        <!-- 1. ROOM LEVELS -->
+                        <div id="room-level-group" class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
+                            <span class="px-1.5 text-slate-400">ROOMS:</span>
+                            <button type="button" onclick="window.setRoomLevel('anchors')" id="rlevel-anchors" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Anchors</button>
+                            <button type="button" onclick="window.setRoomLevel('all')" id="rlevel-all" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black">All</button>
+                            <button type="button" onclick="window.setRoomLevel('dorms')" id="rlevel-dorms" class="hidden px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Dorms</button>
+                            <button type="button" onclick="window.setRoomLevel('privates')" id="rlevel-privates" class="hidden px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Privates</button>
                         </div>
-                        
-                        <div class="h-4 w-px bg-slate-300 mx-0.5 hidden sm:block"></div>
-                        
+
+                        <!-- 2. RATE LEVELS -->
+                        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
+                            <span class="px-1.5 text-slate-400">RATES:</span>
+                            <button type="button" onclick="window.setRateLevel('min')" id="ratelevel-min" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black">Min</button>
+                            <button type="button" onclick="window.setRateLevel('default')" id="ratelevel-default" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Default</button>
+                            <button type="button" onclick="window.setRateLevel('all')" id="ratelevel-all" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">All</button>
+                        </div>
+
+                        <!-- 3. EVENTS LAYER TOGGLE (Shown only when Event Curve is enabled in Setup) -->
+                        <button type="button" id="btn-toggle-evt-rows" onclick="window.toggleEventRows()" class="hidden px-2 py-1 rounded border text-[10px] font-black uppercase cursor-pointer transition-colors flex items-center gap-1 bg-pink-600 text-white border-pink-600 shadow-2xs" title="Show/Hide Event Rate Rows">
+                            <i data-lucide="sparkles" size="11"></i>
+                            <span id="lbl-toggle-evt-rows">Events: On</span>
+                        </button>
+
+                        <!-- 4. VIEW DENSITY -->
                         <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
                             <span class="px-1.5 text-slate-400">VIEW:</span>
                             <button type="button" onclick="window.setViewDensity('avail')" id="density-avail" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Avail</button>
@@ -119,7 +133,7 @@
                         <div class="flex items-center bg-slate-100 rounded border border-slate-200 px-1 py-0.5 text-xs">
                             <span class="text-[9px] font-black text-slate-400 uppercase mr-1">PREVIEW:</span>
                             <select id="channel-preview-select" onchange="window.channelPreviewFilter = this.value; window.renderRateMatrix();" class="bg-transparent font-black text-xs text-indigo-700 outline-none cursor-pointer">
-                                <option value="ALL">All Rates</option>
+                                <option value="ALL">All Channels</option>
                                 <option value="DEF">DEF - Default Rate</option>
                                 <option value="BDC">BDC - Booking.com</option>
                             </select>
@@ -134,83 +148,99 @@
                 </div>
 
                 <!-- QUICK BULK DRAWER -->
-                <div id="quick-bulk-panel" class="hidden bg-slate-900 border-b border-slate-800 p-2 shrink-0 shadow-xl flex-col gap-2 z-30 text-slate-200">
+                <div id="quick-bulk-panel" class="hidden bg-slate-50 border-b-2 border-indigo-200 p-2.5 shrink-0 shadow-md flex-col gap-2 z-30 text-slate-800">
                     <div class="flex items-center justify-between gap-2 flex-wrap">
                         <div class="flex items-center gap-2 flex-wrap">
-                            <span class="text-xs font-black uppercase text-amber-400 flex items-center gap-1 mr-1">
-                                <i data-lucide="layers" size="14"></i> Bulk Update
+                            <span class="text-xs font-black uppercase text-indigo-900 flex items-center gap-1 mr-1">
+                                <i data-lucide="layers" size="14" class="text-indigo-600"></i> Bulk Update
                             </span>
-                            <label class="text-[10px] font-black uppercase text-slate-400">Start:</label>
-                            <input type="date" id="qb-start" class="input-base !py-0.5 !px-1.5 !text-xs w-28 bg-slate-800 text-white border-slate-700">
-                            <label class="text-[10px] font-black uppercase text-slate-400">End:</label>
-                            <input type="date" id="qb-end" class="input-base !py-0.5 !px-1.5 !text-xs w-28 bg-slate-800 text-white border-slate-700">
+                            <label class="text-[10px] font-black uppercase text-slate-500">Start:</label>
+                            <input type="date" id="qb-start" class="input-base !py-0.5 !px-1.5 !text-xs w-32 bg-white">
+                            <label class="text-[10px] font-black uppercase text-slate-500">End:</label>
+                            <input type="date" id="qb-end" class="input-base !py-0.5 !px-1.5 !text-xs w-32 bg-white">
                             
-                            <div class="flex items-center bg-slate-800 rounded p-0.5 border border-slate-700 text-[10px] font-black uppercase ml-1">
-                                <span class="px-1 text-slate-400">SCOPE:</span>
-                                <button type="button" onclick="window.setBulkScopeMode('anchors')" id="qb-scope-anchors" class="px-2 py-0.5 rounded cursor-pointer bg-indigo-600 text-white shadow-2xs font-black">Anchors</button>
-                                <button type="button" onclick="window.setBulkScopeMode('all')" id="qb-scope-all" class="px-2 py-0.5 rounded cursor-pointer text-slate-400 hover:text-white">All</button>
+                            <div class="flex items-center bg-slate-200 rounded p-0.5 border border-slate-300 text-[10px] font-black uppercase ml-1">
+                                <span class="px-1 text-slate-500">SCOPE:</span>
+                                <button type="button" onclick="window.setBulkScopeMode('anchors')" id="qb-scope-anchors" class="px-2 py-0.5 rounded cursor-pointer bg-white text-indigo-700 shadow-2xs font-black">Anchors</button>
+                                <button type="button" onclick="window.setBulkScopeMode('all')" id="qb-scope-all" class="px-2 py-0.5 rounded cursor-pointer text-slate-600 hover:bg-white">All</button>
                             </div>
 
-                            <button type="button" onclick="window.applyBulkGrid(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded font-black text-xs uppercase cursor-pointer">Apply</button>
-                            <button type="button" onclick="window.applyBulkGrid(true)" class="bg-rose-900 hover:bg-rose-800 text-rose-300 border border-rose-700 px-2.5 py-1 rounded font-black text-xs uppercase cursor-pointer">Clear</button>
+                            <button type="button" onclick="window.applyBulkGrid(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded font-black text-xs uppercase cursor-pointer shadow-2xs">Apply</button>
+                            <button type="button" onclick="window.applyBulkGrid(true)" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 px-2.5 py-1 rounded font-black text-xs uppercase cursor-pointer">Clear</button>
                         </div>
-                        <button type="button" onclick="window.toggleQuickBulk(true)" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
+                        <button type="button" onclick="window.toggleQuickBulk(true)" class="text-slate-400 hover:text-slate-800 text-base font-black cursor-pointer px-1">&times;</button>
                     </div>
-                    <div class="overflow-auto max-h-56 border border-slate-700 rounded bg-slate-800/90 shadow-inner">
+                    <div class="overflow-auto max-h-56 border border-slate-300 rounded bg-white shadow-2xs">
                         <table class="w-full text-left text-xs whitespace-nowrap">
-                            <thead class="bg-slate-950 text-white text-[9px] uppercase font-black sticky top-0 z-10 border-b border-slate-700">
+                            <thead class="bg-slate-800 text-white text-[9px] uppercase font-black sticky top-0 z-10">
                                 <tr>
-                                    <th class="p-1.5 border-r border-slate-800 w-52">Room / Scope</th>
-                                    <th class="p-1.5 text-center border-r border-slate-800 w-24">Rate (฿)</th>
-                                    <th class="p-1.5 text-center border-r border-slate-800 w-32">Min Stay (&gt; for Arr)</th>
-                                    <th class="p-1.5 text-center border-r border-slate-800 w-32">Max Stay</th>
+                                    <th class="p-1.5 border-r border-slate-700 w-52">Room / Scope</th>
+                                    <th class="p-1.5 text-center border-r border-slate-700 w-24">DEF Non-Ref (฿)</th>
+                                    <th class="p-1.5 text-center border-r border-slate-700 w-32">Min Stay (▸ for Arr)</th>
+                                    <th class="p-1.5 text-center border-r border-slate-700 w-32">Max Stay</th>
                                     <th class="p-1.5 text-center w-36">Closed Status</th>
                                 </tr>
                             </thead>
-                            <tbody id="qb-grid-body" class="divide-y divide-slate-700/50"></tbody>
+                            <tbody id="qb-grid-body" class="divide-y divide-slate-200"></tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- QUICK EVENT CURVE TUNER DRAWER -->
-                <div id="quick-curve-panel" class="hidden bg-slate-900 border-b border-pink-900/60 p-2.5 shrink-0 shadow-xl flex-col gap-2.5 z-30 text-slate-200">
+                <!-- QUICK EVENT CURVE & RESTRICTIONS TUNER DRAWER -->
+                <div id="quick-curve-panel" class="hidden bg-pink-50/60 border-b-2 border-pink-300 p-2.5 shrink-0 shadow-md flex-col gap-2 z-30 text-slate-800 max-h-[65vh] overflow-y-auto">
                     <div class="flex items-center justify-between gap-2 flex-wrap">
                         <div class="flex items-center gap-2 flex-wrap">
-                            <span class="text-xs font-black uppercase text-pink-400 flex items-center gap-1.5 mr-1">
-                                <i data-lucide="sparkles" size="14"></i> Event Curve Tuner
+                            <span class="text-xs font-black uppercase text-pink-900 flex items-center gap-1.5 mr-1">
+                                <i data-lucide="sparkles" size="14" class="text-pink-600"></i> Event Curve & Pyramid
                             </span>
-                            <label class="text-[10px] font-black uppercase text-slate-400">Target Event:</label>
-                            <select id="ct-event-select" onchange="window.handleCurveEventSelect(this.value)" class="input-base !py-0.5 !px-2 !text-xs font-bold bg-slate-800 text-pink-300 border-slate-700 cursor-pointer"></select>
+                            <label class="text-[10px] font-black uppercase text-slate-500">Event:</label>
+                            <select id="ct-event-select" onchange="window.handleCurveEventSelect(this.value)" class="input-base !w-auto !py-0.5 !px-2 !text-xs font-bold bg-white text-pink-800 border-pink-300 cursor-pointer"></select>
                             
-                            <div class="flex items-center gap-1 bg-slate-800 p-0.5 rounded border border-slate-700 text-[10px] font-black ml-1">
-                                <span class="px-1 text-slate-400 uppercase text-[9px]">PEAK ADJUST:</span>
-                                <button type="button" onclick="window.adjustCurveTunerPeak(-0.10, true)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-rose-300 cursor-pointer">-10%</button>
-                                <button type="button" onclick="window.adjustCurveTunerPeak(0.10, true)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-emerald-300 cursor-pointer">+10%</button>
-                                <button type="button" onclick="window.adjustCurveTunerPeak(-500, false)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-rose-300 cursor-pointer">-500฿</button>
-                                <button type="button" onclick="window.adjustCurveTunerPeak(500, false)" class="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-emerald-300 cursor-pointer">+500฿</button>
+                            <!-- Inline Add / Remove Event Date -->
+                            <div class="flex items-center gap-1 bg-white px-1.5 py-0.5 rounded border border-pink-200">
+                                <input type="date" id="ct-new-event-date" class="text-[11px] font-bold text-slate-700 outline-none bg-transparent">
+                                <button type="button" onclick="window.addCmEventDate()" class="px-1.5 py-0.5 rounded bg-pink-100 hover:bg-pink-200 text-pink-800 font-black text-[9px] uppercase cursor-pointer" title="Add Event Date">+ Event</button>
+                                <button type="button" onclick="window.removeCmEventDate()" class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 font-black text-[9px] uppercase cursor-pointer" title="Remove Selected Event Date">Del</button>
                             </div>
 
-                            <button type="button" onclick="window.applyCurveTuner(false)" class="bg-pink-600 hover:bg-pink-700 text-white px-3 py-1 rounded font-black text-xs uppercase cursor-pointer ml-1">Apply to Event</button>
-                            <button type="button" onclick="window.saveCurveTunerAsDefault()" class="bg-indigo-700 hover:bg-indigo-600 text-indigo-100 border border-indigo-600 px-2.5 py-1 rounded font-black text-xs uppercase cursor-pointer" title="Save this curve as default baseline">Save as Default</button>
+                            <div class="flex items-center gap-1 bg-white p-0.5 rounded border border-slate-300 text-[10px] font-black">
+                                <span class="px-1 text-slate-400 uppercase text-[9px]">PEAK:</span>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(-0.10, true)" class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-rose-100 text-rose-700 cursor-pointer">-10%</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(0.10, true)" class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-emerald-100 text-emerald-700 cursor-pointer">+10%</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(-500, false)" class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-rose-100 text-rose-700 cursor-pointer">-500฿</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(500, false)" class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-emerald-100 text-emerald-700 cursor-pointer">+500฿</button>
+                            </div>
+
+                            <button type="button" onclick="window.applyCurveTuner()" class="bg-pink-600 hover:bg-pink-700 text-white px-3 py-1 rounded font-black text-xs uppercase cursor-pointer shadow-2xs">Apply to Event</button>
+                            <button type="button" onclick="window.saveCurveTunerAsDefault()" class="bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-300 px-2.5 py-1 rounded font-black text-xs uppercase cursor-pointer" title="Save this curve & pyramid as default baseline">Save Default</button>
                         </div>
-                        <button type="button" onclick="window.toggleCurveTuner(true)" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
+                        <button type="button" onclick="window.toggleCurveTuner(true)" class="text-slate-400 hover:text-slate-800 text-base font-black cursor-pointer px-1">&times;</button>
                     </div>
 
-                    <div class="overflow-auto rounded border border-slate-700 bg-slate-800/95 shadow-inner max-h-[220px]">
+                    <!-- 1. Peak Pricing Curve -->
+                    <div class="overflow-auto rounded border border-pink-200 bg-white shadow-2xs">
                         <table class="w-full text-center border-collapse text-xs whitespace-nowrap">
-                            <thead class="bg-slate-950 text-white text-[9px] font-black uppercase sticky top-0 z-10 border-b border-slate-700">
+                            <thead class="bg-slate-800 text-white text-[9px] font-black uppercase">
                                 <tr>
-                                    <th class="p-2 text-left border-r border-slate-800 w-44">Segment / Anchor</th>
-                                    <th class="p-2 border-r border-slate-800 w-24">Std Base</th>
-                                    <th class="p-2 border-r border-slate-800 w-24 text-pink-400">EVT Pkg</th>
-                                    <th class="p-2 border-r border-slate-800 w-24" id="ct-th-m2">EVT -2</th>
-                                    <th class="p-2 border-r border-slate-800 w-24" id="ct-th-m1">EVT -1</th>
-                                    <th class="p-2 border-r border-slate-800 w-28 text-amber-400 font-black bg-amber-950/40" id="ct-th-0">Peak (0)</th>
-                                    <th class="p-2 border-r border-slate-800 w-24" id="ct-th-p1">EVT +1</th>
-                                    <th class="p-2 w-24" id="ct-th-p2">EVT +2</th>
+                                    <th class="p-1.5 text-left border-r border-slate-700 w-44">Anchor Segment</th>
+                                    <th class="p-1.5 border-r border-slate-700 w-24">DEF Base</th>
+                                    <th class="p-1.5 border-r border-slate-700 w-24 text-pink-300">DEF Event Pkg</th>
+                                    <th class="p-1.5 border-r border-slate-700 w-24" id="ct-th-m2">EVT -2</th>
+                                    <th class="p-1.5 border-r border-slate-700 w-24" id="ct-th-m1">EVT -1</th>
+                                    <th class="p-1.5 border-r border-slate-700 w-28 text-amber-300 font-black bg-amber-900/40" id="ct-th-0">Peak (0)</th>
+                                    <th class="p-1.5 border-r border-slate-700 w-24" id="ct-th-p1">EVT +1</th>
+                                    <th class="p-1.5 w-24" id="ct-th-p2">EVT +2</th>
                                 </tr>
                             </thead>
-                            <tbody id="ct-grid-body" class="divide-y divide-slate-700/60 font-black"></tbody>
+                            <tbody id="ct-grid-body" class="divide-y divide-slate-200 font-black"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- 2. Event Stay Restrictions Pyramid (±6 Days) -->
+                    <div class="overflow-auto rounded border border-indigo-200 bg-white shadow-2xs">
+                        <table class="w-full text-center border-collapse text-[11px] whitespace-nowrap">
+                            <thead id="ct-restr-thead" class="bg-indigo-950 text-white text-[9px] font-black uppercase"></thead>
+                            <tbody id="ct-restr-tbody" class="divide-y divide-slate-200 font-bold"></tbody>
                         </table>
                     </div>
                 </div>
@@ -280,16 +310,16 @@
                         </div>
 
                         <!-- Effective Stack Simulator -->
-                        <div class="p-2.5 bg-slate-900 text-slate-200 rounded-lg border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div class="p-2.5 bg-slate-100 text-slate-800 rounded-lg border border-slate-300 flex flex-wrap items-center justify-between gap-2 text-xs">
                             <div class="flex items-center gap-2 flex-wrap">
-                                <span class="text-[10px] font-black uppercase text-pink-400 flex items-center gap-1">
+                                <span class="text-[10px] font-black uppercase text-pink-700 flex items-center gap-1">
                                     <i data-lucide="layers" size="13"></i> Stack Preview (As of Today):
                                 </span>
-                                <input type="date" id="sim-date" onchange="window.renderPromoStackSimulator()" class="input-base !w-auto !py-0.5 !px-1.5 !text-xs bg-slate-800 text-white border-slate-700">
-                                <select id="sim-channel" onchange="window.renderPromoStackSimulator()" class="input-base !w-auto !py-0.5 !px-1.5 !text-xs bg-slate-800 text-white border-slate-700 font-bold"></select>
-                                <select id="sim-room" onchange="window.renderPromoStackSimulator()" class="input-base !w-auto !py-0.5 !px-1.5 !text-xs bg-slate-800 text-white border-slate-700 font-bold"></select>
+                                <input type="date" id="sim-date" onchange="window.renderPromoStackSimulator()" class="input-base !w-auto !py-0.5 !px-1.5 !text-xs bg-white">
+                                <select id="sim-channel" onchange="window.renderPromoStackSimulator()" class="input-base !w-auto !py-0.5 !px-1.5 !text-xs bg-white font-bold"></select>
+                                <select id="sim-room" onchange="window.renderPromoStackSimulator()" class="input-base !w-auto !py-0.5 !px-1.5 !text-xs bg-white font-bold"></select>
                             </div>
-                            <div id="sim-output" class="text-[11px] font-bold text-slate-300"></div>
+                            <div id="sim-output" class="text-[11px] font-bold text-slate-700"></div>
                         </div>
 
                         <div class="overflow-x-auto border border-slate-200 rounded bg-slate-50">
@@ -370,10 +400,8 @@
 
                 <div class="grid grid-cols-2 gap-2">
                     <div>
-                        <label class="label-base">Channel</label>
-                        <select id="promo-channel" class="input-base">
-                            <option value="ALL">All Channels</option>
-                        </select>
+                        <label class="label-base">OTA Channel</label>
+                        <select id="promo-channel" class="input-base font-bold"></select>
                     </div>
                     <div>
                         <label class="label-base">Campaign Name</label>
