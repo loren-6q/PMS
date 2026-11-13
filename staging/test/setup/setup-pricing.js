@@ -329,9 +329,27 @@ export function deleteChannelRule(idx) {
 
 // --- Seasonal & Event Dual-Curve Panel (Master Anchors & Full Restrictions) ---
 let ratesSpanDays = 2;
-let restrSpanDays = 7;
+let restrSpanDays = 6;
 
 const offsetTag = off => (off < 0 ? `m${Math.abs(off)}` : (off === 0 ? '0' : `p${off}`));
+
+export function applyEventPyramidPreset() {
+    window.savedAutofillBaselines = parseJson(window.savedAutofillBaselines);
+    const b = window.savedAutofillBaselines;
+    const span = restrSpanDays || 6;
+    const postArrVal = span + 1;
+
+    for (let off = -span; off <= span; off++) {
+        const tag = offsetTag(off);
+        const absOff = Math.abs(off);
+        b[`r_min_${tag}`] = absOff + 1;
+        b[`r_minarr_${tag}`] = off <= 0 ? (absOff + 1) : postArrVal;
+        b[`r_cta_${tag}`] = off > 0;
+        b[`r_ctd_${tag}`] = false;
+    }
+
+    renderEventPricingMatrix();
+}
 
 export function updateEventBaseline(key, value) {
     window.savedAutofillBaselines = parseJson(window.savedAutofillBaselines);
@@ -357,7 +375,7 @@ export function cycleRatesSpan() {
 }
 
 export function cycleRestrSpan() {
-    restrSpanDays = restrSpanDays === 7 ? 4 : (restrSpanDays === 4 ? 2 : 7);
+    restrSpanDays = restrSpanDays === 6 ? 7 : (restrSpanDays === 7 ? 4 : (restrSpanDays === 4 ? 2 : 6));
     const pill = document.getElementById('restr-span-pill');
     if (pill) pill.innerText = `±${restrSpanDays} Days`;
     renderEventPricingMatrix();
@@ -422,7 +440,15 @@ export function renderEventPricingMatrix() {
         const offsets = [];
         for (let i = -restrSpanDays; i <= restrSpanDays; i++) offsets.push(i);
 
-        let th = '<tr><th class="p-1 text-slate-500 uppercase text-[9px] text-left">Restriction Rule</th>';
+        let th = `<tr>
+            <th class="p-1 text-slate-500 uppercase text-[9px] text-left">
+                <div class="flex items-center gap-1.5">
+                    <span>Restriction Rule</span>
+                    <button type="button" onclick="window.applyEventPyramidPreset()" class="px-1.5 py-0.2 rounded bg-pink-100 hover:bg-pink-200 text-pink-800 border border-pink-300 text-[8px] font-black uppercase cursor-pointer" title="Auto-fill symmetrical pyramid (7..1..7 + post-peak CTA)">
+                        Pyramid Preset
+                    </button>
+                </div>
+            </th>`;
         offsets.forEach(off => {
             const label = off === 0 ? 'PEAK (0)' : (off > 0 ? `+${off}d` : `${off}d`);
             th += `<th class="p-1 text-[9px] font-black ${off === 0 ? 'text-indigo-700 bg-indigo-100' : 'text-slate-700'}">${label}</th>`;
@@ -486,6 +512,7 @@ if (typeof window !== 'undefined') {
     window.confirmAddChannel = confirmAddChannel;
     window.deleteChannelRule = deleteChannelRule;
     window.updateEventBaseline = updateEventBaseline;
+    window.applyEventPyramidPreset = applyEventPyramidPreset;
     window.toggleEventSettings = toggleEventSettings;
     window.cycleRatesSpan = cycleRatesSpan;
     window.cycleRestrSpan = cycleRestrSpan;
