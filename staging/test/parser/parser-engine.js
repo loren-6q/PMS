@@ -17,7 +17,7 @@ import { getLocalYMD } from '../core/dates.js';
 // 1. DATE NORMALIZATION & CALENDAR NAVIGATION UTILITIES
 // --------------------------------------------------------------------------
 
-export function parseFlexibleDate(rawStr) {
+export function parseFlexibleDate(rawStr, referenceYmd = null) {
     if (!rawStr) return '';
     const str = rawStr.trim();
 
@@ -25,7 +25,7 @@ export function parseFlexibleDate(rawStr) {
 
     const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
     
-    const textMatch = str.match(/(?:[A-Za-z]+,?\s+)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/);
+    const textMatch = str.match(/(?:[A-Za-z]+,?\s+)?(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/);
     if (textMatch) {
         const d = String(textMatch[1]).padStart(2, '0');
         const mKey = textMatch[2].toLowerCase().slice(0, 3);
@@ -40,6 +40,33 @@ export function parseFlexibleDate(rawStr) {
         const m = parseInt(slashParts[1], 10);
         const y = parseInt(slashParts[2], 10);
         return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+
+    // Yearless date strings (e.g. "Sat, Dec 19" or "19 Dec") -> infer upcoming year
+    const noYearMatch = str.match(/^(?:[A-Za-z]+,?\s+)?([A-Za-z]{3,9})\s+(\d{1,2})(?:st|nd|rd|th)?$/i) ||
+                        str.match(/^(?:[A-Za-z]+,?\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})$/i);
+    if (noYearMatch) {
+        const isMonthFirst = isNaN(parseInt(noYearMatch[1], 10));
+        const mKey = (isMonthFirst ? noYearMatch[1] : noYearMatch[2]).toLowerCase().slice(0, 3);
+        const dayNum = parseInt(isMonthFirst ? noYearMatch[2] : noYearMatch[1], 10);
+        const monthNum = months[mKey];
+        if (monthNum && dayNum >= 1 && dayNum <= 31) {
+            const now = new Date();
+            let year = referenceYmd ? parseInt(referenceYmd.slice(0, 4), 10) : now.getFullYear();
+            let candidate = `${year}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+
+            if (referenceYmd) {
+                if (candidate < referenceYmd) {
+                    candidate = `${year + 1}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                }
+            } else {
+                const cutoff = new Date(now.getTime() - (60 * 86400000));
+                if (candidate < getLocalYMD(cutoff)) {
+                    candidate = `${year + 1}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                }
+            }
+            return candidate;
+        }
     }
 
     const parsedTimestamp = Date.parse(str);
