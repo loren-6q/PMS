@@ -437,37 +437,79 @@ export function applyCurveTuner() {
     const anchorP = window.pricingRules?.anchorPrivate;
     const anchorD = window.pricingRules?.anchorDorm;
 
-    offsets.forEach(off => {
+    const b = window.savedAutofillBaselines || {};
+    const evtRatePlans = (window.channexRateMap || []).filter(
+        r => (r.product === 'evt') || (r.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(r.ratePlanTitle || '')
+    );
+
+    for (let off = -6; off <= 6; off++) {
         const dStr = getLocalYMD(new Date(peakMs + (off * 86400000)));
         window.masterPricing.timeline[dStr] = window.masterPricing.timeline[dStr] || {};
+        const dObj = window.masterPricing.timeline[dStr];
         const isPeak = (off === 0);
 
         if (anchorP) {
-            window.masterPricing.timeline[dStr][anchorP] = window.masterPricing.timeline[dStr][anchorP] || { isOverride: {} };
-            window.masterPricing.timeline[dStr][anchorP].std = p_rates[off];
-            window.masterPricing.timeline[dStr][anchorP].fmp = isPeak ? p_rates[off] : p_pkg;
-            window.masterPricing.timeline[dStr][anchorP].isOverride.std = true;
-            window.masterPricing.timeline[dStr][anchorP].isOverride.fmp = true;
+            dObj[anchorP] = dObj[anchorP] || { isOverride: {} };
+            if (p_rates[off] !== undefined) {
+                dObj[anchorP].std = p_rates[off];
+                dObj[anchorP].isOverride.std = true;
+            }
+            dObj[anchorP].fmp = isPeak ? p_rates[0] : p_pkg;
+            dObj[anchorP].isOverride.fmp = true;
             rippleDay(dStr, anchorP, true);
         }
 
         if (anchorD) {
-            window.masterPricing.timeline[dStr][anchorD] = window.masterPricing.timeline[dStr][anchorD] || { isOverride: {} };
-            window.masterPricing.timeline[dStr][anchorD].std = d_rates[off];
-            window.masterPricing.timeline[dStr][anchorD].fmp = isPeak ? d_rates[off] : d_pkg;
-            window.masterPricing.timeline[dStr][anchorD].isOverride.std = true;
-            window.masterPricing.timeline[dStr][anchorD].isOverride.fmp = true;
+            dObj[anchorD] = dObj[anchorD] || { isOverride: {} };
+            if (d_rates[off] !== undefined) {
+                dObj[anchorD].std = d_rates[off];
+                dObj[anchorD].isOverride.std = true;
+            }
+            dObj[anchorD].fmp = isPeak ? d_rates[0] : d_pkg;
+            dObj[anchorD].isOverride.fmp = true;
             rippleDay(dStr, anchorD, true);
+        }
+
+        const tag = off < 0 ? `m${Math.abs(off)}` : (off === 0 ? '0' : `p${off}`);
+        const rMin = b[`r_min_${tag}`];
+        const rMinArr = b[`r_minarr_${tag}`];
+        const rMax = b[`r_max_${tag}`];
+        const rCta = !!b[`r_cta_${tag}`];
+        const rCtd = !!b[`r_ctd_${tag}`];
+
+        dObj.evtRestrictions = {
+            min: rMin !== undefined && rMin !== '' ? parseInt(rMin, 10) : '',
+            min_arr: rMinArr !== undefined && rMinArr !== '' ? parseInt(rMinArr, 10) : '',
+            max: rMax !== undefined && rMax !== '' ? parseInt(rMax, 10) : '',
+            cta: rCta,
+            ctd: rCtd
+        };
+
+        if (evtRatePlans.length > 0) {
+            dObj.otaOverrides = dObj.otaOverrides || {};
+            evtRatePlans.forEach(rp => {
+                if (rMin !== undefined && rMin !== '') dObj.otaOverrides[`${rp.ratePlanId}_min`] = parseInt(rMin, 10);
+                else delete dObj.otaOverrides[`${rp.ratePlanId}_min`];
+
+                if (rMinArr !== undefined && rMinArr !== '') dObj.otaOverrides[`${rp.ratePlanId}_min_arr`] = parseInt(rMinArr, 10);
+                else delete dObj.otaOverrides[`${rp.ratePlanId}_min_arr`];
+
+                if (rMax !== undefined && rMax !== '') dObj.otaOverrides[`${rp.ratePlanId}_max`] = parseInt(rMax, 10);
+                else delete dObj.otaOverrides[`${rp.ratePlanId}_max`];
+
+                dObj.otaOverrides[`${rp.ratePlanId}_cta`] = rCta;
+                dObj.otaOverrides[`${rp.ratePlanId}_ctd`] = rCtd;
+            });
         }
 
         window.dirtyDates.add(dStr);
         window.syncedDates.delete(dStr);
-    });
+    }
 
     window.markUnsavedChanges();
     renderRateMatrix();
     toggleCurveTuner(true);
-    customAlert("Curve Applied", `Event curve updated for ${evtStr} (±2 days). Click "SAVE & SYNC" to push.`);
+    customAlert("Curve Applied", `Event curve & restriction pyramid painted for ${evtStr} (±6 days). Click "SAVE & SYNC" to push.`);
 }
 
 export async function saveCurveTunerAsDefault() {
