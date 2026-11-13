@@ -75,6 +75,7 @@ export function updateStep5Review() {
     const catEl = document.getElementById('rev-cat-count');
     const chanEl = document.getElementById('rev-chan-status');
     const plansEl = document.getElementById('rev-chan-plans');
+    const eventsEl = document.getElementById('rev-events-status');
 
     if (nameEl) nameEl.innerText = document.getElementById('prop-name')?.value || window.currentPropertyId;
     if (codeEl) codeEl.innerText = document.getElementById('prop-short')?.value || window.currentPropertyId.toUpperCase();
@@ -82,6 +83,7 @@ export function updateStep5Review() {
     if (catEl) catEl.innerText = `${new Set(activeRooms.map(r => r.category)).size} Categories`;
     if (chanEl) chanEl.innerText = (window.channexMap || []).length > 0 ? `${window.channexMap.length} Categories Mapped` : 'Unmapped';
     if (plansEl) plansEl.innerText = `${(window.channexRateMap || []).length} Rate Plans`;
+    if (eventsEl) eventsEl.innerText = window.enableEventRates ? 'Events: On' : 'Events: Off';
 }
 
 // --- Hydrate All Input Fields and Tables from Property Data ---
@@ -90,6 +92,9 @@ export async function loadPropertyData(propId) {
 
     try {
         const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId));
+        const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`));
+        const pricingDoc = pricingSnap.exists() ? pricingSnap.data() : {};
+
         if (snap.exists()) {
             const data = snap.data();
             window.currentPropertyConfig = { id: snap.id, ...data };
@@ -117,7 +122,10 @@ export async function loadPropertyData(propId) {
             window.channexRatePlans = Array.isArray(data.channexRatePlans) ? data.channexRatePlans : [];
             window.channexMap = Array.isArray(data.channexMap) ? data.channexMap : [];
             window.channexRateMap = Array.isArray(data.channexRateMap) ? data.channexRateMap : [];
-            // Auto-parse if Firestore stored pricing as stringified JSON
+            window.enableEventRates = data.enableEventRates !== undefined
+                ? !!data.enableEventRates
+                : ((data.events || []).length > 0);
+
             let parsedMasterPricing = data.masterPricing || {};
             if (typeof parsedMasterPricing === 'string') {
                 try { parsedMasterPricing = JSON.parse(parsedMasterPricing); } catch (e) { parsedMasterPricing = {}; }
@@ -129,6 +137,11 @@ export async function loadPropertyData(propId) {
                 try { parsedPricingRules = JSON.parse(parsedPricingRules); } catch (e) { parsedPricingRules = {}; }
             }
             window.pricingRules = parsedPricingRules;
+
+            window.savedAutofillBaselines = {
+                ...(pricingDoc.autofillBaselines || {}),
+                ...(data.autofillBaselines || {})
+            };
 
             setVal('chan-api-key', data.channex?.apiKey);
             setVal('chan-prop-id', data.channex?.propId);
@@ -188,12 +201,23 @@ export async function savePropertyToDatabase(notify = true) {
             channexRatePlans: window.channexRatePlans || [],
             channexMap: window.channexMap || [],
             channexRateMap: window.channexRateMap || [],
+            enableEventRates: !!window.enableEventRates,
             pricingRules: window.pricingRules || {},
             masterPricing: window.masterPricing || {},
+            autofillBaselines: window.savedAutofillBaselines || {},
             updatedAt: new Date().toISOString()
         };
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), propData, { merge: true });
+
+        // Keep master pricing doc synchronized with Step 4 rules & event curves
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`), {
+            relationships: window.masterPricing?.relationships || [],
+            pricingRules: window.pricingRules || {},
+            autofillBaselines: window.savedAutofillBaselines || {},
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+
         window.currentPropertyConfig = { ...propData };
 
         if (propData.channex.apiKey && propData.channex.propId && typeof window.triggerAutoSync === 'function') {
