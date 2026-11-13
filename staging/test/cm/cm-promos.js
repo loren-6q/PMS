@@ -11,16 +11,22 @@ import { customAlert } from '../core/ui-dialogs.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
 import { evaluatePromoStack } from './cm-ripple.js';
 
-function getOrderedChannelOptionsHtml(includeAll = true) {
+function getOrderedOtaOptionsHtml() {
     const activeCodes = new Set(
         (window.channexRateMap || []).map(r => resolveChannelCode(r.channel)).filter(c => c !== 'DEF' && c !== 'WEB')
     );
     const primaryOtas = CANONICAL_OTA_LIST.filter(o => activeCodes.has(o.code));
     const otherOtas = CANONICAL_OTA_LIST.filter(o => !activeCodes.has(o.code));
 
-    return (includeAll ? `<option value="ALL">All Channels</option>` : '') +
-        primaryOtas.map(o => `<option value="${o.code}">${o.code} - ${o.name}</option>`).join('') +
-        otherOtas.map(o => `<option value="${o.code}">${o.code} - ${o.name}</option>`).join('');
+    return primaryOtas.map(o => `<option value="${o.code}">${o.code} - ${o.name}</option>`).join('') +
+           otherOtas.map(o => `<option value="${o.code}">${o.code} - ${o.name}</option>`).join('');
+}
+
+function getDefaultOtaCode() {
+    const activeCodes = (window.channexRateMap || [])
+        .map(r => resolveChannelCode(r.channel))
+        .filter(c => c && c !== 'DEF' && c !== 'WEB');
+    return activeCodes[0] || 'BDC';
 }
 
 function markPromoStayDatesDirty(rule) {
@@ -45,11 +51,11 @@ function markPromoStayDatesDirty(rule) {
 
 export function detectPromoScheduleShifts(lastSyncDateStr) {
     const todayStr = getLocalYMD(new Date());
-    const rules = (window.promoRules || []).filter(r => r && r.active);
+    const rules = (window.promoRules || []).filter(r => r && r.active && r.channel && r.channel !== 'ALL');
     if (!lastSyncDateStr || lastSyncDateStr >= todayStr || rules.length === 0) return [];
 
     const channels = new Set(['BDC', 'HWL', 'AGO', 'EXP', 'ABB']);
-    rules.forEach(r => { if (r.channel && r.channel !== 'ALL') channels.add(resolveChannelCode(r.channel)); });
+    rules.forEach(r => channels.add(resolveChannelCode(r.channel)));
     const rooms = (window.roomTypes && window.roomTypes.length) ? window.roomTypes : ['ALL'];
 
     const shiftedDates = new Set();
@@ -90,7 +96,7 @@ export function detectPromoScheduleShifts(lastSyncDateStr) {
 
 export function populatePromoScopeDropdown() {
     const chanEl = document.getElementById('promo-channel');
-    if (chanEl) chanEl.innerHTML = getOrderedChannelOptionsHtml(true);
+    if (chanEl) chanEl.innerHTML = getOrderedOtaOptionsHtml();
 }
 
 export function setPromoStackMode(isStackable) {
@@ -203,7 +209,10 @@ export function openAddPromoModal(existingRule = null) {
     if (existingRule) {
         if (titleEl) titleEl.innerText = 'Edit OTA Promotion';
         if (idEl) idEl.value = existingRule.id || '';
-        if (chanEl) chanEl.value = existingRule.channel === 'ALL' ? 'ALL' : resolveChannelCode(existingRule.channel);
+        const resolved = existingRule.channel && existingRule.channel !== 'ALL'
+            ? resolveChannelCode(existingRule.channel)
+            : getDefaultOtaCode();
+        if (chanEl) chanEl.value = resolved;
         if (nameEl) nameEl.value = existingRule.name || '';
         if (discEl) discEl.value = existingRule.discountPct ?? 15;
         if (advEl) advEl.value = existingRule.minAdvanceDays || 0;
@@ -232,7 +241,7 @@ export function openAddPromoModal(existingRule = null) {
     } else {
         if (titleEl) titleEl.innerText = 'Add OTA Promotion';
         if (idEl) idEl.value = '';
-        if (chanEl) chanEl.value = 'ALL';
+        if (chanEl) chanEl.value = getDefaultOtaCode();
         if (nameEl) nameEl.value = '';
         if (discEl) discEl.value = '15';
         if (advEl) advEl.value = '0';
@@ -281,7 +290,7 @@ export async function savePromoRule() {
     const name = document.getElementById('promo-name')?.value.trim();
     const discountPct = parseFloat(document.getElementById('promo-discount-pct')?.value) || 0;
     const minAdvanceDays = Math.max(0, parseInt(document.getElementById('promo-min-advance')?.value, 10) || 0);
-    const channel = document.getElementById('promo-channel')?.value || 'ALL';
+    const channel = document.getElementById('promo-channel')?.value || getDefaultOtaCode();
     const scopes = getSelectedPromoScopes();
     const stackable = document.getElementById('promo-stackable')?.value === 'true';
 
@@ -295,6 +304,9 @@ export async function savePromoRule() {
     const excludeEvents = !!document.getElementById('promo-exclude-events')?.checked;
     const active = document.getElementById('promo-active-toggle')?.checked !== false;
 
+    if (!channel || channel === 'ALL') {
+        return customAlert("Validation Error", "Please select a specific OTA channel.");
+    }
     if (!name || discountPct <= 0 || discountPct >= 100) {
         return customAlert("Validation Error", "Please provide a promo campaign name and discount (1-99%).");
     }
@@ -392,8 +404,8 @@ export function renderPromoStackSimulator() {
     if (!dateEl.value) dateEl.value = getLocalYMD(new Date());
 
     if (chanEl.options.length === 0) {
-        chanEl.innerHTML = getOrderedChannelOptionsHtml(false);
-        if (Array.from(chanEl.options).some(o => o.value === 'BDC')) chanEl.value = 'BDC';
+        chanEl.innerHTML = getOrderedOtaOptionsHtml();
+        chanEl.value = getDefaultOtaCode();
     }
 
     const rooms = window.roomTypes || [];
@@ -403,22 +415,22 @@ export function renderPromoStackSimulator() {
 
     const res = evaluatePromoStack(dateEl.value, chanEl.value, roomEl.value);
     if (res.applied.length === 0) {
-        outEl.innerHTML = `<span class="text-slate-400">No promos apply today for this stay date / channel / room (0% markup).</span>`;
+        outEl.innerHTML = `<span class="text-slate-500">No promos apply today for this stay date / channel / room (0% markup).</span>`;
         return;
     }
 
-    const parts = res.applied.map(p => `<span class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-white font-black text-[10px]">${p.name} (${p.discountPct}%)</span>`);
+    const parts = res.applied.map(p => `<span class="px-1.5 py-0.5 rounded bg-white border border-slate-300 text-slate-900 font-black text-[10px]">${p.name} (${p.discountPct}%)</span>`);
     const beatNote = res.superseded.length > 0
-        ? ` <span class="text-slate-400 text-[10px]">[beat ${res.superseded.map(s => `${s.name} ${s.discountPct}%`).join(', ')}]</span>`
+        ? ` <span class="text-slate-500 text-[10px]">[beat ${res.superseded.map(s => `${s.name} ${s.discountPct}%`).join(', ')}]</span>`
         : '';
 
     outEl.innerHTML = `
         <span class="inline-flex items-center gap-1 flex-wrap">
-            ${parts.join(' <span class="text-pink-400 font-black">+</span> ')}${beatNote}
+            ${parts.join(' <span class="text-pink-600 font-black">+</span> ')}${beatNote}
             <span class="text-slate-400 mx-1">&rarr;</span>
-            <span>Eff. Disc: <strong class="text-rose-400">${res.effectiveDiscountPct.toFixed(1)}%</strong></span>
-            <span class="text-slate-500 mx-0.5">|</span>
-            <span>Total Markup: <strong class="text-emerald-400 font-mono">+${res.totalMarkupPct.toFixed(1)}%</strong></span>
+            <span>Eff. Disc: <strong class="text-rose-600">${res.effectiveDiscountPct.toFixed(1)}%</strong></span>
+            <span class="text-slate-400 mx-0.5">|</span>
+            <span>Total Markup: <strong class="text-emerald-700 font-mono">+${res.totalMarkupPct.toFixed(1)}%</strong></span>
         </span>
     `;
 }
@@ -450,7 +462,7 @@ export function renderPromoRulesTable() {
         const isCurrentlyLive = r.active && !isNotStartedYet && !isBookingEnded && !isStayExpired;
 
         const markup = ((1 / (1 - (r.discountPct / 100))) - 1) * 100;
-        const chanLabel = r.channel === 'ALL' ? 'ALL' : `${resolveChannelCode(r.channel)} - ${getChannelByCode(r.channel).name}`;
+        const chanLabel = `${resolveChannelCode(r.channel)} - ${getChannelByCode(r.channel).name}`;
 
         let bookHtml = bookAlw
             ? `<span class="text-slate-600">Ongoing</span>`
