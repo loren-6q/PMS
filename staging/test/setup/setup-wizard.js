@@ -63,6 +63,18 @@ export function prevStep() {
     if (currentStep > 1) jumpStep(currentStep - 1);
 }
 
+export async function launchApp(target) {
+    const page = target === 'cm' ? 'cm.html' : 'pms.html';
+    const propId = window.currentPropertyId || 'swims_resort';
+    try {
+        localStorage.setItem('last_prop', propId);
+        await savePropertyToDatabase(false);
+    } catch (e) {
+        console.warn("[Launch Save Notice]:", e);
+    }
+    window.location.href = `${page}?p=${encodeURIComponent(propId)}`;
+}
+
 // --- Step 5 Review Screen Populator ---
 export function updateStep5Review() {
     const definitions = window.roomDefinitions || [];
@@ -305,9 +317,10 @@ export async function initSetup() {
 }
 
 if (typeof window !== 'undefined') {
-    window.jumpStep = jumpStep;
+   window.jumpStep = jumpStep;
     window.nextStep = nextStep;
     window.prevStep = prevStep;
+    window.launchApp = launchApp;
     window.savePropertyToDatabase = savePropertyToDatabase;
     window.openNewPropertyModal = openNewPropertyModal;
     window.closeNewPropertyModal = closeNewPropertyModal;
