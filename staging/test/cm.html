@@ -253,27 +253,57 @@
 
             <!-- VIEW 2: PROMOTIONS & DEALS -->
             <div id="view-promos" class="hidden flex-1 overflow-y-auto bg-slate-50 p-4">
-                <div class="max-w-5xl mx-auto space-y-4">
-                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-xs">
-                        <div class="flex justify-between items-center border-b border-slate-200 pb-2 mb-3">
+                <div class="max-w-6xl mx-auto space-y-3">
+                    <!-- Daily Promo Transition Alert Banner -->
+                    <div id="promo-shift-banner" class="hidden bg-amber-50 border-2 border-amber-400 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 shadow-xs">
+                        <div class="flex items-center gap-2 text-xs">
+                            <i data-lucide="clock-alert" size="16" class="text-amber-600 shrink-0"></i>
+                            <div>
+                                <span class="font-black uppercase text-amber-950">Promo Schedule Shifted Since Last Sync:</span>
+                                <span id="promo-shift-desc" class="font-bold text-amber-800 ml-1"></span>
+                            </div>
+                        </div>
+                        <button type="button" onclick="window.saveAndSync(this, 'delta')" class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-black text-xs uppercase shadow-xs cursor-pointer flex items-center gap-1">
+                            <i data-lucide="zap" size="12"></i> Sync Promo Shifts Now
+                        </button>
+                    </div>
+
+                    <div class="bg-white p-4 border border-slate-200 rounded-xl shadow-xs space-y-3">
+                        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
                             <div>
                                 <h2 class="text-xs sm:text-sm font-black uppercase text-slate-800 flex items-center gap-1.5">
                                     <i data-lucide="tags" class="text-pink-600"></i> OTA Promotions & Deals
                                 </h2>
-                                <span class="text-[11px] font-bold text-slate-500">Margin-preserving promotional markups.</span>
+                                <span class="text-[11px] font-bold text-slate-500">Evaluates Bookable Window, Lead Time, Stay Dates & Exclusions. Highest Non-Stacking wins; Stackables compound.</span>
                             </div>
                             <button type="button" onclick="window.openAddPromoModal()" class="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white rounded font-black text-xs uppercase cursor-pointer">+ Add Promo</button>
                         </div>
+
+                        <!-- Effective Stack Simulator -->
+                        <div class="p-2.5 bg-slate-900 text-slate-200 rounded-lg border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-[10px] font-black uppercase text-pink-400 flex items-center gap-1">
+                                    <i data-lucide="layers" size="13"></i> Stack Preview (As of Today):
+                                </span>
+                                <input type="date" id="sim-date" onchange="window.renderPromoStackSimulator()" class="input-base !w-auto !py-0.5 !px-1.5 !text-xs bg-slate-800 text-white border-slate-700">
+                                <select id="sim-channel" onchange="window.renderPromoStackSimulator()" class="input-base !w-auto !py-0.5 !px-1.5 !text-xs bg-slate-800 text-white border-slate-700 font-bold"></select>
+                                <select id="sim-room" onchange="window.renderPromoStackSimulator()" class="input-base !w-auto !py-0.5 !px-1.5 !text-xs bg-slate-800 text-white border-slate-700 font-bold"></select>
+                            </div>
+                            <div id="sim-output" class="text-[11px] font-bold text-slate-300"></div>
+                        </div>
+
                         <div class="overflow-x-auto border border-slate-200 rounded bg-slate-50">
                             <table class="w-full text-left text-xs whitespace-nowrap">
                                 <thead class="bg-slate-800 text-white text-[9px] uppercase font-black">
                                     <tr>
                                         <th class="p-2">Channel</th>
                                         <th class="p-2">Campaign</th>
-                                        <th class="p-2">Date Window</th>
-                                        <th class="p-2 text-center">Discount</th>
-                                        <th class="p-2 text-center text-pink-300">Markup Required</th>
-                                        <th class="p-2">Scope</th>
+                                        <th class="p-2">Stacking</th>
+                                        <th class="p-2">Bookable Period</th>
+                                        <th class="p-2">Stay Dates</th>
+                                        <th class="p-2 text-center">Disc</th>
+                                        <th class="p-2 text-center text-pink-300">Markup</th>
+                                        <th class="p-2">Room Scope</th>
                                         <th class="p-2 text-center">Status</th>
                                         <th class="p-2 text-center">Actions</th>
                                     </tr>
@@ -327,24 +357,28 @@
 
     <!-- MODAL: ADD / EDIT PROMO -->
     <div id="promo-modal" class="alert-modal-overlay hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[9999] flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full border-2 border-slate-800 flex flex-col overflow-hidden text-xs">
-            <div class="bg-slate-900 p-2.5 text-white font-bold uppercase flex justify-between items-center">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full border-2 border-slate-800 flex flex-col overflow-hidden text-xs max-h-[92vh]">
+            <div class="bg-slate-900 p-2.5 text-white font-bold uppercase flex justify-between items-center shrink-0">
                 <span id="promo-modal-title">Add OTA Promotion</span>
-                <button type="button" onclick="document.getElementById('promo-modal').classList.add('hidden')" class="text-slate-400 hover:text-white cursor-pointer">&times;</button>
+                <button type="button" onclick="document.getElementById('promo-modal').classList.add('hidden')" class="text-slate-400 hover:text-white cursor-pointer text-base leading-none">&times;</button>
             </div>
-            <div class="p-3 space-y-2.5">
+            <div class="p-3 space-y-2.5 overflow-y-auto">
                 <input type="hidden" id="promo-rule-id">
-                <div>
-                    <label class="label-base">Channel</label>
-                    <select id="promo-channel" class="input-base">
-                        <option value="ALL">All Channels</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="label-base">Campaign Name</label>
-                    <input type="text" id="promo-name" placeholder="e.g. Genius 15%, Early Bird" class="input-base uppercase font-bold">
-                </div>
+
                 <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="label-base">Channel</label>
+                        <select id="promo-channel" class="input-base">
+                            <option value="ALL">All Channels</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label-base">Campaign Name</label>
+                        <input type="text" id="promo-name" placeholder="e.g. Black Friday 30%" class="input-base uppercase font-bold">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
                     <div>
                         <label class="label-base">Discount (%)</label>
                         <input type="number" id="promo-discount-pct" value="15" min="1" max="99" oninput="window.updatePromoModalMath()" class="input-base font-black text-pink-600">
@@ -353,37 +387,83 @@
                         <label class="label-base">Markup Required</label>
                         <input type="text" id="promo-calculated-markup" readonly class="input-base bg-slate-100 font-black text-emerald-700 text-center">
                     </div>
+                    <div>
+                        <label class="label-base">Advance Days</label>
+                        <input type="number" id="promo-min-advance" value="0" min="0" max="365" placeholder="0" class="input-base font-black text-center" title="e.g. 30 for Early Booker (30+ days before check-in)">
+                    </div>
                 </div>
-                <div class="space-y-1 pt-1 border-t border-slate-200">
+
+                <!-- 1. Bookable Period (When guest can make the booking) -->
+                <div class="p-2 bg-amber-50/60 border border-amber-200 rounded space-y-1">
                     <div class="flex items-center justify-between">
-                        <label class="label-base mb-0">Date Window</label>
-                        <label class="text-[10px] font-bold text-slate-600 flex items-center gap-1 cursor-pointer">
-                            <input type="checkbox" id="promo-always-active" onchange="window.togglePromoDateInputs(this.checked)" class="row-checkbox"> Always Active
+                        <label class="label-base mb-0 text-amber-950">1. Bookable Period (Sales Window)</label>
+                        <label class="text-[10px] font-bold text-amber-900 flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="promo-book-always" onchange="window.togglePromoBookInputs(this.checked)" class="row-checkbox"> Ongoing / Now
                         </label>
                     </div>
-                    <div id="promo-date-wrap" class="grid grid-cols-2 gap-2">
+                    <div id="promo-book-wrap" class="grid grid-cols-2 gap-2">
                         <div>
-                            <label class="label-base">Start Date</label>
-                            <input type="date" id="promo-start-date" class="input-base">
+                            <label class="label-base">Bookable From</label>
+                            <input type="date" id="promo-book-start" class="input-base bg-white">
                         </div>
                         <div>
-                            <label class="label-base">End Date</label>
-                            <input type="date" id="promo-end-date" class="input-base">
+                            <label class="label-base">Bookable Until</label>
+                            <input type="date" id="promo-book-end" class="input-base bg-white">
                         </div>
                     </div>
                 </div>
-                <div>
-                    <label class="label-base">Room Scope</label>
-                    <select id="promo-room-scope" class="input-base">
-                        <option value="ALL">All Categories</option>
-                    </select>
+
+                <!-- 2. Stay Dates (When the guest stays) -->
+                <div class="p-2 bg-indigo-50/50 border border-indigo-200 rounded space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="label-base mb-0 text-indigo-950">2. Stay Dates (Applicable Nights)</label>
+                        <label class="text-[10px] font-bold text-indigo-900 flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="promo-stay-always" onchange="window.togglePromoStayInputs(this.checked)" class="row-checkbox"> Always Active
+                        </label>
+                    </div>
+                    <div id="promo-stay-wrap" class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="label-base">Stay From</label>
+                            <input type="date" id="promo-stay-start" class="input-base bg-white">
+                        </div>
+                        <div>
+                            <label class="label-base">Stay Until</label>
+                            <input type="date" id="promo-stay-end" class="input-base bg-white">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-indigo-200/70">
+                        <label class="text-[10px] font-black text-pink-800 flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="promo-exclude-events" class="row-checkbox"> Exclude Event Dates (Peak / FMP)
+                        </label>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2 pt-1 border-t border-slate-200">
-                    <input type="checkbox" id="promo-active-toggle" checked class="row-checkbox">
-                    <label for="promo-active-toggle" class="text-[11px] font-black uppercase text-slate-700 cursor-pointer">
-                        Rule Active
+
+                <!-- 3. Stacking Behavior -->
+                <div class="space-y-1">
+                    <label class="label-base mb-0">3. Stacking Behavior</label>
+                    <input type="hidden" id="promo-stackable" value="false">
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button type="button" id="promo-stack-btn-no" onclick="window.setPromoStackMode(false)" class="px-2 py-1 rounded border text-[10px] font-black uppercase cursor-pointer bg-slate-800 text-white border-slate-800">
+                            Non-Stacking (Max Wins)
+                        </button>
+                        <button type="button" id="promo-stack-btn-yes" onclick="window.setPromoStackMode(true)" class="px-2 py-1 rounded border text-[10px] font-black uppercase cursor-pointer bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200">
+                            Stackable Add-On
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. Room Scope -->
+                <div class="space-y-1">
+                    <label class="label-base mb-0">4. Room Scope (Select One or More)</label>
+                    <div id="promo-room-pills" class="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1.5 bg-slate-50 border border-slate-200 rounded"></div>
+                </div>
+
+                <div class="flex items-center justify-between pt-1 border-t border-slate-200">
+                    <label for="promo-active-toggle" class="text-[11px] font-black uppercase text-slate-700 flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" id="promo-active-toggle" checked class="row-checkbox"> Rule Enabled
                     </label>
                 </div>
+
                 <div class="pt-2 flex justify-end gap-2 border-t border-slate-200">
                     <button type="button" onclick="document.getElementById('promo-modal').classList.add('hidden')" class="px-3 py-1 bg-slate-200 rounded font-bold uppercase cursor-pointer">Cancel</button>
                     <button type="button" onclick="window.savePromoRule()" class="px-4 py-1 bg-pink-600 hover:bg-pink-700 text-white rounded font-black uppercase shadow-xs cursor-pointer">Save Promo</button>
