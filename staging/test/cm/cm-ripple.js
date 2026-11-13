@@ -95,22 +95,21 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
 
 export function evaluatePromoStack(dateStr, chanCode, room, asOfDateStr = null) {
     const resolvedChan = resolveChannelCode(chanCode);
+    if (!resolvedChan || resolvedChan === 'DEF' || resolvedChan === 'WEB') {
+        return { applied: [], winner: null, superseded: [], stackable: [], multiplier: 1, effectiveDiscountPct: 0, totalMarkupPct: 0 };
+    }
+
     const asOf = asOfDateStr || getLocalYMD(new Date());
     const eventsSet = new Set(window.eventDates || []);
 
     const matching = (window.promoRules || []).filter(pr => {
-        if (!pr || !pr.active) return false;
+        if (!pr || !pr.active || !pr.channel || pr.channel === 'ALL') return false;
+        if (resolveChannelCode(pr.channel) !== resolvedChan) return false;
 
-        // A. Channel match
-        const isChanMatch = pr.channel === 'ALL' || resolveChannelCode(pr.channel) === resolvedChan;
-        if (!isChanMatch) return false;
-
-        // B. Room scope match (supports multi-room scopes[] and legacy scope)
         const scopes = Array.isArray(pr.scopes) && pr.scopes.length ? pr.scopes : [pr.scope || 'ALL'];
         const isScopeMatch = scopes.includes('ALL') || (room && scopes.includes(room));
         if (!isScopeMatch) return false;
 
-        // C. Bookable period (sales window relative to asOf date)
         const hasBookBounds = !!(pr.bookStart || pr.bookEnd);
         const bookAlw = pr.bookAlways !== undefined ? !!pr.bookAlways : !hasBookBounds;
         if (!bookAlw) {
@@ -118,14 +117,12 @@ export function evaluatePromoStack(dateStr, chanCode, room, asOfDateStr = null) 
             if (pr.bookEnd && asOf > pr.bookEnd) return false;
         }
 
-        // D. Advance purchase / lead time (e.g., 30+ days before check-in)
         const minAdv = parseInt(pr.minAdvanceDays, 10) || 0;
         if (minAdv > 0) {
             const leadDays = Math.round((parseYMD(dateStr) - parseYMD(asOf)) / 86400000);
             if (leadDays < minAdv) return false;
         }
 
-        // E. Stay date window (supports stayStart/stayEnd and legacy startDate/endDate)
         const stayAlw = pr.stayAlways !== undefined ? !!pr.stayAlways : !!pr.isAlways;
         const sStart = pr.stayStart || pr.startDate || '';
         const sEnd = pr.stayEnd || pr.endDate || '';
@@ -134,7 +131,6 @@ export function evaluatePromoStack(dateStr, chanCode, room, asOfDateStr = null) 
             if (sEnd && dateStr > sEnd) return false;
         }
 
-        // F. Excluded stay dates (Peak/Event dates & custom blackouts)
         if (pr.excludeEvents && eventsSet.has(dateStr)) return false;
         if (Array.isArray(pr.excludedDates) && pr.excludedDates.includes(dateStr)) return false;
 
