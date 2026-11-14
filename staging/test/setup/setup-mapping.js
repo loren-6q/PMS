@@ -370,7 +370,7 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
 
     renderStep3UnifiedMapping();
 }
-}
+
 
 // Dynamically builds Batch Suite templates based on connected channels
 export function getDynamicBatchRateTemplates() {
