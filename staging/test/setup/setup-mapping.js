@@ -101,21 +101,81 @@ export function detectRatePlanClassification(title, plan = null) {
     return { channel, policy, isEvent: policy.startsWith('event') };
 }
 
+let step3ShowRates = true;
+const step3ExpandedCats = new Set();
+
+export function setStep3RateView(showRates) {
+    step3ShowRates = !!showRates;
+    if (step3ShowRates) step3ExpandedCats.clear();
+    renderStep3UnifiedMapping();
+}
+
+export function toggleStep3CategoryRates(cat) {
+    if (!cat) return;
+    if (step3ExpandedCats.has(cat)) step3ExpandedCats.delete(cat);
+    else step3ExpandedCats.add(cat);
+    renderStep3UnifiedMapping();
+}
+
 export function renderStep3UnifiedMapping() {
     const container = document.getElementById('unified-mapping-container');
     if (!container) return;
     container.innerHTML = '';
 
-    const definitions = window.roomDefinitions || [];
-    const pmsCategories = Array.from(new Set(definitions.filter(r => !r.inactive).map(r => r.category).filter(Boolean)));
+    const definitions = (window.roomDefinitions || []).filter(r => !r.inactive);
+    const pmsCategories = Array.from(new Set(definitions.map(r => (r.category || '').trim()).filter(Boolean)));
 
     if (pmsCategories.length === 0) {
         container.innerHTML = `<div class="p-6 text-center text-slate-400 font-bold text-xs uppercase">No PMS room categories defined yet. Complete Step 2 first.</div>`;
         return;
     }
 
-    window.channexMap = window.channexMap || [];
-    window.channexRateMap = window.channexRateMap || [];
+    const catToId = new Map();
+    const idToCat = new Map();
+    definitions.forEach(d => {
+        const c = (d.category || '').trim();
+        if (c && d.catId) {
+            catToId.set(c, d.catId);
+            idToCat.set(d.catId, c);
+        }
+    });
+
+    const activeCatSet = new Set(pmsCategories.map(c => c.toLowerCase()));
+
+    // Auto-heal renamed categories via catId & purge stale orphaned mappings
+    window.channexMap = (window.channexMap || [])
+        .map(m => {
+            if (m.catId && idToCat.has(m.catId)) m.pmsCategory = idToCat.get(m.catId);
+            return m;
+        })
+        .filter(m => m.pmsCategory && activeCatSet.has(m.pmsCategory.trim().toLowerCase()));
+
+    window.channexRateMap = (window.channexRateMap || [])
+        .map(rp => {
+            if (rp.catId && idToCat.has(rp.catId)) rp.pmsCategory = idToCat.get(rp.catId);
+            return rp;
+        })
+        .filter(rp => rp.pmsCategory && activeCatSet.has(rp.pmsCategory.trim().toLowerCase()));
+
+    const mappedCount = pmsCategories.filter(cat => window.channexMap.some(m => m.pmsCategory === cat && m.channexId)).length;
+
+    // Top View Toggle Bar (Rooms Only vs All Rates)
+    const toolbar = document.createElement('div');
+    toolbar.className = 'flex items-center justify-between gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs text-xs';
+    toolbar.innerHTML = `
+        <div class="flex items-center gap-2">
+            <span class="font-black uppercase text-slate-700">Room & Rate Mapping</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${mappedCount === pmsCategories.length ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}">
+                ${mappedCount} / ${pmsCategories.length} Rooms Mapped • ${window.channexRateMap.length} Active Plans
+            </span>
+        </div>
+        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
+            <span class="px-1.5 text-slate-400">DISPLAY:</span>
+            <button type="button" onclick="window.setStep3RateView(false)" class="px-2.5 py-0.5 rounded cursor-pointer transition-colors ${!step3ShowRates ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}">Rooms Only</button>
+            <button type="button" onclick="window.setStep3RateView(true)" class="px-2.5 py-0.5 rounded cursor-pointer transition-colors ${step3ShowRates ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}">All Rates</button>
+        </div>
+    `;
+    container.appendChild(toolbar);
 
     const availableChannels = getAvailableMappingChannels();
 
@@ -136,13 +196,14 @@ export function renderStep3UnifiedMapping() {
             selectOptions += `<option value="${cr.id}" ${isSel}>${cr.attributes?.title || cr.id}</option>`;
         });
 
-        let ratePlansHtml = '';
-        if (isMapped) {
-            const matchingPlans = (window.channexRatePlans || []).filter(p => {
-                const rId = p.attributes?.room_type_id || p.relationships?.room_type?.data?.id;
-                return rId === currentMap.channexId;
-            });
+        const matchingPlans = isMapped
+            ? (window.channexRatePlans || []).filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === currentMap.channexId)
+            : [];
 
+        const isCardPlansVisible = step3ShowRates || step3ExpandedCats.has(cat);
+
+        let ratePlansHtml = '';
+        if (isMapped && isCardPlansVisible) {
             if (matchingPlans.length > 0) {
                 ratePlansHtml = `
                     <div class="overflow-x-auto p-2 bg-white">
@@ -164,6 +225,7 @@ export function renderStep3UnifiedMapping() {
                                         mapping = {
                                             ratePlanId: plan.id,
                                             pmsCategory: cat,
+                                            catId: catToId.get(cat) || null,
                                             channexRoomId: currentMap.channexId,
                                             ratePlanTitle: title,
                                             channel: detected.channel,
@@ -173,6 +235,8 @@ export function renderStep3UnifiedMapping() {
                                         };
                                         window.channexRateMap.push(mapping);
                                     } else {
+                                        mapping.pmsCategory = cat;
+                                        if (catToId.has(cat)) mapping.catId = catToId.get(cat);
                                         if (!mapping.channel || mapping.channel === "DEF" || mapping.channel === "DEFAULT") {
                                             if (detected.channel !== "DEF") mapping.channel = detected.channel;
                                         }
@@ -195,6 +259,7 @@ export function renderStep3UnifiedMapping() {
                                         policySelectClass += ' border-emerald-400 text-emerald-700 bg-emerald-50/20';
                                     }
 
+                                    const safeCat = cat.replace(/'/g, "\\'");
                                     return `
                                         <tr class="hover:bg-slate-50/80 transition-colors">
                                             <td class="py-1.5 px-2">
@@ -205,14 +270,14 @@ export function renderStep3UnifiedMapping() {
                                                 <div class="font-mono text-[9.5px] text-slate-400 mt-0.5">ID: ...${plan.id.slice(-8)}</div>
                                             </td>
                                             <td class="py-1.5 px-2">
-                                                <select tabindex="0" class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'channel', this.value, this)">
+                                                <select tabindex="0" class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${safeCat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'channel', this.value, this)">
                                                     ${availableChannels.map(ch => `
                                                         <option value="${ch.val}" ${mapping.channel === ch.val ? 'selected' : ''}>${ch.label}</option>
                                                     `).join('')}
                                                 </select>
                                             </td>
                                             <td class="py-1.5 px-2">
-                                                <select tabindex="0" class="${policySelectClass}" onchange="window.updateRatePlanClassification('${plan.id}', '${cat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'policy', this.value, this)">
+                                                <select tabindex="0" class="${policySelectClass}" onchange="window.updateRatePlanClassification('${plan.id}', '${safeCat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'policy', this.value, this)">
                                                     ${AVAILABLE_POLICIES.map(pol => `
                                                         <option value="${pol.val}" ${mapping.policy === pol.val ? 'selected' : ''}>${pol.label}</option>
                                                     `).join('')}
@@ -234,14 +299,22 @@ export function renderStep3UnifiedMapping() {
             }
         }
 
+        const safeCatAttr = cat.replace(/'/g, "\\'");
+        const plansToggleBadge = (isMapped && !step3ShowRates)
+            ? `<button type="button" onclick="window.toggleStep3CategoryRates('${safeCatAttr}')" class="px-2 py-0.5 rounded bg-white/90 hover:bg-white text-emerald-900 border border-emerald-300 text-[9.5px] font-black uppercase cursor-pointer">
+                ${matchingPlans.length} Plan${matchingPlans.length === 1 ? '' : 's'} ${isCardPlansVisible ? '▴' : '▸'}
+               </button>`
+            : '';
+
         card.innerHTML = `
             <div class="${isMapped ? 'mapping-header-mapped' : 'mapping-header-unmapped'}">
                 <div class="flex items-center gap-2">
                     <span class="${isMapped ? 'mapping-badge-mapped' : 'mapping-badge-unmapped'}">${isMapped ? 'MAPPED ✓' : 'UNMAPPED ⚠'}</span>
                     <span class="font-black text-xs uppercase tracking-wide text-slate-900">${cat}</span>
+                    ${plansToggleBadge}
                 </div>
                 <div class="w-64">
-                    <select class="table-input font-bold bg-white text-slate-800" onchange="window.updateRoomTypeMapping('${cat}', this.value)">
+                    <select class="table-input font-bold bg-white text-slate-800" onchange="window.updateRoomTypeMapping('${safeCatAttr}', this.value)">
                         ${selectOptions}
                     </select>
                 </div>
@@ -259,21 +332,18 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     window.channexMap = window.channexMap || [];
     window.channexRateMap = window.channexRateMap || [];
 
-    const idx = window.channexMap.findIndex(m => m.pmsCategory === pmsCategory);
-    window.channexRateMap = window.channexRateMap.filter(r => r.pmsCategory !== pmsCategory);
+    const defMatch = (window.roomDefinitions || []).find(d => !d.inactive && (d.category || '').trim() === pmsCategory);
+    const catId = defMatch?.catId || null;
 
-    if (!channexId) {
-        if (idx > -1) window.channexMap.splice(idx, 1);
-    } else {
+    // Remove any existing mapping for this PMS category OR any prior category holding this Channex Room ID
+    window.channexMap = window.channexMap.filter(m => m.pmsCategory !== pmsCategory && (!channexId || m.channexId !== channexId));
+    window.channexRateMap = window.channexRateMap.filter(r => r.pmsCategory !== pmsCategory && (!channexId || r.channexRoomId !== channexId));
+
+    if (channexId) {
         const cRoom = (window.channexRooms || []).find(r => r.id === channexId);
         const title = cRoom?.attributes?.title || channexId;
 
-        if (idx > -1) {
-            window.channexMap[idx].channexId = channexId;
-            window.channexMap[idx].channexTitle = title;
-        } else {
-            window.channexMap.push({ pmsCategory, channexId, channexTitle: title });
-        }
+        window.channexMap.push({ pmsCategory, catId, channexId, channexTitle: title });
 
         const matchingPlans = (window.channexRatePlans || []).filter(p => {
             const rId = p.attributes?.room_type_id || p.relationships?.room_type?.data?.id;
@@ -283,8 +353,10 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
         matchingPlans.forEach(plan => {
             const planTitle = plan.attributes?.title || plan.id;
             const detected = detectRatePlanClassification(planTitle, plan);
+            window.channexRateMap = window.channexRateMap.filter(r => r.ratePlanId !== plan.id);
             window.channexRateMap.push({
                 pmsCategory,
+                catId,
                 channexRoomId: channexId,
                 ratePlanId: plan.id,
                 ratePlanTitle: planTitle,
@@ -297,6 +369,7 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     }
 
     renderStep3UnifiedMapping();
+}
 }
 
 // Dynamically builds Batch Suite templates based on connected channels
@@ -1037,6 +1110,8 @@ export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoo
 
 if (typeof window !== 'undefined') {
     window.fetchChannexData = fetchChannexData;
+    window.setStep3RateView = setStep3RateView;
+    window.toggleStep3CategoryRates = toggleStep3CategoryRates;
     window.renderStep3UnifiedMapping = renderStep3UnifiedMapping;
     window.updateRoomTypeMapping = updateRoomTypeMapping;
     window.updateRatePlanClassification = updateRatePlanClassification;
