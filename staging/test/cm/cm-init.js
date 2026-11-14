@@ -253,17 +253,19 @@ export async function savePricingToCloud(silent = false) {
     try {
         const canonId = toCanonicalPropId(window.currentPropertyId);
 
+        const serializedTimeline = JSON.stringify(window.masterPricing.timeline || {});
+
         // 1. Immutable Rolling Backup
         const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing_backups', `${canonId}_${Date.now()}`);
         await setDoc(backupRef, {
-            timeline: window.masterPricing.timeline || {},
+            timeline: serializedTimeline,
             createdAt: new Date().toISOString()
         });
 
         // 2. Persist Master Pricing Matrix
         const mainRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`);
         await setDoc(mainRef, {
-            timeline: window.masterPricing.timeline || {},
+            timeline: serializedTimeline,
             relationships: window.masterPricing.relationships || [],
             pricingRules: window.pricingRules || {},
             updatedAt: new Date().toISOString()
