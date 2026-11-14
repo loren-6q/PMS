@@ -3,7 +3,34 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { resolveChannelCode } from './channels.js';
+function getDismissedStorageKey() {
+    const propId = window.currentPropertyId || 'swims_resort';
+    return `ww_audit_dismissed_${propId}`;
+}
+
+export function getDismissedAuditIds() {
+    try {
+        const raw = localStorage.getItem(getDismissedStorageKey());
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(arr) ? arr : []);
+    } catch (e) {
+        return new Set();
+    }
+}
+
+export function dismissAuditIssue(encodedId, containerId = 'cm-health-banner', context = 'cm') {
+    if (!encodedId) return;
+    const issueId = decodeURIComponent(encodedId);
+    const set = getDismissedAuditIds();
+    set.add(issueId);
+    localStorage.setItem(getDismissedStorageKey(), JSON.stringify(Array.from(set)));
+    renderHealthAuditBanner(containerId, context);
+}
+
+export function resetDismissedAuditIssues(containerId = 'cm-health-banner', context = 'cm') {
+    localStorage.removeItem(getDismissedStorageKey());
+    renderHealthAuditBanner(containerId, context);
+}
 
 export function runSystemHealthAudit() {
     const issues = [];
@@ -27,7 +54,7 @@ export function runSystemHealthAudit() {
     const dormSource = defs.length ? defs : activeRooms;
     const dormCats = Array.from(new Set(dormSource.filter(r => r.rule && r.rule !== 'private').map(r => (r.category || r.type || '').trim()).filter(Boolean)));
     const privCats = Array.from(new Set(dormSource.filter(r => r.rule === 'private').map(r => (r.category || r.type || '').trim()).filter(Boolean)));
-    
+
     const rules = window.pricingRules || {};
     const rels = window.masterPricing?.relationships || rules.relationships || [];
     const cMap = window.channexMap || [];
@@ -38,6 +65,7 @@ export function runSystemHealthAudit() {
     if (privCats.length > 0) {
         if (!rules.anchorPrivate) {
             issues.push({
+                id: 'anchor_priv_missing',
                 severity: 'warn',
                 title: 'Private Master Anchor Not Set',
                 detail: 'Select a Private Master Room Anchor in Setup Step 4 so Curves and Bulk updates know which room drives private rates.',
@@ -45,6 +73,7 @@ export function runSystemHealthAudit() {
             });
         } else if (!matchActiveCat(rules.anchorPrivate)) {
             issues.push({
+                id: `anchor_priv_broken_${rules.anchorPrivate}`,
                 severity: 'error',
                 title: `Broken Private Anchor: "${rules.anchorPrivate}"`,
                 detail: 'The Private Master Anchor points to a room category that no longer exists.',
@@ -56,6 +85,7 @@ export function runSystemHealthAudit() {
     if (dormCats.length > 0) {
         if (!rules.anchorDorm) {
             issues.push({
+                id: 'anchor_dorm_missing',
                 severity: 'warn',
                 title: 'Dorm Master Anchor Not Set',
                 detail: 'Select a Dorm Master Room Anchor in Setup Step 4 so Curves and Bulk updates know which room drives dorm rates.',
@@ -63,6 +93,7 @@ export function runSystemHealthAudit() {
             });
         } else if (!matchActiveCat(rules.anchorDorm)) {
             issues.push({
+                id: `anchor_dorm_broken_${rules.anchorDorm}`,
                 severity: 'error',
                 title: `Broken Dorm Anchor: "${rules.anchorDorm}"`,
                 detail: 'The Dorm Master Anchor points to a room category that no longer exists.',
@@ -78,6 +109,7 @@ export function runSystemHealthAudit() {
         const tMatch = matchActiveCat(rel.target);
         if (rel.anchor && rel.anchor !== 'unlinked' && !aMatch) {
             issues.push({
+                id: `rel_anchor_${idx}_${rel.anchor}`,
                 severity: 'error',
                 title: `Orphaned Ripple Link #${idx + 1}: "${rel.anchor}"`,
                 detail: `Anchor category "${rel.anchor}" does not match any active room category.`,
@@ -86,6 +118,7 @@ export function runSystemHealthAudit() {
         }
         if (rel.target && !tMatch) {
             issues.push({
+                id: `rel_target_${idx}_${rel.target}`,
                 severity: 'error',
                 title: `Orphaned Ripple Link #${idx + 1}: "${rel.target}"`,
                 detail: `Target category "${rel.target}" does not match any active room category.`,
@@ -100,6 +133,7 @@ export function runSystemHealthAudit() {
         const unlinked = activeCats.filter(c => !linkedCats.has(c.toLowerCase()));
         if (unlinked.length > 0) {
             issues.push({
+                id: `unlinked_cats_${unlinked.join('|')}`,
                 severity: 'warn',
                 title: `Unlinked Room Categor${unlinked.length > 1 ? 'ies' : 'y'}: ${unlinked.join(', ')}`,
                 detail: 'These rooms will not receive Ripple price updates when you edit an Anchor rate.',
@@ -116,6 +150,7 @@ export function runSystemHealthAudit() {
             const matched = matchActiveCat(m.pmsCategory);
             if (!matched) {
                 issues.push({
+                    id: `cmap_stale_${m.pmsCategory}`,
                     severity: 'error',
                     title: `Broken Channex Room Mapping: "${m.pmsCategory}"`,
                     detail: 'Mapped to a room category name that no longer exists in Step 2.',
@@ -129,6 +164,7 @@ export function runSystemHealthAudit() {
         const unmappedCats = activeCats.filter(c => !mappedCats.has(c.toLowerCase()));
         if (unmappedCats.length > 0) {
             issues.push({
+                id: `cmap_unmapped_${unmappedCats.join('|')}`,
                 severity: 'warn',
                 title: `Unmapped Channex Room${unmappedCats.length > 1 ? 's' : ''}: ${unmappedCats.join(', ')}`,
                 detail: 'Availability and rates for unmapped categories will not sync to Channex.',
@@ -138,10 +174,12 @@ export function runSystemHealthAudit() {
 
         const orphanedPlans = rMap.filter(rp => rp.pmsCategory && !matchActiveCat(rp.pmsCategory));
         if (orphanedPlans.length > 0) {
+            const staleNames = Array.from(new Set(orphanedPlans.map(p => p.pmsCategory)));
             issues.push({
+                id: `rplan_stale_${staleNames.join('|')}`,
                 severity: 'error',
                 title: `${orphanedPlans.length} Orphaned Channex Rate Plan(s)`,
-                detail: `Rate plans are still linked to renamed/deleted categories (${Array.from(new Set(orphanedPlans.map(p => p.pmsCategory))).join(', ')}).`,
+                detail: `Rate plans are still linked to renamed/deleted categories (${staleNames.join(', ')}).`,
                 step: 3
             });
         }
@@ -155,6 +193,7 @@ export function runSystemHealthAudit() {
         const badScopes = scopes.filter(sc => !catSet.has(String(sc).trim().toLowerCase()));
         if (badScopes.length > 0) {
             issues.push({
+                id: `promo_scope_${pr.id || pr.name}_${badScopes.join('|')}`,
                 severity: 'warn',
                 title: `Promo "${pr.name}" Targets Missing Room: ${badScopes.join(', ')}`,
                 detail: 'Update the room scope on this promotion rule in Deals & Promos.',
@@ -170,10 +209,22 @@ export function renderHealthAuditBanner(containerId, context = 'cm') {
     const el = document.getElementById(containerId);
     if (!el) return [];
 
-    const issues = runSystemHealthAudit();
+    const allIssues = runSystemHealthAudit();
+    const dismissed = getDismissedAuditIds();
+    const issues = allIssues.filter(i => !dismissed.has(i.id));
+    const hiddenCount = allIssues.length - issues.length;
+
     if (issues.length === 0) {
-        el.classList.add('hidden');
-        el.innerHTML = '';
+        if (hiddenCount > 0) {
+            el.className = 'bg-slate-100 border-b border-slate-200 px-3 py-0.5 shrink-0 z-30 flex items-center justify-between text-[10px] text-slate-500';
+            el.innerHTML = `
+                <span>${hiddenCount} dismissed audit notice${hiddenCount > 1 ? 's' : ''} hidden.</span>
+                <button type="button" onclick="window.resetDismissedAuditIssues('${containerId}', '${context}')" class="font-black uppercase text-indigo-700 hover:underline cursor-pointer">Restore Dismissed (${hiddenCount})</button>
+            `;
+        } else {
+            el.classList.add('hidden');
+            el.innerHTML = '';
+        }
         return issues;
     }
 
@@ -196,13 +247,17 @@ export function renderHealthAuditBanner(containerId, context = 'cm') {
             }
         }
 
+        const encodedId = encodeURIComponent(iss.id);
         return `<div class="flex items-center justify-between gap-2 py-1 border-t border-black/10 first:border-t-0 text-xs">
             <div class="flex items-center gap-1.5 min-w-0">
                 <span class="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase shrink-0 ${badgeCls}">${iss.severity === 'error' ? 'ERROR' : 'WARN'}</span>
                 <span class="font-black text-slate-900 truncate">${iss.title}:</span>
                 <span class="text-slate-700 font-semibold truncate">${iss.detail}</span>
             </div>
-            ${actionBtn}
+            <div class="flex items-center gap-1 shrink-0">
+                ${actionBtn}
+                <button type="button" onclick="window.dismissAuditIssue('${encodedId}', '${containerId}', '${context}')" class="px-1.5 py-0.5 rounded hover:bg-black/10 text-slate-600 hover:text-slate-950 font-black text-xs cursor-pointer" title="Dismiss this item (remembers across refreshes)">&times;</button>
+            </div>
         </div>`;
     }).join('');
 
@@ -216,8 +271,9 @@ export function renderHealthAuditBanner(containerId, context = 'cm') {
                 <button type="button" onclick="document.getElementById('${detailsId}').classList.toggle('hidden')" class="ml-1 px-2 py-0.2 rounded bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-[9.5px] font-black uppercase cursor-pointer">
                     Show / Hide Details
                 </button>
+                ${hiddenCount > 0 ? `<button type="button" onclick="window.resetDismissedAuditIssues('${containerId}', '${context}')" class="ml-1 text-[9.5px] font-bold underline text-slate-600 hover:text-slate-900 cursor-pointer">Restore Dismissed (${hiddenCount})</button>` : ''}
             </div>
-            <button type="button" onclick="document.getElementById('${containerId}').classList.add('hidden')" class="text-slate-500 hover:text-slate-900 text-[10px] font-black uppercase cursor-pointer px-1">Dismiss &times;</button>
+            <button type="button" onclick="document.getElementById('${containerId}').classList.add('hidden')" class="text-slate-500 hover:text-slate-900 text-[10px] font-black uppercase cursor-pointer px-1" title="Hide bar for this session (returns on refresh)">Hide &times;</button>
         </div>
         <div id="${detailsId}" class="hidden mt-1.5 max-h-40 overflow-y-auto border-t border-black/10 pt-1">${rowsHtml}</div>
     `;
@@ -229,4 +285,6 @@ export function renderHealthAuditBanner(containerId, context = 'cm') {
 if (typeof window !== 'undefined') {
     window.runSystemHealthAudit = runSystemHealthAudit;
     window.renderHealthAuditBanner = renderHealthAuditBanner;
+    window.dismissAuditIssue = dismissAuditIssue;
+    window.resetDismissedAuditIssues = resetDismissedAuditIssues;
 }
