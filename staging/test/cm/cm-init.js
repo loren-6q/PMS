@@ -13,11 +13,30 @@ import { customAlert } from '../core/ui-dialogs.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
 import { loadPropertyBaseline, checkMissing, renderManualGrid } from './cm-auditor.js';
 import { renderPromoRulesTable, detectPromoScheduleShifts } from './cm-promos.js';
+import { renderHealthAuditBanner } from '../core/health-audit.js';
 import './cm-bulk-drawer.js';
 import { pushToChannexAPI, saveAndSync } from '../channex.js';
 
 export let hasUnsavedChanges = false;
 export let hasLoadedPricingFromCloud = false;
+
+export function markCmDirty(dateStr, kind = 'rate', target = '*') {
+    if (!dateStr) return;
+    window.dirtyDates = window.dirtyDates || new Set();
+    window.syncedDates = window.syncedDates || new Set();
+    window.dirtyAvailKeys = window.dirtyAvailKeys || new Set();
+    window.dirtyPlanKeys = window.dirtyPlanKeys || new Set();
+
+    window.dirtyDates.add(dateStr);
+    window.syncedDates.delete(dateStr);
+
+    if (kind === 'avail' || kind === 'both') {
+        window.dirtyAvailKeys.add(`${dateStr}|${target}`);
+    }
+    if (kind === 'rate' || kind === 'both') {
+        window.dirtyPlanKeys.add(`${dateStr}|${target}`);
+    }
+}
 
 export async function initCm() {
     const loader = document.getElementById('loader');
@@ -63,8 +82,10 @@ export async function initCm() {
             channel: resolveChannelCode(rm.channel || rm.ratePlanTitle)
         }));
         window.promoRules = activeProp?.promoRules || [];
-        window.dirtyDates = new Set();
+       window.dirtyDates = new Set();
         window.syncedDates = new Set();
+        window.dirtyAvailKeys = new Set();
+        window.dirtyPlanKeys = new Set();
         window.editMode = 'ripple';
 
         // Load Pricing Matrix from Firestore (safely parse if stored as JSON string)
@@ -122,6 +143,7 @@ export async function initCm() {
         renderRateMatrix();
         renderPromoRulesTable();
         detectPromoScheduleShifts(activeProp?.lastPromoSyncDate);
+        renderHealthAuditBanner('cm-health-banner', 'cm');
         loadPropertyBaseline();
 
         if (loader) loader.style.display = 'none';
@@ -323,6 +345,7 @@ export function shiftTape(days) {
 
 // Global Window Exports
 if (typeof window !== 'undefined') {
+    window.markCmDirty = markCmDirty;
     window.markUnsavedChanges = markUnsavedChanges;
     window.updateSaveIndicator = updateSaveIndicator;
     window.savePricingToCloud = savePricingToCloud;
