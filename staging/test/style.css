@@ -891,30 +891,40 @@ body {
 .rate-grid-table td {
   border-right: 1px solid #cbd5e1;
   border-bottom: 1px solid #cbd5e1;
-  padding: 0px 1px !important;
+  padding: 0px !important;
   text-align: center;
-  height: 20px !important;
+  height: auto !important;
   line-height: 1 !important;
   box-sizing: border-box;
+  vertical-align: middle;
 }
 
 .rate-grid-table td input[type="number"],
 .rate-grid-table td input[type="text"] {
-  width: 36px;
+  width: 100%;
   height: 18px !important;
   text-align: center;
   font-family: 'Roboto Condensed', system-ui, -apple-system, sans-serif !important;
   letter-spacing: -0.02em !important;
   font-variant-numeric: tabular-nums;
-  font-weight: 500 !important;
+  font-weight: 700 !important;
   font-size: 11px !important;
   padding: 0px 1px !important;
   border: 1px solid transparent;
   border-radius: 0px;
   outline: none;
-  transition: all 0.2s;
+  transition: all 0.15s;
   -moz-appearance: textfield;
   background: transparent;
+}
+
+.rate-grid-table td input.cell-min-input,
+.rate-grid-table td input.cell-max-input {
+  width: 50% !important;
+  min-width: 0 !important;
+  height: 14px !important;
+  font-size: 9px !important;
+  padding: 0px !important;
 }
 
 .rate-grid-table td input[type="number"]::-webkit-outer-spin-button,
