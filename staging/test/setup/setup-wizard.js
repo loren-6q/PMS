@@ -13,6 +13,7 @@ import { renderPaymentMethodsTable, renderAddonsTable, updateLogoPreview, normal
 import { renderRoomDefinitionsTable, compileRoomsFromDefinitions } from './setup-rooms.js';
 import { renderStep3UnifiedMapping } from './setup-mapping.js';
 import { renderPricingConfig } from './setup-pricing.js';
+import { renderHealthAuditBanner } from '../core/health-audit.js';
 
 export let currentStep = 1;
 
@@ -223,12 +224,20 @@ export async function savePropertyToDatabase(notify = true) {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), propData, { merge: true });
 
         // Keep master pricing doc synchronized with Step 4 rules & event curves
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`), {
+        const pricingUpdatePayload = {
             relationships: window.masterPricing?.relationships || [],
             pricingRules: window.pricingRules || {},
             autofillBaselines: window.savedAutofillBaselines || {},
             updatedAt: new Date().toISOString()
-        }, { merge: true });
+        };
+        if (window._timelineMigratedByRename && window.masterPricing?.timeline) {
+            pricingUpdatePayload.timeline = typeof window.masterPricing.timeline === 'string'
+                ? window.masterPricing.timeline
+                : JSON.stringify(window.masterPricing.timeline);
+            window._timelineMigratedByRename = false;
+        }
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`), pricingUpdatePayload, { merge: true });
+        renderHealthAuditBanner('setup-health-banner', 'setup');
 
         window.currentPropertyConfig = { ...propData };
 
@@ -309,7 +318,9 @@ export async function initSetup() {
         window.currentPropertyId = toCanonicalPropId(pParam);
 
         await loadPropertyData(window.currentPropertyId);
-        jumpStep(1);
+        const startStep = parseInt(urlParams.get('step'), 10) || 1;
+        jumpStep(startStep);
+        renderHealthAuditBanner('setup-health-banner', 'setup');
 
     } catch (err) {
         console.error("[Setup Boot Error]:", err);
