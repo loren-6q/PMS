@@ -1,7 +1,7 @@
 {
   "system": "Wild & Wandering PMS Architecture Contract",
-  "version": "2.1.0",
-  "lastAudited": "2026-11-10",
+  "version": "2.2.0",
+  "lastAudited": "2026-11-15",
   "designPrinciple": "1-File / 1-Domain Strict Responsibility Matrix. Zero Hardcoding. Single Source of Truth.",
   "modules": {
     "core": {
@@ -81,6 +81,13 @@
           "auditRoomIntegrity(hotelRooms, staffBookings)",
           "reconcileOrphanedBookings(staffBookings, hotelRooms)",
           "validateRoomCapacity(roomDefinition)"
+        ]
+      },
+      "core/health-audit.js": {
+        "responsibility": "Shared Setup & Channel Manager configuration auditor: detects unlinked categories, orphaned ripple links, broken Channex mappings, and invalid promo scopes.",
+        "functions": [
+          "runSystemHealthAudit()",
+          "renderHealthAuditBanner(containerId, context)"
         ]
       }
     },
@@ -297,19 +304,14 @@
         ]
       },
       "cm/cm-bulk-drawer.js": {
-        "responsibility": "Fast bulk rate & restriction update drawer: custom date ranges, day-of-week filters, absolute vs percentage adjustments.",
+        "responsibility": "Unified Range Bulk Update, Ripple Recovery (Fill Blanks / Re-Ripple All), Event Date Manager & Event Curve/Pyramid Tuner.",
         "functions": [
-          "openBulkDrawer(selectedRange)",
-          "closeBulkDrawer()",
-          "executeBulkUpdate(bulkPayload)"
-        ]
-      },
-      "cm/cm-curve-tuner.js": {
-        "responsibility": "Peak event pricing curve adjuster: multiplier calculation, event shoulder taper math, and dynamic minimum stay enforcement.",
-        "functions": [
-          "calculateEventMultiplier(peakDate, targetDate, curveConfig)",
-          "applyShoulderCurve(baseRate, daysFromPeak, curveConfig)",
-          "previewCurveTuning(eventConfig)"
+          "toggleQuickBulk(forceClose)",
+          "applyBulkGrid(isClear)",
+          "runRippleRecovery(mode)",
+          "toggleCurveTuner(forceClose, targetDateStr)",
+          "applyCurveTuner()",
+          "saveCurveTunerAsDefault()"
         ]
       },
       "cm/cm-promos.js": {
@@ -347,13 +349,14 @@
         ]
       },
       "setup/setup-rooms.js": {
-        "responsibility": "Step 2: Physical inventory builder: rooms, dorms, bed numbering (№), parent-child relationships, drag-sorting, and rank assignment.",
+        "responsibility": "Step 2: Physical inventory builder: rooms, dorms, canonical № bed IDs, immutable category IDs, automatic rename cascading, drag-sorting, and relocation.",
         "functions": [
-          "renderStep2Rooms()",
-          "addRoomDefinition(roomData)",
-          "removeRoomDefinition(roomId)",
-          "reorderRooms(orderedIdList)",
-          "toggleRoomActive(roomId)"
+          "compileRoomsFromDefinitions()",
+          "renderRoomDefinitionsTable()",
+          "handleCategoryRename(idx, rawNewCat)",
+          "moveRoomWithinCategory(idx, dir)",
+          "deleteRoomDef(index)",
+          "executeWizardGenerate()"
         ]
       },
       "setup/setup-mapping.js": {
