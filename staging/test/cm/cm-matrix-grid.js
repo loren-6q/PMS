@@ -312,6 +312,9 @@ export function handleCellEdit(dateStr, room, field, val, isEvt = false) {
         } else {
             rData.fmp = roundCurrency(parseFloat(val));
             rData.isOverride.fmp = true;
+            if (window.editMode === 'ripple') {
+                rippleDay(dateStr, room, true);
+            }
         }
     } else if (field === 'fmp_ref') {
         if (val === "" || isNaN(parseFloat(val))) {
