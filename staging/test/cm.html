@@ -147,38 +147,38 @@
                     </div>
                 </div>
 
-                <!-- QUICK BULK DRAWER -->
-                <div id="quick-bulk-panel" class="hidden bg-slate-50 border-b-2 border-indigo-200 p-2.5 shrink-0 shadow-md flex-col gap-2 z-30 text-slate-800">
-                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                <!-- QUICK BULK DRAWER (Unified style.css Light Card) -->
+                <div id="quick-bulk-panel" class="hidden bg-white border-b-2 border-slate-300 p-2.5 shrink-0 shadow-sm flex-col gap-2 z-30 text-slate-800">
+                    <div class="flex items-center justify-between gap-2 flex-wrap pb-1.5 border-b border-slate-200">
                         <div class="flex items-center gap-2 flex-wrap">
-                            <span class="text-xs font-black uppercase text-indigo-900 flex items-center gap-1 mr-1">
-                                <i data-lucide="layers" size="14" class="text-indigo-600"></i> Bulk Update
+                            <span class="setup-card-title text-indigo-700 mr-1">
+                                <i data-lucide="layers" size="14" class="text-indigo-600"></i> Range Bulk Update
                             </span>
-                            <label class="text-[10px] font-black uppercase text-slate-500">Start:</label>
-                            <input type="date" id="qb-start" class="input-base !py-0.5 !px-1.5 !text-xs w-32 bg-white">
-                            <label class="text-[10px] font-black uppercase text-slate-500">End:</label>
-                            <input type="date" id="qb-end" class="input-base !py-0.5 !px-1.5 !text-xs w-32 bg-white">
+                            <label class="text-[10px] font-black uppercase text-slate-500">From:</label>
+                            <input type="date" id="qb-start" class="table-input !w-32">
+                            <label class="text-[10px] font-black uppercase text-slate-500">To:</label>
+                            <input type="date" id="qb-end" class="table-input !w-32">
                             
-                            <div class="flex items-center bg-slate-200 rounded p-0.5 border border-slate-300 text-[10px] font-black uppercase ml-1">
-                                <span class="px-1 text-slate-500">SCOPE:</span>
+                            <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase ml-1">
+                                <span class="px-1.5 text-slate-400">SCOPE:</span>
                                 <button type="button" onclick="window.setBulkScopeMode('anchors')" id="qb-scope-anchors" class="px-2 py-0.5 rounded cursor-pointer bg-white text-indigo-700 shadow-2xs font-black">Anchors</button>
-                                <button type="button" onclick="window.setBulkScopeMode('all')" id="qb-scope-all" class="px-2 py-0.5 rounded cursor-pointer text-slate-600 hover:bg-white">All</button>
+                                <button type="button" onclick="window.setBulkScopeMode('all')" id="qb-scope-all" class="px-2 py-0.5 rounded cursor-pointer text-slate-600 hover:bg-white">All Rooms</button>
                             </div>
 
-                            <button type="button" onclick="window.applyBulkGrid(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded font-black text-xs uppercase cursor-pointer shadow-2xs">Apply</button>
-                            <button type="button" onclick="window.applyBulkGrid(true)" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 px-2.5 py-1 rounded font-black text-xs uppercase cursor-pointer">Clear</button>
+                            <button type="button" onclick="window.applyBulkGrid(false)" class="btn-setup-continue !py-1 !px-3">Apply Range</button>
+                            <button type="button" onclick="window.applyBulkGrid(true)" class="btn-setup-prev !py-1 !px-2.5 !text-rose-600 hover:!bg-rose-50">Clear Overrides</button>
                         </div>
-                        <button type="button" onclick="window.toggleQuickBulk(true)" class="text-slate-400 hover:text-slate-800 text-base font-black cursor-pointer px-1">&times;</button>
+                        <button type="button" onclick="window.toggleQuickBulk(true)" class="btn-setup-prev !py-0.5 !px-2 text-sm leading-none">&times;</button>
                     </div>
-                    <div class="overflow-auto max-h-56 border border-slate-300 rounded bg-white shadow-2xs">
+                    <div class="overflow-auto max-h-56 border border-slate-200 rounded bg-white">
                         <table class="w-full text-left text-xs whitespace-nowrap">
-                            <thead class="bg-slate-800 text-white text-[9px] uppercase font-black sticky top-0 z-10">
+                            <thead class="bg-slate-100 text-slate-600 text-[9px] uppercase font-black sticky top-0 z-10 border-b border-slate-200">
                                 <tr>
-                                    <th class="p-1.5 border-r border-slate-700 w-52">Room / Scope</th>
-                                    <th class="p-1.5 text-center border-r border-slate-700 w-24">DEF Non-Ref (฿)</th>
-                                    <th class="p-1.5 text-center border-r border-slate-700 w-32">Min Stay (▸ for Arr)</th>
-                                    <th class="p-1.5 text-center border-r border-slate-700 w-32">Max Stay</th>
-                                    <th class="p-1.5 text-center w-36">Closed Status</th>
+                                    <th class="p-1.5 border-r border-slate-200 w-52">Room / Scope</th>
+                                    <th class="p-1.5 text-center border-r border-slate-200 w-28">DEF Non-Ref (฿)</th>
+                                    <th class="p-1.5 text-center border-r border-slate-200 w-32">Min Stay (▸ Arr)</th>
+                                    <th class="p-1.5 text-center border-r border-slate-200 w-28">Max Stay</th>
+                                    <th class="p-1.5 text-center w-40">Restriction Status</th>
                                 </tr>
                             </thead>
                             <tbody id="qb-grid-body" class="divide-y divide-slate-200"></tbody>
@@ -186,49 +186,49 @@
                     </div>
                 </div>
 
-                <!-- QUICK EVENT CURVE & RESTRICTIONS TUNER DRAWER -->
-                <div id="quick-curve-panel" class="hidden bg-pink-50/60 border-b-2 border-pink-300 p-2.5 shrink-0 shadow-md flex-col gap-2 z-30 text-slate-800 max-h-[65vh] overflow-y-auto">
-                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                <!-- QUICK EVENT CURVE & RESTRICTIONS TUNER DRAWER (Unified style.css Light Card) -->
+                <div id="quick-curve-panel" class="hidden bg-white border-b-2 border-slate-300 p-2.5 shrink-0 shadow-sm flex-col gap-2 z-30 text-slate-800 max-h-[65vh] overflow-y-auto">
+                    <div class="flex items-center justify-between gap-2 flex-wrap pb-1.5 border-b border-slate-200">
                         <div class="flex items-center gap-2 flex-wrap">
-                            <span class="text-xs font-black uppercase text-pink-900 flex items-center gap-1.5 mr-1">
+                            <span class="setup-card-title text-pink-700 mr-1">
                                 <i data-lucide="sparkles" size="14" class="text-pink-600"></i> Event Curve & Pyramid
                             </span>
                             <label class="text-[10px] font-black uppercase text-slate-500">Event:</label>
-                            <select id="ct-event-select" onchange="window.handleCurveEventSelect(this.value)" class="input-base !w-auto !py-0.5 !px-2 !text-xs font-bold bg-white text-pink-800 border-pink-300 cursor-pointer"></select>
+                            <select id="ct-event-select" onchange="window.handleCurveEventSelect(this.value)" class="table-input !w-auto !px-2 font-bold text-slate-800 cursor-pointer"></select>
                             
                             <!-- Inline Add / Remove Event Date -->
-                            <div class="flex items-center gap-1 bg-white px-1.5 py-0.5 rounded border border-pink-200">
+                            <div class="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
                                 <input type="date" id="ct-new-event-date" class="text-[11px] font-bold text-slate-700 outline-none bg-transparent">
-                                <button type="button" onclick="window.addCmEventDate()" class="px-1.5 py-0.5 rounded bg-pink-100 hover:bg-pink-200 text-pink-800 font-black text-[9px] uppercase cursor-pointer" title="Add Event Date">+ Event</button>
-                                <button type="button" onclick="window.removeCmEventDate()" class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-700 font-black text-[9px] uppercase cursor-pointer" title="Remove Selected Event Date">Del</button>
+                                <button type="button" onclick="window.addCmEventDate()" class="preset-pill !bg-pink-50 !text-pink-700 !border-pink-200 hover:!bg-pink-100">+ Event</button>
+                                <button type="button" onclick="window.removeCmEventDate()" class="preset-pill hover:!bg-rose-50 hover:!text-rose-700">Del</button>
                             </div>
 
-                            <div class="flex items-center gap-1 bg-white p-0.5 rounded border border-slate-300 text-[10px] font-black">
+                            <div class="flex items-center gap-1 bg-slate-50 p-0.5 rounded border border-slate-200 text-[10px] font-black">
                                 <span class="px-1 text-slate-400 uppercase text-[9px]">PEAK:</span>
-                                <button type="button" onclick="window.adjustCurveTunerPeak(-0.10, true)" class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-rose-100 text-rose-700 cursor-pointer">-10%</button>
-                                <button type="button" onclick="window.adjustCurveTunerPeak(0.10, true)" class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-emerald-100 text-emerald-700 cursor-pointer">+10%</button>
-                                <button type="button" onclick="window.adjustCurveTunerPeak(-500, false)" class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-rose-100 text-rose-700 cursor-pointer">-500฿</button>
-                                <button type="button" onclick="window.adjustCurveTunerPeak(500, false)" class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-emerald-100 text-emerald-700 cursor-pointer">+500฿</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(-0.10, true)" class="preset-pill hover:!bg-rose-50 hover:!text-rose-700">-10%</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(0.10, true)" class="preset-pill hover:!bg-emerald-50 hover:!text-emerald-700">+10%</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(-500, false)" class="preset-pill hover:!bg-rose-50 hover:!text-rose-700">-500฿</button>
+                                <button type="button" onclick="window.adjustCurveTunerPeak(500, false)" class="preset-pill hover:!bg-emerald-50 hover:!text-emerald-700">+500฿</button>
                             </div>
 
-                            <button type="button" onclick="window.applyCurveTuner()" class="bg-pink-600 hover:bg-pink-700 text-white px-3 py-1 rounded font-black text-xs uppercase cursor-pointer shadow-2xs">Apply to Event</button>
-                            <button type="button" onclick="window.saveCurveTunerAsDefault()" class="bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-300 px-2.5 py-1 rounded font-black text-xs uppercase cursor-pointer" title="Save this curve & pyramid as default baseline">Save Default</button>
+                            <button type="button" onclick="window.applyCurveTuner()" class="btn-setup-add !bg-pink-600 hover:!bg-pink-700 !py-1 !px-3">Apply to Event</button>
+                            <button type="button" onclick="window.saveCurveTunerAsDefault()" class="btn-setup-prev !py-1 !px-2.5" title="Save this curve & pyramid as default baseline">Save Default</button>
                         </div>
-                        <button type="button" onclick="window.toggleCurveTuner(true)" class="text-slate-400 hover:text-slate-800 text-base font-black cursor-pointer px-1">&times;</button>
+                        <button type="button" onclick="window.toggleCurveTuner(true)" class="btn-setup-prev !py-0.5 !px-2 text-sm leading-none">&times;</button>
                     </div>
 
                     <!-- 1. Peak Pricing Curve -->
-                    <div class="overflow-auto rounded border border-pink-200 bg-white shadow-2xs">
+                    <div class="overflow-auto rounded border border-slate-200 bg-white">
                         <table class="w-full text-center border-collapse text-xs whitespace-nowrap">
-                            <thead class="bg-slate-800 text-white text-[9px] font-black uppercase">
+                            <thead class="bg-slate-100 text-slate-600 text-[9px] font-black uppercase border-b border-slate-200">
                                 <tr>
-                                    <th class="p-1.5 text-left border-r border-slate-700 w-44">Anchor Segment</th>
-                                    <th class="p-1.5 border-r border-slate-700 w-24">DEF Base</th>
-                                    <th class="p-1.5 border-r border-slate-700 w-24 text-pink-300">DEF Event Pkg</th>
-                                    <th class="p-1.5 border-r border-slate-700 w-24" id="ct-th-m2">EVT -2</th>
-                                    <th class="p-1.5 border-r border-slate-700 w-24" id="ct-th-m1">EVT -1</th>
-                                    <th class="p-1.5 border-r border-slate-700 w-28 text-amber-300 font-black bg-amber-900/40" id="ct-th-0">Peak (0)</th>
-                                    <th class="p-1.5 border-r border-slate-700 w-24" id="ct-th-p1">EVT +1</th>
+                                    <th class="p-1.5 text-left border-r border-slate-200 w-44">Anchor Segment</th>
+                                    <th class="p-1.5 border-r border-slate-200 w-24">DEF Base</th>
+                                    <th class="p-1.5 border-r border-slate-200 w-24 text-pink-700">DEF Event Pkg</th>
+                                    <th class="p-1.5 border-r border-slate-200 w-24" id="ct-th-m2">EVT -2</th>
+                                    <th class="p-1.5 border-r border-slate-200 w-24" id="ct-th-m1">EVT -1</th>
+                                    <th class="p-1.5 border-r border-slate-200 w-28 text-indigo-800 bg-indigo-50" id="ct-th-0">Peak (0)</th>
+                                    <th class="p-1.5 border-r border-slate-200 w-24" id="ct-th-p1">EVT +1</th>
                                     <th class="p-1.5 w-24" id="ct-th-p2">EVT +2</th>
                                 </tr>
                             </thead>
@@ -237,9 +237,9 @@
                     </div>
 
                     <!-- 2. Event Stay Restrictions Pyramid (±6 Days) -->
-                    <div class="overflow-auto rounded border border-indigo-200 bg-white shadow-2xs">
+                    <div class="overflow-auto rounded border border-slate-200 bg-white">
                         <table class="w-full text-center border-collapse text-[11px] whitespace-nowrap">
-                            <thead id="ct-restr-thead" class="bg-indigo-950 text-white text-[9px] font-black uppercase"></thead>
+                            <thead id="ct-restr-thead" class="bg-slate-100 text-slate-600 text-[9px] font-black uppercase border-b border-slate-200"></thead>
                             <tbody id="ct-restr-tbody" class="divide-y divide-slate-200 font-bold"></tbody>
                         </table>
                     </div>
@@ -253,30 +253,30 @@
                     </table>
                 </div>
 
-                <!-- CELL LEGEND FOOTER -->
-                <footer id="cm-calendar-legend" class="bg-slate-900 border-t border-slate-800 text-slate-300 px-3 py-1 flex flex-wrap items-center justify-between gap-2 text-[10px] shrink-0 select-text z-30">
+                <!-- CELL LEGEND FOOTER (Unified Light UI + Full Labels) -->
+                <footer id="cm-calendar-legend" class="bg-white border-t border-slate-300 text-slate-600 px-3 py-1 flex flex-wrap items-center justify-between gap-2 text-[10px] shrink-0 select-text z-30">
                     <div class="flex items-center gap-2 flex-wrap">
-                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Legend:</span>
-                        <div class="flex items-center gap-1 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                            <span class="font-black text-amber-400 text-[9px]">TOP:</span>
-                            <span class="text-slate-200 font-bold">Min | Max</span>
+                        <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Cell Guide:</span>
+                        <div class="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            <span class="font-black text-indigo-700 text-[9px]">TOP BOXES:</span>
+                            <span class="font-bold text-slate-700">Left = Min Nights (<code>3▸</code> = Min on Arrival; double-click to toggle) | Right = Max Nights</span>
                         </div>
-                        <div class="flex items-center gap-1.5 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                            <span class="font-black text-indigo-400 text-[9px]">PILL:</span>
-                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-slate-700 text-slate-300">OPEN</span>
-                            <span class="text-slate-500">&rarr;</span>
-                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900">CTA</span>
-                            <span class="text-slate-500">&rarr;</span>
-                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900">CTD</span>
-                            <span class="text-slate-500">&rarr;</span>
-                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900">CTB</span>
-                            <span class="text-slate-500">&rarr;</span>
-                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white">STOP</span>
+                        <div class="flex items-center gap-1.5 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex-wrap">
+                            <span class="font-black text-indigo-700 text-[9px]">BOTTOM PILL (CLICK TO CYCLE):</span>
+                            <span class="font-bold text-slate-600">• Open</span>
+                            <span class="text-slate-400">|</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900">CTA</span><span>= Closed to Arrival</span>
+                            <span class="text-slate-400">|</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900">CTD</span><span>= Closed to Departure</span>
+                            <span class="text-slate-400">|</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900">CTB</span><span>= Closed to Both</span>
+                            <span class="text-slate-400">|</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white">STOP</span><span>= Stop Sell</span>
                         </div>
                     </div>
-                    <div class="flex items-center gap-1.5 text-amber-300 font-bold text-[9px]">
-                        <span class="w-2.5 h-2.5 bg-amber-100 border border-amber-400 rounded-xs inline-block"></span>
-                        <span>Custom Override (Double-click to unlock/revert)</span>
+                    <div class="flex items-center gap-1.5 text-amber-800 font-bold text-[9.5px] bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        <span class="w-2.5 h-2.5 bg-amber-200 border border-amber-500 rounded-xs inline-block"></span>
+                        <span>Manual Override (Double-click cell to revert)</span>
                     </div>
                 </footer>
             </div>
