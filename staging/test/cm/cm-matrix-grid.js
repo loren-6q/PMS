@@ -10,12 +10,24 @@ import { resolveChannelCode } from '../core/channels.js';
 import { rippleDay, applyMath, computeDynamicPlanRate, getNearestEvent } from './cm-ripple.js';
 
 export let roomLevel = 'all';      // 'anchors' | 'all' | 'dorms' | 'privates'
-export let rateLevel = 'min';      // 'min' | 'default' | 'all'
+export let rateLevel = 'min';      // 'min' | 'direct' | 'default' | 'all'
 export let showEventRows = true;   // toggled via EVENTS button when Setup enables event rates
+export let highlightGaps = false;  // toggled via GAPS button in toolbar
 export let viewDensity = 'full';   // 'avail' | 'price' | 'compact' | 'minmax' | 'full'
 export let channelPreviewFilter = 'ALL';
 export const expandedRooms = new Set();
 export const daysToRender = 42;
+
+export function toggleHighlightGaps() {
+    highlightGaps = !highlightGaps;
+    const btn = document.getElementById('btn-toggle-gaps');
+    if (btn) {
+        btn.className = highlightGaps
+            ? "view-btn !bg-rose-600 !text-white !border-rose-600 cursor-pointer font-black text-xs px-2 py-1 rounded flex items-center gap-1 shadow-2xs"
+            : "view-btn !bg-slate-100 text-slate-600 cursor-pointer font-black text-xs px-2 py-1 rounded border border-slate-300 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-1";
+    }
+    renderRateMatrix();
+}
 
 function getClassifiedRooms() {
     const all = [...(window.roomTypes || [])];
@@ -158,13 +170,13 @@ export function calculateLiveInventory() {
 export function handleAvailEdit(dateStr, room, val) {
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     window.masterPricing.timeline[dateStr].otaOverrides = window.masterPricing.timeline[dateStr].otaOverrides || {};
-    if (val === "" || isNaN(parseInt(val, 10))) {
+    if (val === "" || isNaN(parseFloat(val))) {
         delete window.masterPricing.timeline[dateStr].otaOverrides[`${room}_avail`];
     } else {
         window.masterPricing.timeline[dateStr].otaOverrides[`${room}_avail`] = parseInt(val, 10);
     }
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
+    if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'avail', `ROOM:${room}`);
+    else window.dirtyDates.add(dateStr);
     window.markUnsavedChanges();
     renderRateMatrix();
 }
@@ -260,10 +272,9 @@ export function handleCellPriceChange(e, dateStr, room) {
         }
     }
 
-    window.dirtyDates = window.dirtyDates || new Set();
-    window.syncedDates = window.syncedDates || new Set();
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
+    if (typeof window.markCmDirty === 'function') {
+        window.markCmDirty(dateStr, 'rate', window.editMode === 'ripple' ? '*' : `ROOM:${room}`);
+    }
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
 }
@@ -496,7 +507,7 @@ export function setRoomLevel(level) {
 export function setRateLevel(level) {
     rateLevel = level;
     window.rateLevel = level;
-    ['min', 'default', 'all'].forEach(l => {
+    ['min', 'direct', 'default', 'all'].forEach(l => {
         const btn = document.getElementById(`ratelevel-${l}`);
         if (btn) {
             btn.className = l === level
@@ -584,7 +595,14 @@ export function renderRateMatrix() {
         if (isEvents && minDiff === 0) highlight = 'evt-peak !bg-amber-500 text-slate-900';
         else if (isEvents && Math.abs(minDiff) <= 2) highlight = 'bg-amber-400 text-amber-900 border-amber-500';
 
-        trHead += `<th class="px-0 py-0.5 border-b ${highlight} text-center cursor-pointer" style="width: 42px; min-width: 42px; max-width: 42px;" onclick="window.cycleUnifiedRestriction('${dateStr}', 'GLOBAL')" title="Click to cycle GLOBAL CTA/CTD/STOP">
+        const headerClick = (isEvents && minDiff === 0)
+            ? `window.openCurveTunerForDate('${dateStr}')`
+            : `window.cycleUnifiedRestriction('${dateStr}', 'GLOBAL')`;
+        const headerTitle = (isEvents && minDiff === 0)
+            ? 'Peak Event Date — Click to open Event Curve Tuner'
+            : 'Click to cycle GLOBAL CTA/CTD/STOP';
+
+        trHead += `<th class="px-0 py-0.5 border-b ${highlight} text-center cursor-pointer" style="width: 42px; min-width: 42px; max-width: 42px;" onclick="${headerClick}" title="${headerTitle}">
             <span class="block text-[8px] font-bold uppercase leading-none">${mNames[cur.getUTCMonth()]}</span>
             <span class="block text-[11px] font-black leading-tight mt-0.5">${cur.getUTCDate()}</span>
         </th>`;
@@ -656,7 +674,7 @@ export function renderRateMatrix() {
             if (activePreviewFilter !== 'ALL' && chanCode !== activePreviewFilter) return false;
 
             // Rate level filter
-            if (effectiveRateLevel === 'min') return false;
+            if (effectiveRateLevel === 'min' || effectiveRateLevel === 'direct') return false;
             if (effectiveRateLevel === 'default') return chanCode === 'DEF';
             return true;
         });
@@ -764,10 +782,13 @@ export function renderRateMatrix() {
         trRate += `</tr>`;
         allRowsHtml += trRate;
 
-        // C. DEF Event Non-Ref Row (Rendered ONLY when Events layer is ON)
+        // C. DEF Event Non-Ref Row (Matches all VIEW density filters: Avail / Price / Compact / MinMax / Full)
         if (renderEventsLayer && density !== 'avail') {
+            const showTopEvt = density === 'minmax' || density === 'full';
+            const showBottomEvt = density === 'full';
+
             let trEvt = `<tr class="${groupClass} border-b-2 border-slate-400 bg-pink-50/40">
-                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 bg-pink-50/90">
+                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 !bg-pink-50">
                     <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
                         <span class="text-[10px] font-black text-pink-800 truncate">DEF Event Non-Ref</span>
                         <span class="text-[7px] font-black uppercase text-pink-700 bg-pink-100 px-1 py-0.5 rounded border border-pink-300 shrink-0">DEF EVT</span>
@@ -778,18 +799,90 @@ export function renderRateMatrix() {
                 const cur = new Date(dObj);
                 cur.setUTCDate(cur.getUTCDate() + i);
                 const dateStr = getLocalYMD(cur);
-                const rData = window.masterPricing?.timeline?.[dateStr]?.[room] || {};
+                const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
+                const rData = dayObj[room] || {};
                 const displayFmp = rData.fmp !== undefined && rData.fmp !== "" ? rData.fmp : "";
                 const isPinnedFmp = !!rData.isOverride?.fmp;
 
-                trEvt += `<td class="p-0 border-r border-pink-200 text-center relative ${isPinnedFmp ? 'rate-cell-pinned !bg-amber-100' : ''}" style="width: 42px; min-width: 42px; max-width: 42px;">
-                    <div class="h-[22px] flex items-center justify-center">
-                        <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-pink-800 px-0" value="${displayFmp}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${room}', 'fmp')" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp', this.value, true)">
+                const evtMinVal = rData.evt_min !== undefined && rData.evt_min !== ""
+                    ? rData.evt_min
+                    : (rData.evt_min_arr ? `${rData.evt_min_arr}▸` : (dayObj.evtRestrictions?.min || (dayObj.evtRestrictions?.min_arr ? `${dayObj.evtRestrictions.min_arr}▸` : "")));
+                const evtMaxVal = rData.evt_max !== undefined && rData.evt_max !== "" ? rData.evt_max : (dayObj.evtRestrictions?.max || "");
+                const evtCta = rData.evt_cta !== undefined ? !!rData.evt_cta : !!dayObj.evtRestrictions?.cta;
+                const evtCtd = rData.evt_ctd !== undefined ? !!rData.evt_ctd : !!dayObj.evtRestrictions?.ctd;
+                const evtStopped = rData.evt_stop !== undefined ? !!(rData.evt_stop || rData.evt_stopSell) : !!dayObj.evtRestrictions?.stop;
+                const evtPillHtml = getUnifiedRestrictionBadgeHtml(evtCta, evtCtd, evtStopped);
+
+                trEvt += `<td class="p-0 border-r border-pink-200 text-center relative ${evtStopped ? 'rate-cell-stopped' : (isPinnedFmp ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;">
+                    ${showTopEvt ? `
+                    <div class="flex items-center w-full h-[15px] border-b ${evtStopped ? 'border-rose-700 bg-transparent' : 'border-pink-200 bg-white/60'} overflow-hidden leading-none">
+                        <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-pink-800 outline-none p-0" value="${evtMinVal}" placeholder="Min" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value, true)">
+                        <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-pink-500 outline-none p-0 border-l ${evtStopped ? 'border-rose-700' : 'border-pink-200'}" value="${evtMaxVal}" placeholder="Max" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value, true)">
+                    </div>` : ''}
+
+                    <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
+                        <input type="number" data-fill-room="${room}" data-fill-field="fmp" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-pink-800 px-0" value="${displayFmp}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${room}', 'fmp')" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp', this.value, true)">
                     </div>
+
+                    ${showBottomEvt ? `
+                    <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${evtStopped ? 'border-rose-700' : 'border-pink-200/70'}">
+                        <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${room}', null, true)" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle Event restrictions">
+                            ${evtPillHtml}
+                        </button>
+                    </div>` : ''}
                 </td>`;
             }
             trEvt += `</tr>`;
             allRowsHtml += trEvt;
+        }
+
+        // C2. Direct (WEB) Row (Shown when RATES is Direct, Default, or All)
+        if ((effectiveRateLevel === 'direct' || effectiveRateLevel === 'default' || effectiveRateLevel === 'all') && density !== 'avail') {
+            const showTopDir = density === 'minmax' || density === 'full';
+            const showBottomDir = density === 'full';
+
+            let trDir = `<tr class="bg-emerald-50/50 border-b border-emerald-200">
+                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 !bg-emerald-50">
+                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
+                        <span class="text-[10px] font-black text-emerald-900 truncate">Direct Rate</span>
+                        <span class="text-[7px] font-black uppercase text-white bg-emerald-600 px-1 py-0.5 rounded shrink-0">DIR</span>
+                    </div>
+                </td>`;
+
+            for (let i = 0; i < daysToRender; i++) {
+                const cur = new Date(dObj);
+                cur.setUTCDate(cur.getUTCDate() + i);
+                const dateStr = getLocalYMD(cur);
+                const rData = window.masterPricing?.timeline?.[dateStr]?.[room] || {};
+                const displayDir = rData.dir_std !== undefined && rData.dir_std !== "" ? rData.dir_std : (rData.std ?? "");
+                const isPinnedDir = rData.dir_std !== undefined && rData.dir_std !== "";
+
+                const dirMinVal = rData.dir_min !== undefined && rData.dir_min !== "" ? rData.dir_min : (rData.dir_min_arr ? `${rData.dir_min_arr}▸` : "");
+                const dirMaxVal = rData.dir_max !== undefined && rData.dir_max !== "" ? rData.dir_max : "";
+                const dirStopped = !!(rData.dir_stop || rData.dir_stopSell);
+                const dirPillHtml = getUnifiedRestrictionBadgeHtml(rData.dir_cta, rData.dir_ctd, dirStopped);
+
+                trDir += `<td class="p-0 border-r border-emerald-200 text-center relative ${dirStopped ? 'rate-cell-stopped' : (isPinnedDir ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;">
+                    ${showTopDir ? `
+                    <div class="flex items-center w-full h-[15px] border-b ${dirStopped ? 'border-rose-700 bg-transparent' : 'border-emerald-200 bg-white/70'} overflow-hidden leading-none">
+                        <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-emerald-800 outline-none p-0" value="${dirMinVal}" placeholder="Min" onchange="window.handleDirectEdit('${dateStr}', '${room}', 'min', this.value)">
+                        <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-emerald-600 outline-none p-0 border-l ${dirStopped ? 'border-rose-700' : 'border-emerald-200'}" value="${dirMaxVal}" placeholder="Max" onchange="window.handleDirectEdit('${dateStr}', '${room}', 'max', this.value)">
+                    </div>` : ''}
+
+                    <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
+                        <input type="number" data-fill-room="${room}" data-fill-field="dir_std" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-emerald-900 px-0" value="${displayDir}" onfocus="this.select()" onchange="window.handleDirectEdit('${dateStr}', '${room}', 'rate', this.value)">
+                    </div>
+
+                    ${showBottomDir ? `
+                    <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${dirStopped ? 'border-rose-700' : 'border-emerald-200/70'}">
+                        <button type="button" onclick="event.stopPropagation(); window.cycleDirectRestriction('${dateStr}', '${room}')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Direct booking restriction (independent of OTAs)">
+                            ${dirPillHtml}
+                        </button>
+                    </div>` : ''}
+                </td>`;
+            }
+            trDir += `</tr>`;
+            allRowsHtml += trDir;
         }
 
         // D. Mapped Rate Plans (Filtered by RATES level & EVENTS toggle)
@@ -893,10 +986,125 @@ export function renderRateMatrix() {
     }
 }
 
-// Horizontal Tab Navigation across Date Columns
-if (typeof document !== 'undefined') {
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Tab') return;
+export function handleDirectEdit(dateStr, room, field, val) {
+        window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+        const dObj = window.masterPricing.timeline[dateStr];
+        dObj[room] = dObj[room] || { isOverride: {} };
+        const rData = dObj[room];
+
+        if (field === 'rate') {
+            if (val === "" || isNaN(parseFloat(val))) delete rData.dir_std;
+            else rData.dir_std = roundCurrency(parseFloat(val));
+        } else if (field === 'min') {
+            const clean = String(val).trim();
+            if (!clean || clean === '-') { delete rData.dir_min; delete rData.dir_min_arr; }
+            else if (/(\d+)\s*(a|>|▸)/i.test(clean)) { rData.dir_min_arr = parseInt(clean.match(/(\d+)/)[1], 10); delete rData.dir_min; }
+            else { rData.dir_min = parseInt(clean.match(/(\d+)/)[1], 10); delete rData.dir_min_arr; }
+        } else if (field === 'max') {
+            if (!val || val === '-') delete rData.dir_max;
+            else rData.dir_max = parseInt(val, 10);
+        }
+        if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
+        renderRateMatrix();
+    }
+
+    export function cycleDirectRestriction(dateStr, room) {
+        window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+        const dObj = window.masterPricing.timeline[dateStr];
+        dObj[room] = dObj[room] || { isOverride: {} };
+        const rData = dObj[room];
+
+        const cta = !!rData.dir_cta;
+        const ctd = !!rData.dir_ctd;
+        const stop = !!(rData.dir_stop || rData.dir_stopSell);
+
+        if (!cta && !ctd && !stop) { rData.dir_cta = true; rData.dir_ctd = false; rData.dir_stop = false; }
+        else if (cta && !ctd && !stop) { rData.dir_cta = false; rData.dir_ctd = true; rData.dir_stop = false; }
+        else if (!cta && ctd && !stop) { rData.dir_cta = true; rData.dir_ctd = true; rData.dir_stop = false; }
+        else if (cta && ctd && !stop) { rData.dir_cta = false; rData.dir_ctd = false; rData.dir_stop = true; }
+        else { rData.dir_cta = false; rData.dir_ctd = false; rData.dir_stop = false; }
+
+        if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
+        renderRateMatrix();
+    }
+
+    // Progressive Multi-Tap Ctrl + RightArrow Fill-Right + Horizontal Tab Navigation
+    let lastFillKey = '';
+    let lastFillTime = 0;
+    let fillTapStage = 0;
+
+    if (typeof document !== 'undefined') {
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowRight') {
+                const target = document.activeElement;
+                if (!target || target.tagName !== 'INPUT') return;
+                const room = target.dataset.fillRoom;
+                const field = target.dataset.fillField;
+                const startDate = target.dataset.fillDate;
+                if (!room || !field || !startDate) return;
+
+                e.preventDefault();
+                const now = Date.now();
+                const key = `${room}|${field}|${startDate}`;
+                const baseStep = parseInt(window.pricingRules?.fillRightDays, 10) || 7;
+                const steps = Array.from(new Set([baseStep, 14, 30, 90])).sort((a, b) => a - b);
+
+                if (key === lastFillKey && (now - lastFillTime) < 1800) {
+                    fillTapStage = (fillTapStage + 1) % steps.length;
+                } else {
+                    fillTapStage = 0;
+                }
+                lastFillKey = key;
+                lastFillTime = now;
+
+                const daysForward = steps[fillTapStage];
+                const rawVal = target.value;
+                const numVal = rawVal !== '' && !isNaN(parseFloat(rawVal)) ? roundCurrency(parseFloat(rawVal)) : '';
+                const startMs = parseYMD(startDate);
+
+                for (let i = 0; i <= daysForward; i++) {
+                    const dStr = getLocalYMD(new Date(startMs + (i * 86400000)));
+                    window.masterPricing.timeline[dStr] = window.masterPricing.timeline[dStr] || {};
+                    window.masterPricing.timeline[dStr][room] = window.masterPricing.timeline[dStr][room] || { isOverride: {} };
+                    const cell = window.masterPricing.timeline[dStr][room];
+                    cell.isOverride = cell.isOverride || {};
+
+                    if (numVal === '') {
+                        delete cell[field];
+                        delete cell.isOverride[field];
+                    } else {
+                        cell[field] = numVal;
+                        cell.isOverride[field] = true;
+                        if (window.editMode === 'ripple' && (field === 'std' || field === 'fmp')) {
+                            rippleDay(dStr, room, true);
+                        }
+                    }
+                    if (typeof window.markCmDirty === 'function' && field !== 'dir_std') {
+                        window.markCmDirty(dStr, 'rate', window.editMode === 'ripple' ? '*' : `ROOM:${room}`);
+                    }
+                }
+
+                if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
+                renderRateMatrix();
+
+                const nextStep = steps[(fillTapStage + 1) % steps.length];
+                const tt = document.getElementById('cm-tooltip');
+                if (tt) {
+                    tt.innerText = `Filled forward +${daysForward} days (Press Ctrl+→ again for +${nextStep}d)`;
+                    tt.classList.remove('hidden');
+                    tt.style.left = '50%';
+                    tt.style.top = '54px';
+                    tt.style.transform = 'translateX(-50%)';
+                    clearTimeout(window._fillToastTimer);
+                    window._fillToastTimer = setTimeout(() => {
+                        tt.classList.add('hidden');
+                        tt.style.transform = '';
+                    }, 2200);
+                }
+                return;
+            }
+
+            if (e.key !== 'Tab') return;
         const target = e.target;
         if (!target || target.tagName !== 'INPUT') return;
 
