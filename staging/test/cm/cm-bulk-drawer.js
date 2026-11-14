@@ -303,6 +303,72 @@ export function applyBulkGrid(isClear = false) {
     customAlert("Bulk Update", isClear ? "Overrides cleared across the selected range." : `Applied updates from ${s} to ${e}.`);
 }
 
+export function runRippleRecovery(mode = 'blanks') {
+    const s = document.getElementById('qb-start')?.value;
+    const e = document.getElementById('qb-end')?.value;
+    if (!s || !e) return customAlert("Validation Error", "Please choose a valid Start and End date range.");
+    if (s > e) return customAlert("Validation Error", "End date must be on or after Start date.");
+
+    window.masterPricing = window.masterPricing || { timeline: {}, relationships: [] };
+    window.masterPricing.timeline = window.masterPricing.timeline || {};
+    const allRooms = window.roomTypes || [];
+    const { anchorP, anchorD } = getResolvedAnchors();
+    const sU = parseYMD(s);
+    const eU = parseYMD(e);
+
+    let updatedCount = 0;
+
+    for (let d = sU; d <= eU; d += 86400000) {
+        const dateStr = getLocalYMD(new Date(d));
+        const dObj = window.masterPricing.timeline[dateStr];
+        if (!dObj) continue;
+
+        if (mode === 'blanks') {
+            // Snapshot existing non-blank values so we never overwrite them
+            const preserved = {};
+            allRooms.forEach(rt => {
+                const cur = dObj[rt];
+                if (cur && cur.std !== undefined && cur.std !== "") preserved[rt] = { ...cur };
+            });
+
+            // Find any populated room to propagate from
+            const seeds = Array.from(new Set([anchorP, anchorD, ...Object.keys(preserved)].filter(Boolean)));
+            seeds.forEach(seed => {
+                if (preserved[seed]) rippleDay(dateStr, seed, true);
+            });
+
+            // Restore any room that already had a price, counting newly filled rooms
+            allRooms.forEach(rt => {
+                if (preserved[rt]) {
+                    dObj[rt] = preserved[rt];
+                } else if (dObj[rt] && dObj[rt].std !== undefined && dObj[rt].std !== "") {
+                    updatedCount++;
+                    if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', `ROOM:${rt}`);
+                }
+            });
+        } else {
+            // RE-RIPPLE ALL: Recalculate all linked targets from Anchors
+            [anchorP, anchorD].filter(Boolean).forEach(anc => {
+                if (dObj[anc] && (dObj[anc].std !== undefined || dObj[anc].fmp !== undefined)) {
+                    rippleDay(dateStr, anc, false);
+                    updatedCount++;
+                    if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', '*');
+                }
+            });
+        }
+    }
+
+    if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
+    renderRateMatrix();
+    toggleQuickBulk(true);
+    customAlert(
+        mode === 'blanks' ? "Fill Blanks Complete" : "Re-Ripple Complete",
+        mode === 'blanks'
+            ? `Populated ${updatedCount} missing room cell(s) from ${s} to ${e}.`
+            : `Recalculated linked rooms across ${updatedCount} anchor date(s) from ${s} to ${e}.`
+    );
+}
+
 // --- 2. QUICK EVENT CURVE & PYRAMID TUNER CONTROLLERS ---
 
 export function toggleCurveTuner(forceClose = false, targetDateStr = null) {
@@ -729,6 +795,7 @@ if (typeof window !== 'undefined') {
     window.cycleBulkRowPill = cycleBulkRowPill;
     window.renderBulkGrid = renderBulkGrid;
     window.applyBulkGrid = applyBulkGrid;
+    window.runRippleRecovery = runRippleRecovery;
     window.toggleCurveTuner = toggleCurveTuner;
     window.openCurveTunerForDate = openCurveTunerForDate;
     window.addCmEventDate = addCmEventDate;
