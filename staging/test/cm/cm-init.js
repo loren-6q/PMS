@@ -67,15 +67,26 @@ export async function initCm() {
         window.syncedDates = new Set();
         window.editMode = 'ripple';
 
-        // Load Pricing Matrix from Firestore
+        // Load Pricing Matrix from Firestore (safely parse if stored as JSON string)
+        const parseIfJson = (val, fallback) => {
+            if (typeof val === 'string') {
+                try { return JSON.parse(val); } catch (e) { return fallback; }
+            }
+            return val ?? fallback;
+        };
+
         const canonId = toCanonicalPropId(window.currentPropertyId);
         const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`));
         const pData = pricingSnap.exists() ? pricingSnap.data() : {};
 
+        const parsedTimeline = parseIfJson(pData.timeline, {});
+        const parsedPropRels = parseIfJson(activeProp?.masterPricing?.relationships, []);
+        const parsedDocRels = parseIfJson(pData.relationships, []);
+
         window.masterPricing = {
-            timeline: pData.timeline || {},
-            relationships: (activeProp?.masterPricing?.relationships?.length ? activeProp.masterPricing.relationships : pData.relationships) || [],
-            baseRates: pData.baseRates || {}
+            timeline: (parsedTimeline && typeof parsedTimeline === 'object') ? parsedTimeline : {},
+            relationships: (Array.isArray(parsedPropRels) && parsedPropRels.length ? parsedPropRels : parsedDocRels) || [],
+            baseRates: parseIfJson(pData.baseRates, {})
         };
 
         const mergedRules = {
