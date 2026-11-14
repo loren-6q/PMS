@@ -24,7 +24,7 @@ export function dismissAuditIssue(encodedId, containerId = 'cm-health-banner', c
     const set = getDismissedAuditIds();
     set.add(issueId);
     localStorage.setItem(getDismissedStorageKey(), JSON.stringify(Array.from(set)));
-    renderHealthAuditBanner(containerId, context);
+    renderHealthAuditBanner(containerId, context, true);
 }
 
 export function resetDismissedAuditIssues(containerId = 'cm-health-banner', context = 'cm') {
@@ -205,9 +205,12 @@ export function runSystemHealthAudit() {
     return issues;
 }
 
-export function renderHealthAuditBanner(containerId, context = 'cm') {
+export function renderHealthAuditBanner(containerId, context = 'cm', keepOpen = false) {
     const el = document.getElementById(containerId);
     if (!el) return [];
+
+    const existingDetails = document.getElementById(`${containerId}-details`);
+    const shouldStayOpen = keepOpen || !!(existingDetails && !existingDetails.classList.contains('hidden'));
 
     const allIssues = runSystemHealthAudit();
     const dismissed = getDismissedAuditIds();
@@ -275,7 +278,7 @@ export function renderHealthAuditBanner(containerId, context = 'cm') {
             </div>
             <button type="button" onclick="document.getElementById('${containerId}').classList.add('hidden')" class="text-slate-500 hover:text-slate-900 text-[10px] font-black uppercase cursor-pointer px-1" title="Hide bar for this session (returns on refresh)">Hide &times;</button>
         </div>
-        <div id="${detailsId}" class="hidden mt-1.5 max-h-40 overflow-y-auto border-t border-black/10 pt-1">${rowsHtml}</div>
+        <div id="${detailsId}" class="${shouldStayOpen ? '' : 'hidden '}mt-1.5 max-h-40 overflow-y-auto border-t border-black/10 pt-1">${rowsHtml}</div>
     `;
 
     if (window.lucide) window.lucide.createIcons();
