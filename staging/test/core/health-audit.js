@@ -8,14 +8,26 @@ import { resolveChannelCode } from './channels.js';
 export function runSystemHealthAudit() {
     const issues = [];
 
-    const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
-    const activeCats = Array.from(new Set(defs.map(r => (r.category || '').trim()).filter(Boolean)));
+    const rawDefs = (window.roomDefinitions && window.roomDefinitions.length)
+        ? window.roomDefinitions
+        : (window.currentPropertyConfig?.roomDefinitions || []);
+    const defs = rawDefs.filter(r => !r.inactive);
+    const activeRooms = (window.hotelRooms || []).filter(r => !r.inactive);
+
+    const catCandidates = [
+        ...defs.map(r => (r.category || '').trim()),
+        ...activeRooms.map(r => (r.category || r.type || '').trim()),
+        ...(window.roomTypes || []).map(c => String(c || '').trim())
+    ].filter(Boolean);
+
+    const activeCats = Array.from(new Set(catCandidates));
     const catSet = new Set(activeCats.map(c => c.toLowerCase()));
     const matchActiveCat = (name) => activeCats.find(c => c.toLowerCase() === String(name || '').trim().toLowerCase()) || null;
 
-    const dormCats = Array.from(new Set(defs.filter(r => r.rule && r.rule !== 'private').map(r => r.category.trim())));
-    const privCats = Array.from(new Set(defs.filter(r => r.rule === 'private').map(r => r.category.trim())));
-
+    const dormSource = defs.length ? defs : activeRooms;
+    const dormCats = Array.from(new Set(dormSource.filter(r => r.rule && r.rule !== 'private').map(r => (r.category || r.type || '').trim()).filter(Boolean)));
+    const privCats = Array.from(new Set(dormSource.filter(r => r.rule === 'private').map(r => (r.category || r.type || '').trim()).filter(Boolean)));
+    
     const rules = window.pricingRules || {};
     const rels = window.masterPricing?.relationships || rules.relationships || [];
     const cMap = window.channexMap || [];
@@ -194,16 +206,20 @@ export function renderHealthAuditBanner(containerId, context = 'cm') {
         </div>`;
     }).join('');
 
-    el.className = `${hasErrors ? 'bg-rose-50 border-rose-300' : 'bg-amber-50 border-amber-300'} border-b px-3 py-1.5 shrink-0 z-30`;
+    const detailsId = `${containerId}-details`;
+    el.className = `${hasErrors ? 'bg-rose-50 border-rose-300' : 'bg-amber-50 border-amber-300'} border-b px-3 py-1 shrink-0 z-30`;
     el.innerHTML = `
         <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-1.5 text-xs font-black uppercase ${hasErrors ? 'text-rose-900' : 'text-amber-950'}">
-                <i data-lucide="shield-alert" size="14" class="${hasErrors ? 'text-rose-600' : 'text-amber-600'}"></i>
+                <i data-lucide="shield-alert" size="13" class="${hasErrors ? 'text-rose-600' : 'text-amber-600'}"></i>
                 <span>System Health Audit: ${issues.length} Issue${issues.length > 1 ? 's' : ''} Detected</span>
+                <button type="button" onclick="document.getElementById('${detailsId}').classList.toggle('hidden')" class="ml-1 px-2 py-0.2 rounded bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-[9.5px] font-black uppercase cursor-pointer">
+                    Show / Hide Details
+                </button>
             </div>
-            <button type="button" onclick="document.getElementById('${containerId}').classList.add('hidden')" class="text-slate-500 hover:text-slate-900 text-xs font-black uppercase cursor-pointer px-1">Dismiss &times;</button>
+            <button type="button" onclick="document.getElementById('${containerId}').classList.add('hidden')" class="text-slate-500 hover:text-slate-900 text-[10px] font-black uppercase cursor-pointer px-1">Dismiss &times;</button>
         </div>
-        <div class="mt-1">${rowsHtml}</div>
+        <div id="${detailsId}" class="hidden mt-1.5 max-h-40 overflow-y-auto border-t border-black/10 pt-1">${rowsHtml}</div>
     `;
 
     if (window.lucide) window.lucide.createIcons();
