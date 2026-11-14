@@ -48,9 +48,13 @@ export function compileRoomsFromDefinitions() {
         const rule = def.rule || 'private';
         const floor = def.floor || '1';
 
-        // Guardrail: Ensure every room has an immutable permanent ID
+        // Guardrail: Ensure every room and category has an immutable permanent ID
         if (!def.id || def.id.startsWith('room_')) {
             def.id = (rawName || `rm_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 5)}`).trim();
+        }
+        if (!def.catId) {
+            const siblingWithId = definitions.find(d => d.catId && (d.category || '').trim().toLowerCase() === cat.toLowerCase());
+            def.catId = siblingWithId ? siblingWithId.catId : `cat_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 5)}`;
         }
         const baseId = def.id.trim();
         const isInactive = !!def.inactive;
@@ -172,7 +176,7 @@ export function renderRoomDefinitionsTable() {
                 </div>
             </td>
             <td><input type="text" value="${room.name || ''}" class="table-input font-bold" onchange="window.roomDefinitions[${idx}].name = this.value.trim(); window.compileRoomsFromDefinitions();"></td>
-            <td><input type="text" list="setup-category-datalist" value="${room.category || ''}" class="table-input font-bold" onchange="window.roomDefinitions[${idx}].category = this.value; window.renderRoomDefinitionsTable();"></td>
+            <td><input type="text" list="setup-category-datalist" value="${room.category || ''}" class="table-input font-bold" onchange="window.handleCategoryRename(${idx}, this.value)"></td>
             <td class="text-center"><input type="number" min="1" max="60" value="${room.beds || room.units || 1}" class="table-input text-center font-black" onchange="const v = parseInt(this.value, 10) || 1; window.roomDefinitions[${idx}].beds = v; window.roomDefinitions[${idx}].units = v; window.compileRoomsFromDefinitions();"></td>
             <td class="text-center"><input type="text" value="${room.floor || '1'}" class="table-input text-center font-bold" onchange="window.roomDefinitions[${idx}].floor = this.value"></td>
             <td>
@@ -735,6 +739,83 @@ export function executeWizardGenerate() {
     customAlert("Rooms Created", `Added ${names.length} room(s) under "${cat}".`);
 }
 
+export function handleCategoryRename(idx, rawNewCat) {
+    const defs = window.roomDefinitions || [];
+    const targetDef = defs[idx];
+    if (!targetDef) return;
+
+    const oldCat = (targetDef.category || '').trim();
+    const newCat = (rawNewCat || '').trim();
+    if (!newCat || oldCat === newCat) {
+        renderRoomDefinitionsTable();
+        return;
+    }
+
+    // Update all rooms sharing this category (or catId)
+    defs.forEach(d => {
+        if ((d.category || '').trim() === oldCat || (targetDef.catId && d.catId === targetDef.catId)) {
+            d.category = newCat;
+            if (targetDef.catId) d.catId = targetDef.catId;
+        }
+    });
+
+    // Cascade rename across Channex Room & Rate Plan Mappings
+    (window.channexMap || []).forEach(m => {
+        if ((m.pmsCategory || '').trim() === oldCat) {
+            m.pmsCategory = newCat;
+            if (targetDef.catId) m.catId = targetDef.catId;
+        }
+    });
+    (window.channexRateMap || []).forEach(rp => {
+        if ((rp.pmsCategory || '').trim() === oldCat) {
+            rp.pmsCategory = newCat;
+            if (targetDef.catId) rp.catId = targetDef.catId;
+        }
+    });
+
+    // Cascade rename across Pricing Anchors & Ripple Relationships
+    if (window.pricingRules) {
+        if (window.pricingRules.anchorPrivate === oldCat) window.pricingRules.anchorPrivate = newCat;
+        if (window.pricingRules.anchorDorm === oldCat) window.pricingRules.anchorDorm = newCat;
+    }
+    (window.masterPricing?.relationships || []).forEach(rel => {
+        if (rel.anchor === oldCat) rel.anchor = newCat;
+        if (rel.target === oldCat) rel.target = newCat;
+    });
+
+    // Cascade rename across Promo Scopes
+    (window.promoRules || []).forEach(pr => {
+        if (Array.isArray(pr.scopes)) {
+            pr.scopes = pr.scopes.map(s => s === oldCat ? newCat : s);
+            pr.scope = pr.scopes.includes('ALL') ? 'ALL' : pr.scopes.join(', ');
+        } else if (pr.scope === oldCat) {
+            pr.scope = newCat;
+        }
+    });
+
+    // Cascade rename across Pricing Timeline Dates
+    if (window.masterPricing?.timeline && typeof window.masterPricing.timeline === 'object') {
+        Object.values(window.masterPricing.timeline).forEach(dayObj => {
+            if (dayObj && typeof dayObj === 'object') {
+                if (dayObj[oldCat] !== undefined) {
+                    dayObj[newCat] = dayObj[oldCat];
+                    delete dayObj[oldCat];
+                }
+                if (dayObj.otaOverrides && dayObj.otaOverrides[`${oldCat}_avail`] !== undefined) {
+                    dayObj.otaOverrides[`${newCat}_avail`] = dayObj.otaOverrides[`${oldCat}_avail`];
+                    delete dayObj.otaOverrides[`${oldCat}_avail`];
+                }
+            }
+        });
+        window._timelineMigratedByRename = true;
+    }
+
+    renderRoomDefinitionsTable();
+    if (typeof window.renderHealthAuditBanner === 'function') {
+        window.renderHealthAuditBanner('setup-health-banner', 'setup');
+    }
+}
+
 export function clearAllRoomDefs() {
     const titleEl = document.getElementById('delete-room-confirm-title');
     const msgEl = document.getElementById('delete-room-confirm-msg');
@@ -760,6 +841,7 @@ export function clearAllRoomDefs() {
 
 if (typeof window !== 'undefined') {
     window.formatDormBedId = formatDormBedId;
+    window.handleCategoryRename = handleCategoryRename;
     window.compileRoomsFromDefinitions = compileRoomsFromDefinitions;
     window.renderRoomDefinitionsTable = renderRoomDefinitionsTable;
     window.moveRoomWithinCategory = moveRoomWithinCategory;
