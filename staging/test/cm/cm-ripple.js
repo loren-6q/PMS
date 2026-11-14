@@ -184,47 +184,67 @@ export function rippleDay(dateStr, startRoom, forceRipple = false) {
     const minDiff = getNearestEvent(dMs);
     const isPeak = (minDiff === 0);
 
+    const allRooms = window.roomTypes || [];
+    const matchRoom = (rawName) => {
+        if (!rawName) return null;
+        const clean = String(rawName).trim().toLowerCase();
+        return allRooms.find(r => r.trim().toLowerCase() === clean) || null;
+    };
+
+    const canonicalStart = matchRoom(startRoom);
+    if (!canonicalStart) return;
+
     const adj = {};
-    (window.roomTypes || []).forEach(r => { adj[r] = []; });
+    allRooms.forEach(r => { adj[r] = []; });
+
     (window.masterPricing.relationships || []).forEach(rel => {
-        if (!rel.anchor || rel.anchor === 'unlinked' || !rel.target) return;
-        if (!adj[rel.anchor]) adj[rel.anchor] = [];
-        if (!adj[rel.target]) adj[rel.target] = [];
-        adj[rel.anchor].push({ to: rel.target, type: rel.type, val: rel.val, typeFmp: rel.typeFmp, valFmp: rel.valFmp, isReverse: false });
-        adj[rel.target].push({ to: rel.anchor, type: rel.type, val: rel.val, typeFmp: rel.typeFmp, valFmp: rel.valFmp, isReverse: true });
+        const rawA = rel.anchor || rel.source || rel.from || rel.roomA;
+        const rawB = rel.target || rel.to || rel.roomB;
+        if (!rawA || rawA === 'unlinked' || !rawB) return;
+
+        const roomA = matchRoom(rawA);
+        const roomB = matchRoom(rawB);
+        if (!roomA || !roomB || roomA === roomB) return;
+
+        const op = rel.type || rel.op || '+';
+        const val = rel.val ?? rel.modifier ?? 0;
+        const opFmp = rel.typeFmp || rel.opFmp || op;
+        const valFmp = rel.valFmp ?? rel.modifierFmp ?? val;
+
+        adj[roomA].push({ to: roomB, type: op, val, typeFmp: opFmp, valFmp, isReverse: false });
+        adj[roomB].push({ to: roomA, type: op, val, typeFmp: opFmp, valFmp, isReverse: true });
     });
 
-    const queue = [startRoom];
-    const visited = new Set([startRoom]);
+    const queue = [canonicalStart];
+    const visited = new Set([canonicalStart]);
 
     while (queue.length > 0) {
         const cur = queue.shift();
         const curVals = window.masterPricing.timeline[dateStr][cur] || {};
 
         (adj[cur] || []).forEach(edge => {
-            if (!(window.roomTypes || []).includes(edge.to) || visited.has(edge.to)) return;
+            if (visited.has(edge.to)) return;
 
             visited.add(edge.to);
             window.masterPricing.timeline[dateStr][edge.to] = window.masterPricing.timeline[dateStr][edge.to] || { isOverride: {} };
             const nextVals = window.masterPricing.timeline[dateStr][edge.to];
+            nextVals.isOverride = nextVals.isOverride || {};
 
-            if (!forceRipple && nextVals.isOverride?.std) return;
+            if (!forceRipple && nextVals.isOverride.std) return;
 
             if (isPeak) {
-                const rType = edge.typeFmp || edge.type;
-                const rVal = edge.valFmp !== undefined ? edge.valFmp : edge.val;
-                const basePrice = curVals.std !== "" ? curVals.std : curVals.fmp;
-                const target = applyMath(basePrice, rType, rVal, edge.isReverse);
-                nextVals.std = target;
-                nextVals.fmp = target;
+                const basePrice = (curVals.std !== undefined && curVals.std !== "") ? curVals.std : curVals.fmp;
+                if (basePrice !== undefined && basePrice !== "") {
+                    const target = applyMath(basePrice, edge.typeFmp, edge.valFmp, edge.isReverse);
+                    nextVals.std = target;
+                    nextVals.fmp = target;
+                }
             } else {
                 if (curVals.std !== undefined && curVals.std !== "") {
                     nextVals.std = applyMath(curVals.std, edge.type, edge.val, edge.isReverse);
                 }
                 if (curVals.fmp !== undefined && curVals.fmp !== "") {
-                    const rType = edge.typeFmp || edge.type;
-                    const rVal = edge.valFmp !== undefined ? edge.valFmp : edge.val;
-                    nextVals.fmp = applyMath(curVals.fmp, rType, rVal, edge.isReverse);
+                    nextVals.fmp = applyMath(curVals.fmp, edge.typeFmp, edge.valFmp, edge.isReverse);
                 }
             }
 
