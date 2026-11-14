@@ -56,9 +56,12 @@
         </div>
     </nav>
 
+    <!-- System Health Audit Banner -->
+    <div id="setup-health-banner" class="hidden"></div>
+
     <!-- Main Content Container -->
     <main class="flex-1 max-w-7xl w-full mx-auto p-2.5 flex flex-col gap-2 min-h-0 overflow-hidden">
-
+         
         <!-- STEP 1: GENERAL PROFILE, BRAND ASSETS, PAYMENTS & ADD-ONS -->
         <section id="step-content-1" class="space-y-2.5 flex-1 overflow-y-auto">
             <!-- Property Details Card -->
@@ -353,7 +356,7 @@
                     <i data-lucide="chevron-down" id="chev-price-anchors" size="14" class="text-indigo-600 transition-transform"></i>
                 </div>
 
-                <div id="sec-price-anchors" class="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                <div id="sec-price-anchors" class="p-3 grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
                     <div class="bg-slate-50 p-2.5 rounded border border-slate-200">
                         <label class="label-base text-indigo-700">Master Anchor Channel</label>
                         <select id="rule-master-driver" class="table-input font-bold"></select>
@@ -365,6 +368,15 @@
                     <div class="bg-slate-50 p-2.5 rounded border border-slate-200">
                         <label class="label-base text-indigo-700">Private Master Room Anchor</label>
                         <select id="anchor-private-select" class="table-input font-bold"></select>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded border border-slate-200">
+                        <label class="label-base text-indigo-700">Quick Fill-Right (Ctrl+→)</label>
+                        <select id="rule-fill-right-days" class="table-input font-bold">
+                            <option value="7">7 Days (1 Week)</option>
+                            <option value="14">14 Days (2 Weeks)</option>
+                            <option value="30">30 Days (1 Month)</option>
+                            <option value="90">90 Days (3 Months)</option>
+                        </select>
                     </div>
                 </div>
             </div>
