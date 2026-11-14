@@ -737,23 +737,24 @@ export function renderRateMatrix() {
 
             const showTop = density === 'minmax' || density === 'full';
             const showBottom = density === 'full';
-            const pillHtml = getUnifiedRestrictionBadgeHtml(rData.cta, rData.ctd, rData.stop || rData.stopSell);
+            const isStopped = !!(rData.stop || rData.stopSell);
+            const pillHtml = getUnifiedRestrictionBadgeHtml(rData.cta, rData.ctd, isStopped);
 
-            let cellClass = `p-0 border-r border-slate-200 text-center relative ${isPinned ? 'rate-cell-pinned !bg-amber-100' : ''}`;
+            let cellClass = `p-0 border-r border-slate-200 text-center relative ${isStopped ? 'rate-cell-stopped' : (isPinned ? 'rate-cell-pinned !bg-amber-100' : '')}`;
 
             trRate += `<td class="${cellClass}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nDEF Non-Ref: ฿${displayPrice || '--'}${isPinned ? ' (Manual Override - Double-click to revert)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
                 ${showTop ? `
-                <div class="flex items-center w-full h-[14px] border-b border-slate-200 bg-slate-50/70 overflow-hidden leading-none">
+                <div class="flex items-center w-full h-[15px] border-b ${isStopped ? 'border-rose-700 bg-transparent' : 'border-slate-200 bg-slate-50/70'} overflow-hidden leading-none">
                     <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-slate-700 outline-none p-0" value="${minVal}" placeholder="Min" title="Min Stay (e.g. 3 or 3▸ for Arrival; double-click to toggle)" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', '${room}')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)">
-                    <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-slate-500 outline-none p-0 border-l border-slate-200" value="${maxVal}" placeholder="Max" title="Max Stay" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)">
+                    <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-slate-500 outline-none p-0 border-l ${isStopped ? 'border-rose-700' : 'border-slate-200'}" value="${maxVal}" placeholder="Max" title="Max Stay" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)">
                 </div>` : ''}
 
                 <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
-                    <input type="number" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] ${isPinned ? '!text-amber-900' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${room}', 'std')" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}')">
+                    <input type="number" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] ${isPinned && !isStopped ? '!text-amber-900' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${room}', 'std')" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}')">
                 </div>
 
                 ${showBottom ? `
-                <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t border-slate-100">
+                <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${isStopped ? 'border-rose-700' : 'border-slate-100'}">
                     <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${room}')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle: Open → CTA → CTD → CTB → STOP">
                         ${pillHtml}
                     </button>
@@ -824,17 +825,17 @@ export function renderRateMatrix() {
                     const otaCtd = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_ctd`];
                     const otaPillHtml = getUnifiedRestrictionBadgeHtml(otaCta, otaCtd, otaStop);
 
-                    trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : ''}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}', '${rate.ratePlanId}')">
+                    trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaStop ? 'rate-cell-stopped' : (otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}', '${rate.ratePlanId}')">
                         ${showTop ? `
-                        <div class="flex items-center w-full h-[14px] border-b border-indigo-100 bg-white/60 overflow-hidden leading-none">
+                        <div class="flex items-center w-full h-[15px] border-b ${otaStop ? 'border-rose-700 bg-transparent' : 'border-indigo-100 bg-white/60'} overflow-hidden leading-none">
                             <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-bold text-indigo-700 outline-none p-0" value="${otaMin}" placeholder="Min" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'min', this.value)">
-                            <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-indigo-400 outline-none p-0 border-l border-indigo-100" value="${otaMax}" placeholder="Max" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'max', this.value)">
+                            <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-indigo-400 outline-none p-0 border-l ${otaStop ? 'border-rose-700' : 'border-indigo-100'}" value="${otaMax}" placeholder="Max" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'max', this.value)">
                         </div>` : ''}
                         <div class="${(density === 'compact' || density === 'price') ? 'h-[22px]' : 'h-[18px]'} flex items-center justify-center">
-                            <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${computed}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'rate', this.value)">
+                            <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined && !otaStop ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${computed}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'rate', this.value)">
                         </div>
                         ${showBottom ? `
-                        <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t border-indigo-100/70">
+                        <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${otaStop ? 'border-rose-700' : 'border-indigo-100/70'}">
                             <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer w-full h-full flex items-center justify-center">
                                 ${otaPillHtml}
                             </button>
@@ -862,12 +863,13 @@ export function renderRateMatrix() {
             cur.setUTCDate(cur.getUTCDate() + i);
             const dateStr = getLocalYMD(cur);
             const gData = window.masterPricing?.timeline?.[dateStr]?.GLOBAL || {};
-            const gPillHtml = getUnifiedRestrictionBadgeHtml(gData.cta, gData.ctd, gData.stop || gData.stopSell);
+            const gStopped = !!(gData.stop || gData.stopSell);
+            const gPillHtml = getUnifiedRestrictionBadgeHtml(gData.cta, gData.ctd, gStopped);
 
-            globalTr += `<td class="p-0 border-r border-slate-300 text-center bg-slate-50" style="width: 42px; min-width: 42px; max-width: 42px;">
-                <div class="flex items-center w-full h-[14px] leading-none overflow-hidden">
-                    <input type="text" class="cell-min-input w-1/2 bg-white text-center font-black text-slate-800 outline-none p-0" value="${gData.min || ''}" placeholder="Min" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min', this.value)">
-                    <input type="text" class="cell-max-input w-1/2 bg-white text-center font-bold text-slate-500 outline-none p-0 border-l border-slate-200" value="${gData.max || ''}" placeholder="Max" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'max', this.value)">
+            globalTr += `<td class="p-0 border-r border-slate-300 text-center ${gStopped ? 'rate-cell-stopped' : 'bg-slate-50'}" style="width: 42px; min-width: 42px; max-width: 42px;">
+                <div class="flex items-center w-full h-[15px] leading-none overflow-hidden">
+                    <input type="text" class="cell-min-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white'} text-center font-black text-slate-800 outline-none p-0" value="${gData.min || ''}" placeholder="Min" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min', this.value)">
+                    <input type="text" class="cell-max-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white'} text-center font-bold text-slate-500 outline-none p-0 border-l ${gStopped ? 'border-rose-700' : 'border-slate-200'}" value="${gData.max || ''}" placeholder="Max" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'max', this.value)">
                 </div>
                 ${density === 'full' ? `
                 <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t border-slate-200">
