@@ -18,8 +18,10 @@
 │   ├── money.js                (Currency rounding, getPaid, getDue, getComm)
 │   ├── occupancy.js            (The Occupancy Law: PMS_STATUS, isOccupyingBooking)
 │   ├── properties.js           (Canonical property IDs, display keys, switcher state)
+│   ├── nav.js                  (Universal self-mounting top navigation & property switcher)
 │   ├── ui-dialogs.js           (Unified customAlert, showToast, confirmModal)
-│   └── audit-rooms.js          (Inventory integrity, room structure validation, orphaned booking reconciliation)
+│   ├── audit-rooms.js          (Inventory integrity, room structure validation, orphaned booking reconciliation)
+│   └── health-audit.js         (Shared Setup & CM configuration auditor for links, mappings, anchors & promos)
 │
 ├── parser/
 │   ├── parser-engine.js        (Master extractor router & normalizer)
@@ -48,8 +50,7 @@
 │   ├── cm-init.js              (CM boot, matrix loaders, save indicator)
 │   ├── cm-matrix-grid.js       (Calendar rate grid renderer, cell price edits, views)
 │   ├── cm-ripple.js            (Bidirectional relational pricing propagation engine)
-│   ├── cm-bulk-drawer.js       (Fast bulk update drawer: range, anchors vs all)
-│   ├── cm-curve-tuner.js       (Peak event pricing curve adjuster & shoulder math)
+│   ├── cm-bulk-drawer.js       (Range bulk update drawer, Fill Blanks / Re-Ripple recovery & Event Curve/Pyramid tuner)
 │   ├── cm-promos.js            (Margin-preserving OTA promo & deal calculator)
 │   └── cm-auditor.js           (Discrepancy checker & missing booking auditor)
 │
