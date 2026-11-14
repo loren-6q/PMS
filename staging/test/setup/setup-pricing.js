@@ -52,6 +52,13 @@ export function renderPricingConfig() {
         };
     }
 
+    // 2b. Default Ctrl+Right Fill-Right Days
+    const fillSel = document.getElementById('rule-fill-right-days');
+    if (fillSel) {
+        fillSel.value = String(rules.fillRightDays || 7);
+        fillSel.onchange = () => { rules.fillRightDays = parseInt(fillSel.value, 10) || 7; };
+    }
+
     // 3. Refundable Markups
     const stdRef = document.getElementById('rule-std-ref');
     const evtRef = document.getElementById('rule-evt-ref');
