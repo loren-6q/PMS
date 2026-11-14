@@ -758,7 +758,8 @@ export function renderRateMatrix() {
             const isStopped = !!(rData.stop || rData.stopSell);
             const pillHtml = getUnifiedRestrictionBadgeHtml(rData.cta, rData.ctd, isStopped);
 
-            let cellClass = `p-0 border-r border-slate-200 text-center relative ${isStopped ? 'rate-cell-stopped' : (isPinned ? 'rate-cell-pinned !bg-amber-100' : '')}`;
+            const isGap = highlightGaps && (displayPrice === "" || displayPrice === null || displayPrice === undefined);
+            let cellClass = `p-0 border-r border-slate-200 text-center relative ${isStopped ? 'rate-cell-stopped' : (isGap ? 'gap-cell-highlight' : (isPinned ? 'rate-cell-pinned !bg-amber-100' : ''))}`;
 
             trRate += `<td class="${cellClass}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nDEF Non-Ref: ฿${displayPrice || '--'}${isPinned ? ' (Manual Override - Double-click to revert)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
                 ${showTop ? `
@@ -768,7 +769,7 @@ export function renderRateMatrix() {
                 </div>` : ''}
 
                 <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
-                    <input type="number" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] ${isPinned && !isStopped ? '!text-amber-900' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${room}', 'std')" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}')">
+                    <input type="number" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" data-fill-room="${room}" data-fill-field="std" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] ${isPinned && !isStopped ? '!text-amber-900' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${room}', 'std')" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}')">
                 </div>
 
                 ${showBottom ? `
@@ -1177,6 +1178,9 @@ if (typeof window !== 'undefined') {
     window.setRoomLevel = setRoomLevel;
     window.setRateLevel = setRateLevel;
     window.toggleEventRows = toggleEventRows;
+    window.toggleHighlightGaps = toggleHighlightGaps;
+    window.handleDirectEdit = handleDirectEdit;
+    window.cycleDirectRestriction = cycleDirectRestriction;
     window.setViewDensity = setViewDensity;
     window.toggleRoomExpand = toggleRoomExpand;
 }
