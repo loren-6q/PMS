@@ -464,6 +464,25 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             }
         }
 
+        // Granular Delta Filters (so rate edits never push availability, and single-plan edits only push that plan)
+        const hasGranularAvail = window.dirtyAvailKeys instanceof Set && window.dirtyAvailKeys.size > 0;
+        const hasGranularPlans = window.dirtyPlanKeys instanceof Set && window.dirtyPlanKeys.size > 0;
+        const useGranular = (mode === 'delta') && (hasGranularAvail || hasGranularPlans);
+
+        const shouldPushAvail = (dStr, pmsCat) => {
+            if (mode === 'full' || !useGranular) return true;
+            if (!hasGranularAvail) return false;
+            return window.dirtyAvailKeys.has(`${dStr}|*`) || window.dirtyAvailKeys.has(`${dStr}|ROOM:${pmsCat}`);
+        };
+
+        const shouldPushPlan = (dStr, pmsCat, ratePlanId) => {
+            if (mode === 'full' || !useGranular) return true;
+            if (!hasGranularPlans) return false;
+            return window.dirtyPlanKeys.has(`${dStr}|*`)
+                || window.dirtyPlanKeys.has(`${dStr}|ROOM:${pmsCat}`)
+                || window.dirtyPlanKeys.has(`${dStr}|PLAN:${ratePlanId}`);
+        };
+
         // 1. Availability Payload
         const rawAvailEntries = [];
         window.channexMap.forEach(rule => {
@@ -473,6 +492,7 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             const peakCap = getPeakCategoryCapacity(pmsCat);
 
             datesToProcess.forEach(dStr => {
+                if (!shouldPushAvail(dStr, pmsCat)) return;
                 const otaAvail = window.masterPricing?.timeline?.[dStr]?.otaOverrides?.[`${pmsCat}_avail`];
                 const live = getNetAvailabilityForDate(pmsCat, dStr, peakCap);
                 const availToday = otaAvail !== undefined ? otaAvail : live;
@@ -507,6 +527,7 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             const isEvtRate = isEventsActive && ((plan.product === 'evt') || (plan.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(plan.ratePlanTitle || ''));
 
             datesToProcess.forEach(dStr => {
+                if (!shouldPushPlan(dStr, pmsCat, ratePlanId)) return;
                 const dayObj = window.masterPricing?.timeline?.[dStr] || {};
                 const roomObj = dayObj[pmsCat] || {};
                 const globObj = dayObj['GLOBAL'] || {};
@@ -589,7 +610,7 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             restrPayload.push(...compressDateEntries(planEntries));
         });
 
-        // 3. Execute Calls (Test 1: Exactly 2 calls)
+        // 3. Execute Calls (Test 1: Exactly 2 calls; Tests 2-10: Single batched API call per endpoint)
         const recordedTaskIds = [];
 
         if (mode === 'full') {
@@ -597,7 +618,7 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             if (res.availabilityTaskId) recordedTaskIds.push(res.availabilityTaskId);
             if (res.restrictionsTaskId) recordedTaskIds.push(res.restrictionsTaskId);
         } else {
-            const CHUNK_SIZE = 50;
+            const CHUNK_SIZE = 2500;
             if (availPayload.length > 0) {
                 for (let i = 0; i < availPayload.length; i += CHUNK_SIZE) {
                     const chunk = availPayload.slice(i, i + CHUNK_SIZE);
@@ -625,6 +646,8 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             if (window.dirtyDates) window.dirtyDates.delete(d);
             if (window.syncedDates) window.syncedDates.add(d);
         });
+        if (window.dirtyAvailKeys instanceof Set) window.dirtyAvailKeys.clear();
+        if (window.dirtyPlanKeys instanceof Set) window.dirtyPlanKeys.clear();
         window.hasUnsavedChanges = false;
         if (typeof window.updateSaveIndicator === 'function') window.updateSaveIndicator();
         if (typeof window.renderGrid === 'function') window.renderGrid();
