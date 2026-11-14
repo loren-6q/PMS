@@ -43,6 +43,7 @@ html, body {
 
 body {
   font-family: 'Roboto Condensed', sans-serif;
+  font-variant-numeric: tabular-nums;
   background-color: #f1f5f9;
   color: #1e293b;
   font-size: 1.2rem;
@@ -915,9 +916,9 @@ body {
   height: 18px !important;
   text-align: center;
   font-family: 'Roboto Condensed', system-ui, -apple-system, sans-serif !important;
-  letter-spacing: -0.02em !important;
+  letter-spacing: -0.01em !important;
   font-variant-numeric: tabular-nums;
-  font-weight: 700 !important;
+  font-weight: 600 !important;
   font-size: 11px !important;
   padding: 0px 1px !important;
   border: 1px solid transparent;
