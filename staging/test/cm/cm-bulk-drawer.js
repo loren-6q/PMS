@@ -7,11 +7,36 @@ import { parseYMD, getLocalYMD, mNames } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { db, appId } from '../core/config.js';
-import { doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { renderRateMatrix } from './cm-matrix-grid.js';
 import { rippleDay } from './cm-ripple.js';
 
 export let bulkScopeMode = 'anchors'; // 'anchors' | 'all'
+
+function findCanonicalRoom(name) {
+    if (!name) return '';
+    const clean = String(name).trim().toLowerCase();
+    return (window.roomTypes || []).find(r => r.trim().toLowerCase() === clean) || '';
+}
+
+function getResolvedAnchors() {
+    const rooms = window.roomTypes || [];
+    const hotelRooms = window.hotelRooms || [];
+    const dormCats = new Set(hotelRooms.filter(r => r.rule && r.rule !== 'private').map(r => r.category || r.type));
+    const privCats = new Set(hotelRooms.filter(r => r.rule === 'private').map(r => r.category || r.type));
+
+    let anchorP = findCanonicalRoom(window.pricingRules?.anchorPrivate);
+    if (!anchorP) {
+        anchorP = rooms.find(rt => privCats.has(rt) || !/dorm|bed|bunk/i.test(rt)) || rooms[0] || '';
+    }
+
+    let anchorD = findCanonicalRoom(window.pricingRules?.anchorDorm);
+    if (!anchorD) {
+        anchorD = rooms.find(rt => dormCats.has(rt) || /dorm|bed|bunk/i.test(rt)) || (rooms[1] && rooms[1] !== anchorP ? rooms[1] : '');
+    }
+
+    return { anchorP, anchorD };
+}
 
 // --- 1. QUICK BULK DRAWER CONTROLLERS ---
 
@@ -52,11 +77,11 @@ export function setBulkScopeMode(mode) {
     const btnAll = document.getElementById('qb-scope-all');
     if (btnAnchors && btnAll) {
         btnAnchors.className = mode === 'anchors' 
-            ? "px-2 py-0.5 rounded cursor-pointer bg-indigo-600 text-white shadow-2xs font-black"
-            : "px-2 py-0.5 rounded cursor-pointer text-slate-400 hover:text-white";
+            ? "px-2 py-0.5 rounded cursor-pointer bg-white text-indigo-700 shadow-2xs font-black"
+            : "px-2 py-0.5 rounded cursor-pointer text-slate-600 hover:bg-white";
         btnAll.className = mode === 'all'
-            ? "px-2 py-0.5 rounded cursor-pointer bg-indigo-600 text-white shadow-2xs font-black"
-            : "px-2 py-0.5 rounded cursor-pointer text-slate-400 hover:text-white";
+            ? "px-2 py-0.5 rounded cursor-pointer bg-white text-indigo-700 shadow-2xs font-black"
+            : "px-2 py-0.5 rounded cursor-pointer text-slate-600 hover:bg-white";
     }
     renderBulkGrid();
 }
@@ -69,22 +94,22 @@ export function cycleBulkRowPill(btn) {
     btn.dataset.state = next;
 
     const labels = {
-        open: 'Open',
-        cta: 'CTA',
-        ctd: 'CTD',
-        both: 'CTB',
-        stop: 'Stop Sell'
+        open: 'No Change / Open',
+        cta: 'CTA (Closed Arrival)',
+        ctd: 'CTD (Closed Depart)',
+        both: 'CTB (Closed Both)',
+        stop: 'STOP (Stop Sell)'
     };
 
     const classes = {
-        open: 'bg-slate-800 text-slate-400 border-slate-700',
-        cta: 'bg-amber-400/20 text-amber-300 border-amber-500',
-        ctd: 'bg-sky-400/20 text-sky-300 border-sky-500',
-        both: 'bg-purple-400/20 text-purple-300 border-purple-500',
-        stop: 'bg-rose-600 text-white border-rose-500'
+        open: 'bg-slate-100 text-slate-600 border-slate-300',
+        cta: 'bg-amber-200 text-amber-900 border-amber-400',
+        ctd: 'bg-sky-200 text-sky-900 border-sky-400',
+        both: 'bg-purple-200 text-purple-900 border-purple-400',
+        stop: 'bg-rose-600 text-white border-rose-600'
     };
 
-    btn.className = `qb-val-pill w-full sm:w-36 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs ${classes[next]}`;
+    btn.className = `qb-val-pill w-full sm:w-40 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-2xs ${classes[next]}`;
     btn.innerHTML = labels[next];
 }
 
@@ -92,38 +117,33 @@ export function renderBulkGrid() {
     const qbBody = document.getElementById('qb-grid-body');
     if (!qbBody) return;
 
-    const inptCls = "w-full text-center text-xs font-black bg-slate-900 border border-slate-700 text-white rounded p-1 outline-none";
-    const pillBtn = `<button type="button" data-state="open" onclick="window.cycleBulkRowPill(this)" class="qb-val-pill w-full sm:w-36 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-xs bg-slate-800 text-slate-400 border-slate-700">Open</button>`;
+    const inptCls = "table-input text-center font-black";
+    const pillBtn = `<button type="button" data-state="open" onclick="window.cycleBulkRowPill(this)" class="qb-val-pill w-full sm:w-40 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-2xs bg-slate-100 text-slate-600 border-slate-300">No Change / Open</button>`;
 
-    let html = '';
-
-    // 1. GLOBAL Row (Restrictions Only)
-    html += `
-    <tr class="bg-slate-950/80 font-black text-slate-200" data-type="global" data-id="GLOBAL">
-        <td class="p-2 border-r border-slate-800 font-black uppercase text-amber-400">
-            🌍 GLOBAL (All Rooms)
+    let html = `
+    <tr class="bg-slate-50 font-black text-slate-800" data-type="global" data-id="GLOBAL">
+        <td class="p-1.5 border-r border-slate-200 font-black uppercase text-slate-700">
+            GLOBAL (All Rooms)
         </td>
-        <td class="p-1 border-r border-slate-800 text-center">
-            <input type="text" disabled placeholder="--" class="${inptCls} !bg-slate-950 !text-slate-600 cursor-not-allowed">
+        <td class="p-1 border-r border-slate-200 text-center">
+            <input type="text" disabled placeholder="--" class="${inptCls} !bg-slate-100 !text-slate-400 cursor-not-allowed">
         </td>
-        <td class="p-1 border-r border-slate-800 text-center">
-            <input type="text" class="${inptCls} qb-val-min text-amber-400" placeholder="e.g. 3 or 3▸">
+        <td class="p-1 border-r border-slate-200 text-center">
+            <input type="text" class="${inptCls} qb-val-min" placeholder="e.g. 3 or 3▸">
         </td>
-        <td class="p-1 border-r border-slate-800 text-center">
-            <input type="text" class="${inptCls} qb-val-max text-slate-300" placeholder="e.g. 14">
+        <td class="p-1 border-r border-slate-200 text-center">
+            <input type="text" class="${inptCls} qb-val-max" placeholder="e.g. 14">
         </td>
         <td class="p-1 text-center">
             ${pillBtn}
         </td>
     </tr>`;
 
-    // 2. Room Rows
     let roomsToRender = [...(window.roomTypes || [])];
-    const anchorP = window.pricingRules?.anchorPrivate;
-    const anchorD = window.pricingRules?.anchorDorm;
+    const { anchorP, anchorD } = getResolvedAnchors();
 
     if (bulkScopeMode === 'anchors') {
-        roomsToRender = [anchorP, anchorD].filter(Boolean);
+        roomsToRender = Array.from(new Set([anchorP, anchorD].filter(Boolean)));
         if (roomsToRender.length === 0 && (window.roomTypes || []).length > 0) {
             roomsToRender = [window.roomTypes[0]];
         }
@@ -134,18 +154,18 @@ export function renderBulkGrid() {
         const isAnchor = (r === anchorP || r === anchorD);
 
         html += `
-        <tr class="bg-slate-900/40 hover:bg-slate-800/80 text-white transition-colors" data-type="room" data-id="${r}">
-            <td class="p-2 border-r border-slate-800 font-bold text-slate-200 truncate">
-                ${displayName} ${isAnchor ? '<span class="text-[8px] font-black uppercase bg-indigo-900/70 border border-indigo-700 text-indigo-300 px-1 py-0.2 rounded ml-1">ANCHOR</span>' : ''}
+        <tr class="bg-white hover:bg-slate-50 text-slate-800 transition-colors" data-type="room" data-id="${r}">
+            <td class="p-1.5 border-r border-slate-200 font-bold text-slate-800 truncate">
+                ${displayName} ${isAnchor ? '<span class="setup-badge-std !text-indigo-700 !bg-indigo-50 !border-indigo-200 ml-1">ANCHOR</span>' : ''}
             </td>
-            <td class="p-1 border-r border-slate-800 text-center">
-                <input type="number" step="any" class="${inptCls} qb-val-rate !text-emerald-400" placeholder="--">
+            <td class="p-1 border-r border-slate-200 text-center">
+                <input type="number" step="any" class="${inptCls} qb-val-rate !text-indigo-700" placeholder="--">
             </td>
-            <td class="p-1 border-r border-slate-800 text-center">
-                <input type="text" class="${inptCls} qb-val-min text-amber-400" placeholder="e.g. 3 or 3▸">
+            <td class="p-1 border-r border-slate-200 text-center">
+                <input type="text" class="${inptCls} qb-val-min" placeholder="e.g. 3 or 3▸">
             </td>
-            <td class="p-1 border-r border-slate-800 text-center">
-                <input type="text" class="${inptCls} qb-val-max text-slate-300" placeholder="e.g. 14">
+            <td class="p-1 border-r border-slate-200 text-center">
+                <input type="text" class="${inptCls} qb-val-max" placeholder="e.g. 14">
             </td>
             <td class="p-1 text-center">
                 ${pillBtn}
@@ -161,6 +181,11 @@ export function applyBulkGrid(isClear = false) {
     const e = document.getElementById('qb-end')?.value;
     if (!s || !e) return customAlert("Validation Error", "Please choose a valid Start and End date range.");
     if (s > e) return customAlert("Validation Error", "End date must be on or after Start date.");
+
+    window.masterPricing = window.masterPricing || { timeline: {}, relationships: [] };
+    window.masterPricing.timeline = window.masterPricing.timeline || {};
+    window.dirtyDates = window.dirtyDates || new Set();
+    window.syncedDates = window.syncedDates || new Set();
 
     const sU = parseYMD(s);
     const eU = parseYMD(e);
@@ -237,7 +262,7 @@ export function applyBulkGrid(isClear = false) {
         }
 
         roomUpdates.forEach(r => {
-            const rt = r.id;
+            const rt = findCanonicalRoom(r.id) || r.id;
             dObj[rt] = dObj[rt] || { isOverride: {} };
             const rData = dObj[rt];
             rData.isOverride = rData.isOverride || {};
@@ -252,10 +277,10 @@ export function applyBulkGrid(isClear = false) {
                 delete rData.stop;
                 rData.isOverride = {};
             } else {
-                if (r.rate !== undefined) {
+                if (r.rate !== undefined && !isNaN(r.rate)) {
                     rData.std = roundCurrency(r.rate);
                     rData.isOverride.std = true;
-                    rippleDay(dateStr, rt);
+                    rippleDay(dateStr, rt, true);
                 }
                 if (r.min !== undefined) { rData.min = r.min; delete rData.min_arr; rData.isOverride.min = true; }
                 if (r.min_arr !== undefined) { rData.min_arr = r.min_arr; delete rData.min; rData.isOverride.min_arr = true; }
@@ -272,13 +297,13 @@ export function applyBulkGrid(isClear = false) {
         });
     }
 
-    window.markUnsavedChanges();
+    if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
     toggleQuickBulk(true);
     customAlert("Bulk Update", isClear ? "Overrides cleared across the selected range." : `Applied updates from ${s} to ${e}.`);
 }
 
-// --- 2. QUICK EVENT CURVE TUNER CONTROLLERS ---
+// --- 2. QUICK EVENT CURVE & PYRAMID TUNER CONTROLLERS ---
 
 export function toggleCurveTuner(forceClose = false, targetDateStr = null) {
     const panel = document.getElementById('quick-curve-panel');
@@ -304,18 +329,58 @@ export function openCurveTunerForDate(dateStr) {
     toggleCurveTuner(false, dateStr);
 }
 
+export async function addCmEventDate() {
+    const input = document.getElementById('ct-new-event-date');
+    const newDate = input?.value;
+    if (!newDate) return customAlert("Date Required", "Pick a date in the '+ Event' date box first.");
+
+    const events = new Set(window.eventDates || []);
+    events.add(newDate);
+    window.eventDates = Array.from(events).sort();
+
+    try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', window.currentPropertyId), {
+            events: window.eventDates
+        });
+        if (input) input.value = '';
+        initCurveTuner(newDate);
+        renderRateMatrix();
+    } catch (err) {
+        customAlert("Save Error", err.message);
+    }
+}
+
+export async function removeCmEventDate() {
+    const select = document.getElementById('ct-event-select');
+    const target = select?.value;
+    if (!target) return;
+
+    window.eventDates = (window.eventDates || []).filter(d => d !== target);
+
+    try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', window.currentPropertyId), {
+            events: window.eventDates
+        });
+        initCurveTuner();
+        renderRateMatrix();
+    } catch (err) {
+        customAlert("Delete Error", err.message);
+    }
+}
+
 export function initCurveTuner(targetDateStr = null) {
     const select = document.getElementById('ct-event-select');
     if (!select) return;
 
     const events = (window.eventDates || []).slice().sort();
     if (events.length === 0) {
-        select.innerHTML = `<option value="">No event dates configured</option>`;
+        select.innerHTML = `<option value="">No events — add a date →</option>`;
+        renderCurveRestrictionsGrid();
         return;
     }
 
     const todayStr = getLocalYMD(new Date());
-    let selectedDate = targetDateStr || events.find(d => d >= todayStr) || events[0];
+    let selectedDate = targetDateStr || events.find(d => d >= todayStr) || events[events.length - 1];
 
     select.innerHTML = events.map(dStr => {
         const dObj = new Date(dStr + "T12:00:00Z");
@@ -325,7 +390,77 @@ export function initCurveTuner(targetDateStr = null) {
     handleCurveEventSelect(selectedDate);
 }
 
+export function renderCurveRestrictionsGrid() {
+    const rThead = document.getElementById('ct-restr-thead');
+    const rTbody = document.getElementById('ct-restr-tbody');
+    if (!rThead || !rTbody) return;
+
+    const b = window.savedAutofillBaselines || {};
+    const offsets = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
+    const tagOf = off => (off < 0 ? `m${Math.abs(off)}` : (off === 0 ? '0' : `p${off}`));
+
+    rThead.innerHTML = `<tr>
+        <th class="p-1.5 text-left border-r border-slate-200">
+            <div class="flex items-center gap-1.5">
+                <span>Event Restrictions (±6d)</span>
+                <button type="button" onclick="window.applyCmPyramidPreset()" class="preset-pill !bg-pink-50 !text-pink-700 !border-pink-200 hover:!bg-pink-100">Pyramid Preset</button>
+            </div>
+        </th>
+        ${offsets.map(off => `<th class="p-1 border-r border-slate-200 ${off === 0 ? 'bg-indigo-50 text-indigo-800' : ''}">${off === 0 ? 'PEAK' : (off > 0 ? `+${off}` : off)}</th>`).join('')}
+    </tr>`;
+
+    const numRows = [
+        { idPrefix: 'ct-r-min', bPrefix: 'r_min', label: 'Min Stay (Through)', cls: 'text-slate-800' },
+        { idPrefix: 'ct-r-minarr', bPrefix: 'r_minarr', label: 'Min on Arrival', cls: 'text-indigo-700' },
+        { idPrefix: 'ct-r-max', bPrefix: 'r_max', label: 'Max Stay', cls: 'text-slate-600' }
+    ];
+
+    const boolRows = [
+        { idPrefix: 'ct-r-cta', bPrefix: 'r_cta', label: 'Closed to Arrival (CTA)' },
+        { idPrefix: 'ct-r-ctd', bPrefix: 'r_ctd', label: 'Closed to Departure (CTD)' }
+    ];
+
+    let html = numRows.map(r => `<tr>
+        <td class="p-1 text-left border-r border-slate-200 text-slate-700 font-bold">${r.label}</td>
+        ${offsets.map(off => {
+            const tag = tagOf(off);
+            const val = b[`${r.bPrefix}_${tag}`] ?? '';
+            return `<td class="p-0.5 border-r border-slate-200 ${off === 0 ? 'bg-indigo-50/40' : ''}">
+                <input type="number" min="1" id="${r.idPrefix}-${tag}" class="table-input !w-9 text-center font-black ${r.cls}" value="${val}" placeholder="-">
+            </td>`;
+        }).join('')}
+    </tr>`).join('');
+
+    html += boolRows.map(r => `<tr>
+        <td class="p-1 text-left border-r border-slate-200 text-slate-700 font-bold">${r.label}</td>
+        ${offsets.map(off => {
+            const tag = tagOf(off);
+            const checked = !!b[`${r.bPrefix}_${tag}`];
+            return `<td class="p-0.5 border-r border-slate-200 ${off === 0 ? 'bg-indigo-50/40' : ''}">
+                <input type="checkbox" id="${r.idPrefix}-${tag}" class="row-checkbox cursor-pointer" ${checked ? 'checked' : ''}>
+            </td>`;
+        }).join('')}
+    </tr>`).join('');
+
+    rTbody.innerHTML = html;
+}
+
+export function applyCmPyramidPreset() {
+    window.savedAutofillBaselines = window.savedAutofillBaselines || {};
+    const b = window.savedAutofillBaselines;
+    for (let off = -6; off <= 6; off++) {
+        const tag = off < 0 ? `m${Math.abs(off)}` : (off === 0 ? '0' : `p${off}`);
+        const absOff = Math.abs(off);
+        b[`r_min_${tag}`] = absOff + 1;
+        b[`r_minarr_${tag}`] = off <= 0 ? (absOff + 1) : 7;
+        b[`r_cta_${tag}`] = off > 0;
+        b[`r_ctd_${tag}`] = false;
+    }
+    renderCurveRestrictionsGrid();
+}
+
 export function handleCurveEventSelect(selectedDateStr) {
+    renderCurveRestrictionsGrid();
     if (!selectedDateStr) return;
     const body = document.getElementById('ct-grid-body');
     if (!body) return;
@@ -340,48 +475,56 @@ export function handleCurveEventSelect(selectedDateStr) {
         if (th) th.textContent = `${curD.getUTCDate()} ${mNames[curD.getUTCMonth()]} (${off === 0 ? 'PEAK' : (off > 0 ? `+${off}` : off)})`;
     });
 
-    const anchorP = window.pricingRules?.anchorPrivate || 'Private Room';
-    const anchorD = window.pricingRules?.anchorDorm || 'Dorm Bed';
+    const { anchorP, anchorD } = getResolvedAnchors();
     const b = window.savedAutofillBaselines || {};
     const timeline = window.masterPricing?.timeline || {};
 
     const getTimelineVal = (off, room, field, baselineKey, defaultVal) => {
-        const dStr = getLocalYMD(new Date(peakMs + (off * 86400000)));
-        const dayData = timeline[dStr]?.[room];
-        if (dayData && dayData[field] !== undefined && dayData[field] !== "") {
-            return dayData[field];
+        if (room) {
+            const dStr = getLocalYMD(new Date(peakMs + (off * 86400000)));
+            const dayData = timeline[dStr]?.[room];
+            if (dayData && dayData[field] !== undefined && dayData[field] !== "") {
+                return dayData[field];
+            }
         }
         return b[baselineKey] !== undefined ? b[baselineKey] : defaultVal;
     };
 
-    const inptCls = "w-full text-center text-xs font-black bg-slate-900 border border-slate-700 text-white rounded p-1 outline-none";
-    const peakInptCls = "w-full text-center text-xs font-black bg-amber-950/60 border border-amber-500 text-amber-300 rounded p-1 outline-none";
+    const inptCls = "table-input text-center font-black";
+    const peakInptCls = "table-input text-center font-black !border-indigo-400 !bg-indigo-50/40 !text-indigo-900";
 
-    const labelP = window.displayAbbrev?.[anchorP] || anchorP;
-    const labelD = window.displayAbbrev?.[anchorD] || anchorD;
-
-    body.innerHTML = `
-        <tr class="bg-indigo-950/20 text-white" data-segment="p" data-anchor="${anchorP}">
-            <td class="p-2 text-left border-r border-slate-800 text-indigo-300 font-bold truncate" title="${anchorP}">${labelP}</td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-p-base" class="${inptCls}" value="${b.p_base || 899}" onchange="window.recalcCurveTunerShoulders('p')"></td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-p-pkg" class="${inptCls} !text-pink-400" value="${getTimelineVal(-1, anchorP, 'fmp', 'p_pkg', 1000)}"></td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-p-m2" class="${inptCls}" value="${getTimelineVal(-2, anchorP, 'std', 'p_m2', 1099)}"></td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-p-m1" class="${inptCls}" value="${getTimelineVal(-1, anchorP, 'std', 'p_m1', 1999)}"></td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-p-0" class="${peakInptCls}" value="${getTimelineVal(0, anchorP, 'std', 'p_0', 5999)}" oninput="window.recalcCurveTunerShoulders('p')"></td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-p-p1" class="${inptCls}" value="${getTimelineVal(1, anchorP, 'std', 'p_p1', 1999)}"></td>
+    let rowsHtml = '';
+    if (anchorP) {
+        const labelP = window.displayAbbrev?.[anchorP] || anchorP;
+        rowsHtml += `
+        <tr class="bg-white text-slate-800" data-segment="p" data-anchor="${anchorP}">
+            <td class="p-1.5 text-left border-r border-slate-200 text-indigo-800 font-black truncate" title="${anchorP}">${labelP}</td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-p-base" class="${inptCls}" value="${b.p_base || 899}" onchange="window.recalcCurveTunerShoulders('p')"></td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-p-pkg" class="table-input-pink table-input text-center" value="${getTimelineVal(-1, anchorP, 'fmp', 'p_pkg', 1000)}"></td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-p-m2" class="${inptCls}" value="${getTimelineVal(-2, anchorP, 'std', 'p_m2', 1099)}"></td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-p-m1" class="${inptCls}" value="${getTimelineVal(-1, anchorP, 'std', 'p_m1', 1999)}"></td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-p-0" class="${peakInptCls}" value="${getTimelineVal(0, anchorP, 'std', 'p_0', 5999)}" oninput="window.recalcCurveTunerShoulders('p')"></td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-p-p1" class="${inptCls}" value="${getTimelineVal(1, anchorP, 'std', 'p_p1', 1999)}"></td>
             <td class="p-1"><input type="number" id="ct-p-p2" class="${inptCls}" value="${getTimelineVal(2, anchorP, 'std', 'p_p2', 1099)}"></td>
-        </tr>
-        <tr class="bg-orange-950/20 text-white" data-segment="d" data-anchor="${anchorD}">
-            <td class="p-2 text-left border-r border-slate-800 text-orange-300 font-bold truncate" title="${anchorD}">${labelD}</td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-d-base" class="${inptCls}" value="${b.d_base || 199}" onchange="window.recalcCurveTunerShoulders('d')"></td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-d-pkg" class="${inptCls} !text-pink-400" value="${getTimelineVal(-1, anchorD, 'fmp', 'd_pkg', 200)}"></td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-d-m2" class="${inptCls}" value="${getTimelineVal(-2, anchorD, 'std', 'd_m2', 299)}"></td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-d-m1" class="${inptCls}" value="${getTimelineVal(-1, anchorD, 'std', 'd_m1', 799)}"></td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-d-0" class="${peakInptCls}" value="${getTimelineVal(0, anchorD, 'std', 'd_0', 2499)}" oninput="window.recalcCurveTunerShoulders('d')"></td>
-            <td class="p-1 border-r border-slate-800"><input type="number" id="ct-d-p1" class="${inptCls}" value="${getTimelineVal(1, anchorD, 'std', 'd_p1', 799)}"></td>
+        </tr>`;
+    }
+
+    if (anchorD) {
+        const labelD = window.displayAbbrev?.[anchorD] || anchorD;
+        rowsHtml += `
+        <tr class="bg-slate-50/60 text-slate-800" data-segment="d" data-anchor="${anchorD}">
+            <td class="p-1.5 text-left border-r border-slate-200 text-slate-800 font-black truncate" title="${anchorD}">${labelD}</td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-d-base" class="${inptCls}" value="${b.d_base || 199}" onchange="window.recalcCurveTunerShoulders('d')"></td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-d-pkg" class="table-input-pink table-input text-center" value="${getTimelineVal(-1, anchorD, 'fmp', 'd_pkg', 200)}"></td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-d-m2" class="${inptCls}" value="${getTimelineVal(-2, anchorD, 'std', 'd_m2', 299)}"></td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-d-m1" class="${inptCls}" value="${getTimelineVal(-1, anchorD, 'std', 'd_m1', 799)}"></td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-d-0" class="${peakInptCls}" value="${getTimelineVal(0, anchorD, 'std', 'd_0', 2499)}" oninput="window.recalcCurveTunerShoulders('d')"></td>
+            <td class="p-1 border-r border-slate-200"><input type="number" id="ct-d-p1" class="${inptCls}" value="${getTimelineVal(1, anchorD, 'std', 'd_p1', 799)}"></td>
             <td class="p-1"><input type="number" id="ct-d-p2" class="${inptCls}" value="${getTimelineVal(2, anchorD, 'std', 'd_p2', 299)}"></td>
-        </tr>
-    `;
+        </tr>`;
+    }
+
+    body.innerHTML = rowsHtml;
 }
 
 export function adjustCurveTunerPeak(delta, isPct = false) {
@@ -418,14 +561,40 @@ export function recalcCurveTunerShoulders(segment = 'all') {
     });
 }
 
+function readCurveRestrictionsFromUI() {
+    const out = {};
+    for (let off = -6; off <= 6; off++) {
+        const tag = off < 0 ? `m${Math.abs(off)}` : (off === 0 ? '0' : `p${off}`);
+        const minV = document.getElementById(`ct-r-min-${tag}`)?.value;
+        const minArrV = document.getElementById(`ct-r-minarr-${tag}`)?.value;
+        const maxV = document.getElementById(`ct-r-max-${tag}`)?.value;
+        const ctaV = !!document.getElementById(`ct-r-cta-${tag}`)?.checked;
+        const ctdV = !!document.getElementById(`ct-r-ctd-${tag}`)?.checked;
+
+        out[`r_min_${tag}`] = minV !== undefined && minV !== '' ? parseInt(minV, 10) : '';
+        out[`r_minarr_${tag}`] = minArrV !== undefined && minArrV !== '' ? parseInt(minArrV, 10) : '';
+        out[`r_max_${tag}`] = maxV !== undefined && maxV !== '' ? parseInt(maxV, 10) : '';
+        out[`r_cta_${tag}`] = ctaV;
+        out[`r_ctd_${tag}`] = ctdV;
+    }
+    return out;
+}
+
 export function applyCurveTuner() {
     const select = document.getElementById('ct-event-select');
     const evtStr = select?.value;
-    if (!evtStr) return customAlert("Input Required", "Please select an upcoming event date.");
+    if (!evtStr) return customAlert("Input Required", "Please select or add an event date first.");
+
+    window.masterPricing = window.masterPricing || { timeline: {}, relationships: [] };
+    window.masterPricing.timeline = window.masterPricing.timeline || {};
+    window.dirtyDates = window.dirtyDates || new Set();
+    window.syncedDates = window.syncedDates || new Set();
+
+    // Ensure Event rows are visible so the applied curve is immediately seen
+    window.enableEventRates = true;
+    window.showEventRows = true;
 
     const peakMs = parseYMD(evtStr);
-    const offsets = [-2, -1, 0, 1, 2];
-
     const getVal = id => parseFloat(document.getElementById(id)?.value) || 0;
 
     const p_pkg = getVal('ct-p-pkg') || 1000;
@@ -434,10 +603,12 @@ export function applyCurveTuner() {
     const p_rates = { [-2]: getVal('ct-p-m2'), [-1]: getVal('ct-p-m1'), [0]: getVal('ct-p-0'), [1]: getVal('ct-p-p1'), [2]: getVal('ct-p-p2') };
     const d_rates = { [-2]: getVal('ct-d-m2'), [-1]: getVal('ct-d-m1'), [0]: getVal('ct-d-0'), [1]: getVal('ct-d-p1'), [2]: getVal('ct-d-p2') };
 
-    const anchorP = window.pricingRules?.anchorPrivate;
-    const anchorD = window.pricingRules?.anchorDorm;
+    const { anchorP, anchorD } = getResolvedAnchors();
+    if (!anchorP && !anchorD) {
+        return customAlert("No Rooms Found", "No active room categories were found to apply the curve to.");
+    }
 
-    const b = window.savedAutofillBaselines || {};
+    const restrMap = readCurveRestrictionsFromUI();
     const evtRatePlans = (window.channexRateMap || []).filter(
         r => (r.product === 'evt') || (r.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(r.ratePlanTitle || '')
     );
@@ -450,37 +621,39 @@ export function applyCurveTuner() {
 
         if (anchorP) {
             dObj[anchorP] = dObj[anchorP] || { isOverride: {} };
-            if (p_rates[off] !== undefined) {
+            dObj[anchorP].isOverride = dObj[anchorP].isOverride || {};
+            if (p_rates[off] !== undefined && p_rates[off] > 0) {
                 dObj[anchorP].std = p_rates[off];
                 dObj[anchorP].isOverride.std = true;
             }
-            dObj[anchorP].fmp = isPeak ? p_rates[0] : p_pkg;
+            dObj[anchorP].fmp = isPeak ? (p_rates[0] || p_pkg) : p_pkg;
             dObj[anchorP].isOverride.fmp = true;
             rippleDay(dStr, anchorP, true);
         }
 
         if (anchorD) {
             dObj[anchorD] = dObj[anchorD] || { isOverride: {} };
-            if (d_rates[off] !== undefined) {
+            dObj[anchorD].isOverride = dObj[anchorD].isOverride || {};
+            if (d_rates[off] !== undefined && d_rates[off] > 0) {
                 dObj[anchorD].std = d_rates[off];
                 dObj[anchorD].isOverride.std = true;
             }
-            dObj[anchorD].fmp = isPeak ? d_rates[0] : d_pkg;
+            dObj[anchorD].fmp = isPeak ? (d_rates[0] || d_pkg) : d_pkg;
             dObj[anchorD].isOverride.fmp = true;
             rippleDay(dStr, anchorD, true);
         }
 
         const tag = off < 0 ? `m${Math.abs(off)}` : (off === 0 ? '0' : `p${off}`);
-        const rMin = b[`r_min_${tag}`];
-        const rMinArr = b[`r_minarr_${tag}`];
-        const rMax = b[`r_max_${tag}`];
-        const rCta = !!b[`r_cta_${tag}`];
-        const rCtd = !!b[`r_ctd_${tag}`];
+        const rMin = restrMap[`r_min_${tag}`];
+        const rMinArr = restrMap[`r_minarr_${tag}`];
+        const rMax = restrMap[`r_max_${tag}`];
+        const rCta = !!restrMap[`r_cta_${tag}`];
+        const rCtd = !!restrMap[`r_ctd_${tag}`];
 
         dObj.evtRestrictions = {
-            min: rMin !== undefined && rMin !== '' ? parseInt(rMin, 10) : '',
-            min_arr: rMinArr !== undefined && rMinArr !== '' ? parseInt(rMinArr, 10) : '',
-            max: rMax !== undefined && rMax !== '' ? parseInt(rMax, 10) : '',
+            min: rMin,
+            min_arr: rMinArr,
+            max: rMax,
             cta: rCta,
             ctd: rCtd
         };
@@ -488,13 +661,13 @@ export function applyCurveTuner() {
         if (evtRatePlans.length > 0) {
             dObj.otaOverrides = dObj.otaOverrides || {};
             evtRatePlans.forEach(rp => {
-                if (rMin !== undefined && rMin !== '') dObj.otaOverrides[`${rp.ratePlanId}_min`] = parseInt(rMin, 10);
+                if (rMin !== '') dObj.otaOverrides[`${rp.ratePlanId}_min`] = rMin;
                 else delete dObj.otaOverrides[`${rp.ratePlanId}_min`];
 
-                if (rMinArr !== undefined && rMinArr !== '') dObj.otaOverrides[`${rp.ratePlanId}_min_arr`] = parseInt(rMinArr, 10);
+                if (rMinArr !== '') dObj.otaOverrides[`${rp.ratePlanId}_min_arr`] = rMinArr;
                 else delete dObj.otaOverrides[`${rp.ratePlanId}_min_arr`];
 
-                if (rMax !== undefined && rMax !== '') dObj.otaOverrides[`${rp.ratePlanId}_max`] = parseInt(rMax, 10);
+                if (rMax !== '') dObj.otaOverrides[`${rp.ratePlanId}_max`] = rMax;
                 else delete dObj.otaOverrides[`${rp.ratePlanId}_max`];
 
                 dObj.otaOverrides[`${rp.ratePlanId}_cta`] = rCta;
@@ -506,14 +679,15 @@ export function applyCurveTuner() {
         window.syncedDates.delete(dStr);
     }
 
-    window.markUnsavedChanges();
+    if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
     toggleCurveTuner(true);
-    customAlert("Curve Applied", `Event curve & restriction pyramid painted for ${evtStr} (±6 days). Click "SAVE & SYNC" to push.`);
+    customAlert("Curve Applied", `Event curve & restriction pyramid applied for ${evtStr} (±6 days). Click "SAVE & SYNC" to push.`);
 }
 
 export async function saveCurveTunerAsDefault() {
     const getVal = id => parseFloat(document.getElementById(id)?.value) || 0;
+    const restrMap = readCurveRestrictionsFromUI();
 
     const baselines = {
         p_base: getVal('ct-p-base'),
@@ -529,19 +703,20 @@ export async function saveCurveTunerAsDefault() {
         d_m1: getVal('ct-d-m1'),
         d_0: getVal('ct-d-0'),
         d_p1: getVal('ct-d-p1'),
-        d_p2: getVal('ct-d-p2')
+        d_p2: getVal('ct-d-p2'),
+        ...restrMap
     };
 
     window.savedAutofillBaselines = { ...(window.savedAutofillBaselines || {}), ...baselines };
 
     try {
-        const canonId = window.toCanonicalPropId(window.currentPropertyId);
+        const canonId = window.toCanonicalPropId ? window.toCanonicalPropId(window.currentPropertyId) : window.currentPropertyId;
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`), {
             autofillBaselines: window.savedAutofillBaselines,
             updatedAt: new Date().toISOString()
         }, { merge: true });
 
-        customAlert("Template Saved", "Default event pricing curve template saved to database.");
+        customAlert("Template Saved", "Default event pricing curve & pyramid template saved.");
     } catch (err) {
         customAlert("Save Error", err.message);
     }
@@ -556,6 +731,9 @@ if (typeof window !== 'undefined') {
     window.applyBulkGrid = applyBulkGrid;
     window.toggleCurveTuner = toggleCurveTuner;
     window.openCurveTunerForDate = openCurveTunerForDate;
+    window.addCmEventDate = addCmEventDate;
+    window.removeCmEventDate = removeCmEventDate;
+    window.applyCmPyramidPreset = applyCmPyramidPreset;
     window.handleCurveEventSelect = handleCurveEventSelect;
     window.adjustCurveTunerPeak = adjustCurveTunerPeak;
     window.recalcCurveTunerShoulders = recalcCurveTunerShoulders;
