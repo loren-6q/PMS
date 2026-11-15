@@ -12,7 +12,7 @@ import { renderLegendStatusPills } from '../core/occupancy.js';
 import { renderCalendar } from './pms-calendar-grid.js';
 import { renderDashboard } from './pms-dashboard.js';
 import { renderDatabaseTable } from './pms-database.js';
-import { openGuestModal, initModalDrag, editStaff } from './pms-folio-modal.js';
+import { openGuestModal, initModalDrag, openGuestModal as editStaff } from './pms-folio-modal.js';
 import { scrollToToday } from './pms-calendar-tape.js';
 
 import './pms-folio-actions.js';
