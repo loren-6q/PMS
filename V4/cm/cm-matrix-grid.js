@@ -229,6 +229,10 @@ export function toggleMinStayMode(dateStr, room) {
         return;
     }
 
+   if (window.editMode === 'ripple' && room !== 'GLOBAL') {
+        rippleDay(dateStr, room, true, 'restrictions');
+    }
+
     window.dirtyDates = window.dirtyDates || new Set();
     window.dirtyDates.add(dateStr);
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
@@ -261,14 +265,14 @@ export function handleCellPriceChange(e, dateStr, room) {
 
         if (window.editMode === 'ripple') {
             const anchors = new Set((window.masterPricing.relationships || []).map(r => r.anchor || r.source || r.from));
-            anchors.forEach(a => { if (a && a !== 'unlinked') rippleDay(dateStr, a, true); });
+            anchors.forEach(a => { if (a && a !== 'unlinked') rippleDay(dateStr, a, true, 'rates'); });
         }
     } else {
         rData.std = roundCurrency(parseFloat(val));
         rData.isOverride.std = true;
 
         if (window.editMode === 'ripple') {
-            rippleDay(dateStr, room, true);
+            rippleDay(dateStr, room, true, 'rates');
         }
     }
 
@@ -324,7 +328,7 @@ export function handleCellEdit(dateStr, room, field, val, isEvt = false) {
             rData.fmp = roundCurrency(parseFloat(val));
             rData.isOverride.fmp = true;
             if (window.editMode === 'ripple') {
-                rippleDay(dateStr, room, true);
+                rippleDay(dateStr, room, true, 'rates');
             }
         }
     } else if (field === 'fmp_ref') {
@@ -335,6 +339,10 @@ export function handleCellEdit(dateStr, room, field, val, isEvt = false) {
             rData.fmp_ref = roundCurrency(parseFloat(val));
             rData.isOverride.fmp_ref = true;
         }
+    }
+
+    if (window.editMode === 'ripple' && room !== 'GLOBAL' && (field === 'min_hybrid' || field === 'min' || field === 'max')) {
+        rippleDay(dateStr, room, true, 'restrictions');
     }
 
     window.dirtyDates.add(dateStr);
@@ -424,6 +432,10 @@ export function cycleUnifiedRestriction(dateStr, room, ratePlanId = null, isEvt 
         } else {
             rData[`${pfx}cta`] = false; rData[`${pfx}ctd`] = false; rData[`${pfx}stop`] = false;
             delete rData.isOverride[`${pfx}cta`]; delete rData.isOverride[`${pfx}ctd`]; delete rData.isOverride[`${pfx}stop`];
+        }
+
+        if (window.editMode === 'ripple' && room !== 'GLOBAL') {
+            rippleDay(dateStr, room, true, 'restrictions');
         }
     }
 
@@ -854,9 +866,12 @@ export function renderRateMatrix() {
                 cur.setUTCDate(cur.getUTCDate() + i);
                 const dateStr = getLocalYMD(cur);
                 const rData = window.masterPricing?.timeline?.[dateStr]?.[room] || {};
-                const displayDir = rData.dir_std !== undefined && rData.dir_std !== "" ? rData.dir_std : (rData.std ?? "");
                 const isPinnedDir = rData.dir_std !== undefined && rData.dir_std !== "";
-
+                const computedDir = computeDynamicPlanRate
+                    ? computeDynamicPlanRate(dateStr, room, { channel: 'WEB', policy: 'non-ref', product: 'std' })
+                    : null;
+                const displayDir = isPinnedDir ? rData.dir_std : (computedDir ?? rData.std ?? "");
+                
                 const dirMinVal = rData.dir_min !== undefined && rData.dir_min !== "" ? rData.dir_min : (rData.dir_min_arr ? `${rData.dir_min_arr}▸` : "");
                 const dirMaxVal = rData.dir_max !== undefined && rData.dir_max !== "" ? rData.dir_max : "";
                 const dirStopped = !!(rData.dir_stop || rData.dir_stopSell);
@@ -956,12 +971,13 @@ export function renderRateMatrix() {
             cur.setUTCDate(cur.getUTCDate() + i);
             const dateStr = getLocalYMD(cur);
             const gData = window.masterPricing?.timeline?.[dateStr]?.GLOBAL || {};
+            const gMinVal = gData.min !== undefined && gData.min !== "" ? gData.min : (gData.min_arr ? `${gData.min_arr}▸` : "");
             const gStopped = !!(gData.stop || gData.stopSell);
             const gPillHtml = getUnifiedRestrictionBadgeHtml(gData.cta, gData.ctd, gStopped);
 
             globalTr += `<td class="p-0 border-r border-slate-300 text-center ${gStopped ? 'rate-cell-stopped' : 'bg-slate-50'}" style="width: 42px; min-width: 42px; max-width: 42px;">
                 <div class="flex items-center w-full h-[15px] leading-none overflow-hidden">
-                    <input type="text" class="cell-min-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white'} text-center font-black text-slate-800 outline-none p-0" value="${gData.min || ''}" placeholder="Min" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min', this.value)">
+                    <input type="text" class="cell-min-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white'} text-center font-black text-slate-800 outline-none p-0" value="${gMinVal}" placeholder="Min" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', 'GLOBAL')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min_hybrid', this.value)">
                     <input type="text" class="cell-max-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white'} text-center font-bold text-slate-500 outline-none p-0 border-l ${gStopped ? 'border-rose-700' : 'border-slate-200'}" value="${gData.max || ''}" placeholder="Max" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'max', this.value)">
                 </div>
                 ${density === 'full' ? `
