@@ -11,7 +11,7 @@ import { rippleDay, applyMath, computeDynamicPlanRate, getNearestEvent } from '.
 
 export let roomLevel = 'all';      // 'anchors' | 'all' | 'dorms' | 'privates'
 export let rateLevel = 'min';      // 'min' | 'direct' | 'default' | 'all'
-export let showEventRows = true;   // toggled via EVENTS button when Setup enables event rates
+export let showEventRows = false;  // defaults to OFF; toggled via EVENTS button when Setup enables event rates
 export let highlightGaps = false;  // toggled via GAPS button in toolbar
 export let viewDensity = 'full';   // 'avail' | 'price' | 'compact' | 'minmax' | 'full'
 export let channelPreviewFilter = 'ALL';
@@ -1083,6 +1083,18 @@ export function handleDirectEdit(dateStr, room, field, val) {
                     if (typeof window.markCmDirty === 'function' && field !== 'dir_std') {
                         window.markCmDirty(dStr, 'rate', window.editMode === 'ripple' ? '*' : `ROOM:${room}`);
                     }
+                }
+
+                const tbody = document.getElementById('grid-body');
+                const tr = target.closest('tr');
+                const td = target.closest('td');
+                if (tbody && tr && td) {
+                    window._pendingGridFocus = {
+                        id: target.id || null,
+                        selector: '.cell-price-text',
+                        rowIdx: Array.from(tbody.children).indexOf(tr),
+                        colIdx: Array.from(tr.children).indexOf(td)
+                    };
                 }
 
                 if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
