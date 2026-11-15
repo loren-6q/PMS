@@ -131,9 +131,7 @@
                         <div class="flex items-center bg-slate-100 rounded border border-slate-200 px-1 py-0.5 text-xs">
                             <span class="text-[9px] font-black text-slate-400 uppercase mr-1">PREVIEW:</span>
                             <select id="channel-preview-select" onchange="window.channelPreviewFilter = this.value; window.renderRateMatrix();" class="bg-transparent font-black text-xs text-indigo-700 outline-none cursor-pointer">
-                                <option value="ALL">All Channels</option>
-                                <option value="DEF">DEF - Default Rate</option>
-                                <option value="BDC">BDC - Booking.com</option>
+                                <option value="ALL">All Rates</option>
                             </select>
                         </div>
                         <button type="button" id="btn-toggle-gaps" onclick="window.toggleHighlightGaps()" class="view-btn !bg-slate-100 text-slate-600 cursor-pointer font-black text-xs px-2 py-1 rounded border border-slate-300 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-1" title="Highlight empty rate or restriction cells">
