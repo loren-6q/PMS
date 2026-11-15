@@ -8,9 +8,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>W&W Channel Manager</title>
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="apple-touch-icon" href="../gfx/WWicon.png">
+    <link rel="icon" type="image/png" href="../gfx/WWicon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="style.css">
@@ -116,13 +115,7 @@
                             <button type="button" onclick="window.setRateLevel('all')" id="ratelevel-all" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">All</button>
                         </div>
 
-                        <!-- 3. EVENTS LAYER TOGGLE (Shown only when Event Curve is enabled in Setup) -->
-                        <button type="button" id="btn-toggle-evt-rows" onclick="window.toggleEventRows()" class="hidden px-2 py-1 rounded border text-[10px] font-black uppercase cursor-pointer transition-colors flex items-center gap-1 bg-pink-600 text-white border-pink-600 shadow-2xs" title="Show/Hide Event Rate Rows">
-                            <i data-lucide="sparkles" size="11"></i>
-                            <span id="lbl-toggle-evt-rows">Events: On</span>
-                        </button>
-
-                        <!-- 4. VIEW DENSITY -->
+                        <!-- 3. VIEW DENSITY -->
                         <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
                             <span class="px-1.5 text-slate-400">VIEW:</span>
                             <button type="button" onclick="window.setViewDensity('avail')" id="density-avail" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Avail</button>
@@ -133,7 +126,7 @@
                         </div>
                     </div>
 
-                    <!-- Channel Filter, Curve & Bulk Actions -->
+                    <!-- Channel Filter, Curve, Bulk & Events Layer Toggle -->
                     <div class="flex items-center gap-1.5">
                         <div class="flex items-center bg-slate-100 rounded border border-slate-200 px-1 py-0.5 text-xs">
                             <span class="text-[9px] font-black text-slate-400 uppercase mr-1">PREVIEW:</span>
@@ -151,6 +144,10 @@
                         </button>
                         <button type="button" onclick="window.toggleQuickBulk()" class="view-btn !bg-slate-100 cursor-pointer font-black text-xs px-2.5 py-1 rounded border border-slate-300 hover:bg-slate-200 flex items-center gap-1">
                             <i data-lucide="layers" size="12"></i> BULK
+                        </button>
+                        <button type="button" id="btn-toggle-evt-rows" onclick="window.toggleEventRows()" class="hidden px-2 py-1 rounded border text-[10px] font-black uppercase cursor-pointer transition-colors flex items-center gap-1 bg-slate-100 text-slate-600 border-slate-300 hover:bg-pink-50" title="Show/Hide Event Rate Rows">
+                            <i data-lucide="sparkles" size="11"></i>
+                            <span id="lbl-toggle-evt-rows">Events: Off</span>
                         </button>
                     </div>
                 </div>
