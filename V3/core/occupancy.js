@@ -82,3 +82,17 @@ if (typeof window !== 'undefined') {
     window.getNextStatus = getNextStatus;
     window.applyStatusStyle = applyStatusStyle;
 }
+
+
+export function renderLegendStatusPills(containerId = 'legend-status-pills') {
+    const el = document.getElementById(containerId);
+    if (!el || typeof STATUS_CYCLE === 'undefined') return;
+    el.innerHTML = STATUS_CYCLE.map(s => {
+        const label = s.label || String(s.val || '').toUpperCase();
+        return `<span class="px-2 py-0.5 rounded text-[9px] font-black uppercase border border-black/15 shadow-2xs" style="background:${s.bg}; color:${s.txt};">${label}</span>`;
+    }).join('');
+}
+
+if (typeof window !== 'undefined') {
+    window.renderLegendStatusPills = renderLegendStatusPills;
+}
