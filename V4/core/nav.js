@@ -5,7 +5,26 @@
 
 import { loadPropertiesCatalog, getActivePropertyId, switchProperty, toDisplayPropKey } from './properties.js';
 
-const DEFAULT_BRAND_LOGO = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
+const DEFAULT_BRAND_LOGO = "gfx/WWicon.png";
+
+export function applyPropertyFavicon(iconUrl) {
+    const href = (iconUrl && String(iconUrl).trim()) ? String(iconUrl).trim() : DEFAULT_BRAND_LOGO;
+    let iconLink = document.querySelector("link[rel='icon']");
+    if (!iconLink) {
+        iconLink = document.createElement('link');
+        iconLink.rel = 'icon';
+        document.head.appendChild(iconLink);
+    }
+    iconLink.href = href;
+
+    let appleLink = document.querySelector("link[rel='apple-touch-icon']");
+    if (!appleLink) {
+        appleLink = document.createElement('link');
+        appleLink.rel = 'apple-touch-icon';
+        document.head.appendChild(appleLink);
+    }
+    appleLink.href = href;
+}
 
 export const APP_REGISTRY = [
     { id: 'pms', label: 'PMS', href: 'pms.html', icon: 'layout-grid' },
@@ -161,17 +180,20 @@ function updateNavBrandLogo() {
     const curProp = getActivePropertyId();
     const props = window.availableProperties || [];
     const active = props.find(p => p.id.toLowerCase() === curProp.toLowerCase());
+    const activeIcon = active?.iconUrl || active?.logoUrl || DEFAULT_BRAND_LOGO;
     const logoEl = document.getElementById('main-brand-logo');
-    if (logoEl && active) {
-        logoEl.src = active.iconUrl || active.logoUrl || DEFAULT_BRAND_LOGO;
+    if (logoEl) {
+        logoEl.src = activeIcon;
     }
+    applyPropertyFavicon(activeIcon);
 }
 
 if (typeof window !== 'undefined') {
     window.navigateToApp = navigateToApp;
     window.togglePropertyPicker = togglePropertyPicker;
     window.renderPropertyPickerList = renderPropertyPickerList;
-    window.switchProperty = switchProperty; // <-- ADD THIS LINE so button onclick can call it
+    window.switchProperty = switchProperty;
+    window.applyPropertyFavicon = applyPropertyFavicon;
     window.mountNav = mountNav;
 }
 
