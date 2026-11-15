@@ -35,9 +35,20 @@ export const APP_REGISTRY = [
 ];
 
 export function navigateToApp(appName, event) {
-    if (event) event.preventDefault();
     const curProp = getActivePropertyId();
-    window.location.href = `${appName}.html?p=${curProp}`;
+    const targetUrl = `${appName}.html?p=${curProp}`;
+    if (event) {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button === 1) {
+            return;
+        }
+        if (event.altKey) {
+            event.preventDefault();
+            window.open(targetUrl, '_blank');
+            return;
+        }
+        event.preventDefault();
+    }
+    window.location.href = targetUrl;
 }
 
 export function togglePropertyPicker() {
