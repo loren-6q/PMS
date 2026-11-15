@@ -3,8 +3,10 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { getActivePropertyId } from './properties.js';
+
 function getDismissedStorageKey() {
-    const propId = window.currentPropertyId || 'swims_resort';
+    const propId = getActivePropertyId() || 'default';
     return `ww_audit_dismissed_${propId}`;
 }
 
@@ -232,7 +234,7 @@ export function renderHealthAuditBanner(containerId, context = 'cm', keepOpen = 
     }
 
     const hasErrors = issues.some(i => i.severity === 'error');
-    const propParam = encodeURIComponent(window.currentPropertyId || 'swims_resort');
+    const propParam = encodeURIComponent(getActivePropertyId());
 
     const rowsHtml = issues.map(iss => {
         const badgeCls = iss.severity === 'error'
