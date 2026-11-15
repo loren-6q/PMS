@@ -1,7 +1,7 @@
 // ==========================================================================
 // CHANNEL MANAGER CALENDAR GRID & INVENTORY (cm-grid.js)
 // Wild & Wandering Channel Manager
-// Hosted at: https://loren-6q.github.io/PMS/cm-grid.js
+// Hosted at: https://loren-6q.github.io/PMS/V2/cm-grid.js
 // ==========================================================================
 
 window.daysToRender = window.daysToRender || 42;

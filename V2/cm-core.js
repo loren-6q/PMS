@@ -1,7 +1,7 @@
 // ==========================================================================
 // CHANNEL MANAGER CORE MODULE (cm-core.js)
 // Wild & Wandering Channel Manager
-// Hosted at: https://loren-6q.github.io/PMS/cm-core.js
+// Hosted at: https://loren-6q.github.io/PMS/V2/cm-core.js
 // ==========================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";

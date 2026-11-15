@@ -1,7 +1,7 @@
 // ==========================================================================
 // CHANNEL MANAGER CHANNEX API & OTA MAPPING (cm-channex.js)
 // Wild & Wandering Channel Manager
-// Hosted at: https://loren-6q.github.io/PMS/cm-channex.js
+// Hosted at: https://loren-6q.github.io/PMS/V2/cm-channex.js
 // ==========================================================================
 
 // --- 1. CHANNEX REST API CLIENT WITH EXPONENTIAL BACKOFF RETRY ---

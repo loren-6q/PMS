@@ -1,7 +1,7 @@
 // ==========================================================================
 // CHANNEL MANAGER PRICING & PROMOTIONS ENGINE (cm-pricing.js)
 // Wild & Wandering Channel Manager
-// Hosted at: https://loren-6q.github.io/PMS/cm-pricing.js
+// Hosted at: https://loren-6q.github.io/PMS/V2/cm-pricing.js
 // ==========================================================================
 
 // Safe fallbacks to prevent module loading race conditions

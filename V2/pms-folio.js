@@ -1,7 +1,7 @@
 // ==========================================================================
 // PMS FOLIO, FINANCIALS & MODAL CONTROLLER (pms-folio.js)
 // Wild & Wandering Property Management System
-// Hosted at: https://loren-6q.github.io/PMS/pms-folio.js
+// Hosted at: https://loren-6q.github.io/PMS/V2/pms-folio.js
 // ==========================================================================
 
 (function() {
