@@ -229,6 +229,7 @@ export function renderStep3UnifiedMapping() {
                                             channexRoomId: currentMap.channexId,
                                             ratePlanTitle: title,
                                             channel: detected.channel,
+                                            product: detected.isEvent ? 'evt' : 'std',
                                             policy: detected.policy,
                                             rateType: detected.policy,
                                             isEvent: detected.isEvent
@@ -1084,6 +1085,7 @@ export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoo
         if (field === 'policy') {
             mapping.rateType = value;
             mapping.isEvent = value.startsWith('event');
+            mapping.product = mapping.isEvent ? 'evt' : 'std';
         }
     }
 
