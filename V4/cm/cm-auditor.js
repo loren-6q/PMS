@@ -297,27 +297,70 @@ export function checkMissing() {
         `);
     };
 
+    const cleanExtractedGuestName = (raw) => {
+        if (!raw) return "";
+        return String(raw)
+            .replace(/THB|USD|EUR|GBP|฿|\$|€/gi, '')
+            .replace(/Payment via Booking\.com|Bank transfer|Virtual credit card|VCC|Online payment/gi, '')
+            .replace(/StatusPriceCommission and chargesBooking number/gi, '')
+            .replace(/\b(Visa|Mastercard|Amex|JCB|Diners|UnionPay|Discover|Maestro|Cash|None|Genius|Preferred|Mobile|Confirmed|Cancelled|Canceled|OK|No[- ]?show|Pending|Late|Reference|Card|Type|Arriving|Departing|Check[- ]?in|Check[- ]?out|Booked|Guests?|Adults?|Children|Rooms?|Beds?|Dorm|Private)\b/gi, '')
+            .replace(/\b\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*(\s+\d{2,4})?\b/gi, '')
+            .replace(/[\d,.:;()[\]{}|/\\]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    };
+
+    const isLikelyGuestName = (txt) => {
+        if (!txt || txt.length < 2 || txt.length > 60) return false;
+        if (!/[A-Za-zÀ-ÖØ-öø-ÿ]{2,}/.test(txt)) return false;
+        if (/^(guest name|booked on|check-in|check-out|rooms|status|price|commission|booking number|total|net|view|print)$/i.test(txt)) return false;
+        return true;
+    };
+
     if (source === 'hw') {
+        const hwLines = rawText.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
         const hwRegex = /\b(\d{5,7}-\d+)\b/g;
-        let match;
-        while ((match = hwRegex.exec(rawText)) !== null) {
-            let id = match[1];
-            let startIndex = match.index + id.length;
-            let textAfterId = rawText.substring(startIndex);
-            let firstDigitIndex = textAfterId.search(/\d/);
-            let rawName = firstDigitIndex > -1 ? textAfterId.substring(0, firstDigitIndex) : textAfterId.substring(0, 50);
 
-            let guestName = rawName
-                .replace(/Visa|Mastercard|Amex|JCB|Diners|UnionPay|Discover|Maestro|Cash|None/gi, '')
-                .replace(/Late|Reference|Card|Type/gi, '')
-                .replace(/[\n\r\t]/g, ' ')
-                .trim();
+        for (let i = 0; i < hwLines.length; i++) {
+            let match;
+            hwRegex.lastIndex = 0;
+            while ((match = hwRegex.exec(hwLines[i])) !== null) {
+                const id = match[1];
+                let guestName = "";
 
-            if (!guestName || guestName.length < 2) guestName = "UNKNOWN GUEST";
+                // 1. Check tab-separated cells on the same row
+                if (hwLines[i].includes('\t')) {
+                    const cells = hwLines[i].split('\t').map(c => cleanExtractedGuestName(c)).filter(isLikelyGuestName);
+                    if (cells.length > 0) guestName = cells[0];
+                }
 
-            let pmsBooking = findPmsBooking(id);
-            if (!pmsBooking) {
-                addMissing(id, guestName, 'Missing in PMS', 'missing', id);
+                // 2. Check text after ID on the same line (stopping at date/number)
+                if (!isLikelyGuestName(guestName)) {
+                    const after = hwLines[i].slice(match.index + id.length);
+                    const firstDigit = after.search(/\d/);
+                    const candidate = cleanExtractedGuestName(firstDigit > -1 ? after.slice(0, firstDigit) : after);
+                    if (isLikelyGuestName(candidate)) guestName = candidate;
+                }
+
+                // 3. Check adjacent lines (1 line above or 1–2 lines below)
+                if (!isLikelyGuestName(guestName)) {
+                    for (const offset of [1, -1, 2]) {
+                        const neighbor = hwLines[i + offset];
+                        if (!neighbor || /\b\d{5,7}-\d+\b/.test(neighbor)) continue;
+                        const candidate = cleanExtractedGuestName(neighbor);
+                        if (isLikelyGuestName(candidate)) {
+                            guestName = candidate;
+                            break;
+                        }
+                    }
+                }
+
+                if (!isLikelyGuestName(guestName)) guestName = "UNKNOWN GUEST";
+
+                const pmsBooking = findPmsBooking(id);
+                if (!pmsBooking) {
+                    addMissing(id, guestName, 'Missing in PMS', 'missing', id);
+                }
             }
         }
     } else if (source === 'airbnb') {
@@ -348,32 +391,55 @@ export function checkMissing() {
 
         for (let i = 0; i < lines.length; i++) {
             let match;
+            numRegex.lastIndex = 0;
             while ((match = numRegex.exec(lines[i])) !== null) {
                 let id = match[0];
                 let pmsBooking = findPmsBooking(id);
-                let guestName = "UNKNOWN GUEST";
+                let guestName = "";
                 let isCancelled = false;
 
-                for (let j = i; j >= Math.max(0, i - 12); j--) {
-                    if (/\b(adult|child|adults|children)\b/i.test(lines[j])) {
-                        if (j - 1 >= 0) {
-                            let rawLine = lines[j - 1];
-                            guestName = rawLine
-                                .replace(/THB|฿/gi, '')
-                                .replace(/Payment via Booking\.com/i, '')
-                                .replace(/Bank transfer/i, '')
-                                .replace(/StatusPriceCommission and chargesBooking number/i, '')
-                                .replace(/[\d,.]+/g, '')
-                                .trim();
+                // Check cancellation status across the row block
+                for (let k = Math.max(0, i - 10); k <= Math.min(lines.length - 1, i + 2); k++) {
+                    if (lines[k] && /\b(cancelled|canceled)\b/i.test(lines[k])) isCancelled = true;
+                }
 
-                            for (let k = Math.max(0, j - 2); k <= i; k++) {
-                                if (lines[k] && /cancelled|canceled/i.test(lines[k])) isCancelled = true;
+                // 1. Tab-separated table row copy (Guest Name is usually the first non-date cell)
+                if (lines[i].includes('\t')) {
+                    const cells = lines[i].split('\t').map(c => cleanExtractedGuestName(c)).filter(isLikelyGuestName);
+                    if (cells.length > 0) guestName = cells[0];
+                }
+
+                // 2. Multi-line Booking.com Extranet card: look above the "adults/guests" line
+                if (!isLikelyGuestName(guestName)) {
+                    for (let j = i; j >= Math.max(0, i - 14); j--) {
+                        if (j < i && /\b\d{10}\b/.test(lines[j])) break; // hit previous booking
+                        if (/\b(adult|adults|child|children|guest|guests)\b/i.test(lines[j])) {
+                            for (let up = j - 1; up >= Math.max(0, j - 4); up--) {
+                                if (/\b\d{10}\b/.test(lines[up])) break;
+                                const candidate = cleanExtractedGuestName(lines[up]);
+                                if (isLikelyGuestName(candidate)) {
+                                    guestName = candidate;
+                                    break;
+                                }
                             }
+                            if (isLikelyGuestName(guestName)) break;
                         }
-                        break;
                     }
                 }
-                if (!guestName || guestName.length < 2) guestName = "UNKNOWN GUEST";
+
+                // 3. Fallback: scan upward in the current booking block for the first clean name line
+                if (!isLikelyGuestName(guestName)) {
+                    for (let j = i - 1; j >= Math.max(0, i - 12); j--) {
+                        if (/\b\d{10}\b/.test(lines[j])) break;
+                        const candidate = cleanExtractedGuestName(lines[j]);
+                        if (isLikelyGuestName(candidate)) {
+                            guestName = candidate;
+                            break;
+                        }
+                    }
+                }
+
+                if (!isLikelyGuestName(guestName)) guestName = "UNKNOWN GUEST";
 
                 if (!pmsBooking && !isCancelled) addMissing(id, guestName, 'Missing in PMS', 'missing', id);
                 else if (!pmsBooking && isCancelled) addMissing(id, guestName, 'OTA Cancelled', 'ota_cancel', id);
