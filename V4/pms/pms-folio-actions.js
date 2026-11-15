@@ -73,6 +73,18 @@ export const saveBooking = async (keepOpen = false) => {
         const rawStat = $('guest-status-hidden')?.value || 'future';
         const stat = rawStat === 'noshow' ? 'no-show' : rawStat;
 
+        // Duplicate Room Guard (Same Booking)
+        const seenAssigned = new Set();
+        for (const r of assignedRooms) {
+            const norm = r.toUpperCase();
+            if (seenAssigned.has(norm)) {
+                if (sB) { sB.disabled = false; sB.innerHTML = '<i data-lucide="check" size="14"></i> <span>SAVE</span>'; }
+                if (window.lucide) window.lucide.createIcons();
+                return customAlert("Duplicate Room", `Room ${r} is assigned more than once on this booking. Please select a different room or remove the duplicate row.`);
+            }
+            seenAssigned.add(norm);
+        }
+
         // Room Overlap Collision Guard
         if (assignedRooms.length > 0 && isOccupyingBooking(stat, true)) {
             const occupiedNow = window.getOccupiedRooms ? window.getOccupiedRooms(cI, cO, id) : new Set();
