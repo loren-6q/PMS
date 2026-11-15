@@ -241,6 +241,7 @@ export function applyBulkGrid(isClear = false) {
 
         if (globalRule) {
             dObj['GLOBAL'] = dObj['GLOBAL'] || { isOverride: {} };
+            dObj['GLOBAL'].isOverride = dObj['GLOBAL'].isOverride || {};
             if (isClear) {
                 delete dObj['GLOBAL'].min;
                 delete dObj['GLOBAL'].max;
@@ -249,16 +250,21 @@ export function applyBulkGrid(isClear = false) {
                 delete dObj['GLOBAL'].ctd;
                 delete dObj['GLOBAL'].stop;
                 delete dObj['GLOBAL'].stopSell;
+                dObj['GLOBAL'].isOverride = {};
             } else {
-                if (globalRule.min !== undefined) dObj['GLOBAL'].min = globalRule.min;
-                if (globalRule.min_arr !== undefined) dObj['GLOBAL'].min_arr = globalRule.min_arr;
-                if (globalRule.max !== undefined) dObj['GLOBAL'].max = globalRule.max;
+                if (globalRule.min !== undefined) { dObj['GLOBAL'].min = globalRule.min; delete dObj['GLOBAL'].min_arr; dObj['GLOBAL'].isOverride.min = true; }
+                if (globalRule.min_arr !== undefined) { dObj['GLOBAL'].min_arr = globalRule.min_arr; delete dObj['GLOBAL'].min; dObj['GLOBAL'].isOverride.min_arr = true; }
+                if (globalRule.max !== undefined) { dObj['GLOBAL'].max = globalRule.max; dObj['GLOBAL'].isOverride.max = true; }
                 if (globalRule.pillState !== 'open') {
                     dObj['GLOBAL'].cta = globalRule.cta;
                     dObj['GLOBAL'].ctd = globalRule.ctd;
                     dObj['GLOBAL'].stop = globalRule.stop;
+                    dObj['GLOBAL'].isOverride.cta = true;
+                    dObj['GLOBAL'].isOverride.ctd = true;
+                    dObj['GLOBAL'].isOverride.stop = true;
                 }
             }
+            if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', '*');
         }
 
         roomUpdates.forEach(r => {
@@ -277,10 +283,13 @@ export function applyBulkGrid(isClear = false) {
                 delete rData.stop;
                 rData.isOverride = {};
             } else {
-                if (r.rate !== undefined && !isNaN(r.rate)) {
+                const hasRateChange = r.rate !== undefined && !isNaN(r.rate);
+                const hasRestrChange = r.min !== undefined || r.min_arr !== undefined || r.max !== undefined || r.pillState !== 'open';
+
+                if (hasRateChange) {
                     rData.std = roundCurrency(r.rate);
                     rData.isOverride.std = true;
-                    rippleDay(dateStr, rt, true);
+                    rippleDay(dateStr, rt, true, 'rates');
                 }
                 if (r.min !== undefined) { rData.min = r.min; delete rData.min_arr; rData.isOverride.min = true; }
                 if (r.min_arr !== undefined) { rData.min_arr = r.min_arr; delete rData.min; rData.isOverride.min_arr = true; }
@@ -293,9 +302,14 @@ export function applyBulkGrid(isClear = false) {
                     rData.isOverride.ctd = true;
                     rData.isOverride.stop = true;
                 }
+                if (hasRestrChange) {
+                    rippleDay(dateStr, rt, true, 'restrictions');
+                }
+                if ((hasRateChange || hasRestrChange) && typeof window.markCmDirty === 'function') {
+                    window.markCmDirty(dateStr, 'rate', '*');
+                }
             }
         });
-    }
 
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
