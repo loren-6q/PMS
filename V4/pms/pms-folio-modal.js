@@ -395,24 +395,36 @@ export const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = nul
     return occ;
 };
 
-// --- Refresh Dropdown Options with (OCCUPIED) Status ---
+// --- Refresh Dropdown Options with (OCCUPIED) & Sibling (SELECTED) Guards ---
 export const updateAvailableRooms = () => {
     const cI = $('check-in')?.value, cO = $('check-out')?.value, cId = $('guest-id')?.value;
     if (!cI || !cO) return;
     const occ = getOccupiedRooms(cI, cO, cId);
+    const allSelects = Array.from($$('.assigned-room-select'));
 
-    $$('.assigned-room-select').forEach(sel => {
+    allSelects.forEach((sel, selIdx) => {
         const cur = sel.value;
+        const selectedElsewhere = new Set(
+            allSelects
+                .filter((_, idx) => idx !== selIdx)
+                .map(s => String(s.value || '').trim().toUpperCase())
+                .filter(Boolean)
+        );
+
         Array.from(sel.options).forEach(opt => {
             if (!opt.value) return;
-            if (occ.has(String(opt.value).trim().toUpperCase())) {
+            const normVal = String(opt.value).trim().toUpperCase();
+            const baseLabel = opt.text.replace(/\s*\((OCCUPIED|SELECTED)\)/g, '');
+
+            if (occ.has(normVal)) {
                 opt.disabled = true;
-                if (!opt.text.includes('(OCCUPIED)')) {
-                    opt.text = opt.text + ' (OCCUPIED)';
-                }
+                opt.text = `${baseLabel} (OCCUPIED)`;
+            } else if (selectedElsewhere.has(normVal)) {
+                opt.disabled = true;
+                opt.text = `${baseLabel} (SELECTED)`;
             } else {
                 opt.disabled = false;
-                opt.text = opt.text.replace(' (OCCUPIED)', '');
+                opt.text = baseLabel;
             }
         });
         sel.value = cur;
