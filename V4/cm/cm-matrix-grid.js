@@ -167,7 +167,25 @@ export function calculateLiveInventory() {
     }
 }
 
+export function markCellDirty(dateStr, room) {
+    if (!dateStr || !room) return;
+    window.dirtyCellKeys = window.dirtyCellKeys || new Set();
+    window.justSyncedCellKeys = window.justSyncedCellKeys || new Set();
+    const key = `${dateStr}|${room}`;
+    window.dirtyCellKeys.add(key);
+    window.justSyncedCellKeys.delete(key);
+}
+
+function isCellDirty(dateStr, room) {
+    return !!(window.dirtyCellKeys && window.dirtyCellKeys.has(`${dateStr}|${room}`));
+}
+
+function isCellJustSynced(dateStr, room) {
+    return !!(window.justSyncedCellKeys && window.justSyncedCellKeys.has(`${dateStr}|${room}`));
+}
+
 export function handleAvailEdit(dateStr, room, val) {
+    markCellDirty(dateStr, `${room}_avail`);
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     window.masterPricing.timeline[dateStr].otaOverrides = window.masterPricing.timeline[dateStr].otaOverrides || {};
     if (val === "" || isNaN(parseFloat(val))) {
@@ -200,6 +218,7 @@ export function handleCellPriceLive(input, dateStr, room, field = 'std') {
         rData.isOverride[field] = true;
     }
 
+    markCellDirty(dateStr, room);
     window.dirtyDates = window.dirtyDates || new Set();
     window.syncedDates = window.syncedDates || new Set();
     window.dirtyDates.add(dateStr);
@@ -208,6 +227,7 @@ export function handleCellPriceLive(input, dateStr, room, field = 'std') {
 }
 
 export function toggleMinStayMode(dateStr, room) {
+    markCellDirty(dateStr, room);
     window.masterPricing = window.masterPricing || { relationships: [], timeline: {} };
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     const dObj = window.masterPricing.timeline[dateStr];
@@ -276,6 +296,7 @@ export function handleCellPriceChange(e, dateStr, room) {
         }
     }
 
+    markCellDirty(dateStr, room);
     if (typeof window.markCmDirty === 'function') {
         window.markCmDirty(dateStr, 'rate', window.editMode === 'ripple' ? '*' : `ROOM:${room}`);
     }
@@ -345,6 +366,7 @@ export function handleCellEdit(dateStr, room, field, val, isEvt = false) {
         rippleDay(dateStr, room, true, 'restrictions');
     }
 
+    markCellDirty(dateStr, room);
     window.dirtyDates.add(dateStr);
     window.syncedDates.delete(dateStr);
     window.markUnsavedChanges();
@@ -352,6 +374,7 @@ export function handleCellEdit(dateStr, room, field, val, isEvt = false) {
 }
 
 export function handleOtaEdit(dateStr, ratePlanId, room, ruleType, ruleVal, field, val, rateSource = 'std') {
+    markCellDirty(dateStr, `${room}|${ratePlanId}`);
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     window.masterPricing.timeline[dateStr].otaOverrides = window.masterPricing.timeline[dateStr].otaOverrides || {};
     const overrides = window.masterPricing.timeline[dateStr].otaOverrides;
@@ -439,6 +462,7 @@ export function cycleUnifiedRestriction(dateStr, room, ratePlanId = null, isEvt 
         }
     }
 
+    markCellDirty(dateStr, ratePlanId ? `${room}|${ratePlanId}` : room);
     window.dirtyDates.add(dateStr);
     window.syncedDates.delete(dateStr);
     window.markUnsavedChanges();
@@ -497,6 +521,7 @@ export function unlockCellOverride(dateStr, room, ratePlanId = null) {
             }
         }
     }
+    markCellDirty(dateStr, ratePlanId ? `${room}|${ratePlanId}` : room);
     window.dirtyDates.add(dateStr);
     window.syncedDates.delete(dateStr);
     window.markUnsavedChanges();
@@ -661,13 +686,20 @@ export function renderRateMatrix() {
 
     const activePreviewFilter = window.channelPreviewFilter || channelPreviewFilter || 'ALL';
     const renderEventsLayer = isEvents && showEventRows;
+    const linkedTargetSet = new Set(
+        (window.masterPricing?.relationships || [])
+            .filter(rel => (rel.anchor || rel.source || rel.from) && (rel.anchor || rel.source || rel.from) !== 'unlinked')
+            .map(rel => String(rel.target || rel.to || rel.roomB || '').trim().toLowerCase())
+            .filter(Boolean)
+    );
     let allRowsHtml = '';
 
     targetRooms.forEach((room, idx) => {
         const groupClass = idx % 2 === 0 ? 'room-group-even' : 'room-group-odd';
         const displayName = window.displayAbbrev?.[room] || room;
+        const isLinkedTargetRoom = linkedTargetSet.has(room.trim().toLowerCase());
         const allMappedRates = (window.channexRateMap || []).filter(m => m.pmsCategory === room);
-
+        
         const isRoomManuallyExpanded = expandedRooms.has(room);
         const effectiveRateLevel = isRoomManuallyExpanded && rateLevel === 'min' ? 'all' : rateLevel;
 
@@ -705,10 +737,10 @@ export function renderRateMatrix() {
                </button>`
             : '';
 
-        // 0. Room Group Header Row (Full unshortened name + thick black top border)
+        // 0. Room Group Header Row (Flush-left sticky label + thick black top border)
         allRowsHtml += `<tr class="bg-white border-t-[3px] border-slate-900 border-b border-slate-300">
-            <td colspan="${daysToRender + 1}" class="p-0 bg-white">
-                <div class="sticky left-0 z-20 inline-flex items-center gap-2 px-2 py-1 bg-white">
+            <td colspan="${daysToRender + 1}" class="!text-left p-0 bg-white" style="text-align: left;">
+                <div class="sticky left-0 z-20 inline-flex items-center gap-2 px-2 py-1 bg-white text-left" style="left: 0;">
                     <span class="font-black text-xs uppercase tracking-wide text-slate-950 whitespace-nowrap">${room}</span>
                     ${expandBtnHtml}
                 </div>
@@ -769,10 +801,26 @@ export function renderRateMatrix() {
             const isStopped = !!(rData.stop || rData.stopSell);
             const pillHtml = getUnifiedRestrictionBadgeHtml(rData.cta, rData.ctd, isStopped);
 
+            const isDirty = isCellDirty(dateStr, room);
+            const isSynced = isCellJustSynced(dateStr, room);
+            const isBrokenRipple = isLinkedTargetRoom && isPinned;
             const isGap = highlightGaps && (displayPrice === "" || displayPrice === null || displayPrice === undefined);
-            let cellClass = `p-0 border-r border-slate-200 text-center relative ${isStopped ? 'rate-cell-stopped' : (isGap ? 'gap-cell-highlight' : (isPinned ? 'rate-cell-pinned !bg-amber-100' : ''))}`;
 
-            trRate += `<td class="${cellClass}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nDEF Non-Ref: ฿${displayPrice || '--'}${isPinned ? ' (Manual Override - Double-click to revert)' : ''}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
+            let stateBgClass = '';
+            if (isStopped) stateBgClass = 'rate-cell-stopped';
+            else if (isDirty) stateBgClass = '!bg-amber-100 ring-1 ring-inset ring-amber-400';
+            else if (isSynced) stateBgClass = '!bg-emerald-50 ring-1 ring-inset ring-emerald-300';
+            else if (isGap) stateBgClass = 'gap-cell-highlight';
+
+            let cellClass = `p-0 border-r border-slate-200 text-center relative ${stateBgClass}`;
+            const pinCornerHtml = isBrokenRipple
+                ? `<span class="pointer-events-none absolute top-0 right-0 w-0 h-0 border-t-[7px] border-r-[7px] border-t-indigo-600 border-r-transparent z-10" title="Pinned Override (breaks ripple — double-click to re-link)"></span>`
+                : '';
+            const stateNote = isDirty ? ' • Unsaved' : (isSynced ? ' • Just Synced' : '');
+            const pinNote = isBrokenRipple ? ' • Pinned (Double-click to re-link)' : '';
+
+            trRate += `<td class="${cellClass}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nDEF Non-Ref: ฿${displayPrice || '--'}${stateNote}${pinNote}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
+                ${pinCornerHtml}
                 ${showTop ? `
                 <div class="flex items-center w-full h-[15px] border-b ${isStopped ? 'border-rose-700 bg-transparent' : 'border-slate-200 bg-slate-50/70'} overflow-hidden leading-none">
                     <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-slate-700 outline-none p-0" value="${minVal}" placeholder="Min" title="Min Stay (e.g. 3 or 3▸ for Arrival; double-click to toggle)" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', '${room}')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)">
@@ -780,7 +828,7 @@ export function renderRateMatrix() {
                 </div>` : ''}
 
                 <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
-                    <input type="number" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" data-fill-room="${room}" data-fill-field="std" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] ${isPinned && !isStopped ? '!text-amber-900' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${room}', 'std')" onchange="window.handleCellPriceChange(event, '${dateStr}', '${room}')">
+                    <input type="number" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" data-fill-room="${room}" data-fill-field="std" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] ${isDirty && !isStopped ? '!text-amber-950' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${safeRoom}', 'std')" onchange="window.handleCellPriceChange(event, '${dateStr}', '${safeRoom}')">
                 </div>
 
                 ${showBottom ? `
@@ -909,8 +957,8 @@ export function renderRateMatrix() {
                 const showBottom = density === 'full';
 
                 let trOta = `<tr class="bg-indigo-50/40 border-b border-indigo-100">
-                    <td class="frozen-col !p-0 z-20 border-r-2 border-slate-400 bg-indigo-50/70">
-                        <div class="w-[140px] flex items-center justify-between gap-1 px-1.5 h-full text-left truncate" title="${rate.ratePlanTitle}">
+                    <td class="frozen-col !p-0 z-20 border-r-2 border-slate-400 !bg-[#eef2ff]">
+                    <div class="w-[140px] flex items-center justify-between gap-1 px-1.5 h-full text-left truncate" title="${rate.ratePlanTitle}">
                             <div class="flex items-center gap-1 min-w-0">
                                 ${badgeHtml}
                                 <span class="text-[9px] font-black text-indigo-950 truncate">${rate.ratePlanTitle}</span>
