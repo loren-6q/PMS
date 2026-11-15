@@ -8,35 +8,11 @@ import { roundCurrency } from '../core/money.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { db, appId } from '../core/config.js';
 import { doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { resolveRoomCategory as findCanonicalRoom, getResolvedAnchors } from '../core/properties.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
 import { rippleDay } from './cm-ripple.js';
 
 export let bulkScopeMode = 'anchors'; // 'anchors' | 'all'
-
-function findCanonicalRoom(name) {
-    if (!name) return '';
-    const clean = String(name).trim().toLowerCase();
-    return (window.roomTypes || []).find(r => r.trim().toLowerCase() === clean) || '';
-}
-
-function getResolvedAnchors() {
-    const rooms = window.roomTypes || [];
-    const hotelRooms = window.hotelRooms || [];
-    const dormCats = new Set(hotelRooms.filter(r => r.rule && r.rule !== 'private').map(r => r.category || r.type));
-    const privCats = new Set(hotelRooms.filter(r => r.rule === 'private').map(r => r.category || r.type));
-
-    let anchorP = findCanonicalRoom(window.pricingRules?.anchorPrivate);
-    if (!anchorP) {
-        anchorP = rooms.find(rt => privCats.has(rt) || !/dorm|bed|bunk/i.test(rt)) || rooms[0] || '';
-    }
-
-    let anchorD = findCanonicalRoom(window.pricingRules?.anchorDorm);
-    if (!anchorD) {
-        anchorD = rooms.find(rt => dormCats.has(rt) || /dorm|bed|bunk/i.test(rt)) || (rooms[1] && rooms[1] !== anchorP ? rooms[1] : '');
-    }
-
-    return { anchorP, anchorD };
-}
 
 // --- 1. QUICK BULK DRAWER CONTROLLERS ---
 
