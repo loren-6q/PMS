@@ -151,3 +151,10 @@ if (typeof window !== 'undefined') {
     window.parseOtaClipboardText = parseOtaClipboardText;
     window.parseFlexibleDate = parseFlexibleDate;
 }
+
+export function processManualPaste() {
+    const raw = document.getElementById('parse-textarea')?.value || '';
+    return typeof parseOtaClipboardText === 'function' ? parseOtaClipboardText(raw) : null;
+}
+
+
