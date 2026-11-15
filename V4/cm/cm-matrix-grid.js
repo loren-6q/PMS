@@ -5,8 +5,9 @@
 
 import { parseYMD, getLocalYMD, mNames } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
-import { isOccupyingBooking } from '../core/occupancy.js';
+import { isOccupyingBooking, getRestrictionBadgeHtml } from '../core/occupancy.js';
 import { resolveChannelCode } from '../core/channels.js';
+import { getClassifiedRooms } from '../core/properties.js';
 import { rippleDay, applyMath, computeDynamicPlanRate, getNearestEvent } from './cm-ripple.js';
 
 export let roomLevel = 'all';      // 'anchors' | 'all' | 'dorms' | 'privates'
@@ -27,24 +28,6 @@ export function toggleHighlightGaps() {
             : "view-btn !bg-slate-100 text-slate-600 cursor-pointer font-black text-xs px-2 py-1 rounded border border-slate-300 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-1";
     }
     renderRateMatrix();
-}
-
-function getClassifiedRooms() {
-    const all = [...(window.roomTypes || [])];
-    const hotelRooms = window.hotelRooms || [];
-    const dormSet = new Set();
-    const privSet = new Set();
-
-    hotelRooms.forEach(hr => {
-        const cat = hr.category || hr.type;
-        if (!cat) return;
-        if (hr.rule === 'private') privSet.add(cat);
-        else if (hr.rule) dormSet.add(cat);
-    });
-
-    const dorms = all.filter(rt => dormSet.has(rt) || (!privSet.has(rt) && /dorm|bed|bunk/i.test(rt)));
-    const privates = all.filter(rt => !dorms.includes(rt));
-    return { all, dorms, privates };
 }
 
 export function formatMinStayInput(val) {
@@ -469,13 +452,7 @@ export function cycleUnifiedRestriction(dateStr, room, ratePlanId = null, isEvt 
     renderRateMatrix();
 }
 
-export function getUnifiedRestrictionBadgeHtml(cta, ctd, stop) {
-    if (stop) return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-rose-600 text-white leading-none">STOP</span>';
-    if (cta && ctd) return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 leading-none">CTB</span>';
-    if (cta) return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none">CTA</span>';
-    if (ctd) return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">CTD</span>';
-    return '<span class="w-1.5 h-1.5 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>';
-}
+export const getUnifiedRestrictionBadgeHtml = getRestrictionBadgeHtml;
 
 function getCanonicalChannelBadgeHtml(code) {
     const c = resolveChannelCode(code);
