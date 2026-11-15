@@ -50,7 +50,7 @@ export async function initCm() {
 
         const props = await loadPropertiesCatalog();
         const urlParams = new URLSearchParams(window.location.search);
-        const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || 'swims_resort';
+        const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || props[0]?.id || '';
         window.currentPropertyId = toCanonicalPropId(pParam);
 
         const activeProp = props.find(p => p.id === window.currentPropertyId) || props[0];
@@ -208,9 +208,6 @@ export function updateEventPricingToggleUI() {
             ? `<i data-lucide="calendar-heart" size="13" class="text-pink-600"></i> <span>EVENTS: ON</span>`
             : `<i data-lucide="calendar-off" size="13" class="text-slate-400"></i> <span>EVENTS: OFF</span>`;
     }
-    const depthEvtBtn = document.getElementById('depth-event');
-    if (depthEvtBtn) depthEvtBtn.style.display = isEn ? 'inline-block' : 'none';
-
     const btnCurve = document.getElementById('btn-curve-tuner');
     if (btnCurve) btnCurve.style.display = isEn ? 'inline-flex' : 'none';
 
@@ -239,6 +236,22 @@ export function toggleEditMode() {
 export function markUnsavedChanges() {
     hasUnsavedChanges = true;
     updateSaveIndicator();
+}
+
+export function onChannexSyncComplete(syncedDates = []) {
+    (syncedDates || []).forEach(d => {
+        if (window.dirtyDates) window.dirtyDates.delete(d);
+        if (window.syncedDates) window.syncedDates.add(d);
+    });
+    if (window.dirtyAvailKeys instanceof Set) window.dirtyAvailKeys.clear();
+    if (window.dirtyPlanKeys instanceof Set) window.dirtyPlanKeys.clear();
+    if (window.dirtyCellKeys instanceof Set && window.dirtyCellKeys.size > 0) {
+        window.justSyncedCellKeys = new Set(window.dirtyCellKeys);
+        window.dirtyCellKeys.clear();
+    }
+    hasUnsavedChanges = false;
+    updateSaveIndicator();
+    renderRateMatrix();
 }
 
 export function updateSaveIndicator() {
@@ -352,6 +365,7 @@ export function shiftTape(days) {
 if (typeof window !== 'undefined') {
     window.markCmDirty = markCmDirty;
     window.markUnsavedChanges = markUnsavedChanges;
+    window.onChannexSyncComplete = onChannexSyncComplete;
     window.updateSaveIndicator = updateSaveIndicator;
     window.savePricingToCloud = savePricingToCloud;
     window.switchTab = switchTab;
