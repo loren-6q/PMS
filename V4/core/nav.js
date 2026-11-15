@@ -5,10 +5,19 @@
 
 import { loadPropertiesCatalog, getActivePropertyId, switchProperty, toDisplayPropKey } from './properties.js';
 
-const DEFAULT_BRAND_LOGO = "gfx/WWicon.png";
+const DEFAULT_BRAND_LOGO = "../gfx/WWicon.png";
+
+function resolveRootAsset(url, fallback = DEFAULT_BRAND_LOGO) {
+    const raw = (url && String(url).trim()) ? String(url).trim() : fallback;
+    const isSubdir = /\/(V[1-4]|LIVE)\//i.test(window.location.pathname);
+    if (isSubdir && /^(gfx|pics)\//i.test(raw)) {
+        return `../${raw}`;
+    }
+    return raw;
+}
 
 export function applyPropertyFavicon(iconUrl) {
-    const href = (iconUrl && String(iconUrl).trim()) ? String(iconUrl).trim() : DEFAULT_BRAND_LOGO;
+    const href = resolveRootAsset(iconUrl, DEFAULT_BRAND_LOGO);
     let iconLink = document.querySelector("link[rel='icon']");
     if (!iconLink) {
         iconLink = document.createElement('link');
@@ -191,7 +200,7 @@ function updateNavBrandLogo() {
     const curProp = getActivePropertyId();
     const props = window.availableProperties || [];
     const active = props.find(p => p.id.toLowerCase() === curProp.toLowerCase());
-    const activeIcon = active?.iconUrl || active?.logoUrl || DEFAULT_BRAND_LOGO;
+    const activeIcon = resolveRootAsset(active?.iconUrl || active?.logoUrl, DEFAULT_BRAND_LOGO);
     const logoEl = document.getElementById('main-brand-logo');
     if (logoEl) {
         logoEl.src = activeIcon;
