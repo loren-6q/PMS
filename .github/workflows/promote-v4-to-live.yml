@@ -1,0 +1,27 @@
+name: Promote V4 to LIVE
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Mirror V4 into LIVE
+        run: |
+          rm -rf LIVE
+          mkdir -p LIVE
+          cp -R V4/. LIVE/
+
+      - name: Commit and push LIVE build
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add LIVE
+          git diff --staged --quiet || (git commit -m "Promote V4 to LIVE" && git push)
