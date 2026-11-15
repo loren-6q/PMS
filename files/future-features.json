@@ -93,6 +93,13 @@
       "title": "Clean Operational Booking Notifications & Owner Pulse Digest",
       "description": "Ultra-concise instant alerts (Telegram / Email / Web Push) for new, modified, and cancelled bookings capturing essential fields (property, guest name, dates, net price, policy, room type) alongside low-inventory warnings, with configurable daily morning digests.",
       "status": "planned"
+    },
+    {
+      "id": "FEAT-014",
+      "category": "Channel Management",
+      "title": "Scarcity Mode (OTA Availability Gatekeeping & Inventory Ceiling)",
+      "description": "Caps transmitted availability to OTAs at a configurable ceiling (e.g., max 6 rooms or beds shown) to trigger 'Only X left' urgency badges on Booking.com and partner channels without altering real PMS inventory, supporting property-wide and per-room-category caps.",
+      "status": "planned"
     }
   ]
 }
