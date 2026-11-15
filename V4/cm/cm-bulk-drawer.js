@@ -310,6 +310,7 @@ export function applyBulkGrid(isClear = false) {
                 }
             }
         });
+    }
 
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
