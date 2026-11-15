@@ -86,6 +86,8 @@ export async function initCm() {
         window.syncedDates = new Set();
         window.dirtyAvailKeys = new Set();
         window.dirtyPlanKeys = new Set();
+        window.dirtyCellKeys = new Set();
+        window.justSyncedCellKeys = new Set();
         window.editMode = 'ripple';
 
         // Load Pricing Matrix from Firestore (safely parse if stored as JSON string)
@@ -300,8 +302,11 @@ export async function savePricingToCloud(silent = false) {
         const shiftBanner = document.getElementById('promo-shift-banner');
         if (shiftBanner) shiftBanner.classList.add('hidden');
 
+        window.justSyncedCellKeys = new Set(window.dirtyCellKeys || []);
+        window.dirtyCellKeys = new Set();
         hasUnsavedChanges = false;
         updateSaveIndicator();
+        renderRateMatrix();
         if (!silent) customAlert("Success", "Master pricing matrix safely saved and backed up.");
         
     } catch (err) {
