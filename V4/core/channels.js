@@ -199,11 +199,13 @@ export function normalizeChannelRules(rawRules = []) {
         seen.add(code);
 
         const meta = getChannelByCode(code);
+        const rawOp = rule.op || "+%";
+        const cleanOp = rawOp === "+$" ? "+" : (rawOp === "-$" ? "-" : rawOp);
         result.push({
             code: meta.code,
             name: meta.name,
             sub: meta.sub || "Custom Channel",
-            op: rule.op || "+%",
+            op: cleanOp,
             val: rule.val ?? (rule.markupPct || 0),
             locked: false
         });
