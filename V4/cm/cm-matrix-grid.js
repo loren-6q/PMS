@@ -791,8 +791,9 @@ export function renderRateMatrix() {
             const dateStr = getLocalYMD(cur);
             const rData = window.masterPricing?.timeline?.[dateStr]?.[room] || {};
             const isPinned = !!rData.isOverride?.std;
-            const displayPrice = rData.std !== undefined && rData.std !== "" ? rData.std : "";
-
+            const rawStd = rData.std !== undefined && rData.std !== "" ? rData.std : "";
+            const displayPrice = rawStd !== "" && !isNaN(parseFloat(rawStd)) ? Math.round(parseFloat(rawStd)) : "";
+            
             const minVal = rData.min !== undefined && rData.min !== "" ? rData.min : (rData.min_arr ? `${rData.min_arr}▸` : "");
             const maxVal = rData.max !== undefined && rData.max !== "" ? rData.max : "";
 
@@ -918,7 +919,8 @@ export function renderRateMatrix() {
                 const computedDir = computeDynamicPlanRate
                     ? computeDynamicPlanRate(dateStr, room, { channel: 'WEB', policy: 'non-ref', product: 'std' })
                     : null;
-                const displayDir = isPinnedDir ? rData.dir_std : (computedDir ?? rData.std ?? "");
+                const rawDir = isPinnedDir ? rData.dir_std : (computedDir ?? rData.std ?? "");
+                const displayDir = rawDir !== "" && rawDir !== null && !isNaN(parseFloat(rawDir)) ? Math.round(parseFloat(rawDir)) : "";
                 
                 const dirMinVal = rData.dir_min !== undefined && rData.dir_min !== "" ? rData.dir_min : (rData.dir_min_arr ? `${rData.dir_min_arr}▸` : "");
                 const dirMaxVal = rData.dir_max !== undefined && rData.dir_max !== "" ? rData.dir_max : "";
@@ -972,8 +974,9 @@ export function renderRateMatrix() {
                     const dateStr = getLocalYMD(cur);
                     const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
                     const otaOverride = dayObj.otaOverrides?.[rate.ratePlanId];
-                    const computed = otaOverride !== undefined ? otaOverride : (computeDynamicPlanRate ? computeDynamicPlanRate(dateStr, room, rate) : "");
-
+                    const rawComputed = otaOverride !== undefined ? otaOverride : (computeDynamicPlanRate ? computeDynamicPlanRate(dateStr, room, rate) : "");
+                    const computed = rawComputed !== "" && rawComputed !== null && !isNaN(parseFloat(rawComputed)) ? Math.round(parseFloat(rawComputed)) : "";
+                    
                     const otaMin = dayObj.otaOverrides?.[`${rate.ratePlanId}_min`] || '';
                     const otaMax = dayObj.otaOverrides?.[`${rate.ratePlanId}_max`] || '';
                     const otaStop = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_stop`];
