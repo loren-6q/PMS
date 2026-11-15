@@ -275,6 +275,10 @@ export function rippleDay(dateStr, startRoom, forceRipple = false, scope = 'both
             queue.push(edge.to);
             window.dirtyDates = window.dirtyDates || new Set();
             window.dirtyDates.add(dateStr);
+            window.dirtyCellKeys = window.dirtyCellKeys || new Set();
+            window.justSyncedCellKeys = window.justSyncedCellKeys || new Set();
+            window.dirtyCellKeys.add(`${dateStr}|${edge.to}`);
+            window.justSyncedCellKeys.delete(`${dateStr}|${edge.to}`);
         });
     }
 }
