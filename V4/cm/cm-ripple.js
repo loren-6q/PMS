@@ -3,9 +3,10 @@
 // Wild & Wandering Channel Manager
 // ==========================================================================
 
-import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { parseYMD, getLocalYMD, getNearestEvent } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
 import { resolveChannelCode } from '../core/channels.js';
+import { resolveRoomCategory } from '../core/properties.js';
 
 export function applyMath(baseVal, type, modifier, isReverse = false) {
     if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
@@ -29,17 +30,7 @@ export function applyMath(baseVal, type, modifier, isReverse = false) {
     return roundCurrency(res);
 }
 
-export function getNearestEvent(unixMs) {
-    const events = window.eventDates || [];
-    if (!events.length) return 999;
-    let minDiff = Infinity;
-    events.forEach(evt => {
-        const evtUnix = parseYMD(evt);
-        const diff = Math.round((unixMs - evtUnix) / 86400000);
-        if (Math.abs(diff) < Math.abs(minDiff)) minDiff = diff;
-    });
-    return minDiff;
-}
+export { getNearestEvent };
 
 export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     if (!ratePlan) return null;
@@ -204,13 +195,7 @@ export function rippleDay(dateStr, startRoom, forceRipple = false, scope = 'both
     const doRestrictions = scope === 'restrictions' || scope === 'both';
 
     const allRooms = window.roomTypes || [];
-    const matchRoom = (rawName) => {
-        if (!rawName) return null;
-        const clean = String(rawName).trim().toLowerCase();
-        return allRooms.find(r => r.trim().toLowerCase() === clean) || null;
-    };
-
-    const canonicalStart = matchRoom(startRoom);
+    const canonicalStart = resolveRoomCategory(startRoom, allRooms);
     if (!canonicalStart) return;
 
     const adj = {};
@@ -221,8 +206,8 @@ export function rippleDay(dateStr, startRoom, forceRipple = false, scope = 'both
         const rawB = rel.target || rel.to || rel.roomB;
         if (!rawA || rawA === 'unlinked' || !rawB) return;
 
-        const roomA = matchRoom(rawA);
-        const roomB = matchRoom(rawB);
+        const roomA = resolveRoomCategory(rawA, allRooms);
+        const roomB = resolveRoomCategory(rawB, allRooms);
         if (!roomA || !roomB || roomA === roomB) return;
 
         const op = rel.type || rel.op || '+';
