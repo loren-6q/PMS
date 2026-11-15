@@ -685,19 +685,31 @@ export function renderRateMatrix() {
             return c !== 'DEF' || isRef;
         });
 
+        const safeRoom = room.replace(/'/g, "\\'");
+        const expandBtnHtml = (hasExpandablePlans && rateLevel !== 'all' && density !== 'avail')
+            ? `<button type="button" onclick="window.toggleRoomExpand('${safeRoom}')" class="text-slate-500 hover:text-indigo-700 bg-slate-100 hover:bg-indigo-50 border border-slate-300 rounded px-1 py-0.2 cursor-pointer flex items-center gap-0.5 text-[9px] font-black uppercase" title="Expand/Collapse Rate Plans">
+                    <i data-lucide="${isRoomManuallyExpanded ? 'chevron-down' : 'chevron-right'}" size="11"></i>
+                    <span>${isRoomManuallyExpanded ? 'Hide' : 'Rates'}</span>
+               </button>`
+            : '';
+
+        // 0. Room Group Header Row (Full unshortened name + thick black top border)
+        allRowsHtml += `<tr class="bg-white border-t-[3px] border-slate-900 border-b border-slate-300">
+            <td colspan="${daysToRender + 1}" class="p-0 bg-white">
+                <div class="sticky left-0 z-20 inline-flex items-center gap-2 px-2 py-1 bg-white">
+                    <span class="font-black text-xs uppercase tracking-wide text-slate-950 whitespace-nowrap">${room}</span>
+                    ${expandBtnHtml}
+                </div>
+            </td>
+        </tr>`;
+
         // A. Availability Row (Hidden in PRICE view so there is no blank row)
         if (density !== 'price') {
             let trAvail = `<tr class="${groupClass} border-b border-slate-200">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full font-black text-slate-800 text-[11px]">
-                        <span class="truncate" title="${room}">${displayName}</span>
-                        <div class="flex items-center gap-1">
-                            ${hasExpandablePlans && rateLevel !== 'all' ? `
-                            <button type="button" onclick="window.toggleRoomExpand('${room}')" class="text-slate-400 hover:text-indigo-600 p-0.5 cursor-pointer" title="Expand/Collapse Rate Plans">
-                                <i data-lucide="${isRoomManuallyExpanded ? 'chevron-down' : 'chevron-right'}" size="12"></i>
-                            </button>` : ''}
-                            <span class="text-[8px] font-bold text-slate-400">AVL</span>
-                        </div>
+                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full font-bold text-slate-600 text-[10px]">
+                        <span class="truncate">Availability</span>
+                        <span class="text-[8px] font-bold text-slate-400">AVL</span>
                     </div>
                 </td>`;
 
@@ -711,7 +723,7 @@ export function renderRateMatrix() {
                 const availColor = displayVal === 0 ? 'text-rose-600 font-black' : (displayVal <= 2 ? 'text-amber-600 font-bold' : 'text-emerald-700 font-bold');
 
                 trAvail += `<td class="p-0 border-r border-slate-200 ${otaAvail !== undefined ? '!bg-amber-100' : 'bg-slate-50/80'} text-center" style="width: 42px; min-width: 42px; max-width: 42px;">
-                    <input type="number" class="cell-avail-input w-full text-center outline-none bg-transparent text-[10px] ${availColor} font-bold px-0 py-1" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${room}', this.value)">
+                    <input type="number" class="cell-avail-input w-full text-center outline-none bg-transparent text-[10px] ${availColor} font-bold px-0 py-1" value="${displayVal}" onfocus="this.select()" onchange="window.handleAvailEdit('${dateStr}', '${safeRoom}', this.value)">
                 </td>`;
             }
             trAvail += `</tr>`;
@@ -720,25 +732,12 @@ export function renderRateMatrix() {
 
         if (density === 'avail') return;
 
-        // B. DEF Non-Ref Row (Shows Room Name directly on this row when in PRICE view)
-        const baseRowLabel = density === 'price'
-            ? `<span class="text-[11px] font-black text-slate-800 truncate" title="${room}">${displayName}</span>`
-            : `<span class="text-[10px] font-black text-slate-700 truncate">DEF Non-Ref</span>`;
-
-        const baseExpandBtn = (density === 'price' && hasExpandablePlans && rateLevel !== 'all')
-            ? `<button type="button" onclick="window.toggleRoomExpand('${room}')" class="text-slate-400 hover:text-indigo-600 p-0.5 cursor-pointer" title="Expand/Collapse Rate Plans">
-                    <i data-lucide="${isRoomManuallyExpanded ? 'chevron-down' : 'chevron-right'}" size="12"></i>
-               </button>`
-            : '';
-
+        // B. DEF Non-Ref Row
         let trRate = `<tr class="${groupClass} border-b border-slate-300">
             <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
                 <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                    ${baseRowLabel}
-                    <div class="flex items-center gap-0.5 shrink-0">
-                        ${baseExpandBtn}
-                        <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200">DEF</span>
-                    </div>
+                    <span class="text-[10px] font-black text-slate-700 truncate">DEF Non-Ref</span>
+                    <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200 shrink-0">DEF</span>
                 </div>
             </td>`;
 
