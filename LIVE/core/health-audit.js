@@ -1,0 +1,293 @@
+// ==========================================================================
+// core/health-audit.js - Shared Configuration & Pricing Integrity Auditor
+// Wild & Wandering Property Management System
+// ==========================================================================
+
+function getDismissedStorageKey() {
+    const propId = window.currentPropertyId || 'swims_resort';
+    return `ww_audit_dismissed_${propId}`;
+}
+
+export function getDismissedAuditIds() {
+    try {
+        const raw = localStorage.getItem(getDismissedStorageKey());
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(arr) ? arr : []);
+    } catch (e) {
+        return new Set();
+    }
+}
+
+export function dismissAuditIssue(encodedId, containerId = 'cm-health-banner', context = 'cm') {
+    if (!encodedId) return;
+    const issueId = decodeURIComponent(encodedId);
+    const set = getDismissedAuditIds();
+    set.add(issueId);
+    localStorage.setItem(getDismissedStorageKey(), JSON.stringify(Array.from(set)));
+    renderHealthAuditBanner(containerId, context, true);
+}
+
+export function resetDismissedAuditIssues(containerId = 'cm-health-banner', context = 'cm') {
+    localStorage.removeItem(getDismissedStorageKey());
+    renderHealthAuditBanner(containerId, context);
+}
+
+export function runSystemHealthAudit() {
+    const issues = [];
+
+    const rawDefs = (window.roomDefinitions && window.roomDefinitions.length)
+        ? window.roomDefinitions
+        : (window.currentPropertyConfig?.roomDefinitions || []);
+    const defs = rawDefs.filter(r => !r.inactive);
+    const activeRooms = (window.hotelRooms || []).filter(r => !r.inactive);
+
+    const catCandidates = [
+        ...defs.map(r => (r.category || '').trim()),
+        ...activeRooms.map(r => (r.category || r.type || '').trim()),
+        ...(window.roomTypes || []).map(c => String(c || '').trim())
+    ].filter(Boolean);
+
+    const activeCats = Array.from(new Set(catCandidates));
+    const catSet = new Set(activeCats.map(c => c.toLowerCase()));
+    const matchActiveCat = (name) => activeCats.find(c => c.toLowerCase() === String(name || '').trim().toLowerCase()) || null;
+
+    const dormSource = defs.length ? defs : activeRooms;
+    const dormCats = Array.from(new Set(dormSource.filter(r => r.rule && r.rule !== 'private').map(r => (r.category || r.type || '').trim()).filter(Boolean)));
+    const privCats = Array.from(new Set(dormSource.filter(r => r.rule === 'private').map(r => (r.category || r.type || '').trim()).filter(Boolean)));
+
+    const rules = window.pricingRules || {};
+    const rels = window.masterPricing?.relationships || rules.relationships || [];
+    const cMap = window.channexMap || [];
+    const rMap = window.channexRateMap || [];
+    const promos = window.promoRules || [];
+
+    // 1. Check Anchors
+    if (privCats.length > 0) {
+        if (!rules.anchorPrivate) {
+            issues.push({
+                id: 'anchor_priv_missing',
+                severity: 'warn',
+                title: 'Private Master Anchor Not Set',
+                detail: 'Select a Private Master Room Anchor in Setup Step 4 so Curves and Bulk updates know which room drives private rates.',
+                step: 4
+            });
+        } else if (!matchActiveCat(rules.anchorPrivate)) {
+            issues.push({
+                id: `anchor_priv_broken_${rules.anchorPrivate}`,
+                severity: 'error',
+                title: `Broken Private Anchor: "${rules.anchorPrivate}"`,
+                detail: 'The Private Master Anchor points to a room category that no longer exists.',
+                step: 4
+            });
+        }
+    }
+
+    if (dormCats.length > 0) {
+        if (!rules.anchorDorm) {
+            issues.push({
+                id: 'anchor_dorm_missing',
+                severity: 'warn',
+                title: 'Dorm Master Anchor Not Set',
+                detail: 'Select a Dorm Master Room Anchor in Setup Step 4 so Curves and Bulk updates know which room drives dorm rates.',
+                step: 4
+            });
+        } else if (!matchActiveCat(rules.anchorDorm)) {
+            issues.push({
+                id: `anchor_dorm_broken_${rules.anchorDorm}`,
+                severity: 'error',
+                title: `Broken Dorm Anchor: "${rules.anchorDorm}"`,
+                detail: 'The Dorm Master Anchor points to a room category that no longer exists.',
+                step: 4
+            });
+        }
+    }
+
+    // 2. Check Bidirectional Pricing Links (Orphaned or Unlinked Categories)
+    const linkedCats = new Set();
+    rels.forEach((rel, idx) => {
+        const aMatch = matchActiveCat(rel.anchor);
+        const tMatch = matchActiveCat(rel.target);
+        if (rel.anchor && rel.anchor !== 'unlinked' && !aMatch) {
+            issues.push({
+                id: `rel_anchor_${idx}_${rel.anchor}`,
+                severity: 'error',
+                title: `Orphaned Ripple Link #${idx + 1}: "${rel.anchor}"`,
+                detail: `Anchor category "${rel.anchor}" does not match any active room category.`,
+                step: 4
+            });
+        }
+        if (rel.target && !tMatch) {
+            issues.push({
+                id: `rel_target_${idx}_${rel.target}`,
+                severity: 'error',
+                title: `Orphaned Ripple Link #${idx + 1}: "${rel.target}"`,
+                detail: `Target category "${rel.target}" does not match any active room category.`,
+                step: 4
+            });
+        }
+        if (aMatch) linkedCats.add(aMatch.toLowerCase());
+        if (tMatch) linkedCats.add(tMatch.toLowerCase());
+    });
+
+    if (activeCats.length > 1) {
+        const unlinked = activeCats.filter(c => !linkedCats.has(c.toLowerCase()));
+        if (unlinked.length > 0) {
+            issues.push({
+                id: `unlinked_cats_${unlinked.join('|')}`,
+                severity: 'warn',
+                title: `Unlinked Room Categor${unlinked.length > 1 ? 'ies' : 'y'}: ${unlinked.join(', ')}`,
+                detail: 'These rooms will not receive Ripple price updates when you edit an Anchor rate.',
+                step: 4
+            });
+        }
+    }
+
+    // 3. Check Channex Room & Rate Plan Mappings
+    if (window.channexConfig?.propId) {
+        const mappedCats = new Set();
+        cMap.forEach(m => {
+            if (!m.pmsCategory) return;
+            const matched = matchActiveCat(m.pmsCategory);
+            if (!matched) {
+                issues.push({
+                    id: `cmap_stale_${m.pmsCategory}`,
+                    severity: 'error',
+                    title: `Broken Channex Room Mapping: "${m.pmsCategory}"`,
+                    detail: 'Mapped to a room category name that no longer exists in Step 2.',
+                    step: 3
+                });
+            } else if (m.channexId) {
+                mappedCats.add(matched.toLowerCase());
+            }
+        });
+
+        const unmappedCats = activeCats.filter(c => !mappedCats.has(c.toLowerCase()));
+        if (unmappedCats.length > 0) {
+            issues.push({
+                id: `cmap_unmapped_${unmappedCats.join('|')}`,
+                severity: 'warn',
+                title: `Unmapped Channex Room${unmappedCats.length > 1 ? 's' : ''}: ${unmappedCats.join(', ')}`,
+                detail: 'Availability and rates for unmapped categories will not sync to Channex.',
+                step: 3
+            });
+        }
+
+        const orphanedPlans = rMap.filter(rp => rp.pmsCategory && !matchActiveCat(rp.pmsCategory));
+        if (orphanedPlans.length > 0) {
+            const staleNames = Array.from(new Set(orphanedPlans.map(p => p.pmsCategory)));
+            issues.push({
+                id: `rplan_stale_${staleNames.join('|')}`,
+                severity: 'error',
+                title: `${orphanedPlans.length} Orphaned Channex Rate Plan(s)`,
+                detail: `Rate plans are still linked to renamed/deleted categories (${staleNames.join(', ')}).`,
+                step: 3
+            });
+        }
+    }
+
+    // 4. Check Promo Scopes
+    promos.forEach(pr => {
+        if (!pr || !pr.active) return;
+        const scopes = Array.isArray(pr.scopes) && pr.scopes.length ? pr.scopes : [pr.scope || 'ALL'];
+        if (scopes.includes('ALL')) return;
+        const badScopes = scopes.filter(sc => !catSet.has(String(sc).trim().toLowerCase()));
+        if (badScopes.length > 0) {
+            issues.push({
+                id: `promo_scope_${pr.id || pr.name}_${badScopes.join('|')}`,
+                severity: 'warn',
+                title: `Promo "${pr.name}" Targets Missing Room: ${badScopes.join(', ')}`,
+                detail: 'Update the room scope on this promotion rule in Deals & Promos.',
+                tab: 'promos'
+            });
+        }
+    });
+
+    return issues;
+}
+
+export function renderHealthAuditBanner(containerId, context = 'cm', keepOpen = false) {
+    const el = document.getElementById(containerId);
+    if (!el) return [];
+
+    const existingDetails = document.getElementById(`${containerId}-details`);
+    const shouldStayOpen = keepOpen || !!(existingDetails && !existingDetails.classList.contains('hidden'));
+
+    const allIssues = runSystemHealthAudit();
+    const dismissed = getDismissedAuditIds();
+    const issues = allIssues.filter(i => !dismissed.has(i.id));
+    const hiddenCount = allIssues.length - issues.length;
+
+    if (issues.length === 0) {
+        if (hiddenCount > 0) {
+            el.className = 'bg-slate-100 border-b border-slate-200 px-3 py-0.5 shrink-0 z-30 flex items-center justify-between text-[10px] text-slate-500';
+            el.innerHTML = `
+                <span>${hiddenCount} dismissed audit notice${hiddenCount > 1 ? 's' : ''} hidden.</span>
+                <button type="button" onclick="window.resetDismissedAuditIssues('${containerId}', '${context}')" class="font-black uppercase text-indigo-700 hover:underline cursor-pointer">Restore Dismissed (${hiddenCount})</button>
+            `;
+        } else {
+            el.classList.add('hidden');
+            el.innerHTML = '';
+        }
+        return issues;
+    }
+
+    const hasErrors = issues.some(i => i.severity === 'error');
+    const propParam = encodeURIComponent(window.currentPropertyId || 'swims_resort');
+
+    const rowsHtml = issues.map(iss => {
+        const badgeCls = iss.severity === 'error'
+            ? 'bg-rose-600 text-white'
+            : 'bg-amber-500 text-slate-950';
+
+        let actionBtn = '';
+        if (context === 'setup' && iss.step) {
+            actionBtn = `<button type="button" onclick="window.jumpStep(${iss.step})" class="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-[9.5px] font-black uppercase cursor-pointer shrink-0">Go to Step ${iss.step}</button>`;
+        } else if (context === 'cm') {
+            if (iss.tab === 'promos') {
+                actionBtn = `<button type="button" onclick="window.switchTab('promos')" class="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-[9.5px] font-black uppercase cursor-pointer shrink-0">Fix in Promos</button>`;
+            } else if (iss.step) {
+                actionBtn = `<a href="setup.html?p=${propParam}&step=${iss.step}" class="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-[9.5px] font-black uppercase cursor-pointer shrink-0">Fix in Setup (Step ${iss.step})</a>`;
+            }
+        }
+
+        const encodedId = encodeURIComponent(iss.id);
+        return `<div class="flex items-center justify-between gap-2 py-1 border-t border-black/10 first:border-t-0 text-xs">
+            <div class="flex items-center gap-1.5 min-w-0">
+                <span class="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase shrink-0 ${badgeCls}">${iss.severity === 'error' ? 'ERROR' : 'WARN'}</span>
+                <span class="font-black text-slate-900 truncate">${iss.title}:</span>
+                <span class="text-slate-700 font-semibold truncate">${iss.detail}</span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+                ${actionBtn}
+                <button type="button" onclick="window.dismissAuditIssue('${encodedId}', '${containerId}', '${context}')" class="px-1.5 py-0.5 rounded hover:bg-black/10 text-slate-600 hover:text-slate-950 font-black text-xs cursor-pointer" title="Dismiss this item (remembers across refreshes)">&times;</button>
+            </div>
+        </div>`;
+    }).join('');
+
+    const detailsId = `${containerId}-details`;
+    el.className = `${hasErrors ? 'bg-rose-50 border-rose-300' : 'bg-amber-50 border-amber-300'} border-b px-3 py-1 shrink-0 z-30`;
+    el.innerHTML = `
+        <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5 text-xs font-black uppercase ${hasErrors ? 'text-rose-900' : 'text-amber-950'}">
+                <i data-lucide="shield-alert" size="13" class="${hasErrors ? 'text-rose-600' : 'text-amber-600'}"></i>
+                <span>System Health Audit: ${issues.length} Issue${issues.length > 1 ? 's' : ''} Detected</span>
+                <button type="button" onclick="document.getElementById('${detailsId}').classList.toggle('hidden')" class="ml-1 px-2 py-0.2 rounded bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-[9.5px] font-black uppercase cursor-pointer">
+                    Show / Hide Details
+                </button>
+                ${hiddenCount > 0 ? `<button type="button" onclick="window.resetDismissedAuditIssues('${containerId}', '${context}')" class="ml-1 text-[9.5px] font-bold underline text-slate-600 hover:text-slate-900 cursor-pointer">Restore Dismissed (${hiddenCount})</button>` : ''}
+            </div>
+            <button type="button" onclick="document.getElementById('${containerId}').classList.add('hidden')" class="text-slate-500 hover:text-slate-900 text-[10px] font-black uppercase cursor-pointer px-1" title="Hide bar for this session (returns on refresh)">Hide &times;</button>
+        </div>
+        <div id="${detailsId}" class="${shouldStayOpen ? '' : 'hidden '}mt-1.5 max-h-40 overflow-y-auto border-t border-black/10 pt-1">${rowsHtml}</div>
+    `;
+
+    if (window.lucide) window.lucide.createIcons();
+    return issues;
+}
+
+if (typeof window !== 'undefined') {
+    window.runSystemHealthAudit = runSystemHealthAudit;
+    window.renderHealthAuditBanner = renderHealthAuditBanner;
+    window.dismissAuditIssue = dismissAuditIssue;
+    window.resetDismissedAuditIssues = resetDismissedAuditIssues;
+}
