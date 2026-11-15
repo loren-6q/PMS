@@ -75,7 +75,40 @@ export function applyStatusStyle(element, status, applyText = false) {
     }
 }
 
-// --- 4. Window Global Bridge ---
+// --- 4. Canonical Channel Restriction Cycle (Open -> CTA -> CTD -> CTB -> STOP) ---
+export const RESTRICTION_STATES = ['open', 'cta', 'ctd', 'both', 'stop'];
+
+export function getRestrictionState(cta, ctd, stop) {
+    if (stop) return 'stop';
+    if (cta && ctd) return 'both';
+    if (cta) return 'cta';
+    if (ctd) return 'ctd';
+    return 'open';
+}
+
+export function getNextRestrictionState(currentState) {
+    const idx = RESTRICTION_STATES.indexOf(currentState || 'open');
+    return RESTRICTION_STATES[(idx + 1) % RESTRICTION_STATES.length];
+}
+
+export function restrictionStateToFlags(state) {
+    return {
+        cta: state === 'cta' || state === 'both',
+        ctd: state === 'ctd' || state === 'both',
+        stop: state === 'stop'
+    };
+}
+
+export function getRestrictionBadgeHtml(cta, ctd, stop) {
+    const state = getRestrictionState(cta, ctd, stop);
+    if (state === 'stop') return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-rose-600 text-white leading-none">STOP</span>';
+    if (state === 'both') return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900 leading-none">CTB</span>';
+    if (state === 'cta') return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900 leading-none">CTA</span>';
+    if (state === 'ctd') return '<span class="w-full text-center py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900 leading-none">CTD</span>';
+    return '<span class="w-1.5 h-1.5 rounded-full bg-slate-300 hover:bg-slate-400 inline-block transition-colors"></span>';
+}
+
+// --- 5. Window Global Bridge ---
 if (typeof window !== 'undefined') {
     window.PMS_STATUS = PMS_STATUS;
     window.STATUS_CYCLE = STATUS_CYCLE;
@@ -84,4 +117,9 @@ if (typeof window !== 'undefined') {
     window.getStatusObj = getStatusObj;
     window.getNextStatus = getNextStatus;
     window.applyStatusStyle = applyStatusStyle;
+    window.RESTRICTION_STATES = RESTRICTION_STATES;
+    window.getRestrictionState = getRestrictionState;
+    window.getNextRestrictionState = getNextRestrictionState;
+    window.restrictionStateToFlags = restrictionStateToFlags;
+    window.getRestrictionBadgeHtml = getRestrictionBadgeHtml;
 }
