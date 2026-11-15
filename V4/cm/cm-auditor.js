@@ -14,7 +14,7 @@ export let snapshotData = {};
 export let dismissedIds = [];
 export let excludedAuditorRooms = new Set();
 
-const getPropId = () => window.currentPropertyId || 'swims_resort';
+const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
 const getBaselineDocId = () => `baseline_${getPropId()}`;
 const getExcludedStorageKey = () => `ww_auditor_excl_${getPropId()}`;
 
@@ -254,7 +254,7 @@ export function checkMissing() {
     let missingHtml = [];
     let actionCount = 0;
 
-    const ignoreIds = ['16646458'];
+    const ignoreIds = Array.isArray(window.currentPropertyConfig?.ignoredAuditIds) ? window.currentPropertyConfig.ignoredAuditIds : [];
     const dismissed = dismissedIds || [];
 
     const lowerText = rawText.toLowerCase();
