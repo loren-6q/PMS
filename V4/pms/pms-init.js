@@ -5,6 +5,7 @@
 
 import { mountNav } from '../core/nav.js';
 import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { toCanonicalPropId } from '../core/properties.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -32,7 +33,7 @@ export const $ = id => document.getElementById(id);
 export const $$ = s => document.querySelectorAll(s);
 
 export const REQUIRE_LOGIN = false;
-export const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
+export const DEFAULT_WW_ICON = "../gfx/WWicon.png";
 
 export const firebaseConfig = { apiKey: "AIzaSyCyz--TlQZf_d-YNxhtGCV29LuFoRBfEeU", authDomain: "swimspms.firebaseapp.com", projectId: "swimspms", storageBucket: "swimspms.firebasestorage.app", messagingSenderId: "989960113115", appId: "1:989960113115:web:a99e08a23a36ff4289f5fe" };
 export const appId = 'hotel-pms-v1';
@@ -49,7 +50,7 @@ try { initialP = new URLSearchParams(window.location.search).get('p')?.toUpperCa
 export let storedProp = null;
 try { storedProp = localStorage.getItem('last_prop'); } catch (e) {}
 
-export let currentPropertyId = storedProp || 'swims_resort';
+export let currentPropertyId = storedProp || '';
 
 export let currentUserRole = null, currentUserEmail = 'unknown';
 export let staff = [], dailyRates = {};
@@ -253,7 +254,7 @@ export const loadPropertyConfig = async () => {
                 p.id.toLowerCase().includes(currentPropertyId.toLowerCase()) || 
                 currentPropertyId.toLowerCase().includes(p.id.toLowerCase())
             );
-            currentPropertyId = fallbackMatch ? fallbackMatch.id : (propsList[0]?.id || 'swims_resort');
+            currentPropertyId = fallbackMatch ? fallbackMatch.id : (propsList[0]?.id || toCanonicalPropId(''));
         }
 
         try { localStorage.setItem('last_prop', currentPropertyId); } catch (e) {}
