@@ -521,7 +521,10 @@ export function addRoomSelect(val = "", isManualAdd = false) {
 export const openGuestModal = (s = {}) => {
     const isN = !s.id;
     const f = $('guest-form');
-    if (f) f.reset();
+    if (f) {
+        f.reset();
+        f.scrollTop = 0;
+    }
     const mC = $('guest-modal-content');
     if (mC) {
         mC.style.position = 'relative';
