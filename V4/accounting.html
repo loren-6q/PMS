@@ -1,0 +1,940 @@
+<!-- ==========================================================================
+     accounting.html - Raw Financial Ledger, Cash-vs-Accrual & Rollup Reports
+     Wild & Wandering Property Management System
+     ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wild &amp; Wandering | Accounting Ledger</title>
+    <link rel="apple-touch-icon" href="../gfx/WWicon.png">
+    <link rel="icon" type="image/png" href="../gfx/WWicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body class="bg-slate-100 p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden text-slate-800">
+
+    <!-- Boot Loader -->
+    <div id="boot-loader" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4">
+            <span id="sync-status">Loading Financial Ledger...</span>
+        </div>
+    </div>
+
+    <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+
+        <!-- UNIVERSAL TOP NAVIGATION -->
+        <div id="app-nav" data-app="accounting">
+            <div id="nav-center-slot" class="flex items-center gap-1.5 flex-wrap">
+                <!-- Property Scope Selector (Includes ALL Properties) -->
+                <div class="flex items-center bg-slate-100 rounded px-1.5 py-0.5 border border-slate-300">
+                    <span class="text-[9px] font-black uppercase text-slate-500 mr-1 hidden lg:inline">Scope:</span>
+                    <select id="acc-prop-scope" onchange="window.handleScopeChange(this.value)" class="bg-white font-black text-[11px] uppercase text-indigo-700 outline-none cursor-pointer border border-slate-300 rounded px-1.5 py-0.5">
+                        <option value="ALL">ALL PROPERTIES</option>
+                    </select>
+                </div>
+
+                <!-- Date Basis Selector -->
+                <select id="acc-date-basis" onchange="window.renderAccounting()" class="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] font-black uppercase text-slate-700 outline-none cursor-pointer" title="Which date the range applies to">
+                    <option value="checkIn">By Check-In</option>
+                    <option value="overlap">By Stay Overlap</option>
+                    <option value="checkOut">By Check-Out</option>
+                    <option value="payment">By Payment Date</option>
+                </select>
+
+                <!-- Period Preset Selector -->
+                <select id="acc-period-preset" onchange="window.applyPeriodPreset(this.value)" class="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] font-black uppercase text-blue-700 outline-none cursor-pointer">
+                    <option value="this_month" selected>This Month</option>
+                    <option value="last_month">Last Month</option>
+                    <option value="next_month">Next Month</option>
+                    <option value="this_week">This Week</option>
+                    <option value="last_week">Last Week</option>
+                    <option value="this_year">This Year</option>
+                    <option value="last_year">Last Year</option>
+                    <option value="all">All Dates</option>
+                    <option value="custom">Custom Range</option>
+                </select>
+
+                <!-- Explicit Start / End Date Inputs -->
+                <div class="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300">
+                    <input type="date" id="acc-date-start" onchange="window.onCustomDateChange()" class="bg-white border border-slate-300 rounded px-1 py-0.5 text-[11px] font-bold outline-none cursor-pointer">
+                    <span class="text-[10px] font-black text-slate-400">TO</span>
+                    <input type="date" id="acc-date-end" onchange="window.onCustomDateChange()" class="bg-white border border-slate-300 rounded px-1 py-0.5 text-[11px] font-bold outline-none cursor-pointer">
+                </div>
+            </div>
+
+            <div id="nav-right-slot" class="flex items-center gap-1.5">
+                <!-- View Switcher: Raw Ledger vs Monthly/Yearly Rollup -->
+                <div class="flex bg-slate-100 rounded p-0.5 border border-slate-300 text-[10px] font-black uppercase">
+                    <button type="button" id="btn-view-ledger" onclick="window.setAccView('ledger')" class="px-2 py-0.5 rounded bg-slate-900 text-white cursor-pointer">Ledger</button>
+                    <button type="button" id="btn-view-rollup" onclick="window.setAccView('rollup')" class="px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer">Chart / Rollup</button>
+                </div>
+
+                <button type="button" onclick="window.exportAccountingXlsx()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[11px] uppercase flex items-center gap-1 shadow-xs cursor-pointer whitespace-nowrap" title="Download Multi-Tab Excel Workbook">
+                    <i data-lucide="file-spreadsheet" size="13"></i>
+                    <span>Export XLSX</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ACCOUNTING CONTROL STRIP (Cash vs Accrual, Payment Mode, OTA Lag) -->
+        <div class="bg-white px-2.5 py-1.5 rounded-none sm:rounded-t-lg border-x border-t border-slate-300 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 unselectable">
+            <div class="flex items-center gap-3 flex-wrap">
+                <!-- Include In-Transit Toggle -->
+                <label class="flex items-center gap-1.5 cursor-pointer bg-amber-50 border border-amber-300 px-2 py-0.5 rounded font-black text-[11px] text-amber-900">
+                    <input type="checkbox" id="acc-include-transit" checked onchange="window.renderAccounting()" class="row-checkbox">
+                    <span>Include In-Transit OTA in Net Kept</span>
+                </label>
+
+                <!-- Payment Settlement Filter -->
+                <div class="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
+                    <span class="text-[10px] font-black uppercase text-slate-500">Kept Filter:</span>
+                    <select id="acc-kept-mode" onchange="window.renderAccounting()" class="bg-white border border-slate-300 rounded px-1.5 py-0.2 text-[11px] font-black uppercase text-slate-800 outline-none cursor-pointer">
+                        <option value="all">All Kept Money</option>
+                        <option value="cash_only">Cash Only (In-Hand)</option>
+                        <option value="bank_only">Bank / Card / OTA Only</option>
+                    </select>
+                </div>
+
+                <!-- Bucket Filter -->
+                <div class="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
+                    <span class="text-[10px] font-black uppercase text-slate-500">Bucket:</span>
+                    <select id="acc-bucket-filter" onchange="window.renderAccounting()" class="bg-white border border-slate-300 rounded px-1.5 py-0.2 text-[11px] font-black uppercase text-slate-800 outline-none cursor-pointer">
+                        <option value="all">All Rows</option>
+                        <option value="kept">Has Kept Money</option>
+                        <option value="transit">Has In-Transit</option>
+                        <option value="future">Has Future Due</option>
+                        <option value="unpaid">Has Unpaid (Left)</option>
+                        <option value="wnc">Has Will Not Collect</option>
+                        <option value="fees">Has Fees / Comm</option>
+                    </select>
+                </div>
+
+                <!-- OTA Payout Settlement Lag -->
+                <div class="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300" title="Days after check-out before OTA payouts count as received in bank">
+                    <span class="text-[10px] font-black uppercase text-slate-500">OTA Payout Lag:</span>
+                    <input type="number" id="acc-ota-lag" value="3" min="0" max="30" oninput="window.renderAccounting()" class="w-11 bg-white border border-slate-300 rounded px-1 py-0.2 text-[11px] font-black text-center outline-none">
+                    <span class="text-[10px] font-bold text-slate-500">d</span>
+                </div>
+            </div>
+
+            <!-- Live Equation Verification Pill -->
+            <div id="acc-audit-pill" class="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
+                0 Rows
+            </div>
+        </div>
+
+        <!-- ================================================================== -->
+        <!-- VIEW 1: RAW SPREADSHEET LEDGER (DEFAULT)                           -->
+        <!-- ================================================================== -->
+        <main id="view-ledger" class="flex-1 flex flex-col min-h-0 bg-white border border-slate-300 sm:rounded-b-lg shadow overflow-hidden">
+            <div class="flex-1 overflow-auto bg-white">
+                <table class="w-full text-left border-collapse whitespace-nowrap text-xs tabular-nums" id="acc-table">
+                    <thead class="sticky top-0 z-20 bg-slate-900 text-white select-none">
+                        <tr class="text-[10px] font-black uppercase tracking-wider border-b border-slate-700">
+                            <th onclick="window.sortAccounting('property')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Prop</th>
+                            <th onclick="window.sortAccounting('bookId')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Book ID</th>
+                            <th onclick="window.sortAccounting('name')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Guest</th>
+                            <th onclick="window.sortAccounting('status')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Status</th>
+                            <th onclick="window.sortAccounting('source')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Source</th>
+                            <th onclick="window.sortAccounting('checkIn')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">In</th>
+                            <th onclick="window.sortAccounting('checkOut')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Out</th>
+                            <th onclick="window.sortAccounting('nights')" class="py-2 px-1.5 border-r border-slate-700 text-center cursor-pointer hover:bg-slate-800">Nts</th>
+                            <th onclick="window.sortAccounting('gross')" class="py-2 px-2 border-r border-slate-700 text-right cursor-pointer hover:bg-slate-800">Gross</th>
+                            <th onclick="window.sortAccounting('fees')" class="py-2 px-2 border-r border-slate-700 text-right text-rose-300 cursor-pointer hover:bg-slate-800">Fees/Comm</th>
+                            <th onclick="window.sortAccounting('netKept')" class="py-2 px-2 border-r border-slate-700 text-right text-emerald-300 cursor-pointer hover:bg-slate-800 bg-slate-800/80">Net Kept</th>
+                            <th onclick="window.sortAccounting('cashRecv')" class="py-2 px-2 border-r border-slate-700 text-right text-green-300 cursor-pointer hover:bg-slate-800">Cash Recv</th>
+                            <th onclick="window.sortAccounting('bankRecv')" class="py-2 px-2 border-r border-slate-700 text-right text-sky-300 cursor-pointer hover:bg-slate-800">Bank/Card</th>
+                            <th onclick="window.sortAccounting('inTransit')" class="py-2 px-2 border-r border-slate-700 text-right text-amber-300 cursor-pointer hover:bg-slate-800">In-Transit</th>
+                            <th onclick="window.sortAccounting('futureDue')" class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300 cursor-pointer hover:bg-slate-800">Future Due</th>
+                            <th onclick="window.sortAccounting('unpaidLeft')" class="py-2 px-2 border-r border-slate-700 text-right text-orange-300 cursor-pointer hover:bg-slate-800">Unpaid (Left)</th>
+                            <th onclick="window.sortAccounting('willNotCollect')" class="py-2 px-2 text-right text-slate-300 cursor-pointer hover:bg-slate-800">Will Not Collect</th>
+                        </tr>
+                        <!-- Inline Column Filter Row -->
+                        <tr class="bg-slate-800 text-[10px] font-bold">
+                            <th class="p-1 border-r border-slate-700"></th>
+                            <th class="p-1 border-r border-slate-700" colspan="2">
+                                <input type="text" id="acc-filter-search" oninput="window.renderAccounting()" placeholder="Filter guest, ID, room..." class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] outline-none">
+                            </th>
+                            <th class="p-1 border-r border-slate-700">
+                                <select id="acc-filter-status" onchange="window.renderAccounting()" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1 py-0.5 text-[10px] uppercase outline-none cursor-pointer">
+                                    <option value="">All Status</option>
+                                </select>
+                            </th>
+                            <th class="p-1 border-r border-slate-700">
+                                <select id="acc-filter-source" onchange="window.renderAccounting()" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1 py-0.5 text-[10px] uppercase outline-none cursor-pointer">
+                                    <option value="">All Sources</option>
+                                    <option value="direct">Direct</option>
+                                    <option value="booking.com">Booking.com</option>
+                                    <option value="agoda">Agoda</option>
+                                    <option value="hostelworld">Hostelworld</option>
+                                    <option value="airbnb">Airbnb</option>
+                                    <option value="expedia">Expedia</option>
+                                    <option value="ctrip">Ctrip</option>
+                                    <option value="walk-in">Walk-In</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </th>
+                            <th colspan="12" class="p-1 text-right text-[9px] font-normal text-slate-400 pr-2">
+                                Click any row to open reservation in PMS &bull; Click column headers to sort
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="acc-ledger-body" class="divide-y divide-slate-200 bg-white font-semibold text-xs"></tbody>
+
+                    <!-- Sticky Totals Footer (Computed Directly From Visible Rows) -->
+                    <tfoot id="acc-ledger-foot" class="sticky bottom-0 z-20 bg-slate-900 text-white font-black text-xs border-t-2 border-slate-600 shadow-inner"></tfoot>
+                </table>
+            </div>
+        </main>
+
+        <!-- ================================================================== -->
+        <!-- VIEW 2: MONTHLY & YEARLY ROLLUP + CHART                            -->
+        <!-- ================================================================== -->
+        <section id="view-rollup" class="hidden flex-1 flex-col min-h-0 bg-white border border-slate-300 sm:rounded-b-lg shadow overflow-hidden">
+            <div class="p-2.5 bg-slate-50 border-b border-slate-300 flex items-center justify-between gap-2 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-black uppercase text-slate-800">Period Rollup &amp; Comparison</span>
+                    <div class="flex bg-white rounded p-0.5 border border-slate-300 text-[10px] font-black uppercase">
+                        <button type="button" id="btn-rollup-monthly" onclick="window.setRollupGranularity('monthly')" class="px-2 py-0.5 rounded bg-indigo-600 text-white cursor-pointer">Monthly</button>
+                        <button type="button" id="btn-rollup-yearly" onclick="window.setRollupGranularity('yearly')" class="px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100 cursor-pointer">Yearly</button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 text-[10px] font-black uppercase">
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-emerald-500 inline-block"></span> Cash</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-sky-500 inline-block"></span> Bank/Card</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-amber-400 inline-block"></span> In-Transit</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-indigo-400 inline-block"></span> Future Due</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-rose-400 inline-block"></span> Fees/Comm</span>
+                </div>
+            </div>
+
+            <!-- Bar Chart Container -->
+            <div id="rollup-chart-container" class="p-3 border-b border-slate-300 bg-white shrink-0 overflow-x-auto"></div>
+
+            <!-- Monthly / Yearly Spreadsheet Table -->
+            <div class="flex-1 overflow-auto">
+                <table class="w-full text-left border-collapse whitespace-nowrap text-xs tabular-nums">
+                    <thead class="sticky top-0 z-10 bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
+                        <tr>
+                            <th class="py-2 px-2.5 border-r border-slate-700">Period</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-center">Bookings</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-center">Room Nts</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-right">Gross</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-right text-rose-300">Fees/Comm</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-right text-emerald-300 bg-slate-800">Net Kept</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-right text-green-300">Cash Recv</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-right text-sky-300">Bank/Card</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-right text-amber-300">In-Transit</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300">Future Due</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-right text-orange-300">Unpaid (Left)</th>
+                            <th class="py-2 px-2 text-right text-slate-300">Will Not Collect</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rollup-table-body" class="divide-y divide-slate-200 bg-white font-semibold"></tbody>
+                    <tfoot id="rollup-table-foot" class="sticky bottom-0 z-10 bg-slate-900 text-white font-black border-t-2 border-slate-600"></tfoot>
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <script type="module">
+        import { db, auth, appId } from './core/config.js';
+        import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey, getActivePropertyId } from './core/properties.js';
+        import { parseYMD, getLocalYMD, mNames } from './core/dates.js';
+        import { roundCurrency } from './core/money.js';
+        import { STATUS_CYCLE, getStatusObj } from './core/occupancy.js';
+        import { mountNav } from './core/nav.js';
+
+        // ------------------------------------------------------------------
+        // 1. MODULE STATE & HELPERS
+        // ------------------------------------------------------------------
+
+        let propertiesCatalog = [];
+        let allBookings = [];
+        let activeScope = 'ALL';
+        let activeView = 'ledger';
+        let rollupGranularity = 'monthly';
+        let sortKey = 'checkIn';
+        let sortAsc = false;
+        let lastComputedRows = [];
+        let lastRollupRows = [];
+
+        const NON_COLLECTIBLE_STATUSES = new Set([
+            'cancelled', 'unconfirmed', 'new', 'to-charge', 'tocharge', 'no-show', 'noshow'
+        ]);
+
+        const LEFT_UNPAID_STATUSES = new Set([
+            'left', 'early out', 'early-out'
+        ]);
+
+        const OTA_PAYOUT_METHODS = new Set([
+            'bdc-pay', 'agoda-pay', 'airbnb-pay', 'expedia-pay', 'trip-pay'
+        ]);
+
+        const DEFAULT_FEE_METHODS = new Set([
+            'hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'card-kp', 'cc-fee'
+        ]);
+
+        function addDaysToYmd(ymd, days) {
+            const ms = parseYMD(ymd);
+            if (!ms) return ymd;
+            return new Date(ms + (days * 86400000)).toISOString().split('T')[0];
+        }
+
+        function fmtMoney(num) {
+            const val = roundCurrency(Number(num) || 0);
+            if (val === 0) return '0.00';
+            return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function buildCommissionKeySet(propId) {
+            const keys = new Set(DEFAULT_FEE_METHODS);
+            const prop = propertiesCatalog.find(p => p.id === propId);
+            if (prop && Array.isArray(prop.payments)) {
+                prop.payments.forEach(pm => {
+                    if (pm && pm.key && pm.type === 'commission') {
+                        keys.add(String(pm.key).trim().toLowerCase());
+                    }
+                });
+            }
+            return keys;
+        }
+
+        // ------------------------------------------------------------------
+        // 2. EXACT 7-BUCKET RESERVATION FINANCIAL DECOMPOSITION
+        // ------------------------------------------------------------------
+
+        function classifyBookingFinancials(booking, todayStr, otaLagDays, includeTransit, keptMode, dateBasis, startStr, endStr) {
+            const propId = toCanonicalPropId(booking.property);
+            const feeKeys = buildCommissionKeySet(propId);
+            const gross = roundCurrency(Number(booking.totalPrice) || 0);
+            const status = String(booking.status || 'future').toLowerCase().trim();
+
+            const inMs = parseYMD(booking.checkIn);
+            const outMs = parseYMD(booking.checkOut);
+            const nights = (inMs && outMs && outMs > inMs) ? Math.max(1, Math.round((outMs - inMs) / 86400000)) : 1;
+
+            let cashRecv = 0;
+            let bankRecv = 0;
+            let inTransit = 0;
+            let fees = 0;
+            let matchedPaymentInPeriod = false;
+
+            const payments = Array.isArray(booking.payments) ? booking.payments : [];
+            payments.forEach(p => {
+                const amt = roundCurrency(Number(p.amt) || 0);
+                if (amt === 0) return;
+                const method = String(p.method || 'cash').trim().toLowerCase();
+                const payDate = String(p.date || booking.checkIn || '');
+
+                if (dateBasis === 'payment') {
+                    if (startStr && payDate < startStr) return;
+                    if (endStr && payDate > endStr) return;
+                    matchedPaymentInPeriod = true;
+                }
+
+                const isFee = method.endsWith('-kp') || feeKeys.has(method);
+                if (isFee) {
+                    fees = roundCurrency(fees + amt);
+                    return;
+                }
+
+                const isOtaPay = method.endsWith('-pay') || OTA_PAYOUT_METHODS.has(method);
+                const settleDate = isOtaPay
+                    ? addDaysToYmd(booking.checkOut || payDate, otaLagDays)
+                    : payDate;
+
+                const isInTransit = (payDate && payDate > todayStr) || (isOtaPay && settleDate > todayStr);
+
+                if (isInTransit) {
+                    inTransit = roundCurrency(inTransit + amt);
+                } else if (method === 'cash') {
+                    cashRecv = roundCurrency(cashRecv + amt);
+                } else {
+                    bankRecv = roundCurrency(bankRecv + amt);
+                }
+            });
+
+            // When filtering by payment date, rows with no payments in range are excluded
+            if (dateBasis === 'payment' && !matchedPaymentInPeriod) {
+                return null;
+            }
+
+            const totalAccountedPaid = roundCurrency(cashRecv + bankRecv + inTransit + fees);
+            const remaining = Math.max(0, roundCurrency(gross - totalAccountedPaid));
+
+            let futureDue = 0;
+            let unpaidLeft = 0;
+            let willNotCollect = 0;
+
+            if (NON_COLLECTIBLE_STATUSES.has(status)) {
+                willNotCollect = remaining;
+            } else if (LEFT_UNPAID_STATUSES.has(status) || (status === 'here' && booking.checkOut && booking.checkOut < todayStr)) {
+                unpaidLeft = remaining;
+            } else {
+                futureDue = remaining;
+            }
+
+            // Compute Net Kept according to active toggles (Cash/Bank & In-Transit)
+            let netKept = 0;
+            if (keptMode === 'cash_only') {
+                netKept = cashRecv;
+            } else if (keptMode === 'bank_only') {
+                netKept = roundCurrency(bankRecv + (includeTransit ? inTransit : 0));
+            } else {
+                netKept = roundCurrency(cashRecv + bankRecv + (includeTransit ? inTransit : 0));
+            }
+
+            const rList = Array.isArray(booking.rooms) && booking.rooms.length ? booking.rooms : (booking.room ? [booking.room] : []);
+
+            return {
+                id: booking.id,
+                property: propId,
+                propShort: toDisplayPropKey(propId) || propId.toUpperCase(),
+                bookId: booking.bookId || booking.id,
+                name: `${booking.firstName || ''} ${booking.lastName || ''}`.trim() || 'Unknown',
+                status,
+                source: String(booking.source || 'direct').toLowerCase(),
+                checkIn: booking.checkIn || '',
+                checkOut: booking.checkOut || '',
+                roomsStr: rList.filter(Boolean).join(', '),
+                nights,
+                gross,
+                fees,
+                netKept,
+                cashRecv,
+                bankRecv,
+                inTransit,
+                futureDue,
+                unpaidLeft,
+                willNotCollect,
+                badCC: !!booking.badCC
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // 3. DATE PRESETS & FILTER CONTROLS
+        // ------------------------------------------------------------------
+
+        window.applyPeriodPreset = (preset) => {
+            const startEl = document.getElementById('acc-date-start');
+            const endEl = document.getElementById('acc-date-end');
+            if (!startEl || !endEl) return;
+
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = now.getMonth();
+
+            if (preset === 'this_month') {
+                startEl.value = getLocalYMD(new Date(y, m, 1));
+                endEl.value = getLocalYMD(new Date(y, m + 1, 0));
+            } else if (preset === 'last_month') {
+                startEl.value = getLocalYMD(new Date(y, m - 1, 1));
+                endEl.value = getLocalYMD(new Date(y, m, 0));
+            } else if (preset === 'next_month') {
+                startEl.value = getLocalYMD(new Date(y, m + 1, 1));
+                endEl.value = getLocalYMD(new Date(y, m + 2, 0));
+            } else if (preset === 'this_week') {
+                const day = now.getDay();
+                const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+                const mon = new Date(y, m, diff);
+                const sun = new Date(y, m, diff + 6);
+                startEl.value = getLocalYMD(mon);
+                endEl.value = getLocalYMD(sun);
+            } else if (preset === 'last_week') {
+                const day = now.getDay();
+                const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
+                const mon = new Date(y, m, diff);
+                const sun = new Date(y, m, diff + 6);
+                startEl.value = getLocalYMD(mon);
+                endEl.value = getLocalYMD(sun);
+            } else if (preset === 'this_year') {
+                startEl.value = `${y}-01-01`;
+                endEl.value = `${y}-12-31`;
+            } else if (preset === 'last_year') {
+                startEl.value = `${y - 1}-01-01`;
+                endEl.value = `${y - 1}-12-31`;
+            } else if (preset === 'all') {
+                startEl.value = '';
+                endEl.value = '';
+            }
+
+            window.renderAccounting();
+        };
+
+        window.onCustomDateChange = () => {
+            const presetEl = document.getElementById('acc-period-preset');
+            if (presetEl) presetEl.value = 'custom';
+            window.renderAccounting();
+        };
+
+        window.handleScopeChange = (val) => {
+            activeScope = val === 'ALL' ? 'ALL' : toCanonicalPropId(val);
+            if (activeScope !== 'ALL') {
+                try { localStorage.setItem('last_prop', activeScope); } catch (e) {}
+            }
+            window.renderAccounting();
+        };
+
+        window.setAccView = (view) => {
+            activeView = view;
+            const ledgerEl = document.getElementById('view-ledger');
+            const rollupEl = document.getElementById('view-rollup');
+            const btnLedger = document.getElementById('btn-view-ledger');
+            const btnRollup = document.getElementById('btn-view-rollup');
+
+            if (view === 'rollup') {
+                ledgerEl?.classList.add('hidden');
+                rollupEl?.classList.remove('hidden');
+                rollupEl?.classList.add('flex');
+                if (btnLedger) btnLedger.className = 'px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer';
+                if (btnRollup) btnRollup.className = 'px-2 py-0.5 rounded bg-slate-900 text-white cursor-pointer';
+                renderRollupView();
+            } else {
+                rollupEl?.classList.add('hidden');
+                rollupEl?.classList.remove('flex');
+                ledgerEl?.classList.remove('hidden');
+                if (btnRollup) btnRollup.className = 'px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer';
+                if (btnLedger) btnLedger.className = 'px-2 py-0.5 rounded bg-slate-900 text-white cursor-pointer';
+            }
+        };
+
+        window.setRollupGranularity = (gran) => {
+            rollupGranularity = gran;
+            const btnM = document.getElementById('btn-rollup-monthly');
+            const btnY = document.getElementById('btn-rollup-yearly');
+            if (btnM) btnM.className = gran === 'monthly' ? 'px-2 py-0.5 rounded bg-indigo-600 text-white cursor-pointer' : 'px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100 cursor-pointer';
+            if (btnY) btnY.className = gran === 'yearly' ? 'px-2 py-0.5 rounded bg-indigo-600 text-white cursor-pointer' : 'px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100 cursor-pointer';
+            renderRollupView();
+        };
+
+        window.sortAccounting = (key) => {
+            if (sortKey === key) sortAsc = !sortAsc;
+            else {
+                sortKey = key;
+                sortAsc = true;
+            }
+            window.renderAccounting();
+        };
+
+        // ------------------------------------------------------------------
+        // 4. MASTER LEDGER RENDERER & STICKY TOTALS
+        // ------------------------------------------------------------------
+
+        window.renderAccounting = () => {
+            const todayStr = getLocalYMD(new Date());
+            const dateBasis = document.getElementById('acc-date-basis')?.value || 'checkIn';
+            const startStr = document.getElementById('acc-date-start')?.value || '';
+            const endStr = document.getElementById('acc-date-end')?.value || '';
+            const includeTransit = !!document.getElementById('acc-include-transit')?.checked;
+            const keptMode = document.getElementById('acc-kept-mode')?.value || 'all';
+            const bucketFilter = document.getElementById('acc-bucket-filter')?.value || 'all';
+            const otaLagDays = Math.max(0, parseInt(document.getElementById('acc-ota-lag')?.value, 10) || 0);
+
+            const searchFilter = (document.getElementById('acc-filter-search')?.value || '').trim().toUpperCase();
+            const statusFilter = (document.getElementById('acc-filter-status')?.value || '').toLowerCase();
+            const sourceFilter = (document.getElementById('acc-filter-source')?.value || '').toLowerCase();
+
+            const rows = [];
+
+            allBookings.forEach(b => {
+                if (b.isMockTest) return;
+                const propId = toCanonicalPropId(b.property);
+                if (activeScope !== 'ALL' && propId !== activeScope) return;
+
+                if (dateBasis === 'checkIn') {
+                    if (startStr && (b.checkIn || '') < startStr) return;
+                    if (endStr && (b.checkIn || '') > endStr) return;
+                } else if (dateBasis === 'checkOut') {
+                    if (startStr && (b.checkOut || '') < startStr) return;
+                    if (endStr && (b.checkOut || '') > endStr) return;
+                } else if (dateBasis === 'overlap') {
+                    if (startStr && (b.checkOut || '') <= startStr) return;
+                    if (endStr && (b.checkIn || '') > endStr) return;
+                }
+
+                const fin = classifyBookingFinancials(b, todayStr, otaLagDays, includeTransit, keptMode, dateBasis, startStr, endStr);
+                if (!fin) return;
+
+                if (statusFilter && fin.status !== statusFilter) return;
+                if (sourceFilter && fin.source !== sourceFilter) return;
+                if (searchFilter) {
+                    const hay = `${fin.name} ${fin.bookId} ${fin.roomsStr} ${fin.propShort}`.toUpperCase();
+                    if (!hay.includes(searchFilter)) return;
+                }
+
+                if (bucketFilter === 'kept' && fin.netKept <= 0) return;
+                if (bucketFilter === 'transit' && fin.inTransit <= 0) return;
+                if (bucketFilter === 'future' && fin.futureDue <= 0) return;
+                if (bucketFilter === 'unpaid' && fin.unpaidLeft <= 0) return;
+                if (bucketFilter === 'wnc' && fin.willNotCollect <= 0) return;
+                if (bucketFilter === 'fees' && fin.fees <= 0) return;
+
+                rows.push(fin);
+            });
+
+            rows.sort((a, b) => {
+                const vA = a[sortKey] ?? '';
+                const vB = b[sortKey] ?? '';
+                if (typeof vA === 'number' && typeof vB === 'number') {
+                    return sortAsc ? vA - vB : vB - vA;
+                }
+                const cmp = String(vA).localeCompare(String(vB));
+                return sortAsc ? cmp : -cmp;
+            });
+
+            lastComputedRows = rows;
+
+            // Accumulate exact column totals from visible rows
+            const totals = {
+                nights: 0,
+                gross: 0,
+                fees: 0,
+                netKept: 0,
+                cashRecv: 0,
+                bankRecv: 0,
+                inTransit: 0,
+                futureDue: 0,
+                unpaidLeft: 0,
+                willNotCollect: 0
+            };
+
+            const tbody = document.getElementById('acc-ledger-body');
+            const tfoot = document.getElementById('acc-ledger-foot');
+            if (!tbody || !tfoot) return;
+
+            if (rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="17" class="text-center py-12 text-slate-400 font-black uppercase tracking-widest">No reservations match the current filters.</td></tr>`;
+            } else {
+                tbody.innerHTML = rows.map(r => {
+                    totals.nights += r.nights;
+                    totals.gross = roundCurrency(totals.gross + r.gross);
+                    totals.fees = roundCurrency(totals.fees + r.fees);
+                    totals.netKept = roundCurrency(totals.netKept + r.netKept);
+                    totals.cashRecv = roundCurrency(totals.cashRecv + r.cashRecv);
+                    totals.bankRecv = roundCurrency(totals.bankRecv + r.bankRecv);
+                    totals.inTransit = roundCurrency(totals.inTransit + r.inTransit);
+                    totals.futureDue = roundCurrency(totals.futureDue + r.futureDue);
+                    totals.unpaidLeft = roundCurrency(totals.unpaidLeft + r.unpaidLeft);
+                    totals.willNotCollect = roundCurrency(totals.willNotCollect + r.willNotCollect);
+
+                    const st = getStatusObj(r.status);
+                    const badge = `<span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border:1px solid ${st.border};">${st.label}</span>`;
+                    const isDead = NON_COLLECTIBLE_STATUSES.has(r.status);
+
+                    return `
+                        <tr onclick="window.location.href='pms.html?p=${encodeURIComponent(r.property)}&edit=${encodeURIComponent(r.id)}'" class="hover:bg-indigo-50/60 cursor-pointer transition-colors ${isDead ? 'bg-slate-50/80 text-slate-500' : 'text-slate-800'}">
+                            <td class="py-1.5 px-2 border-r border-slate-200 font-black text-indigo-700">${r.propShort}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 font-mono text-[11px] text-slate-600">${r.bookId}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 font-bold max-w-[180px] truncate" title="${r.name}">${r.name}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200">${badge}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 uppercase text-[10px] text-slate-600">${r.source}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 font-mono text-[11px]">${r.checkIn}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 font-mono text-[11px]">${r.checkOut}</td>
+                            <td class="py-1.5 px-1.5 border-r border-slate-200 text-center font-bold">${r.nights}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black">${fmtMoney(r.gross)}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.fees > 0 ? 'text-rose-600' : 'text-slate-300'}">${fmtMoney(r.fees)}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black bg-emerald-50/60 ${r.netKept > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmtMoney(r.netKept)}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.cashRecv > 0 ? 'text-green-700' : 'text-slate-300'}">${fmtMoney(r.cashRecv)}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.bankRecv > 0 ? 'text-sky-700' : 'text-slate-300'}">${fmtMoney(r.bankRecv)}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.inTransit > 0 ? 'text-amber-700' : 'text-slate-300'}">${fmtMoney(r.inTransit)}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.futureDue > 0 ? 'text-indigo-700' : 'text-slate-300'}">${fmtMoney(r.futureDue)}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black ${r.unpaidLeft > 0 ? 'text-orange-600 bg-orange-50/70' : 'text-slate-300'} ${r.badCC ? 'underline decoration-dashed decoration-red-500' : ''}">${fmtMoney(r.unpaidLeft)}</td>
+                            <td class="py-1.5 px-2 text-right ${r.willNotCollect > 0 ? 'text-slate-500 bg-slate-100' : 'text-slate-300'}">${fmtMoney(r.willNotCollect)}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            tfoot.innerHTML = `
+                <tr>
+                    <td colspan="7" class="py-2 px-2 border-r border-slate-700 uppercase tracking-wider text-right text-[11px]">Totals (${rows.length} Rows):</td>
+                    <td class="py-2 px-1.5 border-r border-slate-700 text-center">${totals.nights}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right">฿${fmtMoney(totals.gross)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-rose-300">฿${fmtMoney(totals.fees)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-emerald-300 bg-slate-800">฿${fmtMoney(totals.netKept)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-green-300">฿${fmtMoney(totals.cashRecv)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-sky-300">฿${fmtMoney(totals.bankRecv)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-amber-300">฿${fmtMoney(totals.inTransit)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300">฿${fmtMoney(totals.futureDue)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-orange-300">฿${fmtMoney(totals.unpaidLeft)}</td>
+                    <td class="py-2 px-2 text-right text-slate-300">฿${fmtMoney(totals.willNotCollect)}</td>
+                </tr>
+            `;
+
+            const pill = document.getElementById('acc-audit-pill');
+            if (pill) {
+                pill.innerText = `${rows.length} Rows | Kept: ฿${fmtMoney(totals.netKept)} | Unpaid: ฿${fmtMoney(totals.unpaidLeft)}`;
+            }
+
+            if (activeView === 'rollup') {
+                renderRollupView();
+            }
+        };
+
+        // ------------------------------------------------------------------
+        // 5. MONTHLY & YEARLY ROLLUP + SVG BAR CHART
+        // ------------------------------------------------------------------
+
+        function renderRollupView() {
+            const buckets = new Map();
+
+            lastComputedRows.forEach(r => {
+                const rawDate = r.checkIn || r.checkOut || '0000-00-00';
+                const key = rollupGranularity === 'yearly' ? rawDate.slice(0, 4) : rawDate.slice(0, 7);
+                if (!buckets.has(key)) {
+                    buckets.set(key, {
+                        period: key,
+                        count: 0,
+                        nights: 0,
+                        gross: 0,
+                        fees: 0,
+                        netKept: 0,
+                        cashRecv: 0,
+                        bankRecv: 0,
+                        inTransit: 0,
+                        futureDue: 0,
+                        unpaidLeft: 0,
+                        willNotCollect: 0
+                    });
+                }
+                const b = buckets.get(key);
+                b.count += 1;
+                b.nights += r.nights;
+                b.gross = roundCurrency(b.gross + r.gross);
+                b.fees = roundCurrency(b.fees + r.fees);
+                b.netKept = roundCurrency(b.netKept + r.netKept);
+                b.cashRecv = roundCurrency(b.cashRecv + r.cashRecv);
+                b.bankRecv = roundCurrency(b.bankRecv + r.bankRecv);
+                b.inTransit = roundCurrency(b.inTransit + r.inTransit);
+                b.futureDue = roundCurrency(b.futureDue + r.futureDue);
+                b.unpaidLeft = roundCurrency(b.unpaidLeft + r.unpaidLeft);
+                b.willNotCollect = roundCurrency(b.willNotCollect + r.willNotCollect);
+            });
+
+            const sorted = Array.from(buckets.values()).sort((a, b) => a.period.localeCompare(b.period));
+            lastRollupRows = sorted;
+
+            const formatPeriodLabel = (p) => {
+                if (rollupGranularity === 'yearly' || p.length < 7) return p;
+                const [y, m] = p.split('-');
+                const mIdx = parseInt(m, 10) - 1;
+                return `${mNames[mIdx] || m} ${y}`;
+            };
+
+            // Render stacked bar chart
+            const chartEl = document.getElementById('rollup-chart-container');
+            if (chartEl) {
+                if (sorted.length === 0) {
+                    chartEl.innerHTML = `<div class="text-center py-6 text-xs font-bold text-slate-400 uppercase">No data in range to chart.</div>`;
+                } else {
+                    const maxVal = Math.max(1, ...sorted.map(x => x.cashRecv + x.bankRecv + x.inTransit + x.futureDue + x.fees));
+                    chartEl.innerHTML = `
+                        <div class="flex items-end gap-3 h-40 pt-5 pb-1 min-w-max px-2">
+                            ${sorted.map(item => {
+                                const totalBar = item.cashRecv + item.bankRecv + item.inTransit + item.futureDue + item.fees;
+                                const hPct = Math.max(4, Math.round((totalBar / maxVal) * 100));
+                                const seg = (val) => totalBar > 0 ? ((val / totalBar) * 100).toFixed(2) : 0;
+                                return `
+                                    <div class="flex flex-col items-center w-16 shrink-0 group">
+                                        <span class="text-[9px] font-black text-slate-700 mb-1">฿${Math.round(item.netKept).toLocaleString()}</span>
+                                        <div class="w-9 rounded-t overflow-hidden flex flex-col-reverse border border-slate-300 shadow-2xs" style="height: ${hPct}%;">
+                                            <div style="height:${seg(item.cashRecv)}%" class="bg-emerald-500" title="Cash: ฿${fmtMoney(item.cashRecv)}"></div>
+                                            <div style="height:${seg(item.bankRecv)}%" class="bg-sky-500" title="Bank/Card: ฿${fmtMoney(item.bankRecv)}"></div>
+                                            <div style="height:${seg(item.inTransit)}%" class="bg-amber-400" title="In-Transit: ฿${fmtMoney(item.inTransit)}"></div>
+                                            <div style="height:${seg(item.futureDue)}%" class="bg-indigo-400" title="Future Due: ฿${fmtMoney(item.futureDue)}"></div>
+                                            <div style="height:${seg(item.fees)}%" class="bg-rose-400" title="Fees/Comm: ฿${fmtMoney(item.fees)}"></div>
+                                        </div>
+                                        <span class="text-[10px] font-black text-slate-600 uppercase mt-1.5">${formatPeriodLabel(item.period)}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                }
+            }
+
+            // Render rollup table
+            const rBody = document.getElementById('rollup-table-body');
+            const rFoot = document.getElementById('rollup-table-foot');
+            if (!rBody || !rFoot) return;
+
+            const grand = { count: 0, nights: 0, gross: 0, fees: 0, netKept: 0, cashRecv: 0, bankRecv: 0, inTransit: 0, futureDue: 0, unpaidLeft: 0, willNotCollect: 0 };
+
+            rBody.innerHTML = sorted.map(b => {
+                grand.count += b.count;
+                grand.nights += b.nights;
+                grand.gross = roundCurrency(grand.gross + b.gross);
+                grand.fees = roundCurrency(grand.fees + b.fees);
+                grand.netKept = roundCurrency(grand.netKept + b.netKept);
+                grand.cashRecv = roundCurrency(grand.cashRecv + b.cashRecv);
+                grand.bankRecv = roundCurrency(grand.bankRecv + b.bankRecv);
+                grand.inTransit = roundCurrency(grand.inTransit + b.inTransit);
+                grand.futureDue = roundCurrency(grand.futureDue + b.futureDue);
+                grand.unpaidLeft = roundCurrency(grand.unpaidLeft + b.unpaidLeft);
+                grand.willNotCollect = roundCurrency(grand.willNotCollect + b.willNotCollect);
+
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-1.5 px-2.5 border-r border-slate-200 font-black uppercase text-slate-800">${formatPeriodLabel(b.period)}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-center">${b.count}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-center">${b.nights}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black">${fmtMoney(b.gross)}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-rose-600">${fmtMoney(b.fees)}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black text-emerald-700 bg-emerald-50/60">${fmtMoney(b.netKept)}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-green-700">${fmtMoney(b.cashRecv)}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-sky-700">${fmtMoney(b.bankRecv)}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-amber-700">${fmtMoney(b.inTransit)}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-indigo-700">${fmtMoney(b.futureDue)}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-orange-600">${fmtMoney(b.unpaidLeft)}</td>
+                        <td class="py-1.5 px-2 text-right text-slate-500">${fmtMoney(b.willNotCollect)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            rFoot.innerHTML = `
+                <tr>
+                    <td class="py-2 px-2.5 border-r border-slate-700 uppercase">Grand Total</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-center">${grand.count}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-center">${grand.nights}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right">฿${fmtMoney(grand.gross)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-rose-300">฿${fmtMoney(grand.fees)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-emerald-300 bg-slate-800">฿${fmtMoney(grand.netKept)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-green-300">฿${fmtMoney(grand.cashRecv)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-sky-300">฿${fmtMoney(grand.bankRecv)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-amber-300">฿${fmtMoney(grand.inTransit)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300">฿${fmtMoney(grand.futureDue)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-orange-300">฿${fmtMoney(grand.unpaidLeft)}</td>
+                    <td class="py-2 px-2 text-right text-slate-300">฿${fmtMoney(grand.willNotCollect)}</td>
+                </tr>
+            `;
+        }
+
+        // ------------------------------------------------------------------
+        // 6. MULTI-SHEET XLSX SPREADSHEET EXPORTER
+        // ------------------------------------------------------------------
+
+        window.exportAccountingXlsx = () => {
+            if (lastComputedRows.length === 0) return;
+
+            const wb = XLSX.utils.book_new();
+
+            // Sheet 1: Raw Reservation Ledger
+            const ledgerHeader = [
+                'Property', 'Book ID', 'Guest', 'Status', 'Source', 'Check-In', 'Check-Out', 'Nights',
+                'Gross', 'Fees / Comm', 'Net Kept', 'Cash Received', 'Bank / Card Received',
+                'In-Transit (OTA)', 'Future Due', 'Unpaid (Left)', 'Will Not Collect'
+            ];
+
+            const ledgerData = lastComputedRows.map(r => [
+                r.propShort, r.bookId, r.name, r.status.toUpperCase(), r.source.toUpperCase(),
+                r.checkIn, r.checkOut, r.nights,
+                r.gross, r.fees, r.netKept, r.cashRecv, r.bankRecv,
+                r.inTransit, r.futureDue, r.unpaidLeft, r.willNotCollect
+            ]);
+
+            const sumCol = (idx) => roundCurrency(ledgerData.reduce((acc, row) => acc + (Number(row[idx]) || 0), 0));
+            const ledgerTotalRow = [
+                'TOTAL', '', `${ledgerData.length} Rows`, '', '', '', '', sumCol(7),
+                sumCol(8), sumCol(9), sumCol(10), sumCol(11), sumCol(12),
+                sumCol(13), sumCol(14), sumCol(15), sumCol(16)
+            ];
+
+            const wsLedger = XLSX.utils.aoa_to_sheet([ledgerHeader, ...ledgerData, ledgerTotalRow]);
+            XLSX.utils.book_append_sheet(wb, wsLedger, 'Reservation_Ledger');
+
+            // Sheet 2: Period Rollup
+            if (lastRollupRows.length === 0) renderRollupView();
+            const rollupHeader = [
+                'Period', 'Bookings', 'Nights', 'Gross', 'Fees / Comm', 'Net Kept',
+                'Cash Received', 'Bank / Card Received', 'In-Transit (OTA)',
+                'Future Due', 'Unpaid (Left)', 'Will Not Collect'
+            ];
+            const rollupData = lastRollupRows.map(b => [
+                b.period, b.count, b.nights, b.gross, b.fees, b.netKept,
+                b.cashRecv, b.bankRecv, b.inTransit, b.futureDue, b.unpaidLeft, b.willNotCollect
+            ]);
+            const wsRollup = XLSX.utils.aoa_to_sheet([rollupHeader, ...rollupData]);
+            XLSX.utils.book_append_sheet(wb, wsRollup, 'Period_Rollup');
+
+            const scopeTag = activeScope === 'ALL' ? 'ALL' : (toDisplayPropKey(activeScope) || activeScope).toUpperCase();
+            const todayTag = getLocalYMD(new Date());
+            XLSX.writeFile(wb, `${scopeTag}_Accounting_${todayTag}.xlsx`);
+        };
+
+        // ------------------------------------------------------------------
+        // 7. BOOTLOADER & REALTIME SNAPSHOT SUBSCRIPTION
+        // ------------------------------------------------------------------
+
+        async function initAccounting() {
+            try {
+                if (!auth.currentUser) {
+                    await signInAnonymously(auth);
+                }
+
+                propertiesCatalog = await loadPropertiesCatalog();
+
+                const scopeSelect = document.getElementById('acc-prop-scope');
+                if (scopeSelect && propertiesCatalog.length > 0) {
+                    scopeSelect.innerHTML = `<option value="ALL">ALL PROPERTIES</option>` +
+                        propertiesCatalog.map(p => `<option value="${p.id}">${p.short}</option>`).join('');
+                }
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const pParam = urlParams.get('p');
+                if (pParam && pParam.toUpperCase() !== 'ALL') {
+                    activeScope = toCanonicalPropId(pParam);
+                } else if (!pParam) {
+                    const last = getActivePropertyId();
+                    activeScope = last || 'ALL';
+                } else {
+                    activeScope = 'ALL';
+                }
+                if (scopeSelect) scopeSelect.value = activeScope;
+
+                // Populate status filter dropdown from canonical STATUS_CYCLE
+                const statusSelect = document.getElementById('acc-filter-status');
+                if (statusSelect) {
+                    statusSelect.innerHTML = `<option value="">All Status</option>` +
+                        STATUS_CYCLE.map(s => `<option value="${s.val}">${s.label}</option>`).join('');
+                }
+
+                // Default to This Month
+                window.applyPeriodPreset('this_month');
+
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => {
+                    allBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    const loader = document.getElementById('boot-loader');
+                    if (loader) loader.style.display = 'none';
+                    window.renderAccounting();
+                }, (err) => {
+                    console.error('[Accounting Snapshot Error]:', err);
+                    const statusEl = document.getElementById('sync-status');
+                    if (statusEl) statusEl.innerText = 'Database Connection Error';
+                });
+
+                mountNav();
+                if (window.lucide) window.lucide.createIcons();
+            } catch (err) {
+                console.error('[Accounting Init Error]:', err);
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initAccounting);
+        } else {
+            initAccounting();
+        }
+    </script>
+</body>
+</html>
