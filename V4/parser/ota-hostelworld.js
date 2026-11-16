@@ -126,8 +126,13 @@ export function parseHostelworld(rawText) {
     // 5. Nights & Pax
     let nights = 1;
     let pax = 1;
+    const comboNightLine = lines.find(l => /^(\d+)\s+(\d+)\s*nights?$/i.test(l));
     const nightLineIdx = lines.findIndex(l => /^(\d+)\s*nights?$/i.test(l));
-    if (nightLineIdx !== -1) {
+    if (comboNightLine) {
+        const m = comboNightLine.match(/^(\d+)\s+(\d+)\s*nights?$/i);
+        pax = parseInt(m[1], 10) || 1;
+        nights = parseInt(m[2], 10) || 1;
+    } else if (nightLineIdx !== -1) {
         nights = parseInt(lines[nightLineIdx].match(/^(\d+)/)[1], 10) || 1;
         const prevLine = lines[nightLineIdx - 1] || '';
         if (/^\d+$/.test(prevLine)) {
@@ -185,7 +190,7 @@ export function parseHostelworld(rawText) {
         const endIdx = bookingPriceIdx > roomDetailsIdx ? bookingPriceIdx : lines.length;
         const roomRows = [];
         for (let i = roomDetailsIdx + 1; i < endIdx; i++) {
-            const datePrefix = lines[i].match(/^(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\s*[´'’`′]?\s*\d{2,4})(?:[\t\s]+(.+))?$/i);
+            const datePrefix = lines[i].match(/^(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\s*[´'’`′]?\s*\d{2,4})(.*)$/i);
             if (!datePrefix) continue;
 
             const rowDate = parseHwDate(datePrefix[1]);
@@ -194,19 +199,27 @@ export function parseHostelworld(rawText) {
             const remainder = (datePrefix[2] || '').trim();
             if (remainder) {
                 const tabCols = remainder.split('\t').map(c => c.trim()).filter(Boolean);
-                const rawTitle = tabCols.length >= 2
-                    ? tabCols[0]
-                    : remainder.replace(/\s+\d+\s+\d+\s+(?:THB|฿|[A-Z]{3})\s*[0-9,]+(?:\.[0-9]{1,2})?\s*$/i, '').trim();
-                const personsMatch = tabCols.length >= 2
-                    ? (tabCols[1].match(/^(\d+)$/) || [])
-                    : remainder.match(/\s+(\d+)\s+\d+\s+(?:THB|฿|[A-Z]{3})\s*[0-9,]+(?:\.[0-9]{1,2})?\s*$/i);
+                let rawTitle = '';
+                let persons = 0;
+
+                if (tabCols.length >= 2) {
+                    rawTitle = tabCols[0];
+                    persons = /^\d+$/.test(tabCols[1]) ? parseInt(tabCols[1], 10) : 0;
+                } else {
+                    const tailMatch = remainder.match(/^(.*?)\s+(\d+)(?:\s+\d+)?\s*(?:THB|฿|[A-Z]{3})\s*[0-9,]+(?:\.[0-9]{1,2})?\s*$/i);
+                    if (tailMatch) {
+                        rawTitle = tailMatch[1].trim();
+                        const pbDigits = tailMatch[2];
+                        persons = pbDigits.length >= 2
+                            ? (parseInt(pbDigits.slice(0, -1), 10) || 1)
+                            : (parseInt(pbDigits, 10) || 1);
+                    } else {
+                        rawTitle = remainder;
+                    }
+                }
 
                 if (rawTitle && !/^(date|room\s*type|persons|breakfast|price)$/i.test(rawTitle)) {
-                    roomRows.push({
-                        date: rowDate,
-                        rawTitle,
-                        persons: personsMatch ? parseInt(personsMatch[1], 10) : 0
-                    });
+                    roomRows.push({ date: rowDate, rawTitle, persons });
                 }
             } else if (lines[i + 1] && !/^(date|room\s*type|persons|breakfast|price)$/i.test(lines[i + 1])) {
                 roomRows.push({
