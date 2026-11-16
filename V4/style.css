@@ -515,10 +515,17 @@ body {
   background: transparent;
   pointer-events: none;
   z-index: 100;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding-top: 5vh;
-  padding-bottom: 5vh;
+  padding: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .modal-overlay {
+    align-items: flex-start;
+    padding-top: 3dvh;
+    padding-bottom: 3dvh;
+  }
 }
 
 .modal-overlay.active {
@@ -528,12 +535,18 @@ body {
 .modal-content {
   pointer-events: auto;
   width: 420px;
-  max-width: 95vw;
-  max-height: 90vh;
+  max-width: 96vw;
+  max-height: calc(100dvh - 1rem);
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  .modal-content {
+    max-height: 94dvh;
+  }
 }
 
 .alert-modal-overlay {
