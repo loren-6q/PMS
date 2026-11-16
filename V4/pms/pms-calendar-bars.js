@@ -42,7 +42,8 @@ export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) =
     const eE = getDayIndex(s.checkOut) + 0.25;
     if (eS >= dShow || eE <= 0) return null;
     const due = getDue(s);
-    const owes = due > 0;
+    const owes = due > 0.01;
+    const overpaid = due < -0.01;
     let bSty = 'border border-black/10';
     let isA = false;
 
@@ -58,6 +59,7 @@ export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) =
     if (!isA) {
         if (s.badCC) bSty = '!border-red-500 !border-dashed !border-[3px]';
         else if (owes) bSty = '!border-red-500 !border-[3px]';
+        else if (overpaid) bSty = '!border-fuchsia-500 !border-[3px]';
     }
 
     const srcC = {
@@ -111,7 +113,11 @@ export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) =
     if (s.emailSpecial) tags.push('Special Sent');
     if (s.linkedId) tags.push(`Linked: ${s.linkedId}`);
 
-    let ttHtml = `<div class="font-black text-[15px] text-blue-300 leading-tight mb-1">${s.firstName || ''} ${s.lastName || ''}</div><div>Total: ฿${Number(s.totalPrice || 0).toFixed(2)} | <span class="${due > 0 ? 'text-red-400' : 'text-green-400'}">Due: ฿${due.toFixed(2)} ${s.badCC ? '(*BAD CC*)' : ''}</span></div><div class="text-slate-300 mt-1">${s.checkIn ? s.checkIn.substr(5) : ''} → ${s.checkOut ? s.checkOut.substr(5) : ''} (${s.pax} PAX)</div><div class="text-slate-300 mt-0.5">Rooms: ${getRooms(s).filter(Boolean).join(', ') || 'Unassigned'}</div>`;
+    const dueLabel = overpaid
+        ? `<span class="text-fuchsia-300 font-black">Overpaid: ฿${Math.abs(due).toFixed(2)}</span>`
+        : `<span class="${owes ? 'text-red-400' : 'text-green-400'}">Due: ฿${due.toFixed(2)} ${s.badCC ? '(*BAD CC*)' : ''}</span>`;
+
+    let ttHtml = `<div class="font-black text-[15px] text-blue-300 leading-tight mb-1">${s.firstName || ''} ${s.lastName || ''}</div><div>Total: ฿${Number(s.totalPrice || 0).toFixed(2)} | ${dueLabel}</div><div class="text-slate-300 mt-1">${s.checkIn ? s.checkIn.substr(5) : ''} → ${s.checkOut ? s.checkOut.substr(5) : ''} (${s.pax} PAX)</div><div class="text-slate-300 mt-0.5">Rooms: ${getRooms(s).filter(Boolean).join(', ') || 'Unassigned'}</div>`;
     if (s.bookedType) ttHtml += `<div class="text-slate-300 mt-0.5">Booked: ${s.bookedType}</div>`;
     ttHtml += `<div class="text-slate-300 mt-0.5">Src: ${(s.source || 'other').toUpperCase()}</div>`;
     if (tags.length > 0) ttHtml += `<div class="mt-1 pt-1 border-t border-slate-600 text-yellow-200 text-[10px] uppercase font-bold max-w-[200px] leading-tight">${tags.join(' • ')}</div>`;
