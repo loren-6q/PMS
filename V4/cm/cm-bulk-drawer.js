@@ -130,7 +130,6 @@ export function renderBulkRatesDropdown() {
     if (!bulkSelectedRateKeys) {
         bulkSelectedRateKeys = new Set(allLeafKeys);
     } else {
-        // Keep only valid keys, or default back to all if none remain
         const valid = new Set(allLeafKeys.filter(k => bulkSelectedRateKeys.has(k)));
         bulkSelectedRateKeys = valid.size > 0 ? valid : new Set(allLeafKeys);
     }
@@ -191,7 +190,6 @@ export function renderBulkRatesDropdown() {
 
     dropdown.innerHTML = html;
 
-    // Set tri-state indeterminate flags on parent checkboxes
     const allCb = document.getElementById('qb-rate-cb-all');
     if (allCb) allCb.indeterminate = selectedCount > 0 && selectedCount < totalCount;
 
@@ -208,7 +206,6 @@ export function renderBulkRatesDropdown() {
         });
     });
 
-    // Update closed button summary text
     if (labelEl) {
         if (selectedCount === totalCount) {
             labelEl.innerText = 'All Rates';
@@ -319,7 +316,7 @@ export function setBulkScopeMode(mode) {
     const btnAnchors = document.getElementById('qb-scope-anchors');
     const btnAll = document.getElementById('qb-scope-all');
     if (btnAnchors && btnAll) {
-        btnAnchors.className = mode === 'anchors' 
+        btnAnchors.className = mode === 'anchors'
             ? "px-2 py-0.5 rounded cursor-pointer bg-white text-indigo-700 shadow-2xs font-black"
             : "px-2 py-0.5 rounded cursor-pointer text-slate-600 hover:bg-white";
         btnAll.className = mode === 'all'
@@ -444,7 +441,7 @@ export function applyBulkGrid(isClear = false) {
         if (sig) selectedPlanSigs.add(sig);
     });
 
-    const applyRestrictionPayload = (dObj, targetRoom, r) => {
+    const applyRestrictionPayload = (dObj, dateStr, targetRoom, r) => {
         const targetRooms = getTargetRoomsForBulkRow(targetRoom);
         const primaryData = dObj[targetRoom] || (dObj[targetRoom] = { isOverride: {} });
         primaryData.isOverride = primaryData.isOverride || {};
@@ -588,7 +585,7 @@ export function applyBulkGrid(isClear = false) {
                         dObj['GLOBAL'].isOverride.stop = true;
                     }
                 } else {
-                    (window.roomTypes || []).forEach(rt => applyRestrictionPayload(dObj, rt, globalRule));
+                    (window.roomTypes || []).forEach(rt => applyRestrictionPayload(dObj, dateStr, rt, globalRule));
                 }
             }
             if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', '*');
@@ -619,13 +616,14 @@ export function applyBulkGrid(isClear = false) {
                     rippleDay(dateStr, rt, true, 'rates');
                 }
                 if (hasRestrChange) {
-                    applyRestrictionPayload(dObj, rt, r);
+                    applyRestrictionPayload(dObj, dateStr, rt, r);
                 }
                 if ((hasRateChange || hasRestrChange) && typeof window.markCmDirty === 'function') {
                     window.markCmDirty(dateStr, 'rate', '*');
                 }
             }
         });
+    }
 
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
@@ -654,20 +652,17 @@ export function runRippleRecovery(mode = 'blanks') {
         if (!dObj) continue;
 
         if (mode === 'blanks') {
-            // Snapshot existing non-blank values so we never overwrite them
             const preserved = {};
             allRooms.forEach(rt => {
                 const cur = dObj[rt];
                 if (cur && cur.std !== undefined && cur.std !== "") preserved[rt] = { ...cur };
             });
 
-            // Find any populated room to propagate from
             const seeds = Array.from(new Set([anchorP, anchorD, ...Object.keys(preserved)].filter(Boolean)));
             seeds.forEach(seed => {
                 if (preserved[seed]) rippleDay(dateStr, seed, true);
             });
 
-            // Restore any room that already had a price, counting newly filled rooms
             allRooms.forEach(rt => {
                 if (preserved[rt]) {
                     dObj[rt] = preserved[rt];
@@ -677,7 +672,6 @@ export function runRippleRecovery(mode = 'blanks') {
                 }
             });
         } else {
-            // RE-RIPPLE ALL: Recalculate all linked targets from Anchors
             [anchorP, anchorD].filter(Boolean).forEach(anc => {
                 if (dObj[anc] && (dObj[anc].std !== undefined || dObj[anc].fmp !== undefined)) {
                     rippleDay(dateStr, anc, false);
@@ -986,7 +980,6 @@ export function applyCurveTuner() {
     window.dirtyDates = window.dirtyDates || new Set();
     window.syncedDates = window.syncedDates || new Set();
 
-    // Ensure Event rows are visible so the applied curve is immediately seen
     window.enableEventRates = true;
     window.showEventRows = true;
 
