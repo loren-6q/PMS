@@ -301,11 +301,6 @@
             }, 4000);
         };
         window.showToast = showToast;
-        const normalizeRoomId = (r) => {
-            if (window.normalizeRoomId) return window.normalizeRoomId(r);
-            if (r === null || r === undefined) return '';
-            return String(r).trim().toUpperCase();
-        };
 
         let currentCompressedBase64 = null;
         let uploadedPhotoUrl = null;
