@@ -268,9 +268,39 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, where, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey } from './core/properties.js';
-        import { showToast, customAlert } from './core/ui-dialogs.js';
+        import { customAlert } from './core/ui-dialogs.js';
 
         const auth = getAuth(db.app);
+
+        const showToast = (title, text, type = "success") => {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            const bgColor = type === "error"
+                ? "bg-red-600 border-red-500 shadow-red-500/20"
+                : "bg-emerald-600 border-emerald-500 shadow-emerald-500/20";
+            const icon = type === "error"
+                ? `<i data-lucide="alert-circle" class="w-4 h-4 text-white"></i>`
+                : `<i data-lucide="check-circle" class="w-4 h-4 text-white"></i>`;
+
+            toast.className = `${bgColor} border text-white p-3 rounded-lg shadow-xl transform transition-all duration-300 translate-x-full opacity-0 max-w-xs`;
+            toast.innerHTML = `
+                <div class="flex items-start gap-2">
+                    <div class="mt-0.5">${icon}</div>
+                    <div>
+                        <h4 class="text-xs font-black uppercase tracking-widest">${title}</h4>
+                        <p class="text-[11px] font-bold text-white/90 mt-0.5 leading-tight">${text}</p>
+                    </div>
+                </div>`;
+            container.appendChild(toast);
+            if (window.lucide) window.lucide.createIcons();
+            requestAnimationFrame(() => toast.classList.remove('translate-x-full', 'opacity-0'));
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        };
+        window.showToast = showToast;
 
         let propertiesCatalog = [];
         let currentSubmissionsList = [];
