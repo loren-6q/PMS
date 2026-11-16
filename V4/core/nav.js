@@ -66,18 +66,26 @@ export function togglePropertyPicker() {
     }
 }
 
+// --- Check Cross-Tab Admin Lock State ---
+function isAdminUnlocked() {
+    try {
+        return localStorage.getItem('ww_admin_unlocked') === 'true';
+    } catch (e) {
+        return false;
+    }
+}
+
 // --- Toggle Admin Menu or Prompt for Password ---
 export function toggleAdminMenu() {
-    const isUnlocked = sessionStorage.getItem('ww_admin_unlocked') === 'true';
-    if (!isUnlocked) {
-        const pass = prompt("Enter Admin Password:");
+    if (!isAdminUnlocked()) {
         const props = window.availableProperties || [];
         const curProp = getActivePropertyId();
         const activeCfg = window.currentPropertyConfig || props.find(p => p.id.toLowerCase() === curProp.toLowerCase()) || {};
         const validPass = activeCfg.adminPassword || 'admin123';
 
+        const pass = prompt(`Enter Admin Password${activeCfg.adminPassword ? '' : ' (default: admin123)'}:`);
         if (pass === validPass) {
-            sessionStorage.setItem('ww_admin_unlocked', 'true');
+            try { localStorage.setItem('ww_admin_unlocked', 'true'); } catch (e) {}
             renderAdminMenu();
             const menu = document.getElementById('admin-dropdown-menu');
             if (menu) menu.classList.remove('hidden');
@@ -90,9 +98,9 @@ export function toggleAdminMenu() {
     if (menu) menu.classList.toggle('hidden');
 }
 
-// --- Lock Admin Session & Return to Front Desk if Needed ---
+// --- Lock Admin Session Across All Open Tabs ---
 export function lockAdmin() {
-    sessionStorage.removeItem('ww_admin_unlocked');
+    try { localStorage.removeItem('ww_admin_unlocked'); } catch (e) {}
     closeSplitScreen();
     renderAdminMenu();
     if (/\/(cm|accounting|setup)\.html/i.test(window.location.pathname)) {
@@ -127,11 +135,11 @@ export function openSplitScreen(leftApp = 'cm', rightApp = 'pms') {
         <div class="bg-slate-900 text-white px-3 py-1.5 flex items-center justify-between border-b border-slate-700 text-xs shrink-0">
             <div class="flex items-center gap-2">
                 <span class="font-black uppercase tracking-wider text-indigo-300 flex items-center gap-1"><i data-lucide="columns-2" class="!w-3.5 !h-3.5"></i> Split Workspace</span>
-                <select onchange="document.getElementById('split-frame-left').src = this.value + '.html?p=${curProp}'" class="bg-slate-800 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase cursor-pointer">
+                <select onchange="document.getElementById('split-frame-left').src = this.value + '.html?p=${curProp}&split=1'" class="bg-slate-800 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase cursor-pointer">
                     ${buildOpts(leftApp)}
                 </select>
                 <span class="text-slate-500 font-black">|</span>
-                <select onchange="document.getElementById('split-frame-right').src = this.value + '.html?p=${curProp}'" class="bg-slate-800 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase cursor-pointer">
+                <select onchange="document.getElementById('split-frame-right').src = this.value + '.html?p=${curProp}&split=1'" class="bg-slate-800 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase cursor-pointer">
                     ${buildOpts(rightApp)}
                 </select>
             </div>
@@ -140,8 +148,8 @@ export function openSplitScreen(leftApp = 'cm', rightApp = 'pms') {
             </button>
         </div>
         <div class="flex-1 flex min-h-0">
-            <iframe id="split-frame-left" src="${leftApp}.html?p=${curProp}" class="w-1/2 h-full border-r-2 border-slate-800 bg-white"></iframe>
-            <iframe id="split-frame-right" src="${rightApp}.html?p=${curProp}" class="w-1/2 h-full bg-white"></iframe>
+            <iframe id="split-frame-left" src="${leftApp}.html?p=${curProp}&split=1" class="w-1/2 h-full border-r-2 border-slate-800 bg-white"></iframe>
+            <iframe id="split-frame-right" src="${rightApp}.html?p=${curProp}&split=1" class="w-1/2 h-full bg-white"></iframe>
         </div>
     `;
     overlay.classList.remove('hidden');
@@ -158,10 +166,9 @@ export function closeSplitScreen() {
 function renderAdminMenu() {
     const container = document.getElementById('nav-admin-wrapper');
     if (!container) return;
-    const isUnlocked = sessionStorage.getItem('ww_admin_unlocked') === 'true';
     const curProp = getActivePropertyId();
 
-    if (isUnlocked) {
+    if (isAdminUnlocked()) {
         container.innerHTML = `
             <button type="button" onclick="window.toggleAdminMenu()" class="px-2 py-1 rounded text-[11px] font-black uppercase flex items-center gap-1 transition-colors bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs cursor-pointer">
                 <i data-lucide="shield-check" class="!w-3 !h-3"></i> Admin ▾
@@ -225,7 +232,6 @@ export function mountNav() {
         return;
     }
 
-    // Hide header automatically if rendered inside Split Screen iframe
     if (window.self !== window.top && new URLSearchParams(window.location.search).get('split') === '1') {
         container.style.display = 'none';
         return;
@@ -300,6 +306,16 @@ export function mountNav() {
         const aBtn = document.getElementById('nav-admin-wrapper');
         if (aMenu && !aMenu.classList.contains('hidden')) {
             if (!aMenu.contains(e.target) && (!aBtn || !aBtn.contains(e.target))) aMenu.classList.add('hidden');
+        }
+    });
+
+    // Keep Admin lock state synced live across all open tabs
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'ww_admin_unlocked') {
+            renderAdminMenu();
+            if (e.newValue !== 'true' && /\/(cm|accounting|setup)\.html/i.test(window.location.pathname)) {
+                window.location.href = `pms.html?p=${getActivePropertyId()}`;
+            }
         }
     });
 
