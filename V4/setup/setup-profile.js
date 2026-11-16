@@ -3,7 +3,7 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { appId } from '../core/config.js';
+import { db, appId } from '../core/config.js';
 import { getActivePropertyId } from '../core/properties.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { CANONICAL_OTA_LIST, getChannelByCode, getOtaPaymentPair, resolveChannelCode } from '../core/channels.js';
@@ -231,26 +231,80 @@ export function resetLogosToDefault() {
     customAlert("Logos Reset", "Restored active property brand assets.");
 }
 
+function downscaleBrandAsset(file, maxDimension) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                let { width, height } = img;
+                if (width > maxDimension || height > maxDimension) {
+                    if (width > height) {
+                        height = Math.round((height * maxDimension) / width);
+                        width = maxDimension;
+                    } else {
+                        width = Math.round((width * maxDimension) / height);
+                        height = maxDimension;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                let mimeType = 'image/png';
+                let dataUrl = canvas.toDataURL('image/png');
+                if (dataUrl.length > 140000) {
+                    mimeType = 'image/webp';
+                    dataUrl = canvas.toDataURL('image/webp', 0.85);
+                }
+                resolve({ dataUrl, mimeType });
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
 export async function handleLogoFileUpload(event, type) {
     const file = event.target?.files?.[0];
     if (!file) return;
+    event.target.value = '';
 
     try {
-        customAlert("Uploading Image...", `Processing ${file.name}...`);
-        const { getStorage, ref, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js");
-        const storage = getStorage();
-        const propId = getActivePropertyId();
-        const fileRef = ref(storage, `artifacts/${appId}/public/branding/${propId}/${type}_${Date.now()}_${file.name}`);
-        
-        await uploadBytes(fileRef, file);
-        const downloadUrl = await getDownloadURL(fileRef);
+        customAlert("Processing Image...", `Optimizing ${file.name}...`);
+        const maxDim = type === 'icon' ? 192 : 512;
+        const { dataUrl, mimeType } = await downscaleBrandAsset(file, maxDim);
+        const ext = mimeType === 'image/webp' ? 'webp' : 'png';
+
+        let finalUrl = dataUrl;
+        try {
+            const { getStorage, ref, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js");
+            const storage = getStorage(db.app);
+            const propId = getActivePropertyId();
+            const fileRef = ref(storage, `artifacts/${appId}/public/branding/${propId}/${type}_${Date.now()}.${ext}`);
+            const blob = await (await fetch(dataUrl)).blob();
+
+            const uploadTask = (async () => {
+                await uploadBytes(fileRef, blob, { contentType: mimeType });
+                return await getDownloadURL(fileRef);
+            })();
+            const timeoutTask = new Promise((_, reject) => setTimeout(() => reject(new Error("Storage CORS/timeout")), 5000));
+
+            finalUrl = await Promise.race([uploadTask, timeoutTask]);
+        } catch (storageErr) {
+            console.warn("[Branding Upload]: Storage blocked/timed out, using optimized inline asset.", storageErr.message);
+        }
 
         const inputMap = { primary: 'prop-logo-url', banner: 'prop-banner-url', icon: 'prop-icon-url' };
         const targetInput = document.getElementById(inputMap[type]);
-        if (targetInput) targetInput.value = downloadUrl;
+        if (targetInput) targetInput.value = finalUrl;
 
-        updateLogoPreview(type, downloadUrl);
-        customAlert("Upload Complete", "Brand asset uploaded and linked.");
+        updateLogoPreview(type, finalUrl);
+        customAlert("Asset Ready", "Brand asset optimized and linked. Click SAVE to persist.");
     } catch (err) {
         console.error("Upload error:", err);
         customAlert("Upload Failed", err.message);
