@@ -11,7 +11,7 @@ import { getStatusObj } from '../core/occupancy.js';
 import { getDue } from '../core/money.js';
 
 // --- DOM Selector Helper ---
-const $ = id => document.getElementById(id);
+const \$ = id => document.getElementById(id);
 
 // --------------------------------------------------------------------------
 // 1. DAILY OVERVIEW & OPERATIONS DASHBOARD RENDERER
@@ -19,19 +19,19 @@ const $ = id => document.getElementById(id);
 
 export const renderDashboard = () => {
     const todayStr = getLocalYMD(new Date());
-    const dateEl = $('dash-date-display');
+    const dateEl = \$('dash-date-display');
     if (dateEl) dateEl.innerText = todayStr;
 
     const arr = [], dep = [], stay = [], act = [];
 
     const staff = window.staff || [];
-    const curProp = toCanonicalPropId(window.currentPropertyId || 'swims_resort');
+    const curProp = toCanonicalPropId(window.currentPropertyId || '');
 
     const sortedStaff = [...staff]
         .filter(x => toCanonicalPropId(x.property) === curProp)
         .sort((a, b) => {
-            let ra = a.rooms?.[0] || a.room || 'ZZZ';
-            let rb = b.rooms?.[0] || b.room || 'ZZZ';
+            const ra = a.rooms?.[0] || a.room || 'ZZZ';
+            const rb = b.rooms?.[0] || b.room || 'ZZZ';
             return ra.localeCompare(rb);
         });
 
@@ -44,7 +44,6 @@ export const renderDashboard = () => {
         const assigned = (window.getRooms ? window.getRooms(s) : (s.rooms || [s.room])).filter(Boolean).join(',') || 'Unassigned';
         const name = `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Unknown';
 
-        // Authoritative Status Pill from core/occupancy.js
         const st = getStatusObj(s.status);
         const sBadge = `<span class="px-1.5 py-0.5 text-[8px] rounded uppercase font-black shadow-xs select-text ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border: 1px solid ${st.border};">${st.label}</span>`;
         const dueBadge = due > 0 ? `<span class="text-red-500 font-black">฿${due.toFixed(2)}</span>` : `<span class="text-green-500">฿0</span>`;
@@ -66,21 +65,21 @@ export const renderDashboard = () => {
         }
     });
 
-    if ($('dash-arr-count')) $('dash-arr-count').innerText = arr.length;
-    if ($('dash-arr-list')) $('dash-arr-list').innerHTML = arr.length ? arr.join('') : '<div class="text-slate-400 italic text-center py-2">No arrivals</div>';
-    if ($('dash-dep-count')) $('dash-dep-count').innerText = dep.length;
-    if ($('dash-dep-list')) $('dash-dep-list').innerHTML = dep.length ? dep.join('') : '<div class="text-slate-400 italic text-center py-2">No departures</div>';
-    if ($('dash-stay-count')) $('dash-stay-count').innerText = stay.length;
-    if ($('dash-stay-list')) $('dash-stay-list').innerHTML = stay.length ? stay.join('') : '<div class="text-slate-400 italic text-center py-2">No stay-overs</div>';
-    if ($('dash-act-list')) $('dash-act-list').innerHTML = act.length ? act.join('') : '<div class="text-green-500 font-black text-center py-2"><i data-lucide="check-circle" size="14" class="inline"></i> All clear!</div>';
+    if ($('dash-arr-count'))$('dash-arr-count').innerText = arr.length;
+    if ($('dash-arr-list'))$('dash-arr-list').innerHTML = arr.length ? arr.join('') : '<div class="text-slate-400 italic text-center py-2">No arrivals</div>';
+    if ($('dash-dep-count'))$('dash-dep-count').innerText = dep.length;
+    if ($('dash-dep-list'))$('dash-dep-list').innerHTML = dep.length ? dep.join('') : '<div class="text-slate-400 italic text-center py-2">No departures</div>';
+    if ($('dash-stay-count'))$('dash-stay-count').innerText = stay.length;
+    if ($('dash-stay-list'))$('dash-stay-list').innerHTML = stay.length ? stay.join('') : '<div class="text-slate-400 italic text-center py-2">No stay-overs</div>';
+    if ($('dash-act-list'))$('dash-act-list').innerHTML = act.length ? act.join('') : '<div class="text-green-500 font-black text-center py-2"><i data-lucide="check-circle" size="14" class="inline"></i> All clear!</div>';
 
     let rHtml = '';
     const roomTypes = window.roomTypes || [];
     const dailyRates = window.dailyRates || {};
-    roomTypes.forEach(t => { 
-        if (dailyRates[t]) rHtml += `<div class="flex justify-between py-1 border-b border-indigo-100 last:border-0"><span class="truncate pr-2">${t}</span><span>฿${dailyRates[t]}</span></div>`; 
+    roomTypes.forEach(t => {
+        if (dailyRates[t]) rHtml += `<div class="flex justify-between py-1 border-b border-indigo-100 last:border-0"><span class="truncate pr-2">${t}</span><span>฿${dailyRates[t]}</span></div>`;
     });
-    if ($('dash-rates-list')) $('dash-rates-list').innerHTML = rHtml || '<span class="text-slate-400 italic text-center mt-4">No rates loaded for today.</span>';
+    if ($('dash-rates-list'))$('dash-rates-list').innerHTML = rHtml || '<span class="text-slate-400 italic text-center mt-4">No rates loaded for today.</span>';
     if (window.lucide) window.lucide.createIcons();
 };
 
@@ -92,7 +91,7 @@ export const dismissAlert = async id => {
     try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), { alertDismissed: true });
         const staff = window.staff || [];
-        let s = staff.find(x => x.id === id);
+        const s = staff.find(x => x.id === id);
         if (s) s.alertDismissed = true;
         renderDashboard();
     } catch (e) {
