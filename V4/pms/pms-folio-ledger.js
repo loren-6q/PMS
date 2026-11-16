@@ -4,7 +4,7 @@
 // ==========================================================================
 
 import { parseYMD, getLocalYMD } from '../core/dates.js';
-import { roundCurrency, calculatePaxSplit } from '../core/money.js';
+import { roundCurrency } from '../core/money.js';
 import { isOccupyingBooking } from '../core/occupancy.js';
 import { toCanonicalPropId, resolveRoomCategory } from '../core/properties.js';
 import { getCmStayQuote } from '../cm/cm-ripple.js';
@@ -55,11 +55,11 @@ export const calcFinancials = () => {
 
     if (pax > 1) {
         if (dC) {
-            dC.title = `Split: ฿${calculatePaxSplit(due, pax).toFixed(2)} each`;
+            dC.title = `Split: ฿${(due / pax).toFixed(2)} each`;
             dC.classList.add('cursor-help', 'border-b-2', 'border-dashed', 'border-red-300');
         }
         if (tC) {
-            tC.title = `Split: ฿${calculatePaxSplit(tot, pax).toFixed(2)} each`;
+            tC.title = `Split: ฿${(tot / pax).toFixed(2)} each`;
             tC.classList.add('cursor-help', 'border-b-2', 'border-dashed', 'border-slate-300');
         }
     } else {
