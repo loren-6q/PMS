@@ -38,6 +38,7 @@ export function applyPropertyFavicon(iconUrl) {
 export const APP_REGISTRY = [
     { id: 'pms', label: 'PMS', href: 'pms.html', icon: 'layout-grid' },
     { id: 'cm', label: 'CM', href: 'cm.html', icon: 'calendar' },
+    { id: 'accounting', label: 'Acct', href: 'accounting.html', icon: 'bar-chart-3' },
     { id: 'setup', label: 'Setup', href: 'setup.html', icon: 'settings' },
     { id: 'scan', label: 'Scan', href: 'scan.html', icon: 'scan' },
     { id: 'tm30', label: 'TM30', href: 'tm30.html', icon: 'file-text' }
