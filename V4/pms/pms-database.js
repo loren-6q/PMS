@@ -4,6 +4,7 @@
 // ==========================================================================
 
 import { STATUS_CYCLE, getStatusObj } from '../core/occupancy.js';
+import { toCanonicalPropId } from '../core/properties.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
@@ -12,10 +13,8 @@ const $$ = s => document.querySelectorAll(s);
 // --- State, Accessor & Config Resolvers ---
 const getStaffList = () => window.staff || (window.getStaff ? window.getStaff() : []);
 const getHotelRoomsList = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
-const getPropId = () => {
-    const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
-    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
-};
+const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
+
 const getSearchVal = () => window.getSearchTerm ? window.getSearchTerm() : (window.searchTerm || '');
 const getRoomsHelper = () => window.getRooms || (s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : [])));
 const getLocalYMD = () => window.getLocalYMD || (d => {
