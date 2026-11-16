@@ -18,7 +18,7 @@ const $$ = s => document.querySelectorAll(s);
 const getStaff = () => window.staff || [];
 const getHotelRooms = () => window.hotelRooms || [];
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
-const getPropId = () => toCanonicalPropId(window.currentPropertyId || 'swims_resort');
+const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
 
 // --------------------------------------------------------------------------
 // 1. RESERVATION PERSISTENCE (SAVE / DELETE / DUPLICATE)
@@ -47,7 +47,6 @@ export const saveBooking = async (keepOpen = false) => {
         const curProp = getPropId();
         const linkCodeVal = $('link-code')?.value.trim().toUpperCase() || '';
 
-        // Prevent Duplicate Booking IDs
         if (bId) {
             const dupe = getStaff().find(s => {
                 if (toCanonicalPropId(s.property) !== curProp || s.bookId !== bId || s.id === id) return false;
@@ -73,7 +72,6 @@ export const saveBooking = async (keepOpen = false) => {
         const rawStat = $('guest-status-hidden')?.value || 'future';
         const stat = rawStat === 'noshow' ? 'no-show' : rawStat;
 
-        // Duplicate Room Guard (Same Booking)
         const seenAssigned = new Set();
         for (const r of assignedRooms) {
             const norm = r.toUpperCase();
@@ -85,10 +83,9 @@ export const saveBooking = async (keepOpen = false) => {
             seenAssigned.add(norm);
         }
 
-        // Room Overlap Collision Guard
         if (assignedRooms.length > 0 && isOccupyingBooking(stat, true)) {
             const occupiedNow = window.getOccupiedRooms ? window.getOccupiedRooms(cI, cO, id) : new Set();
-            for (let r of assignedRooms) {
+            for (const r of assignedRooms) {
                 if (occupiedNow.has(r.toUpperCase())) {
                     const conflict = getStaff().find(s => {
                         if (s.id === id || toCanonicalPropId(s.property) !== curProp) return false;
@@ -301,7 +298,6 @@ export const confirmSplit = async () => {
 
     const totalNights = Math.max(1, Math.round((parseYMD(s.checkOut) - parseYMD(s.checkIn)) / 86400000));
     const leg1Nights = Math.max(1, Math.round((parseYMD(splitDate) - parseYMD(s.checkIn)) / 86400000));
-    const leg2Nights = Math.max(1, totalNights - leg1Nights);
 
     const leg1Price = Number(((s.totalPrice / totalNights) * leg1Nights).toFixed(2));
     const leg2Price = Number((s.totalPrice - leg1Price).toFixed(2));
@@ -399,7 +395,7 @@ export const requestMerge = () => {
         if (a.linkedId && a.linkedId === cur.linkedId) scoreA += 50;
         if (b.linkedId && b.linkedId === cur.linkedId) scoreB += 50;
         if (a.lastName && a.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreA += 30;
-        if (b.lastName && b.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreA += 30;
+        if (b.lastName && b.lastName.toUpperCase() === cur.lastName.toUpperCase()) scoreB += 30;
         if (parseYMD(a.checkOut) === curIn || parseYMD(a.checkIn) === curOut) scoreA += 40;
         if (parseYMD(b.checkOut) === curIn || parseYMD(b.checkIn) === curOut) scoreB += 40;
         return scoreB - scoreA;
@@ -481,8 +477,8 @@ export const confirmMerge = async () => {
 let currentEcoBooking = null;
 
 function calculateStayMath(booking, targetOutDate) {
-    const originalOut = (booking.earlyCheckout && booking.earlyCheckout.originalCheckOut) 
-        ? booking.earlyCheckout.originalCheckOut 
+    const originalOut = (booking.earlyCheckout && booking.earlyCheckout.originalCheckOut)
+        ? booking.earlyCheckout.originalCheckOut
         : booking.checkOut;
 
     const originalTotal = (booking.earlyCheckout && booking.earlyCheckout.originalTotalPrice !== undefined)
@@ -606,7 +602,7 @@ export const confirmEarlyCheckout = async (mode) => {
     const math = calculateStayMath(s, targetOut);
     const todayStr = getLocalYMD(new Date());
 
-    let extraCharges = (Array.isArray(s.extraCharges) ? [...s.extraCharges] : [])
+    const extraCharges = (Array.isArray(s.extraCharges) ? [...s.extraCharges] : [])
         .filter(c => !c.desc?.includes('EARLY DEPARTURE PENALTY'));
 
     let newTotalPrice = 0;
@@ -634,14 +630,14 @@ export const confirmEarlyCheckout = async (mode) => {
         unstayedNights: math.unstayedNights,
         stayedAmount: math.stayedAmt,
         unstayedAmount: math.unstayedAmt,
-        mode: mode,
-        penaltyId: penaltyId,
+        mode,
+        penaltyId,
         ts: new Date().toISOString()
     };
 
     const noteMsg = `\n[EARLY CHECKOUT on ${todayStr}] Departed on ${targetOut} (${math.unstayedNights} nts early, original departure: ${math.originalOut}). ` +
-        (mode === 'refund' 
-            ? `Deducted ฿${math.unstayedAmt.toLocaleString()} unstayed room charges. New Folio Total: ฿${newTotalPrice.toLocaleString()}.` 
+        (mode === 'refund'
+            ? `Deducted ฿${math.unstayedAmt.toLocaleString()} unstayed room charges. New Folio Total: ฿${newTotalPrice.toLocaleString()}.`
             : `Kept full charge of ฿${newTotalPrice.toLocaleString()} (฿${math.stayedAmt.toLocaleString()} room + ฿${math.unstayedAmt.toLocaleString()} penalty fee).`);
 
     const updatedNotes = ((s.notes || '') + noteMsg).trim();
@@ -651,7 +647,7 @@ export const confirmEarlyCheckout = async (mode) => {
             checkOut: targetOut,
             status: 'early out',
             totalPrice: newTotalPrice,
-            extraCharges: extraCharges,
+            extraCharges,
             earlyCheckout: earlySnapshot,
             notes: updatedNotes,
             lastEditedAt: new Date().toISOString()
@@ -685,11 +681,10 @@ export const confirmEarlyCheckout = async (mode) => {
 
         if (window.showToast) {
             window.showToast(
-                "Early Checkout", 
+                "Early Checkout",
                 `Departed on ${targetOut}. ${mode === 'refund' ? `Deducted ฿${math.unstayedAmt.toLocaleString()}` : `Itemized ฿${math.unstayedAmt.toLocaleString()} penalty fee`}.`
             );
         }
-        
     } catch (err) {
         console.error("Early Checkout Error:", err);
         customAlert("Error", "Error processing early checkout: " + err.message);
@@ -708,7 +703,7 @@ export const undoEarlyCheckout = async () => {
     const rL = s.rooms || [s.room];
 
     const occ = window.getOccupiedRooms ? window.getOccupiedRooms(s.checkOut, originalOut, id) : new Set();
-    for (let r of rL) {
+    for (const r of rL) {
         if (occ.has(r)) {
             return customAlert("Collision Detected", `Cannot revert early checkout. Room ${r} is already occupied between ${s.checkOut} and ${originalOut}.`);
         }
@@ -716,7 +711,7 @@ export const undoEarlyCheckout = async () => {
 
     const todayStr = getLocalYMD(new Date());
 
-    let extraCharges = (Array.isArray(s.extraCharges) ? [...s.extraCharges] : [])
+    const extraCharges = (Array.isArray(s.extraCharges) ? [...s.extraCharges] : [])
         .filter(c => c.id !== penaltyId && !c.desc?.includes('EARLY DEPARTURE PENALTY'));
 
     const revertMsg = `\n[EARLY CHECKOUT REVERTED on ${todayStr}] Restored original departure ${originalOut} and total ฿${originalTotal.toLocaleString()}.`;
@@ -727,7 +722,7 @@ export const undoEarlyCheckout = async () => {
             checkOut: originalOut,
             status: 'here',
             totalPrice: originalTotal,
-            extraCharges: extraCharges,
+            extraCharges,
             earlyCheckout: null,
             notes: updatedNotes,
             lastEditedAt: new Date().toISOString()
