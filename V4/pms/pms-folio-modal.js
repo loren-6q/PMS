@@ -449,7 +449,12 @@ export function addRoomSelect(val = "", isManualAdd = false) {
 
     if (val) {
         const valUpper = String(val).trim().toUpperCase();
-        const existingOpt = Array.from(sel.options).find(o => o.value && String(o.value).trim().toUpperCase() === valUpper);
+        const valClean = valUpper.replace(/[№#\-_:\s]/g, '');
+        const existingOpt = Array.from(sel.options).find(o => {
+            if (!o.value) return false;
+            const optUpper = String(o.value).trim().toUpperCase();
+            return optUpper === valUpper || optUpper.replace(/[№#\-_:\s]/g, '') === valClean;
+        });
         if (existingOpt) {
             sel.value = existingOpt.value;
         } else {
