@@ -3,31 +3,19 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { toCanonicalPropId } from '../core/properties.js';
+
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
-// --- Fallback Branding Asset Constant ---
 const DEFAULT_WW_ICON = "../gfx/WWicon.png";
-
-// --- Date Parsing & Conversion Resolvers ---
-const getParseYMD = () => window.parseYMD || (str => {
-    if (!str || typeof str !== 'string') return 0;
-    const p = str.split('-');
-    return p.length !== 3 ? 0 : Date.UTC(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
-});
-
-const getLocalYMD = () => window.getLocalYMD || (d => {
-    if (!d) d = new Date();
-    const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
-    return o.toISOString().split('T')[0];
-});
 
 // --------------------------------------------------------------------------
 // 1. PRINTABLE FOLIO INVOICE & RECEIPT GENERATOR
 // --------------------------------------------------------------------------
 
-// --- Render & Print Branded HTML Guest Folio Invoice ---
 export const generateGuestInvoice = () => {
     const guestId = $('guest-id')?.value;
     const staffList = window.staff || [];
@@ -36,7 +24,6 @@ export const generateGuestInvoice = () => {
     if (!booking) {
         const total = parseFloat($('total-price')?.value) || 0;
         const rList = Array.from($$('.assigned-room-select') || []).map(s => s.value).filter(Boolean);
-        const getYmdFn = getLocalYMD();
         booking = {
             id: guestId || 'DRAFT',
             bookId: $('booking-id')?.value || guestId || 'DIRECT',
@@ -45,8 +32,8 @@ export const generateGuestInvoice = () => {
             phone: $('phone')?.value || '',
             email: $('email')?.value || '',
             country: $('guest-country')?.value || '',
-            checkIn: $('check-in')?.value || getYmdFn(new Date()),
-            checkOut: $('check-out')?.value || getYmdFn(new Date()),
+            checkIn: $('check-in')?.value || getLocalYMD(new Date()),
+            checkOut: $('check-out')?.value || getLocalYMD(new Date()),
             bookedType: $('booked-type')?.value || 'Standard Room',
             room: rList[0] || 'Unassigned',
             rooms: rList,
@@ -59,8 +46,8 @@ export const generateGuestInvoice = () => {
     }
 
     const curProp = window.currentPropertyConfig || {};
-    const curPropId = window.getCurrentPropertyId ? window.getCurrentPropertyId() : (window.currentPropertyId || 'property');
-    const propertyName = curProp.name || curProp.title || curPropId.toUpperCase();
+    const curPropId = toCanonicalPropId(window.currentPropertyId || '');
+    const propertyName = curProp.name || curProp.title || (curPropId || 'PROPERTY').toUpperCase();
     const propertySubtitle = curProp.subtitle || curProp.tagline || "";
     const propertyAddress = curProp.address || "";
     const currencySym = curProp.currencySymbol || (curProp.currency === 'USD' ? '$' : (curProp.currency === 'EUR' ? '€' : (curProp.currency === 'GBP' ? '£' : '฿')));
@@ -73,9 +60,8 @@ export const generateGuestInvoice = () => {
     if (curProp.website) contactParts.push(curProp.website);
     const propertyContact = contactParts.join(' • ');
 
-    const parseFn = getParseYMD();
-    const inMs = parseFn(booking.checkIn);
-    const outMs = parseFn(booking.checkOut);
+    const inMs = parseYMD(booking.checkIn);
+    const outMs = parseYMD(booking.checkOut);
     const nights = Math.max(1, Math.round((outMs - inMs) / 86400000)) || 1;
 
     const hotelRooms = window.hotelRooms || [];
@@ -104,8 +90,7 @@ export const generateGuestInvoice = () => {
     const balanceDue = Number((grandTotal - totalPaid).toFixed(2));
 
     const invoiceNumber = `INV-${(booking.bookId || booking.id || '0000').replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`;
-    const getYmdFn = getLocalYMD();
-    const issueDate = getYmdFn(new Date());
+    const issueDate = getLocalYMD(new Date());
 
     const cleanPayments = [];
     const groupedOta = {};
