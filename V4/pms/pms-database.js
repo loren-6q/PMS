@@ -186,8 +186,9 @@ export const getFilteredBookings = (v = 'db', sKey = dbSortKey, sAsc = dbSortAsc
         if (dE && s.checkIn >= dE) return false;
 
         const due = getDue(s);
-        if (dF === 'zero' && due > 0) return false;
-        if (dF === 'owes' && due <= 0) return false;
+        if (dF === 'zero' && Math.abs(due) > 0.01) return false;
+        if (dF === 'owes' && due <= 0.01) return false;
+        if (dF === 'overpaid' && due >= -0.01) return false;
 
         const tP = Number(s.totalPrice || 0);
         if (minF && tP < Number(minF)) return false;
@@ -262,6 +263,9 @@ export const renderDatabase = () => {
         const asg = getRooms(s).filter(Boolean).join(', ') || '--';
 
         const st = getStatusObj(s.status);
+        const dueCls = due > 0.01
+            ? 'text-red-600'
+            : (due < -0.01 ? 'text-fuchsia-700 bg-fuchsia-50' : '');
 
         const tr = document.createElement('tr');
         tr.className = "border-b hover:bg-slate-50 cursor-pointer";
@@ -275,7 +279,7 @@ export const renderDatabase = () => {
             <td class="p-2 border-r border-slate-200 font-black max-w-[96px] break-words whitespace-normal leading-tight">${asg}</td>
             <td class="p-2 border-r border-slate-200 text-right font-black">฿${Number(s.totalPrice || 0).toFixed(2)}</td>
             <td class="p-2 border-r border-slate-200 text-right font-black text-green-600">฿${paid.toFixed(2)}</td>
-            <td class="p-2 border-r border-slate-200 text-right font-black ${due > 0 ? 'text-red-600' : ''} ${s.badCC ? 'underline decoration-dashed decoration-red-500' : ''}">฿${due.toFixed(2)}</td>
+            <td class="p-2 border-r border-slate-200 text-right font-black ${dueCls} ${s.badCC ? 'underline decoration-dashed decoration-red-500' : ''}">฿${due.toFixed(2)}</td>
             <td class="p-2 text-center">
                 <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border: 1px solid ${st.border};">${st.label}</span>
             </td>
