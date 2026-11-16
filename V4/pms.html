@@ -65,21 +65,21 @@
             </div>
 
             <!-- Right Slot: PMS Search & Quick Actions -->
-            <div id="nav-right-slot" class="flex items-center gap-1">
-                <div id="search-jump-btn" onclick="window.jumpToSearchMatch()" class="hidden items-center bg-orange-100 text-orange-700 px-1 sm:px-2 py-0.5 sm:py-1 rounded font-black text-[9px] sm:text-xs uppercase cursor-pointer hover:bg-orange-200 shrink-0 border border-orange-300">
-                    <span id="match-counter">Match?</span>
-                </div>
-
-                <div id="search-container" class="hidden sm:flex relative bg-transparent p-0 rounded-none w-28 md:w-36 shrink-0">
-                    <i data-lucide="search" class="absolute left-2 top-1.5 text-slate-400 !w-[13px] !h-[13px]"></i>
-                    <input type="text" id="guest-search" placeholder="FIND..." oninput="window.handleSearch(this.value)" class="pl-6 pr-6 py-1 w-full bg-white border border-slate-300 rounded font-black text-[10px] sm:text-xs uppercase outline-none focus:ring-1 focus:ring-blue-500">
-                    <button type="button" onclick="window.clearSearchAndClose()" class="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 cursor-pointer"><i data-lucide="x" class="!w-3 !h-3"></i></button>
+            <div id="nav-right-slot" class="flex items-center gap-1 sm:gap-1.5">
+                <div id="search-container" class="hidden sm:flex flex-col relative shrink-0 w-24 sm:w-28">
+                    <div class="relative w-full">
+                        <i data-lucide="search" class="absolute left-1.5 top-[5px] text-slate-400 !w-[11px] !h-[11px]"></i>
+                        <input type="text" id="guest-search" placeholder="FIND..." oninput="window.handleSearch(this.value)" class="pl-5 pr-5 py-[3px] w-full bg-white border border-slate-300 rounded font-black text-[10px] uppercase outline-none focus:ring-1 focus:ring-blue-500 shadow-inner">
+                        <button type="button" onclick="window.clearSearchAndClose()" class="absolute right-1 top-[5px] text-slate-400 hover:text-slate-600 cursor-pointer"><i data-lucide="x" class="!w-3 !h-3"></i></button>
+                    </div>
+                    <!-- Stacked Match Pill -->
+                    <div id="search-jump-btn" onclick="window.jumpToSearchMatch()" class="hidden w-full mt-[3px] items-center justify-center bg-orange-100 text-orange-700 py-0.5 rounded font-black text-[9px] uppercase cursor-pointer hover:bg-orange-200 border border-orange-300 shadow-sm leading-none transition-colors">
+                        <span id="match-counter">1 / 3</span>
+                    </div>
                 </div>
 
                 <button type="button" onclick="window.openExtractModal()" id="btn-extract" class="p-1 sm:p-1.5 text-slate-500 hover:text-indigo-600 bg-white border border-slate-200 hover:bg-indigo-50 rounded shadow-xs transition-colors cursor-pointer" title="Import Booking"><i data-lucide="mail-plus" class="!w-4 !h-4"></i></button>
-                <button type="button" onclick="window.openPriceCheckModal()" class="p-1 sm:p-1.5 text-slate-500 hover:text-pink-600 bg-white border border-slate-200 hover:bg-pink-50 rounded shadow-xs transition-colors cursor-pointer" title="Price Check"><i data-lucide="tag" class="!w-4 !h-4"></i></button>
             </div>
-        </div>
 
         <!-- ========================================================================== -->
         <!-- 3. VIEW: DAILY OPERATIONS DASHBOARD -->
@@ -512,42 +512,6 @@
         </div>
     </div>
 
-     
-    <!-- Price Check Modal -->
-    <div id="price-check-modal" class="alert-modal-overlay" onclick="if(event.target === this) window.closeModal('price-check-modal')">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border-2 border-slate-800 flex flex-col max-h-[88dvh]">
-            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs shrink-0">
-                <span class="flex items-center gap-1.5"><i data-lucide="tag" size="14" class="text-pink-400"></i> Price Check (CM &bull; DEF Non-Ref)</span>
-                <button type="button" onclick="window.closeModal('price-check-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
-            </div>
-            <div class="p-3 text-xs space-y-2.5 overflow-y-auto">
-                <div class="grid grid-cols-3 gap-2">
-                    <div>
-                        <label class="field-label">Check-in</label>
-                        <input type="date" id="pc-checkin" class="input-base font-bold" oninput="window.runPriceCheck()" onchange="window.runPriceCheck()">
-                    </div>
-                    <div>
-                        <label class="field-label">Nights</label>
-                        <input type="number" id="pc-nights" value="1" min="1" class="input-base text-center font-bold" oninput="window.runPriceCheck()">
-                    </div>
-                    <div>
-                        <label class="field-label">PAX</label>
-                        <input type="number" id="pc-pax" value="1" min="1" class="input-base text-center font-bold" oninput="window.runPriceCheck()">
-                    </div>
-                </div>
-                <div id="pc-summary-bar" class="text-[10px] font-black uppercase text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200 flex justify-between items-center">
-                    <span id="pc-dates-label">--</span>
-                    <span class="text-indigo-700">DEF Non-Ref</span>
-                </div>
-                <div id="pc-results" class="space-y-1.5"></div>
-            </div>
-            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2 shrink-0">
-                <button type="button" onclick="window.closeModal('price-check-modal')" class="btn-modal bg-slate-200 text-slate-700 text-xs !py-1 !px-3 cursor-pointer">Close</button>
-                <button type="button" onclick="window.runPriceCheck()" class="btn-modal bg-indigo-600 hover:bg-indigo-700 text-white text-xs !py-1 !px-4 shadow-sm cursor-pointer">Refresh CM</button>
-            </div>
-        </div>
-    </div>
-     
 
 <!-- Early Checkout Modal -->
     <div id="early-checkout-modal" class="alert-modal-overlay">
