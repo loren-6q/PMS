@@ -27,8 +27,8 @@ export const functions = getFunctions(app, 'asia-southeast1');
 
 // Safe Staging Environment Detector
 export const IS_STAGING = typeof window !== 'undefined' && (
-    window.location.pathname.includes('/staging/') || 
-    window.location.hostname === 'localhost' || 
+    /\/V[1-4]\//i.test(window.location.pathname) ||
+    window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1'
 );
 

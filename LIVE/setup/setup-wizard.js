@@ -7,7 +7,7 @@ import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { customAlert } from '../core/ui-dialogs.js';
-import { loadPropertiesCatalog, toCanonicalPropId } from '../core/properties.js';
+import { loadPropertiesCatalog, toCanonicalPropId, getActivePropertyId } from '../core/properties.js';
 
 import { renderPaymentMethodsTable, renderAddonsTable, updateLogoPreview, normalizePaymentMethods } from './setup-profile.js';
 import { renderRoomDefinitionsTable, compileRoomsFromDefinitions } from './setup-rooms.js';
@@ -66,7 +66,7 @@ export function prevStep() {
 
 export async function launchApp(target) {
     const page = target === 'cm' ? 'cm.html' : 'pms.html';
-    const propId = window.currentPropertyId || 'swims_resort';
+    const propId = getActivePropertyId();
     try {
         localStorage.setItem('last_prop', propId);
         await savePropertyToDatabase(false);
@@ -178,7 +178,7 @@ export async function savePropertyToDatabase(notify = true) {
     if (btnFooter) { btnFooter.disabled = true; btnFooter.innerHTML = `<i data-lucide="save" size="12"></i> <span>SAVING...</span>`; }
 
     try {
-        const propId = window.currentPropertyId || 'swims_resort';
+        const propId = getActivePropertyId();
         const compiled = compileRoomsFromDefinitions();
 
         // 1. Immutable Rolling Backup
@@ -314,7 +314,7 @@ export async function initSetup() {
 
         const props = await loadPropertiesCatalog();
         const urlParams = new URLSearchParams(window.location.search);
-        const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || 'swims_resort';
+        const pParam = urlParams.get('p') || localStorage.getItem('last_prop') || props[0]?.id || '';
         window.currentPropertyId = toCanonicalPropId(pParam);
 
         await loadPropertyData(window.currentPropertyId);

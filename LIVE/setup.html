@@ -8,14 +8,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Property Setup Wizard - Wild & Wandering</title>
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="apple-touch-icon" href="../gfx/WWicon.png">
+    <link rel="icon" type="image/png" href="../gfx/WWicon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col antialiased overflow-hidden">
@@ -134,7 +133,7 @@
                     <div class="border border-slate-200 rounded p-2 bg-slate-50 flex flex-col gap-1.5">
                         <span class="label-base">Primary Brand Logo</span>
                         <div class="h-12 w-full bg-white rounded border border-slate-200 flex items-center justify-center p-1 overflow-hidden">
-                            <img id="preview-logo-primary" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Primary Logo" class="h-full object-contain">
+                            <img id="preview-logo-primary" src="../gfx/WWicon.png" alt="Primary Logo" class="h-full object-contain">
                         </div>
                         <input type="text" id="prop-logo-url" placeholder="Direct Image URL..." oninput="window.updateLogoPreview('primary', this.value)" class="table-input font-mono !text-[10px]">
                         <label class="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-black text-[9.5px] uppercase text-center cursor-pointer shadow-2xs">
@@ -146,7 +145,7 @@
                     <div class="border border-slate-200 rounded p-2 bg-slate-50 flex flex-col gap-1.5">
                         <span class="label-base">Header Banner / Stripe</span>
                         <div class="h-12 w-full bg-white rounded border border-slate-200 flex items-center justify-center p-1 overflow-hidden">
-                            <img id="preview-logo-banner" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="Banner Logo" class="h-full object-contain">
+                            <img id="preview-logo-banner" src="../gfx/WWicon.png" alt="Banner Logo" class="h-full object-contain">
                         </div>
                         <input type="text" id="prop-banner-url" placeholder="Direct Image URL..." oninput="window.updateLogoPreview('banner', this.value)" class="table-input font-mono !text-[10px]">
                         <label class="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-black text-[9.5px] uppercase text-center cursor-pointer shadow-2xs">
@@ -158,7 +157,7 @@
                     <div class="border border-slate-200 rounded p-2 bg-slate-50 flex flex-col gap-1.5">
                         <span class="label-base">Square Favicon & App Icon</span>
                         <div class="h-12 w-full bg-white rounded border border-slate-200 flex items-center justify-center p-1 overflow-hidden">
-                            <img id="preview-logo-icon" src="https://loren-6q.github.io/PMS/gfx/WWicon.png" alt="App Icon" class="h-10 w-10 object-contain rounded">
+                            <img id="preview-logo-icon" src="../gfx/WWicon.png" alt="App Icon" class="h-10 w-10 object-contain rounded">
                         </div>
                         <input type="text" id="prop-icon-url" placeholder="Direct Image URL..." oninput="window.updateLogoPreview('icon', this.value)" class="table-input font-mono !text-[10px]">
                         <label class="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-black text-[9.5px] uppercase text-center cursor-pointer shadow-2xs">

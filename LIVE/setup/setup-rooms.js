@@ -6,6 +6,7 @@
 import { db, appId } from '../core/config.js';
 import { collection, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { customAlert } from '../core/ui-dialogs.js';
+import { getActivePropertyId, toCanonicalPropId } from '../core/properties.js';
 
 // Canonical № Bed Formatter: [Room Name] № [01..NN]
 export function formatDormBedId(parentRoomName, bedNumber) {
@@ -289,11 +290,11 @@ export async function deleteRoomDef(index) {
         const allBookings = staffSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
         const todayStr = new Date().toISOString().split('T')[0];
-        const canonProp = window.currentPropertyId || 'swims_resort';
+        const canonProp = toCanonicalPropId(getActivePropertyId());
 
         const targetBookings = allBookings.filter(b => {
-            const prop = (b.property || 'swims_resort').toLowerCase();
-            if (prop !== canonProp.toLowerCase() || b.status === 'cancelled') return false;
+            const prop = toCanonicalPropId(b.property);
+            if (prop !== canonProp || b.status === 'cancelled') return false;
             const rList = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
             return rList.some(r => String(r).toUpperCase().includes(def.name.toUpperCase()));
         });
@@ -400,11 +401,12 @@ export async function executeBookingRelocation(roomName, hasPast) {
     if (defIndex === -1) return;
 
     try {
+        const canonProp = toCanonicalPropId(getActivePropertyId());
         const staffSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'staff'));
         const targetBookings = staffSnap.docs
             .map(d => ({ id: d.id, ...d.data() }))
-            .filter(b => (b.rooms || []).includes(roomName) || b.room === roomName);
-
+            .filter(b => toCanonicalPropId(b.property) === canonProp && ((b.rooms || []).includes(roomName) || b.room === roomName));
+        
         for (let b of targetBookings) {
             const bRef = doc(db, 'artifacts', appId, 'public', 'data', 'staff', b.id);
             const newRooms = targetRoom === '__UNASSIGNED__' ? [""] : [targetRoom];

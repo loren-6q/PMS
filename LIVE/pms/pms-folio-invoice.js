@@ -8,7 +8,7 @@ const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
 // --- Fallback Branding Asset Constant ---
-const DEFAULT_WW_ICON = "https://loren-6q.github.io/PMS/gfx/WWicon.png";
+const DEFAULT_WW_ICON = "../gfx/WWicon.png";
 
 // --- Date Parsing & Conversion Resolvers ---
 const getParseYMD = () => window.parseYMD || (str => {

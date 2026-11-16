@@ -8,7 +8,7 @@ import { parseAgoda } from './ota-agoda.js';
 import { parseHostelworld } from './ota-hostelworld.js';
 import { parseAirbnb } from './ota-airbnb.js';
 import { parseExpedia } from './ota-expedia.js';
-import { suggestRoomsForBooking, matchCategoryName } from './room-assigner.js';
+import { suggestRoomsForBooking } from './room-assigner.js';
 import { openGuestModal } from '../pms/pms-folio-modal.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { getLocalYMD } from '../core/dates.js';
@@ -91,23 +91,10 @@ export function parseOtaClipboardText(rawText) {
                    parseExpedia(rawText);
 
     if (result) {
-        const activeRooms = (window.hotelRooms && window.hotelRooms.length)
-            ? window.hotelRooms
-            : (window.rooms || window.currentPropertyConfig?.rooms || []);
-
-        // Collect both r.category and r.type so neither field is missed
-        const availableCategories = [...new Set(
-            activeRooms.filter(r => !r.inactive).flatMap(r => [r.category, r.type]).filter(Boolean)
-        )];
-
         if (Array.isArray(result.bookedTypes) && result.bookedTypes.length > 0) {
-            if (availableCategories.length > 0) {
-                result.bookedTypes = result.bookedTypes.map(bt => matchCategoryName(bt, availableCategories));
-            }
-            const uniqueMatched = Array.from(new Set(result.bookedTypes.filter(Boolean)));
-            result.bookedType = uniqueMatched.join(' + ');
-        } else if (result.bookedType && availableCategories.length > 0) {
-            result.bookedType = matchCategoryName(result.bookedType, availableCategories);
+            const uniqueRaw = Array.from(new Set(result.bookedTypes.filter(Boolean)));
+            if (!result.bookedType) result.bookedType = uniqueRaw.join(' + ');
+        } else if (result.bookedType) {
             result.bookedTypes = Array(result.unitCount || 1).fill(result.bookedType);
         }
 

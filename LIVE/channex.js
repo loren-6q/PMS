@@ -642,22 +642,21 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             }
         }
 
-        datesToProcess.forEach(d => {
-            if (window.dirtyDates) window.dirtyDates.delete(d);
-            if (window.syncedDates) window.syncedDates.add(d);
-        });
-        if (window.dirtyAvailKeys instanceof Set) window.dirtyAvailKeys.clear();
-        if (window.dirtyPlanKeys instanceof Set) window.dirtyPlanKeys.clear();
-        window.hasUnsavedChanges = false;
-        if (typeof window.updateSaveIndicator === 'function') window.updateSaveIndicator();
-        if (typeof window.renderGrid === 'function') window.renderGrid();
-
         const taskMsg = recordedTaskIds.length > 0 ? `\nTask IDs: ${recordedTaskIds.slice(0, 3).join(', ')}` : '';
         customAlert("Sync Successful", `Pushed ${availPayload.length} availability ranges and ${restrPayload.length} restriction ranges to Channex.${taskMsg}`);
+
+        return {
+            ok: true,
+            syncedDates: datesToProcess,
+            availRanges: availPayload.length,
+            restrRanges: restrPayload.length,
+            taskIds: recordedTaskIds
+        };
 
     } catch (err) {
         console.error("[Channex Sync Failure]:", err);
         customAlert("Sync Failed", err.message);
+        return { ok: false, error: err };
     } finally {
         if (btn) {
             btn.innerHTML = origHtml;
@@ -672,10 +671,15 @@ export async function saveAndSync(btn, mode = 'delta') {
         if (typeof window.savePricingToCloud === 'function') {
             await window.savePricingToCloud(true);
         }
-        await pushToChannexAPI(btn, mode);
+        const result = await pushToChannexAPI(btn, mode);
+        if (result?.ok && typeof window.onChannexSyncComplete === 'function') {
+            window.onChannexSyncComplete(result.syncedDates);
+        }
+        return result;
     } catch (err) {
         console.error("[Save & Sync Failure]:", err);
         customAlert("Error", err.message);
+        return { ok: false, error: err };
     } finally {
         if (btn) btn.disabled = false;
     }

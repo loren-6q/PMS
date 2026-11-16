@@ -5,6 +5,7 @@
 
 import { STATUS_CYCLE, getStatusObj, getNextStatus, applyStatusStyle } from '../core/occupancy.js';
 import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { toCanonicalPropId } from '../core/properties.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
@@ -16,10 +17,7 @@ const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
 // --- Active Property ID Resolver ---
-const getPropId = () => {
-    const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
-    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
-};
+const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
 
 // --------------------------------------------------------------------------
 // 1. MODAL WINDOW DRAGGING & DIALOG CONTROLLERS
@@ -523,7 +521,10 @@ export function addRoomSelect(val = "", isManualAdd = false) {
 export const openGuestModal = (s = {}) => {
     const isN = !s.id;
     const f = $('guest-form');
-    if (f) f.reset();
+    if (f) {
+        f.reset();
+        f.scrollTop = 0;
+    }
     const mC = $('guest-modal-content');
     if (mC) {
         mC.style.position = 'relative';
@@ -649,12 +650,7 @@ export const openGuestModal = (s = {}) => {
         $('audit-log').innerText = isN ? `NEW RECORD | CREATING AS ${userEmail}` : `CREATED BY ${s.createdBy || 'UNKNOWN'} ON ${s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-GB').slice(0, 5) : '--'}` + (s.lastEditedBy ? ` | LAST EDIT: ${s.lastEditedBy} ON ${new Date(s.lastEditedAt).toLocaleDateString('en-GB').slice(0, 5)}` : '');
     }
 
-    if (window.currentUserRole === 'staff') {
-        ['delete-btn', 'split-btn', 'merge-btn'].forEach(id => { if ($(id)) $(id).style.visibility = 'hidden'; });
-        if ($('save-btn')) $('save-btn').style.display = 'none';
-    }
-
-    const modal = $('guest-modal');
+   const modal = $('guest-modal');
     if (modal) {
         modal.classList.add('active');
         modal.style.display = 'flex';
@@ -680,7 +676,7 @@ export const quickAdd = (r, d) => {
     addRoomSelect(r, false);
 
     const curProp = getPropId();
-    const pCode = window.toDisplayPropKey ? window.toDisplayPropKey(curProp) : 'SWIMS';
+    const pCode = (window.toDisplayPropKey ? window.toDisplayPropKey(curProp) : '') || 'PROP';
     const directBookings = getStaff().filter(s => {
         const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
         return sProp === curProp && s.bookId && s.bookId.startsWith(pCode);
@@ -732,6 +728,5 @@ window.renderItineraryStripe = renderItineraryStripe;
 window.openGuestModal = openGuestModal;
 window.editStaff = editStaff;
 window.quickAdd = quickAdd;
-window.togglePropertyPicker = togglePropertyPicker;
 
 

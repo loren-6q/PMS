@@ -5,10 +5,19 @@
 
 import { loadPropertiesCatalog, getActivePropertyId, switchProperty, toDisplayPropKey } from './properties.js';
 
-const DEFAULT_BRAND_LOGO = "gfx/WWicon.png";
+const DEFAULT_BRAND_LOGO = "../gfx/WWicon.png";
+
+function resolveRootAsset(url, fallback = DEFAULT_BRAND_LOGO) {
+    const raw = (url && String(url).trim()) ? String(url).trim() : fallback;
+    const isSubdir = /\/(V[1-4]|LIVE)\//i.test(window.location.pathname);
+    if (isSubdir && /^(gfx|pics)\//i.test(raw)) {
+        return `../${raw}`;
+    }
+    return raw;
+}
 
 export function applyPropertyFavicon(iconUrl) {
-    const href = (iconUrl && String(iconUrl).trim()) ? String(iconUrl).trim() : DEFAULT_BRAND_LOGO;
+    const href = resolveRootAsset(iconUrl, DEFAULT_BRAND_LOGO);
     let iconLink = document.querySelector("link[rel='icon']");
     if (!iconLink) {
         iconLink = document.createElement('link');
@@ -35,9 +44,20 @@ export const APP_REGISTRY = [
 ];
 
 export function navigateToApp(appName, event) {
-    if (event) event.preventDefault();
     const curProp = getActivePropertyId();
-    window.location.href = `${appName}.html?p=${curProp}`;
+    const targetUrl = `${appName}.html?p=${curProp}`;
+    if (event) {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button === 1) {
+            return;
+        }
+        if (event.altKey) {
+            event.preventDefault();
+            window.open(targetUrl, '_blank');
+            return;
+        }
+        event.preventDefault();
+    }
+    window.location.href = targetUrl;
 }
 
 export function togglePropertyPicker() {
@@ -180,7 +200,7 @@ function updateNavBrandLogo() {
     const curProp = getActivePropertyId();
     const props = window.availableProperties || [];
     const active = props.find(p => p.id.toLowerCase() === curProp.toLowerCase());
-    const activeIcon = active?.iconUrl || active?.logoUrl || DEFAULT_BRAND_LOGO;
+    const activeIcon = resolveRootAsset(active?.iconUrl || active?.logoUrl, DEFAULT_BRAND_LOGO);
     const logoEl = document.getElementById('main-brand-logo');
     if (logoEl) {
         logoEl.src = activeIcon;

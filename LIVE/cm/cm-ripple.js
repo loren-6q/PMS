@@ -3,9 +3,10 @@
 // Wild & Wandering Channel Manager
 // ==========================================================================
 
-import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { parseYMD, getLocalYMD, getNearestEvent } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
 import { resolveChannelCode } from '../core/channels.js';
+import { resolveRoomCategory } from '../core/properties.js';
 
 export function applyMath(baseVal, type, modifier, isReverse = false) {
     if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
@@ -29,17 +30,7 @@ export function applyMath(baseVal, type, modifier, isReverse = false) {
     return roundCurrency(res);
 }
 
-export function getNearestEvent(unixMs) {
-    const events = window.eventDates || [];
-    if (!events.length) return 999;
-    let minDiff = Infinity;
-    events.forEach(evt => {
-        const evtUnix = parseYMD(evt);
-        const diff = Math.round((unixMs - evtUnix) / 86400000);
-        if (Math.abs(diff) < Math.abs(minDiff)) minDiff = diff;
-    });
-    return minDiff;
-}
+export { getNearestEvent };
 
 export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     if (!ratePlan) return null;
@@ -58,21 +49,28 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     if (basePrice === undefined || basePrice === "" || isNaN(parseFloat(basePrice))) return null;
     let computed = parseFloat(basePrice);
 
-    // 2. Canonical Channel Multiplier / Adjustment
+    // 2. Canonical Channel Multiplier / Adjustment (DEF is the base input row)
     const rawChan = ratePlan.channel || 'DEF';
     const chanCode = resolveChannelCode(rawChan);
-    const masterDriver = resolveChannelCode(window.pricingRules?.masterDriver || 'WEB');
-    const isMaster = (chanCode === masterDriver);
 
-    if (!isMaster) {
+    if (chanCode !== 'DEF') {
         const rulesList = window.pricingRules?.channelRules || [];
-        const rule = rulesList.find(r => r.code === chanCode) 
-                  || window.pricingRules?.channels?.[rawChan] 
-                  || { op: 'sync', val: 0 };
+        let rule = rulesList.find(r => resolveChannelCode(r.code) === chanCode)
+                || window.pricingRules?.channels?.[chanCode]
+                || window.pricingRules?.channels?.[rawChan];
 
-        const op = rule.op || rule.type || 'sync';
-        const val = rule.val ?? (rule.markupPct || 0);
-        computed = applyMath(computed, op, val);
+        if (!rule && chanCode === 'WEB') {
+            const legacyDirPct = parseFloat(window.pricingRules?.directDiscountPct ?? window.pricingRules?.webDiscountPct);
+            if (!isNaN(legacyDirPct) && legacyDirPct !== 0) {
+                rule = { op: '-%', val: Math.abs(legacyDirPct) };
+            }
+        }
+
+        if (rule) {
+            const op = rule.op || rule.type || 'sync';
+            const val = rule.val ?? (rule.markupPct || 0);
+            computed = applyMath(computed, op, val);
+        }
     }
 
     // 3. Refundable Policy Markup
@@ -177,21 +175,27 @@ export function evaluatePromoStack(dateStr, chanCode, room, asOfDateStr = null) 
     };
 }
 
-export function rippleDay(dateStr, startRoom, forceRipple = false) {
+function copyRestrictionField(src, dst, key, force) {
+    if (!force && dst.isOverride?.[key]) return;
+    if (src[key] !== undefined && src[key] !== "" && src[key] !== false) {
+        dst[key] = src[key];
+    } else {
+        delete dst[key];
+    }
+}
+
+export function rippleDay(dateStr, startRoom, forceRipple = false, scope = 'both') {
     window.masterPricing = window.masterPricing || { timeline: {}, relationships: [] };
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     const dMs = parseYMD(dateStr);
     const minDiff = getNearestEvent(dMs);
     const isPeak = (minDiff === 0);
 
-    const allRooms = window.roomTypes || [];
-    const matchRoom = (rawName) => {
-        if (!rawName) return null;
-        const clean = String(rawName).trim().toLowerCase();
-        return allRooms.find(r => r.trim().toLowerCase() === clean) || null;
-    };
+    const doRates = scope === 'rates' || scope === 'both';
+    const doRestrictions = scope === 'restrictions' || scope === 'both';
 
-    const canonicalStart = matchRoom(startRoom);
+    const allRooms = window.roomTypes || [];
+    const canonicalStart = resolveRoomCategory(startRoom, allRooms);
     if (!canonicalStart) return;
 
     const adj = {};
@@ -202,8 +206,8 @@ export function rippleDay(dateStr, startRoom, forceRipple = false) {
         const rawB = rel.target || rel.to || rel.roomB;
         if (!rawA || rawA === 'unlinked' || !rawB) return;
 
-        const roomA = matchRoom(rawA);
-        const roomB = matchRoom(rawB);
+        const roomA = resolveRoomCategory(rawA, allRooms);
+        const roomB = resolveRoomCategory(rawB, allRooms);
         if (!roomA || !roomB || roomA === roomB) return;
 
         const op = rel.type || rel.op || '+';
@@ -230,27 +234,36 @@ export function rippleDay(dateStr, startRoom, forceRipple = false) {
             const nextVals = window.masterPricing.timeline[dateStr][edge.to];
             nextVals.isOverride = nextVals.isOverride || {};
 
-            if (!forceRipple && nextVals.isOverride.std) return;
+            if (doRates && (forceRipple || !nextVals.isOverride.std)) {
+                if (isPeak) {
+                    const basePrice = (curVals.std !== undefined && curVals.std !== "") ? curVals.std : curVals.fmp;
+                    if (basePrice !== undefined && basePrice !== "") {
+                        const target = applyMath(basePrice, edge.typeFmp, edge.valFmp, edge.isReverse);
+                        nextVals.std = target;
+                        nextVals.fmp = target;
+                    }
+                } else {
+                    if (curVals.std !== undefined && curVals.std !== "") {
+                        nextVals.std = applyMath(curVals.std, edge.type, edge.val, edge.isReverse);
+                    }
+                    if (curVals.fmp !== undefined && curVals.fmp !== "") {
+                        nextVals.fmp = applyMath(curVals.fmp, edge.typeFmp, edge.valFmp, edge.isReverse);
+                    }
+                }
+            }
 
-            if (isPeak) {
-                const basePrice = (curVals.std !== undefined && curVals.std !== "") ? curVals.std : curVals.fmp;
-                if (basePrice !== undefined && basePrice !== "") {
-                    const target = applyMath(basePrice, edge.typeFmp, edge.valFmp, edge.isReverse);
-                    nextVals.std = target;
-                    nextVals.fmp = target;
-                }
-            } else {
-                if (curVals.std !== undefined && curVals.std !== "") {
-                    nextVals.std = applyMath(curVals.std, edge.type, edge.val, edge.isReverse);
-                }
-                if (curVals.fmp !== undefined && curVals.fmp !== "") {
-                    nextVals.fmp = applyMath(curVals.fmp, edge.typeFmp, edge.valFmp, edge.isReverse);
-                }
+            if (doRestrictions) {
+                ['min', 'min_arr', 'max', 'cta', 'ctd', 'stop', 'evt_min', 'evt_min_arr', 'evt_max', 'evt_cta', 'evt_ctd', 'evt_stop']
+                    .forEach(k => copyRestrictionField(curVals, nextVals, k, forceRipple));
             }
 
             queue.push(edge.to);
             window.dirtyDates = window.dirtyDates || new Set();
             window.dirtyDates.add(dateStr);
+            window.dirtyCellKeys = window.dirtyCellKeys || new Set();
+            window.justSyncedCellKeys = window.justSyncedCellKeys || new Set();
+            window.dirtyCellKeys.add(`${dateStr}|${edge.to}`);
+            window.justSyncedCellKeys.delete(`${dateStr}|${edge.to}`);
         });
     }
 }

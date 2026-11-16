@@ -21,7 +21,7 @@ export function getBaseRoomId(roomOrId) {
 
 const TIER_MODIFIERS = [
     'partial', 'side', 'semi', 'garden', 'ocean', 'sea', 'beach', 'beachfront',
-    'pool', 'mountain', 'deluxe', 'standard', 'superior', 'budget', 'economy', 'family', 'suite'
+    'pool', 'mountain', 'deluxe', 'superior', 'budget', 'economy', 'family', 'suite'
 ];
 
 function normalizeCategoryString(str) {

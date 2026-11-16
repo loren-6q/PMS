@@ -8,34 +8,273 @@ import { roundCurrency } from '../core/money.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { db, appId } from '../core/config.js';
 import { doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { resolveRoomCategory as findCanonicalRoom, getResolvedAnchors } from '../core/properties.js';
+import { resolveChannelCode, getChannelByCode } from '../core/channels.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
 import { rippleDay } from './cm-ripple.js';
 
 export let bulkScopeMode = 'anchors'; // 'anchors' | 'all'
+export let bulkSelectedRateKeys = null; // Set of selected leaf keys (null = all selected)
 
-function findCanonicalRoom(name) {
-    if (!name) return '';
-    const clean = String(name).trim().toLowerCase();
-    return (window.roomTypes || []).find(r => r.trim().toLowerCase() === clean) || '';
+function getCleanPlanLabel(rp) {
+    let title = (rp.ratePlanTitle || rp.title || '').trim();
+    const cat = (rp.pmsCategory || '').trim();
+    if (cat && title.toLowerCase().startsWith(cat.toLowerCase())) {
+        title = title.slice(cat.length).replace(/^[\s\-–—:|]+/, '').trim();
+    }
+    return title || rp.ratePlanId;
 }
 
-function getResolvedAnchors() {
-    const rooms = window.roomTypes || [];
-    const hotelRooms = window.hotelRooms || [];
-    const dormCats = new Set(hotelRooms.filter(r => r.rule && r.rule !== 'private').map(r => r.category || r.type));
-    const privCats = new Set(hotelRooms.filter(r => r.rule === 'private').map(r => r.category || r.type));
+function getTargetRoomsForBulkRow(rt) {
+    if (bulkScopeMode !== 'anchors') return [rt];
+    const targets = new Set([rt]);
+    const queue = [rt];
+    const rels = window.masterPricing?.relationships || [];
+    while (queue.length > 0) {
+        const cur = queue.shift();
+        rels.forEach(rel => {
+            const src = findCanonicalRoom(rel.source) || rel.source;
+            const tgt = findCanonicalRoom(rel.target) || rel.target;
+            if (src === cur && tgt && !targets.has(tgt)) {
+                targets.add(tgt);
+                queue.push(tgt);
+            }
+        });
+    }
+    return Array.from(targets);
+}
 
-    let anchorP = findCanonicalRoom(window.pricingRules?.anchorPrivate);
-    if (!anchorP) {
-        anchorP = rooms.find(rt => privCats.has(rt) || !/dorm|bed|bunk/i.test(rt)) || rooms[0] || '';
+function buildBulkRatesTree() {
+    const rateMap = window.channexRateMap || [];
+    const seenPlanKeys = new Set();
+
+    const defLeaves = [{ key: 'DEF::BASE', label: 'DEF Non-Ref (Master)', planSig: null }];
+    const dirLeaves = [{ key: 'DIR::BASE', label: 'Direct Rate (Master)', planSig: null }];
+    const evtLeaves = [];
+    const otaByChannel = new Map();
+    const otherLeaves = [];
+
+    if (window.enableEventRates || rateMap.some(r => r.product === 'evt' || r.rateSource === 'evt' || r.isEvent)) {
+        evtLeaves.push({ key: 'EVT::BASE', label: 'DEF Event Rate', planSig: null });
     }
 
-    let anchorD = findCanonicalRoom(window.pricingRules?.anchorDorm);
-    if (!anchorD) {
-        anchorD = rooms.find(rt => dormCats.has(rt) || /dorm|bed|bunk/i.test(rt)) || (rooms[1] && rooms[1] !== anchorP ? rooms[1] : '');
+    rateMap.forEach(rp => {
+        if (!rp || !rp.ratePlanId) return;
+        const ch = resolveChannelCode(rp.channel || '');
+        const cleanLabel = getCleanPlanLabel(rp);
+        const planSig = `${ch}::${cleanLabel.toLowerCase()}`;
+        if (seenPlanKeys.has(planSig)) return;
+        seenPlanKeys.add(planSig);
+
+        const isEvt = (rp.product === 'evt') || (rp.rateSource === 'evt') || (rp.isEvent === true) || /\b(evt|fmp|event|pkg)\b/i.test(cleanLabel);
+        const leaf = { key: `PLAN::${planSig}`, label: cleanLabel, planSig };
+
+        if (isEvt) {
+            evtLeaves.push(leaf);
+        } else if (ch === 'DEF') {
+            defLeaves.push(leaf);
+        } else if (ch === 'WEB' || ch === 'DIR') {
+            dirLeaves.push(leaf);
+        } else if (ch && ch !== 'OTH') {
+            const isStandardPolicy = rp.policy === 'ref' || rp.policy === 'non-ref' || /\b(non-?ref|refundable|standard)\b/i.test(cleanLabel);
+            if (isStandardPolicy) {
+                if (!otaByChannel.has(ch)) otaByChannel.set(ch, []);
+                otaByChannel.get(ch).push(leaf);
+            } else {
+                otherLeaves.push(leaf);
+            }
+        } else {
+            otherLeaves.push(leaf);
+        }
+    });
+
+    const groups = [
+        { id: 'grp-def', label: 'DEFAULT RATES (DEF)', shortLabel: 'DEF Rates', leaves: defLeaves, subgroups: [] },
+        { id: 'grp-dir', label: 'DIRECT RATES (DIR)', shortLabel: 'Direct Rates', leaves: dirLeaves, subgroups: [] }
+    ];
+
+    if (otaByChannel.size > 0) {
+        const subgroups = Array.from(otaByChannel.entries()).map(([ch, leaves]) => ({
+            id: `ota-${ch}`,
+            label: `${ch} (${getChannelByCode(ch).name})`,
+            shortLabel: `${ch} Rates`,
+            leaves
+        }));
+        groups.push({ id: 'grp-ota', label: 'OTA RATES', shortLabel: 'OTA Rates', leaves: [], subgroups });
     }
 
-    return { anchorP, anchorD };
+    if (evtLeaves.length > 0) {
+        groups.push({ id: 'grp-evt', label: 'EVENT RATES (EVT)', shortLabel: 'Event Rates', leaves: evtLeaves, subgroups: [] });
+    }
+
+    if (otherLeaves.length > 0) {
+        groups.push({ id: 'grp-other', label: 'OTHER RATES', shortLabel: 'Other Rates', leaves: otherLeaves, subgroups: [] });
+    }
+
+    const allLeafKeys = [];
+    const leafMap = new Map();
+    groups.forEach(g => {
+        g.leaves.forEach(l => { allLeafKeys.push(l.key); leafMap.set(l.key, l); });
+        g.subgroups.forEach(sg => sg.leaves.forEach(l => { allLeafKeys.push(l.key); leafMap.set(l.key, l); }));
+    });
+
+    return { groups, allLeafKeys, leafMap };
+}
+
+export function renderBulkRatesDropdown() {
+    const dropdown = document.getElementById('qb-rates-dropdown');
+    const labelEl = document.getElementById('qb-rates-label');
+    if (!dropdown) return;
+
+    const { groups, allLeafKeys, leafMap } = buildBulkRatesTree();
+    if (!bulkSelectedRateKeys) {
+        bulkSelectedRateKeys = new Set(allLeafKeys);
+    } else {
+        const valid = new Set(allLeafKeys.filter(k => bulkSelectedRateKeys.has(k)));
+        bulkSelectedRateKeys = valid.size > 0 ? valid : new Set(allLeafKeys);
+    }
+
+    const totalCount = allLeafKeys.length;
+    const selectedCount = bulkSelectedRateKeys.size;
+    const allChecked = selectedCount === totalCount;
+
+    let html = `
+        <label class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-indigo-50 cursor-pointer border-b border-slate-200 mb-1 font-black text-indigo-800 uppercase text-[10px]">
+            <input type="checkbox" id="qb-rate-cb-all" ${allChecked ? 'checked' : ''} onchange="window.toggleBulkRateNode('all', 'ALL', this.checked)" class="row-checkbox">
+            <span>All Rates (${totalCount})</span>
+        </label>
+    `;
+
+    groups.forEach(g => {
+        const groupLeaves = [...g.leaves, ...g.subgroups.flatMap(sg => sg.leaves)];
+        const gSel = groupLeaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
+        const gChecked = gSel === groupLeaves.length && groupLeaves.length > 0;
+
+        html += `
+            <div class="mt-1">
+                <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 cursor-pointer font-black text-[10px] uppercase text-slate-700">
+                    <input type="checkbox" id="qb-rate-cb-${g.id}" ${gChecked ? 'checked' : ''} onchange="window.toggleBulkRateNode('group', '${g.id}', this.checked)" class="row-checkbox">
+                    <span>${g.label}</span>
+                </label>
+                <div class="pl-3 space-y-0.5 mt-0.5">
+                    ${g.leaves.map(l => `
+                        <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-700">
+                            <input type="checkbox" ${bulkSelectedRateKeys.has(l.key) ? 'checked' : ''} onchange="window.toggleBulkRateNode('leaf', '${l.key.replace(/'/g, "\\'")}', this.checked)" class="row-checkbox">
+                            <span class="truncate">${l.label}</span>
+                        </label>
+                    `).join('')}
+                    ${g.subgroups.map(sg => {
+                        const sgSel = sg.leaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
+                        const sgChecked = sgSel === sg.leaves.length && sg.leaves.length > 0;
+                        return `
+                            <div class="mt-0.5">
+                                <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-100 cursor-pointer font-black text-[10px] uppercase text-slate-700">
+                                    <input type="checkbox" id="qb-rate-cb-${sg.id}" ${sgChecked ? 'checked' : ''} onchange="window.toggleBulkRateNode('subgroup', '${sg.id}', this.checked)" class="row-checkbox">
+                                    <span>${sg.label}</span>
+                                </label>
+                                <div class="pl-4 space-y-0.5">
+                                    ${sg.leaves.map(l => `
+                                        <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-600">
+                                            <input type="checkbox" ${bulkSelectedRateKeys.has(l.key) ? 'checked' : ''} onchange="window.toggleBulkRateNode('leaf', '${l.key.replace(/'/g, "\\'")}', this.checked)" class="row-checkbox">
+                                            <span class="truncate">${l.label}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    dropdown.innerHTML = html;
+
+    const allCb = document.getElementById('qb-rate-cb-all');
+    if (allCb) allCb.indeterminate = selectedCount > 0 && selectedCount < totalCount;
+
+    groups.forEach(g => {
+        const groupLeaves = [...g.leaves, ...g.subgroups.flatMap(sg => sg.leaves)];
+        const gSel = groupLeaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
+        const gCb = document.getElementById(`qb-rate-cb-${g.id}`);
+        if (gCb) gCb.indeterminate = gSel > 0 && gSel < groupLeaves.length;
+
+        g.subgroups.forEach(sg => {
+            const sgSel = sg.leaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
+            const sgCb = document.getElementById(`qb-rate-cb-${sg.id}`);
+            if (sgCb) sgCb.indeterminate = sgSel > 0 && sgSel < sg.leaves.length;
+        });
+    });
+
+    if (labelEl) {
+        if (selectedCount === totalCount) {
+            labelEl.innerText = 'All Rates';
+        } else if (selectedCount === 1) {
+            const onlyKey = Array.from(bulkSelectedRateKeys)[0];
+            labelEl.innerText = leafMap.get(onlyKey)?.label || '1 Selected';
+        } else {
+            const exactGroup = groups.find(g => {
+                const gl = [...g.leaves, ...g.subgroups.flatMap(sg => sg.leaves)];
+                return gl.length === selectedCount && gl.every(l => bulkSelectedRateKeys.has(l.key));
+            });
+            const exactSub = groups.flatMap(g => g.subgroups).find(sg =>
+                sg.leaves.length === selectedCount && sg.leaves.every(l => bulkSelectedRateKeys.has(l.key))
+            );
+            if (exactGroup) labelEl.innerText = `${exactGroup.shortLabel} (${selectedCount})`;
+            else if (exactSub) labelEl.innerText = `${exactSub.shortLabel} (${selectedCount})`;
+            else labelEl.innerText = `${selectedCount} Selected`;
+        }
+    }
+}
+
+export function toggleBulkRatesDropdown(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById('qb-rates-dropdown');
+    if (!dropdown) return;
+    const isHidden = dropdown.classList.contains('hidden');
+    if (isHidden) {
+        renderBulkRatesDropdown();
+        dropdown.classList.remove('hidden');
+    } else {
+        dropdown.classList.add('hidden');
+    }
+}
+
+export function toggleBulkRateNode(nodeType, nodeId, checked) {
+    const { groups, allLeafKeys } = buildBulkRatesTree();
+    if (!bulkSelectedRateKeys) bulkSelectedRateKeys = new Set(allLeafKeys);
+
+    let targetKeys = [];
+    if (nodeType === 'all') {
+        targetKeys = allLeafKeys;
+    } else if (nodeType === 'group') {
+        const grp = groups.find(g => g.id === nodeId);
+        if (grp) targetKeys = [...grp.leaves, ...grp.subgroups.flatMap(sg => sg.leaves)].map(l => l.key);
+    } else if (nodeType === 'subgroup') {
+        const sub = groups.flatMap(g => g.subgroups).find(sg => sg.id === nodeId);
+        if (sub) targetKeys = sub.leaves.map(l => l.key);
+    } else if (nodeType === 'leaf') {
+        targetKeys = [nodeId];
+    }
+
+    targetKeys.forEach(k => {
+        if (checked) bulkSelectedRateKeys.add(k);
+        else bulkSelectedRateKeys.delete(k);
+    });
+
+    if (bulkSelectedRateKeys.size === 0) {
+        bulkSelectedRateKeys = new Set(allLeafKeys);
+    }
+
+    renderBulkRatesDropdown();
+}
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('click', e => {
+        if (!e.target.closest('#qb-rates-wrap')) {
+            document.getElementById('qb-rates-dropdown')?.classList.add('hidden');
+        }
+    });
 }
 
 // --- 1. QUICK BULK DRAWER CONTROLLERS ---
@@ -64,6 +303,7 @@ export function toggleQuickBulk(forceClose = false) {
             qbEnd.value = getLocalYMD(next30);
         }
 
+        renderBulkRatesDropdown();
         renderBulkGrid();
     } else {
         panel.classList.add('hidden');
@@ -76,7 +316,7 @@ export function setBulkScopeMode(mode) {
     const btnAnchors = document.getElementById('qb-scope-anchors');
     const btnAll = document.getElementById('qb-scope-all');
     if (btnAnchors && btnAll) {
-        btnAnchors.className = mode === 'anchors' 
+        btnAnchors.className = mode === 'anchors'
             ? "px-2 py-0.5 rounded cursor-pointer bg-white text-indigo-700 shadow-2xs font-black"
             : "px-2 py-0.5 rounded cursor-pointer text-slate-600 hover:bg-white";
         btnAll.className = mode === 'all'
@@ -191,6 +431,85 @@ export function applyBulkGrid(isClear = false) {
     const eU = parseYMD(e);
     const rows = document.querySelectorAll('#qb-grid-body tr');
 
+    const { allLeafKeys, leafMap } = buildBulkRatesTree();
+    if (!bulkSelectedRateKeys) bulkSelectedRateKeys = new Set(allLeafKeys);
+    const isAllRatesSelected = bulkSelectedRateKeys.size === allLeafKeys.length;
+
+    const selectedPlanSigs = new Set();
+    bulkSelectedRateKeys.forEach(k => {
+        const sig = leafMap.get(k)?.planSig;
+        if (sig) selectedPlanSigs.add(sig);
+    });
+
+    const applyRestrictionPayload = (dObj, dateStr, targetRoom, r) => {
+        const targetRooms = getTargetRoomsForBulkRow(targetRoom);
+        const primaryData = dObj[targetRoom] || (dObj[targetRoom] = { isOverride: {} });
+        primaryData.isOverride = primaryData.isOverride || {};
+
+        if (isAllRatesSelected || bulkSelectedRateKeys.has('DEF::BASE')) {
+            if (r.min !== undefined) { primaryData.min = r.min; delete primaryData.min_arr; primaryData.isOverride.min = true; }
+            if (r.min_arr !== undefined) { primaryData.min_arr = r.min_arr; delete primaryData.min; primaryData.isOverride.min_arr = true; }
+            if (r.max !== undefined) { primaryData.max = r.max; primaryData.isOverride.max = true; }
+            if (r.pillState !== 'open') {
+                primaryData.cta = r.cta;
+                primaryData.ctd = r.ctd;
+                primaryData.stop = r.stop;
+                primaryData.isOverride.cta = true;
+                primaryData.isOverride.ctd = true;
+                primaryData.isOverride.stop = true;
+            }
+            if (bulkScopeMode === 'anchors') {
+                rippleDay(dateStr, targetRoom, true, 'restrictions');
+            }
+        }
+
+        if (isAllRatesSelected || bulkSelectedRateKeys.has('DIR::BASE')) {
+            targetRooms.forEach(rm => {
+                const rmData = dObj[rm] || (dObj[rm] = { isOverride: {} });
+                if (r.min !== undefined) { rmData.dir_min = r.min; delete rmData.dir_min_arr; }
+                if (r.min_arr !== undefined) { rmData.dir_min_arr = r.min_arr; delete rmData.dir_min; }
+                if (r.max !== undefined) { rmData.dir_max = r.max; }
+                if (r.pillState !== 'open') {
+                    rmData.dir_cta = r.cta;
+                    rmData.dir_ctd = r.ctd;
+                    rmData.dir_stop = r.stop;
+                }
+            });
+        }
+
+        if (isAllRatesSelected || bulkSelectedRateKeys.has('EVT::BASE')) {
+            dObj.evtRestrictions = dObj.evtRestrictions || {};
+            if (r.min !== undefined) { dObj.evtRestrictions.min = r.min; delete dObj.evtRestrictions.min_arr; }
+            if (r.min_arr !== undefined) { dObj.evtRestrictions.min_arr = r.min_arr; delete dObj.evtRestrictions.min; }
+            if (r.max !== undefined) { dObj.evtRestrictions.max = r.max; }
+            if (r.pillState !== 'open') {
+                dObj.evtRestrictions.cta = r.cta;
+                dObj.evtRestrictions.ctd = r.ctd;
+                dObj.evtRestrictions.stop = r.stop;
+            }
+        }
+
+        if (isAllRatesSelected || selectedPlanSigs.size > 0) {
+            dObj.otaOverrides = dObj.otaOverrides || {};
+            (window.channexRateMap || []).forEach(rp => {
+                const mappedCat = findCanonicalRoom(rp.pmsCategory) || rp.pmsCategory;
+                if (!targetRooms.includes(mappedCat)) return;
+                const ch = resolveChannelCode(rp.channel || '');
+                const planSig = `${ch}::${getCleanPlanLabel(rp).toLowerCase()}`;
+                if (!isAllRatesSelected && !selectedPlanSigs.has(planSig)) return;
+
+                if (r.min !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_min`] = r.min; delete dObj.otaOverrides[`${rp.ratePlanId}_min_arr`]; }
+                if (r.min_arr !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_min_arr`] = r.min_arr; delete dObj.otaOverrides[`${rp.ratePlanId}_min`]; }
+                if (r.max !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_max`] = r.max; }
+                if (r.pillState !== 'open') {
+                    dObj.otaOverrides[`${rp.ratePlanId}_cta`] = r.cta;
+                    dObj.otaOverrides[`${rp.ratePlanId}_ctd`] = r.ctd;
+                    dObj.otaOverrides[`${rp.ratePlanId}_stop`] = r.stop;
+                }
+            });
+        }
+    };
+
     const roomUpdates = [];
     let globalRule = null;
 
@@ -240,7 +559,9 @@ export function applyBulkGrid(isClear = false) {
         window.syncedDates.delete(dateStr);
 
         if (globalRule) {
+            const hasGlobalRestr = globalRule.min !== undefined || globalRule.min_arr !== undefined || globalRule.max !== undefined || globalRule.pillState !== 'open';
             dObj['GLOBAL'] = dObj['GLOBAL'] || { isOverride: {} };
+            dObj['GLOBAL'].isOverride = dObj['GLOBAL'].isOverride || {};
             if (isClear) {
                 delete dObj['GLOBAL'].min;
                 delete dObj['GLOBAL'].max;
@@ -249,16 +570,25 @@ export function applyBulkGrid(isClear = false) {
                 delete dObj['GLOBAL'].ctd;
                 delete dObj['GLOBAL'].stop;
                 delete dObj['GLOBAL'].stopSell;
-            } else {
-                if (globalRule.min !== undefined) dObj['GLOBAL'].min = globalRule.min;
-                if (globalRule.min_arr !== undefined) dObj['GLOBAL'].min_arr = globalRule.min_arr;
-                if (globalRule.max !== undefined) dObj['GLOBAL'].max = globalRule.max;
-                if (globalRule.pillState !== 'open') {
-                    dObj['GLOBAL'].cta = globalRule.cta;
-                    dObj['GLOBAL'].ctd = globalRule.ctd;
-                    dObj['GLOBAL'].stop = globalRule.stop;
+                dObj['GLOBAL'].isOverride = {};
+            } else if (hasGlobalRestr) {
+                if (isAllRatesSelected) {
+                    if (globalRule.min !== undefined) { dObj['GLOBAL'].min = globalRule.min; delete dObj['GLOBAL'].min_arr; dObj['GLOBAL'].isOverride.min = true; }
+                    if (globalRule.min_arr !== undefined) { dObj['GLOBAL'].min_arr = globalRule.min_arr; delete dObj['GLOBAL'].min; dObj['GLOBAL'].isOverride.min_arr = true; }
+                    if (globalRule.max !== undefined) { dObj['GLOBAL'].max = globalRule.max; dObj['GLOBAL'].isOverride.max = true; }
+                    if (globalRule.pillState !== 'open') {
+                        dObj['GLOBAL'].cta = globalRule.cta;
+                        dObj['GLOBAL'].ctd = globalRule.ctd;
+                        dObj['GLOBAL'].stop = globalRule.stop;
+                        dObj['GLOBAL'].isOverride.cta = true;
+                        dObj['GLOBAL'].isOverride.ctd = true;
+                        dObj['GLOBAL'].isOverride.stop = true;
+                    }
+                } else {
+                    (window.roomTypes || []).forEach(rt => applyRestrictionPayload(dObj, dateStr, rt, globalRule));
                 }
             }
+            if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', '*');
         }
 
         roomUpdates.forEach(r => {
@@ -277,21 +607,19 @@ export function applyBulkGrid(isClear = false) {
                 delete rData.stop;
                 rData.isOverride = {};
             } else {
-                if (r.rate !== undefined && !isNaN(r.rate)) {
+                const hasRateChange = r.rate !== undefined && !isNaN(r.rate);
+                const hasRestrChange = r.min !== undefined || r.min_arr !== undefined || r.max !== undefined || r.pillState !== 'open';
+
+                if (hasRateChange) {
                     rData.std = roundCurrency(r.rate);
                     rData.isOverride.std = true;
-                    rippleDay(dateStr, rt, true);
+                    rippleDay(dateStr, rt, true, 'rates');
                 }
-                if (r.min !== undefined) { rData.min = r.min; delete rData.min_arr; rData.isOverride.min = true; }
-                if (r.min_arr !== undefined) { rData.min_arr = r.min_arr; delete rData.min; rData.isOverride.min_arr = true; }
-                if (r.max !== undefined) { rData.max = r.max; rData.isOverride.max = true; }
-                if (r.pillState !== 'open') {
-                    rData.cta = r.cta;
-                    rData.ctd = r.ctd;
-                    rData.stop = r.stop;
-                    rData.isOverride.cta = true;
-                    rData.isOverride.ctd = true;
-                    rData.isOverride.stop = true;
+                if (hasRestrChange) {
+                    applyRestrictionPayload(dObj, dateStr, rt, r);
+                }
+                if ((hasRateChange || hasRestrChange) && typeof window.markCmDirty === 'function') {
+                    window.markCmDirty(dateStr, 'rate', '*');
                 }
             }
         });
@@ -324,20 +652,17 @@ export function runRippleRecovery(mode = 'blanks') {
         if (!dObj) continue;
 
         if (mode === 'blanks') {
-            // Snapshot existing non-blank values so we never overwrite them
             const preserved = {};
             allRooms.forEach(rt => {
                 const cur = dObj[rt];
                 if (cur && cur.std !== undefined && cur.std !== "") preserved[rt] = { ...cur };
             });
 
-            // Find any populated room to propagate from
             const seeds = Array.from(new Set([anchorP, anchorD, ...Object.keys(preserved)].filter(Boolean)));
             seeds.forEach(seed => {
                 if (preserved[seed]) rippleDay(dateStr, seed, true);
             });
 
-            // Restore any room that already had a price, counting newly filled rooms
             allRooms.forEach(rt => {
                 if (preserved[rt]) {
                     dObj[rt] = preserved[rt];
@@ -347,7 +672,6 @@ export function runRippleRecovery(mode = 'blanks') {
                 }
             });
         } else {
-            // RE-RIPPLE ALL: Recalculate all linked targets from Anchors
             [anchorP, anchorD].filter(Boolean).forEach(anc => {
                 if (dObj[anc] && (dObj[anc].std !== undefined || dObj[anc].fmp !== undefined)) {
                     rippleDay(dateStr, anc, false);
@@ -656,7 +980,6 @@ export function applyCurveTuner() {
     window.dirtyDates = window.dirtyDates || new Set();
     window.syncedDates = window.syncedDates || new Set();
 
-    // Ensure Event rows are visible so the applied curve is immediately seen
     window.enableEventRates = true;
     window.showEventRows = true;
 
@@ -792,6 +1115,9 @@ export async function saveCurveTunerAsDefault() {
 if (typeof window !== 'undefined') {
     window.toggleQuickBulk = toggleQuickBulk;
     window.setBulkScopeMode = setBulkScopeMode;
+    window.renderBulkRatesDropdown = renderBulkRatesDropdown;
+    window.toggleBulkRatesDropdown = toggleBulkRatesDropdown;
+    window.toggleBulkRateNode = toggleBulkRateNode;
     window.cycleBulkRowPill = cycleBulkRowPill;
     window.renderBulkGrid = renderBulkGrid;
     window.applyBulkGrid = applyBulkGrid;

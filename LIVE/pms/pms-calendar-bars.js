@@ -45,22 +45,21 @@ export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) =
     if (eS >= dShow || eE <= 0) return null;
     const due = window.getDue ? window.getDue(s) : 0;
     const owes = due > 0;
-    let bSty = 'border border-black/10';
-    let isA = false;
+    let borderCls = 'border border-black/10';
+    if (s.badCC) borderCls = '!border-red-500 !border-dashed !border-[3px]';
+    else if (owes) borderCls = '!border-red-500 !border-[3px]';
 
+    let pulseCls = '';
     if (s.status === 'future' || s.status === 'new') {
-        if (s.checkIn === todayStr) { bSty += ' checkin-today'; isA = true; }
-        else if (s.checkIn <= yStr) { bSty += ' late-checkin'; isA = true; }
+        if (s.checkIn === todayStr) pulseCls += ' checkin-today';
+        else if (s.checkIn <= yStr) pulseCls += ' late-checkin';
     } else if (s.status === 'here') {
-        if (s.checkOut === todayStr) { bSty += ' overdue-checkout-today'; isA = true; }
-        else if (s.checkOut <= yStr) { bSty += ' overdue-checkout-past'; isA = true; }
+        if (s.checkOut === todayStr) pulseCls += ' overdue-checkout-today';
+        else if (s.checkOut <= yStr) pulseCls += ' overdue-checkout-past';
     }
 
-    if (s.status === 'new') { bSty += ' status-new-pulse'; isA = true; }
-    if (!isA) {
-        if (s.badCC) bSty = '!border-red-500 !border-dashed !border-[3px]';
-        else if (owes) bSty = '!border-red-500 !border-[3px]';
-    }
+    if (s.status === 'new') pulseCls += ' status-new-pulse';
+    const bSty = `${borderCls}${pulseCls}`;
 
     const srcC = {
         'booking.com': { bg: 'bg-[#003580]', text: 'B' },

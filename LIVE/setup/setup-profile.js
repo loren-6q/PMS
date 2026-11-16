@@ -3,8 +3,12 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { appId } from '../core/config.js';
+import { getActivePropertyId } from '../core/properties.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { CANONICAL_OTA_LIST, getChannelByCode, getOtaPaymentPair, resolveChannelCode } from '../core/channels.js';
+
+const DEFAULT_SETUP_ICON = '../gfx/WWicon.png';
 
 export const BASE_DIRECT_PAYMENTS = [
     { key: "cash", label: "Cash", type: "revenue", isBase: true, active: true },
@@ -200,7 +204,7 @@ export function updateLogoPreview(type, url) {
             }
         };
     } else {
-        previewEl.src = 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
+        previewEl.src = DEFAULT_SETUP_ICON;
         previewEl.classList.remove('hidden');
         previewEl.style.display = '';
         previewEl.onclick = null;
@@ -212,9 +216,9 @@ export function resetLogosToDefault() {
     const propCfg = window.currentPropertyConfig || {};
     const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
 
-    const logo = propCfg.logoUrl || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
-    const banner = propCfg.bannerUrl || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
-    const icon = propCfg.iconUrl || 'https://loren-6q.github.io/PMS/gfx/WWicon.png';
+    const logo = propCfg.logoUrl || DEFAULT_SETUP_ICON;
+    const banner = propCfg.bannerUrl || DEFAULT_SETUP_ICON;
+    const icon = propCfg.iconUrl || DEFAULT_SETUP_ICON;
 
     setVal('prop-logo-url', logo);
     setVal('prop-banner-url', banner);
@@ -235,9 +239,9 @@ export async function handleLogoFileUpload(event, type) {
         customAlert("Uploading Image...", `Processing ${file.name}...`);
         const { getStorage, ref, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js");
         const storage = getStorage();
-        const propId = window.currentPropertyId || 'swims_resort';
-        const fileRef = ref(storage, `artifacts/hotel-pms-v1/public/branding/${propId}/${type}_${Date.now()}_${file.name}`);
-
+        const propId = getActivePropertyId();
+        const fileRef = ref(storage, `artifacts/${appId}/public/branding/${propId}/${type}_${Date.now()}_${file.name}`);
+        
         await uploadBytes(fileRef, file);
         const downloadUrl = await getDownloadURL(fileRef);
 

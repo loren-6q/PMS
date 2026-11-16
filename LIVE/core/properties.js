@@ -54,7 +54,7 @@ export async function getActivePropertyConfig(propId) {
  */
 export function toCanonicalPropId(rawId) {
     if (!rawId) {
-        return localStorage.getItem('last_prop') || window.availableProperties?.[0]?.id || 'swims_resort';
+        return localStorage.getItem('last_prop') || window.availableProperties?.[0]?.id || '';
     }
     const clean = String(rawId).trim().toLowerCase();
     const props = window.availableProperties || [];
@@ -106,6 +106,50 @@ export function switchProperty(targetPropId) {
     window.location.href = url.toString();
 }
 
+/**
+ * Case-insensitive canonical room category resolver.
+ */
+export function resolveRoomCategory(rawName, roomTypes = (window.roomTypes || [])) {
+    if (!rawName) return '';
+    const clean = String(rawName).trim().toLowerCase();
+    return roomTypes.find(r => String(r).trim().toLowerCase() === clean) || '';
+}
+
+/**
+ * Classifies active room categories into dorms vs privates.
+ */
+export function getClassifiedRooms() {
+    const all = [...(window.roomTypes || [])];
+    const hotelRooms = window.hotelRooms || [];
+    const dormSet = new Set();
+    const privSet = new Set();
+
+    hotelRooms.forEach(hr => {
+        const cat = hr.category || hr.type;
+        if (!cat) return;
+        if (hr.rule === 'private') privSet.add(cat);
+        else if (hr.rule) dormSet.add(cat);
+    });
+
+    const dorms = all.filter(rt => dormSet.has(rt) || (!privSet.has(rt) && /dorm|bed|bunk/i.test(rt)));
+    const privates = all.filter(rt => !dorms.includes(rt));
+    return { all, dorms, privates };
+}
+
+/**
+ * Resolves the canonical Private and Dorm Master Anchors with safe fallbacks.
+ */
+export function getResolvedAnchors() {
+    const { all, dorms, privates } = getClassifiedRooms();
+    let anchorP = resolveRoomCategory(window.pricingRules?.anchorPrivate, all);
+    if (!anchorP) anchorP = privates[0] || all[0] || '';
+
+    let anchorD = resolveRoomCategory(window.pricingRules?.anchorDorm, all);
+    if (!anchorD) anchorD = dorms[0] || (all[1] && all[1] !== anchorP ? all[1] : '');
+
+    return { anchorP, anchorD };
+}
+
 // Global window bridges
 if (typeof window !== 'undefined') {
     window.loadPropertiesCatalog = loadPropertiesCatalog;
@@ -114,4 +158,7 @@ if (typeof window !== 'undefined') {
     window.getActivePropertyId = getActivePropertyId;
     window.toDisplayPropKey = toDisplayPropKey;
     window.switchProperty = switchProperty;
+    window.resolveRoomCategory = resolveRoomCategory;
+    window.getClassifiedRooms = getClassifiedRooms;
+    window.getResolvedAnchors = getResolvedAnchors;
 }

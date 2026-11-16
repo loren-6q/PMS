@@ -9,8 +9,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Wild & Wandering PMS</title>
-    <link rel="apple-touch-icon" href="gfx/WWicon.png">
-    <link rel="icon" type="image/png" href="gfx/WWicon.png">
+    <link rel="apple-touch-icon" href="../gfx/WWicon.png">
+    <link rel="icon" type="image/png" href="../gfx/WWicon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script>
@@ -259,7 +259,7 @@
     <!-- 6. MASTER GUEST FOLIO MODAL -->
     <!-- ========================================================================== -->
     <div id="guest-modal" class="modal-overlay">
-        <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800 flex flex-col h-auto max-h-[95vh] w-full max-w-[480px]">
+        <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800 flex flex-col h-auto max-h-[calc(100dvh-1rem)] sm:max-h-[94dvh] w-full max-w-[480px]">
              <div id="modal-header-btn" class="bg-slate-900 p-2 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable shrink-0" onmousedown="window.startDrag(event)">
                 <div class="flex items-center gap-2 pointer-events-none">
                     <i data-lucide="user" size="18"></i>
@@ -272,8 +272,8 @@
 
             <div id="itinerary-stripe" class="hidden bg-slate-900 border-b border-slate-700 px-2 py-1 text-white flex items-center justify-between gap-1 overflow-x-auto no-scrollbar unselectable text-xs shrink-0"></div>
 
-            <form id="guest-form" class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-2 no-scrollbar relative block">
-                <input type="hidden" id="guest-id"> 
+            <form id="guest-form" class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y p-2 space-y-2 relative block">
+                 <input type="hidden" id="guest-id"> 
                 <input type="hidden" id="created-at"> 
                 <input type="hidden" id="created-by"> 
                 <input type="hidden" id="guest-status-hidden">
