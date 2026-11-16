@@ -30,15 +30,7 @@
 
         <!-- UNIVERSAL TOP NAVIGATION -->
         <div id="app-nav" data-app="accounting">
-            <div id="nav-center-slot" class="flex items-center gap-1.5 flex-wrap">
-                <!-- Property Scope Selector (Includes ALL Properties) -->
-                <div class="flex items-center bg-slate-100 rounded px-1.5 py-0.5 border border-slate-300">
-                    <span class="text-[9px] font-black uppercase text-slate-500 mr-1 hidden lg:inline">Scope:</span>
-                    <select id="acc-prop-scope" onchange="window.handleScopeChange(this.value)" class="bg-white font-black text-[11px] uppercase text-indigo-700 outline-none cursor-pointer border border-slate-300 rounded px-1.5 py-0.5">
-                        <option value="ALL">ALL PROPERTIES</option>
-                    </select>
-                </div>
-
+            <div id="nav-center-slot" class="flex items-center gap-1 flex-wrap">
                 <!-- Date Basis Selector -->
                 <select id="acc-date-basis" onchange="window.renderAccounting()" class="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] font-black uppercase text-slate-700 outline-none cursor-pointer" title="Which date the range applies to">
                     <option value="checkIn">By Check-In</option>
@@ -69,22 +61,21 @@
             </div>
 
             <div id="nav-right-slot" class="flex items-center gap-1.5">
-                <!-- View Switcher: Raw Ledger vs Monthly/Yearly Rollup -->
                 <div class="flex bg-slate-100 rounded p-0.5 border border-slate-300 text-[10px] font-black uppercase">
                     <button type="button" id="btn-view-ledger" onclick="window.setAccView('ledger')" class="px-2 py-0.5 rounded bg-slate-900 text-white cursor-pointer">Ledger</button>
                     <button type="button" id="btn-view-rollup" onclick="window.setAccView('rollup')" class="px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer">Chart / Rollup</button>
                 </div>
 
-                <button type="button" onclick="window.exportAccountingXlsx()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[11px] uppercase flex items-center gap-1 shadow-xs cursor-pointer whitespace-nowrap" title="Download Multi-Tab Excel Workbook">
+                <button type="button" onclick="window.exportAccountingXlsx()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[11px] uppercase flex items-center gap-1 shadow-xs cursor-pointer whitespace-nowrap" title="Download Excel Workbook">
                     <i data-lucide="file-spreadsheet" size="13"></i>
                     <span>Export XLSX</span>
                 </button>
             </div>
         </div>
 
-        <!-- ACCOUNTING CONTROL STRIP (Cash vs Accrual, Payment Mode, OTA Lag) -->
+        <!-- ACCOUNTING CONTROL STRIP -->
         <div class="bg-white px-2.5 py-1.5 rounded-none sm:rounded-t-lg border-x border-t border-slate-300 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 unselectable">
-            <div class="flex items-center gap-3 flex-wrap">
+            <div class="flex items-center gap-2.5 flex-wrap">
                 <!-- Include In-Transit Toggle -->
                 <label class="flex items-center gap-1.5 cursor-pointer bg-amber-50 border border-amber-300 px-2 py-0.5 rounded font-black text-[11px] text-amber-900">
                     <input type="checkbox" id="acc-include-transit" checked onchange="window.renderAccounting()" class="row-checkbox">
@@ -93,11 +84,11 @@
 
                 <!-- Payment Settlement Filter -->
                 <div class="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
-                    <span class="text-[10px] font-black uppercase text-slate-500">Kept Filter:</span>
+                    <span class="text-[10px] font-black uppercase text-slate-500">Kept:</span>
                     <select id="acc-kept-mode" onchange="window.renderAccounting()" class="bg-white border border-slate-300 rounded px-1.5 py-0.2 text-[11px] font-black uppercase text-slate-800 outline-none cursor-pointer">
                         <option value="all">All Kept Money</option>
-                        <option value="cash_only">Cash Only (In-Hand)</option>
-                        <option value="bank_only">Bank / Card / OTA Only</option>
+                        <option value="cash_only">Cash Only</option>
+                        <option value="bank_only">Bank / Card / OTA</option>
                     </select>
                 </div>
 
@@ -115,10 +106,15 @@
                     </select>
                 </div>
 
+                <!-- Quick Status Exclusion Preset -->
+                <button type="button" id="btn-paid-statuses-only" onclick="window.togglePaidStatusesOnly()" class="px-2 py-0.5 rounded border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase cursor-pointer" title="Toggle excluding Cancelled, No-Show, Unconfirmed, Volunteer & To-Charge">
+                    Active / Paid Statuses
+                </button>
+
                 <!-- OTA Payout Settlement Lag -->
                 <div class="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300" title="Days after check-out before OTA payouts count as received in bank">
-                    <span class="text-[10px] font-black uppercase text-slate-500">OTA Payout Lag:</span>
-                    <input type="number" id="acc-ota-lag" value="3" min="0" max="30" oninput="window.renderAccounting()" class="w-11 bg-white border border-slate-300 rounded px-1 py-0.2 text-[11px] font-black text-center outline-none">
+                    <span class="text-[10px] font-black uppercase text-slate-500">OTA Lag:</span>
+                    <input type="number" id="acc-ota-lag" value="3" min="0" max="30" oninput="window.renderAccounting()" class="w-10 bg-white border border-slate-300 rounded px-1 py-0.2 text-[11px] font-black text-center outline-none">
                     <span class="text-[10px] font-bold text-slate-500">d</span>
                 </div>
             </div>
@@ -130,14 +126,13 @@
         </div>
 
         <!-- ================================================================== -->
-        <!-- VIEW 1: RAW SPREADSHEET LEDGER (DEFAULT)                           -->
+        <!-- VIEW 1: RAW SPREADSHEET LEDGER                                     -->
         <!-- ================================================================== -->
         <main id="view-ledger" class="flex-1 flex flex-col min-h-0 bg-white border border-slate-300 sm:rounded-b-lg shadow overflow-hidden">
             <div class="flex-1 overflow-auto bg-white">
                 <table class="w-full text-left border-collapse whitespace-nowrap text-xs tabular-nums" id="acc-table">
                     <thead class="sticky top-0 z-20 bg-slate-900 text-white select-none">
                         <tr class="text-[10px] font-black uppercase tracking-wider border-b border-slate-700">
-                            <th onclick="window.sortAccounting('property')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Prop</th>
                             <th onclick="window.sortAccounting('bookId')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Book ID</th>
                             <th onclick="window.sortAccounting('name')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Guest</th>
                             <th onclick="window.sortAccounting('status')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Status</th>
@@ -155,40 +150,32 @@
                             <th onclick="window.sortAccounting('unpaidLeft')" class="py-2 px-2 border-r border-slate-700 text-right text-orange-300 cursor-pointer hover:bg-slate-800">Unpaid (Left)</th>
                             <th onclick="window.sortAccounting('willNotCollect')" class="py-2 px-2 text-right text-slate-300 cursor-pointer hover:bg-slate-800">Will Not Collect</th>
                         </tr>
-                        <!-- Inline Column Filter Row -->
+                        <!-- Inline Multi-Select Column Filter Row -->
                         <tr class="bg-slate-800 text-[10px] font-bold">
-                            <th class="p-1 border-r border-slate-700"></th>
                             <th class="p-1 border-r border-slate-700" colspan="2">
                                 <input type="text" id="acc-filter-search" oninput="window.renderAccounting()" placeholder="Filter guest, ID, room..." class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] outline-none">
                             </th>
-                            <th class="p-1 border-r border-slate-700">
-                                <select id="acc-filter-status" onchange="window.renderAccounting()" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1 py-0.5 text-[10px] uppercase outline-none cursor-pointer">
-                                    <option value="">All Status</option>
-                                </select>
+                            <th class="p-1 border-r border-slate-700 relative">
+                                <button type="button" onclick="window.toggleAccDropdown('acc-status-dropdown', this)" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
+                                    <span id="acc-status-label" class="truncate">All Status</span><span>▾</span>
+                                </button>
+                                <div id="acc-status-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-44 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-60 overflow-y-auto p-1 text-left"></div>
                             </th>
-                            <th class="p-1 border-r border-slate-700">
-                                <select id="acc-filter-source" onchange="window.renderAccounting()" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1 py-0.5 text-[10px] uppercase outline-none cursor-pointer">
-                                    <option value="">All Sources</option>
-                                    <option value="direct">Direct</option>
-                                    <option value="booking.com">Booking.com</option>
-                                    <option value="agoda">Agoda</option>
-                                    <option value="hostelworld">Hostelworld</option>
-                                    <option value="airbnb">Airbnb</option>
-                                    <option value="expedia">Expedia</option>
-                                    <option value="ctrip">Ctrip</option>
-                                    <option value="walk-in">Walk-In</option>
-                                    <option value="other">Other</option>
-                                </select>
+                            <th class="p-1 border-r border-slate-700 relative">
+                                <button type="button" onclick="window.toggleAccDropdown('acc-source-dropdown', this)" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
+                                    <span id="acc-source-label" class="truncate">All Sources</span><span>▾</span>
+                                </button>
+                                <div id="acc-source-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-40 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-60 overflow-y-auto p-1 text-left"></div>
                             </th>
                             <th colspan="12" class="p-1 text-right text-[9px] font-normal text-slate-400 pr-2">
-                                Click any row to open reservation in PMS &bull; Click column headers to sort
+                                Click any row to edit booking right here &bull; Click column headers to sort
                             </th>
                         </tr>
                     </thead>
 
                     <tbody id="acc-ledger-body" class="divide-y divide-slate-200 bg-white font-semibold text-xs"></tbody>
 
-                    <!-- Sticky Totals Footer (Computed Directly From Visible Rows) -->
+                    <!-- Sticky Totals Footer -->
                     <tfoot id="acc-ledger-foot" class="sticky bottom-0 z-20 bg-slate-900 text-white font-black text-xs border-t-2 border-slate-600 shadow-inner"></tfoot>
                 </table>
             </div>
@@ -215,10 +202,8 @@
                 </div>
             </div>
 
-            <!-- Bar Chart Container -->
             <div id="rollup-chart-container" class="p-3 border-b border-slate-300 bg-white shrink-0 overflow-x-auto"></div>
 
-            <!-- Monthly / Yearly Spreadsheet Table -->
             <div class="flex-1 overflow-auto">
                 <table class="w-full text-left border-collapse whitespace-nowrap text-xs tabular-nums">
                     <thead class="sticky top-0 z-10 bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
@@ -245,32 +230,229 @@
 
     </div>
 
+    <!-- ====================================================================== -->
+    <!-- IN-PAGE GUEST FOLIO MODAL (Reuses PMS Folio Modal, Ledger & Actions)   -->
+    <!-- ====================================================================== -->
+    <div id="guest-modal" class="modal-overlay">
+        <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800 flex flex-col h-auto max-h-[calc(100dvh-1rem)] w-full max-w-[480px]">
+            <div id="modal-header-btn" class="bg-slate-900 p-2 text-white flex justify-between items-center cursor-move rounded-t-lg unselectable shrink-0" onmousedown="window.startDrag(event)">
+                <div class="flex items-center gap-2 pointer-events-none">
+                    <i data-lucide="user" size="18"></i>
+                    <h3 id="modal-guest-name-display" class="text-lg font-black uppercase tracking-tighter leading-none">BOOKING</h3>
+                </div>
+                <button type="button" onclick="event.stopPropagation(); window.closeGuestModal()" class="p-1 hover:bg-red-500 rounded cursor-pointer"><i data-lucide="x" size="20"></i></button>
+            </div>
+
+            <div id="itinerary-stripe" class="hidden bg-slate-900 border-b border-slate-700 px-2 py-1 text-white flex items-center justify-between gap-1 overflow-x-auto no-scrollbar unselectable text-xs shrink-0"></div>
+
+            <form id="guest-form" class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-2 no-scrollbar relative block">
+                <input type="hidden" id="guest-id">
+                <input type="hidden" id="created-at">
+                <input type="hidden" id="created-by">
+                <input type="hidden" id="guest-status-hidden">
+
+                <div class="section-header rounded-t-md mt-1" onclick="window.toggleSection('guest-profile-section', 'profile-chevron')">
+                    <span>Guest Details</span>
+                    <i data-lucide="chevron-down" id="profile-chevron" size="14" class="transition-transform duration-200"></i>
+                </div>
+
+                <div id="guest-profile-section" class="bg-slate-50 p-1.5 border-x border-b border-slate-200 rounded-b-md space-y-1.5 mt-0 block">
+                    <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">First Name</label><input type="text" id="first-name" class="input-base uppercase" oninput="window.updateHeaderName()"></div><div><label class="field-label">Last Name</label><input type="text" id="last-name" required class="input-base uppercase" oninput="window.updateHeaderName()"></div></div>
+                    <div class="grid grid-cols-2 gap-1.5"><div><label class="field-label">Phone</label><input type="text" id="phone" class="input-base"></div><div><label class="field-label">Country</label><input type="text" id="guest-country" class="input-base"></div></div>
+                    <div><label class="field-label">Email</label><input type="text" id="email" class="input-base" oninput="window.checkEmailProxy(this.value)"></div>
+                </div>
+
+                <div class="bg-slate-50 p-1.5 rounded-md border border-slate-200 space-y-1.5">
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-[130px] shrink-0">
+                            <label class="field-label text-center mb-0.5">IN</label>
+                            <div class="flex items-stretch bg-white border border-slate-300 rounded overflow-hidden shadow-sm h-[28px]">
+                                <button type="button" onclick="window.nudgeDate('in', -1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-r border-slate-200 cursor-pointer">◀</button>
+                                <input type="date" id="check-in" required class="w-full text-[11px] font-black px-0 text-center bg-transparent border-none outline-none cursor-pointer" onchange="window.handleCheckInPicker(this.value)">
+                                <button type="button" onclick="window.nudgeDate('in', 1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-l border-slate-200 cursor-pointer">▶</button>
+                            </div>
+                        </div>
+
+                        <div class="w-[130px] shrink-0">
+                            <label class="field-label text-center mb-0.5">OUT</label>
+                            <div class="flex items-stretch bg-white border border-slate-300 rounded overflow-hidden shadow-sm h-[28px]">
+                                <button type="button" onclick="window.nudgeDate('out', -1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-r border-slate-200 cursor-pointer">◀</button>
+                                <input type="date" id="check-out" required class="w-full text-[11px] font-black px-0 text-center bg-transparent border-none outline-none cursor-pointer" onchange="window.handleCheckOutPicker(this.value)">
+                                <button type="button" onclick="window.nudgeDate('out', 1)" class="w-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border-l border-slate-200 cursor-pointer">▶</button>
+                            </div>
+                        </div>
+
+                        <div class="flex-1 min-w-0 flex flex-col items-center">
+                            <label class="field-label text-center mb-0.5">#NTS</label>
+                            <div id="booking-nights-display" class="w-full h-[28px] bg-indigo-50 border border-indigo-200 rounded font-black text-xs text-indigo-700 flex items-center justify-center px-1.5 shadow-sm select-none">
+                                <span id="nights-count-text">1 Nt</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-1 pt-1 border-t border-slate-200">
+                        <div class="w-full h-[28px] bg-white border border-slate-300 rounded shadow-sm flex items-center justify-between px-0.5 text-[10px] font-black text-slate-600 select-none">
+                            <button type="button" onclick="window.adjustPax(-1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer">◀</button>
+                            <div class="flex items-center gap-0.5">
+                                <input type="number" id="pax-count" value="1" min="1" class="w-6 text-center text-xs font-black border-none outline-none p-0 bg-transparent" oninput="window.calcFinancials()">
+                                <span class="text-[8px] uppercase font-black text-slate-400">PAX</span>
+                            </div>
+                            <button type="button" onclick="window.adjustPax(1)" class="w-5 h-full flex items-center justify-center text-slate-500 hover:text-slate-800 font-black cursor-pointer">▶</button>
+                        </div>
+
+                        <button type="button" id="status-cycle-btn" onclick="window.cycleStatus()" class="w-full h-[28px] rounded text-[10px] font-black uppercase text-center shadow-sm cursor-pointer border unselectable truncate px-1"></button>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                    <div><label class="field-label">Booked Type</label><input type="text" id="booked-type" class="input-base" placeholder="--"></div>
+                    <div>
+                        <div class="flex justify-between items-end mb-1">
+                            <label class="field-label text-blue-600 mb-0">Assigned Rooms</label>
+                            <button type="button" onclick="window.addRoomSelect()" class="text-[9px] font-black uppercase text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded hover:bg-blue-200 border border-blue-200 cursor-pointer">+ ADD</button>
+                        </div>
+                        <div id="assigned-rooms-container" class="max-h-[110px] overflow-y-auto no-scrollbar border border-slate-200 rounded p-1 bg-slate-50 flex flex-col gap-1 w-full"></div>
+                    </div>
+                </div>
+
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('fin-section', 'fin-chevron')">
+                    <span>Payments</span>
+                    <i data-lucide="chevron-down" id="fin-chevron" size="14" class="transition-transform duration-200"></i>
+                </div>
+
+                <div id="fin-section" class="bg-slate-100 p-1.5 border-x border-b border-slate-200 rounded-b-md mt-0 block">
+                    <div class="flex justify-between items-end border-b-2 border-slate-200 pb-1 mb-1">
+                        <div class="flex gap-2 items-end">
+                            <div>
+                                <div class="flex items-center justify-between"><label class="field-label">Total Price</label><button type="button" onclick="window.openChargeModal()" class="text-[9px] font-black text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-1 py-0.5 rounded cursor-pointer ml-1.5 border border-blue-200">+ ADD ฿</button></div>
+                                <div class="flex items-center text-lg font-black">฿<input type="number" id="total-price" value="0" step="0.01" class="w-20 p-0 ml-1 border-none bg-transparent outline-none text-lg font-black" oninput="window.calcFinancials()"></div>
+                            </div>
+                            <div class="mb-0.5"><label class="field-label text-[9px] text-slate-400">Net Est.</label><div class="flex items-center text-xs font-bold text-slate-500">฿<input type="number" id="net-price" value="0" step="0.01" class="w-14 p-0 ml-0.5 border-none bg-transparent outline-none text-xs font-bold text-slate-500" oninput="window.overrideNet()"></div></div>
+                        </div>
+                        <div class="flex gap-3 text-right items-center">
+                            <div><label class="field-label">Paid</label><div class="font-black text-lg text-green-600 leading-none" id="display-paid">฿0</div></div>
+                            <div><label class="field-label !text-red-500">Due</label><div class="font-black text-red-600 text-xl leading-none" id="display-due">฿0</div></div>
+                            <div class="flex flex-col items-center justify-center ml-1 border-l border-slate-300 pl-1.5 cursor-pointer unselectable" onclick="window.toggleBadCC()"><span class="text-[9px] font-black leading-none text-slate-400">BAD</span><span class="text-[9px] font-black leading-none text-slate-400">CC</span><div id="bad-cc-box" class="w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center"></div></div>
+                        </div>
+                    </div>
+
+                    <div id="extra-charges-wrapper" class="hidden mb-1.5 p-1 bg-amber-50/70 border border-amber-200 rounded">
+                        <div class="flex justify-between items-center text-[9px] font-black uppercase text-amber-800 mb-1 px-1 border-b border-amber-200 pb-0.5">
+                            <span>Itemized Add-ons</span>
+                            <span id="extra-charges-total">+฿0</span>
+                        </div>
+                        <div id="extra-charges-list" class="space-y-1"></div>
+                    </div>
+
+                    <div id="payments-list" class="space-y-1 mb-1.5"></div>
+                    <button type="button" onclick="window.addPaymentRow()" class="w-full py-1 border-2 border-dashed border-slate-300 rounded text-xs font-black text-slate-500 hover:bg-slate-200 uppercase unselectable cursor-pointer">+ ADD PAYMENT</button>
+                </div>
+
+                <div class="section-header rounded-t-md unselectable" onclick="window.toggleSection('meta-section', 'meta-chevron')">
+                    <span>More</span>
+                    <i data-lucide="chevron-down" id="meta-chevron" size="14" class="transition-transform duration-200"></i>
+                </div>
+
+                <div id="meta-section" class="bg-slate-50 p-1.5 border-x border-b border-slate-200 rounded-b-md mt-0 block">
+                    <label class="field-label mb-0 border-b border-slate-200 pb-1">Guest Notes</label>
+                    <textarea id="guest-notes" class="smart-notes w-full bg-white border border-slate-300 font-bold text-xs p-1.5 mb-1.5 rounded outline-none mt-1" placeholder="NOTES..."></textarea>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <div class="flex flex-col"><label class="field-label">Source</label><select id="booking-source" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none uppercase cursor-pointer" onchange="window.calcFinancials()"><option value="direct">DIRECT</option><option value="booking.com">BOOKING.COM</option><option value="agoda">AGODA</option><option value="hostelworld">HOSTELWORLD</option><option value="airbnb">AIRBNB</option><option value="expedia">EXPEDIA</option><option value="ctrip">CTRIP</option><option value="walk-in">WALK-IN</option><option value="other">OTHER</option></select></div>
+                        <div class="flex flex-col"><label class="field-label">Book Date</label><input type="date" id="booking-date" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none"></div>
+                        <div class="flex flex-col"><label class="field-label">Book ID</label><input type="text" id="booking-id" class="w-full text-xs font-bold bg-transparent border-none p-0 outline-none"></div>
+                        <div class="flex flex-col col-span-3 mt-0.5 pt-1 border-t border-slate-200"><label class="field-label text-[9px] text-amber-600">Link Code</label><input type="text" id="link-code" class="w-24 text-xs font-black bg-amber-50 border border-amber-200 text-amber-700 rounded px-1 outline-none uppercase text-center"></div>
+                    </div>
+                </div>
+            </form>
+
+            <div class="bg-slate-100 p-2 flex gap-2 justify-between items-center border-t border-slate-300 unselectable shrink-0">
+                <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" id="delete-btn" title="Delete" onclick="window.requestDelete()" class="btn-tool bg-red-600 text-white hover:bg-red-700"><i data-lucide="trash-2" size="14"></i></button>
+                    <button type="button" id="hist-btn" title="History" onclick="window.showAuditHistory()" class="btn-tool bg-slate-200 text-slate-700 hover:bg-slate-300"><i data-lucide="clock" size="14"></i></button>
+                    <button type="button" id="invoice-btn" title="Print Invoice" onclick="window.generateGuestInvoice()" class="btn-tool bg-emerald-100 text-emerald-800 hover:bg-emerald-200 cursor-pointer"><i data-lucide="receipt" size="14"></i></button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="window.closeGuestModal()" class="px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-200 text-xs font-black uppercase cursor-pointer">Cancel</button>
+                    <button type="button" onclick="window.saveBooking()" id="save-booking-btn" class="px-5 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase shadow-sm flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="check" size="14"></i>
+                        <span>SAVE</span>
+                    </button>
+                </div>
+            </div>
+            <div id="audit-log" class="bg-slate-900 text-slate-400 text-[9px] font-bold px-3 py-1 uppercase tracking-wider shrink-0 select-none border-t border-slate-700 rounded-b-xl"></div>
+        </div>
+    </div>
+
+    <!-- Extra Charges Modal -->
+    <div id="charge-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-xs">
+                <span>Add Extra Charge / Item</span>
+                <button type="button" onclick="window.closeModal('charge-modal')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="16"></i></button>
+            </div>
+            <div class="p-3 space-y-2 text-xs">
+                <div><label class="field-label">Description</label><input type="text" id="charge-desc" class="input-base font-bold uppercase"></div>
+                <div class="flex flex-wrap gap-1" id="charge-presets-container"></div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="field-label">Amount (฿)</label><input type="number" id="charge-amount" step="any" class="input-base font-black text-emerald-700"></div>
+                    <div><label class="field-label">Date</label><input type="date" id="charge-date" class="input-base font-bold"></div>
+                </div>
+            </div>
+            <div class="p-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                <button type="button" onclick="window.closeModal('charge-modal')" class="btn-modal bg-slate-200 text-slate-700 text-xs !py-1 !px-3">Cancel</button>
+                <button type="button" onclick="window.confirmAddCharge()" class="btn-modal bg-emerald-600 text-white text-xs !py-1 !px-4 shadow-sm">Add Charge</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Alert Modal -->
+    <div id="alert-modal" class="alert-modal-overlay z-[10000]">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm" id="alert-header-title">Attention</div>
+            <div class="p-6 text-center">
+                <p id="alert-message" class="font-black text-slate-700 leading-tight text-md mb-6 whitespace-pre-line"></p>
+                <div class="flex gap-2 justify-center" id="alert-actions">
+                    <button id="alert-cancel" onclick="window.closeAlert()" class="btn-modal bg-slate-200 text-slate-700 px-6 hidden">Cancel</button>
+                    <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { db, auth, appId } from './core/config.js';
         import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey, getActivePropertyId } from './core/properties.js';
+        import { loadPropertiesCatalog, toCanonicalPropId, getActivePropertyId } from './core/properties.js';
         import { parseYMD, getLocalYMD, mNames } from './core/dates.js';
         import { roundCurrency } from './core/money.js';
         import { STATUS_CYCLE, getStatusObj } from './core/occupancy.js';
         import { mountNav } from './core/nav.js';
+        import './pms/pms-folio-modal.js';
+        import './pms/pms-folio-ledger.js';
+        import './pms/pms-folio-actions.js';
+        import './pms/pms-folio-invoice.js';
 
         // ------------------------------------------------------------------
-        // 1. MODULE STATE & HELPERS
+        // 1. MODULE STATE & CONSTANTS
         // ------------------------------------------------------------------
 
         let propertiesCatalog = [];
         let allBookings = [];
-        let activeScope = 'ALL';
         let activeView = 'ledger';
         let rollupGranularity = 'monthly';
         let sortKey = 'checkIn';
         let sortAsc = false;
         let lastComputedRows = [];
         let lastRollupRows = [];
+        let paidOnlyActive = false;
 
         const NON_COLLECTIBLE_STATUSES = new Set([
             'cancelled', 'unconfirmed', 'new', 'to-charge', 'tocharge', 'no-show', 'noshow'
+        ]);
+
+        const PAID_ACTIVE_STATUSES = new Set([
+            'future', 'here', 'left', 'early out', 'early-out', 'charged'
         ]);
 
         const LEFT_UNPAID_STATUSES = new Set([
@@ -284,6 +466,10 @@
         const DEFAULT_FEE_METHODS = new Set([
             'hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'card-kp', 'cc-fee'
         ]);
+
+        const SOURCE_LIST = [
+            'direct', 'booking.com', 'agoda', 'hostelworld', 'airbnb', 'expedia', 'ctrip', 'walk-in', 'other'
+        ];
 
         function addDaysToYmd(ymd, days) {
             const ms = parseYMD(ymd);
@@ -311,14 +497,95 @@
         }
 
         // ------------------------------------------------------------------
-        // 2. EXACT 7-BUCKET RESERVATION FINANCIAL DECOMPOSITION
+        // 2. MULTI-SELECT DROPDOWN HELPERS
+        // ------------------------------------------------------------------
+
+        function initMultiDropdowns() {
+            const statusDrop = document.getElementById('acc-status-dropdown');
+            if (statusDrop) {
+                statusDrop.innerHTML = STATUS_CYCLE.map(s => `
+                    <label class="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
+                        <input type="checkbox" value="${s.val}" onchange="window.onMultiFilterChange()">
+                        <span class="w-2 h-2 rounded-full shrink-0" style="background:${s.bg}; border:1px solid ${s.border};"></span>
+                        <span>${s.label}</span>
+                    </label>
+                `).join('');
+            }
+
+            const sourceDrop = document.getElementById('acc-source-dropdown');
+            if (sourceDrop) {
+                sourceDrop.innerHTML = SOURCE_LIST.map(src => `
+                    <label class="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
+                        <input type="checkbox" value="${src}" onchange="window.onMultiFilterChange()">
+                        <span>${src}</span>
+                    </label>
+                `).join('');
+            }
+        }
+
+        window.toggleAccDropdown = (id, btnEl) => {
+            if (window.event) window.event.stopPropagation();
+            const target = document.getElementById(id);
+            if (!target) return;
+            const willOpen = target.classList.contains('hidden');
+            document.querySelectorAll('.acc-multi-drop').forEach(el => el.classList.add('hidden'));
+            if (willOpen) target.classList.remove('hidden');
+        };
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.acc-multi-drop')) {
+                document.querySelectorAll('.acc-multi-drop').forEach(el => el.classList.add('hidden'));
+            }
+        });
+
+        function getCheckedSet(dropdownId) {
+            return new Set(Array.from(document.querySelectorAll(`#${dropdownId} input[type="checkbox"]:checked`)).map(cb => cb.value.toLowerCase()));
+        }
+
+        function updateMultiLabels() {
+            const stChecked = getCheckedSet('acc-status-dropdown');
+            const stLbl = document.getElementById('acc-status-label');
+            if (stLbl) stLbl.innerText = stChecked.size === 0 ? 'All Status' : `${stChecked.size} Selected`;
+
+            const srcChecked = getCheckedSet('acc-source-dropdown');
+            const srcLbl = document.getElementById('acc-source-label');
+            if (srcLbl) srcLbl.innerText = srcChecked.size === 0 ? 'All Sources' : `${srcChecked.size} Selected`;
+        }
+
+        window.onMultiFilterChange = () => {
+            paidOnlyActive = false;
+            const btn = document.getElementById('btn-paid-statuses-only');
+            if (btn) btn.className = 'px-2 py-0.5 rounded border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase cursor-pointer';
+            updateMultiLabels();
+            window.renderAccounting();
+        };
+
+        window.togglePaidStatusesOnly = () => {
+            paidOnlyActive = !paidOnlyActive;
+            const checkboxes = document.querySelectorAll('#acc-status-dropdown input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                cb.checked = paidOnlyActive ? PAID_ACTIVE_STATUSES.has(cb.value.toLowerCase()) : false;
+            });
+            const btn = document.getElementById('btn-paid-statuses-only');
+            if (btn) {
+                btn.className = paidOnlyActive
+                    ? 'px-2 py-0.5 rounded border border-emerald-600 bg-emerald-600 text-white font-black text-[10px] uppercase cursor-pointer shadow-2xs'
+                    : 'px-2 py-0.5 rounded border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase cursor-pointer';
+            }
+            updateMultiLabels();
+            window.renderAccounting();
+        };
+
+        // ------------------------------------------------------------------
+        // 3. EXACT 7-BUCKET FINANCIAL DECOMPOSITION
         // ------------------------------------------------------------------
 
         function classifyBookingFinancials(booking, todayStr, otaLagDays, includeTransit, keptMode, dateBasis, startStr, endStr) {
             const propId = toCanonicalPropId(booking.property);
             const feeKeys = buildCommissionKeySet(propId);
-            const gross = roundCurrency(Number(booking.totalPrice) || 0);
+            const rawGross = roundCurrency(Number(booking.totalPrice) || 0);
             const status = String(booking.status || 'future').toLowerCase().trim();
+            const isNonCollectible = NON_COLLECTIBLE_STATUSES.has(status);
 
             const inMs = parseYMD(booking.checkIn);
             const outMs = parseYMD(booking.checkOut);
@@ -344,19 +611,34 @@
                 }
 
                 const isFee = method.endsWith('-kp') || feeKeys.has(method);
+                const isOtaPay = method.endsWith('-pay') || OTA_PAYOUT_METHODS.has(method);
+
+                // Ignore auto-generated virtual OTA rows on cancelled / unconfirmed / no-show bookings
+                if (isNonCollectible && (isOtaPay || isFee)) {
+                    return;
+                }
+
                 if (isFee) {
                     fees = roundCurrency(fees + amt);
                     return;
                 }
 
-                const isOtaPay = method.endsWith('-pay') || OTA_PAYOUT_METHODS.has(method);
-                const settleDate = isOtaPay
-                    ? addDaysToYmd(booking.checkOut || payDate, otaLagDays)
-                    : payDate;
+                if (isOtaPay) {
+                    // OTA payouts are Future Due until guest checks in; In-Transit until checkOut + lag; Bank Recv after
+                    if ((booking.checkIn || '') > todayStr) {
+                        return;
+                    }
+                    const settleDate = addDaysToYmd(booking.checkOut || payDate, otaLagDays);
+                    if (settleDate > todayStr) {
+                        inTransit = roundCurrency(inTransit + amt);
+                    } else {
+                        bankRecv = roundCurrency(bankRecv + amt);
+                    }
+                    return;
+                }
 
-                const isInTransit = (payDate && payDate > todayStr) || (isOtaPay && settleDate > todayStr);
-
-                if (isInTransit) {
+                // Direct in-house settlements (cash, card, scan, transfer)
+                if (payDate && payDate > todayStr) {
                     inTransit = roundCurrency(inTransit + amt);
                 } else if (method === 'cash') {
                     cashRecv = roundCurrency(cashRecv + amt);
@@ -365,27 +647,28 @@
                 }
             });
 
-            // When filtering by payment date, rows with no payments in range are excluded
             if (dateBasis === 'payment' && !matchedPaymentInPeriod) {
                 return null;
             }
 
             const totalAccountedPaid = roundCurrency(cashRecv + bankRecv + inTransit + fees);
-            const remaining = Math.max(0, roundCurrency(gross - totalAccountedPaid));
+            const gross = dateBasis === 'payment' ? totalAccountedPaid : rawGross;
+            const remaining = dateBasis === 'payment' ? 0 : Math.max(0, roundCurrency(rawGross - totalAccountedPaid));
 
             let futureDue = 0;
             let unpaidLeft = 0;
             let willNotCollect = 0;
 
-            if (NON_COLLECTIBLE_STATUSES.has(status)) {
-                willNotCollect = remaining;
-            } else if (LEFT_UNPAID_STATUSES.has(status) || (status === 'here' && booking.checkOut && booking.checkOut < todayStr)) {
-                unpaidLeft = remaining;
-            } else {
-                futureDue = remaining;
+            if (dateBasis !== 'payment') {
+                if (isNonCollectible) {
+                    willNotCollect = remaining;
+                } else if (LEFT_UNPAID_STATUSES.has(status) || (status === 'here' && booking.checkOut && booking.checkOut < todayStr)) {
+                    unpaidLeft = remaining;
+                } else {
+                    futureDue = remaining;
+                }
             }
 
-            // Compute Net Kept according to active toggles (Cash/Bank & In-Transit)
             let netKept = 0;
             if (keptMode === 'cash_only') {
                 netKept = cashRecv;
@@ -399,8 +682,6 @@
 
             return {
                 id: booking.id,
-                property: propId,
-                propShort: toDisplayPropKey(propId) || propId.toUpperCase(),
                 bookId: booking.bookId || booking.id,
                 name: `${booking.firstName || ''} ${booking.lastName || ''}`.trim() || 'Unknown',
                 status,
@@ -423,7 +704,7 @@
         }
 
         // ------------------------------------------------------------------
-        // 3. DATE PRESETS & FILTER CONTROLS
+        // 4. DATE PRESETS & VIEW SWITCHERS
         // ------------------------------------------------------------------
 
         window.applyPeriodPreset = (preset) => {
@@ -447,17 +728,13 @@
             } else if (preset === 'this_week') {
                 const day = now.getDay();
                 const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-                const mon = new Date(y, m, diff);
-                const sun = new Date(y, m, diff + 6);
-                startEl.value = getLocalYMD(mon);
-                endEl.value = getLocalYMD(sun);
+                startEl.value = getLocalYMD(new Date(y, m, diff));
+                endEl.value = getLocalYMD(new Date(y, m, diff + 6));
             } else if (preset === 'last_week') {
                 const day = now.getDay();
                 const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
-                const mon = new Date(y, m, diff);
-                const sun = new Date(y, m, diff + 6);
-                startEl.value = getLocalYMD(mon);
-                endEl.value = getLocalYMD(sun);
+                startEl.value = getLocalYMD(new Date(y, m, diff));
+                endEl.value = getLocalYMD(new Date(y, m, diff + 6));
             } else if (preset === 'this_year') {
                 startEl.value = `${y}-01-01`;
                 endEl.value = `${y}-12-31`;
@@ -475,14 +752,6 @@
         window.onCustomDateChange = () => {
             const presetEl = document.getElementById('acc-period-preset');
             if (presetEl) presetEl.value = 'custom';
-            window.renderAccounting();
-        };
-
-        window.handleScopeChange = (val) => {
-            activeScope = val === 'ALL' ? 'ALL' : toCanonicalPropId(val);
-            if (activeScope !== 'ALL') {
-                try { localStorage.setItem('last_prop', activeScope); } catch (e) {}
-            }
             window.renderAccounting();
         };
 
@@ -528,10 +797,11 @@
         };
 
         // ------------------------------------------------------------------
-        // 4. MASTER LEDGER RENDERER & STICKY TOTALS
+        // 5. MASTER LEDGER RENDERER & STICKY TOTALS
         // ------------------------------------------------------------------
 
         window.renderAccounting = () => {
+            const curProp = getActivePropertyId();
             const todayStr = getLocalYMD(new Date());
             const dateBasis = document.getElementById('acc-date-basis')?.value || 'checkIn';
             const startStr = document.getElementById('acc-date-start')?.value || '';
@@ -542,15 +812,14 @@
             const otaLagDays = Math.max(0, parseInt(document.getElementById('acc-ota-lag')?.value, 10) || 0);
 
             const searchFilter = (document.getElementById('acc-filter-search')?.value || '').trim().toUpperCase();
-            const statusFilter = (document.getElementById('acc-filter-status')?.value || '').toLowerCase();
-            const sourceFilter = (document.getElementById('acc-filter-source')?.value || '').toLowerCase();
+            const statusSet = getCheckedSet('acc-status-dropdown');
+            const sourceSet = getCheckedSet('acc-source-dropdown');
 
             const rows = [];
 
             allBookings.forEach(b => {
                 if (b.isMockTest) return;
-                const propId = toCanonicalPropId(b.property);
-                if (activeScope !== 'ALL' && propId !== activeScope) return;
+                if (toCanonicalPropId(b.property) !== curProp) return;
 
                 if (dateBasis === 'checkIn') {
                     if (startStr && (b.checkIn || '') < startStr) return;
@@ -566,10 +835,10 @@
                 const fin = classifyBookingFinancials(b, todayStr, otaLagDays, includeTransit, keptMode, dateBasis, startStr, endStr);
                 if (!fin) return;
 
-                if (statusFilter && fin.status !== statusFilter) return;
-                if (sourceFilter && fin.source !== sourceFilter) return;
+                if (statusSet.size > 0 && !statusSet.has(fin.status)) return;
+                if (sourceSet.size > 0 && !sourceSet.has(fin.source)) return;
                 if (searchFilter) {
-                    const hay = `${fin.name} ${fin.bookId} ${fin.roomsStr} ${fin.propShort}`.toUpperCase();
+                    const hay = `${fin.name} ${fin.bookId} ${fin.roomsStr}`.toUpperCase();
                     if (!hay.includes(searchFilter)) return;
                 }
 
@@ -595,7 +864,6 @@
 
             lastComputedRows = rows;
 
-            // Accumulate exact column totals from visible rows
             const totals = {
                 nights: 0,
                 gross: 0,
@@ -614,7 +882,7 @@
             if (!tbody || !tfoot) return;
 
             if (rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="17" class="text-center py-12 text-slate-400 font-black uppercase tracking-widest">No reservations match the current filters.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="16" class="text-center py-12 text-slate-400 font-black uppercase tracking-widest">No reservations match the current filters.</td></tr>`;
             } else {
                 tbody.innerHTML = rows.map(r => {
                     totals.nights += r.nights;
@@ -633,8 +901,7 @@
                     const isDead = NON_COLLECTIBLE_STATUSES.has(r.status);
 
                     return `
-                        <tr onclick="window.location.href='pms.html?p=${encodeURIComponent(r.property)}&edit=${encodeURIComponent(r.id)}'" class="hover:bg-indigo-50/60 cursor-pointer transition-colors ${isDead ? 'bg-slate-50/80 text-slate-500' : 'text-slate-800'}">
-                            <td class="py-1.5 px-2 border-r border-slate-200 font-black text-indigo-700">${r.propShort}</td>
+                        <tr onclick="window.editStaff('${r.id}')" class="hover:bg-indigo-50/60 cursor-pointer transition-colors ${isDead ? 'bg-slate-50/80 text-slate-500' : 'text-slate-800'}">
                             <td class="py-1.5 px-2 border-r border-slate-200 font-mono text-[11px] text-slate-600">${r.bookId}</td>
                             <td class="py-1.5 px-2 border-r border-slate-200 font-bold max-w-[180px] truncate" title="${r.name}">${r.name}</td>
                             <td class="py-1.5 px-2 border-r border-slate-200">${badge}</td>
@@ -658,7 +925,7 @@
 
             tfoot.innerHTML = `
                 <tr>
-                    <td colspan="7" class="py-2 px-2 border-r border-slate-700 uppercase tracking-wider text-right text-[11px]">Totals (${rows.length} Rows):</td>
+                    <td colspan="6" class="py-2 px-2 border-r border-slate-700 uppercase tracking-wider text-right text-[11px]">Totals (${rows.length} Rows):</td>
                     <td class="py-2 px-1.5 border-r border-slate-700 text-center">${totals.nights}</td>
                     <td class="py-2 px-2 border-r border-slate-700 text-right">฿${fmtMoney(totals.gross)}</td>
                     <td class="py-2 px-2 border-r border-slate-700 text-right text-rose-300">฿${fmtMoney(totals.fees)}</td>
@@ -683,7 +950,7 @@
         };
 
         // ------------------------------------------------------------------
-        // 5. MONTHLY & YEARLY ROLLUP + SVG BAR CHART
+        // 6. MONTHLY & YEARLY ROLLUP + BAR CHART
         // ------------------------------------------------------------------
 
         function renderRollupView() {
@@ -732,7 +999,6 @@
                 return `${mNames[mIdx] || m} ${y}`;
             };
 
-            // Render stacked bar chart
             const chartEl = document.getElementById('rollup-chart-container');
             if (chartEl) {
                 if (sorted.length === 0) {
@@ -746,7 +1012,7 @@
                                 const hPct = Math.max(4, Math.round((totalBar / maxVal) * 100));
                                 const seg = (val) => totalBar > 0 ? ((val / totalBar) * 100).toFixed(2) : 0;
                                 return `
-                                    <div class="flex flex-col items-center w-16 shrink-0 group">
+                                    <div class="flex flex-col items-center w-16 shrink-0">
                                         <span class="text-[9px] font-black text-slate-700 mb-1">฿${Math.round(item.netKept).toLocaleString()}</span>
                                         <div class="w-9 rounded-t overflow-hidden flex flex-col-reverse border border-slate-300 shadow-2xs" style="height: ${hPct}%;">
                                             <div style="height:${seg(item.cashRecv)}%" class="bg-emerald-500" title="Cash: ฿${fmtMoney(item.cashRecv)}"></div>
@@ -764,7 +1030,6 @@
                 }
             }
 
-            // Render rollup table
             const rBody = document.getElementById('rollup-table-body');
             const rFoot = document.getElementById('rollup-table-foot');
             if (!rBody || !rFoot) return;
@@ -821,23 +1086,21 @@
         }
 
         // ------------------------------------------------------------------
-        // 6. MULTI-SHEET XLSX SPREADSHEET EXPORTER
+        // 7. MULTI-SHEET XLSX SPREADSHEET EXPORTER
         // ------------------------------------------------------------------
 
         window.exportAccountingXlsx = () => {
             if (lastComputedRows.length === 0) return;
 
             const wb = XLSX.utils.book_new();
-
-            // Sheet 1: Raw Reservation Ledger
             const ledgerHeader = [
-                'Property', 'Book ID', 'Guest', 'Status', 'Source', 'Check-In', 'Check-Out', 'Nights',
+                'Book ID', 'Guest', 'Status', 'Source', 'Check-In', 'Check-Out', 'Nights',
                 'Gross', 'Fees / Comm', 'Net Kept', 'Cash Received', 'Bank / Card Received',
                 'In-Transit (OTA)', 'Future Due', 'Unpaid (Left)', 'Will Not Collect'
             ];
 
             const ledgerData = lastComputedRows.map(r => [
-                r.propShort, r.bookId, r.name, r.status.toUpperCase(), r.source.toUpperCase(),
+                r.bookId, r.name, r.status.toUpperCase(), r.source.toUpperCase(),
                 r.checkIn, r.checkOut, r.nights,
                 r.gross, r.fees, r.netKept, r.cashRecv, r.bankRecv,
                 r.inTransit, r.futureDue, r.unpaidLeft, r.willNotCollect
@@ -845,15 +1108,14 @@
 
             const sumCol = (idx) => roundCurrency(ledgerData.reduce((acc, row) => acc + (Number(row[idx]) || 0), 0));
             const ledgerTotalRow = [
-                'TOTAL', '', `${ledgerData.length} Rows`, '', '', '', '', sumCol(7),
-                sumCol(8), sumCol(9), sumCol(10), sumCol(11), sumCol(12),
-                sumCol(13), sumCol(14), sumCol(15), sumCol(16)
+                'TOTAL', `${ledgerData.length} Rows`, '', '', '', '', sumCol(6),
+                sumCol(7), sumCol(8), sumCol(9), sumCol(10), sumCol(11),
+                sumCol(12), sumCol(13), sumCol(14), sumCol(15)
             ];
 
             const wsLedger = XLSX.utils.aoa_to_sheet([ledgerHeader, ...ledgerData, ledgerTotalRow]);
             XLSX.utils.book_append_sheet(wb, wsLedger, 'Reservation_Ledger');
 
-            // Sheet 2: Period Rollup
             if (lastRollupRows.length === 0) renderRollupView();
             const rollupHeader = [
                 'Period', 'Bookings', 'Nights', 'Gross', 'Fees / Comm', 'Net Kept',
@@ -867,13 +1129,13 @@
             const wsRollup = XLSX.utils.aoa_to_sheet([rollupHeader, ...rollupData]);
             XLSX.utils.book_append_sheet(wb, wsRollup, 'Period_Rollup');
 
-            const scopeTag = activeScope === 'ALL' ? 'ALL' : (toDisplayPropKey(activeScope) || activeScope).toUpperCase();
+            const propTag = getActivePropertyId().toUpperCase();
             const todayTag = getLocalYMD(new Date());
-            XLSX.writeFile(wb, `${scopeTag}_Accounting_${todayTag}.xlsx`);
+            XLSX.writeFile(wb, `${propTag}_Accounting_${todayTag}.xlsx`);
         };
 
         // ------------------------------------------------------------------
-        // 7. BOOTLOADER & REALTIME SNAPSHOT SUBSCRIPTION
+        // 8. BOOTLOADER & GUEST MODAL BRIDGE
         // ------------------------------------------------------------------
 
         async function initAccounting() {
@@ -883,37 +1145,20 @@
                 }
 
                 propertiesCatalog = await loadPropertiesCatalog();
+                const curProp = getActivePropertyId();
+                const activeCfg = propertiesCatalog.find(p => p.id === curProp) || propertiesCatalog[0] || {};
+                window.currentPropertyConfig = activeCfg;
+                window.hotelRooms = activeCfg.rooms || [];
+                window.roomTypes = [...new Set((activeCfg.rooms || []).filter(r => r.type).map(r => r.type))];
+                window.currentUserRole = 'admin';
+                window.currentUserEmail = 'admin';
 
-                const scopeSelect = document.getElementById('acc-prop-scope');
-                if (scopeSelect && propertiesCatalog.length > 0) {
-                    scopeSelect.innerHTML = `<option value="ALL">ALL PROPERTIES</option>` +
-                        propertiesCatalog.map(p => `<option value="${p.id}">${p.short}</option>`).join('');
-                }
-
-                const urlParams = new URLSearchParams(window.location.search);
-                const pParam = urlParams.get('p');
-                if (pParam && pParam.toUpperCase() !== 'ALL') {
-                    activeScope = toCanonicalPropId(pParam);
-                } else if (!pParam) {
-                    const last = getActivePropertyId();
-                    activeScope = last || 'ALL';
-                } else {
-                    activeScope = 'ALL';
-                }
-                if (scopeSelect) scopeSelect.value = activeScope;
-
-                // Populate status filter dropdown from canonical STATUS_CYCLE
-                const statusSelect = document.getElementById('acc-filter-status');
-                if (statusSelect) {
-                    statusSelect.innerHTML = `<option value="">All Status</option>` +
-                        STATUS_CYCLE.map(s => `<option value="${s.val}">${s.label}</option>`).join('');
-                }
-
-                // Default to This Month
+                initMultiDropdowns();
                 window.applyPeriodPreset('this_month');
 
                 onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => {
                     allBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    window.staff = allBookings;
                     const loader = document.getElementById('boot-loader');
                     if (loader) loader.style.display = 'none';
                     window.renderAccounting();
