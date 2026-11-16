@@ -103,6 +103,7 @@
                         <option value="unpaid">Has Unpaid (Left)</option>
                         <option value="wnc">Has Will Not Collect</option>
                         <option value="fees">Has Fees / Comm</option>
+                        <option value="unknown">Has Unknown Method</option>
                     </select>
                 </div>
 
@@ -148,7 +149,8 @@
                             <th onclick="window.sortAccounting('inTransit')" class="py-2 px-2 border-r border-slate-700 text-right text-amber-300 cursor-pointer hover:bg-slate-800">In-Transit</th>
                             <th onclick="window.sortAccounting('futureDue')" class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300 cursor-pointer hover:bg-slate-800">Future Due</th>
                             <th onclick="window.sortAccounting('unpaidLeft')" class="py-2 px-2 border-r border-slate-700 text-right text-orange-300 cursor-pointer hover:bg-slate-800">Unpaid (Left)</th>
-                            <th onclick="window.sortAccounting('willNotCollect')" class="py-2 px-2 text-right text-slate-300 cursor-pointer hover:bg-slate-800">Will Not Collect</th>
+                            <th onclick="window.sortAccounting('willNotCollect')" class="py-2 px-2 border-r border-slate-700 text-right text-slate-300 cursor-pointer hover:bg-slate-800">Will Not Collect</th>
+                            <th onclick="window.sortAccounting('unknownAmt')" class="py-2 px-2 text-right text-fuchsia-300 cursor-pointer hover:bg-slate-800" title="Payments with method keys not configured in Setup">Unknown</th>
                         </tr>
                         <!-- Inline Multi-Select Column Filter Row -->
                         <tr class="bg-slate-800 text-[10px] font-bold">
@@ -167,7 +169,7 @@
                                 </button>
                                 <div id="acc-source-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-40 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-60 overflow-y-auto p-1 text-left"></div>
                             </th>
-                            <th colspan="12" class="p-1 text-right text-[9px] font-normal text-slate-400 pr-2">
+                            <th colspan="13" class="p-1 text-right text-[9px] font-normal text-slate-400 pr-2">
                                 Click any row to edit booking right here &bull; Click column headers to sort
                             </th>
                         </tr>
@@ -219,7 +221,8 @@
                             <th class="py-2 px-2 border-r border-slate-700 text-right text-amber-300">In-Transit</th>
                             <th class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300">Future Due</th>
                             <th class="py-2 px-2 border-r border-slate-700 text-right text-orange-300">Unpaid (Left)</th>
-                            <th class="py-2 px-2 text-right text-slate-300">Will Not Collect</th>
+                            <th class="py-2 px-2 border-r border-slate-700 text-right text-slate-300">Will Not Collect</th>
+                            <th class="py-2 px-2 text-right text-fuchsia-300">Unknown</th>
                         </tr>
                     </thead>
                     <tbody id="rollup-table-body" class="divide-y divide-slate-200 bg-white font-semibold"></tbody>
@@ -428,16 +431,18 @@
         import { roundCurrency } from './core/money.js';
         import { STATUS_CYCLE, getStatusObj } from './core/occupancy.js';
         import { mountNav } from './core/nav.js';
+        import { normalizePaymentMethods } from './setup/setup-profile.js';
         import './pms/pms-folio-modal.js';
         import './pms/pms-folio-ledger.js';
         import './pms/pms-folio-actions.js';
         import './pms/pms-folio-invoice.js';
 
         // ------------------------------------------------------------------
-        // 1. MODULE STATE & CONSTANTS
+        // 1. MODULE STATE & EXACT PAYMENT SCHEMA LOOKUP
         // ------------------------------------------------------------------
 
         let propertiesCatalog = [];
+        let paymentSchemaMap = new Map();
         let allBookings = [];
         let activeView = 'ledger';
         let rollupGranularity = 'monthly';
@@ -459,19 +464,6 @@
             'left', 'early out', 'early-out'
         ]);
 
-        const DIRECT_BANK_METHODS = new Set([
-            'card', 'credit card', 'cc', 'pos', 'scan', 'promptpay', 'qr', 'transfer', 'bank', 'bank transfer'
-        ]);
-
-        const OTA_PAYOUT_METHODS = new Set([
-            'bdc-pay', 'agoda-pay', 'airbnb-pay', 'expedia-pay', 'trip-pay',
-            'ota', 'virtual', 'prepaid', 'booking.com', 'agoda', 'airbnb', 'expedia', 'hostelworld', 'hw', 'ctrip', 'trip'
-        ]);
-
-        const DEFAULT_FEE_METHODS = new Set([
-            'hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'card-kp', 'cc-fee'
-        ]);
-
         const SOURCE_LIST = [
             'direct', 'booking.com', 'agoda', 'hostelworld', 'airbnb', 'expedia', 'ctrip', 'walk-in', 'other'
         ];
@@ -488,17 +480,22 @@
             return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
-        function buildCommissionKeySet(propId) {
-            const keys = new Set(DEFAULT_FEE_METHODS);
-            const prop = propertiesCatalog.find(p => p.id === propId);
-            if (prop && Array.isArray(prop.payments)) {
-                prop.payments.forEach(pm => {
-                    if (pm && pm.key && pm.type === 'commission') {
-                        keys.add(String(pm.key).trim().toLowerCase());
-                    }
+        // Build exact payment lookup from active property's Firestore payments config
+        function buildExactPaymentMap(propConfig) {
+            const methods = normalizePaymentMethods(propConfig?.payments || []);
+            const map = new Map();
+            methods.forEach(pm => {
+                if (!pm || !pm.key) return;
+                const key = String(pm.key).trim().toLowerCase();
+                map.set(key, {
+                    key,
+                    label: pm.label || key,
+                    type: pm.type || 'revenue',
+                    channel: pm.channel || null,
+                    active: pm.active !== false
                 });
-            }
-            return keys;
+            });
+            return map;
         }
 
         // ------------------------------------------------------------------
@@ -582,12 +579,10 @@
         };
 
         // ------------------------------------------------------------------
-        // 3. EXACT 7-BUCKET FINANCIAL DECOMPOSITION
+        // 3. EXACT 8-BUCKET FINANCIAL DECOMPOSITION (ZERO GUESSING)
         // ------------------------------------------------------------------
 
         function classifyBookingFinancials(booking, todayStr, otaLagDays, includeTransit, keptMode, dateBasis, startStr, endStr) {
-            const propId = toCanonicalPropId(booking.property);
-            const feeKeys = buildCommissionKeySet(propId);
             const rawGross = roundCurrency(Number(booking.totalPrice) || 0);
             const status = String(booking.status || 'future').toLowerCase().trim();
             const isNonCollectible = NON_COLLECTIBLE_STATUSES.has(status);
@@ -600,15 +595,16 @@
             let bankRecv = 0;
             let inTransit = 0;
             let fees = 0;
+            let unknownAmt = 0;
+            const unknownKeys = [];
             let matchedPaymentInPeriod = false;
 
             const payments = Array.isArray(booking.payments) ? booking.payments : [];
             payments.forEach(p => {
                 const amt = roundCurrency(Number(p.amt) || 0);
                 if (amt === 0) return;
-                const method = String(p.method || '').trim().toLowerCase();
-                if (!method) return;
 
+                const methodKey = String(p.method || '').trim().toLowerCase();
                 const payDate = String(p.date || booking.checkIn || '');
 
                 if (dateBasis === 'payment') {
@@ -617,28 +613,52 @@
                     matchedPaymentInPeriod = true;
                 }
 
-                const isFee = method.endsWith('-kp') || feeKeys.has(method);
-                const isOtaPay = method.endsWith('-pay') || OTA_PAYOUT_METHODS.has(method);
-                const isCash = method === 'cash';
-                const isDirectBank = DIRECT_BANK_METHODS.has(method);
-
-                // Ignore virtual/OTA entries on cancelled, unconfirmed, or no-show bookings
-                if (isNonCollectible && !isCash && !isDirectBank) {
+                // Exact lookup against property's Firestore payments configuration
+                const pmDef = paymentSchemaMap.get(methodKey);
+                if (!pmDef) {
+                    unknownAmt = roundCurrency(unknownAmt + amt);
+                    unknownKeys.push(methodKey || '(blank)');
                     return;
                 }
 
-                if (isFee) {
+                const isOtaChannel = !!(pmDef.channel && pmDef.channel !== 'card');
+
+                // Ignore expected OTA payout & OTA commission rows on cancelled / no-show / unconfirmed stays
+                if (isNonCollectible && isOtaChannel) {
+                    return;
+                }
+
+                if (pmDef.type === 'commission') {
                     fees = roundCurrency(fees + amt);
                     return;
                 }
 
-                if (isOtaPay) {
-                    // OTA payouts stay Future Due until check-in; In-Transit until checkOut + lag; Bank Recv after
-                    if ((booking.checkIn || '') > todayStr) {
+                if (pmDef.type === 'revenue') {
+                    if (pmDef.key === 'cash') {
+                        if (payDate && payDate > todayStr) {
+                            inTransit = roundCurrency(inTransit + amt);
+                        } else {
+                            cashRecv = roundCurrency(cashRecv + amt);
+                        }
                         return;
                     }
-                    const settleDate = addDaysToYmd(booking.checkOut || payDate, otaLagDays);
-                    if (settleDate > todayStr) {
+
+                    if (isOtaChannel) {
+                        // OTA payouts remain Future Due until guest checks in; In-Transit until checkOut + lag; Bank Recv after
+                        if ((booking.checkIn || '') > todayStr) {
+                            return;
+                        }
+                        const settleDate = addDaysToYmd(booking.checkOut || payDate, otaLagDays);
+                        if (settleDate > todayStr) {
+                            inTransit = roundCurrency(inTransit + amt);
+                        } else {
+                            bankRecv = roundCurrency(bankRecv + amt);
+                        }
+                        return;
+                    }
+
+                    // Direct non-cash revenue configured in Setup (e.g. scan, transfer, card)
+                    if (payDate && payDate > todayStr) {
                         inTransit = roundCurrency(inTransit + amt);
                     } else {
                         bankRecv = roundCurrency(bankRecv + amt);
@@ -646,29 +666,16 @@
                     return;
                 }
 
-                if (isCash) {
-                    if (payDate && payDate > todayStr) {
-                        inTransit = roundCurrency(inTransit + amt);
-                    } else {
-                        cashRecv = roundCurrency(cashRecv + amt);
-                    }
-                    return;
-                }
-
-                if (isDirectBank) {
-                    if (payDate && payDate > todayStr) {
-                        inTransit = roundCurrency(inTransit + amt);
-                    } else {
-                        bankRecv = roundCurrency(bankRecv + amt);
-                    }
-                }
+                // Any unrecognized accounting class falls into Unknown
+                unknownAmt = roundCurrency(unknownAmt + amt);
+                unknownKeys.push(`${methodKey}:${pmDef.type}`);
             });
 
             if (dateBasis === 'payment' && !matchedPaymentInPeriod) {
                 return null;
             }
 
-            const totalAccountedPaid = roundCurrency(cashRecv + bankRecv + inTransit + fees);
+            const totalAccountedPaid = roundCurrency(cashRecv + bankRecv + inTransit + fees + unknownAmt);
             const gross = dateBasis === 'payment' ? totalAccountedPaid : rawGross;
             const remaining = dateBasis === 'payment' ? 0 : Math.max(0, roundCurrency(rawGross - totalAccountedPaid));
 
@@ -716,6 +723,8 @@
                 futureDue,
                 unpaidLeft,
                 willNotCollect,
+                unknownAmt,
+                unknownKeys: Array.from(new Set(unknownKeys)),
                 badCC: !!booking.badCC
             };
         }
@@ -855,7 +864,7 @@
                 if (statusSet.size > 0 && !statusSet.has(fin.status)) return;
                 if (sourceSet.size > 0 && !sourceSet.has(fin.source)) return;
                 if (searchFilter) {
-                    const hay = `${fin.name} ${fin.bookId} ${fin.roomsStr}`.toUpperCase();
+                    const hay = `${fin.name} ${fin.bookId} ${fin.roomsStr} ${fin.unknownKeys.join(' ')}`.toUpperCase();
                     if (!hay.includes(searchFilter)) return;
                 }
 
@@ -865,6 +874,7 @@
                 if (bucketFilter === 'unpaid' && fin.unpaidLeft <= 0) return;
                 if (bucketFilter === 'wnc' && fin.willNotCollect <= 0) return;
                 if (bucketFilter === 'fees' && fin.fees <= 0) return;
+                if (bucketFilter === 'unknown' && fin.unknownAmt <= 0) return;
 
                 rows.push(fin);
             });
@@ -891,7 +901,8 @@
                 inTransit: 0,
                 futureDue: 0,
                 unpaidLeft: 0,
-                willNotCollect: 0
+                willNotCollect: 0,
+                unknownAmt: 0
             };
 
             const tbody = document.getElementById('acc-ledger-body');
@@ -899,7 +910,7 @@
             if (!tbody || !tfoot) return;
 
             if (rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="16" class="text-center py-12 text-slate-400 font-black uppercase tracking-widest">No reservations match the current filters.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="17" class="text-center py-12 text-slate-400 font-black uppercase tracking-widest">No reservations match the current filters.</td></tr>`;
             } else {
                 tbody.innerHTML = rows.map(r => {
                     totals.nights += r.nights;
@@ -912,10 +923,12 @@
                     totals.futureDue = roundCurrency(totals.futureDue + r.futureDue);
                     totals.unpaidLeft = roundCurrency(totals.unpaidLeft + r.unpaidLeft);
                     totals.willNotCollect = roundCurrency(totals.willNotCollect + r.willNotCollect);
+                    totals.unknownAmt = roundCurrency(totals.unknownAmt + r.unknownAmt);
 
                     const st = getStatusObj(r.status);
                     const badge = `<span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border:1px solid ${st.border};">${st.label}</span>`;
                     const isDead = NON_COLLECTIBLE_STATUSES.has(r.status);
+                    const unkTitle = r.unknownKeys.length > 0 ? `Unmapped method key(s): ${r.unknownKeys.join(', ')}` : '';
 
                     return `
                         <tr onclick="window.editStaff('${r.id}')" class="hover:bg-indigo-50/60 cursor-pointer transition-colors ${isDead ? 'bg-slate-50/80 text-slate-500' : 'text-slate-800'}">
@@ -934,7 +947,8 @@
                             <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.inTransit > 0 ? 'text-amber-700' : 'text-slate-300'}">${fmtMoney(r.inTransit)}</td>
                             <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.futureDue > 0 ? 'text-indigo-700' : 'text-slate-300'}">${fmtMoney(r.futureDue)}</td>
                             <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black ${r.unpaidLeft > 0 ? 'text-orange-600 bg-orange-50/70' : 'text-slate-300'} ${r.badCC ? 'underline decoration-dashed decoration-red-500' : ''}">${fmtMoney(r.unpaidLeft)}</td>
-                            <td class="py-1.5 px-2 text-right ${r.willNotCollect > 0 ? 'text-slate-500 bg-slate-100' : 'text-slate-300'}">${fmtMoney(r.willNotCollect)}</td>
+                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.willNotCollect > 0 ? 'text-slate-500 bg-slate-100' : 'text-slate-300'}">${fmtMoney(r.willNotCollect)}</td>
+                            <td class="py-1.5 px-2 text-right font-black ${r.unknownAmt > 0 ? 'text-fuchsia-700 bg-fuchsia-50' : 'text-slate-300'}" title="${unkTitle}">${fmtMoney(r.unknownAmt)}</td>
                         </tr>
                     `;
                 }).join('');
@@ -952,13 +966,15 @@
                     <td class="py-2 px-2 border-r border-slate-700 text-right text-amber-300">฿${fmtMoney(totals.inTransit)}</td>
                     <td class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300">฿${fmtMoney(totals.futureDue)}</td>
                     <td class="py-2 px-2 border-r border-slate-700 text-right text-orange-300">฿${fmtMoney(totals.unpaidLeft)}</td>
-                    <td class="py-2 px-2 text-right text-slate-300">฿${fmtMoney(totals.willNotCollect)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-slate-300">฿${fmtMoney(totals.willNotCollect)}</td>
+                    <td class="py-2 px-2 text-right text-fuchsia-300">฿${fmtMoney(totals.unknownAmt)}</td>
                 </tr>
             `;
 
             const pill = document.getElementById('acc-audit-pill');
             if (pill) {
-                pill.innerText = `${rows.length} Rows | Kept: ฿${fmtMoney(totals.netKept)} | Unpaid: ฿${fmtMoney(totals.unpaidLeft)}`;
+                const unkPart = totals.unknownAmt > 0 ? ` | Unk: ฿${fmtMoney(totals.unknownAmt)}` : '';
+                pill.innerText = `${rows.length} Rows | Kept: ฿${fmtMoney(totals.netKept)} | Unpaid: ฿${fmtMoney(totals.unpaidLeft)}${unkPart}`;
             }
 
             if (activeView === 'rollup') {
@@ -989,7 +1005,8 @@
                         inTransit: 0,
                         futureDue: 0,
                         unpaidLeft: 0,
-                        willNotCollect: 0
+                        willNotCollect: 0,
+                        unknownAmt: 0
                     });
                 }
                 const b = buckets.get(key);
@@ -1004,6 +1021,7 @@
                 b.futureDue = roundCurrency(b.futureDue + r.futureDue);
                 b.unpaidLeft = roundCurrency(b.unpaidLeft + r.unpaidLeft);
                 b.willNotCollect = roundCurrency(b.willNotCollect + r.willNotCollect);
+                b.unknownAmt = roundCurrency(b.unknownAmt + r.unknownAmt);
             });
 
             const sorted = Array.from(buckets.values()).sort((a, b) => a.period.localeCompare(b.period));
@@ -1051,7 +1069,7 @@
             const rFoot = document.getElementById('rollup-table-foot');
             if (!rBody || !rFoot) return;
 
-            const grand = { count: 0, nights: 0, gross: 0, fees: 0, netKept: 0, cashRecv: 0, bankRecv: 0, inTransit: 0, futureDue: 0, unpaidLeft: 0, willNotCollect: 0 };
+            const grand = { count: 0, nights: 0, gross: 0, fees: 0, netKept: 0, cashRecv: 0, bankRecv: 0, inTransit: 0, futureDue: 0, unpaidLeft: 0, willNotCollect: 0, unknownAmt: 0 };
 
             rBody.innerHTML = sorted.map(b => {
                 grand.count += b.count;
@@ -1065,6 +1083,7 @@
                 grand.futureDue = roundCurrency(grand.futureDue + b.futureDue);
                 grand.unpaidLeft = roundCurrency(grand.unpaidLeft + b.unpaidLeft);
                 grand.willNotCollect = roundCurrency(grand.willNotCollect + b.willNotCollect);
+                grand.unknownAmt = roundCurrency(grand.unknownAmt + b.unknownAmt);
 
                 return `
                     <tr class="hover:bg-slate-50">
@@ -1079,7 +1098,8 @@
                         <td class="py-1.5 px-2 border-r border-slate-200 text-right text-amber-700">${fmtMoney(b.inTransit)}</td>
                         <td class="py-1.5 px-2 border-r border-slate-200 text-right text-indigo-700">${fmtMoney(b.futureDue)}</td>
                         <td class="py-1.5 px-2 border-r border-slate-200 text-right text-orange-600">${fmtMoney(b.unpaidLeft)}</td>
-                        <td class="py-1.5 px-2 text-right text-slate-500">${fmtMoney(b.willNotCollect)}</td>
+                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-slate-500">${fmtMoney(b.willNotCollect)}</td>
+                        <td class="py-1.5 px-2 text-right font-black ${b.unknownAmt > 0 ? 'text-fuchsia-700' : 'text-slate-300'}">${fmtMoney(b.unknownAmt)}</td>
                     </tr>
                 `;
             }).join('');
@@ -1097,7 +1117,8 @@
                     <td class="py-2 px-2 border-r border-slate-700 text-right text-amber-300">฿${fmtMoney(grand.inTransit)}</td>
                     <td class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300">฿${fmtMoney(grand.futureDue)}</td>
                     <td class="py-2 px-2 border-r border-slate-700 text-right text-orange-300">฿${fmtMoney(grand.unpaidLeft)}</td>
-                    <td class="py-2 px-2 text-right text-slate-300">฿${fmtMoney(grand.willNotCollect)}</td>
+                    <td class="py-2 px-2 border-r border-slate-700 text-right text-slate-300">฿${fmtMoney(grand.willNotCollect)}</td>
+                    <td class="py-2 px-2 text-right text-fuchsia-300">฿${fmtMoney(grand.unknownAmt)}</td>
                 </tr>
             `;
         }
@@ -1113,21 +1134,21 @@
             const ledgerHeader = [
                 'Book ID', 'Guest', 'Status', 'Source', 'Check-In', 'Check-Out', 'Nights',
                 'Gross', 'Fees / Comm', 'Net Kept', 'Cash Received', 'Bank / Card Received',
-                'In-Transit (OTA)', 'Future Due', 'Unpaid (Left)', 'Will Not Collect'
+                'In-Transit (OTA)', 'Future Due', 'Unpaid (Left)', 'Will Not Collect', 'Unknown'
             ];
 
             const ledgerData = lastComputedRows.map(r => [
                 r.bookId, r.name, r.status.toUpperCase(), r.source.toUpperCase(),
                 r.checkIn, r.checkOut, r.nights,
                 r.gross, r.fees, r.netKept, r.cashRecv, r.bankRecv,
-                r.inTransit, r.futureDue, r.unpaidLeft, r.willNotCollect
+                r.inTransit, r.futureDue, r.unpaidLeft, r.willNotCollect, r.unknownAmt
             ]);
 
             const sumCol = (idx) => roundCurrency(ledgerData.reduce((acc, row) => acc + (Number(row[idx]) || 0), 0));
             const ledgerTotalRow = [
                 'TOTAL', `${ledgerData.length} Rows`, '', '', '', '', sumCol(6),
                 sumCol(7), sumCol(8), sumCol(9), sumCol(10), sumCol(11),
-                sumCol(12), sumCol(13), sumCol(14), sumCol(15)
+                sumCol(12), sumCol(13), sumCol(14), sumCol(15), sumCol(16)
             ];
 
             const wsLedger = XLSX.utils.aoa_to_sheet([ledgerHeader, ...ledgerData, ledgerTotalRow]);
@@ -1137,11 +1158,11 @@
             const rollupHeader = [
                 'Period', 'Bookings', 'Nights', 'Gross', 'Fees / Comm', 'Net Kept',
                 'Cash Received', 'Bank / Card Received', 'In-Transit (OTA)',
-                'Future Due', 'Unpaid (Left)', 'Will Not Collect'
+                'Future Due', 'Unpaid (Left)', 'Will Not Collect', 'Unknown'
             ];
             const rollupData = lastRollupRows.map(b => [
                 b.period, b.count, b.nights, b.gross, b.fees, b.netKept,
-                b.cashRecv, b.bankRecv, b.inTransit, b.futureDue, b.unpaidLeft, b.willNotCollect
+                b.cashRecv, b.bankRecv, b.inTransit, b.futureDue, b.unpaidLeft, b.willNotCollect, b.unknownAmt
             ]);
             const wsRollup = XLSX.utils.aoa_to_sheet([rollupHeader, ...rollupData]);
             XLSX.utils.book_append_sheet(wb, wsRollup, 'Period_Rollup');
@@ -1164,7 +1185,10 @@
                 propertiesCatalog = await loadPropertiesCatalog();
                 const curProp = getActivePropertyId();
                 const activeCfg = propertiesCatalog.find(p => p.id === curProp) || propertiesCatalog[0] || {};
+                paymentSchemaMap = buildExactPaymentMap(activeCfg);
+
                 window.currentPropertyConfig = activeCfg;
+                window.paymentMethods = normalizePaymentMethods(activeCfg.payments || []);
                 window.hotelRooms = activeCfg.rooms || [];
                 window.roomTypes = [...new Set((activeCfg.rooms || []).filter(r => r.type).map(r => r.type))];
                 window.currentUserRole = 'admin';
