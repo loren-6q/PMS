@@ -198,10 +198,10 @@ export function parseHostelworld(rawText) {
         if (roomRows.length > 0) {
             const firstTitle = roomRows[0].rawTitle;
             if (/non-?refundable/i.test(firstTitle)) refundability = 'non-ref';
-            else if (/\b(standard|flexible|free\s*cancellation)\b/i.test(firstTitle)) refundability = 'ref';
+            else if (/\b(refundable|standard\s*rate|flexible|free\s*cancellation)\b/i.test(firstTitle)) refundability = 'ref';
 
             bookedType = firstTitle
-                .replace(/\s*\b(?:non-?refundable|standard|flexible|free\s*cancellation)\b.*$/i, '')
+                .replace(/\s*[-–—]?\s*\b(?:non-?refundable|refundable|free\s*cancellation|flexible(?:\s*rate)?|standard\s*rate)\b\s*$/i, '')
                 .trim();
 
             const firstDateRows = roomRows.filter(r => r.date === roomRows[0].date);
@@ -214,7 +214,7 @@ export function parseHostelworld(rawText) {
         const roomMatch = text.match(/(?:room\s*type|accommodation)[\s:#]+([^\n\r]+)/i);
         if (roomMatch && !/^persons$/i.test(roomMatch[1].trim())) {
             bookedType = roomMatch[1]
-                .replace(/\s*\b(?:non-?refundable|standard|flexible|free\s*cancellation)\b.*$/i, '')
+                .replace(/\s*[-–—]?\s*\b(?:non-?refundable|refundable|free\s*cancellation|flexible(?:\s*rate)?|standard\s*rate)\b\s*$/i, '')
                 .trim();
         }
         unitCount = /dorm|bed|bunk/i.test(bookedType) ? pax : 1;
