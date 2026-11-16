@@ -24,7 +24,7 @@ export function parseFlexibleDate(rawStr, referenceYmd = null) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
 
     const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
-    
+
     const textMatch = str.match(/(?:[A-Za-z]+,?\s+)?(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/);
     if (textMatch) {
         const d = String(textMatch[1]).padStart(2, '0');
@@ -52,7 +52,7 @@ export function parseFlexibleDate(rawStr, referenceYmd = null) {
         const monthNum = months[mKey];
         if (monthNum && dayNum >= 1 && dayNum <= 31) {
             const now = new Date();
-            let year = referenceYmd ? parseInt(referenceYmd.slice(0, 4), 10) : now.getFullYear();
+            const year = referenceYmd ? parseInt(referenceYmd.slice(0, 4), 10) : now.getFullYear();
             let candidate = `${year}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
 
             if (referenceYmd) {
@@ -109,7 +109,7 @@ export function parseOtaClipboardText(rawText) {
 
         if (result.netPrice !== null && Array.isArray(result.payments)) {
             result.payments.forEach(p => {
-                if (['bdc-pay', 'ago-pay', 'agoda-pay', 'exp-pay', 'expedia-pay'].includes(p.method)) {
+                if (String(p.method || '').toLowerCase().endsWith('-pay')) {
                     p.amt = result.netPrice;
                 }
             });
@@ -183,13 +183,13 @@ export async function processAndImportClipboard() {
 export function parseBooking() {
     const textarea = document.getElementById('parse-textarea');
     const text = textarea?.value?.trim();
-    
+
     if (!text) {
         return customAlert("Input Required", "Please paste reservation text first.");
     }
 
     const parsed = parseOtaClipboardText(text);
-    
+
     if (parsed) {
         const modal = document.getElementById('import-modal');
         if (modal) {
