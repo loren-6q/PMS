@@ -1,5 +1,5 @@
 <!-- ==========================================================================
-     accounting.html - Raw Financial Ledger, Cash-vs-Accrual & Rollup Reports
+     accounting.html - Financial Ledger & Weekly/Monthly/Yearly Summaries
      Wild & Wandering Property Management System
      ========================================================================== -->
 <!DOCTYPE html>
@@ -7,7 +7,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Wild &amp; Wandering | Accounting Ledger</title>
+    <title>Wild &amp; Wandering | Accounting</title>
     <link rel="apple-touch-icon" href="../gfx/WWicon.png">
     <link rel="icon" type="image/png" href="../gfx/WWicon.png">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,7 +22,7 @@
     <div id="boot-loader" class="loading-overlay">
         <div class="spinner"></div>
         <div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4">
-            <span id="sync-status">Loading Financial Ledger...</span>
+            <span id="sync-status">Loading Financials...</span>
         </div>
     </div>
 
@@ -34,7 +34,7 @@
                 <!-- Date Basis Selector -->
                 <select id="acc-date-basis" onchange="window.renderAccounting()" class="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[11px] font-black uppercase text-slate-700 outline-none cursor-pointer" title="Which date the range applies to">
                     <option value="checkIn">By Check-In</option>
-                    <option value="overlap">By Stay Overlap</option>
+                    <option value="stayover">By Stayover</option>
                     <option value="checkOut">By Check-Out</option>
                     <option value="payment">By Payment Date</option>
                 </select>
@@ -62,8 +62,8 @@
 
             <div id="nav-right-slot" class="flex items-center gap-1.5">
                 <div class="flex bg-slate-100 rounded p-0.5 border border-slate-300 text-[10px] font-black uppercase">
-                    <button type="button" id="btn-view-ledger" onclick="window.setAccView('ledger')" class="px-2 py-0.5 rounded bg-slate-900 text-white cursor-pointer">Ledger</button>
-                    <button type="button" id="btn-view-rollup" onclick="window.setAccView('rollup')" class="px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer">Chart / Rollup</button>
+                    <button type="button" id="btn-view-ledger" onclick="window.setAccView('ledger')" class="px-2 py-0.5 rounded bg-slate-900 text-white cursor-pointer">Detailed</button>
+                    <button type="button" id="btn-view-rollup" onclick="window.setAccView('rollup')" class="px-2 py-0.5 rounded text-slate-600 hover:bg-white cursor-pointer">Summaries</button>
                 </div>
 
                 <button type="button" onclick="window.exportAccountingXlsx()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[11px] uppercase flex items-center gap-1 shadow-xs cursor-pointer whitespace-nowrap" title="Download Excel Workbook">
@@ -76,103 +76,50 @@
         <!-- ACCOUNTING CONTROL STRIP -->
         <div class="bg-white px-2.5 py-1.5 rounded-none sm:rounded-t-lg border-x border-t border-slate-300 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 unselectable">
             <div class="flex items-center gap-2.5 flex-wrap">
-                <!-- Include In-Transit Toggle -->
-                <label class="flex items-center gap-1.5 cursor-pointer bg-amber-50 border border-amber-300 px-2 py-0.5 rounded font-black text-[11px] text-amber-900">
-                    <input type="checkbox" id="acc-include-transit" checked onchange="window.renderAccounting()" class="row-checkbox">
-                    <span>Include In-Transit OTA in Net Kept</span>
-                </label>
-
-                <!-- Payment Settlement Filter -->
-                <div class="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
-                    <span class="text-[10px] font-black uppercase text-slate-500">Kept:</span>
-                    <select id="acc-kept-mode" onchange="window.renderAccounting()" class="bg-white border border-slate-300 rounded px-1.5 py-0.2 text-[11px] font-black uppercase text-slate-800 outline-none cursor-pointer">
-                        <option value="all">All Kept Money</option>
-                        <option value="cash_only">Cash Only</option>
-                        <option value="bank_only">Bank / Card / OTA</option>
-                    </select>
+                <!-- Include Pending Payouts + Payout Lag -->
+                <div class="flex items-center gap-2 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded">
+                    <label class="flex items-center gap-1.5 cursor-pointer font-black text-[11px] text-amber-900">
+                        <input type="checkbox" id="acc-include-pending" checked onchange="window.renderAccounting()" class="row-checkbox">
+                        <span>Include Pending Payouts</span>
+                    </label>
+                    <span class="text-amber-300">|</span>
+                    <div class="flex items-center gap-1" title="Days after check-out before OTA payouts count as received in bank">
+                        <span class="text-[10px] font-black uppercase text-amber-800">Payout Lag:</span>
+                        <input type="number" id="acc-ota-lag" value="3" min="0" max="30" oninput="window.renderAccounting()" class="w-10 bg-white border border-amber-300 rounded px-1 py-0.2 text-[11px] font-black text-center text-amber-900 outline-none">
+                        <span class="text-[10px] font-bold text-amber-800">d</span>
+                    </div>
                 </div>
 
-                <!-- Bucket Filter -->
-                <div class="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
-                    <span class="text-[10px] font-black uppercase text-slate-500">Bucket:</span>
-                    <select id="acc-bucket-filter" onchange="window.renderAccounting()" class="bg-white border border-slate-300 rounded px-1.5 py-0.2 text-[11px] font-black uppercase text-slate-800 outline-none cursor-pointer">
-                        <option value="all">All Rows</option>
-                        <option value="kept">Has Kept Money</option>
-                        <option value="transit">Has In-Transit</option>
-                        <option value="future">Has Future Due</option>
-                        <option value="unpaid">Has Unpaid (Left)</option>
-                        <option value="wnc">Has Will Not Collect</option>
-                        <option value="fees">Has Fees / Comm</option>
-                        <option value="unknown">Has Unknown Method</option>
-                    </select>
-                </div>
-
-                <!-- Quick Status Exclusion Preset -->
-                <button type="button" id="btn-paid-statuses-only" onclick="window.togglePaidStatusesOnly()" class="px-2 py-0.5 rounded border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase cursor-pointer" title="Toggle excluding Cancelled, No-Show, Unconfirmed, Volunteer & To-Charge">
-                    Active / Paid Statuses
+                <!-- Remove Unpaid Quick Toggle -->
+                <button type="button" id="btn-remove-unpaid" onclick="window.toggleRemoveUnpaid()" class="px-2 py-0.5 rounded border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase cursor-pointer" title="Exclude Cancelled, No-Show, Unconfirmed, New, Volunteer & To-Charge bookings">
+                    Remove Unpaid
                 </button>
 
-                <!-- OTA Payout Settlement Lag -->
-                <div class="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300" title="Days after check-out before OTA payouts count as received in bank">
-                    <span class="text-[10px] font-black uppercase text-slate-500">OTA Lag:</span>
-                    <input type="number" id="acc-ota-lag" value="3" min="0" max="30" oninput="window.renderAccounting()" class="w-10 bg-white border border-slate-300 rounded px-1 py-0.2 text-[11px] font-black text-center outline-none">
-                    <span class="text-[10px] font-bold text-slate-500">d</span>
+                <!-- Column Visibility Picker -->
+                <div class="relative">
+                    <button type="button" onclick="window.toggleAccDropdown('acc-columns-dropdown')" class="px-2 py-0.5 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-black text-[10px] uppercase flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="columns-3" class="!w-3 !h-3 text-indigo-600"></i>
+                        <span>Columns ▾</span>
+                    </button>
+                    <div id="acc-columns-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-48 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-72 overflow-y-auto p-1.5 text-left"></div>
                 </div>
             </div>
 
-            <!-- Live Equation Verification Pill -->
+            <!-- Live Totals Summary Pill -->
             <div id="acc-audit-pill" class="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
                 0 Rows
             </div>
         </div>
 
         <!-- ================================================================== -->
-        <!-- VIEW 1: RAW SPREADSHEET LEDGER                                     -->
+        <!-- VIEW 1: DETAILED LEDGER                                            -->
         <!-- ================================================================== -->
         <main id="view-ledger" class="flex-1 flex flex-col min-h-0 bg-white border border-slate-300 sm:rounded-b-lg shadow overflow-hidden">
             <div class="flex-1 overflow-auto bg-white">
                 <table class="w-full text-left border-collapse whitespace-nowrap text-xs tabular-nums" id="acc-table">
                     <thead class="sticky top-0 z-20 bg-slate-900 text-white select-none">
-                        <tr class="text-[10px] font-black uppercase tracking-wider border-b border-slate-700">
-                            <th onclick="window.sortAccounting('bookId')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Book ID</th>
-                            <th onclick="window.sortAccounting('name')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Guest</th>
-                            <th onclick="window.sortAccounting('status')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Status</th>
-                            <th onclick="window.sortAccounting('source')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Source</th>
-                            <th onclick="window.sortAccounting('checkIn')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">In</th>
-                            <th onclick="window.sortAccounting('checkOut')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800">Out</th>
-                            <th onclick="window.sortAccounting('nights')" class="py-2 px-1.5 border-r border-slate-700 text-center cursor-pointer hover:bg-slate-800">Nts</th>
-                            <th onclick="window.sortAccounting('gross')" class="py-2 px-2 border-r border-slate-700 text-right cursor-pointer hover:bg-slate-800">Gross</th>
-                            <th onclick="window.sortAccounting('fees')" class="py-2 px-2 border-r border-slate-700 text-right text-rose-300 cursor-pointer hover:bg-slate-800">Fees/Comm</th>
-                            <th onclick="window.sortAccounting('netKept')" class="py-2 px-2 border-r border-slate-700 text-right text-emerald-300 cursor-pointer hover:bg-slate-800 bg-slate-800/80">Net Kept</th>
-                            <th onclick="window.sortAccounting('cashRecv')" class="py-2 px-2 border-r border-slate-700 text-right text-green-300 cursor-pointer hover:bg-slate-800">Cash Recv</th>
-                            <th onclick="window.sortAccounting('bankRecv')" class="py-2 px-2 border-r border-slate-700 text-right text-sky-300 cursor-pointer hover:bg-slate-800">Bank/Card</th>
-                            <th onclick="window.sortAccounting('inTransit')" class="py-2 px-2 border-r border-slate-700 text-right text-amber-300 cursor-pointer hover:bg-slate-800">In-Transit</th>
-                            <th onclick="window.sortAccounting('futureDue')" class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300 cursor-pointer hover:bg-slate-800">Future Due</th>
-                            <th onclick="window.sortAccounting('unpaidLeft')" class="py-2 px-2 border-r border-slate-700 text-right text-orange-300 cursor-pointer hover:bg-slate-800">Unpaid (Left)</th>
-                            <th onclick="window.sortAccounting('willNotCollect')" class="py-2 px-2 border-r border-slate-700 text-right text-slate-300 cursor-pointer hover:bg-slate-800">Will Not Collect</th>
-                            <th onclick="window.sortAccounting('unknownAmt')" class="py-2 px-2 text-right text-fuchsia-300 cursor-pointer hover:bg-slate-800" title="Payments with method keys not configured in Setup">Unknown</th>
-                        </tr>
-                        <!-- Inline Multi-Select Column Filter Row -->
-                        <tr class="bg-slate-800 text-[10px] font-bold">
-                            <th class="p-1 border-r border-slate-700" colspan="2">
-                                <input type="text" id="acc-filter-search" oninput="window.renderAccounting()" placeholder="Filter guest, ID, room..." class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] outline-none">
-                            </th>
-                            <th class="p-1 border-r border-slate-700 relative">
-                                <button type="button" onclick="window.toggleAccDropdown('acc-status-dropdown', this)" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
-                                    <span id="acc-status-label" class="truncate">All Status</span><span>▾</span>
-                                </button>
-                                <div id="acc-status-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-44 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-60 overflow-y-auto p-1 text-left"></div>
-                            </th>
-                            <th class="p-1 border-r border-slate-700 relative">
-                                <button type="button" onclick="window.toggleAccDropdown('acc-source-dropdown', this)" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
-                                    <span id="acc-source-label" class="truncate">All Sources</span><span>▾</span>
-                                </button>
-                                <div id="acc-source-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-40 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-60 overflow-y-auto p-1 text-left"></div>
-                            </th>
-                            <th colspan="13" class="p-1 text-right text-[9px] font-normal text-slate-400 pr-2">
-                                Click any row to edit booking right here &bull; Click column headers to sort
-                            </th>
-                        </tr>
+                        <tr id="acc-header-row" class="text-[10px] font-black uppercase tracking-wider border-b border-slate-700"></tr>
+                        <tr id="acc-filter-row" class="bg-slate-800 text-[10px] font-bold"></tr>
                     </thead>
 
                     <tbody id="acc-ledger-body" class="divide-y divide-slate-200 bg-white font-semibold text-xs"></tbody>
@@ -184,22 +131,25 @@
         </main>
 
         <!-- ================================================================== -->
-        <!-- VIEW 2: MONTHLY & YEARLY ROLLUP + CHART                            -->
+        <!-- VIEW 2: WEEKLY / MONTHLY / YEARLY SUMMARIES + CHART                -->
         <!-- ================================================================== -->
         <section id="view-rollup" class="hidden flex-1 flex-col min-h-0 bg-white border border-slate-300 sm:rounded-b-lg shadow overflow-hidden">
-            <div class="p-2.5 bg-slate-50 border-b border-slate-300 flex items-center justify-between gap-2 shrink-0">
+            <div class="p-2.5 bg-slate-50 border-b border-slate-300 flex items-center justify-between gap-2 shrink-0 flex-wrap">
                 <div class="flex items-center gap-2">
-                    <span class="text-xs font-black uppercase text-slate-800">Period Rollup &amp; Comparison</span>
+                    <span class="text-xs font-black uppercase text-slate-800">Grouped by:</span>
                     <div class="flex bg-white rounded p-0.5 border border-slate-300 text-[10px] font-black uppercase">
-                        <button type="button" id="btn-rollup-monthly" onclick="window.setRollupGranularity('monthly')" class="px-2 py-0.5 rounded bg-indigo-600 text-white cursor-pointer">Monthly</button>
-                        <button type="button" id="btn-rollup-yearly" onclick="window.setRollupGranularity('yearly')" class="px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100 cursor-pointer">Yearly</button>
+                        <button type="button" id="btn-rollup-weekly" onclick="window.setRollupGranularity('weekly')" class="px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100 cursor-pointer">Week</button>
+                        <button type="button" id="btn-rollup-monthly" onclick="window.setRollupGranularity('monthly')" class="px-2 py-0.5 rounded bg-indigo-600 text-white cursor-pointer">Month</button>
+                        <button type="button" id="btn-rollup-yearly" onclick="window.setRollupGranularity('yearly')" class="px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100 cursor-pointer">Year</button>
                     </div>
                 </div>
-                <div class="flex items-center gap-3 text-[10px] font-black uppercase">
+                <div class="flex items-center gap-3 text-[10px] font-black uppercase flex-wrap">
                     <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-emerald-500 inline-block"></span> Cash</span>
-                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-sky-500 inline-block"></span> Bank/Card</span>
-                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-amber-400 inline-block"></span> In-Transit</span>
-                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-indigo-400 inline-block"></span> Future Due</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-sky-500 inline-block"></span> Bank</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-blue-500 inline-block"></span> Card</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-teal-500 inline-block"></span> OTA Payouts</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-amber-400 inline-block"></span> Pending</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-indigo-400 inline-block"></span> Future</span>
                     <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-rose-400 inline-block"></span> Fees/Comm</span>
                 </div>
             </div>
@@ -208,23 +158,7 @@
 
             <div class="flex-1 overflow-auto">
                 <table class="w-full text-left border-collapse whitespace-nowrap text-xs tabular-nums">
-                    <thead class="sticky top-0 z-10 bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
-                        <tr>
-                            <th class="py-2 px-2.5 border-r border-slate-700">Period</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-center">Bookings</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-center">Room Nts</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-right">Gross</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-right text-rose-300">Fees/Comm</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-right text-emerald-300 bg-slate-800">Net Kept</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-right text-green-300">Cash Recv</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-right text-sky-300">Bank/Card</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-right text-amber-300">In-Transit</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300">Future Due</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-right text-orange-300">Unpaid (Left)</th>
-                            <th class="py-2 px-2 border-r border-slate-700 text-right text-slate-300">Will Not Collect</th>
-                            <th class="py-2 px-2 text-right text-fuchsia-300">Unknown</th>
-                        </tr>
-                    </thead>
+                    <thead id="rollup-table-head" class="sticky top-0 z-10 bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider"></thead>
                     <tbody id="rollup-table-body" class="divide-y divide-slate-200 bg-white font-semibold"></tbody>
                     <tfoot id="rollup-table-foot" class="sticky bottom-0 z-10 bg-slate-900 text-white font-black border-t-2 border-slate-600"></tfoot>
                 </table>
@@ -234,7 +168,7 @@
     </div>
 
     <!-- ====================================================================== -->
-    <!-- IN-PAGE GUEST FOLIO MODAL (Reuses PMS Folio Modal, Ledger & Actions)   -->
+    <!-- IN-PAGE GUEST FOLIO MODAL                                              -->
     <!-- ====================================================================== -->
     <div id="guest-modal" class="modal-overlay">
         <div id="guest-modal-content" class="modal-content bg-white rounded-xl shadow-2xl border-2 border-slate-800 flex flex-col h-auto max-h-[calc(100dvh-1rem)] w-full max-w-[480px]">
@@ -426,10 +360,11 @@
         import { db, auth, appId } from './core/config.js';
         import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { loadPropertiesCatalog, toCanonicalPropId, getActivePropertyId } from './core/properties.js';
+        import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey, getActivePropertyId } from './core/properties.js';
         import { parseYMD, getLocalYMD, mNames } from './core/dates.js';
         import { roundCurrency } from './core/money.js';
         import { STATUS_CYCLE, getStatusObj } from './core/occupancy.js';
+        import { resolveChannelCode } from './core/channels.js';
         import { mountNav } from './core/nav.js';
         import { normalizePaymentMethods } from './setup/setup-profile.js';
         import './pms/pms-folio-modal.js';
@@ -438,10 +373,9 @@
         import './pms/pms-folio-invoice.js';
 
         // ------------------------------------------------------------------
-        // 1. MODULE STATE & EXACT PAYMENT SCHEMA LOOKUP
+        // 1. MODULE STATE, COLUMN DEFINITIONS & EXACT DB PAYMENT SCHEMA
         // ------------------------------------------------------------------
 
-        let propertiesCatalog = [];
         let paymentSchemaMap = new Map();
         let allBookings = [];
         let activeView = 'ledger';
@@ -450,7 +384,43 @@
         let sortAsc = false;
         let lastComputedRows = [];
         let lastRollupRows = [];
-        let paidOnlyActive = false;
+        let removeUnpaidActive = false;
+
+        const COLUMNS = [
+            { key: 'bookId', label: 'Book ID', align: 'left', visible: true, isMoney: false },
+            { key: 'name', label: 'Guest', align: 'left', visible: true, isMoney: false },
+            { key: 'status', label: 'Status', align: 'left', visible: true, isMoney: false },
+            { key: 'source', label: 'Source', align: 'left', visible: true, isMoney: false },
+            { key: 'checkIn', label: 'In', align: 'left', visible: true, isMoney: false },
+            { key: 'checkOut', label: 'Out', align: 'left', visible: true, isMoney: false },
+            { key: 'nights', label: 'Nts', align: 'center', visible: true, isMoney: false },
+            { key: 'gross', label: 'Gross', align: 'right', visible: true, isMoney: true },
+            { key: 'fees', label: 'Fees / Comm', align: 'right', visible: true, isMoney: true, hdrCls: 'text-rose-300' },
+            { key: 'net', label: 'Net', align: 'right', visible: true, isMoney: true, hdrCls: 'text-emerald-300 bg-slate-800/80' },
+            { key: 'cash', label: 'Cash', align: 'right', visible: true, isMoney: true, hdrCls: 'text-green-300' },
+            { key: 'bank', label: 'Bank', align: 'right', visible: true, isMoney: true, hdrCls: 'text-sky-300' },
+            { key: 'card', label: 'Card', align: 'right', visible: true, isMoney: true, hdrCls: 'text-blue-300' },
+            { key: 'otaPayouts', label: 'OTA Payouts', align: 'right', visible: true, isMoney: true, hdrCls: 'text-teal-300' },
+            { key: 'pending', label: 'Pending', align: 'right', visible: true, isMoney: true, hdrCls: 'text-amber-300' },
+            { key: 'future', label: 'Future', align: 'right', visible: true, isMoney: true, hdrCls: 'text-indigo-300' },
+            { key: 'unpaid', label: 'Unpaid', align: 'right', visible: true, isMoney: true, hdrCls: 'text-orange-300' },
+            { key: 'uncollectible', label: 'Uncollectible', align: 'right', visible: true, isMoney: true, hdrCls: 'text-slate-300' },
+            { key: 'unknown', label: 'Unknown', align: 'right', visible: true, isMoney: true, hdrCls: 'text-fuchsia-300' }
+        ];
+
+        const NET_FILTER_OPTIONS = [
+            { key: 'net', label: 'Has Net' },
+            { key: 'cash', label: 'Has Cash' },
+            { key: 'bank', label: 'Has Bank' },
+            { key: 'card', label: 'Has Card' },
+            { key: 'otaPayouts', label: 'Has OTA Payouts' },
+            { key: 'pending', label: 'Has Pending' },
+            { key: 'future', label: 'Has Future' },
+            { key: 'unpaid', label: 'Has Unpaid' },
+            { key: 'uncollectible', label: 'Has Uncollectible' },
+            { key: 'fees', label: 'Has Fees / Comm' },
+            { key: 'unknown', label: 'Has Unknown' }
+        ];
 
         const NON_COLLECTIBLE_STATUSES = new Set([
             'cancelled', 'unconfirmed', 'new', 'to-charge', 'tocharge', 'no-show', 'noshow'
@@ -480,6 +450,22 @@
             return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
+        // Normalize legacy payment keys (e.g. "HW KP", "hw-kp", "agoda-pay") to Setup's canonical keys
+        function normalizePaymentMethodKey(rawKey) {
+            const clean = String(rawKey || '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+            if (!clean) return '';
+            if (clean === 'cc-fee') return 'card-kp';
+            if (clean === 'qr') return 'scan';
+            if (clean.endsWith('-pay') || clean.endsWith('-kp')) {
+                const suffix = clean.endsWith('-pay') ? '-pay' : '-kp';
+                const prefix = clean.slice(0, -suffix.length);
+                if (prefix === 'card') return 'card-kp';
+                const canonCode = resolveChannelCode(prefix);
+                return `${canonCode.toLowerCase()}${suffix}`;
+            }
+            return clean;
+        }
+
         // Build exact payment lookup from active property's Firestore payments config
         function buildExactPaymentMap(propConfig) {
             const methods = normalizePaymentMethods(propConfig?.payments || []);
@@ -491,16 +477,107 @@
                     key,
                     label: pm.label || key,
                     type: pm.type || 'revenue',
-                    channel: pm.channel || null,
-                    active: pm.active !== false
+                    channel: pm.channel || null
                 });
             });
             return map;
         }
 
         // ------------------------------------------------------------------
-        // 2. MULTI-SELECT DROPDOWN HELPERS
+        // 2. COLUMN HEADERS, COLUMN PICKER & MULTI-SELECT FILTER DROPDOWNS
         // ------------------------------------------------------------------
+
+        function renderTableHeaders() {
+            const headerRow = document.getElementById('acc-header-row');
+            const filterRow = document.getElementById('acc-filter-row');
+            if (!headerRow || !filterRow) return;
+
+            const visibleCols = COLUMNS.filter(c => c.visible);
+
+            headerRow.innerHTML = visibleCols.map(c => {
+                const alignCls = c.align === 'right' ? 'text-right' : (c.align === 'center' ? 'text-center' : 'text-left');
+                return `<th onclick="window.sortAccounting('${c.key}')" class="py-2 px-2 border-r border-slate-700 cursor-pointer hover:bg-slate-800 ${alignCls} ${c.hdrCls || ''}">${c.label}</th>`;
+            }).join('');
+
+            filterRow.innerHTML = visibleCols.map(c => {
+                if (c.key === 'bookId') {
+                    return `<th class="p-1 border-r border-slate-700"><input type="text" id="acc-filter-id" oninput="window.renderAccounting()" placeholder="ID..." class="w-16 bg-slate-900 text-white border border-slate-600 rounded px-1 py-0.5 text-[10px] outline-none"></th>`;
+                }
+                if (c.key === 'name') {
+                    return `<th class="p-1 border-r border-slate-700"><input type="text" id="acc-filter-name" oninput="window.renderAccounting()" placeholder="Guest..." class="w-28 bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] outline-none"></th>`;
+                }
+                if (c.key === 'status') {
+                    return `
+                        <th class="p-1 border-r border-slate-700 relative">
+                            <button type="button" onclick="window.toggleAccDropdown('acc-status-dropdown')" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
+                                <span id="acc-status-label" class="truncate">All</span><span>▾</span>
+                            </button>
+                            <div id="acc-status-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-44 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-60 overflow-y-auto p-1 text-left"></div>
+                        </th>
+                    `;
+                }
+                if (c.key === 'source') {
+                    return `
+                        <th class="p-1 border-r border-slate-700 relative">
+                            <button type="button" onclick="window.toggleAccDropdown('acc-source-dropdown')" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
+                                <span id="acc-source-label" class="truncate">All</span><span>▾</span>
+                            </button>
+                            <div id="acc-source-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-40 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-60 overflow-y-auto p-1 text-left"></div>
+                        </th>
+                    `;
+                }
+                if (c.key === 'net') {
+                    return `
+                        <th class="p-1 border-r border-slate-700 relative">
+                            <button type="button" onclick="window.toggleAccDropdown('acc-net-dropdown')" class="w-full bg-slate-900 text-emerald-300 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
+                                <span id="acc-net-label" class="truncate">Filter</span><span>▾</span>
+                            </button>
+                            <div id="acc-net-dropdown" class="acc-multi-drop hidden absolute right-0 top-full mt-1 w-44 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-64 overflow-y-auto p-1 text-left"></div>
+                        </th>
+                    `;
+                }
+                return `<th class="p-1 border-r border-slate-700"></th>`;
+            }).join('');
+
+            initMultiDropdowns();
+        }
+
+        function initColumnPicker() {
+            const drop = document.getElementById('acc-columns-dropdown');
+            if (!drop) return;
+            drop.innerHTML = COLUMNS.map((c, idx) => `
+                <label class="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
+                    <input type="checkbox" ${c.visible ? 'checked' : ''} onchange="window.toggleColumnVisibility(${idx}, this.checked)">
+                    <span>${c.label}</span>
+                </label>
+            `).join('');
+        }
+
+        window.toggleColumnVisibility = (idx, isVisible) => {
+            if (!COLUMNS[idx]) return;
+            COLUMNS[idx].visible = isVisible;
+            const prevStatus = getCheckedSet('acc-status-dropdown');
+            const prevSource = getCheckedSet('acc-source-dropdown');
+            const prevNet = getCheckedSet('acc-net-dropdown');
+            const prevId = document.getElementById('acc-filter-id')?.value || '';
+            const prevName = document.getElementById('acc-filter-name')?.value || '';
+
+            renderTableHeaders();
+
+            if (document.getElementById('acc-filter-id')) document.getElementById('acc-filter-id').value = prevId;
+            if (document.getElementById('acc-filter-name')) document.getElementById('acc-filter-name').value = prevName;
+            restoreCheckedSet('acc-status-dropdown', prevStatus);
+            restoreCheckedSet('acc-source-dropdown', prevSource);
+            restoreCheckedSet('acc-net-dropdown', prevNet);
+            updateMultiLabels();
+            window.renderAccounting();
+        };
+
+        function restoreCheckedSet(dropdownId, set) {
+            document.querySelectorAll(`#${dropdownId} input[type="checkbox"]`).forEach(cb => {
+                cb.checked = set.has(cb.value.toLowerCase());
+            });
+        }
 
         function initMultiDropdowns() {
             const statusDrop = document.getElementById('acc-status-dropdown');
@@ -520,6 +597,16 @@
                     <label class="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
                         <input type="checkbox" value="${src}" onchange="window.onMultiFilterChange()">
                         <span>${src}</span>
+                    </label>
+                `).join('');
+            }
+
+            const netDrop = document.getElementById('acc-net-dropdown');
+            if (netDrop) {
+                netDrop.innerHTML = NET_FILTER_OPTIONS.map(opt => `
+                    <label class="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
+                        <input type="checkbox" value="${opt.key}" onchange="window.onNetFilterChange()">
+                        <span>${opt.label}</span>
                     </label>
                 `).join('');
             }
@@ -547,30 +634,39 @@
         function updateMultiLabels() {
             const stChecked = getCheckedSet('acc-status-dropdown');
             const stLbl = document.getElementById('acc-status-label');
-            if (stLbl) stLbl.innerText = stChecked.size === 0 ? 'All Status' : `${stChecked.size} Selected`;
+            if (stLbl) stLbl.innerText = stChecked.size === 0 ? 'All' : `${stChecked.size} Sel`;
 
             const srcChecked = getCheckedSet('acc-source-dropdown');
             const srcLbl = document.getElementById('acc-source-label');
-            if (srcLbl) srcLbl.innerText = srcChecked.size === 0 ? 'All Sources' : `${srcChecked.size} Selected`;
+            if (srcLbl) srcLbl.innerText = srcChecked.size === 0 ? 'All' : `${srcChecked.size} Sel`;
+
+            const netChecked = getCheckedSet('acc-net-dropdown');
+            const netLbl = document.getElementById('acc-net-label');
+            if (netLbl) netLbl.innerText = netChecked.size === 0 ? 'Filter' : `${netChecked.size} Sel`;
         }
 
         window.onMultiFilterChange = () => {
-            paidOnlyActive = false;
-            const btn = document.getElementById('btn-paid-statuses-only');
+            removeUnpaidActive = false;
+            const btn = document.getElementById('btn-remove-unpaid');
             if (btn) btn.className = 'px-2 py-0.5 rounded border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase cursor-pointer';
             updateMultiLabels();
             window.renderAccounting();
         };
 
-        window.togglePaidStatusesOnly = () => {
-            paidOnlyActive = !paidOnlyActive;
+        window.onNetFilterChange = () => {
+            updateMultiLabels();
+            window.renderAccounting();
+        };
+
+        window.toggleRemoveUnpaid = () => {
+            removeUnpaidActive = !removeUnpaidActive;
             const checkboxes = document.querySelectorAll('#acc-status-dropdown input[type="checkbox"]');
             checkboxes.forEach(cb => {
-                cb.checked = paidOnlyActive ? PAID_ACTIVE_STATUSES.has(cb.value.toLowerCase()) : false;
+                cb.checked = removeUnpaidActive ? PAID_ACTIVE_STATUSES.has(cb.value.toLowerCase()) : false;
             });
-            const btn = document.getElementById('btn-paid-statuses-only');
+            const btn = document.getElementById('btn-remove-unpaid');
             if (btn) {
-                btn.className = paidOnlyActive
+                btn.className = removeUnpaidActive
                     ? 'px-2 py-0.5 rounded border border-emerald-600 bg-emerald-600 text-white font-black text-[10px] uppercase cursor-pointer shadow-2xs'
                     : 'px-2 py-0.5 rounded border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase cursor-pointer';
             }
@@ -579,10 +675,10 @@
         };
 
         // ------------------------------------------------------------------
-        // 3. EXACT 8-BUCKET FINANCIAL DECOMPOSITION (ZERO GUESSING)
+        // 3. EXACT RESERVATION FINANCIAL DECOMPOSITION
         // ------------------------------------------------------------------
 
-        function classifyBookingFinancials(booking, todayStr, otaLagDays, includeTransit, keptMode, dateBasis, startStr, endStr) {
+        function classifyBookingFinancials(booking, todayStr, otaLagDays, includePending, dateBasis, startStr, endStr) {
             const rawGross = roundCurrency(Number(booking.totalPrice) || 0);
             const status = String(booking.status || 'future').toLowerCase().trim();
             const isNonCollectible = NON_COLLECTIBLE_STATUSES.has(status);
@@ -591,11 +687,13 @@
             const outMs = parseYMD(booking.checkOut);
             const nights = (inMs && outMs && outMs > inMs) ? Math.max(1, Math.round((outMs - inMs) / 86400000)) : 1;
 
-            let cashRecv = 0;
-            let bankRecv = 0;
-            let inTransit = 0;
+            let cash = 0;
+            let bank = 0;
+            let card = 0;
+            let otaPayouts = 0;
+            let pending = 0;
             let fees = 0;
-            let unknownAmt = 0;
+            let unknown = 0;
             const unknownKeys = [];
             let matchedPaymentInPeriod = false;
 
@@ -604,7 +702,8 @@
                 const amt = roundCurrency(Number(p.amt) || 0);
                 if (amt === 0) return;
 
-                const methodKey = String(p.method || '').trim().toLowerCase();
+                const rawMethod = String(p.method || '').trim();
+                const normKey = normalizePaymentMethodKey(rawMethod);
                 const payDate = String(p.date || booking.checkIn || '');
 
                 if (dateBasis === 'payment') {
@@ -613,11 +712,11 @@
                     matchedPaymentInPeriod = true;
                 }
 
-                // Exact lookup against property's Firestore payments configuration
-                const pmDef = paymentSchemaMap.get(methodKey);
+                // Exact lookup against property's configured payments in Firestore
+                const pmDef = paymentSchemaMap.get(normKey);
                 if (!pmDef) {
-                    unknownAmt = roundCurrency(unknownAmt + amt);
-                    unknownKeys.push(methodKey || '(blank)');
+                    unknown = roundCurrency(unknown + amt);
+                    unknownKeys.push(rawMethod || '(blank)');
                     return;
                 }
 
@@ -636,73 +735,72 @@
                 if (pmDef.type === 'revenue') {
                     if (pmDef.key === 'cash') {
                         if (payDate && payDate > todayStr) {
-                            inTransit = roundCurrency(inTransit + amt);
+                            pending = roundCurrency(pending + amt);
                         } else {
-                            cashRecv = roundCurrency(cashRecv + amt);
+                            cash = roundCurrency(cash + amt);
                         }
                         return;
                     }
 
                     if (isOtaChannel) {
-                        // OTA payouts remain Future Due until guest checks in; In-Transit until checkOut + lag; Bank Recv after
+                        // OTA payouts remain Future until guest checks in; Pending until checkOut + lag; OTA Payouts after
                         if ((booking.checkIn || '') > todayStr) {
                             return;
                         }
                         const settleDate = addDaysToYmd(booking.checkOut || payDate, otaLagDays);
                         if (settleDate > todayStr) {
-                            inTransit = roundCurrency(inTransit + amt);
+                            pending = roundCurrency(pending + amt);
                         } else {
-                            bankRecv = roundCurrency(bankRecv + amt);
+                            otaPayouts = roundCurrency(otaPayouts + amt);
                         }
                         return;
                     }
 
-                    // Direct non-cash revenue configured in Setup (e.g. scan, transfer, card)
+                    if (pmDef.key === 'card') {
+                        if (payDate && payDate > todayStr) {
+                            pending = roundCurrency(pending + amt);
+                        } else {
+                            card = roundCurrency(card + amt);
+                        }
+                        return;
+                    }
+
+                    // Instant direct bank transfers / PromptPay / QR scan
                     if (payDate && payDate > todayStr) {
-                        inTransit = roundCurrency(inTransit + amt);
+                        pending = roundCurrency(pending + amt);
                     } else {
-                        bankRecv = roundCurrency(bankRecv + amt);
+                        bank = roundCurrency(bank + amt);
                     }
                     return;
                 }
 
-                // Any unrecognized accounting class falls into Unknown
-                unknownAmt = roundCurrency(unknownAmt + amt);
-                unknownKeys.push(`${methodKey}:${pmDef.type}`);
+                unknown = roundCurrency(unknown + amt);
+                unknownKeys.push(`${rawMethod}:${pmDef.type}`);
             });
 
             if (dateBasis === 'payment' && !matchedPaymentInPeriod) {
                 return null;
             }
 
-            const totalAccountedPaid = roundCurrency(cashRecv + bankRecv + inTransit + fees + unknownAmt);
+            const totalAccountedPaid = roundCurrency(cash + bank + card + otaPayouts + pending + fees + unknown);
             const gross = dateBasis === 'payment' ? totalAccountedPaid : rawGross;
             const remaining = dateBasis === 'payment' ? 0 : Math.max(0, roundCurrency(rawGross - totalAccountedPaid));
 
-            let futureDue = 0;
-            let unpaidLeft = 0;
-            let willNotCollect = 0;
+            let future = 0;
+            let unpaid = 0;
+            let uncollectible = 0;
 
             if (dateBasis !== 'payment') {
                 if (isNonCollectible) {
-                    willNotCollect = remaining;
+                    uncollectible = remaining;
                 } else if (LEFT_UNPAID_STATUSES.has(status) || (status === 'here' && booking.checkOut && booking.checkOut < todayStr)) {
-                    unpaidLeft = remaining;
+                    unpaid = remaining;
                 } else {
-                    futureDue = remaining;
+                    future = remaining;
                 }
             }
 
-            let netKept = 0;
-            if (keptMode === 'cash_only') {
-                netKept = cashRecv;
-            } else if (keptMode === 'bank_only') {
-                netKept = roundCurrency(bankRecv + (includeTransit ? inTransit : 0));
-            } else {
-                netKept = roundCurrency(cashRecv + bankRecv + (includeTransit ? inTransit : 0));
-            }
-
-            const rList = Array.isArray(booking.rooms) && booking.rooms.length ? booking.rooms : (booking.room ? [booking.room] : []);
+            const net = roundCurrency(cash + bank + card + otaPayouts + (includePending ? pending : 0));
 
             return {
                 id: booking.id,
@@ -712,18 +810,19 @@
                 source: String(booking.source || 'direct').toLowerCase(),
                 checkIn: booking.checkIn || '',
                 checkOut: booking.checkOut || '',
-                roomsStr: rList.filter(Boolean).join(', '),
                 nights,
                 gross,
                 fees,
-                netKept,
-                cashRecv,
-                bankRecv,
-                inTransit,
-                futureDue,
-                unpaidLeft,
-                willNotCollect,
-                unknownAmt,
+                net,
+                cash,
+                bank,
+                card,
+                otaPayouts,
+                pending,
+                future,
+                unpaid,
+                uncollectible,
+                unknown,
                 unknownKeys: Array.from(new Set(unknownKeys)),
                 badCC: !!booking.badCC
             };
@@ -806,8 +905,10 @@
 
         window.setRollupGranularity = (gran) => {
             rollupGranularity = gran;
+            const btnW = document.getElementById('btn-rollup-weekly');
             const btnM = document.getElementById('btn-rollup-monthly');
             const btnY = document.getElementById('btn-rollup-yearly');
+            if (btnW) btnW.className = gran === 'weekly' ? 'px-2 py-0.5 rounded bg-indigo-600 text-white cursor-pointer' : 'px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100 cursor-pointer';
             if (btnM) btnM.className = gran === 'monthly' ? 'px-2 py-0.5 rounded bg-indigo-600 text-white cursor-pointer' : 'px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100 cursor-pointer';
             if (btnY) btnY.className = gran === 'yearly' ? 'px-2 py-0.5 rounded bg-indigo-600 text-white cursor-pointer' : 'px-2 py-0.5 rounded text-slate-600 hover:bg-slate-100 cursor-pointer';
             renderRollupView();
@@ -823,8 +924,72 @@
         };
 
         // ------------------------------------------------------------------
-        // 5. MASTER LEDGER RENDERER & STICKY TOTALS
+        // 5. DETAILED LEDGER RENDERER & STICKY TOTALS
         // ------------------------------------------------------------------
+
+        function renderCellHtml(colKey, r) {
+            if (colKey === 'bookId') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 font-mono text-[11px] text-slate-600">${r.bookId}</td>`;
+            }
+            if (colKey === 'name') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 font-bold max-w-[180px] truncate" title="${r.name}">${r.name}</td>`;
+            }
+            if (colKey === 'status') {
+                const st = getStatusObj(r.status);
+                const badge = `<span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border:1px solid ${st.border};">${st.label}</span>`;
+                return `<td class="py-1.5 px-2 border-r border-slate-200">${badge}</td>`;
+            }
+            if (colKey === 'source') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 uppercase text-[10px] text-slate-600">${r.source}</td>`;
+            }
+            if (colKey === 'checkIn') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 font-mono text-[11px]">${r.checkIn}</td>`;
+            }
+            if (colKey === 'checkOut') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 font-mono text-[11px]">${r.checkOut}</td>`;
+            }
+            if (colKey === 'nights') {
+                return `<td class="py-1.5 px-1.5 border-r border-slate-200 text-center font-bold">${r.nights}</td>`;
+            }
+            if (colKey === 'gross') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right font-black">${fmtMoney(r.gross)}</td>`;
+            }
+            if (colKey === 'fees') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.fees > 0 ? 'text-rose-600' : 'text-slate-300'}">${fmtMoney(r.fees)}</td>`;
+            }
+            if (colKey === 'net') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right font-black bg-emerald-50/60 ${r.net > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmtMoney(r.net)}</td>`;
+            }
+            if (colKey === 'cash') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.cash > 0 ? 'text-green-700' : 'text-slate-300'}">${fmtMoney(r.cash)}</td>`;
+            }
+            if (colKey === 'bank') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.bank > 0 ? 'text-sky-700' : 'text-slate-300'}">${fmtMoney(r.bank)}</td>`;
+            }
+            if (colKey === 'card') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.card > 0 ? 'text-blue-700' : 'text-slate-300'}">${fmtMoney(r.card)}</td>`;
+            }
+            if (colKey === 'otaPayouts') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.otaPayouts > 0 ? 'text-teal-700' : 'text-slate-300'}">${fmtMoney(r.otaPayouts)}</td>`;
+            }
+            if (colKey === 'pending') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.pending > 0 ? 'text-amber-700' : 'text-slate-300'}">${fmtMoney(r.pending)}</td>`;
+            }
+            if (colKey === 'future') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.future > 0 ? 'text-indigo-700' : 'text-slate-300'}">${fmtMoney(r.future)}</td>`;
+            }
+            if (colKey === 'unpaid') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right font-black ${r.unpaid > 0 ? 'text-orange-600 bg-orange-50/70' : 'text-slate-300'} ${r.badCC ? 'underline decoration-dashed decoration-red-500' : ''}">${fmtMoney(r.unpaid)}</td>`;
+            }
+            if (colKey === 'uncollectible') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.uncollectible > 0 ? 'text-slate-500 bg-slate-100' : 'text-slate-300'}">${fmtMoney(r.uncollectible)}</td>`;
+            }
+            if (colKey === 'unknown') {
+                const unkTitle = r.unknownKeys.length > 0 ? `Unmapped key(s): ${r.unknownKeys.join(', ')}` : '';
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right font-black ${r.unknown > 0 ? 'text-fuchsia-700 bg-fuchsia-50' : 'text-slate-300'}" title="${unkTitle}">${fmtMoney(r.unknown)}</td>`;
+            }
+            return '';
+        }
 
         window.renderAccounting = () => {
             const curProp = getActivePropertyId();
@@ -832,14 +997,14 @@
             const dateBasis = document.getElementById('acc-date-basis')?.value || 'checkIn';
             const startStr = document.getElementById('acc-date-start')?.value || '';
             const endStr = document.getElementById('acc-date-end')?.value || '';
-            const includeTransit = !!document.getElementById('acc-include-transit')?.checked;
-            const keptMode = document.getElementById('acc-kept-mode')?.value || 'all';
-            const bucketFilter = document.getElementById('acc-bucket-filter')?.value || 'all';
+            const includePending = !!document.getElementById('acc-include-pending')?.checked;
             const otaLagDays = Math.max(0, parseInt(document.getElementById('acc-ota-lag')?.value, 10) || 0);
 
-            const searchFilter = (document.getElementById('acc-filter-search')?.value || '').trim().toUpperCase();
+            const idFilter = (document.getElementById('acc-filter-id')?.value || '').trim().toUpperCase();
+            const nameFilter = (document.getElementById('acc-filter-name')?.value || '').trim().toUpperCase();
             const statusSet = getCheckedSet('acc-status-dropdown');
             const sourceSet = getCheckedSet('acc-source-dropdown');
+            const netFilterSet = getCheckedSet('acc-net-dropdown');
 
             const rows = [];
 
@@ -853,28 +1018,23 @@
                 } else if (dateBasis === 'checkOut') {
                     if (startStr && (b.checkOut || '') < startStr) return;
                     if (endStr && (b.checkOut || '') > endStr) return;
-                } else if (dateBasis === 'overlap') {
-                    if (startStr && (b.checkOut || '') <= startStr) return;
+                } else if (dateBasis === 'stayover') {
+                    if (startStr && (b.checkOut || '') < startStr) return;
                     if (endStr && (b.checkIn || '') > endStr) return;
                 }
 
-                const fin = classifyBookingFinancials(b, todayStr, otaLagDays, includeTransit, keptMode, dateBasis, startStr, endStr);
+                const fin = classifyBookingFinancials(b, todayStr, otaLagDays, includePending, dateBasis, startStr, endStr);
                 if (!fin) return;
 
                 if (statusSet.size > 0 && !statusSet.has(fin.status)) return;
                 if (sourceSet.size > 0 && !sourceSet.has(fin.source)) return;
-                if (searchFilter) {
-                    const hay = `${fin.name} ${fin.bookId} ${fin.roomsStr} ${fin.unknownKeys.join(' ')}`.toUpperCase();
-                    if (!hay.includes(searchFilter)) return;
-                }
+                if (idFilter && !String(fin.bookId).toUpperCase().includes(idFilter)) return;
+                if (nameFilter && !`${fin.name} ${fin.unknownKeys.join(' ')}`.toUpperCase().includes(nameFilter)) return;
 
-                if (bucketFilter === 'kept' && fin.netKept <= 0) return;
-                if (bucketFilter === 'transit' && fin.inTransit <= 0) return;
-                if (bucketFilter === 'future' && fin.futureDue <= 0) return;
-                if (bucketFilter === 'unpaid' && fin.unpaidLeft <= 0) return;
-                if (bucketFilter === 'wnc' && fin.willNotCollect <= 0) return;
-                if (bucketFilter === 'fees' && fin.fees <= 0) return;
-                if (bucketFilter === 'unknown' && fin.unknownAmt <= 0) return;
+                if (netFilterSet.size > 0) {
+                    const matchesAnyBucket = Array.from(netFilterSet).some(k => (Number(fin[k]) || 0) > 0);
+                    if (!matchesAnyBucket) return;
+                }
 
                 rows.push(fin);
             });
@@ -892,89 +1052,51 @@
             lastComputedRows = rows;
 
             const totals = {
-                nights: 0,
-                gross: 0,
-                fees: 0,
-                netKept: 0,
-                cashRecv: 0,
-                bankRecv: 0,
-                inTransit: 0,
-                futureDue: 0,
-                unpaidLeft: 0,
-                willNotCollect: 0,
-                unknownAmt: 0
+                nights: 0, gross: 0, fees: 0, net: 0, cash: 0, bank: 0, card: 0,
+                otaPayouts: 0, pending: 0, future: 0, unpaid: 0, uncollectible: 0, unknown: 0
             };
 
+            const visibleCols = COLUMNS.filter(c => c.visible);
             const tbody = document.getElementById('acc-ledger-body');
             const tfoot = document.getElementById('acc-ledger-foot');
             if (!tbody || !tfoot) return;
 
             if (rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="17" class="text-center py-12 text-slate-400 font-black uppercase tracking-widest">No reservations match the current filters.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="${visibleCols.length}" class="text-center py-12 text-slate-400 font-black uppercase tracking-widest">No reservations match the current filters.</td></tr>`;
             } else {
                 tbody.innerHTML = rows.map(r => {
                     totals.nights += r.nights;
                     totals.gross = roundCurrency(totals.gross + r.gross);
                     totals.fees = roundCurrency(totals.fees + r.fees);
-                    totals.netKept = roundCurrency(totals.netKept + r.netKept);
-                    totals.cashRecv = roundCurrency(totals.cashRecv + r.cashRecv);
-                    totals.bankRecv = roundCurrency(totals.bankRecv + r.bankRecv);
-                    totals.inTransit = roundCurrency(totals.inTransit + r.inTransit);
-                    totals.futureDue = roundCurrency(totals.futureDue + r.futureDue);
-                    totals.unpaidLeft = roundCurrency(totals.unpaidLeft + r.unpaidLeft);
-                    totals.willNotCollect = roundCurrency(totals.willNotCollect + r.willNotCollect);
-                    totals.unknownAmt = roundCurrency(totals.unknownAmt + r.unknownAmt);
+                    totals.net = roundCurrency(totals.net + r.net);
+                    totals.cash = roundCurrency(totals.cash + r.cash);
+                    totals.bank = roundCurrency(totals.bank + r.bank);
+                    totals.card = roundCurrency(totals.card + r.card);
+                    totals.otaPayouts = roundCurrency(totals.otaPayouts + r.otaPayouts);
+                    totals.pending = roundCurrency(totals.pending + r.pending);
+                    totals.future = roundCurrency(totals.future + r.future);
+                    totals.unpaid = roundCurrency(totals.unpaid + r.unpaid);
+                    totals.uncollectible = roundCurrency(totals.uncollectible + r.uncollectible);
+                    totals.unknown = roundCurrency(totals.unknown + r.unknown);
 
-                    const st = getStatusObj(r.status);
-                    const badge = `<span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border:1px solid ${st.border};">${st.label}</span>`;
                     const isDead = NON_COLLECTIBLE_STATUSES.has(r.status);
-                    const unkTitle = r.unknownKeys.length > 0 ? `Unmapped method key(s): ${r.unknownKeys.join(', ')}` : '';
+                    const cells = visibleCols.map(c => renderCellHtml(c.key, r)).join('');
 
-                    return `
-                        <tr onclick="window.editStaff('${r.id}')" class="hover:bg-indigo-50/60 cursor-pointer transition-colors ${isDead ? 'bg-slate-50/80 text-slate-500' : 'text-slate-800'}">
-                            <td class="py-1.5 px-2 border-r border-slate-200 font-mono text-[11px] text-slate-600">${r.bookId}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 font-bold max-w-[180px] truncate" title="${r.name}">${r.name}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200">${badge}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 uppercase text-[10px] text-slate-600">${r.source}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 font-mono text-[11px]">${r.checkIn}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 font-mono text-[11px]">${r.checkOut}</td>
-                            <td class="py-1.5 px-1.5 border-r border-slate-200 text-center font-bold">${r.nights}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black">${fmtMoney(r.gross)}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.fees > 0 ? 'text-rose-600' : 'text-slate-300'}">${fmtMoney(r.fees)}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black bg-emerald-50/60 ${r.netKept > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmtMoney(r.netKept)}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.cashRecv > 0 ? 'text-green-700' : 'text-slate-300'}">${fmtMoney(r.cashRecv)}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.bankRecv > 0 ? 'text-sky-700' : 'text-slate-300'}">${fmtMoney(r.bankRecv)}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.inTransit > 0 ? 'text-amber-700' : 'text-slate-300'}">${fmtMoney(r.inTransit)}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.futureDue > 0 ? 'text-indigo-700' : 'text-slate-300'}">${fmtMoney(r.futureDue)}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black ${r.unpaidLeft > 0 ? 'text-orange-600 bg-orange-50/70' : 'text-slate-300'} ${r.badCC ? 'underline decoration-dashed decoration-red-500' : ''}">${fmtMoney(r.unpaidLeft)}</td>
-                            <td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.willNotCollect > 0 ? 'text-slate-500 bg-slate-100' : 'text-slate-300'}">${fmtMoney(r.willNotCollect)}</td>
-                            <td class="py-1.5 px-2 text-right font-black ${r.unknownAmt > 0 ? 'text-fuchsia-700 bg-fuchsia-50' : 'text-slate-300'}" title="${unkTitle}">${fmtMoney(r.unknownAmt)}</td>
-                        </tr>
-                    `;
+                    return `<tr onclick="window.editStaff('${r.id}')" class="hover:bg-indigo-50/60 cursor-pointer transition-colors ${isDead ? 'bg-slate-50/80 text-slate-500' : 'text-slate-800'}">${cells}</tr>`;
                 }).join('');
             }
 
-            tfoot.innerHTML = `
-                <tr>
-                    <td colspan="6" class="py-2 px-2 border-r border-slate-700 uppercase tracking-wider text-right text-[11px]">Totals (${rows.length} Rows):</td>
-                    <td class="py-2 px-1.5 border-r border-slate-700 text-center">${totals.nights}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right">฿${fmtMoney(totals.gross)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-rose-300">฿${fmtMoney(totals.fees)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-emerald-300 bg-slate-800">฿${fmtMoney(totals.netKept)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-green-300">฿${fmtMoney(totals.cashRecv)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-sky-300">฿${fmtMoney(totals.bankRecv)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-amber-300">฿${fmtMoney(totals.inTransit)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300">฿${fmtMoney(totals.futureDue)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-orange-300">฿${fmtMoney(totals.unpaidLeft)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-slate-300">฿${fmtMoney(totals.willNotCollect)}</td>
-                    <td class="py-2 px-2 text-right text-fuchsia-300">฿${fmtMoney(totals.unknownAmt)}</td>
-                </tr>
-            `;
+            tfoot.innerHTML = `<tr>${visibleCols.map((c, idx) => {
+                if (idx === 0) return `<td class="py-2 px-2 border-r border-slate-700 uppercase tracking-wider text-[11px]">Totals (${rows.length})</td>`;
+                if (c.key === 'nights') return `<td class="py-2 px-1.5 border-r border-slate-700 text-center">${totals.nights}</td>`;
+                if (c.isMoney) return `<td class="py-2 px-2 border-r border-slate-700 text-right ${c.hdrCls || ''}">฿${fmtMoney(totals[c.key])}</td>`;
+                return `<td class="py-2 px-2 border-r border-slate-700"></td>`;
+            }).join('')}</tr>`;
 
             const pill = document.getElementById('acc-audit-pill');
             if (pill) {
-                const unkPart = totals.unknownAmt > 0 ? ` | Unk: ฿${fmtMoney(totals.unknownAmt)}` : '';
-                pill.innerText = `${rows.length} Rows | Kept: ฿${fmtMoney(totals.netKept)} | Unpaid: ฿${fmtMoney(totals.unpaidLeft)}${unkPart}`;
+                const unkPart = totals.unknown > 0 ? ` | Unknown: ฿${fmtMoney(totals.unknown)}` : '';
+                pill.innerText = `${rows.length} Rows | Net: ฿${fmtMoney(totals.net)} | Unpaid: ฿${fmtMoney(totals.unpaid)}${unkPart}`;
             }
 
             if (activeView === 'rollup') {
@@ -983,30 +1105,33 @@
         };
 
         // ------------------------------------------------------------------
-        // 6. MONTHLY & YEARLY ROLLUP + BAR CHART
+        // 6. WEEKLY / MONTHLY / YEARLY SUMMARIES + BAR CHART
         // ------------------------------------------------------------------
+
+        function getWeekStartMonday(ymd) {
+            const ms = parseYMD(ymd);
+            if (!ms) return '0000-00-00';
+            const d = new Date(ms);
+            const day = d.getUTCDay();
+            const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1);
+            d.setUTCDate(diff);
+            return d.toISOString().split('T')[0];
+        }
 
         function renderRollupView() {
             const buckets = new Map();
 
             lastComputedRows.forEach(r => {
                 const rawDate = r.checkIn || r.checkOut || '0000-00-00';
-                const key = rollupGranularity === 'yearly' ? rawDate.slice(0, 4) : rawDate.slice(0, 7);
+                let key = rawDate.slice(0, 7);
+                if (rollupGranularity === 'yearly') key = rawDate.slice(0, 4);
+                else if (rollupGranularity === 'weekly') key = getWeekStartMonday(rawDate);
+
                 if (!buckets.has(key)) {
                     buckets.set(key, {
-                        period: key,
-                        count: 0,
-                        nights: 0,
-                        gross: 0,
-                        fees: 0,
-                        netKept: 0,
-                        cashRecv: 0,
-                        bankRecv: 0,
-                        inTransit: 0,
-                        futureDue: 0,
-                        unpaidLeft: 0,
-                        willNotCollect: 0,
-                        unknownAmt: 0
+                        period: key, count: 0, nights: 0, gross: 0, fees: 0, net: 0,
+                        cash: 0, bank: 0, card: 0, otaPayouts: 0, pending: 0,
+                        future: 0, unpaid: 0, uncollectible: 0, unknown: 0
                     });
                 }
                 const b = buckets.get(key);
@@ -1014,21 +1139,25 @@
                 b.nights += r.nights;
                 b.gross = roundCurrency(b.gross + r.gross);
                 b.fees = roundCurrency(b.fees + r.fees);
-                b.netKept = roundCurrency(b.netKept + r.netKept);
-                b.cashRecv = roundCurrency(b.cashRecv + r.cashRecv);
-                b.bankRecv = roundCurrency(b.bankRecv + r.bankRecv);
-                b.inTransit = roundCurrency(b.inTransit + r.inTransit);
-                b.futureDue = roundCurrency(b.futureDue + r.futureDue);
-                b.unpaidLeft = roundCurrency(b.unpaidLeft + r.unpaidLeft);
-                b.willNotCollect = roundCurrency(b.willNotCollect + r.willNotCollect);
-                b.unknownAmt = roundCurrency(b.unknownAmt + r.unknownAmt);
+                b.net = roundCurrency(b.net + r.net);
+                b.cash = roundCurrency(b.cash + r.cash);
+                b.bank = roundCurrency(b.bank + r.bank);
+                b.card = roundCurrency(b.card + r.card);
+                b.otaPayouts = roundCurrency(b.otaPayouts + r.otaPayouts);
+                b.pending = roundCurrency(b.pending + r.pending);
+                b.future = roundCurrency(b.future + r.future);
+                b.unpaid = roundCurrency(b.unpaid + r.unpaid);
+                b.uncollectible = roundCurrency(b.uncollectible + r.uncollectible);
+                b.unknown = roundCurrency(b.unknown + r.unknown);
             });
 
             const sorted = Array.from(buckets.values()).sort((a, b) => a.period.localeCompare(b.period));
             lastRollupRows = sorted;
 
             const formatPeriodLabel = (p) => {
-                if (rollupGranularity === 'yearly' || p.length < 7) return p;
+                if (rollupGranularity === 'yearly') return p;
+                if (rollupGranularity === 'weekly') return `Wk ${p.slice(5)}`;
+                if (p.length < 7) return p;
                 const [y, m] = p.split('-');
                 const mIdx = parseInt(m, 10) - 1;
                 return `${mNames[mIdx] || m} ${y}`;
@@ -1039,21 +1168,23 @@
                 if (sorted.length === 0) {
                     chartEl.innerHTML = `<div class="text-center py-6 text-xs font-bold text-slate-400 uppercase">No data in range to chart.</div>`;
                 } else {
-                    const maxVal = Math.max(1, ...sorted.map(x => x.cashRecv + x.bankRecv + x.inTransit + x.futureDue + x.fees));
+                    const maxVal = Math.max(1, ...sorted.map(x => x.cash + x.bank + x.card + x.otaPayouts + x.pending + x.future + x.fees));
                     chartEl.innerHTML = `
                         <div class="flex items-end gap-3 h-40 pt-5 pb-1 min-w-max px-2">
                             ${sorted.map(item => {
-                                const totalBar = item.cashRecv + item.bankRecv + item.inTransit + item.futureDue + item.fees;
+                                const totalBar = item.cash + item.bank + item.card + item.otaPayouts + item.pending + item.future + item.fees;
                                 const hPct = Math.max(4, Math.round((totalBar / maxVal) * 100));
                                 const seg = (val) => totalBar > 0 ? ((val / totalBar) * 100).toFixed(2) : 0;
                                 return `
                                     <div class="flex flex-col items-center w-16 shrink-0">
-                                        <span class="text-[9px] font-black text-slate-700 mb-1">฿${Math.round(item.netKept).toLocaleString()}</span>
+                                        <span class="text-[9px] font-black text-slate-700 mb-1">฿${Math.round(item.net).toLocaleString()}</span>
                                         <div class="w-9 rounded-t overflow-hidden flex flex-col-reverse border border-slate-300 shadow-2xs" style="height: ${hPct}%;">
-                                            <div style="height:${seg(item.cashRecv)}%" class="bg-emerald-500" title="Cash: ฿${fmtMoney(item.cashRecv)}"></div>
-                                            <div style="height:${seg(item.bankRecv)}%" class="bg-sky-500" title="Bank/Card: ฿${fmtMoney(item.bankRecv)}"></div>
-                                            <div style="height:${seg(item.inTransit)}%" class="bg-amber-400" title="In-Transit: ฿${fmtMoney(item.inTransit)}"></div>
-                                            <div style="height:${seg(item.futureDue)}%" class="bg-indigo-400" title="Future Due: ฿${fmtMoney(item.futureDue)}"></div>
+                                            <div style="height:${seg(item.cash)}%" class="bg-emerald-500" title="Cash: ฿${fmtMoney(item.cash)}"></div>
+                                            <div style="height:${seg(item.bank)}%" class="bg-sky-500" title="Bank: ฿${fmtMoney(item.bank)}"></div>
+                                            <div style="height:${seg(item.card)}%" class="bg-blue-500" title="Card: ฿${fmtMoney(item.card)}"></div>
+                                            <div style="height:${seg(item.otaPayouts)}%" class="bg-teal-500" title="OTA Payouts: ฿${fmtMoney(item.otaPayouts)}"></div>
+                                            <div style="height:${seg(item.pending)}%" class="bg-amber-400" title="Pending: ฿${fmtMoney(item.pending)}"></div>
+                                            <div style="height:${seg(item.future)}%" class="bg-indigo-400" title="Future: ฿${fmtMoney(item.future)}"></div>
                                             <div style="height:${seg(item.fees)}%" class="bg-rose-400" title="Fees/Comm: ฿${fmtMoney(item.fees)}"></div>
                                         </div>
                                         <span class="text-[10px] font-black text-slate-600 uppercase mt-1.5">${formatPeriodLabel(item.period)}</span>
@@ -1065,62 +1196,40 @@
                 }
             }
 
+            const moneyCols = COLUMNS.filter(c => c.isMoney && c.visible);
+            const rHead = document.getElementById('rollup-table-head');
             const rBody = document.getElementById('rollup-table-body');
             const rFoot = document.getElementById('rollup-table-foot');
-            if (!rBody || !rFoot) return;
+            if (!rHead || !rBody || !rFoot) return;
 
-            const grand = { count: 0, nights: 0, gross: 0, fees: 0, netKept: 0, cashRecv: 0, bankRecv: 0, inTransit: 0, futureDue: 0, unpaidLeft: 0, willNotCollect: 0, unknownAmt: 0 };
+            rHead.innerHTML = `<tr>
+                <th class="py-2 px-2.5 border-r border-slate-700">Period</th>
+                <th class="py-2 px-2 border-r border-slate-700 text-center">Bookings</th>
+                <th class="py-2 px-2 border-r border-slate-700 text-center">Nts</th>
+                ${moneyCols.map(c => `<th class="py-2 px-2 border-r border-slate-700 text-right ${c.hdrCls || ''}">${c.label}</th>`).join('')}
+            </tr>`;
+
+            const grand = { count: 0, nights: 0, gross: 0, fees: 0, net: 0, cash: 0, bank: 0, card: 0, otaPayouts: 0, pending: 0, future: 0, unpaid: 0, uncollectible: 0, unknown: 0 };
 
             rBody.innerHTML = sorted.map(b => {
                 grand.count += b.count;
                 grand.nights += b.nights;
-                grand.gross = roundCurrency(grand.gross + b.gross);
-                grand.fees = roundCurrency(grand.fees + b.fees);
-                grand.netKept = roundCurrency(grand.netKept + b.netKept);
-                grand.cashRecv = roundCurrency(grand.cashRecv + b.cashRecv);
-                grand.bankRecv = roundCurrency(grand.bankRecv + b.bankRecv);
-                grand.inTransit = roundCurrency(grand.inTransit + b.inTransit);
-                grand.futureDue = roundCurrency(grand.futureDue + b.futureDue);
-                grand.unpaidLeft = roundCurrency(grand.unpaidLeft + b.unpaidLeft);
-                grand.willNotCollect = roundCurrency(grand.willNotCollect + b.willNotCollect);
-                grand.unknownAmt = roundCurrency(grand.unknownAmt + b.unknownAmt);
+                moneyCols.forEach(c => { grand[c.key] = roundCurrency(grand[c.key] + b[c.key]); });
 
-                return `
-                    <tr class="hover:bg-slate-50">
-                        <td class="py-1.5 px-2.5 border-r border-slate-200 font-black uppercase text-slate-800">${formatPeriodLabel(b.period)}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-center">${b.count}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-center">${b.nights}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black">${fmtMoney(b.gross)}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-rose-600">${fmtMoney(b.fees)}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-right font-black text-emerald-700 bg-emerald-50/60">${fmtMoney(b.netKept)}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-green-700">${fmtMoney(b.cashRecv)}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-sky-700">${fmtMoney(b.bankRecv)}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-amber-700">${fmtMoney(b.inTransit)}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-indigo-700">${fmtMoney(b.futureDue)}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-orange-600">${fmtMoney(b.unpaidLeft)}</td>
-                        <td class="py-1.5 px-2 border-r border-slate-200 text-right text-slate-500">${fmtMoney(b.willNotCollect)}</td>
-                        <td class="py-1.5 px-2 text-right font-black ${b.unknownAmt > 0 ? 'text-fuchsia-700' : 'text-slate-300'}">${fmtMoney(b.unknownAmt)}</td>
-                    </tr>
-                `;
+                return `<tr class="hover:bg-slate-50">
+                    <td class="py-1.5 px-2.5 border-r border-slate-200 font-black uppercase text-slate-800">${formatPeriodLabel(b.period)}</td>
+                    <td class="py-1.5 px-2 border-r border-slate-200 text-center">${b.count}</td>
+                    <td class="py-1.5 px-2 border-r border-slate-200 text-center">${b.nights}</td>
+                    ${moneyCols.map(c => `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${c.key === 'net' ? 'font-black text-emerald-700 bg-emerald-50/60' : ''}">${fmtMoney(b[c.key])}</td>`).join('')}
+                </tr>`;
             }).join('');
 
-            rFoot.innerHTML = `
-                <tr>
-                    <td class="py-2 px-2.5 border-r border-slate-700 uppercase">Grand Total</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-center">${grand.count}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-center">${grand.nights}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right">฿${fmtMoney(grand.gross)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-rose-300">฿${fmtMoney(grand.fees)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-emerald-300 bg-slate-800">฿${fmtMoney(grand.netKept)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-green-300">฿${fmtMoney(grand.cashRecv)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-sky-300">฿${fmtMoney(grand.bankRecv)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-amber-300">฿${fmtMoney(grand.inTransit)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-indigo-300">฿${fmtMoney(grand.futureDue)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-orange-300">฿${fmtMoney(grand.unpaidLeft)}</td>
-                    <td class="py-2 px-2 border-r border-slate-700 text-right text-slate-300">฿${fmtMoney(grand.willNotCollect)}</td>
-                    <td class="py-2 px-2 text-right text-fuchsia-300">฿${fmtMoney(grand.unknownAmt)}</td>
-                </tr>
-            `;
+            rFoot.innerHTML = `<tr>
+                <td class="py-2 px-2.5 border-r border-slate-700 uppercase">Total</td>
+                <td class="py-2 px-2 border-r border-slate-700 text-center">${grand.count}</td>
+                <td class="py-2 px-2 border-r border-slate-700 text-center">${grand.nights}</td>
+                ${moneyCols.map(c => `<td class="py-2 px-2 border-r border-slate-700 text-right ${c.hdrCls || ''}">฿${fmtMoney(grand[c.key])}</td>`).join('')}
+            </tr>`;
         }
 
         // ------------------------------------------------------------------
@@ -1131,49 +1240,40 @@
             if (lastComputedRows.length === 0) return;
 
             const wb = XLSX.utils.book_new();
-            const ledgerHeader = [
-                'Book ID', 'Guest', 'Status', 'Source', 'Check-In', 'Check-Out', 'Nights',
-                'Gross', 'Fees / Comm', 'Net Kept', 'Cash Received', 'Bank / Card Received',
-                'In-Transit (OTA)', 'Future Due', 'Unpaid (Left)', 'Will Not Collect', 'Unknown'
-            ];
+            const visibleCols = COLUMNS.filter(c => c.visible);
+            const ledgerHeader = visibleCols.map(c => c.label);
 
-            const ledgerData = lastComputedRows.map(r => [
-                r.bookId, r.name, r.status.toUpperCase(), r.source.toUpperCase(),
-                r.checkIn, r.checkOut, r.nights,
-                r.gross, r.fees, r.netKept, r.cashRecv, r.bankRecv,
-                r.inTransit, r.futureDue, r.unpaidLeft, r.willNotCollect, r.unknownAmt
-            ]);
+            const ledgerData = lastComputedRows.map(r => visibleCols.map(c => {
+                if (c.key === 'status' || c.key === 'source') return String(r[c.key] || '').toUpperCase();
+                return r[c.key];
+            }));
 
-            const sumCol = (idx) => roundCurrency(ledgerData.reduce((acc, row) => acc + (Number(row[idx]) || 0), 0));
-            const ledgerTotalRow = [
-                'TOTAL', `${ledgerData.length} Rows`, '', '', '', '', sumCol(6),
-                sumCol(7), sumCol(8), sumCol(9), sumCol(10), sumCol(11),
-                sumCol(12), sumCol(13), sumCol(14), sumCol(15), sumCol(16)
-            ];
+            const ledgerTotalRow = visibleCols.map((c, idx) => {
+                if (idx === 0) return 'TOTAL';
+                if (idx === 1) return `${ledgerData.length} Rows`;
+                if (c.key === 'nights' || c.isMoney) {
+                    return roundCurrency(ledgerData.reduce((acc, row) => acc + (Number(row[idx]) || 0), 0));
+                }
+                return '';
+            });
 
             const wsLedger = XLSX.utils.aoa_to_sheet([ledgerHeader, ...ledgerData, ledgerTotalRow]);
-            XLSX.utils.book_append_sheet(wb, wsLedger, 'Reservation_Ledger');
+            XLSX.utils.book_append_sheet(wb, wsLedger, 'Detailed');
 
             if (lastRollupRows.length === 0) renderRollupView();
-            const rollupHeader = [
-                'Period', 'Bookings', 'Nights', 'Gross', 'Fees / Comm', 'Net Kept',
-                'Cash Received', 'Bank / Card Received', 'In-Transit (OTA)',
-                'Future Due', 'Unpaid (Left)', 'Will Not Collect', 'Unknown'
-            ];
-            const rollupData = lastRollupRows.map(b => [
-                b.period, b.count, b.nights, b.gross, b.fees, b.netKept,
-                b.cashRecv, b.bankRecv, b.inTransit, b.futureDue, b.unpaidLeft, b.willNotCollect, b.unknownAmt
-            ]);
+            const moneyCols = COLUMNS.filter(c => c.isMoney && c.visible);
+            const rollupHeader = ['Period', 'Bookings', 'Nights', ...moneyCols.map(c => c.label)];
+            const rollupData = lastRollupRows.map(b => [b.period, b.count, b.nights, ...moneyCols.map(c => b[c.key])]);
             const wsRollup = XLSX.utils.aoa_to_sheet([rollupHeader, ...rollupData]);
-            XLSX.utils.book_append_sheet(wb, wsRollup, 'Period_Rollup');
+            XLSX.utils.book_append_sheet(wb, wsRollup, 'Summaries');
 
-            const propTag = getActivePropertyId().toUpperCase();
+            const propTag = (toDisplayPropKey(getActivePropertyId()) || getActivePropertyId()).toUpperCase();
             const todayTag = getLocalYMD(new Date());
             XLSX.writeFile(wb, `${propTag}_Accounting_${todayTag}.xlsx`);
         };
 
         // ------------------------------------------------------------------
-        // 8. BOOTLOADER & GUEST MODAL BRIDGE
+        // 8. BOOTLOADER & REALTIME SNAPSHOT SUBSCRIPTION
         // ------------------------------------------------------------------
 
         async function initAccounting() {
@@ -1182,9 +1282,12 @@
                     await signInAnonymously(auth);
                 }
 
-                propertiesCatalog = await loadPropertiesCatalog();
+                const catalog = await loadPropertiesCatalog();
                 const curProp = getActivePropertyId();
-                const activeCfg = propertiesCatalog.find(p => p.id === curProp) || propertiesCatalog[0] || {};
+                const activeCfg = catalog.find(p => p.id === curProp) || catalog[0] || {};
+                const shortTitle = toDisplayPropKey(activeCfg.id || curProp) || activeCfg.short || '';
+                document.title = shortTitle ? `${shortTitle} | Accounting` : 'Wild & Wandering | Accounting';
+
                 paymentSchemaMap = buildExactPaymentMap(activeCfg);
 
                 window.currentPropertyConfig = activeCfg;
@@ -1194,7 +1297,8 @@
                 window.currentUserRole = 'admin';
                 window.currentUserEmail = 'admin';
 
-                initMultiDropdowns();
+                initColumnPicker();
+                renderTableHeaders();
                 window.applyPeriodPreset('this_month');
 
                 onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => {
