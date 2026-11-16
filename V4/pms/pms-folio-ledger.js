@@ -35,10 +35,16 @@ export const toggleBadCC = () => {
 export const calcFinancials = () => {
     const tot = Number($('total-price')?.value) || 0;
     let pd = 0, cD = 0;
+    const configuredMethods = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
+    const commSet = new Set(
+        configuredMethods.filter(pm => pm.type === 'commission').map(pm => String(pm.key).toLowerCase())
+    );
+
     $$('.payment-row').forEach(r => {
         const a = Number(r.querySelector('.pay-amt')?.value) || 0;
+        const m = String(r.querySelector('.pay-method')?.value || '').toLowerCase();
         pd += a;
-        if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp'].includes(r.querySelector('.pay-method')?.value)) {
+        if (m.endsWith('-kp') || m === 'cc-fee' || commSet.has(m)) {
             cD += a;
         }
     });
@@ -90,6 +96,37 @@ export const overrideNet = () => {
 
 let pCount = 0;
 
+function getPaymentMethodOptions(selectedMethod) {
+    const configured = Array.isArray(window.paymentMethods) && window.paymentMethods.length > 0
+        ? window.paymentMethods.map(pm => ({ key: String(pm.key), label: pm.label || String(pm.key).toUpperCase() }))
+        : [
+            { key: 'cash', label: 'Cash' },
+            { key: 'scan', label: 'PromptPay / QR Scan' },
+            { key: 'transfer', label: 'Bank Transfer' },
+            { key: 'card', label: 'Credit Card (POS)' },
+            { key: 'card-kp', label: 'Credit Card Fee' },
+            { key: 'bdc-pay', label: 'Booking.com Payout' },
+            { key: 'bdc-kp', label: 'Booking.com Commission' },
+            { key: 'hwl-pay', label: 'Hostelworld Payout' },
+            { key: 'hwl-kp', label: 'Hostelworld Commission' },
+            { key: 'ago-pay', label: 'Agoda Payout' },
+            { key: 'ago-kp', label: 'Agoda Commission' },
+            { key: 'abb-pay', label: 'Airbnb Payout' },
+            { key: 'abb-kp', label: 'Airbnb Commission' },
+            { key: 'exp-pay', label: 'Expedia Payout' },
+            { key: 'exp-kp', label: 'Expedia Commission' },
+            { key: 'trp-pay', label: 'Trip.com Payout' },
+            { key: 'trp-kp', label: 'Trip.com Commission' }
+        ];
+
+    const rawSel = String(selectedMethod || 'cash');
+    const hasMatch = configured.some(opt => opt.key.toLowerCase() === rawSel.toLowerCase());
+    if (rawSel && !hasMatch) {
+        configured.push({ key: rawSel, label: rawSel.replace(/-/g, ' ').toUpperCase() });
+    }
+    return configured;
+}
+
 export const addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
     const id = `pay-${pCount++}`;
     const div = document.createElement('div');
@@ -105,18 +142,10 @@ export const addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
         if (due > 0) a = roundCurrency(due);
     }
 
-    const paymentOptions = [
-        'cash', 'card', 'scan', 'cc-fee',
-        'hw-kp',
-        'bdc-kp', 'bdc-pay',
-        'agoda-kp', 'agoda-pay',
-        'airbnb-kp', 'airbnb-pay',
-        'expedia-kp', 'expedia-pay',
-        'trip-kp', 'trip-pay',
-        'other'
-    ];
+    const rawMethod = String(m || 'cash');
+    const optionsList = getPaymentMethodOptions(rawMethod);
 
-    div.innerHTML = `<input type="date" class="pay-date w-24 text-xs !p-1" value="${d}" ${loc ? 'disabled' : ''}><input type="number" class="pay-amt w-16 text-xs !p-1 font-black" value="${a}" placeholder="0" oninput="window.calcFinancials()" ${loc ? 'disabled' : ''}><select class="pay-method flex-1 text-xs !p-1 uppercase" onchange="window.calcFinancials()" ${loc ? 'disabled' : ''}>${paymentOptions.map(x => `<option value="${x}" ${m === x ? 'selected' : ''}>${x.replace(/-/g, ' ').toUpperCase()}</option>`).join('')}</select>${loc ? `<button type="button" onclick="window.unlockPayment('${id}')" class="p-1 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded flex-shrink-0 border border-slate-200 cursor-pointer" title="Edit Payment"><i data-lucide="edit" size="12"></i></button>` : `<button type="button" onclick="window.removePaymentRow('${id}')" class="p-1 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded flex-shrink-0 border border-red-200 cursor-pointer" title="Delete Payment"><i data-lucide="trash-2" size="12"></i></button>`}`;
+    div.innerHTML = `<input type="date" class="pay-date w-24 text-xs !p-1" value="${d}" ${loc ? 'disabled' : ''}><input type="number" class="pay-amt w-16 text-xs !p-1 font-black" value="${a}" placeholder="0" oninput="window.calcFinancials()" ${loc ? 'disabled' : ''}><select class="pay-method flex-1 text-xs !p-1 uppercase" onchange="window.calcFinancials()" ${loc ? 'disabled' : ''}>${optionsList.map(opt => `<option value="${opt.key}" ${opt.key.toLowerCase() === rawMethod.toLowerCase() ? 'selected' : ''}>${opt.label}</option>`).join('')}</select>${loc ? `<button type="button" onclick="window.unlockPayment('${id}')" class="p-1 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded flex-shrink-0 border border-slate-200 cursor-pointer" title="Edit Payment"><i data-lucide="edit" size="12"></i></button>` : `<button type="button" onclick="window.removePaymentRow('${id}')" class="p-1 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded flex-shrink-0 border border-red-200 cursor-pointer" title="Delete Payment"><i data-lucide="trash-2" size="12"></i></button>`}`;
 
     const pList = $('payments-list');
     if (pList) pList.appendChild(div);
@@ -351,17 +380,14 @@ export const calcExtension = () => {
 
     unitCategories.forEach(cat => {
         if (!newHasPeak) {
-            // Stay has not reached event peak yet: use DIR Non-Ref for added nights
             const dirQuote = getCmStayQuote({ checkIn: cO, nights: days, roomCategory: cat, planType: 'DIR_NON_REF' });
             if (dirQuote.complete && dirQuote.total !== null) extTotal += dirQuote.total;
             else allFound = false;
         } else if (origHasPeak) {
-            // Stay already includes event peak: price added nights at DEF Event Non-Ref (with DIR fallback outside curve)
             const evtExtQuote = getCmStayQuote({ checkIn: cO, nights: days, roomCategory: cat, planType: 'DEF_EVT_NON_REF' });
             if (evtExtQuote.complete && evtExtQuote.total !== null) extTotal += evtExtQuote.total;
             else allFound = false;
         } else {
-            // Extension crosses into event peak: reprice full stay (pre-event DIR days + event curve days) and subtract existing total
             const fullEvtQuote = getCmStayQuote({ checkIn: cI, nights: totalStayNights, roomCategory: cat, planType: 'DEF_EVT_NON_REF' });
             if (fullEvtQuote.complete && fullEvtQuote.total !== null) extTotal += fullEvtQuote.total;
             else allFound = false;
