@@ -3,10 +3,9 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { parseYMD, getLocalYMD, getNearestEvent } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
-import { isOccupyingBooking } from '../core/occupancy.js';
-import { toCanonicalPropId, resolveRoomCategory } from '../core/properties.js';
+import { resolveRoomCategory } from '../core/properties.js';
 import { getCmStayQuote } from '../cm/cm-ripple.js';
 
 // --- DOM Selector Helpers ---
@@ -277,9 +276,21 @@ export const renderExtraCharges = () => {
 };
 
 // --------------------------------------------------------------------------
-// 4. STAY EXTENSIONS & CM PRICE CHECK ENGINES
+// 4. STAY EXTENSIONS (DYNAMIC PRE-EVENT + EVENT RATE SPLIT ENGINE)
 // --------------------------------------------------------------------------
 
+// --- Check if Date Range [startStr, endStr) Includes an Event Peak Day ---
+function rangeHasEventPeak(startStr, endStr) {
+    const sMs = parseYMD(startStr);
+    const eMs = parseYMD(endStr);
+    if (!sMs || !eMs || eMs <= sMs) return false;
+    for (let t = sMs; t < eMs; t += 86400000) {
+        if (getNearestEvent(t) === 0) return true;
+    }
+    return false;
+}
+
+// --- Resolve Room Categories for Current Booking Units ---
 function resolveExtensionCategories() {
     const hotelRooms = window.hotelRooms || [];
     const allRoomTypes = window.roomTypes || [];
@@ -309,10 +320,7 @@ function resolveExtensionCategories() {
     return Array(unitCount).fill(matchedCat);
 }
 
-/**
- * Auto-checks CM across the extension days for DIR Non-Ref and DEF Event Non-Ref,
- * and applies the lower of the two options.
- */
+// --- Auto-Calculate Extension Price Across Any Length Stay ---
 export const calcExtension = () => {
     const cI = $('check-in')?.value;
     const cO = $('check-out')?.value;
@@ -320,71 +328,68 @@ export const calcExtension = () => {
 
     const avgEl = $('ext-avg-rate');
     const prEl = $('ext-price');
-    const srcLabelEl = $('ext-rate-source-label');
-    const srcBtnEl = $('ext-rate-source-btn');
+    const bdcBtn = $('btn-check-bdc');
+    if (bdcBtn) bdcBtn.classList.add('hidden');
 
-    const unitCategories = cO ? resolveExtensionCategories() : [];
-    let dirTotal = 0;
-    let dirAllFound = unitCategories.length > 0;
-    let evtTotal = 0;
-    let evtAllFound = unitCategories.length > 0;
+    if (!cI || !cO) return;
+
+    const inMs = parseYMD(cI);
+    const outMs = parseYMD(cO);
+    const origNights = Math.max(1, Math.round((outMs - inMs) / 86400000));
+    const newOutStr = new Date(outMs + (days * 86400000)).toISOString().split('T')[0];
+    const totalStayNights = origNights + days;
+
+    const extraTotal = (window.activeExtraCharges || []).reduce((sum, c) => sum + (Number(c.amt || c.amount) || 0), 0);
+    const existingRoomTotal = Math.max(0, (Number($('total-price')?.value) || 0) - extraTotal);
+
+    const origHasPeak = rangeHasEventPeak(cI, cO);
+    const newHasPeak = rangeHasEventPeak(cI, newOutStr);
+
+    const unitCategories = resolveExtensionCategories();
+    let extTotal = 0;
+    let allFound = unitCategories.length > 0;
 
     unitCategories.forEach(cat => {
-        const dirQuote = getCmStayQuote({ checkIn: cO, nights: days, roomCategory: cat, planType: 'DIR_NON_REF' });
-        if (dirQuote.complete && dirQuote.total !== null) dirTotal += dirQuote.total;
-        else dirAllFound = false;
-
-        const evtQuote = getCmStayQuote({ checkIn: cO, nights: days, roomCategory: cat, planType: 'DEF_EVT_NON_REF' });
-        if (evtQuote.complete && evtQuote.total !== null) evtTotal += evtQuote.total;
-        else evtAllFound = false;
+        if (!newHasPeak) {
+            // Stay has not reached event peak yet: use DIR Non-Ref for added nights
+            const dirQuote = getCmStayQuote({ checkIn: cO, nights: days, roomCategory: cat, planType: 'DIR_NON_REF' });
+            if (dirQuote.complete && dirQuote.total !== null) extTotal += dirQuote.total;
+            else allFound = false;
+        } else if (origHasPeak) {
+            // Stay already includes event peak: price added nights at DEF Event Non-Ref (with DIR fallback outside curve)
+            const evtExtQuote = getCmStayQuote({ checkIn: cO, nights: days, roomCategory: cat, planType: 'DEF_EVT_NON_REF' });
+            if (evtExtQuote.complete && evtExtQuote.total !== null) extTotal += evtExtQuote.total;
+            else allFound = false;
+        } else {
+            // Extension crosses into event peak: reprice full stay (pre-event DIR days + event curve days) and subtract existing total
+            const fullEvtQuote = getCmStayQuote({ checkIn: cI, nights: totalStayNights, roomCategory: cat, planType: 'DEF_EVT_NON_REF' });
+            if (fullEvtQuote.complete && fullEvtQuote.total !== null) extTotal += fullEvtQuote.total;
+            else allFound = false;
+        }
     });
 
-    let chosenTotal = null;
-    let sourceTag = 'Fallback Avg';
-    let isEventWinner = false;
-
-    if (dirAllFound && evtAllFound) {
-        if (evtTotal < dirTotal) {
-            chosenTotal = roundCurrency(evtTotal);
-            sourceTag = 'CM: DEF Event Non-Ref';
-            isEventWinner = true;
+    let finalExtPrice = 0;
+    if (allFound) {
+        if (newHasPeak && !origHasPeak) {
+            finalExtPrice = Math.max(0, roundCurrency(extTotal - existingRoomTotal));
         } else {
-            chosenTotal = roundCurrency(dirTotal);
-            sourceTag = 'CM: DIR Non-Ref';
+            finalExtPrice = roundCurrency(extTotal);
         }
-    } else if (dirAllFound) {
-        chosenTotal = roundCurrency(dirTotal);
-        sourceTag = 'CM: DIR Non-Ref';
-    } else if (evtAllFound) {
-        chosenTotal = roundCurrency(evtTotal);
-        sourceTag = 'CM: DEF Event Non-Ref';
-        isEventWinner = true;
     } else {
-        const ms = parseYMD(cO) - parseYMD(cI);
-        const stayNights = ms > 0 ? Math.max(1, Math.round(ms / 86400000)) : 1;
-        const avgFallback = (Number($('total-price')?.value) || 0) / stayNights;
-        chosenTotal = roundCurrency(avgFallback * days);
-        sourceTag = 'CM: No Rate (Stay Avg)';
+        const avgFallback = existingRoomTotal / origNights;
+        finalExtPrice = roundCurrency(avgFallback * days);
     }
 
-    const avgDaily = roundCurrency(chosenTotal / days);
+    const avgDaily = roundCurrency(finalExtPrice / days);
 
     if (avgEl) {
         avgEl.value = Math.round(avgDaily);
-        avgEl.classList.toggle('text-pink-700', isEventWinner);
-        avgEl.classList.toggle('bg-pink-50', isEventWinner);
+        avgEl.classList.toggle('text-pink-700', newHasPeak);
+        avgEl.classList.toggle('bg-pink-50', newHasPeak);
     }
     if (prEl) {
-        prEl.value = Math.round(chosenTotal);
+        prEl.value = Math.round(finalExtPrice);
         prEl.placeholder = '';
-    }
-    if (srcLabelEl) {
-        srcLabelEl.innerText = sourceTag;
-    }
-    if (srcBtnEl) {
-        srcBtnEl.className = isEventWinner
-            ? 'flex-1 py-1 px-2 bg-pink-100 hover:bg-pink-200 text-pink-800 text-[9.5px] font-black uppercase rounded border border-pink-300 flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer truncate'
-            : 'flex-1 py-1 px-2 bg-white hover:bg-slate-50 text-slate-600 text-[9.5px] font-black uppercase rounded border border-slate-300 flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer truncate';
     }
 };
 
@@ -409,9 +414,8 @@ export const confirmExtension = async () => {
         extBtn.className = 'flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border bg-blue-100 text-blue-700 border-blue-400';
     }
 
-    const rateSource = $('ext-rate-source-label')?.innerText || 'CM';
     const todayStr = new Date().toLocaleDateString('en-GB').slice(0, 5);
-    const extMsg = `\n[EXTENDED on ${todayStr}] Added ${days} day(s) (${rateSource}). Added ฿${aP} to total.`;
+    const extMsg = `\n[EXTENDED on ${todayStr}] Added ${days} day(s). Added ฿${aP} to total.`;
     const notesEl = $('guest-notes');
     if (notesEl) notesEl.value = (notesEl.value + extMsg).trim();
 
@@ -420,106 +424,6 @@ export const confirmExtension = async () => {
     calcFinancials();
     calcExtension();
     if (window.customAlert) window.customAlert("Extension Applied", `Booking extended by ${days} day(s).\n\nCheckout is now ${nCo}.\nAdded ฿${aP} to Total Price.`);
-};
-
-export const openPriceCheckModal = () => {
-    const d = new Date();
-    d.setHours(12, 0, 0, 0);
-    const ciEl = $('pc-checkin');
-    if (ciEl && !ciEl.value) ciEl.value = getLocalYMD(d);
-    const m = $('price-check-modal');
-    if (m) {
-        m.classList.add('active');
-        m.style.display = 'flex';
-    }
-    runPriceCheck();
-};
-
-export const runPriceCheck = () => {
-    const cI = $('pc-checkin')?.value;
-    const n = Math.max(1, parseInt($('pc-nights')?.value, 10) || 1);
-    const pax = Math.max(1, parseInt($('pc-pax')?.value, 10) || 1);
-    const resultsEl = $('pc-results');
-    const datesLabel = $('pc-dates-label');
-    if (!cI || !resultsEl) return;
-
-    const inMs = parseYMD(cI);
-    const outMs = inMs + (n * 86400000);
-    const cO = new Date(outMs).toISOString().split('T')[0];
-
-    if (datesLabel) {
-        datesLabel.innerText = `${cI} → ${cO} (${n} Nt${n > 1 ? 's' : ''} • ${pax} PAX)`;
-    }
-
-    const curProp = toCanonicalPropId(window.currentPropertyId || '');
-    const roomTypes = window.roomTypes || [];
-    const hotelRooms = (window.hotelRooms || []).filter(r => !r.inactive);
-    const staffList = (window.staff || []).filter(s => toCanonicalPropId(s.property) === curProp && isOccupyingBooking(s.status, true));
-
-    if (roomTypes.length === 0) {
-        resultsEl.innerHTML = `<div class="text-center py-4 text-slate-400 font-bold uppercase text-[11px]">No room categories configured.</div>`;
-        return;
-    }
-
-    resultsEl.innerHTML = roomTypes.map(cat => {
-        const quote = getCmStayQuote({ checkIn: cI, nights: n, roomCategory: cat, planType: 'DEF_NON_REF' });
-        const catUnits = hotelRooms.filter(r => (r.category || r.type) === cat);
-        const isDorm = catUnits.some(r => !r.isPrivate && (r.isDorm === true || (r.rule && r.rule !== 'private') || cat.toLowerCase().includes('dorm')));
-        const maxPaxPerUnit = isDorm ? 1 : (parseInt(catUnits[0]?.maxOccupancy || catUnits[0]?.occAdults || 2, 10) || 2);
-        const unitsNeeded = Math.max(1, Math.ceil(pax / maxPaxPerUnit));
-
-        // Count minimum available units across the stay nights
-        let minAvail = catUnits.length;
-        for (let i = 0; i < n; i++) {
-            const dMs = inMs + (i * 86400000);
-            const occCount = catUnits.filter(u =>
-                staffList.some(b => {
-                    const bRooms = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
-                    return bRooms.some(br => String(br).trim().toUpperCase() === String(u.id).trim().toUpperCase())
-                        && dMs >= parseYMD(b.checkIn) && dMs < parseYMD(b.checkOut);
-                })
-            ).length;
-            minAvail = Math.min(minAvail, Math.max(0, catUnits.length - occCount));
-        }
-
-        const badges = [];
-        if (quote.restrictions.stop) badges.push(`<span class="px-1 py-0.2 rounded bg-rose-100 text-rose-700 border border-rose-300 text-[8.5px] font-black uppercase">STOP</span>`);
-        if (quote.restrictions.cta) badges.push(`<span class="px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[8.5px] font-black uppercase">CTA</span>`);
-        if (quote.restrictions.maxMinStay > n) badges.push(`<span class="px-1 py-0.2 rounded bg-indigo-100 text-indigo-700 border border-indigo-300 text-[8.5px] font-black uppercase">Min ${quote.restrictions.maxMinStay}n</span>`);
-
-        const availBadge = minAvail >= unitsNeeded
-            ? `<span class="text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded uppercase">${minAvail} avail</span>`
-            : `<span class="text-[9px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded uppercase">${minAvail} avail (need ${unitsNeeded})</span>`;
-
-        let priceHtml = `<span class="text-slate-400 font-bold text-xs">No CM Rate</span>`;
-        if (quote.complete && quote.total !== null) {
-            const singleUnitTotal = quote.total;
-            const multiUnitTotal = roundCurrency(singleUnitTotal * unitsNeeded);
-            priceHtml = `
-                <div class="text-right leading-tight">
-                    <div class="text-sm font-black text-indigo-700">฿${multiUnitTotal.toLocaleString()}</div>
-                    <div class="text-[9.5px] font-bold text-slate-500">
-                        ${unitsNeeded > 1 ? `${unitsNeeded}× ฿${singleUnitTotal.toLocaleString()} • ` : ''}฿${quote.avgNightly.toLocaleString()}/nt
-                    </div>
-                </div>
-            `;
-        }
-
-        return `
-            <div class="p-2 rounded-lg border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2">
-                <div class="min-w-0 flex-1">
-                    <div class="font-black text-xs text-slate-800 truncate">${cat}</div>
-                    <div class="flex items-center gap-1 flex-wrap mt-0.5">
-                        ${availBadge}
-                        ${badges.join('')}
-                    </div>
-                </div>
-                <div class="shrink-0">${priceHtml}</div>
-            </div>
-        `;
-    }).join('');
-
-    if (window.lucide) window.lucide.createIcons();
 };
 
 // --------------------------------------------------------------------------
@@ -539,5 +443,3 @@ window.removeCharge = removeCharge;
 window.renderExtraCharges = renderExtraCharges;
 window.calcExtension = calcExtension;
 window.confirmExtension = confirmExtension;
-window.openPriceCheckModal = openPriceCheckModal;
-window.runPriceCheck = runPriceCheck;
