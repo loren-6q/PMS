@@ -5,8 +5,9 @@
 
 import { mountNav } from '../core/nav.js';
 import { parseYMD, getLocalYMD } from '../core/dates.js';
-import { toCanonicalPropId } from '../core/properties.js';
+import { toCanonicalPropId, toDisplayPropKey } from '../core/properties.js';
 import { getPaid, getDue } from '../core/money.js';
+import { normalizePaymentMethods } from '../setup/setup-profile.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -105,6 +106,10 @@ export const dbToUiRoom = rid => {
     const nid = String(rid).toUpperCase().trim();
     const exactMatch = hotelRooms.find(r => r.id === nid || r.id === rid || String(r.id).toUpperCase() === nid);
     if (exactMatch) return exactMatch.id;
+
+    const cleanRid = nid.replace(/[№#\-_:\s]/g, '');
+    const cleanMatch = hotelRooms.find(r => String(r.id).toUpperCase().replace(/[№#\-_:\s]/g, '') === cleanRid);
+    if (cleanMatch) return cleanMatch.id;
 
     const targetTokens = tokenizeRoom(rid);
     if (targetTokens.length > 0) {
@@ -251,7 +256,6 @@ function subscribeToMasterPricing(propId) {
             window.pricingRules = { ...(window.pricingRules || {}), ...parsedRules };
         }
 
-        // Refresh Today's Rates & any open Extension / Price Check quotes live
         const todayStr = getLocalYMD(new Date());
         dailyRates = {};
         if (typeof window.getCmNightRate === 'function') {
@@ -268,10 +272,6 @@ function subscribeToMasterPricing(propId) {
         const guestModal = $('guest-modal');
         if (guestModal && (guestModal.classList.contains('active') || guestModal.style.display === 'flex') && window.calcExtension) {
             window.calcExtension();
-        }
-        const pcModal = $('price-check-modal');
-        if (pcModal && (pcModal.classList.contains('active') || pcModal.style.display === 'flex') && window.runPriceCheck) {
-            window.runPriceCheck();
         }
     }, (err) => {
         console.warn("[PMS Master Pricing Listener Notice]:", err);
@@ -332,7 +332,9 @@ export const loadPropertyConfig = async () => {
         const propToLoad = propsList.find(p => p.id === currentPropertyId) || propsList[0];
         if (propToLoad) {
             window.currentPropertyConfig = propToLoad;
-            document.title = propToLoad.name || 'Wild & Wandering PMS';
+            window.paymentMethods = normalizePaymentMethods(propToLoad.payments || []);
+            const shortTitle = toDisplayPropKey(propToLoad.id) || propToLoad.short || '';
+            document.title = shortTitle ? `${shortTitle} | PMS` : 'Wild & Wandering PMS';
 
             const activeIcon = propToLoad.iconUrl || propToLoad.logoUrl || DEFAULT_WW_ICON;
             const logoEl = $('main-brand-logo');
