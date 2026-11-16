@@ -3,11 +3,11 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { parseYMD } from '../core/dates.js';
 import { toCanonicalPropId } from '../core/properties.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
-const $$ = s => document.querySelectorAll(s);
 
 // --- Calendar Month Constants & Viewport State ---
 export const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -26,37 +26,33 @@ window.searchTerm = searchTerm;
 window.searchMatchIndex = searchMatchIndex;
 
 // --- State & Property Accessors ---
-const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
+const getStaff = () => window.staff || [];
 const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
 
 // --------------------------------------------------------------------------
 // 1. TIMELINE COORDINATE & PERIOD NAVIGATION
 // --------------------------------------------------------------------------
 
-// --- Date to Grid Column Offset Index Calculator ---
 export const getDayIndex = str => {
-    const t = window.parseYMD ? window.parseYMD(str) : 0;
+    const t = parseYMD(str);
     if (!t) return -1;
     const vS = window.viewStart || new Date();
     const vSTime = Date.UTC(vS.getFullYear(), vS.getMonth(), vS.getDate(), 12, 0, 0);
     return Math.round((t - vSTime) / 86400000);
 };
 
-// --- Shift Timeline Window Back (-7 Days) ---
 export const prevPeriod = () => {
     if (!window.viewStart) window.viewStart = new Date();
     window.viewStart.setDate(window.viewStart.getDate() - 7);
     if (window.render) window.render();
 };
 
-// --- Shift Timeline Window Forward (+7 Days) ---
 export const nextPeriod = () => {
     if (!window.viewStart) window.viewStart = new Date();
     window.viewStart.setDate(window.viewStart.getDate() + 7);
     if (window.render) window.render();
 };
 
-// --- Center Timeline Window on Today (-3 Days Buffer) ---
 export const goToday = () => {
     const d = new Date();
     d.setDate(d.getDate() - 3);
@@ -65,7 +61,6 @@ export const goToday = () => {
     if (window.render) window.render();
 };
 
-// --- Jump Viewport to Start of Target Month ---
 export const jumpToMonth = val => {
     if (val) {
         const [y, m] = val.split('-');
@@ -74,7 +69,6 @@ export const jumpToMonth = val => {
     }
 };
 
-// --- Jump Calendar View to Target Date (With Lead-in Buffer) ---
 export const jumpToDate = (dateStr, bufferDays = 3) => {
     if (!dateStr) return;
     const parts = dateStr.split('-');
@@ -89,14 +83,8 @@ export const jumpToDate = (dateStr, bufferDays = 3) => {
     if (typeof window.render === 'function') {
         window.render();
     }
-    if (typeof syncMonthSelectWithView === 'function') {
-        syncMonthSelectWithView();
-    }
 };
-window.jumpToDate = jumpToDate;
 
-
-// --- Toggle Day Column Width Mode (Standard vs Expanded) ---
 export const toggleZoom = () => {
     window.isZoomWide = !window.isZoomWide;
     const c = $('calendar-view');
@@ -110,7 +98,6 @@ export const toggleZoom = () => {
 // 2. GUEST SEARCH & TIMELINE MATCH JUMP ENGINE
 // --------------------------------------------------------------------------
 
-// --- Realtime Guest Search & Filter Dispatcher ---
 export const handleSearch = v => {
     window.searchTerm = v.trim().toUpperCase();
     window.searchMatchIndex = 0;
@@ -123,8 +110,7 @@ export const handleSearch = v => {
     if (dbNameInput && dbNameInput.value !== v) dbNameInput.value = v;
 
     const m = stList.filter(s => {
-        const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-        if (sProp !== curProp) return false;
+        if (toCanonicalPropId(s.property) !== curProp) return false;
         return ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(term) || (s.bookId || '').toUpperCase().includes(term);
     });
     if (term && m.length > 0) {
@@ -137,7 +123,6 @@ export const handleSearch = v => {
     if ($('database-view')?.style.display !== 'none' && window.renderDatabase) window.renderDatabase();
 };
 
-// --- Clear Active Search Term & Reset Filters ---
 export const clearSearch = () => {
     const input = $('guest-search');
     if (input) input.value = "";
@@ -146,7 +131,6 @@ export const clearSearch = () => {
     window.handleSearch("");
 };
 
-// --- Toggle Search Input Drawer Visibility ---
 export const toggleSearchMode = () => {
     const c = $('search-container');
     if (!c) return;
@@ -158,20 +142,17 @@ export const toggleSearchMode = () => {
     }
 };
 
-// --- Clear Search & Dismiss Mobile Search Bar ---
 export const clearSearchAndClose = () => {
     window.clearSearch();
     if (window.innerWidth < 640) $('search-container')?.classList.replace('flex', 'hidden');
 };
 
-// --- Jump Viewport Directly to Next Search Match ---
 export const jumpToSearchMatch = () => {
     const stList = getStaff();
     const term = window.searchTerm;
     const curProp = getPropId();
     const m = stList.filter(s => {
-        const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-        if (sProp !== curProp) return false;
+        if (toCanonicalPropId(s.property) !== curProp) return false;
         return ((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(term) || (s.bookId || '').toUpperCase().includes(term);
     }).sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
 
