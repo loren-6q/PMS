@@ -34,8 +34,10 @@
     </style>
 </head>
 <body class="min-h-[100dvh] flex flex-col justify-between p-3 sm:p-5 max-w-lg mx-auto select-none">
+    <div id="toast-container" class="fixed top-4 left-4 right-4 z-50 flex flex-col items-center gap-2 pointer-events-none"></div>
+
     <!-- Hidden Native File Pickers (kept outside clickable containers so gallery never triggers camera) -->
-    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="window.handleImageSelected(event)">
+     <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="window.handleImageSelected(event)">
     <input type="file" id="gallery-input" accept="image/*" class="hidden" onchange="window.handleImageSelected(event)">
 
     <!-- Top Status & Property Selector -->
@@ -268,9 +270,37 @@
         import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey } from './core/properties.js';
         import { isOccupyingBooking } from './core/occupancy.js';
         import { getLocalYMD } from './core/dates.js';
-        import { showToast } from './core/ui-dialogs.js';
 
         const auth = getAuth(db.app);
+
+        const normalizeRoomId = (r) => {
+            if (window.normalizeRoomId) return window.normalizeRoomId(r);
+            if (r === null || r === undefined) return '';
+            return String(r).trim().toUpperCase();
+        };
+
+        const showToast = (title, msg, type = "success") => {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            const bg = type === "error" ? "bg-red-600 border-red-500" : "bg-emerald-600 border-emerald-500";
+            const icon = type === "error" ? "alert-circle" : "check-circle";
+            toast.className = `${bg} text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 max-w-sm w-full border transition-all duration-300 opacity-0 -translate-y-4`;
+            toast.innerHTML = `
+                <i data-lucide="${icon}" class="w-5 h-5 shrink-0"></i>
+                <div class="leading-tight">
+                    <h4 class="text-xs font-black uppercase tracking-wider">${title}</h4>
+                    <p class="text-[11px] font-bold opacity-90 break-words whitespace-pre-line">${msg}</p>
+                </div>`;
+            container.appendChild(toast);
+            if (window.lucide) window.lucide.createIcons();
+            requestAnimationFrame(() => toast.classList.remove('opacity-0', '-translate-y-4'));
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-4');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        };
+        window.showToast = showToast;
         const normalizeRoomId = (r) => {
             if (window.normalizeRoomId) return window.normalizeRoomId(r);
             if (r === null || r === undefined) return '';
