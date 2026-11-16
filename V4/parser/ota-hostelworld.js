@@ -184,12 +184,21 @@ export function parseHostelworld(rawText) {
     if (roomDetailsIdx !== -1) {
         const endIdx = bookingPriceIdx > roomDetailsIdx ? bookingPriceIdx : lines.length;
         const roomRows = [];
-        for (let i = roomDetailsIdx + 1; i < endIdx - 1; i++) {
-            const rowDate = parseHwDate(lines[i]);
-            if (rowDate && lines[i + 1] && !/^(date|room\s*type|persons|breakfast|price)$/i.test(lines[i + 1])) {
+        for (let i = roomDetailsIdx + 1; i < endIdx; i++) {
+            const cells = lines[i].split('\t').map(c => c.trim()).filter(Boolean);
+            const rowDate = parseHwDate(cells[0]);
+            if (!rowDate) continue;
+
+            if (cells.length >= 2 && !/^(date|room\s*type|persons|breakfast|price)$/i.test(cells[1])) {
                 roomRows.push({
                     date: rowDate,
-                    rawTitle: lines[i + 1],
+                    rawTitle: cells[1],
+                    persons: /^\d+$/.test(cells[2] || '') ? parseInt(cells[2], 10) : 0
+                });
+            } else if (lines[i + 1] && !/^(date|room\s*type|persons|breakfast|price)$/i.test(lines[i + 1])) {
+                roomRows.push({
+                    date: rowDate,
+                    rawTitle: lines[i + 1].split('\t')[0].trim(),
                     persons: /^\d+$/.test(lines[i + 2] || '') ? parseInt(lines[i + 2], 10) : 0
                 });
             }
