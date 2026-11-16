@@ -6,6 +6,7 @@
 import { mNames } from './pms-calendar-tape.js';
 import { SVGS, renderReservationBar } from './pms-calendar-bars.js';
 import { STATUS_CYCLE, isOccupyingBooking } from '../core/occupancy.js';
+import { toCanonicalPropId } from '../core/properties.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
@@ -17,10 +18,8 @@ window.masterState = 0;
 // --- State & Config Accessors ---
 const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
 const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
-const getPropId = () => {
-    const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
-    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || '');
-};
+const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
+
 const getFmpDates = () => window.fmpDates || [];
 const getSearchTerm = () => (window.getSearchTerm ? window.getSearchTerm() : window.searchTerm) || "";
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
