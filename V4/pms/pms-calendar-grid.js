@@ -6,6 +6,7 @@
 import { mNames } from './pms-calendar-tape.js';
 import { SVGS, renderReservationBar } from './pms-calendar-bars.js';
 import { STATUS_CYCLE, isOccupyingBooking } from '../core/occupancy.js';
+import { parseYMD, getLocalYMD } from '../core/dates.js';
 import { toCanonicalPropId } from '../core/properties.js';
 
 // --- DOM Selector Helpers ---
@@ -16,12 +17,11 @@ const $$ = s => document.querySelectorAll(s);
 window.masterState = 0;
 
 // --- State & Config Accessors ---
-const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
-const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
+const getStaff = () => window.staff || [];
+const getHotelRooms = () => window.hotelRooms || [];
 const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
-
 const getFmpDates = () => window.fmpDates || [];
-const getSearchTerm = () => (window.getSearchTerm ? window.getSearchTerm() : window.searchTerm) || "";
+const getSearchTerm = () => window.searchTerm || "";
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
 // --------------------------------------------------------------------------
@@ -110,10 +110,10 @@ export const getBunkIcon = b => {
 export const classifyRoomForCalendar = r => {
     const cat = (r.category || r.type || '').toLowerCase();
     const bunk = (r.bunk || r.bed || '').toLowerCase();
-    
-    const isPrivate = bunk.includes('private') || 
-                      cat.includes('private') || 
-                      r.rule === 'private' || 
+
+    const isPrivate = bunk.includes('private') ||
+                      cat.includes('private') ||
+                      r.rule === 'private' ||
                       r.isDorm === false;
 
     const isDorm = !isPrivate && (
@@ -225,24 +225,23 @@ export const render = () => {
         }
     });
 
-    const todayStr = window.getLocalYMD ? window.getLocalYMD(new Date()) : '';
+    const todayStr = getLocalYMD(new Date());
     const yD = new Date();
     yD.setDate(new Date().getDate() - 1);
-    const yStr = window.getLocalYMD ? window.getLocalYMD(yD) : '';
+    const yStr = getLocalYMD(yD);
 
     days.forEach(d => {
-        const iT = (window.getLocalYMD ? window.getLocalYMD(d) : '') === todayStr;
+        const iT = getLocalYMD(d) === todayStr;
         dGrid.innerHTML += `<div class="flex flex-col items-center justify-center border-r border-slate-400 ${iT ? 'bg-blue-100' : ''}"><div class="text-[10px] font-black text-slate-500 uppercase leading-none">${d.toLocaleDateString('en-US', { weekday: 'short' })}</div><div class="text-[16px] font-black ${iT ? 'text-blue-600' : 'text-slate-800'} leading-tight">${d.getDate()}</div></div>`;
     });
 
     const curProp = getPropId();
-    let hotelRooms = [...getHotelRooms()];
+    const hotelRooms = [...getHotelRooms()];
     const fmpDates = getFmpDates();
     const searchTerm = getSearchTerm();
 
     const actStaff = getStaff().filter(s => {
-        const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-        if (sProp !== curProp) return false;
+        if (toCanonicalPropId(s.property) !== curProp) return false;
         if (s.status === 'cancelled') {
             if (searchTerm && (((s.firstName || '') + ' ' + (s.lastName || '')).toUpperCase().includes(searchTerm) || (s.bookId || '').toUpperCase().includes(searchTerm))) {
                 return true;
@@ -252,15 +251,14 @@ export const render = () => {
         return true;
     });
 
-    const vsUTC = window.parseYMD ? window.parseYMD(window.getLocalYMD(vS)) : 0;
+    const vsUTC = parseYMD(getLocalYMD(vS));
     const veUTC = vsUTC + dShow * 86400000;
     const tRows = [];
     const uConf = [];
 
-    // Render each unassigned slot in s.rooms (supports mixed ['305', ''] and multiple unassigned ['', ''])
     actStaff.forEach(s => {
         if (s.status === 'cancelled') return;
-        if (window.parseYMD(s.checkIn) > veUTC || window.parseYMD(s.checkOut) < vsUTC) return;
+        if (parseYMD(s.checkIn) > veUTC || parseYMD(s.checkOut) < vsUTC) return;
 
         const rawList = getRooms(s);
         const isUnassignedStatus = ['unconfirmed', 'charged', 'to-charge', 'tocharge', 'no-show', 'noshow', 'vol'].includes(s.status);
@@ -293,8 +291,8 @@ export const render = () => {
         const rows = [];
         uConf.forEach(s => {
             let p = false;
-            for (let r of rows) {
-                if (!r.some(e => window.parseYMD(s.checkIn) < window.parseYMD(e.checkOut) && window.parseYMD(e.checkIn) < window.parseYMD(s.checkOut))) {
+            for (const r of rows) {
+                if (!r.some(e => parseYMD(s.checkIn) < parseYMD(e.checkOut) && parseYMD(e.checkIn) < parseYMD(s.checkOut))) {
                     r.push(s);
                     p = true;
                     break;
@@ -310,11 +308,10 @@ export const render = () => {
         if (!r.inactive) return false;
         return actStaff.some(s => {
             if (s.status === 'cancelled' || s.status === 'no-show') return false;
-            const inMs = window.parseYMD(s.checkIn);
-            const outMs = window.parseYMD(s.checkOut);
+            const inMs = parseYMD(s.checkIn);
+            const outMs = parseYMD(s.checkOut);
             if (inMs > veUTC || outMs < vsUTC) return false;
-            const rList = getRooms(s);
-            return rList.some(rm => matchesRoom(rm, r.id));
+            return getRooms(s).some(rm => matchesRoom(rm, r.id));
         });
     });
 
@@ -335,7 +332,7 @@ export const render = () => {
             const isAssignedToThisRoom = s => {
                 if (['unconfirmed', 'charged', 'to-charge', 'tocharge', 'no-show', 'noshow', 'vol', 'cancelled'].includes(s.status)) return false;
                 const rList = getRooms(s).filter(Boolean);
-                return rList.some(rm => matchesRoom(rm, r.id)) && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
+                return rList.some(rm => matchesRoom(rm, r.id)) && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
             };
 
             if (isDorm) {
@@ -377,7 +374,7 @@ export const render = () => {
         archivedHotelRooms.forEach(r => {
             const isAssigned = s => {
                 const rList = getRooms(s).filter(Boolean);
-                return rList.some(rm => matchesRoom(rm, r.id)) && isOccupyingBooking(s.status, true) && window.parseYMD(s.checkIn) <= veUTC && window.parseYMD(s.checkOut) >= vsUTC;
+                return rList.some(rm => matchesRoom(rm, r.id)) && isOccupyingBooking(s.status, true) && parseYMD(s.checkIn) <= veUTC && parseYMD(s.checkOut) >= vsUTC;
             };
 
             tRows.push({
@@ -424,7 +421,7 @@ export const render = () => {
                 const occ = new Set();
                 actStaff.forEach(s => {
                     if (!isOccupyingBooking(s.status, true)) return;
-                    if (dT >= window.parseYMD(s.checkIn) && dT < window.parseYMD(s.checkOut)) {
+                    if (dT >= parseYMD(s.checkIn) && dT < parseYMD(s.checkOut)) {
                         getRooms(s).filter(Boolean).forEach(r => {
                             const uiR = window.dbToUiRoom ? window.dbToUiRoom(r) : r;
                             if (r && (tRIds.some(tId => matchesRoom(r, tId)) || tRIds.some(tId => matchesRoom(uiR, tId)))) occ.add(uiR || r);
@@ -500,10 +497,11 @@ export const render = () => {
 
         for (let i = 0; i < dShow; i++) {
             const c = document.createElement('div');
-            const iT = (window.getLocalYMD ? window.getLocalYMD(days[i]) : '') === todayStr;
+            const dateIso = getLocalYMD(days[i]);
+            const iT = dateIso === todayStr;
             let fmpShade = '';
             const dMs = days[i].getTime();
-            for (let f of fmpDates) {
+            for (const f of fmpDates) {
                 const diff = Math.round((dMs - new Date(f + "T12:00:00").getTime()) / 86400000);
                 if (diff === 0) { fmpShade = 'day-fmp-dark'; break; }
                 if (diff >= -2 && diff <= 2) { fmpShade = 'day-fmp-medium'; break; }
@@ -511,7 +509,7 @@ export const render = () => {
             c.className = `day-column ${fmpShade} ${iT ? 'day-today' : ''} ${rD.isUnassigned ? 'bg-amber-50/50' : ''}`;
             c.dataset.colIndex = i;
             c.dataset.dateNum = days[i].getDate();
-            c.dataset.dateIso = window.getLocalYMD ? window.getLocalYMD(days[i]) : '';
+            c.dataset.dateIso = dateIso;
             c.dataset.roomId = rD.isUnassigned ? "" : (rD.id || "");
             row.appendChild(c);
         }
@@ -559,7 +557,7 @@ export const toggleLegendDrawer = () => {
 export const mountLegendSvgs = () => {
     const pillContainer = document.getElementById('legend-status-pills');
     if (pillContainer) {
-        pillContainer.innerHTML = STATUS_CYCLE.map(s => 
+        pillContainer.innerHTML = STATUS_CYCLE.map(s =>
             `<span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text ${s.strike ? 'line-through' : ''}" style="background:${s.bg}; color:${s.txt}; border: 1px solid ${s.border};">${s.label}</span>`
         ).join('');
     }
