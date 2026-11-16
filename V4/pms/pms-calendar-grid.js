@@ -19,7 +19,7 @@ const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []
 const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
 const getPropId = () => {
     const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
-    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
+    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || '');
 };
 const getFmpDates = () => window.fmpDates || [];
 const getSearchTerm = () => (window.getSearchTerm ? window.getSearchTerm() : window.searchTerm) || "";
