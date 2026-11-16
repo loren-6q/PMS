@@ -459,8 +459,13 @@
             'left', 'early out', 'early-out'
         ]);
 
+        const DIRECT_BANK_METHODS = new Set([
+            'card', 'credit card', 'cc', 'pos', 'scan', 'promptpay', 'qr', 'transfer', 'bank', 'bank transfer'
+        ]);
+
         const OTA_PAYOUT_METHODS = new Set([
-            'bdc-pay', 'agoda-pay', 'airbnb-pay', 'expedia-pay', 'trip-pay'
+            'bdc-pay', 'agoda-pay', 'airbnb-pay', 'expedia-pay', 'trip-pay',
+            'ota', 'virtual', 'prepaid', 'booking.com', 'agoda', 'airbnb', 'expedia', 'hostelworld', 'hw', 'ctrip', 'trip'
         ]);
 
         const DEFAULT_FEE_METHODS = new Set([
@@ -523,7 +528,7 @@
             }
         }
 
-        window.toggleAccDropdown = (id, btnEl) => {
+        window.toggleAccDropdown = (id) => {
             if (window.event) window.event.stopPropagation();
             const target = document.getElementById(id);
             if (!target) return;
@@ -601,7 +606,9 @@
             payments.forEach(p => {
                 const amt = roundCurrency(Number(p.amt) || 0);
                 if (amt === 0) return;
-                const method = String(p.method || 'cash').trim().toLowerCase();
+                const method = String(p.method || '').trim().toLowerCase();
+                if (!method) return;
+
                 const payDate = String(p.date || booking.checkIn || '');
 
                 if (dateBasis === 'payment') {
@@ -612,9 +619,11 @@
 
                 const isFee = method.endsWith('-kp') || feeKeys.has(method);
                 const isOtaPay = method.endsWith('-pay') || OTA_PAYOUT_METHODS.has(method);
+                const isCash = method === 'cash';
+                const isDirectBank = DIRECT_BANK_METHODS.has(method);
 
-                // Ignore auto-generated virtual OTA rows on cancelled / unconfirmed / no-show bookings
-                if (isNonCollectible && (isOtaPay || isFee)) {
+                // Ignore virtual/OTA entries on cancelled, unconfirmed, or no-show bookings
+                if (isNonCollectible && !isCash && !isDirectBank) {
                     return;
                 }
 
@@ -624,7 +633,7 @@
                 }
 
                 if (isOtaPay) {
-                    // OTA payouts are Future Due until guest checks in; In-Transit until checkOut + lag; Bank Recv after
+                    // OTA payouts stay Future Due until check-in; In-Transit until checkOut + lag; Bank Recv after
                     if ((booking.checkIn || '') > todayStr) {
                         return;
                     }
@@ -637,13 +646,21 @@
                     return;
                 }
 
-                // Direct in-house settlements (cash, card, scan, transfer)
-                if (payDate && payDate > todayStr) {
-                    inTransit = roundCurrency(inTransit + amt);
-                } else if (method === 'cash') {
-                    cashRecv = roundCurrency(cashRecv + amt);
-                } else {
-                    bankRecv = roundCurrency(bankRecv + amt);
+                if (isCash) {
+                    if (payDate && payDate > todayStr) {
+                        inTransit = roundCurrency(inTransit + amt);
+                    } else {
+                        cashRecv = roundCurrency(cashRecv + amt);
+                    }
+                    return;
+                }
+
+                if (isDirectBank) {
+                    if (payDate && payDate > todayStr) {
+                        inTransit = roundCurrency(inTransit + amt);
+                    } else {
+                        bankRecv = roundCurrency(bankRecv + amt);
+                    }
                 }
             });
 
