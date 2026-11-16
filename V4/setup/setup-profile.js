@@ -67,16 +67,19 @@ export function normalizePaymentMethods(methods = []) {
 
     methods.forEach(item => {
         if (!item) return;
-        let obj = typeof item === 'string'
+        const obj = typeof item === 'string'
             ? { key: item.trim().toLowerCase(), label: item, type: item.endsWith('-kp') ? 'commission' : 'revenue', active: true }
             : { ...item };
 
         if (!obj.key) return;
-        obj.key = String(obj.key).trim().toLowerCase();
+        obj.key = String(obj.key).trim().toLowerCase().replace(/[\s_]+/g, '-');
 
         if (obj.key === 'qr') {
             obj.key = 'scan';
             obj.label = 'PromptPay / QR Scan';
+        }
+        if (obj.key === 'cc-fee') {
+            obj.key = 'card-kp';
         }
 
         const baseDirect = BASE_DIRECT_PAYMENTS.find(b => b.key === obj.key);
@@ -86,16 +89,15 @@ export function normalizePaymentMethods(methods = []) {
             obj.isBase = true;
             if (baseDirect.channel) obj.channel = baseDirect.channel;
             if (baseDirect.channelName) obj.channelName = baseDirect.channelName;
-        }
-
-        if (!obj.channel && (obj.key.endsWith('-pay') || obj.key.endsWith('-kp'))) {
-            const rawPrefix = obj.key.replace(/-(pay|kp)$/, '');
-            obj.channel = resolveChannelCode(rawPrefix);
-        }
-
-        if (obj.channel && !obj.channelName) {
-            const meta = getChannelByCode(obj.channel);
+        } else if (obj.key.endsWith('-pay') || obj.key.endsWith('-kp')) {
+            const suffix = obj.key.endsWith('-pay') ? '-pay' : '-kp';
+            const rawPrefix = obj.key.slice(0, -suffix.length);
+            const canonCode = resolveChannelCode(rawPrefix);
+            obj.key = `${canonCode.toLowerCase()}${suffix}`;
+            obj.channel = canonCode;
+            const meta = getChannelByCode(canonCode);
             obj.channelName = meta.name;
+            obj.type = suffix === '-kp' ? 'commission' : 'revenue';
         }
 
         if (!seenKeys.has(obj.key)) {
@@ -284,7 +286,6 @@ export function renderPaymentMethodsTable(payments = null) {
 
     window.paymentMethods = normalizePaymentMethods(payments || window.paymentMethods || [...DEFAULT_PAYMENT_METHODS]);
 
-    // Dynamic Quick Toggle Pills: Core OTAs + Any currently added OTAs
     if (togglesContainer) {
         const configuredCodes = Array.from(new Set(
             window.paymentMethods
@@ -317,7 +318,6 @@ export function renderPaymentMethodsTable(payments = null) {
     const activeMethods = window.paymentMethods.filter(m => m.active !== false);
     const archivedMethods = window.paymentMethods.filter(m => m.active === false);
 
-    // Active Rows
     activeMethods.forEach((m) => {
         const actualIdx = window.paymentMethods.findIndex(x => x.key === m.key);
         const tr = document.createElement('tr');
@@ -336,7 +336,7 @@ export function renderPaymentMethodsTable(payments = null) {
                 </select>
             </td>
             <td class="text-center py-1 px-2">
-                ${m.isBase 
+                ${m.isBase
                     ? `<span class="text-[9px] text-slate-300 font-bold uppercase select-none">CORE</span>`
                     : `<button type="button" onclick="window.archivePaymentMethodRow('${m.key}')" class="text-slate-400 hover:text-amber-600 cursor-pointer text-[10px] font-bold" title="Deactivate / Archive Channel">
                             Archive
@@ -347,7 +347,6 @@ export function renderPaymentMethodsTable(payments = null) {
         tbody.appendChild(tr);
     });
 
-    // Archived Tray
     if (archivedMethods.length > 0) {
         const archHeader = document.createElement('tr');
         archHeader.className = "bg-slate-100 border-y border-slate-300 text-slate-600 cursor-pointer select-none";
@@ -357,7 +356,7 @@ export function renderPaymentMethodsTable(payments = null) {
                 <div class="flex items-center justify-between">
                     <span class="text-amber-800 flex items-center gap-1.5">
                         <i data-lucide="archive" size="12"></i> Archived / Disconnected Channels (${archivedMethods.length / 2} OTAs)
-                        <span class="text-slate-500 normal-case font-normal">(Preserved for historical booking balance & commission reporting)</span>
+                        <span class="text-slate-500 normal-case font-normal">(Preserved for historical booking balance &amp; commission reporting)</span>
                     </span>
                     <i data-lucide="chevron-down" id="archived-pay-chevron" size="12" class="transition-transform duration-200 rotate-[-90deg]"></i>
                 </div>
@@ -387,7 +386,7 @@ export function renderPaymentMethodsTable(payments = null) {
     }
 }
 
-export function toggleOtaChannel(code, name) {
+export function toggleOtaChannel(code) {
     window.paymentMethods = normalizePaymentMethods(window.paymentMethods || []);
     const canonCode = resolveChannelCode(code);
     const payKey = `${canonCode.toLowerCase()}-pay`;
@@ -449,7 +448,6 @@ export function toggleArchivedPaymentRows() {
     if (ch) ch.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
 }
 
-// IN-APP PICKER MODAL (Replaces prompt())
 export function openAddOtaPaymentModal() {
     const modal = document.getElementById('add-ota-payment-modal');
     const select = document.getElementById('add-ota-payment-select');
