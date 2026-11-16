@@ -8,6 +8,7 @@ import { roundCurrency } from '../core/money.js';
 import { resolveChannelCode } from '../core/channels.js';
 import { resolveRoomCategory } from '../core/properties.js';
 
+// --- Apply Arithmetic Operator to Base Rate ---
 export function applyMath(baseVal, type, modifier, isReverse = false) {
     if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
     const val = parseFloat(baseVal);
@@ -32,10 +33,7 @@ export function applyMath(baseVal, type, modifier, isReverse = false) {
 
 export { getNearestEvent };
 
-/**
- * Resolves a single night's CM rate for a room category.
- * planType: 'DEF_NON_REF' | 'DIR_NON_REF' | 'DEF_EVT_NON_REF'
- */
+// --- Resolve Single-Night CM Rate ('DEF_NON_REF' | 'DIR_NON_REF' | 'DEF_EVT_NON_REF') ---
 export function getCmNightRate(dateStr, roomCategory, planType = 'DEF_NON_REF') {
     const timeline = window.masterPricing?.timeline || {};
     const dayObj = timeline[dateStr] || {};
@@ -44,9 +42,16 @@ export function getCmNightRate(dateStr, roomCategory, planType = 'DEF_NON_REF') 
     const roomObj = dayObj[canonicalRoom] || {};
 
     if (planType === 'DEF_EVT_NON_REF') {
-        if (window.enableEventRates === false) return null;
-        if (roomObj.fmp === undefined || roomObj.fmp === "" || isNaN(parseFloat(roomObj.fmp))) return null;
-        return roundCurrency(parseFloat(roomObj.fmp));
+        if (roomObj.fmp !== undefined && roomObj.fmp !== "" && !isNaN(parseFloat(roomObj.fmp))) {
+            return roundCurrency(parseFloat(roomObj.fmp));
+        }
+        // On peak day, event rate equals peak standard rate if fmp is blank
+        const dMs = parseYMD(dateStr);
+        if (dMs && getNearestEvent(dMs) === 0 && roomObj.std !== undefined && roomObj.std !== "" && !isNaN(parseFloat(roomObj.std))) {
+            return roundCurrency(parseFloat(roomObj.std));
+        }
+        // Outside event curve dates, fall back to DIR Non-Ref rate
+        return getCmNightRate(dateStr, canonicalRoom, 'DIR_NON_REF');
     }
 
     if (roomObj.std === undefined || roomObj.std === "" || isNaN(parseFloat(roomObj.std))) return null;
@@ -76,9 +81,7 @@ export function getCmNightRate(dateStr, roomCategory, planType = 'DEF_NON_REF') 
     return roundCurrency(computed);
 }
 
-/**
- * Computes a multi-night stay quote and restriction summary from CM timeline data.
- */
+// --- Compute Multi-Night CM Stay Quote & Restrictions ---
 export function getCmStayQuote({ checkIn, nights = 1, roomCategory, planType = 'DEF_NON_REF' } = {}) {
     const startMs = parseYMD(checkIn);
     const numNights = Math.max(1, parseInt(nights, 10) || 1);
@@ -138,6 +141,7 @@ export function getCmStayQuote({ checkIn, nights = 1, roomCategory, planType = '
     };
 }
 
+// --- Compute Derived Rate Plan Price (With Channel, Policy & Promo Rules) ---
 export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     if (!ratePlan) return null;
     const dayObj = (window.masterPricing && window.masterPricing.timeline) ? (window.masterPricing.timeline[dateStr] || {}) : {};
@@ -147,7 +151,6 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     const isEvtProduct = (ratePlan.product === 'evt') || (ratePlan.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(ratePlan.ratePlanTitle || '');
     const isRefPolicy = (ratePlan.policy === 'ref') || (/ref|refundable/i.test(ratePlan.ratePlanTitle || '') && !/non-?ref/i.test(ratePlan.ratePlanTitle || ''));
 
-    // 1. Base Rate
     const basePrice = (isEvtProduct && isEvents && roomObj.fmp !== undefined && roomObj.fmp !== "")
         ? roomObj.fmp
         : roomObj.std;
@@ -155,7 +158,6 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     if (basePrice === undefined || basePrice === "" || isNaN(parseFloat(basePrice))) return null;
     let computed = parseFloat(basePrice);
 
-    // 2. Canonical Channel Multiplier / Adjustment (DEF is the base input row)
     const rawChan = ratePlan.channel || 'DEF';
     const chanCode = resolveChannelCode(rawChan);
 
@@ -179,7 +181,6 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
         }
     }
 
-    // 3. Refundable Policy Markup
     if (isRefPolicy) {
         const rType = (isEvtProduct && isEvents)
             ? (window.pricingRules?.evtRefType || '+%')
@@ -190,13 +191,13 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
         computed = applyMath(computed, rType, rVal);
     }
 
-    // 4. OTA Promo Margin Preserver
     const { multiplier } = evaluatePromoStack(dateStr, chanCode, room);
     computed *= multiplier;
 
     return roundCurrency(computed);
 }
 
+// --- Evaluate Margin-Preserving OTA Promo Stack ---
 export function evaluatePromoStack(dateStr, chanCode, room, asOfDateStr = null) {
     const resolvedChan = resolveChannelCode(chanCode);
     if (!resolvedChan || resolvedChan === 'DEF' || resolvedChan === 'WEB') {
@@ -281,6 +282,7 @@ export function evaluatePromoStack(dateStr, chanCode, room, asOfDateStr = null) 
     };
 }
 
+// --- Copy Restriction Field During Ripple ---
 function copyRestrictionField(src, dst, key, force) {
     if (!force && dst.isOverride?.[key]) return;
     if (src[key] !== undefined && src[key] !== "" && src[key] !== false) {
@@ -290,6 +292,7 @@ function copyRestrictionField(src, dst, key, force) {
     }
 }
 
+// --- Propagate Anchor Rate & Restriction Changes Across Linked Rooms ---
 export function rippleDay(dateStr, startRoom, forceRipple = false, scope = 'both') {
     window.masterPricing = window.masterPricing || { timeline: {}, relationships: [] };
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
