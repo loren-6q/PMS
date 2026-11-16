@@ -404,6 +404,7 @@
             { key: 'pending', label: 'Pending', align: 'right', visible: true, isMoney: true, hdrCls: 'text-amber-300' },
             { key: 'future', label: 'Future', align: 'right', visible: true, isMoney: true, hdrCls: 'text-indigo-300' },
             { key: 'unpaid', label: 'Unpaid', align: 'right', visible: true, isMoney: true, hdrCls: 'text-orange-300' },
+            { key: 'overpaid', label: 'Overpaid', align: 'right', visible: true, isMoney: true, hdrCls: 'text-purple-300' },
             { key: 'uncollectible', label: 'Uncollectible', align: 'right', visible: true, isMoney: true, hdrCls: 'text-slate-300' },
             { key: 'unknown', label: 'Unknown', align: 'right', visible: true, isMoney: true, hdrCls: 'text-fuchsia-300' }
         ];
@@ -417,13 +418,14 @@
             { key: 'pending', label: 'Has Pending' },
             { key: 'future', label: 'Has Future' },
             { key: 'unpaid', label: 'Has Unpaid' },
+            { key: 'overpaid', label: 'Has Overpaid' },
             { key: 'uncollectible', label: 'Has Uncollectible' },
             { key: 'fees', label: 'Has Fees / Comm' },
             { key: 'unknown', label: 'Has Unknown' }
         ];
 
         const NON_COLLECTIBLE_STATUSES = new Set([
-            'cancelled', 'unconfirmed', 'new', 'to-charge', 'tocharge', 'no-show', 'noshow'
+            'cancelled', 'unconfirmed', 'new', 'to-charge', 'tocharge', 'no-show', 'noshow', 'vol'
         ]);
 
         const PAID_ACTIVE_STATUSES = new Set([
@@ -450,7 +452,6 @@
             return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
-        // Normalize legacy payment keys (e.g. "HW KP", "hw-kp", "agoda-pay") to Setup's canonical keys
         function normalizePaymentMethodKey(rawKey) {
             const clean = String(rawKey || '').trim().toLowerCase().replace(/[\s_]+/g, '-');
             if (!clean) return '';
@@ -466,7 +467,6 @@
             return clean;
         }
 
-        // Build exact payment lookup from active property's Firestore payments config
         function buildExactPaymentMap(propConfig) {
             const methods = normalizePaymentMethods(propConfig?.payments || []);
             const map = new Map();
@@ -712,7 +712,6 @@
                     matchedPaymentInPeriod = true;
                 }
 
-                // Exact lookup against property's configured payments in Firestore
                 const pmDef = paymentSchemaMap.get(normKey);
                 if (!pmDef) {
                     unknown = roundCurrency(unknown + amt);
@@ -722,7 +721,6 @@
 
                 const isOtaChannel = !!(pmDef.channel && pmDef.channel !== 'card');
 
-                // Ignore expected OTA payout & OTA commission rows on cancelled / no-show / unconfirmed stays
                 if (isNonCollectible && isOtaChannel) {
                     return;
                 }
@@ -743,7 +741,6 @@
                     }
 
                     if (isOtaChannel) {
-                        // OTA payouts remain Future until guest checks in; Pending until checkOut + lag; OTA Payouts after
                         if ((booking.checkIn || '') > todayStr) {
                             return;
                         }
@@ -765,7 +762,6 @@
                         return;
                     }
 
-                    // Instant direct bank transfers / PromptPay / QR scan
                     if (payDate && payDate > todayStr) {
                         pending = roundCurrency(pending + amt);
                     } else {
@@ -784,7 +780,9 @@
 
             const totalAccountedPaid = roundCurrency(cash + bank + card + otaPayouts + pending + fees + unknown);
             const gross = dateBasis === 'payment' ? totalAccountedPaid : rawGross;
-            const remaining = dateBasis === 'payment' ? 0 : Math.max(0, roundCurrency(rawGross - totalAccountedPaid));
+            const diff = dateBasis === 'payment' ? 0 : roundCurrency(rawGross - totalAccountedPaid);
+            const remaining = Math.max(0, diff);
+            const overpaid = diff < -0.01 ? Math.abs(diff) : 0;
 
             let future = 0;
             let unpaid = 0;
@@ -821,6 +819,7 @@
                 pending,
                 future,
                 unpaid,
+                overpaid,
                 uncollectible,
                 unknown,
                 unknownKeys: Array.from(new Set(unknownKeys)),
@@ -981,6 +980,9 @@
             if (colKey === 'unpaid') {
                 return `<td class="py-1.5 px-2 border-r border-slate-200 text-right font-black ${r.unpaid > 0 ? 'text-orange-600 bg-orange-50/70' : 'text-slate-300'} ${r.badCC ? 'underline decoration-dashed decoration-red-500' : ''}">${fmtMoney(r.unpaid)}</td>`;
             }
+            if (colKey === 'overpaid') {
+                return `<td class="py-1.5 px-2 border-r border-slate-200 text-right font-black ${r.overpaid > 0 ? 'text-purple-700 bg-purple-50' : 'text-slate-300'}">${r.overpaid > 0 ? '-' + fmtMoney(r.overpaid) : '0.00'}</td>`;
+            }
             if (colKey === 'uncollectible') {
                 return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${r.uncollectible > 0 ? 'text-slate-500 bg-slate-100' : 'text-slate-300'}">${fmtMoney(r.uncollectible)}</td>`;
             }
@@ -1053,7 +1055,7 @@
 
             const totals = {
                 nights: 0, gross: 0, fees: 0, net: 0, cash: 0, bank: 0, card: 0,
-                otaPayouts: 0, pending: 0, future: 0, unpaid: 0, uncollectible: 0, unknown: 0
+                otaPayouts: 0, pending: 0, future: 0, unpaid: 0, overpaid: 0, uncollectible: 0, unknown: 0
             };
 
             const visibleCols = COLUMNS.filter(c => c.visible);
@@ -1076,6 +1078,7 @@
                     totals.pending = roundCurrency(totals.pending + r.pending);
                     totals.future = roundCurrency(totals.future + r.future);
                     totals.unpaid = roundCurrency(totals.unpaid + r.unpaid);
+                    totals.overpaid = roundCurrency(totals.overpaid + r.overpaid);
                     totals.uncollectible = roundCurrency(totals.uncollectible + r.uncollectible);
                     totals.unknown = roundCurrency(totals.unknown + r.unknown);
 
@@ -1089,14 +1092,16 @@
             tfoot.innerHTML = `<tr>${visibleCols.map((c, idx) => {
                 if (idx === 0) return `<td class="py-2 px-2 border-r border-slate-700 uppercase tracking-wider text-[11px]">Totals (${rows.length})</td>`;
                 if (c.key === 'nights') return `<td class="py-2 px-1.5 border-r border-slate-700 text-center">${totals.nights}</td>`;
+                if (c.key === 'overpaid') return `<td class="py-2 px-2 border-r border-slate-700 text-right ${c.hdrCls || ''}">${totals.overpaid > 0 ? '-฿' + fmtMoney(totals.overpaid) : '฿0.00'}</td>`;
                 if (c.isMoney) return `<td class="py-2 px-2 border-r border-slate-700 text-right ${c.hdrCls || ''}">฿${fmtMoney(totals[c.key])}</td>`;
                 return `<td class="py-2 px-2 border-r border-slate-700"></td>`;
             }).join('')}</tr>`;
 
             const pill = document.getElementById('acc-audit-pill');
             if (pill) {
+                const overPart = totals.overpaid > 0 ? ` | Overpaid: -฿${fmtMoney(totals.overpaid)}` : '';
                 const unkPart = totals.unknown > 0 ? ` | Unknown: ฿${fmtMoney(totals.unknown)}` : '';
-                pill.innerText = `${rows.length} Rows | Net: ฿${fmtMoney(totals.net)} | Unpaid: ฿${fmtMoney(totals.unpaid)}${unkPart}`;
+                pill.innerText = `${rows.length} Rows | Net: ฿${fmtMoney(totals.net)} | Unpaid: ฿${fmtMoney(totals.unpaid)}${overPart}${unkPart}`;
             }
 
             if (activeView === 'rollup') {
@@ -1131,7 +1136,7 @@
                     buckets.set(key, {
                         period: key, count: 0, nights: 0, gross: 0, fees: 0, net: 0,
                         cash: 0, bank: 0, card: 0, otaPayouts: 0, pending: 0,
-                        future: 0, unpaid: 0, uncollectible: 0, unknown: 0
+                        future: 0, unpaid: 0, overpaid: 0, uncollectible: 0, unknown: 0
                     });
                 }
                 const b = buckets.get(key);
@@ -1147,6 +1152,7 @@
                 b.pending = roundCurrency(b.pending + r.pending);
                 b.future = roundCurrency(b.future + r.future);
                 b.unpaid = roundCurrency(b.unpaid + r.unpaid);
+                b.overpaid = roundCurrency(b.overpaid + r.overpaid);
                 b.uncollectible = roundCurrency(b.uncollectible + r.uncollectible);
                 b.unknown = roundCurrency(b.unknown + r.unknown);
             });
@@ -1209,7 +1215,7 @@
                 ${moneyCols.map(c => `<th class="py-2 px-2 border-r border-slate-700 text-right ${c.hdrCls || ''}">${c.label}</th>`).join('')}
             </tr>`;
 
-            const grand = { count: 0, nights: 0, gross: 0, fees: 0, net: 0, cash: 0, bank: 0, card: 0, otaPayouts: 0, pending: 0, future: 0, unpaid: 0, uncollectible: 0, unknown: 0 };
+            const grand = { count: 0, nights: 0, gross: 0, fees: 0, net: 0, cash: 0, bank: 0, card: 0, otaPayouts: 0, pending: 0, future: 0, unpaid: 0, overpaid: 0, uncollectible: 0, unknown: 0 };
 
             rBody.innerHTML = sorted.map(b => {
                 grand.count += b.count;
@@ -1220,7 +1226,10 @@
                     <td class="py-1.5 px-2.5 border-r border-slate-200 font-black uppercase text-slate-800">${formatPeriodLabel(b.period)}</td>
                     <td class="py-1.5 px-2 border-r border-slate-200 text-center">${b.count}</td>
                     <td class="py-1.5 px-2 border-r border-slate-200 text-center">${b.nights}</td>
-                    ${moneyCols.map(c => `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${c.key === 'net' ? 'font-black text-emerald-700 bg-emerald-50/60' : ''}">${fmtMoney(b[c.key])}</td>`).join('')}
+                    ${moneyCols.map(c => {
+                        if (c.key === 'overpaid') return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${b.overpaid > 0 ? 'font-black text-purple-700 bg-purple-50' : 'text-slate-300'}">${b.overpaid > 0 ? '-' + fmtMoney(b.overpaid) : '0.00'}</td>`;
+                        return `<td class="py-1.5 px-2 border-r border-slate-200 text-right ${c.key === 'net' ? 'font-black text-emerald-700 bg-emerald-50/60' : ''}">${fmtMoney(b[c.key])}</td>`;
+                    }).join('')}
                 </tr>`;
             }).join('');
 
@@ -1228,7 +1237,10 @@
                 <td class="py-2 px-2.5 border-r border-slate-700 uppercase">Total</td>
                 <td class="py-2 px-2 border-r border-slate-700 text-center">${grand.count}</td>
                 <td class="py-2 px-2 border-r border-slate-700 text-center">${grand.nights}</td>
-                ${moneyCols.map(c => `<td class="py-2 px-2 border-r border-slate-700 text-right ${c.hdrCls || ''}">฿${fmtMoney(grand[c.key])}</td>`).join('')}
+                ${moneyCols.map(c => {
+                    if (c.key === 'overpaid') return `<td class="py-2 px-2 border-r border-slate-700 text-right ${c.hdrCls || ''}">${grand.overpaid > 0 ? '-฿' + fmtMoney(grand.overpaid) : '฿0.00'}</td>`;
+                    return `<td class="py-2 px-2 border-r border-slate-700 text-right ${c.hdrCls || ''}">฿${fmtMoney(grand[c.key])}</td>`;
+                }).join('')}
             </tr>`;
         }
 
