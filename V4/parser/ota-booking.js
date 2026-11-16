@@ -98,6 +98,9 @@ export function parseBookingCom(rawText) {
     const isBdc = lines.some(l => /Booking\.com/i.test(l) || /Booking number/i.test(l) || /Reservation details/i.test(l));
     if (!isBdc) return null;
 
+    // Detect Agoda bookings routed through Booking.com affiliate network
+    const isAgodaAffiliate = /\bagoda\b/i.test(rawText);
+
     let checkIn = '';
     let checkOut = '';
     let pax = 1;
@@ -254,7 +257,7 @@ export function parseBookingCom(rawText) {
         }
     }
 
-    // Payments: canonical BDC payout + commission keys
+    // Payments: Always BDC payout + commission keys because Booking.com settles the payout
     const { payKey, kpKey } = resolveOtaKeys('BDC');
     const payments = [];
     if (isPrepaid && totalPrice > 0 && checkIn) {
@@ -281,7 +284,7 @@ export function parseBookingCom(rawText) {
 
     const noteLines = [
         `--- ORIGINAL OTA BOOKING ---`,
-        `Source: BOOKING.COM`,
+        `Source: ${isAgodaAffiliate ? 'AGODA (via Booking.com)' : 'BOOKING.COM'}`,
         `Book ID: ${bookId}`,
         `Dates: ${checkIn || '--'} to ${checkOut || '--'} (${nights} Night${nights > 1 ? 's' : ''})`,
         `Booked: ${bookedType || '--'}`,
@@ -296,8 +299,8 @@ export function parseBookingCom(rawText) {
     if (specialRequests) noteLines.push(`• Special Request: ${specialRequests}`);
 
     return {
-        source: 'booking.com',
-        ota: 'BDC',
+        source: isAgodaAffiliate ? 'agoda' : 'booking.com',
+        ota: isAgodaAffiliate ? 'AGO' : 'BDC',
         bookId,
         firstName: firstName.toUpperCase(),
         lastName: lastName.toUpperCase(),
