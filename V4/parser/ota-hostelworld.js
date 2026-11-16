@@ -4,6 +4,18 @@
 // ==========================================================================
 
 import { parseFlexibleDate } from './parser-engine.js';
+import { getOtaPaymentPair } from '../core/channels.js';
+
+function resolveOtaKeys(channelCode) {
+    const [defaultPay, defaultKp] = getOtaPaymentPair(channelCode);
+    const configured = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
+    const payEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'revenue');
+    const kpEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'commission');
+    return {
+        payKey: payEntry ? payEntry.key : defaultPay.key,
+        kpKey: kpEntry ? kpEntry.key : defaultKp.key
+    };
+}
 
 const HW_MONTHS = {
     jan: '01', january: '01',
@@ -23,7 +35,6 @@ const HW_MONTHS = {
 function parseHwDate(raw) {
     if (!raw) return '';
     const clean = String(raw).trim();
-    // Matches "17th Nov ´26", "17th Nov '26", "17 Nov 2026"
     const m = clean.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\s*[´'’`′]?\s*(\d{2,4})$/i);
     if (m) {
         const day = m[1].padStart(2, '0');
@@ -57,13 +68,12 @@ export function parseHostelworld(rawText) {
     if (!rawText) return null;
     const text = rawText.replace(/\r/g, '');
 
-    // Signature Check
     const isHw = /hostelworld/i.test(text) || /hw\s*booking\s*ref/i.test(text) || /reference\s*number/i.test(text);
     if (!isHw) return null;
 
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-    // 1. Booking Reference Number (e.g. 339615-581112077)
+    // 1. Booking Reference Number
     let bookId = '';
     let refLineIdx = -1;
     const refLabelIdx = lines.findIndex(l => /^reference(?:\s*(?:number|id|code))?$/i.test(l));
@@ -79,7 +89,7 @@ export function parseHostelworld(rawText) {
         }
     }
 
-    // 2. Guest Name & 3. Country (Extranet lines right below Reference ID, with email label fallback)
+    // 2. Guest Name & 3. Country
     let firstName = '';
     let lastName = 'GUEST';
     let country = '';
@@ -179,7 +189,7 @@ export function parseHostelworld(rawText) {
         nights = Math.max(1, Math.round(ms / 86400000)) || nights;
     }
 
-    // 7. Room Category, Unit Count & Refundability (from Room Details table)
+    // 7. Room Category, Unit Count & Refundability
     let bookedType = '';
     let refundability = 'unknown';
     let unitCount = 1;
@@ -290,13 +300,14 @@ export function parseHostelworld(rawText) {
 
     const explicitNet = balanceDue > 0 ? balanceDue : Number((totalPrice - depositPaid).toFixed(2));
 
-    // 9. Payments: Hostelworld Deposit (hw-kp)
+    // 9. Payments: Hostelworld Deposit = canonical HWL commission key
+    const { kpKey } = resolveOtaKeys('HWL');
     const payments = [];
     if (depositPaid > 0 && checkIn) {
         payments.push({
             date: checkIn,
             amt: depositPaid,
-            method: 'hw-kp'
+            method: kpKey
         });
     }
 
@@ -324,12 +335,13 @@ export function parseHostelworld(rawText) {
         `• Policy: ${refundability.toUpperCase()}`
     ];
     if (country) noteLines.push(`• Nationality: ${country}`);
-    if (depositPaid > 0) noteLines.push(`• Deposit Paid (HW-KP): ฿${depositPaid.toFixed(2)}`);
+    if (depositPaid > 0) noteLines.push(`• Deposit Paid (${kpKey.toUpperCase()}): ฿${depositPaid.toFixed(2)}`);
     if (balanceDue > 0) noteLines.push(`• Arrival Due: ฿${balanceDue.toFixed(2)}`);
     if (specialRequests) noteLines.push(`• Special Request: ${specialRequests}`);
 
     return {
         source: 'hostelworld',
+        ota: 'HWL',
         bookId,
         firstName: firstName.toUpperCase(),
         lastName: lastName.toUpperCase(),
