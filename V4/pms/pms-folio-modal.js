@@ -5,6 +5,7 @@
 
 import { STATUS_CYCLE, getStatusObj, getNextStatus, applyStatusStyle } from '../core/occupancy.js';
 import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { toCanonicalPropId } from '../core/properties.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
@@ -16,10 +17,7 @@ const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
 // --- Active Property ID Resolver ---
-const getPropId = () => {
-    const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
-    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
-};
+const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
 
 // --------------------------------------------------------------------------
 // 1. MODAL WINDOW DRAGGING & DIALOG CONTROLLERS
