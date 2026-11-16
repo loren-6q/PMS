@@ -4,6 +4,10 @@
 // ==========================================================================
 
 import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { roundCurrency, calculatePaxSplit } from '../core/money.js';
+import { isOccupyingBooking } from '../core/occupancy.js';
+import { toCanonicalPropId, resolveRoomCategory } from '../core/properties.js';
+import { getCmStayQuote } from '../cm/cm-ripple.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
@@ -40,7 +44,7 @@ export const calcFinancials = () => {
         }
     });
 
-    const due = Number((tot - pd).toFixed(2));
+    const due = roundCurrency(tot - pd);
     const dC = $('display-due');
     const tC = $('total-price')?.parentElement;
     const pax = parseInt($('pax-count')?.value, 10) || 1;
@@ -51,11 +55,11 @@ export const calcFinancials = () => {
 
     if (pax > 1) {
         if (dC) {
-            dC.title = `Split: ฿${(due / pax).toFixed(2)} each`;
+            dC.title = `Split: ฿${calculatePaxSplit(due, pax).toFixed(2)} each`;
             dC.classList.add('cursor-help', 'border-b-2', 'border-dashed', 'border-red-300');
         }
         if (tC) {
-            tC.title = `Split: ฿${(tot / pax).toFixed(2)} each`;
+            tC.title = `Split: ฿${calculatePaxSplit(tot, pax).toFixed(2)} each`;
             tC.classList.add('cursor-help', 'border-b-2', 'border-dashed', 'border-slate-300');
         }
     } else {
@@ -99,7 +103,7 @@ export const addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
         const currentTot = Number($('total-price')?.value) || 0;
         const currentPaid = Array.from($$('.payment-row')).reduce((s, r) => s + (Number(r.querySelector('.pay-amt')?.value) || 0), 0);
         const due = currentTot - currentPaid;
-        if (due > 0) a = Number(due.toFixed(2));
+        if (due > 0) a = roundCurrency(due);
     }
 
     const paymentOptions = [
@@ -205,8 +209,8 @@ export const confirmAddCharge = () => {
     const chargeObj = {
         id: 'chg_' + Math.random().toString(36).substr(2, 9),
         desc: desc.toUpperCase(),
-        amt: Number(amt.toFixed(2)),
-        date: date
+        amt: roundCurrency(amt),
+        date
     };
 
     if (!Array.isArray(window.activeExtraCharges)) window.activeExtraCharges = [];
@@ -273,75 +277,115 @@ export const renderExtraCharges = () => {
 };
 
 // --------------------------------------------------------------------------
-// 4. STAY EXTENSIONS & RATE CHECK ENGINES
+// 4. STAY EXTENSIONS & CM PRICE CHECK ENGINES
 // --------------------------------------------------------------------------
 
+function resolveExtensionCategories() {
+    const hotelRooms = window.hotelRooms || [];
+    const allRoomTypes = window.roomTypes || [];
+    const assignedRooms = Array.from($$('.assigned-room-select')).map(sel => sel.value.trim()).filter(Boolean);
+
+    if (assignedRooms.length > 0) {
+        return assignedRooms.map(rid => {
+            const hr = hotelRooms.find(r => r.id === rid || String(r.id).toUpperCase() === rid.toUpperCase());
+            const rawCat = hr?.category || hr?.type || $('booked-type')?.value || '';
+            return resolveRoomCategory(rawCat, allRoomTypes) || rawCat || allRoomTypes[0] || '';
+        }).filter(Boolean);
+    }
+
+    const bookedRaw = $('booked-type')?.value || '';
+    const cleanBooked = bookedRaw.includes('(') ? bookedRaw.split('(')[0].trim() : bookedRaw.trim();
+    const matchedCat = resolveRoomCategory(cleanBooked, allRoomTypes)
+        || allRoomTypes.find(rt => cleanBooked && (rt.toLowerCase().includes(cleanBooked.toLowerCase()) || cleanBooked.toLowerCase().includes(rt.toLowerCase())))
+        || allRoomTypes[0]
+        || '';
+
+    if (!matchedCat) return [];
+
+    const sampleRoom = hotelRooms.find(r => (r.category || r.type) === matchedCat && !r.inactive);
+    const isDorm = sampleRoom && !sampleRoom.isPrivate && (sampleRoom.isDorm === true || (sampleRoom.rule && sampleRoom.rule !== 'private') || matchedCat.toLowerCase().includes('dorm'));
+    const unitCount = isDorm ? (parseInt($('pax-count')?.value, 10) || 1) : 1;
+
+    return Array(unitCount).fill(matchedCat);
+}
+
+/**
+ * Auto-checks CM across the extension days for DIR Non-Ref and DEF Event Non-Ref,
+ * and applies the lower of the two options.
+ */
 export const calcExtension = () => {
     const cI = $('check-in')?.value;
     const cO = $('check-out')?.value;
-    const ms = parseYMD(cO) - parseYMD(cI);
-    const avg = ms > 0 ? (Number($('total-price')?.value) || 0) / Math.round(ms / 86400000) : 0;
-    const days = parseInt($('ext-days')?.value, 10) || 1;
-    let xFMP = false;
-
-    const fmpList = window.fmpDates || [];
-    if (cO) {
-        const sD = parseYMD(cO);
-        const eD = sD + (days * 86400000);
-        for (let f of fmpList) {
-            const fT = parseYMD(f);
-            if ((sD <= fT && eD >= fT) || (Math.abs(sD - fT) <= 3 * 86400000) || (Math.abs(eD - fT) <= 3 * 86400000)) {
-                xFMP = true;
-                break;
-            }
-        }
-    }
+    const days = Math.max(1, parseInt($('ext-days')?.value, 10) || 1);
 
     const avgEl = $('ext-avg-rate');
     const prEl = $('ext-price');
-    const bdcBtn = $('btn-check-bdc');
+    const srcLabelEl = $('ext-rate-source-label');
+    const srcBtnEl = $('ext-rate-source-btn');
 
-    if (xFMP) {
-        if (avgEl) {
-            avgEl.value = 'FMP!';
-            avgEl.classList.add('text-pink-600', 'bg-pink-100');
+    const unitCategories = cO ? resolveExtensionCategories() : [];
+    let dirTotal = 0;
+    let dirAllFound = unitCategories.length > 0;
+    let evtTotal = 0;
+    let evtAllFound = unitCategories.length > 0;
+
+    unitCategories.forEach(cat => {
+        const dirQuote = getCmStayQuote({ checkIn: cO, nights: days, roomCategory: cat, planType: 'DIR_NON_REF' });
+        if (dirQuote.complete && dirQuote.total !== null) dirTotal += dirQuote.total;
+        else dirAllFound = false;
+
+        const evtQuote = getCmStayQuote({ checkIn: cO, nights: days, roomCategory: cat, planType: 'DEF_EVT_NON_REF' });
+        if (evtQuote.complete && evtQuote.total !== null) evtTotal += evtQuote.total;
+        else evtAllFound = false;
+    });
+
+    let chosenTotal = null;
+    let sourceTag = 'Fallback Avg';
+    let isEventWinner = false;
+
+    if (dirAllFound && evtAllFound) {
+        if (evtTotal < dirTotal) {
+            chosenTotal = roundCurrency(evtTotal);
+            sourceTag = 'CM: DEF Event Non-Ref';
+            isEventWinner = true;
+        } else {
+            chosenTotal = roundCurrency(dirTotal);
+            sourceTag = 'CM: DIR Non-Ref';
         }
-        if (prEl) {
-            prEl.value = '';
-            prEl.placeholder = 'CHECK RATE ->';
-        }
-        if (bdcBtn) {
-            bdcBtn.classList.replace('bg-slate-200', 'bg-pink-500');
-            bdcBtn.classList.replace('text-slate-700', 'text-white');
-            bdcBtn.classList.add('animate-pulse');
-        }
+    } else if (dirAllFound) {
+        chosenTotal = roundCurrency(dirTotal);
+        sourceTag = 'CM: DIR Non-Ref';
+    } else if (evtAllFound) {
+        chosenTotal = roundCurrency(evtTotal);
+        sourceTag = 'CM: DEF Event Non-Ref';
+        isEventWinner = true;
     } else {
-        if (avgEl) {
-            avgEl.value = Math.round(avg);
-            avgEl.classList.remove('text-pink-600', 'bg-pink-100');
-        }
-        if (prEl) {
-            prEl.value = Math.round(avg * days);
-            prEl.placeholder = '';
-        }
-        if (bdcBtn) {
-            bdcBtn.classList.replace('bg-pink-500', 'bg-slate-200');
-            bdcBtn.classList.replace('text-white', 'text-slate-700');
-            bdcBtn.classList.remove('animate-pulse');
-        }
+        const ms = parseYMD(cO) - parseYMD(cI);
+        const stayNights = ms > 0 ? Math.max(1, Math.round(ms / 86400000)) : 1;
+        const avgFallback = (Number($('total-price')?.value) || 0) / stayNights;
+        chosenTotal = roundCurrency(avgFallback * days);
+        sourceTag = 'CM: No Rate (Stay Avg)';
     }
-};
 
-export const checkBdcPrice = () => {
-    const cO = $('check-out')?.value;
-    if (!cO) return window.customAlert ? window.customAlert("Missing Date", "Please set a check-out date first.") : null;
-    const d = new Date(cO + "T12:00:00Z");
-    d.setUTCDate(d.getUTCDate() + (parseInt($('ext-days')?.value, 10) || 1));
-    const roomCount = Array.from($$('.assigned-room-select')).filter(sel => sel.value !== "").length || 1;
-    const pax = $('pax-count')?.value || 1;
-    const curProp = window.currentPropertyConfig || {};
-    const bdcUrl = curProp.bdcUrl || curProp.website || "https://www.booking.com";
-    window.open(`${bdcUrl}?checkin=${cO}&checkout=${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}&group_adults=${pax}&group_children=0&no_rooms=${roomCount}`, '_blank');
+    const avgDaily = roundCurrency(chosenTotal / days);
+
+    if (avgEl) {
+        avgEl.value = Math.round(avgDaily);
+        avgEl.classList.toggle('text-pink-700', isEventWinner);
+        avgEl.classList.toggle('bg-pink-50', isEventWinner);
+    }
+    if (prEl) {
+        prEl.value = Math.round(chosenTotal);
+        prEl.placeholder = '';
+    }
+    if (srcLabelEl) {
+        srcLabelEl.innerText = sourceTag;
+    }
+    if (srcBtnEl) {
+        srcBtnEl.className = isEventWinner
+            ? 'flex-1 py-1 px-2 bg-pink-100 hover:bg-pink-200 text-pink-800 text-[9.5px] font-black uppercase rounded border border-pink-300 flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer truncate'
+            : 'flex-1 py-1 px-2 bg-white hover:bg-slate-50 text-slate-600 text-[9.5px] font-black uppercase rounded border border-slate-300 flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer truncate';
+    }
 };
 
 export const confirmExtension = async () => {
@@ -352,7 +396,7 @@ export const confirmExtension = async () => {
     const days = parseInt($('ext-days')?.value, 10) || 1;
     const d = new Date(cO + "T12:00:00Z");
     d.setUTCDate(d.getUTCDate() + days);
-    const nCo = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    const nCo = d.toISOString().split('T')[0];
 
     $('check-out').value = nCo;
     const totEl = $('total-price');
@@ -365,8 +409,9 @@ export const confirmExtension = async () => {
         extBtn.className = 'flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border bg-blue-100 text-blue-700 border-blue-400';
     }
 
+    const rateSource = $('ext-rate-source-label')?.innerText || 'CM';
     const todayStr = new Date().toLocaleDateString('en-GB').slice(0, 5);
-    const extMsg = `\n[EXTENDED on ${todayStr}] Added ${days} day(s). Added ฿${aP} to total.`;
+    const extMsg = `\n[EXTENDED on ${todayStr}] Added ${days} day(s) (${rateSource}). Added ฿${aP} to total.`;
     const notesEl = $('guest-notes');
     if (notesEl) notesEl.value = (notesEl.value + extMsg).trim();
 
@@ -381,23 +426,100 @@ export const openPriceCheckModal = () => {
     const d = new Date();
     d.setHours(12, 0, 0, 0);
     const ciEl = $('pc-checkin');
-    if (ciEl) ciEl.value = getLocalYMD(d);
+    if (ciEl && !ciEl.value) ciEl.value = getLocalYMD(d);
     const m = $('price-check-modal');
-    if (m) m.style.display = 'flex';
+    if (m) {
+        m.classList.add('active');
+        m.style.display = 'flex';
+    }
+    runPriceCheck();
 };
 
 export const runPriceCheck = () => {
     const cI = $('pc-checkin')?.value;
-    const n = parseInt($('pc-nights')?.value, 10) || 1;
-    const p = parseInt($('pc-pax')?.value, 10) || 1;
-    if (!cI) return;
-    const d = new Date(cI + "T12:00:00Z");
-    d.setUTCDate(d.getUTCDate() + n);
-    const cO = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-    const curProp = window.currentPropertyConfig || {};
-    const bdcUrl = curProp.bdcUrl || curProp.website || "https://www.booking.com";
-    window.open(`${bdcUrl}?checkin=${cI}&checkout=${cO}&group_adults=${p}&group_children=0&no_rooms=1`, '_blank');
-    if (window.closeModal) window.closeModal('price-check-modal');
+    const n = Math.max(1, parseInt($('pc-nights')?.value, 10) || 1);
+    const pax = Math.max(1, parseInt($('pc-pax')?.value, 10) || 1);
+    const resultsEl = $('pc-results');
+    const datesLabel = $('pc-dates-label');
+    if (!cI || !resultsEl) return;
+
+    const inMs = parseYMD(cI);
+    const outMs = inMs + (n * 86400000);
+    const cO = new Date(outMs).toISOString().split('T')[0];
+
+    if (datesLabel) {
+        datesLabel.innerText = `${cI} → ${cO} (${n} Nt${n > 1 ? 's' : ''} • ${pax} PAX)`;
+    }
+
+    const curProp = toCanonicalPropId(window.currentPropertyId || '');
+    const roomTypes = window.roomTypes || [];
+    const hotelRooms = (window.hotelRooms || []).filter(r => !r.inactive);
+    const staffList = (window.staff || []).filter(s => toCanonicalPropId(s.property) === curProp && isOccupyingBooking(s.status, true));
+
+    if (roomTypes.length === 0) {
+        resultsEl.innerHTML = `<div class="text-center py-4 text-slate-400 font-bold uppercase text-[11px]">No room categories configured.</div>`;
+        return;
+    }
+
+    resultsEl.innerHTML = roomTypes.map(cat => {
+        const quote = getCmStayQuote({ checkIn: cI, nights: n, roomCategory: cat, planType: 'DEF_NON_REF' });
+        const catUnits = hotelRooms.filter(r => (r.category || r.type) === cat);
+        const isDorm = catUnits.some(r => !r.isPrivate && (r.isDorm === true || (r.rule && r.rule !== 'private') || cat.toLowerCase().includes('dorm')));
+        const maxPaxPerUnit = isDorm ? 1 : (parseInt(catUnits[0]?.maxOccupancy || catUnits[0]?.occAdults || 2, 10) || 2);
+        const unitsNeeded = Math.max(1, Math.ceil(pax / maxPaxPerUnit));
+
+        // Count minimum available units across the stay nights
+        let minAvail = catUnits.length;
+        for (let i = 0; i < n; i++) {
+            const dMs = inMs + (i * 86400000);
+            const occCount = catUnits.filter(u =>
+                staffList.some(b => {
+                    const bRooms = Array.isArray(b.rooms) && b.rooms.length ? b.rooms : (b.room ? [b.room] : []);
+                    return bRooms.some(br => String(br).trim().toUpperCase() === String(u.id).trim().toUpperCase())
+                        && dMs >= parseYMD(b.checkIn) && dMs < parseYMD(b.checkOut);
+                })
+            ).length;
+            minAvail = Math.min(minAvail, Math.max(0, catUnits.length - occCount));
+        }
+
+        const badges = [];
+        if (quote.restrictions.stop) badges.push(`<span class="px-1 py-0.2 rounded bg-rose-100 text-rose-700 border border-rose-300 text-[8.5px] font-black uppercase">STOP</span>`);
+        if (quote.restrictions.cta) badges.push(`<span class="px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[8.5px] font-black uppercase">CTA</span>`);
+        if (quote.restrictions.maxMinStay > n) badges.push(`<span class="px-1 py-0.2 rounded bg-indigo-100 text-indigo-700 border border-indigo-300 text-[8.5px] font-black uppercase">Min ${quote.restrictions.maxMinStay}n</span>`);
+
+        const availBadge = minAvail >= unitsNeeded
+            ? `<span class="text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded uppercase">${minAvail} avail</span>`
+            : `<span class="text-[9px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded uppercase">${minAvail} avail (need ${unitsNeeded})</span>`;
+
+        let priceHtml = `<span class="text-slate-400 font-bold text-xs">No CM Rate</span>`;
+        if (quote.complete && quote.total !== null) {
+            const singleUnitTotal = quote.total;
+            const multiUnitTotal = roundCurrency(singleUnitTotal * unitsNeeded);
+            priceHtml = `
+                <div class="text-right leading-tight">
+                    <div class="text-sm font-black text-indigo-700">฿${multiUnitTotal.toLocaleString()}</div>
+                    <div class="text-[9.5px] font-bold text-slate-500">
+                        ${unitsNeeded > 1 ? `${unitsNeeded}× ฿${singleUnitTotal.toLocaleString()} • ` : ''}฿${quote.avgNightly.toLocaleString()}/nt
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="p-2 rounded-lg border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                    <div class="font-black text-xs text-slate-800 truncate">${cat}</div>
+                    <div class="flex items-center gap-1 flex-wrap mt-0.5">
+                        ${availBadge}
+                        ${badges.join('')}
+                    </div>
+                </div>
+                <div class="shrink-0">${priceHtml}</div>
+            </div>
+        `;
+    }).join('');
+
+    if (window.lucide) window.lucide.createIcons();
 };
 
 // --------------------------------------------------------------------------
@@ -416,7 +538,6 @@ window.confirmAddCharge = confirmAddCharge;
 window.removeCharge = removeCharge;
 window.renderExtraCharges = renderExtraCharges;
 window.calcExtension = calcExtension;
-window.checkBdcPrice = checkBdcPrice;
 window.confirmExtension = confirmExtension;
 window.openPriceCheckModal = openPriceCheckModal;
 window.runPriceCheck = runPriceCheck;
