@@ -1,0 +1,1010 @@
+<!-- ==========================================================================
+     tm30.html - Thai Immigration TM30 Queue & Batch XLSX Generator
+     Wild & Wandering Property Management System
+     ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wild &amp; Wandering | TM30 Dashboard</title>
+    <link rel="apple-touch-icon" href="../gfx/WWicon.png">
+    <link rel="icon" type="image/png" href="../gfx/WWicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body class="bg-slate-100 p-0 sm:p-2 h-[100dvh] fixed inset-0 flex flex-col overflow-hidden">
+    <div id="toast-container" class="fixed top-4 right-4 z-[999] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Alert Modal matching Global PMS Theme -->
+    <div id="alert-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800">
+            <div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase flex items-center justify-between text-sm">
+                <span id="alert-header-title">Attention</span>
+                <button type="button" onclick="window.closeAlert()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" size="18"></i></button>
+            </div>
+            <div class="p-6 text-center">
+                <div id="alert-message" class="font-black text-slate-700 leading-tight text-md whitespace-pre-wrap"></div>
+                <div id="alert-actions" class="mt-6 flex gap-2 justify-center">
+                    <button id="alert-cancel" onclick="window.closeAlert()" class="hidden btn-modal bg-slate-200 text-slate-700">Cancel</button>
+                    <button id="alert-confirm" onclick="window.closeAlert()" class="btn-modal bg-blue-600 text-white px-10">Okay</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[1950px]">
+        <!-- UNIFORM TOP NAVBAR -->
+        <header class="bg-white px-2 py-1.5 rounded-none sm:rounded-lg shadow-sm border-b sm:border border-slate-200 mb-1 flex flex-wrap items-center justify-between gap-2 shrink-0 z-50 unselectable w-full">
+            <div class="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+                <div id="connection-dot" class="relative flex h-2.5 w-2.5 shrink-0" title="Connecting...">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                </div>
+
+                <a id="nav-logo-link" href="pms.html" class="flex flex-col min-w-0 mr-1 sm:mr-2 hover:brightness-110 transition-all cursor-pointer">
+                    <img id="brand-logo" src="../gfx/WWicon.png" alt="Wild &amp; Wandering" class="h-8 sm:h-10 object-contain">
+                </a>
+
+                <h1 class="text-base sm:text-lg font-black uppercase tracking-tight text-slate-800 flex items-center gap-1.5">
+                    <i data-lucide="id-card" size="18" class="text-emerald-600"></i> <span id="main-title">TM30 Queue</span>
+                </h1>
+
+                <!-- Dynamic Property Filter Switcher -->
+                <div class="flex items-center bg-slate-100 rounded px-2 py-0.5 border border-slate-300 shadow-inner ml-1 sm:ml-2">
+                    <span class="text-[10px] font-black uppercase text-slate-500 mr-1.5 tracking-wider hidden sm:inline">Property:</span>
+                    <select id="property-filter" onchange="window.setPropFilter(this.value)" class="bg-white font-black text-xs uppercase text-emerald-700 outline-none cursor-pointer border border-slate-300 rounded px-2 py-0.5 shadow-sm">
+                        <option value="ALL">ALL PROPERTIES</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Action Controls & Navigation -->
+            <div class="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar ml-auto">
+                <div id="global-search-container" class="relative shrink-0">
+                    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400"></i>
+                    <input type="text" id="global-search" oninput="window.applyFilters()" placeholder="Search..." class="bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded pl-8 pr-2 py-1 w-28 sm:w-36 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-shadow">
+                </div>
+
+                <button type="button" id="bulk-assign-btn" onclick="window.openBulkAssignModal()" class="hidden btn-action bg-purple-600 hover:bg-purple-700 whitespace-nowrap">
+                    <i data-lucide="layers" class="w-3.5 h-3.5"></i> EDIT
+                </button>
+                <button type="button" id="bulk-delete-btn" onclick="window.confirmBulkDelete()" class="hidden btn-action bg-red-600 hover:bg-red-700 whitespace-nowrap">
+                    <i data-lucide="trash" class="w-3.5 h-3.5"></i> DEL
+                </button>
+                <button type="button" id="send-ext-btn" onclick="window.sendToExtension()" class="hidden btn-action bg-sky-600 hover:bg-sky-700 whitespace-nowrap" title="Copy JSON payload for TM30 browser extension">
+                    <i data-lucide="puzzle" class="w-3.5 h-3.5"></i> EXT
+                </button>
+                <button type="button" id="export-excel-btn" onclick="window.exportToExcel()" class="hidden btn-action bg-emerald-600 hover:bg-emerald-700 whitespace-nowrap" title="Download official Thai Immigration XLSX">
+                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> XLS
+                </button>
+                <button type="button" id="clear-queue-btn" onclick="window.markAllAsFiled()" class="hidden btn-action bg-slate-700 hover:bg-slate-600 border border-slate-500 whitespace-nowrap" title="Mark visible / selected queue items as filed">
+                    <i data-lucide="check-square" class="w-3.5 h-3.5"></i> CLEAR
+                </button>
+                <button type="button" id="toggle-view-btn" onclick="window.toggleView()" class="btn-action bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 whitespace-nowrap">
+                    <i data-lucide="database" class="w-3.5 h-3.5"></i> <span id="toggle-view-text">ARCHIVE</span>
+                </button>
+                <button type="button" onclick="document.getElementById('credentials-modal').classList.add('active')" class="p-1 sm:p-1.5 text-slate-500 hover:text-emerald-600 bg-white border border-slate-200 hover:bg-emerald-50 rounded shadow-sm transition-colors cursor-pointer" title="TM30 Login Credentials">
+                    <i data-lucide="key" class="w-4 h-4 text-emerald-600"></i>
+                </button>
+                <a id="nav-scan-btn" href="scan.html" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer whitespace-nowrap">
+                    <i data-lucide="scan-line" size="14"></i> Scanner
+                </a>
+                <a id="nav-pms-btn" href="pms.html" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded font-black text-xs uppercase flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer whitespace-nowrap">
+                    <i data-lucide="calendar" size="14"></i> Calendar
+                </a>
+            </div>
+        </header>
+
+        <!-- MAIN TABLE AREA -->
+        <main class="flex-1 flex flex-col min-h-0 bg-white border-x sm:border border-slate-300 rounded-none sm:rounded-lg shadow overflow-hidden">
+            <div class="flex-1 overflow-auto bg-slate-50">
+                <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
+                    <thead class="sticky top-0 z-10 bg-slate-200 shadow-sm border-b border-slate-300">
+                        <tr class="text-slate-600 uppercase tracking-wider text-[11px] font-black">
+                            <th class="py-2 px-2 w-8 border-r border-slate-300 text-center bg-slate-300">
+                                <input type="checkbox" id="select-all" onclick="window.toggleSelectAll(this)" title="Select all in view" class="row-checkbox">
+                            </th>
+                            <th class="py-2 px-2 w-16 border-r border-slate-300 text-center">Acts</th>
+                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="window.sortTable('property')">
+                                <div class="flex items-center justify-between">Property <i id="sort-icon-property" data-lucide="arrow-up-down" class="w-3 h-3 text-slate-400 group-hover:text-slate-600"></i></div>
+                            </th>
+                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="window.sortTable('firstName')">
+                                <div class="flex items-center justify-between">First Name <i id="sort-icon-firstName" data-lucide="arrow-up-down" class="w-3 h-3 text-slate-400 group-hover:text-slate-600"></i></div>
+                            </th>
+                            <th class="py-2 px-2 border-r border-slate-300">Middle Name</th>
+                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="window.sortTable('lastName')">
+                                <div class="flex items-center justify-between">Last Name <i id="sort-icon-lastName" data-lucide="arrow-up-down" class="w-3 h-3 text-slate-400 group-hover:text-slate-600"></i></div>
+                            </th>
+                            <th class="py-2 px-2 border-r border-slate-300 text-center">Gender</th>
+                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="window.sortTable('passportNumber')">
+                                <div class="flex items-center justify-between">Passport No. <i id="sort-icon-passportNumber" data-lucide="arrow-up-down" class="w-3 h-3 text-slate-400 group-hover:text-slate-600"></i></div>
+                            </th>
+                            <th class="py-2 px-2 border-r border-slate-300 cursor-pointer hover:bg-slate-300 group select-none transition-colors" onclick="window.sortTable('nationality')">
+                                <div class="flex items-center justify-between">Nationality <i id="sort-icon-nationality" data-lucide="arrow-up-down" class="w-3 h-3 text-slate-400 group-hover:text-slate-600"></i></div>
+                            </th>
+                            <th class="py-2 px-2 border-r border-slate-300">Birth Date</th>
+                            <th class="py-2 px-2 border-r border-slate-300">Check-out</th>
+                            <th class="py-2 px-2 border-r border-slate-300">Phone No.</th>
+                            <th class="py-2 px-2 text-center">PMS Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="bg-white">
+                        <tr>
+                            <td colspan="13" class="text-center py-12 text-slate-400 font-bold uppercase tracking-widest">
+                                <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-3 text-slate-300"></i>
+                                Connecting to TM30 stream...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="bg-slate-100 p-1.5 border-t border-slate-300 flex justify-between items-center shrink-0">
+                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2" id="status-footer">Queue Live</span>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider mr-2" id="status-count">0 Guests</span>
+            </div>
+        </main>
+    </div>
+
+    <!-- Custom Confirm Modal -->
+    <div id="confirm-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm text-center border-2 border-slate-800">
+            <div class="flex justify-center mb-3"><i data-lucide="alert-triangle" class="w-10 h-10 text-red-500"></i></div>
+            <h3 class="text-base font-black text-slate-800 uppercase mb-2">Confirm Deletion</h3>
+            <p id="confirm-text" class="text-sm font-bold text-slate-500 mb-6">Are you sure you want to delete?</p>
+            <div class="flex justify-center gap-2">
+                <button type="button" onclick="window.closeConfirmModal()" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300">Cancel</button>
+                <button type="button" id="confirm-yes-btn" class="btn-modal bg-red-600 hover:bg-red-700 text-white">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Credentials Modal -->
+    <div id="credentials-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm border-2 border-slate-800 flex flex-col overflow-hidden max-h-[90vh]">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm shrink-0">
+                <div class="flex items-center gap-2"><i data-lucide="key" class="w-4 h-4 text-emerald-400"></i> TM30 Credentials</div>
+                <button type="button" onclick="document.getElementById('credentials-modal').classList.remove('active')" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="p-4 space-y-3 overflow-y-auto">
+                <div class="text-center">
+                    <a href="https://tm30.immigration.go.th/" target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-700 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-1 bg-blue-50 py-2 rounded border border-blue-200 transition-colors"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> tm30.immigration.go.th</a>
+                </div>
+                <div id="credentials-list" class="space-y-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Assign Modal -->
+    <div id="bulk-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm border-2 border-slate-800 flex flex-col overflow-hidden">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Bulk Edit Property</div>
+            <div class="p-5 text-center">
+                <p class="text-sm font-bold text-slate-500 mb-3">Assign property to <span id="bulk-count" class="font-black text-slate-800">0</span> selected guests.</p>
+                <select id="bulk-property" class="input-base text-center !text-sm mb-4 font-black uppercase cursor-pointer"></select>
+                <div class="flex justify-center gap-2">
+                    <button type="button" onclick="window.closeBulkAssignModal()" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300">Cancel</button>
+                    <button type="button" id="bulk-apply-btn" onclick="window.applyBulkProperty()" class="btn-modal bg-purple-600 hover:bg-purple-700 text-white">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div id="edit-modal" class="alert-modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md border-2 border-slate-800 flex flex-col overflow-hidden max-h-[90vh]">
+            <div class="bg-slate-900 p-3 text-white font-bold uppercase text-sm flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2"><i data-lucide="user" class="w-4 h-4"></i> Edit Guest Details</div>
+                <button type="button" onclick="window.closeEditModal()" class="text-slate-400 hover:text-white cursor-pointer"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-1">
+                <input type="hidden" id="edit-doc-id">
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="col-span-2">
+                        <label class="label-base">Property Assignment</label>
+                        <select id="edit-property" class="input-base font-black uppercase cursor-pointer"></select>
+                    </div>
+                    <div>
+                        <label class="label-base">First Name <span class="text-red-500">*</span></label>
+                        <input type="text" id="edit-first" class="input-base uppercase">
+                    </div>
+                    <div>
+                        <label class="label-base">Middle Name</label>
+                        <input type="text" id="edit-middle" class="input-base uppercase">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="label-base">Last Name <span class="text-red-500">*</span></label>
+                        <input type="text" id="edit-last" class="input-base uppercase">
+                    </div>
+                    <div>
+                        <label class="label-base">Passport <span class="text-red-500">*</span></label>
+                        <input type="text" id="edit-passport" class="input-base font-mono uppercase">
+                    </div>
+                    <div>
+                        <label class="label-base">Nationality <span class="text-red-500">*</span></label>
+                        <input type="text" id="edit-nationality" class="input-base text-center uppercase">
+                    </div>
+                    <div>
+                        <label class="label-base">Check-out (DD/MM/YYYY)</label>
+                        <input type="text" id="edit-checkout" class="input-base text-center" placeholder="DD/MM/YYYY">
+                    </div>
+                    <div>
+                        <label class="label-base">Phone No.</label>
+                        <input type="text" id="edit-phone" class="input-base">
+                    </div>
+                    <div class="col-span-2 flex gap-2 border-t border-slate-200 pt-3 mt-1">
+                        <div class="flex-1">
+                            <label class="label-base">Day</label>
+                            <input type="text" id="edit-day" class="input-base text-center" placeholder="DD">
+                        </div>
+                        <div class="flex-1">
+                            <label class="label-base">Month</label>
+                            <input type="text" id="edit-month" class="input-base text-center" placeholder="MM">
+                        </div>
+                        <div class="flex-1">
+                            <label class="label-base">Year</label>
+                            <input type="text" id="edit-year" class="input-base text-center" placeholder="YYYY">
+                        </div>
+                        <div class="flex-1">
+                            <label class="label-base">Gender</label>
+                            <input type="text" id="edit-gender" class="input-base text-center uppercase" placeholder="M/F">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-3 bg-slate-100 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+                <button type="button" onclick="window.closeEditModal()" class="btn-modal bg-slate-200 text-slate-700 hover:bg-slate-300 !py-1.5">Cancel</button>
+                <button type="button" onclick="window.saveEdit()" class="btn-modal bg-blue-600 hover:bg-blue-700 text-white !py-1.5 shadow">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { db, appId } from './core/config.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, where, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey } from './core/properties.js';
+        import { showToast, customAlert } from './core/ui-dialogs.js';
+
+        const auth = getAuth(db.app);
+
+        let propertiesCatalog = [];
+        let currentSubmissionsList = [];
+        let historyList = [];
+        let pmsBookings = [];
+        let viewMode = 'queue';
+        let currentPropFilter = 'ALL';
+        let searchTerm = '';
+        let sortCol = 'createdAt';
+        let sortDesc = true;
+        let listenersStarted = false;
+
+        const DEFAULT_TM30_CREDENTIALS = [
+            { id: 'wet_pool', name: 'Wet Pool Party', color: 'text-emerald-600', user: 'pontip031217@gmail.com', pass: 'Pontip@chongkonphuet03' },
+            { id: 'swims_resort', name: 'Swims Resort', color: 'text-blue-600', user: 'maxfriendlyresort@gmail.com', pass: 'Max0838888341!' },
+            { id: 'loud_samui', name: 'LOUD Samui', color: 'text-purple-600', user: 'umairch018@gmail.com', pass: 'Samui123!' }
+        ];
+
+        function renderCredentialsModal(props) {
+            const container = document.getElementById('credentials-list');
+            if (!container) return;
+
+            const merged = [...DEFAULT_TM30_CREDENTIALS];
+            (props || []).forEach(p => {
+                const u = p.tm30User || p.tm30?.username || p.tm30?.user;
+                const pw = p.tm30Pass || p.tm30?.password || p.tm30?.pass;
+                if (!u && !pw) return;
+                const existing = merged.find(m => m.id === p.id);
+                if (existing) {
+                    if (u) existing.user = u;
+                    if (pw) existing.pass = pw;
+                    if (p.name) existing.name = p.name;
+                } else {
+                    merged.push({ id: p.id, name: p.name || p.short, color: 'text-indigo-600', user: u || '', pass: pw || '' });
+                }
+            });
+
+            container.innerHTML = merged.map(c => `
+                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 shadow-sm">
+                    <div class="text-[11px] ${c.color} font-black uppercase tracking-wider mb-2 border-b border-slate-200 pb-1">${c.name}</div>
+                    <div class="flex flex-col gap-1.5 text-xs">
+                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="window.copyText('${c.user.replace(/'/g, "\\'")}', '${c.name} Username copied')">
+                            <span class="text-slate-500 font-bold uppercase text-[10px]">User:</span> <span class="text-slate-700 font-bold">${c.user}</span>
+                        </div>
+                        <div class="flex justify-between items-center hover:bg-white p-1.5 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-200 shadow-sm" onclick="window.copyText('${c.pass.replace(/'/g, "\\'")}', '${c.name} Password copied')">
+                            <span class="text-slate-500 font-bold uppercase text-[10px]">Pass:</span> <span class="text-slate-700 font-bold">${c.pass}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function syncNavigationLinks(filterVal) {
+            const shortKey = (!filterVal || filterVal === 'ALL') ? '' : (toDisplayPropKey(filterVal) || filterVal);
+            const suffix = shortKey ? `?p=${encodeURIComponent(shortKey)}` : '';
+            const pmsBtn = document.getElementById('nav-pms-btn');
+            const logoLink = document.getElementById('nav-logo-link');
+            const scanBtn = document.getElementById('nav-scan-btn');
+            if (pmsBtn) pmsBtn.href = `pms.html${suffix}`;
+            if (logoLink) logoLink.href = `pms.html${suffix}`;
+            if (scanBtn) scanBtn.href = `scan.html${suffix}`;
+        }
+
+        window.closeAlert = () => {
+            const modal = document.getElementById('alert-modal');
+            if (modal) {
+                modal.classList.remove('active');
+                modal.style.display = 'none';
+            }
+        };
+
+        window.showAlert = (msg, isConfirm = false, onConfirm = null) => {
+            customAlert("Attention", msg, isConfirm, onConfirm);
+        };
+
+        window.copyText = async (text, successMsg) => {
+            if (!text) return;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const dummy = document.createElement("textarea");
+                    document.body.appendChild(dummy);
+                    dummy.value = text;
+                    dummy.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(dummy);
+                }
+                showToast("Copied", successMsg, "success");
+            } catch (err) {
+                const dummy = document.createElement("textarea");
+                document.body.appendChild(dummy);
+                dummy.value = text;
+                dummy.select();
+                document.execCommand("copy");
+                document.body.removeChild(dummy);
+                showToast("Copied", successMsg, "success");
+            }
+        };
+
+        window.setPropFilter = (f) => {
+            currentPropFilter = (!f || f === 'ALL') ? 'ALL' : toCanonicalPropId(f);
+            const shortKey = currentPropFilter === 'ALL' ? 'ALL' : (toDisplayPropKey(currentPropFilter) || currentPropFilter);
+            try {
+                if (window.location.protocol !== 'blob:') {
+                    const url = new URL(window.location.href);
+                    if (currentPropFilter === 'ALL') url.searchParams.delete('p');
+                    else url.searchParams.set('p', shortKey);
+                    window.history.replaceState({}, '', url.toString());
+                }
+            } catch (e) {}
+
+            syncNavigationLinks(currentPropFilter);
+            renderCurrentView();
+        };
+
+        function getFilteredSortedList() {
+            let list = (viewMode === 'queue' ? currentSubmissionsList : historyList).filter(g => {
+                if (currentPropFilter === 'ALL') return true;
+                return toCanonicalPropId(g.property) === currentPropFilter;
+            });
+
+            if (searchTerm) {
+                list = list.filter(g =>
+                    (g.firstName || "").toLowerCase().includes(searchTerm) ||
+                    (g.lastName || "").toLowerCase().includes(searchTerm) ||
+                    (g.passportNumber || "").toLowerCase().includes(searchTerm) ||
+                    (g.property || "").toLowerCase().includes(searchTerm) ||
+                    (toDisplayPropKey(g.property) || "").toLowerCase().includes(searchTerm) ||
+                    (g.nationality || "").toLowerCase().includes(searchTerm)
+                );
+            }
+
+            return [...list].sort((a, b) => {
+                let valA = a[sortCol] || "";
+                let valB = b[sortCol] || "";
+                if (sortCol === 'createdAt') {
+                    valA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                    valB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                }
+                if (valA < valB) return sortDesc ? 1 : -1;
+                if (valA > valB) return sortDesc ? -1 : 1;
+                return 0;
+            });
+        }
+
+        function getTargetActionList() {
+            const visibleList = getFilteredSortedList();
+            const checkboxes = document.querySelectorAll('#table-body .row-checkbox:checked');
+            if (checkboxes.length > 0) {
+                const selectedIds = new Set(Array.from(checkboxes).map(cb => cb.value));
+                return visibleList.filter(g => selectedIds.has(g.id));
+            }
+            return visibleList;
+        }
+
+        const startListening = () => {
+            if (listenersStarted) return;
+            listenersStarted = true;
+
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'submissions'), (snapshot) => {
+                const submissions = [];
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    if (data.status !== 'completed' && data.status !== 'failed') {
+                        submissions.push({ id: docSnap.id, ...data });
+                    }
+                });
+                currentSubmissionsList = submissions;
+                if (viewMode === 'queue') renderCurrentView();
+            }, (error) => {
+                console.error("TM30 submissions listener error:", error);
+            });
+
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => {
+                pmsBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderCurrentView();
+            });
+        };
+
+        window.toggleView = async () => {
+            const btnText = document.getElementById('toggle-view-text');
+            const title = document.getElementById('main-title');
+
+            const selectAll = document.getElementById('select-all');
+            if (selectAll) selectAll.checked = false;
+            window.updateBulkActionVisibility();
+
+            if (viewMode === 'queue') {
+                viewMode = 'history';
+                if (btnText) btnText.innerText = "QUEUE";
+                if (title) title.innerText = "TM30 Archive";
+                document.getElementById('status-footer').innerText = "History Archive (Past 300)";
+
+                document.getElementById('table-body').innerHTML = '<tr><td colspan="13" class="text-center py-12 text-slate-400 font-bold uppercase tracking-widest"><i data-lucide="loader-2" class="w-8 h-8 mx-auto mb-3 animate-spin text-blue-500"></i>Loading archive...</td></tr>';
+                if (window.lucide) window.lucide.createIcons();
+
+                try {
+                    const q = query(
+                        collection(db, 'artifacts', appId, 'public', 'data', 'submissions'),
+                        where("status", "==", "completed")
+                    );
+                    const snapshot = await getDocs(q);
+                    historyList = [];
+                    snapshot.forEach(docSnap => historyList.push({ id: docSnap.id, ...docSnap.data() }));
+
+                    historyList.sort((a, b) => {
+                        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                        return timeB - timeA;
+                    });
+
+                    historyList = historyList.slice(0, 300);
+                    renderCurrentView();
+                } catch (e) {
+                    showToast("Error", "Could not load archive history.", "error");
+                    console.error("Archive Load Error:", e);
+                }
+            } else {
+                viewMode = 'queue';
+                if (btnText) btnText.innerText = "ARCHIVE";
+                if (title) title.innerText = "TM30 Queue";
+                document.getElementById('status-footer').innerText = "Queue Live";
+                renderCurrentView();
+            }
+        };
+
+        window.applyFilters = () => {
+            searchTerm = (document.getElementById('global-search')?.value || '').toLowerCase().trim();
+            renderCurrentView();
+        };
+
+        window.sortTable = (col) => {
+            if (sortCol === col) sortDesc = !sortDesc;
+            else { sortCol = col; sortDesc = false; }
+            updateSortIcons();
+            renderCurrentView();
+        };
+
+        const updateSortIcons = () => {
+            const columns = ['property', 'firstName', 'lastName', 'passportNumber', 'nationality'];
+            columns.forEach(c => {
+                const iconEl = document.getElementById(`sort-icon-${c}`);
+                if (iconEl) {
+                    if (sortCol === c) {
+                        iconEl.setAttribute('data-lucide', sortDesc ? 'arrow-down' : 'arrow-up');
+                        iconEl.classList.remove('text-slate-400');
+                        iconEl.classList.add('text-blue-600');
+                    } else {
+                        iconEl.setAttribute('data-lucide', 'arrow-up-down');
+                        iconEl.classList.remove('text-blue-600');
+                        iconEl.classList.add('text-slate-400');
+                    }
+                }
+            });
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        const renderCurrentView = () => {
+            const list = getFilteredSortedList();
+
+            const countEl = document.getElementById('status-count');
+            if (countEl) countEl.innerText = `${list.length} Guest${list.length !== 1 ? 's' : ''}`;
+
+            const extBtn = document.getElementById('send-ext-btn');
+            const excelBtn = document.getElementById('export-excel-btn');
+            const clearBtn = document.getElementById('clear-queue-btn');
+
+            if (list.length > 0) {
+                extBtn?.classList.remove('hidden');
+                excelBtn?.classList.remove('hidden');
+                if (viewMode === 'queue') clearBtn?.classList.remove('hidden');
+                else clearBtn?.classList.add('hidden');
+            } else {
+                extBtn?.classList.add('hidden');
+                excelBtn?.classList.add('hidden');
+                clearBtn?.classList.add('hidden');
+            }
+
+            const masterCheckbox = document.getElementById('select-all');
+            if (masterCheckbox) masterCheckbox.checked = false;
+            window.updateBulkActionVisibility();
+
+            const tbody = document.getElementById('table-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            if (list.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="13" class="text-center py-12 text-slate-400 font-bold uppercase tracking-widest">
+                            <i data-lucide="${viewMode === 'history' || searchTerm ? 'search' : 'check-circle'}" class="w-8 h-8 mx-auto mb-3 opacity-80 ${viewMode === 'history' || searchTerm ? 'text-slate-300' : 'text-emerald-500'}"></i>
+                            ${searchTerm ? 'No results match your search.' : viewMode === 'history' ? 'No historical records found.' : 'Queue is empty. Ready for passports.'}
+                        </td>
+                    </tr>`;
+                if (window.lucide) window.lucide.createIcons();
+                return;
+            }
+
+            list.forEach(guest => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-200 hover:bg-slate-50 transition-colors text-slate-700 text-xs";
+                tr.id = `row-${guest.id}`;
+
+                const actsColumn = viewMode === 'history'
+                    ? `<td class="py-1 px-2 border-r border-slate-200 text-center">
+                        <div class="flex gap-2 items-center justify-center">
+                            <span class="text-[9px] bg-slate-200 text-slate-500 px-1 py-0.5 rounded font-black mt-0.5">FILED</span>
+                            <button type="button" id="del-${guest.id}" onclick="window.deleteGuest('${guest.id}')" class="text-slate-400 hover:text-red-500 transition-colors cursor-pointer" title="Delete"><i data-lucide="trash" class="w-3.5 h-3.5"></i></button>
+                        </div>
+                       </td>`
+                    : `<td class="py-1 px-2 border-r border-slate-200 text-center">
+                        <div class="flex gap-2 items-center justify-center">
+                            <button type="button" onclick="window.openEditModalById('${guest.id}')" class="text-slate-400 hover:text-blue-500 transition-colors cursor-pointer" title="Edit"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                            <button type="button" id="del-${guest.id}" onclick="window.deleteGuest('${guest.id}')" class="text-slate-400 hover:text-red-500 transition-colors cursor-pointer" title="Delete"><i data-lucide="trash" class="w-3.5 h-3.5"></i></button>
+                        </div>
+                       </td>`;
+
+                const dobString = (guest.dobDay && guest.dobMonth && guest.dobYear) ? `${guest.dobDay}/${guest.dobMonth}/${guest.dobYear}` : "";
+
+                // Live PMS Booking Match Indicator
+                let pmsBadge = `<span class="text-[9px] text-slate-400 uppercase font-black">--</span>`;
+                const cleanPass = (guest.passportNumber || '').toUpperCase().replace(/\s/g, '');
+                const gCanonProp = toCanonicalPropId(guest.property);
+                const matched = pmsBookings.find(b => {
+                    if (gCanonProp && toCanonicalPropId(b.property) !== gCanonProp) return false;
+                    return (cleanPass && b.notes && b.notes.includes(cleanPass)) ||
+                           (b.lastName && guest.lastName && b.lastName.toUpperCase() === guest.lastName.toUpperCase() && b.firstName && guest.firstName && b.firstName.toUpperCase().includes(guest.firstName.toUpperCase()));
+                });
+
+                if (matched) {
+                    const roomLabel = (matched.rooms?.length ? matched.rooms.filter(Boolean).join(',') : (matched.room || 'PMS')) || 'PMS';
+                    pmsBadge = `<span class="bg-emerald-100 text-emerald-700 border border-emerald-300 text-[9px] px-1.5 py-0.5 rounded uppercase font-black tracking-wide">&#10003; ${roomLabel}</span>`;
+                } else if (guest.roomNumber) {
+                    pmsBadge = `<span class="bg-blue-50 text-blue-600 border border-blue-200 text-[9px] px-1.5 py-0.5 rounded uppercase font-black">Room ${guest.roomNumber}</span>`;
+                }
+
+                const displayProp = toDisplayPropKey(guest.property) || guest.property || 'UNASSIGNED';
+
+                tr.innerHTML = `
+                    <td class="py-1 px-2 border-r border-slate-200 text-center bg-slate-50">
+                        <input type="checkbox" class="row-checkbox" value="${guest.id}" onchange="window.updateBulkActionVisibility()">
+                    </td>
+                    ${actsColumn}
+                    <td class="py-1 px-2 border-r border-slate-200 font-black text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors" onclick="window.copyText('${displayProp}', 'Property copied')">${displayProp}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${(guest.firstName || '').replace(/'/g, "\\'")}', 'First Name copied')">${guest.firstName || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${(guest.middleName || '').replace(/'/g, "\\'")}', 'Middle Name copied')">${guest.middleName || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${(guest.lastName || '').replace(/'/g, "\\'")}', 'Last Name copied')">${guest.lastName || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-black text-center hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.gender || ''}', 'Gender copied')">${guest.gender || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-mono text-[11px] font-bold text-slate-800 hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.passportNumber || ''}', 'Passport copied')">${guest.passportNumber || '-'}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold text-purple-700 hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.nationality || ''}', 'Nationality copied')">${guest.nationality || '-'}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${dobString}', 'DOB copied')">${dobString}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.checkoutDate || ''}', 'Check-out copied')">${guest.checkoutDate || ''}</td>
+                    <td class="py-1 px-2 border-r border-slate-200 font-bold hover:bg-slate-100 cursor-pointer transition-colors" onclick="window.copyText('${guest.phoneNo || ''}', 'Phone No. copied')">${guest.phoneNo || ''}</td>
+                    <td class="py-1 px-2 text-center">${pmsBadge}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.toggleSelectAll = (masterCheckbox) => {
+            const checkboxes = document.querySelectorAll('#table-body .row-checkbox');
+            checkboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+            window.updateBulkActionVisibility();
+        };
+
+        window.updateBulkActionVisibility = () => {
+            const checkedCount = document.querySelectorAll('#table-body .row-checkbox:checked').length;
+            const assignBtn = document.getElementById('bulk-assign-btn');
+            const delBtn = document.getElementById('bulk-delete-btn');
+
+            if (checkedCount > 0) {
+                assignBtn.classList.remove('hidden');
+                assignBtn.innerHTML = `<i data-lucide="layers" class="w-3 h-3"></i> EDIT (${checkedCount})`;
+
+                delBtn.classList.remove('hidden');
+                delBtn.innerHTML = `<i data-lucide="trash" class="w-3 h-3"></i> DEL (${checkedCount})`;
+                if (window.lucide) window.lucide.createIcons();
+            } else {
+                assignBtn.classList.add('hidden');
+                delBtn.classList.add('hidden');
+            }
+        };
+
+        window.openBulkAssignModal = () => {
+            const checkedCount = document.querySelectorAll('#table-body .row-checkbox:checked').length;
+            if (checkedCount === 0) return;
+            document.getElementById('bulk-count').innerText = checkedCount;
+            document.getElementById('bulk-modal').classList.add('active');
+        };
+
+        window.closeBulkAssignModal = () => { document.getElementById('bulk-modal').classList.remove('active'); };
+
+        window.applyBulkProperty = async () => {
+            const rawProp = document.getElementById('bulk-property')?.value || '';
+            if (!rawProp) {
+                showToast("Error", "Please select a property.", "error");
+                return;
+            }
+            const prop = toCanonicalPropId(rawProp);
+
+            const checkboxes = document.querySelectorAll('#table-body .row-checkbox:checked');
+            const btn = document.getElementById('bulk-apply-btn');
+            const origText = btn.innerText;
+            btn.innerHTML = "Saving...";
+            btn.disabled = true;
+
+            try {
+                const batch = writeBatch(db);
+                checkboxes.forEach(cb => {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'submissions', cb.value);
+                    batch.update(docRef, { property: prop });
+                });
+                await batch.commit();
+
+                checkboxes.forEach(cb => {
+                    const hGuest = historyList.find(g => g.id === cb.value);
+                    if (hGuest) hGuest.property = prop;
+                    const qGuest = currentSubmissionsList.find(g => g.id === cb.value);
+                    if (qGuest) qGuest.property = prop;
+                });
+
+                showToast("Updated", `Assigned ${toDisplayPropKey(prop)} to ${checkboxes.length} guests.`, "success");
+                window.closeBulkAssignModal();
+                const selAll = document.getElementById('select-all');
+                if (selAll) selAll.checked = false;
+                window.updateBulkActionVisibility();
+                renderCurrentView();
+            } catch (e) {
+                console.error(e);
+                showToast("Error", "Could not apply bulk edit.", "error");
+            } finally {
+                btn.innerText = origText;
+                btn.disabled = false;
+            }
+        };
+
+        window.confirmBulkDelete = () => {
+            const checkboxes = document.querySelectorAll('#table-body .row-checkbox:checked');
+            if (checkboxes.length === 0) return;
+
+            document.getElementById('confirm-text').innerText = `Permanently delete ${checkboxes.length} guests?`;
+            document.getElementById('confirm-modal').classList.add('active');
+
+            document.getElementById('confirm-yes-btn').onclick = () => {
+                window.closeConfirmModal();
+                executeBulkDelete(checkboxes);
+            };
+        };
+
+        window.closeConfirmModal = () => {
+            document.getElementById('confirm-modal').classList.remove('active');
+        };
+
+        const executeBulkDelete = async (checkboxes) => {
+            try {
+                const batch = writeBatch(db);
+                const deletedIds = [];
+
+                checkboxes.forEach(cb => {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'submissions', cb.value);
+                    batch.delete(docRef);
+                    deletedIds.push(cb.value);
+                });
+
+                await batch.commit();
+
+                historyList = historyList.filter(g => !deletedIds.includes(g.id));
+                currentSubmissionsList = currentSubmissionsList.filter(g => !deletedIds.includes(g.id));
+
+                showToast("Deleted", `Removed ${checkboxes.length} guests.`, "success");
+                const selAll = document.getElementById('select-all');
+                if (selAll) selAll.checked = false;
+                window.updateBulkActionVisibility();
+                renderCurrentView();
+            } catch (e) {
+                console.error(e);
+                showToast("Error", "Could not delete some guests.", "error");
+            }
+        };
+
+        const deleteTimers = {};
+        window.deleteGuest = async (id) => {
+            const btn = document.getElementById(`del-${id}`);
+            if (deleteTimers[id]) {
+                clearTimeout(deleteTimers[id]);
+                delete deleteTimers[id];
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'submissions', id));
+                    historyList = historyList.filter(g => g.id !== id);
+                    currentSubmissionsList = currentSubmissionsList.filter(g => g.id !== id);
+                    renderCurrentView();
+                    showToast("Deleted", "Guest removed.", "success");
+                } catch (e) {
+                    showToast("Error", "Could not delete.", "error");
+                }
+            } else if (btn) {
+                btn.classList.replace('text-slate-400', 'text-red-500');
+                btn.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>`;
+                if (window.lucide) window.lucide.createIcons();
+                deleteTimers[id] = setTimeout(() => {
+                    delete deleteTimers[id];
+                    btn.classList.replace('text-red-500', 'text-slate-400');
+                    btn.innerHTML = `<i data-lucide="trash" class="w-3.5 h-3.5"></i>`;
+                    if (window.lucide) window.lucide.createIcons();
+                }, 3000);
+            }
+        };
+
+        window.openEditModalById = (id) => {
+            const guest = currentSubmissionsList.find(g => g.id === id) || historyList.find(g => g.id === id);
+            if (!guest) return;
+            document.getElementById('edit-doc-id').value = guest.id;
+            const propSel = document.getElementById('edit-property');
+            const canonProp = toCanonicalPropId(guest.property);
+            if (propSel) propSel.value = canonProp || '';
+            document.getElementById('edit-first').value = guest.firstName || '';
+            document.getElementById('edit-middle').value = guest.middleName || '';
+            document.getElementById('edit-last').value = guest.lastName || '';
+            document.getElementById('edit-passport').value = guest.passportNumber || '';
+            document.getElementById('edit-nationality').value = guest.nationality || '';
+            document.getElementById('edit-checkout').value = guest.checkoutDate || '';
+            document.getElementById('edit-phone').value = guest.phoneNo || '';
+            document.getElementById('edit-day').value = guest.dobDay || '';
+            document.getElementById('edit-month').value = guest.dobMonth || '';
+            document.getElementById('edit-year').value = guest.dobYear || '';
+            document.getElementById('edit-gender').value = guest.gender || '';
+            document.getElementById('edit-modal').classList.add('active');
+        };
+
+        window.closeEditModal = () => { document.getElementById('edit-modal').classList.remove('active'); };
+
+        window.saveEdit = async () => {
+            const id = document.getElementById('edit-doc-id').value;
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'submissions', id);
+            const rawProp = document.getElementById('edit-property')?.value || '';
+            const canonProp = toCanonicalPropId(rawProp);
+
+            try {
+                await updateDoc(docRef, {
+                    property: canonProp,
+                    firstName: document.getElementById('edit-first').value.toUpperCase().trim(),
+                    middleName: document.getElementById('edit-middle').value.toUpperCase().trim(),
+                    lastName: document.getElementById('edit-last').value.toUpperCase().trim(),
+                    passportNumber: document.getElementById('edit-passport').value.toUpperCase().trim(),
+                    nationality: document.getElementById('edit-nationality').value.toUpperCase().trim(),
+                    checkoutDate: document.getElementById('edit-checkout').value.trim(),
+                    phoneNo: document.getElementById('edit-phone').value.trim(),
+                    dobDay: document.getElementById('edit-day').value.trim(),
+                    dobMonth: document.getElementById('edit-month').value.trim(),
+                    dobYear: document.getElementById('edit-year').value.trim(),
+                    gender: document.getElementById('edit-gender').value.toUpperCase().trim()
+                });
+                window.closeEditModal();
+                showToast("Saved", "Guest updated.", "success");
+            } catch (e) {
+                showToast("Error", "Could not save.", "error");
+            }
+        };
+
+        window.markAllAsFiled = async () => {
+            const listToClear = getTargetActionList();
+            if (listToClear.length === 0) return;
+
+            const btn = document.getElementById('clear-queue-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> CLR...`;
+            btn.disabled = true;
+            try {
+                const batch = writeBatch(db);
+                for (const guest of listToClear) {
+                    const dRef = doc(db, 'artifacts', appId, 'public', 'data', 'submissions', guest.id);
+                    batch.update(dRef, { status: 'completed' });
+                }
+                await batch.commit();
+
+                showToast("Cleared", `Moved ${listToClear.length} guest(s) to Archive.`, "success");
+                const searchEl = document.getElementById('global-search');
+                if (searchEl) searchEl.value = '';
+                const selAll = document.getElementById('select-all');
+                if (selAll) selAll.checked = false;
+                window.applyFilters();
+                window.updateBulkActionVisibility();
+            } catch (e) {
+                console.error(e);
+                showToast("Error", "Could not clear.", "error");
+            }
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        window.exportToExcel = () => {
+            const listToExport = getTargetActionList();
+            if (listToExport.length === 0) return showToast("Error", "No guests to export.", "error");
+
+            const headerRow = [
+                "ชื่อ\nFirst Name *",
+                "ชื่อกลาง\nMiddle Name",
+                "นามสกุล\nLast Name",
+                "เพศ\nGender *",
+                "เลขหนังสือเดินทาง\nPassport No. *",
+                "สัญชาติ\nNationality *",
+                "วัน เดือน ปี เกิด\nBirth Date\nDD/MM/YYYY(ค.ศ. / A.D.) \nเช่น 17/06/1985 หรือ 10/00/1985 หรือ 00/00/1985",
+                "วันที่แจ้งออกจากที่พัก\nCheck-out Date\nDD/MM/YYYY(ค.ศ. / A.D.) \nเช่น 14/06/2023",
+                "เบอร์โทรศัพท์\nPhone No."
+            ];
+
+            const dataRows = listToExport.map(g => {
+                const dobString = (g.dobDay && g.dobMonth && g.dobYear) ? `${g.dobDay}/${g.dobMonth}/${g.dobYear}` : "";
+                return [
+                    g.firstName || "",
+                    g.middleName || "",
+                    g.lastName || "",
+                    g.gender || "",
+                    g.passportNumber || "",
+                    g.nationality || "",
+                    dobString,
+                    g.checkoutDate || "",
+                    g.phoneNo || ""
+                ];
+            });
+
+            const worksheet = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
+            worksheet['!cols'] = [
+                { wch: 20 }, { wch: 15 }, { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 15 }
+            ];
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "TM30_Guests");
+
+            const propertyPrefix = (listToExport.length > 0 && listToExport[0].property) ? `${toDisplayPropKey(listToExport[0].property)}_` : "";
+            const dateStr = new Date().toISOString().split('T')[0];
+
+            XLSX.writeFile(workbook, `${propertyPrefix}TM30_Batch_${dateStr}.xlsx`);
+            showToast("Exported", `TM30 XLSX generated for ${listToExport.length} guests.`, "success");
+        };
+
+        window.sendToExtension = async () => {
+            const listToExport = getTargetActionList();
+            if (listToExport.length === 0) return;
+
+            const btn = document.getElementById('send-ext-btn');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> LOAD...`;
+
+            const payload = listToExport.map(guest => ({
+                tm30Payload: true,
+                firstName: guest.firstName || "",
+                middleName: guest.middleName || "",
+                lastName: guest.lastName || "",
+                passport: guest.passportNumber || "",
+                nationality: guest.nationality || "",
+                dobDay: String(guest.dobDay || "").padStart(2, '0'),
+                dobMonth: String(guest.dobMonth || "").padStart(2, '0'),
+                dobYear: String(guest.dobYear || ""),
+                gender: (guest.gender || "M").toUpperCase().charAt(0)
+            }));
+
+            await window.copyText(JSON.stringify(payload), `Loaded ${payload.length} guests for extension.`);
+            btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> Ready`;
+            btn.classList.replace('bg-sky-600', 'bg-emerald-600');
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.classList.replace('bg-emerald-600', 'bg-sky-600');
+                if (window.lucide) window.lucide.createIcons();
+            }, 3000);
+        };
+
+        async function initTm30() {
+            try {
+                if (!auth.currentUser) {
+                    await signInAnonymously(auth);
+                }
+
+                propertiesCatalog = await loadPropertiesCatalog();
+                renderCredentialsModal(propertiesCatalog);
+
+                const filterSelect = document.getElementById('property-filter');
+                const bulkSelect = document.getElementById('bulk-property');
+                const editSelect = document.getElementById('edit-property');
+
+                const propOptionsHtml = propertiesCatalog
+                    .map(p => `<option value="${p.id}">${p.short}</option>`)
+                    .join('');
+
+                if (filterSelect) {
+                    filterSelect.innerHTML = `<option value="ALL">ALL PROPERTIES</option>${propOptionsHtml}`;
+                }
+                if (bulkSelect) {
+                    bulkSelect.innerHTML = propOptionsHtml;
+                }
+                if (editSelect) {
+                    editSelect.innerHTML = `<option value="">-- UNASSIGNED --</option>${propOptionsHtml}`;
+                }
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const pParam = urlParams.get('p');
+                if (pParam && pParam.toUpperCase() !== 'ALL') {
+                    currentPropFilter = toCanonicalPropId(pParam);
+                    if (filterSelect) filterSelect.value = currentPropFilter;
+                } else {
+                    currentPropFilter = 'ALL';
+                }
+
+                syncNavigationLinks(currentPropFilter);
+
+                const dot = document.getElementById('connection-dot');
+                if (dot) {
+                    dot.querySelector('.bg-amber-500')?.classList.replace('bg-amber-500', 'bg-emerald-500');
+                    dot.querySelector('.bg-amber-400')?.classList.replace('bg-amber-400', 'bg-emerald-400');
+                    dot.title = "Online";
+                }
+
+                startListening();
+            } catch (err) {
+                console.error("[TM30 Init Error]:", err);
+                showToast("Connection Error", "Failed to initialize TM30 queue.", "error");
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user && propertiesCatalog.length > 0) {
+                startListening();
+            }
+        });
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initTm30);
+        } else {
+            initTm30();
+        }
+        if (window.lucide) window.lucide.createIcons();
+    </script>
+</body>
+</html>
