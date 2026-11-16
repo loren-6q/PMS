@@ -265,12 +265,17 @@
         import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { ref as storageRef, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
         import { httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
-        import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey, normalizeRoomId } from './core/properties.js';
+        import { loadPropertiesCatalog, toCanonicalPropId, toDisplayPropKey } from './core/properties.js';
         import { isOccupyingBooking } from './core/occupancy.js';
         import { getLocalYMD } from './core/dates.js';
         import { showToast } from './core/ui-dialogs.js';
 
         const auth = getAuth(db.app);
+        const normalizeRoomId = (r) => {
+            if (window.normalizeRoomId) return window.normalizeRoomId(r);
+            if (r === null || r === undefined) return '';
+            return String(r).trim().toUpperCase();
+        };
 
         let currentCompressedBase64 = null;
         let uploadedPhotoUrl = null;
