@@ -3,20 +3,18 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { STATUS_CYCLE, getStatusObj, getNextStatus, applyStatusStyle } from '../core/occupancy.js';
+import { STATUS_CYCLE, isOccupyingBooking } from '../core/occupancy.js';
 import { parseYMD, getLocalYMD } from '../core/dates.js';
-import { toCanonicalPropId } from '../core/properties.js';
+import { toCanonicalPropId, toDisplayPropKey } from '../core/properties.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
 // --- State & Config Accessors ---
-const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
-const getHotelRooms = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
+const getStaff = () => window.staff || [];
+const getHotelRooms = () => window.hotelRooms || [];
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
-
-// --- Active Property ID Resolver ---
 const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
 
 // --------------------------------------------------------------------------
@@ -25,7 +23,6 @@ const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
 
 let isDragging = false, dragOffsetX, dragOffsetY;
 
-// --- Modal Drag Initiator ---
 export const startDrag = e => {
     if (e.target.closest('button, input, select, i, textarea, .multi-state-btn')) return;
     isDragging = true;
@@ -40,24 +37,22 @@ export const startDrag = e => {
     dragOffsetY = e.clientY - r.top;
 };
 
-// --- Modal Drag Move Listener ---
 document.addEventListener('mousemove', e => {
     if (!isDragging) return;
     const m = $('guest-modal-content');
     if (!m) return;
-    let nL = e.clientX - dragOffsetX, nT = e.clientY - dragOffsetY;
+    const nL = e.clientX - dragOffsetX;
+    let nT = e.clientY - dragOffsetY;
     if (nT < 0) nT = 0;
     if (nT > window.innerHeight - 50) nT = window.innerHeight - 50;
     m.style.left = nL + 'px';
     m.style.top = nT + 'px';
 });
 
-// --- Modal Drag Release Listener ---
 document.addEventListener('mouseup', () => {
     if (isDragging) isDragging = false;
 });
 
-// --- Close Main Guest Modal ---
 export const closeGuestModal = () => {
     const m = $('guest-modal');
     if (m) {
@@ -66,7 +61,6 @@ export const closeGuestModal = () => {
     }
 };
 
-// --- Universal Modal Closer ---
 export const closeModal = id => {
     if (id === 'guest-modal') {
         closeGuestModal();
@@ -79,7 +73,6 @@ export const closeModal = id => {
     }
 };
 
-// --- Open Reservation Import Modal ---
 export const openExtractModal = () => {
     const txt = $('parse-textarea');
     if (txt) txt.value = '';
@@ -96,7 +89,6 @@ export const openExtractModal = () => {
 // 2. MODAL UI STATE, ACCORDIONS & MULTI-STATE CONTROLLERS
 // --------------------------------------------------------------------------
 
-// --- Accordion Section Toggle ---
 export const toggleSection = (sectionId, chevronId, forceState = null) => {
     const sec = $(sectionId), icon = $(chevronId);
     if (!sec) return;
@@ -112,17 +104,15 @@ export const toggleSection = (sectionId, chevronId, forceState = null) => {
     }
 };
 
-// --- Audit History Modal Display ---
 export const showAuditHistory = () => {
     const id = $('guest-id')?.value;
-    const staffList = window.staff || [];
-    const s = staffList.find(x => x.id === id);
+    const s = getStaff().find(x => x.id === id);
     if (!s) return;
     const logs = s.auditLog || [];
-    let html = logs.length === 0 
-        ? '<p class="text-slate-400 italic">No history recorded yet.</p>' 
+    const html = logs.length === 0
+        ? '<p class="text-slate-400 italic">No history recorded yet.</p>'
         : logs.slice().reverse().map(l => `<div class="text-left text-xs border-b border-slate-200 pb-2 mb-2"><div class="font-black text-slate-800">${new Date(l.ts).toLocaleString('en-GB')} by ${l.user}</div><div class="text-slate-600">${l.msg}</div></div>`).join('');
-    
+
     const titleEl = $('alert-header-title');
     if (titleEl) titleEl.innerText = `Audit History: ${s.lastName}`;
     const msgEl = $('alert-message');
@@ -158,7 +148,6 @@ export const closeAlert = () => {
     }
 };
 
-// --- Modal Header Name Sync ---
 export const updateHeaderName = () => {
     const fn = $('first-name')?.value.trim().toUpperCase() || '';
     const ln = $('last-name')?.value.trim().toUpperCase() || '';
@@ -166,7 +155,6 @@ export const updateHeaderName = () => {
     if (disp) disp.innerText = `${fn} ${ln}`.trim() || "NEW BOOKING";
 };
 
-// --- OTA Proxy Email Detection & Formatting ---
 export const checkEmailProxy = val => {
     const el = $('email');
     if (!el) return;
@@ -177,7 +165,6 @@ export const checkEmailProxy = val => {
     else if (v.includes('@')) el.classList.add('text-green-600', 'font-black');
 };
 
-// --- Folio Status Cycle Handler ---
 export const cycleStatus = () => {
     const sBtn = $('status-cycle-btn');
     if (!sBtn) return;
@@ -193,7 +180,6 @@ export const cycleStatus = () => {
     if (hiddenInput) hiddenInput.value = nO.val;
 };
 
-// --- Multi-State Lifecycle Button State Setter ---
 export const setMulti = (id, state, labels, classes) => {
     const el = $(id);
     if (!el) return;
@@ -204,7 +190,6 @@ export const setMulti = (id, state, labels, classes) => {
         : `flex-1 unselectable multi-state-btn px-1 py-1.5 rounded text-[10px] font-black uppercase border ${classes[state]}`;
 };
 
-// --- Multi-State Lifecycle Button Cycle Initiator ---
 export const cycleMulti = (el, labels, classes) => {
     if (!el) return;
     let cur = parseInt(el.dataset.state || 0, 10);
@@ -212,7 +197,6 @@ export const cycleMulti = (el, labels, classes) => {
     setMulti(el.id, cur, labels, classes);
 };
 
-// --- Linked Stay Multi-Leg Navigation Stripe ---
 export const renderItineraryStripe = s => {
     const stripe = $('itinerary-stripe');
     if (!stripe) return;
@@ -224,8 +208,7 @@ export const renderItineraryStripe = s => {
 
     const curProp = getPropId();
     const legs = getStaff().filter(x => {
-        const xProp = window.toCanonicalPropId ? window.toCanonicalPropId(x.property) : x.property;
-        return xProp === curProp && x.linkedId === s.linkedId && x.status !== 'cancelled' && x.status !== 'noshow';
+        return toCanonicalPropId(x.property) === curProp && x.linkedId === s.linkedId && x.status !== 'cancelled' && x.status !== 'noshow';
     }).sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
 
     if (legs.length <= 1) {
@@ -274,7 +257,6 @@ export const renderItineraryStripe = s => {
 // 3. DATES, NIGHTS DURATION & PAX CONTROLLER
 // --------------------------------------------------------------------------
 
-// --- Calculate Stay Duration in Nights ---
 export const calcNights = () => {
     const cI = $('check-in')?.value, cO = $('check-out')?.value;
     if (!cI || !cO) return 1;
@@ -282,7 +264,6 @@ export const calcNights = () => {
     return Math.max(1, Math.round(ms / 86400000));
 };
 
-// --- Stay Duration Nights Counter Display ---
 export const updateNightsDisplay = (forcedNights = null) => {
     const n = forcedNights !== null ? forcedNights : calcNights();
     const txtEl = $('nights-count-text');
@@ -294,15 +275,13 @@ export const updateNightsDisplay = (forcedNights = null) => {
     return n;
 };
 
-// --- Retrieve Locked Stay Duration ---
 export const getStoredNights = () => {
     const container = $('booking-nights-display');
-    const n = parseInt(container?.dataset?.nights);
+    const n = parseInt(container?.dataset?.nights, 10);
     if (!isNaN(n) && n >= 1) return n;
     return calcNights();
 };
 
-// --- Date Step Arrow Nudger (-1d / +1d) ---
 export const nudgeDate = (type, deltaDays) => {
     const inEl = $('check-in'), outEl = $('check-out');
     if (!inEl?.value || !outEl?.value) return;
@@ -326,7 +305,6 @@ export const nudgeDate = (type, deltaDays) => {
     if (window.calcExtension) window.calcExtension();
 };
 
-// --- Check-in Picker with Duration Preservation ---
 export const handleCheckInPicker = newCheckIn => {
     if (!newCheckIn) return;
     const lockedNights = getStoredNights();
@@ -338,7 +316,6 @@ export const handleCheckInPicker = newCheckIn => {
     if (window.calcExtension) window.calcExtension();
 };
 
-// --- Check-out Picker with Duration Preservation ---
 export const handleCheckOutPicker = newCheckOut => {
     if (!newCheckOut) return;
     const lockedNights = getStoredNights();
@@ -350,11 +327,10 @@ export const handleCheckOutPicker = newCheckOut => {
     if (window.calcExtension) window.calcExtension();
 };
 
-// --- Guest Count Adjuster (PAX +/-) ---
 export const adjustPax = delta => {
     const el = $('pax-count');
     if (!el) return;
-    let val = Math.max(1, (parseInt(el.value) || 1) + delta);
+    const val = Math.max(1, (parseInt(el.value, 10) || 1) + delta);
     el.value = val;
     if (window.calcFinancials) window.calcFinancials();
     if (window.calcExtension) window.calcExtension();
@@ -364,7 +340,6 @@ export const adjustPax = delta => {
 // 4. ROOM AVAILABILITY & BED SELECTION CONTROLLER
 // --------------------------------------------------------------------------
 
-// --- Occupied Room Set Evaluator for Target Date Range ---
 export const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = null) => {
     const occ = new Set();
     const sU = parseYMD(checkInStr), eU = parseYMD(checkOutStr);
@@ -373,16 +348,11 @@ export const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = nul
 
     getStaff().forEach(s => {
         if (s.id === excludeBookingId) return;
-        const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-        if (sProp !== curProp) return;
+        if (toCanonicalPropId(s.property) !== curProp) return;
 
         const rList = getRooms(s);
         const isUnassigned = rList.length === 0 || rList[0] === "";
-        const isOccupying = window.isOccupyingBooking 
-            ? window.isOccupyingBooking(s.status, isUnassigned)
-            : (s.status !== 'cancelled' && s.status !== 'noshow');
-
-        if (!isOccupying) return;
+        if (!isOccupyingBooking(s.status, isUnassigned)) return;
 
         if (sU < parseYMD(s.checkOut) && parseYMD(s.checkIn) < eU) {
             rList.forEach(r => {
@@ -393,7 +363,6 @@ export const getOccupiedRooms = (checkInStr, checkOutStr, excludeBookingId = nul
     return occ;
 };
 
-// --- Refresh Dropdown Options with (OCCUPIED) & Sibling (SELECTED) Guards ---
 export const updateAvailableRooms = () => {
     const cI = $('check-in')?.value, cO = $('check-out')?.value, cId = $('guest-id')?.value;
     if (!cI || !cO) return;
@@ -429,10 +398,9 @@ export const updateAvailableRooms = () => {
     });
 };
 
-// --- Add Assigned Room Selector Row with Dorm Dividers ---
 export function addRoomSelect(val = "", isManualAdd = false) {
     if (arguments.length === 0) isManualAdd = true;
-    
+
     const c = $('assigned-rooms-container');
     if (!c) return;
     const w = document.createElement('div');
@@ -457,7 +425,7 @@ export function addRoomSelect(val = "", isManualAdd = false) {
 
         const classifyFn = window.classifyRoomForCalendar || (rm => {
             const isDorm = !rm.isPrivate && (rm.isDorm === true || (rm.rule && rm.rule !== 'private') || (rm.category || '').toLowerCase().includes('dorm'));
-            let baseRoom = rm.parentRoom || (rm.id.includes('№') ? rm.id.split('№')[0].trim() : rm.id.replace(/\d+$/, '').trim());
+            const baseRoom = rm.parentRoom || (rm.id.includes('№') ? rm.id.split('№')[0].trim() : rm.id.replace(/\d+$/, '').trim());
             return { isDorm, baseRoom };
         });
 
@@ -494,11 +462,12 @@ export function addRoomSelect(val = "", isManualAdd = false) {
     } else {
         sel.value = "";
     }
+
     const del = document.createElement('button');
     del.type = "button";
     del.className = "w-6 flex justify-center items-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 flex-shrink-0 shadow-sm transition-colors cursor-pointer";
     del.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>`;
-    
+
     del.onclick = () => {
         w.remove();
         if (c.children.length === 0) {
@@ -517,7 +486,6 @@ export function addRoomSelect(val = "", isManualAdd = false) {
 // 5. GUEST FOLIO MODAL INGESTION & DISPLAY ENGINE
 // --------------------------------------------------------------------------
 
-// --- Populate & Open Guest Folio Modal ---
 export const openGuestModal = (s = {}) => {
     const isN = !s.id;
     const f = $('guest-form');
@@ -562,10 +530,9 @@ export const openGuestModal = (s = {}) => {
         }
     }
 
-    let pSt = s.status || "future";
+    const pSt = s.status || "future";
     if ($('guest-status-hidden')) $('guest-status-hidden').value = pSt;
-    const cycle = window.STATUS_CYCLE || [];
-    const sObj = cycle.find(x => x.val === pSt) || cycle[1] || { val: 'future', bg: '#7fc6f5', txt: '#1e293b' };
+    const sObj = STATUS_CYCLE.find(x => x.val === pSt) || STATUS_CYCLE[1] || { val: 'future', bg: '#7fc6f5', txt: '#1e293b' };
     const sBtn = $('status-cycle-btn');
     if (sBtn) {
         sBtn.dataset.value = sObj.val;
@@ -576,12 +543,12 @@ export const openGuestModal = (s = {}) => {
 
     if ($('net-price')) $('net-price').dataset.override = s.netOverride ? 'true' : 'false';
     if ($('assigned-rooms-container')) $('assigned-rooms-container').innerHTML = '';
-    
+
     const rL = getRooms(s).length ? getRooms(s) : (isN ? [] : [""]);
-    if (rL.length > 0) { 
-        rL.forEach(r => addRoomSelect(r, false)); 
-    } else { 
-        addRoomSelect("", false); 
+    if (rL.length > 0) {
+        rL.forEach(r => addRoomSelect(r, false));
+    } else {
+        addRoomSelect("", false);
     }
 
     if ($('payments-list')) $('payments-list').innerHTML = '';
@@ -618,12 +585,11 @@ export const openGuestModal = (s = {}) => {
 
     renderItineraryStripe(s);
 
-['delete-btn', 'split-btn', 'merge-btn', 'dup-btn', 'hist-btn', 'invoice-btn'].forEach(id => {
+    ['delete-btn', 'split-btn', 'merge-btn', 'dup-btn', 'hist-btn', 'invoice-btn'].forEach(id => {
         const el = $(id);
         if (el) el.style.visibility = isN ? 'hidden' : 'visible';
     });
-    
-    // --- Early Checkout Action Button Controller in #NTS Box ---
+
     const earlyBtn = $('early-out-btn');
     const todayStr = getLocalYMD(new Date());
     if (earlyBtn) {
@@ -633,7 +599,7 @@ export const openGuestModal = (s = {}) => {
             earlyBtn.innerHTML = `<i data-lucide="rotate-ccw" class="!w-2.5 !h-2.5"></i><span>UNDO</span>`;
             earlyBtn.style.display = 'flex';
             earlyBtn.onclick = () => window.undoEarlyCheckout && window.undoEarlyCheckout();
-        } else if (!isN && s.checkOut > todayStr && window.isOccupyingBooking && window.isOccupyingBooking(s.status, true)) {
+        } else if (!isN && s.checkOut > todayStr && isOccupyingBooking(s.status, true)) {
             earlyBtn.title = "Check Out Early";
             earlyBtn.className = "absolute right-1 px-1.5 py-0.5 bg-amber-700 hover:bg-amber-800 text-white rounded font-black text-[9px] uppercase shadow-xs flex items-center gap-0.5 cursor-pointer";
             earlyBtn.innerHTML = `<i data-lucide="log-out" class="!w-2.5 !h-2.5"></i><span>OUT</span>`;
@@ -644,13 +610,18 @@ export const openGuestModal = (s = {}) => {
             earlyBtn.style.display = 'none';
         }
     }
-    
+
     const userEmail = (window.currentUserEmail || 'admin').toUpperCase();
     if ($('audit-log')) {
         $('audit-log').innerText = isN ? `NEW RECORD | CREATING AS ${userEmail}` : `CREATED BY ${s.createdBy || 'UNKNOWN'} ON ${s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-GB').slice(0, 5) : '--'}` + (s.lastEditedBy ? ` | LAST EDIT: ${s.lastEditedBy} ON ${new Date(s.lastEditedAt).toLocaleDateString('en-GB').slice(0, 5)}` : '');
     }
 
-   const modal = $('guest-modal');
+    if (window.currentUserRole === 'staff') {
+        ['delete-btn', 'split-btn', 'merge-btn'].forEach(id => { if ($(id)) $(id).style.visibility = 'hidden'; });
+        if ($('save-btn')) $('save-btn').style.display = 'none';
+    }
+
+    const modal = $('guest-modal');
     if (modal) {
         modal.classList.add('active');
         modal.style.display = 'flex';
@@ -658,13 +629,11 @@ export const openGuestModal = (s = {}) => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-// --- Edit Booking Entry Point ---
 export const editStaff = id => {
     const s = getStaff().find(x => x.id === id);
     if (s) openGuestModal(s);
 };
 
-// --- Quick Add from Timeline Cell Click ---
 export const quickAdd = (r, d) => {
     openGuestModal({});
     if ($('check-in')) $('check-in').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -676,10 +645,9 @@ export const quickAdd = (r, d) => {
     addRoomSelect(r, false);
 
     const curProp = getPropId();
-    const pCode = (window.toDisplayPropKey ? window.toDisplayPropKey(curProp) : '') || 'PROP';
+    const pCode = toDisplayPropKey(curProp) || 'PROP';
     const directBookings = getStaff().filter(s => {
-        const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-        return sProp === curProp && s.bookId && s.bookId.startsWith(pCode);
+        return toCanonicalPropId(s.property) === curProp && s.bookId && s.bookId.startsWith(pCode);
     }).sort((a, b) => {
         const numA = parseInt(a.bookId.replace(pCode, ''), 10) || 0;
         const numB = parseInt(b.bookId.replace(pCode, ''), 10) || 0;
@@ -694,9 +662,6 @@ export const quickAdd = (r, d) => {
     updateAvailableRooms();
     if (window.calcExtension) window.calcExtension();
 };
-
-
-
 
 // --------------------------------------------------------------------------
 // 6. GLOBAL WINDOW EXPORTS
@@ -728,5 +693,3 @@ window.renderItineraryStripe = renderItineraryStripe;
 window.openGuestModal = openGuestModal;
 window.editStaff = editStaff;
 window.quickAdd = quickAdd;
-
-
