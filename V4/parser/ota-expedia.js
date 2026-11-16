@@ -4,6 +4,18 @@
 // ==========================================================================
 
 import { parseFlexibleDate } from './parser-engine.js';
+import { getOtaPaymentPair } from '../core/channels.js';
+
+function resolveOtaKeys(channelCode) {
+    const [defaultPay, defaultKp] = getOtaPaymentPair(channelCode);
+    const configured = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
+    const payEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'revenue');
+    const kpEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'commission');
+    return {
+        payKey: payEntry ? payEntry.key : defaultPay.key,
+        kpKey: kpEntry ? kpEntry.key : defaultKp.key
+    };
+}
 
 export function parseExpedia(rawText) {
     if (!rawText) return null;
@@ -12,7 +24,7 @@ export function parseExpedia(rawText) {
     const isExpedia = /expedia/i.test(text) || /partner\s*central/i.test(text) || /itinerary\s*number/i.test(text);
     if (!isExpedia) return null;
 
-    // 1. Itinerary Number (Typically 11-13 digits)
+    // 1. Itinerary Number
     const idMatch = text.match(/(?:itinerary\s*number|itinerary|booking\s*id)[\s:#]*([0-9]{10,15})/i) ||
                     text.match(/\b([0-9]{11,13})\b/);
     const bookId = idMatch ? idMatch[1].trim() : '';
@@ -62,7 +74,7 @@ export function parseExpedia(rawText) {
         unitCount = pax;
     }
 
-    // 7. Pricing & Payout Rules (Expedia Collect vs Hotel Collect)
+    // 7. Pricing & Payout Rules
     let totalPrice = 0;
     let explicitNet = null;
     let commissionAmt = 0;
@@ -103,19 +115,20 @@ export function parseExpedia(rawText) {
         refundability = 'ref';
     }
 
-    // 10. Payments: Expedia Collect = expedia-pay (net) + expedia-kp (commission)
+    // 10. Payments: Expedia Collect = canonical EXP payout + commission keys
+    const { payKey, kpKey } = resolveOtaKeys('EXP');
     const payments = [];
     if (isExpediaCollect && totalPrice > 0 && checkIn) {
         payments.push({
             date: checkIn,
             amt: explicitNet !== null ? explicitNet : totalPrice,
-            method: 'expedia-pay'
+            method: payKey
         });
         if (commissionAmt > 0) {
             payments.push({
                 date: checkIn,
                 amt: commissionAmt,
-                method: 'expedia-kp'
+                method: kpKey
             });
         }
     }
@@ -163,6 +176,7 @@ export function parseExpedia(rawText) {
 
     return {
         source: 'expedia',
+        ota: 'EXP',
         bookId,
         firstName: firstName.toUpperCase(),
         lastName: lastName.toUpperCase(),
