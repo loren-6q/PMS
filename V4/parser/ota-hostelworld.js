@@ -214,8 +214,8 @@ export function parseHostelworld(rawText) {
                 .trim();
 
             const firstDateRows = roomRows.filter(r => r.date === roomRows[0].date);
-            const isDorm = /dorm|bed|bunk/i.test(bookedType);
-            unitCount = isDorm ? Math.max(pax, firstDateRows.length) : Math.max(1, firstDateRows.length);
+            const rowPersons = firstDateRows.reduce((sum, r) => sum + (r.persons || 0), 0);
+            unitCount = Math.max(1, firstDateRows.length, rowPersons || pax);
         }
     }
 
@@ -226,9 +226,8 @@ export function parseHostelworld(rawText) {
                 .replace(/\s*[-–—]?\s*\b(?:non-?refundable|refundable|free\s*cancellation|flexible(?:\s*rate)?|standard\s*rate)\b\s*$/i, '')
                 .trim();
         }
-        unitCount = /dorm|bed|bunk/i.test(bookedType) ? pax : 1;
+        unitCount = Math.max(1, pax);
     }
-
     if (refundability === 'unknown') {
         if (/non-?refundable/i.test(text)) refundability = 'non-ref';
         else if (/\bfree\s*cancellation|flexible\b/i.test(text)) refundability = 'ref';
