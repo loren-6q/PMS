@@ -10,7 +10,7 @@ import { resolveRoomCategory } from '../core/properties.js';
 
 export function applyMath(baseVal, type, modifier, isReverse = false) {
     if (baseVal === "" || baseVal == null || isNaN(parseFloat(baseVal))) return "";
-    let val = parseFloat(baseVal);
+    const val = parseFloat(baseVal);
     let mod = parseFloat(modifier);
     if (isNaN(mod)) mod = 0;
 
@@ -32,6 +32,112 @@ export function applyMath(baseVal, type, modifier, isReverse = false) {
 
 export { getNearestEvent };
 
+/**
+ * Resolves a single night's CM rate for a room category.
+ * planType: 'DEF_NON_REF' | 'DIR_NON_REF' | 'DEF_EVT_NON_REF'
+ */
+export function getCmNightRate(dateStr, roomCategory, planType = 'DEF_NON_REF') {
+    const timeline = window.masterPricing?.timeline || {};
+    const dayObj = timeline[dateStr] || {};
+    const allRooms = window.roomTypes || [];
+    const canonicalRoom = resolveRoomCategory(roomCategory, allRooms) || roomCategory;
+    const roomObj = dayObj[canonicalRoom] || {};
+
+    if (planType === 'DEF_EVT_NON_REF') {
+        if (window.enableEventRates === false) return null;
+        if (roomObj.fmp === undefined || roomObj.fmp === "" || isNaN(parseFloat(roomObj.fmp))) return null;
+        return roundCurrency(parseFloat(roomObj.fmp));
+    }
+
+    if (roomObj.std === undefined || roomObj.std === "" || isNaN(parseFloat(roomObj.std))) return null;
+    let computed = parseFloat(roomObj.std);
+
+    if (planType === 'DIR_NON_REF') {
+        const rulesList = window.pricingRules?.channelRules || [];
+        let rule = rulesList.find(r => resolveChannelCode(r.code) === 'WEB')
+                || window.pricingRules?.channels?.['WEB']
+                || window.pricingRules?.channels?.['DIR']
+                || window.pricingRules?.channels?.['DIRECT'];
+
+        if (!rule) {
+            const legacyDirPct = parseFloat(window.pricingRules?.directDiscountPct ?? window.pricingRules?.webDiscountPct);
+            if (!isNaN(legacyDirPct) && legacyDirPct !== 0) {
+                rule = { op: '-%', val: Math.abs(legacyDirPct) };
+            }
+        }
+
+        if (rule) {
+            const op = rule.op || rule.type || 'sync';
+            const val = rule.val ?? (rule.markupPct || 0);
+            computed = applyMath(computed, op, val);
+        }
+    }
+
+    return roundCurrency(computed);
+}
+
+/**
+ * Computes a multi-night stay quote and restriction summary from CM timeline data.
+ */
+export function getCmStayQuote({ checkIn, nights = 1, roomCategory, planType = 'DEF_NON_REF' } = {}) {
+    const startMs = parseYMD(checkIn);
+    const numNights = Math.max(1, parseInt(nights, 10) || 1);
+    if (!startMs || !roomCategory) {
+        return {
+            complete: false,
+            nights: numNights,
+            foundNights: 0,
+            total: null,
+            avgNightly: null,
+            nightly: [],
+            restrictions: { stop: false, cta: false, maxMinStay: 0 }
+        };
+    }
+
+    const timeline = window.masterPricing?.timeline || {};
+    const allRooms = window.roomTypes || [];
+    const canonicalRoom = resolveRoomCategory(roomCategory, allRooms) || roomCategory;
+
+    let total = 0;
+    let foundNights = 0;
+    const nightly = [];
+    let stop = false;
+    let cta = false;
+    let maxMinStay = 0;
+
+    for (let i = 0; i < numNights; i++) {
+        const dStr = new Date(startMs + (i * 86400000)).toISOString().split('T')[0];
+        const rate = getCmNightRate(dStr, canonicalRoom, planType);
+        const dayRoom = timeline[dStr]?.[canonicalRoom] || {};
+        const globalObj = timeline[dStr]?.GLOBAL || {};
+
+        if (dayRoom.stop || globalObj.stop) stop = true;
+        if (i === 0 && (dayRoom.cta || globalObj.cta)) cta = true;
+        const mStay = parseInt(dayRoom.min_arr || dayRoom.min || globalObj.min_arr || globalObj.min || 0, 10) || 0;
+        if (mStay > maxMinStay) maxMinStay = mStay;
+
+        nightly.push({ date: dStr, rate });
+        if (rate !== null && !isNaN(rate)) {
+            total += rate;
+            foundNights++;
+        }
+    }
+
+    const complete = foundNights === numNights;
+    const roundedTotal = complete ? roundCurrency(total) : null;
+    const avgNightly = complete ? roundCurrency(roundedTotal / numNights) : null;
+
+    return {
+        complete,
+        nights: numNights,
+        foundNights,
+        total: roundedTotal,
+        avgNightly,
+        nightly,
+        restrictions: { stop, cta, maxMinStay }
+    };
+}
+
 export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     if (!ratePlan) return null;
     const dayObj = (window.masterPricing && window.masterPricing.timeline) ? (window.masterPricing.timeline[dateStr] || {}) : {};
@@ -42,7 +148,7 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     const isRefPolicy = (ratePlan.policy === 'ref') || (/ref|refundable/i.test(ratePlan.ratePlanTitle || '') && !/non-?ref/i.test(ratePlan.ratePlanTitle || ''));
 
     // 1. Base Rate
-    let basePrice = (isEvtProduct && isEvents && roomObj.fmp !== undefined && roomObj.fmp !== "")
+    const basePrice = (isEvtProduct && isEvents && roomObj.fmp !== undefined && roomObj.fmp !== "")
         ? roomObj.fmp
         : roomObj.std;
 
@@ -78,13 +184,13 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
         const rType = (isEvtProduct && isEvents)
             ? (window.pricingRules?.evtRefType || '+%')
             : (window.pricingRules?.stdRefType || '+%');
-        const rVal = (isEvtProduct && isEvents) 
-            ? (window.pricingRules?.evtRefVal ?? window.pricingRules?.evtRefundableMarkup ?? 25) 
+        const rVal = (isEvtProduct && isEvents)
+            ? (window.pricingRules?.evtRefVal ?? window.pricingRules?.evtRefundableMarkup ?? 25)
             : (window.pricingRules?.stdRefVal ?? window.pricingRules?.stdRefundableMarkup ?? 25);
         computed = applyMath(computed, rType, rVal);
     }
 
-    // 4. OTA Promo Margin Preserver (Bookable Window + Lead Time + Exclusions + Two-Bucket Stacking)
+    // 4. OTA Promo Margin Preserver
     const { multiplier } = evaluatePromoStack(dateStr, chanCode, room);
     computed *= multiplier;
 
@@ -271,6 +377,8 @@ export function rippleDay(dateStr, startRoom, forceRipple = false, scope = 'both
 if (typeof window !== 'undefined') {
     window.applyMath = applyMath;
     window.getNearestEvent = getNearestEvent;
+    window.getCmNightRate = getCmNightRate;
+    window.getCmStayQuote = getCmStayQuote;
     window.computeDynamicPlanRate = computeDynamicPlanRate;
     window.evaluatePromoStack = evaluatePromoStack;
     window.rippleDay = rippleDay;
