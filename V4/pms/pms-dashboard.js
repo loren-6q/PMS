@@ -9,9 +9,10 @@ import { getLocalYMD } from '../core/dates.js';
 import { toCanonicalPropId } from '../core/properties.js';
 import { getStatusObj } from '../core/occupancy.js';
 import { getDue } from '../core/money.js';
+import { getCmStayQuote } from '../cm/cm-ripple.js';
 
 // --- DOM Selector Helper ---
-const \$ = id => document.getElementById(id);
+const $ = id => document.getElementById(id);
 
 // --------------------------------------------------------------------------
 // 1. DAILY OVERVIEW & OPERATIONS DASHBOARD RENDERER
@@ -19,7 +20,7 @@ const \$ = id => document.getElementById(id);
 
 export const renderDashboard = () => {
     const todayStr = getLocalYMD(new Date());
-    const dateEl = \$('dash-date-display');
+    const dateEl = $('dash-date-display');
     if (dateEl) dateEl.innerText = todayStr;
 
     const arr = [], dep = [], stay = [], act = [];
@@ -65,21 +66,25 @@ export const renderDashboard = () => {
         }
     });
 
-    if ($('dash-arr-count'))$('dash-arr-count').innerText = arr.length;
-    if ($('dash-arr-list'))$('dash-arr-list').innerHTML = arr.length ? arr.join('') : '<div class="text-slate-400 italic text-center py-2">No arrivals</div>';
-    if ($('dash-dep-count'))$('dash-dep-count').innerText = dep.length;
-    if ($('dash-dep-list'))$('dash-dep-list').innerHTML = dep.length ? dep.join('') : '<div class="text-slate-400 italic text-center py-2">No departures</div>';
-    if ($('dash-stay-count'))$('dash-stay-count').innerText = stay.length;
-    if ($('dash-stay-list'))$('dash-stay-list').innerHTML = stay.length ? stay.join('') : '<div class="text-slate-400 italic text-center py-2">No stay-overs</div>';
-    if ($('dash-act-list'))$('dash-act-list').innerHTML = act.length ? act.join('') : '<div class="text-green-500 font-black text-center py-2"><i data-lucide="check-circle" size="14" class="inline"></i> All clear!</div>';
+    if ($('dash-arr-count')) $('dash-arr-count').innerText = arr.length;
+    if ($('dash-arr-list')) $('dash-arr-list').innerHTML = arr.length ? arr.join('') : '<div class="text-slate-400 italic text-center py-2">No arrivals</div>';
+    if ($('dash-dep-count')) $('dash-dep-count').innerText = dep.length;
+    if ($('dash-dep-list')) $('dash-dep-list').innerHTML = dep.length ? dep.join('') : '<div class="text-slate-400 italic text-center py-2">No departures</div>';
+    if ($('dash-stay-count')) $('dash-stay-count').innerText = stay.length;
+    if ($('dash-stay-list')) $('dash-stay-list').innerHTML = stay.length ? stay.join('') : '<div class="text-slate-400 italic text-center py-2">No stay-overs</div>';
+    if ($('dash-act-list')) $('dash-act-list').innerHTML = act.length ? act.join('') : '<div class="text-green-500 font-black text-center py-2"><i data-lucide="check-circle" size="14" class="inline"></i> All clear!</div>';
 
+    // Today's CM DIR Non-Ref Rates Card (1-day default; extendable to 2-, 3-, 4-day rates)
     let rHtml = '';
     const roomTypes = window.roomTypes || [];
-    const dailyRates = window.dailyRates || {};
     roomTypes.forEach(t => {
-        if (dailyRates[t]) rHtml += `<div class="flex justify-between py-1 border-b border-indigo-100 last:border-0"><span class="truncate pr-2">${t}</span><span>฿${dailyRates[t]}</span></div>`;
+        const quote = getCmStayQuote({ checkIn: todayStr, nights: 1, roomCategory: t, planType: 'DIR_NON_REF' });
+        const priceLabel = quote.complete && quote.total !== null
+            ? `฿${quote.total.toLocaleString()}`
+            : `<span class="text-slate-400 font-bold">--</span>`;
+        rHtml += `<div class="flex justify-between items-center py-1 border-b border-indigo-100 last:border-0"><span class="truncate pr-2">${t}</span><span>${priceLabel}</span></div>`;
     });
-    if ($('dash-rates-list'))$('dash-rates-list').innerHTML = rHtml || '<span class="text-slate-400 italic text-center mt-4">No rates loaded for today.</span>';
+    if ($('dash-rates-list')) $('dash-rates-list').innerHTML = rHtml || '<span class="text-slate-400 italic text-center mt-2">No room categories configured.</span>';
     if (window.lucide) window.lucide.createIcons();
 };
 
