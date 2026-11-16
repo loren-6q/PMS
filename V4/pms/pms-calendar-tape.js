@@ -115,7 +115,7 @@ export const handleSearch = v => {
     });
     if (term && m.length > 0) {
         jb?.classList.replace('hidden', 'flex');
-        if (mc) mc.innerText = `Match ${window.searchMatchIndex + 1} of ${m.length}`;
+        if (mc) mc.innerText = `${window.searchMatchIndex + 1} of ${m.length}`;
     } else {
         jb?.classList.replace('flex', 'hidden');
     }
@@ -167,7 +167,7 @@ export const jumpToSearchMatch = () => {
         }
         window.searchMatchIndex = idx + 1;
         const mc = $('match-counter');
-        if (mc) mc.innerText = `Match ${idx + 1} of ${m.length}`;
+        if (mc) mc.innerText = `${idx + 1} of ${m.length}`;
         if (window.render) window.render();
     }
 };
