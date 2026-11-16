@@ -27,7 +27,7 @@ window.searchMatchIndex = searchMatchIndex;
 const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
 const getPropId = () => {
     const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
-    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || 'swims_resort');
+    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || '');
 };
 
 // --------------------------------------------------------------------------
