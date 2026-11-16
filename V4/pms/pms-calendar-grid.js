@@ -184,14 +184,32 @@ export const render = () => {
 
     const mOpts = (() => {
         let h = '<option value="">ALL DATES</option>';
-        const d = new Date(vS.getFullYear(), vS.getMonth() - 2, 1);
-        for (let i = 0; i < 36; i++) {
+        let earliestMs = vS.getTime();
+        
+        // Find earliest booking dynamically
+        if (window.staff && window.staff.length > 0) {
+            const curProp = getPropId();
+            const propStaff = window.staff.filter(s => window.toCanonicalPropId ? window.toCanonicalPropId(s.property) === curProp : true);
+            if (propStaff.length > 0) {
+                const earliestCheckIn = propStaff.reduce((min, s) => {
+                    const t = window.parseYMD ? window.parseYMD(s.checkIn) : 0;
+                    return t && t < min ? t : min;
+                }, Date.now());
+                earliestMs = Math.min(earliestMs, earliestCheckIn);
+            }
+        }
+        
+        // Start month generator at the earliest booking, and go up to 2 years ahead of the current View Start
+        const d = new Date(earliestMs);
+        d.setDate(1); 
+        const endMs = vS.getTime() + (730 * 86400000); 
+        
+        while(d.getTime() < endMs) {
             h += `<option value="${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}">${mNames[d.getMonth()]} ${d.getFullYear()}</option>`;
             d.setMonth(d.getMonth() + 1);
         }
         return h;
     })();
-
     const jm = $('jump-month-select');
     if (jm) {
         if (jm.options.length < 2) jm.innerHTML = mOpts;
