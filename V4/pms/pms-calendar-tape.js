@@ -3,6 +3,8 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { toCanonicalPropId } from '../core/properties.js';
+
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
@@ -25,10 +27,7 @@ window.searchMatchIndex = searchMatchIndex;
 
 // --- State & Property Accessors ---
 const getStaff = () => window.staff || (window.getStaff ? window.getStaff() : []);
-const getPropId = () => {
-    const raw = window.getCurrentPropertyId ? window.getCurrentPropertyId() : window.currentPropertyId;
-    return window.toCanonicalPropId ? window.toCanonicalPropId(raw) : (raw || '');
-};
+const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
 
 // --------------------------------------------------------------------------
 // 1. TIMELINE COORDINATE & PERIOD NAVIGATION
