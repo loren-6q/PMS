@@ -18,16 +18,13 @@ export async function fetchChannexData() {
     try {
         customAlert("Connecting...", "Fetching room types, rate plans, and connected channels from Channex...");
 
-        const rJson = await ChannexClient.request(`/room_types?filter[property_id]=${propId}&pagination[limit]=100`, {}, apiKey);
-        window.channexRooms = rJson.data || [];
+        window.channexRooms = await ChannexClient.requestAll(`/room_types?filter[property_id]=${propId}`, {}, apiKey);
 
-        const pJson = await ChannexClient.request(`/rate_plans?filter[property_id]=${propId}&pagination[limit]=100`, {}, apiKey);
-        const allPlans = pJson.data || [];
+        const allPlans = await ChannexClient.requestAll(`/rate_plans?filter[property_id]=${propId}`, {}, apiKey);
 
         // Fetch cancellation policies
         try {
-            const cpJson = await ChannexClient.request(`/cancellation_policies?filter[property_id]=${propId}&pagination[limit]=50`, {}, apiKey);
-            window.channexPolicies = cpJson.data || [];
+            window.channexPolicies = await ChannexClient.requestAll(`/cancellation_policies?filter[property_id]=${propId}`, {}, apiKey);
         } catch (cpErr) {
             console.warn("[Channex] Could not fetch cancellation policies:", cpErr);
             window.channexPolicies = window.channexPolicies || [];
@@ -35,17 +32,18 @@ export async function fetchChannexData() {
 
         // Fetch active channels connected to this property in Channex
         try {
-            const cJson = await ChannexClient.request(`/channels?filter[property_id]=${propId}&pagination[limit]=100`, {}, apiKey);
-            window.channexConnectedChannels = cJson.data || [];
+            window.channexConnectedChannels = await ChannexClient.requestAll(`/channels?filter[property_id]=${propId}`, {}, apiKey);
         } catch (cErr) {
             console.warn("[Channex] Could not fetch connected channels:", cErr);
             window.channexConnectedChannels = window.channexConnectedChannels || [];
         }
 
-        // Primary base plans only
+        // Primary base plans only (scoped to active property)
         window.channexRatePlans = allPlans.filter(p => {
             const attr = p.attributes || {};
             const rel = p.relationships || {};
+            const planPropId = attr.property_id || rel.property?.data?.id;
+            if (planPropId && planPropId !== propId) return false;
             const hasChannel = !!(rel.channel?.data?.id || attr.channel_id);
             const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
             return !hasChannel && !hasParent && !attr.ui_read_only && !attr.is_derived;
@@ -627,8 +625,7 @@ export function toggleBatchPresetPlans(checked) {
 async function resolveChannexPolicyId(targetPolicyType, propId, apiKey) {
     if (!window.channexPolicies || window.channexPolicies.length === 0) {
         try {
-            const res = await ChannexClient.request(`/cancellation_policies?filter[property_id]=${propId}&pagination[limit]=50`, {}, apiKey);
-            window.channexPolicies = res.data || [];
+            window.channexPolicies = await ChannexClient.requestAll(`/cancellation_policies?filter[property_id]=${propId}`, {}, apiKey);
         } catch (e) {
             console.warn("[Channex] Policy fetch fallback failed:", e);
         }
