@@ -771,15 +771,21 @@ export async function executeCloneRatePlans() {
 
     try {
         const totalOps = targetCats.length * sourcePlans.length;
-        customAlert("Cloning...", `Pushing ${totalOps} rate plan(s) to Channex...`);
+        customAlert("Cloning...", `Checking & pushing up to ${totalOps} rate plan(s) to Channex...`);
         let createdCount = 0;
+        let skippedCount = 0;
 
         for (const tgtCat of targetCats) {
             const tgtMap = window.channexMap.find(m => m.pmsCategory === tgtCat);
+            const existingMapped = (window.channexRateMap || []).filter(r => r.pmsCategory === tgtCat);
+            const existingChannexPlans = (window.channexRatePlans || []).filter(
+                p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === tgtMap.channexId
+            );
 
             for (const sp of sourcePlans) {
                 const spTitle = sp.attributes?.title || sp.id;
-                const spMap = (window.channexRateMap || []).find(r => r.ratePlanId === sp.id) || {};
+                const spDetected = detectRatePlanClassification(spTitle, sp);
+                const spMap = (window.channexRateMap || []).find(r => r.ratePlanId === sp.id) || spDetected;
 
                 let newTitle = spTitle;
                 const escSource = sourceCat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -790,6 +796,25 @@ export async function executeCloneRatePlans() {
                 }
 
                 newTitle = newTitle.replace(/\s+Rate\b/gi, '').trim();
+
+                const tgtChan = spMap.channel || 'DEF';
+                const tgtChanId = spMap.channelId || '';
+                const tgtPol = spMap.policy || 'non-ref';
+
+                const alreadyExists =
+                    existingMapped.some(r =>
+                        (r.channel || 'DEF') === tgtChan &&
+                        (r.channelId || '') === tgtChanId &&
+                        (r.policy || 'non-ref') === tgtPol
+                    ) ||
+                    existingChannexPlans.some(p =>
+                        (p.attributes?.title || '').trim().toLowerCase() === newTitle.toLowerCase()
+                    );
+
+                if (alreadyExists) {
+                    skippedCount++;
+                    continue;
+                }
 
                 const sourcePolicyId = sp.attributes?.cancellation_policy_id || sp.relationships?.cancellation_policy?.data?.id;
                 const matchedPolicyId = sourcePolicyId || await resolveChannexPolicyId(spMap.policy || 'non-ref', propId, apiKey);
@@ -840,8 +865,7 @@ export async function executeCloneRatePlans() {
 
         closeCreateRatePlanModal();
         renderStep3UnifiedMapping();
-        customAlert("Success", `Cloned and mapped ${createdCount} rate plan(s) from "${sourceCat}".`);
-    } catch (err) {
+        customAlert("Success", `Cloned ${createdCount} missing rate plan(s) from "${sourceCat}"${skippedCount ? ` (${skippedCount} existing skipped)` : ''}.`);    } catch (err) {
         console.error("[Clone Rate Plans Error]:", err);
         customAlert("Cloning Failed", err.message);
     }
