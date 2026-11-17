@@ -17,7 +17,7 @@ export async function fetchChannexData() {
 
     try {
         customAlert("Connecting...", "Fetching room types, rate plans, and connected channels from Channex...");
-        
+
         const rJson = await ChannexClient.request(`/room_types?filter[property_id]=${propId}&pagination[limit]=100`, {}, apiKey);
         window.channexRooms = rJson.data || [];
 
@@ -53,20 +53,68 @@ export async function fetchChannexData() {
 
         renderStep3UnifiedMapping();
         customAlert("Fetched", `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} rate plans, and ${window.channexConnectedChannels.length} connected channels.`);
-        
+
     } catch (err) {
         console.error("[Channex Fetch Error]:", err);
         customAlert("Fetch Failed", err.message);
     }
 }
 
-// Generates Type-to-Jump friendly channel options
+// Group connected Channex channels by canonical 3-letter code
+function getConnectedChannelsByCode() {
+    const byCode = new Map();
+    (window.channexConnectedChannels || []).forEach(c => {
+        const code = resolveChannelCode(c.attributes?.channel || c.attributes?.title);
+        if (!code || code === 'DEF' || code === 'WEB' || code === 'OTH') return;
+        const title = (c.attributes?.title || getChannelByCode(code).name || code).trim();
+        if (!byCode.has(code)) byCode.set(code, []);
+        byCode.get(code).push({ id: c.id, code, title });
+    });
+    return byCode;
+}
+
+// Generates Type-to-Jump friendly channel options (supports multiple connections per OTA)
 export function getAvailableMappingChannels() {
-    return [
+    const byCode = getConnectedChannelsByCode();
+    const options = [
         { val: "DEF", label: "DEF - Default Rate" },
-        { val: "WEB", label: "WEB - Direct Website" },
-        ...CANONICAL_OTA_LIST.map(ch => ({ val: ch.code, label: `${ch.code} - ${ch.name}` }))
+        { val: "WEB", label: "WEB - Direct Website" }
     ];
+
+    CANONICAL_OTA_LIST.forEach(ch => {
+        const conns = byCode.get(ch.code) || [];
+        if (conns.length > 1) {
+            conns.forEach(conn => {
+                options.push({
+                    val: `${ch.code}::${conn.id}`,
+                    label: `${ch.code} - ${conn.title}`
+                });
+            });
+            options.push({ val: ch.code, label: `${ch.code} - ${ch.name} (All)` });
+        } else if (conns.length === 1) {
+            options.push({
+                val: `${ch.code}::${conns[0].id}`,
+                label: `${ch.code} - ${conns[0].title}`
+            });
+        } else {
+            options.push({ val: ch.code, label: `${ch.code} - ${ch.name}` });
+        }
+    });
+
+    return options;
+}
+
+function getMappingSelectValue(mapping) {
+    if (!mapping || !mapping.channel) return 'DEF';
+    const byCode = getConnectedChannelsByCode();
+    const conns = byCode.get(mapping.channel) || [];
+    if (mapping.channelId && conns.some(c => c.id === mapping.channelId)) {
+        return `${mapping.channel}::${mapping.channelId}`;
+    }
+    if (conns.length === 1) {
+        return `${mapping.channel}::${conns[0].id}`;
+    }
+    return mapping.channel;
 }
 
 const AVAILABLE_POLICIES = [
@@ -80,6 +128,14 @@ const AVAILABLE_POLICIES = [
 // Precedence Classifier: Starts-with-3-letters -> Brand words -> Default
 export function detectRatePlanClassification(title, plan = null) {
     const channel = resolveChannelCode(title);
+    const byCode = getConnectedChannelsByCode();
+    const conns = byCode.get(channel) || [];
+    let matchedConn = conns.length === 1 ? conns[0] : null;
+
+    if (conns.length > 1) {
+        const titleLower = title.toLowerCase();
+        matchedConn = conns.find(c => titleLower.includes(c.title.toLowerCase())) || null;
+    }
 
     const isEvt = /\b(event|peak|full[-_\s]?moon|fmp|pkg|package)\b/i.test(title);
     const isNonRef = /\b(non[-_\s]?ref(undable)?|nr\b|n[-_]?ref|no[-_\s]?refund|nonrefundable)\b/i.test(title);
@@ -98,7 +154,13 @@ export function detectRatePlanClassification(title, plan = null) {
         policy = isEvt ? "event-non-ref" : "non-ref";
     }
 
-    return { channel, policy, isEvent: policy.startsWith('event') };
+    return {
+        channel,
+        channelId: matchedConn?.id || null,
+        connectionTitle: matchedConn?.title || null,
+        policy,
+        isEvent: policy.startsWith('event')
+    };
 }
 
 let step3ShowRates = true;
@@ -142,7 +204,6 @@ export function renderStep3UnifiedMapping() {
 
     const activeCatSet = new Set(pmsCategories.map(c => c.toLowerCase()));
 
-    // Auto-heal renamed categories via catId & purge stale orphaned mappings
     window.channexMap = (window.channexMap || [])
         .map(m => {
             if (m.catId && idToCat.has(m.catId)) m.pmsCategory = idToCat.get(m.catId);
@@ -159,7 +220,6 @@ export function renderStep3UnifiedMapping() {
 
     const mappedCount = pmsCategories.filter(cat => window.channexMap.some(m => m.pmsCategory === cat && m.channexId)).length;
 
-    // Top View Toggle Bar (Rooms Only vs All Rates)
     const toolbar = document.createElement('div');
     toolbar.className = 'flex items-center justify-between gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs text-xs';
     toolbar.innerHTML = `
@@ -211,7 +271,7 @@ export function renderStep3UnifiedMapping() {
                             <thead class="bg-slate-100/70 border-b border-slate-200 text-slate-500 font-black text-[9px] uppercase tracking-wider">
                                 <tr>
                                     <th class="py-1 px-2">RATE PLAN NAME</th>
-                                    <th class="py-1 px-2 w-48">SALES CHANNEL</th>
+                                    <th class="py-1 px-2 w-56">SALES CHANNEL</th>
                                     <th class="py-1 px-2 w-48">CANCELLATION POLICY</th>
                                 </tr>
                             </thead>
@@ -229,6 +289,8 @@ export function renderStep3UnifiedMapping() {
                                             channexRoomId: currentMap.channexId,
                                             ratePlanTitle: title,
                                             channel: detected.channel,
+                                            channelId: detected.channelId,
+                                            connectionTitle: detected.connectionTitle,
                                             product: detected.isEvent ? 'evt' : 'std',
                                             policy: detected.policy,
                                             rateType: detected.policy,
@@ -239,7 +301,11 @@ export function renderStep3UnifiedMapping() {
                                         mapping.pmsCategory = cat;
                                         if (catToId.has(cat)) mapping.catId = catToId.get(cat);
                                         if (!mapping.channel || mapping.channel === "DEF" || mapping.channel === "DEFAULT") {
-                                            if (detected.channel !== "DEF") mapping.channel = detected.channel;
+                                            if (detected.channel !== "DEF") {
+                                                mapping.channel = detected.channel;
+                                                mapping.channelId = detected.channelId;
+                                                mapping.connectionTitle = detected.connectionTitle;
+                                            }
                                         }
                                         if (!mapping.policy || mapping.policy === "non-ref") {
                                             if (detected.policy !== "non-ref") {
@@ -249,6 +315,13 @@ export function renderStep3UnifiedMapping() {
                                             }
                                         }
                                     }
+
+                                    const selectedChannelVal = getMappingSelectValue(mapping);
+                                    const hasSavedCustomConn = mapping.channelId && !availableChannels.some(c => c.val === selectedChannelVal);
+                                    const channelOptsHtml = (hasSavedCustomConn
+                                        ? [{ val: selectedChannelVal, label: `${mapping.channel} - ${mapping.connectionTitle || mapping.channelId.slice(-6)}` }, ...availableChannels]
+                                        : availableChannels
+                                    ).map(ch => `<option value="${ch.val}" ${selectedChannelVal === ch.val ? 'selected' : ''}>${ch.label}</option>`).join('');
 
                                     const isEventPlan = mapping.policy?.startsWith('event');
                                     const isFlexPolicy = mapping.policy === 'ref' || mapping.policy === 'event-ref';
@@ -272,9 +345,7 @@ export function renderStep3UnifiedMapping() {
                                             </td>
                                             <td class="py-1.5 px-2">
                                                 <select tabindex="0" class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${safeCat}', '${currentMap.channexId}', '${title.replace(/'/g, "\\'")}', 'channel', this.value, this)">
-                                                    ${availableChannels.map(ch => `
-                                                        <option value="${ch.val}" ${mapping.channel === ch.val ? 'selected' : ''}>${ch.label}</option>
-                                                    `).join('')}
+                                                    ${channelOptsHtml}
                                                 </select>
                                             </td>
                                             <td class="py-1.5 px-2">
@@ -336,7 +407,6 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     const defMatch = (window.roomDefinitions || []).find(d => !d.inactive && (d.category || '').trim() === pmsCategory);
     const catId = defMatch?.catId || null;
 
-    // Remove any existing mapping for this PMS category OR any prior category holding this Channex Room ID
     window.channexMap = window.channexMap.filter(m => m.pmsCategory !== pmsCategory && (!channexId || m.channexId !== channexId));
     window.channexRateMap = window.channexRateMap.filter(r => r.pmsCategory !== pmsCategory && (!channexId || r.channexRoomId !== channexId));
 
@@ -362,6 +432,8 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
                 ratePlanId: plan.id,
                 ratePlanTitle: planTitle,
                 channel: detected.channel,
+                channelId: detected.channelId,
+                connectionTitle: detected.connectionTitle,
                 policy: detected.policy,
                 rateType: detected.policy,
                 isEvent: detected.isEvent
@@ -372,30 +444,37 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     renderStep3UnifiedMapping();
 }
 
-
-// Dynamically builds Batch Suite templates based on connected channels
+// Dynamically builds Batch Suite templates based on connected channels (supports multiple connections per OTA)
 export function getDynamicBatchRateTemplates() {
-    const connectedCodes = new Set(
-        (window.channexConnectedChannels || []).map(c => resolveChannelCode(c.attributes?.channel || c.attributes?.title))
-    );
-
-    const activeCodes = Array.from(new Set(['BDC', ...connectedCodes])).filter(c => c !== 'DEF' && c !== 'WEB');
+    const byCode = getConnectedChannelsByCode();
+    const activeCodes = Array.from(new Set(['BDC', ...byCode.keys()])).filter(c => c !== 'DEF' && c !== 'WEB');
 
     const templates = [
-        { id: 'def_non_ref', titleTpl: 'Non-Refundable {CAT}', channel: 'DEF', policy: 'non-ref', checked: true, isEvent: false },
-        { id: 'def_ref', titleTpl: 'Refundable {CAT}', channel: 'DEF', policy: 'ref', checked: true, isEvent: false }
+        { id: 'def_non_ref', titleTpl: 'Non-Refundable {CAT}', channel: 'DEF', channelId: null, connectionTitle: null, policy: 'non-ref', checked: true, isEvent: false },
+        { id: 'def_ref', titleTpl: 'Refundable {CAT}', channel: 'DEF', channelId: null, connectionTitle: null, policy: 'ref', checked: true, isEvent: false }
     ];
 
     activeCodes.forEach(code => {
-        templates.push(
-            { id: `${code.toLowerCase()}_non_ref`, titleTpl: `[${code}] Non-Refundable {CAT}`, channel: code, policy: 'non-ref', checked: true, isEvent: false },
-            { id: `${code.toLowerCase()}_ref`, titleTpl: `[${code}] Refundable {CAT}`, channel: code, policy: 'ref', checked: true, isEvent: false }
-        );
+        const conns = byCode.get(code) || [];
+        if (conns.length > 1) {
+            conns.forEach(conn => {
+                templates.push(
+                    { id: `${code.toLowerCase()}_${conn.id}_non_ref`, titleTpl: `[${code}] ${conn.title} Non-Refundable {CAT}`, channel: code, channelId: conn.id, connectionTitle: conn.title, policy: 'non-ref', checked: true, isEvent: false },
+                    { id: `${code.toLowerCase()}_${conn.id}_ref`, titleTpl: `[${code}] ${conn.title} Refundable {CAT}`, channel: code, channelId: conn.id, connectionTitle: conn.title, policy: 'ref', checked: true, isEvent: false }
+                );
+            });
+        } else {
+            const singleConn = conns[0] || null;
+            templates.push(
+                { id: `${code.toLowerCase()}_non_ref`, titleTpl: `[${code}] Non-Refundable {CAT}`, channel: code, channelId: singleConn?.id || null, connectionTitle: singleConn?.title || null, policy: 'non-ref', checked: true, isEvent: false },
+                { id: `${code.toLowerCase()}_ref`, titleTpl: `[${code}] Refundable {CAT}`, channel: code, channelId: singleConn?.id || null, connectionTitle: singleConn?.title || null, policy: 'ref', checked: true, isEvent: false }
+            );
+        }
     });
 
     templates.push(
-        { id: 'evt_non_ref', titleTpl: 'Event Non-Refundable {CAT}', channel: 'DEF', policy: 'event-non-ref', checked: false, isEvent: true },
-        { id: 'evt_ref', titleTpl: 'Event Refundable {CAT}', channel: 'DEF', policy: 'event-ref', checked: false, isEvent: true }
+        { id: 'evt_non_ref', titleTpl: 'Event Non-Refundable {CAT}', channel: 'DEF', channelId: null, connectionTitle: null, policy: 'event-non-ref', checked: false, isEvent: true },
+        { id: 'evt_ref', titleTpl: 'Event Refundable {CAT}', channel: 'DEF', channelId: null, connectionTitle: null, policy: 'event-ref', checked: false, isEvent: true }
     );
 
     return templates;
@@ -432,7 +511,6 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
     const channexMap = window.channexMap || [];
     const allPlans = window.channexRatePlans || [];
 
-    // 1. Populate Room Types Checklist
     const roomTypeChecklist = document.getElementById('crp-roomtype-checklist');
     if (roomTypeChecklist) {
         roomTypeChecklist.innerHTML = categories.map(cat => {
@@ -464,7 +542,6 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
         }).join('');
     }
 
-    // 2. Populate Target Categories Checklist
     const rateChecklist = document.getElementById('crp-room-checklist');
     if (rateChecklist) {
         rateChecklist.innerHTML = categories.map(c => `
@@ -475,7 +552,6 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
         `).join('');
     }
 
-    // 3. Populate Clone Source Dropdown
     const cloneSourceSelect = document.getElementById('crp-clone-source');
     if (cloneSourceSelect) {
         const sourceCats = categories.filter(cat => {
@@ -491,7 +567,6 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
         }).join('');
     }
 
-    // 4. Populate Dynamic Batch Rate Plan Suite Checklist
     const batchListEl = document.getElementById('crp-batch-plans-list');
     window.currentBatchTemplates = getDynamicBatchRateTemplates();
     if (batchListEl) {
@@ -509,7 +584,6 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
         `).join('');
     }
 
-    // 5. Populate Dynamic Channel Pills for Option C
     renderOptionCChannelPills();
 
     switchCreateModalTab(initialTab);
@@ -748,6 +822,8 @@ export async function executeCloneRatePlans() {
                         channexRoomId: tgtMap.channexId,
                         ratePlanTitle: newTitle,
                         channel: spMap.channel || 'DEF',
+                        channelId: spMap.channelId || null,
+                        connectionTitle: spMap.connectionTitle || null,
                         policy: spMap.policy || 'non-ref',
                         rateType: spMap.rateType || spMap.policy || 'non-ref',
                         isEvent: !!spMap.isEvent
@@ -843,6 +919,8 @@ export async function executeBatchCreateRatePlans() {
                         channexRoomId: tgtMap.channexId,
                         ratePlanTitle: finalTitle,
                         channel: tpl.channel,
+                        channelId: tpl.channelId || null,
+                        connectionTitle: tpl.connectionTitle || null,
                         policy: tpl.policy,
                         rateType: tpl.policy,
                         isEvent: tpl.isEvent
@@ -868,29 +946,54 @@ export async function executeBatchCreateRatePlans() {
 
 // --- Option C Dynamic Builder Controller ---
 window.crpCustomChannel = 'DEF';
+window.crpCustomChannelId = null;
+window.crpCustomConnectionTitle = null;
 window.crpCustomPolicy = 'non-ref';
 
 export function renderOptionCChannelPills() {
     const container = document.getElementById('crp-channel-pills');
     if (!container) return;
 
-    const connectedCodes = (window.channexConnectedChannels || []).map(c => resolveChannelCode(c.attributes?.channel || c.attributes?.title));
+    const byCode = getConnectedChannelsByCode();
     const configuredCodes = (window.pricingRules?.channelRules || []).map(r => r.code);
 
-    const primaryList = Array.from(new Set(['DEF', 'WEB', ...connectedCodes, ...configuredCodes, 'BDC', 'HWL', 'EXP'])).filter(Boolean);
-    const active = window.crpCustomChannel || 'DEF';
+    const primaryPills = [
+        { val: 'DEF', label: 'DEF' },
+        { val: 'WEB', label: 'WEB' }
+    ];
+    const seenPrimaryCodes = new Set(['DEF', 'WEB']);
 
-    let html = primaryList.map(code => {
-        const isSel = (active === code);
+    byCode.forEach((conns, code) => {
+        seenPrimaryCodes.add(code);
+        if (conns.length > 1) {
+            conns.forEach(c => primaryPills.push({ val: `${code}::${c.id}`, label: `${code} (${c.title})` }));
+        } else if (conns.length === 1) {
+            primaryPills.push({ val: `${code}::${conns[0].id}`, label: code });
+        }
+    });
+
+    [...configuredCodes, 'BDC', 'HWL', 'EXP'].forEach(code => {
+        if (code && !seenPrimaryCodes.has(code)) {
+            seenPrimaryCodes.add(code);
+            primaryPills.push({ val: code, label: code });
+        }
+    });
+
+    const activeVal = window.crpCustomChannelId
+        ? `${window.crpCustomChannel}::${window.crpCustomChannelId}`
+        : (window.crpCustomChannel || 'DEF');
+
+    let html = primaryPills.map(p => {
+        const isSel = (activeVal === p.val);
         return `
-            <button type="button" onclick="window.setOptionCChannel('${code}')" class="crp-c-chan-btn px-2 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer border ${
+            <button type="button" onclick="window.setOptionCChannel('${p.val}')" class="crp-c-chan-btn px-2 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer border ${
                 isSel ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700'
-            }" data-val="${code}">${code}</button>
+            }" data-val="${p.val}">${p.label}</button>
         `;
     }).join('');
 
-    const otherOtas = CANONICAL_OTA_LIST.filter(ch => !primaryList.includes(ch.code));
-    const isOtherSelected = !primaryList.includes(active);
+    const otherOtas = CANONICAL_OTA_LIST.filter(ch => !seenPrimaryCodes.has(ch.code));
+    const isOtherSelected = !primaryPills.some(p => p.val === activeVal);
 
     html += `
         <select id="crp-channel-dropdown" onchange="window.setOptionCChannel(this.value)" class="table-input font-bold text-[10px] !w-32 ml-1 ${
@@ -898,7 +1001,7 @@ export function renderOptionCChannelPills() {
         }">
             <option value="">+ More OTAs (${otherOtas.length})</option>
             ${otherOtas.map(ch => `
-                <option value="${ch.code}" ${active === ch.code ? 'selected' : ''}>${ch.code} - ${ch.name}</option>
+                <option value="${ch.code}" ${activeVal === ch.code ? 'selected' : ''}>${ch.code} - ${ch.name}</option>
             `).join('')}
         </select>
     `;
@@ -907,11 +1010,22 @@ export function renderOptionCChannelPills() {
     updateOptionCPreview();
 }
 
-export function setOptionCChannel(chan) {
-    if (!chan) return;
-    window.crpCustomChannel = chan;
+export function setOptionCChannel(rawVal) {
+    if (!rawVal) return;
+    if (rawVal.includes('::')) {
+        const [code, connId] = rawVal.split('::');
+        const conn = (getConnectedChannelsByCode().get(code) || []).find(c => c.id === connId);
+        window.crpCustomChannel = code;
+        window.crpCustomChannelId = connId;
+        window.crpCustomConnectionTitle = conn?.title || null;
+    } else {
+        window.crpCustomChannel = rawVal;
+        window.crpCustomChannelId = null;
+        window.crpCustomConnectionTitle = null;
+    }
+
     document.querySelectorAll('.crp-c-chan-btn').forEach(btn => {
-        const isSel = btn.dataset.val === chan;
+        const isSel = btn.dataset.val === rawVal;
         btn.className = `crp-c-chan-btn px-2 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer border ${
             isSel ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs' : 'border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700'
         }`;
@@ -919,8 +1033,8 @@ export function setOptionCChannel(chan) {
 
     const dd = document.getElementById('crp-channel-dropdown');
     if (dd) {
-        dd.value = chan;
-        const isOther = Array.from(dd.options).some(o => o.value === chan && o.value !== "");
+        dd.value = rawVal;
+        const isOther = Array.from(dd.options).some(o => o.value === rawVal && o.value !== "");
         dd.className = `table-input font-bold text-[10px] !w-32 ml-1 ${isOther ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : ''}`;
     }
 
@@ -988,6 +1102,8 @@ export async function executeCreateAndPushRatePlan() {
     }
 
     const channel = window.crpCustomChannel || 'DEF';
+    const channelId = window.crpCustomChannelId || null;
+    const connectionTitle = window.crpCustomConnectionTitle || null;
     const policy = window.crpCustomPolicy || 'non-ref';
     const customSuffix = document.getElementById('crp-custom-name')?.value.trim() || '';
 
@@ -1036,6 +1152,8 @@ export async function executeCreateAndPushRatePlan() {
                     channexRoomId: currentMap.channexId,
                     ratePlanTitle: finalTitle,
                     channel: channel,
+                    channelId: channelId,
+                    connectionTitle: connectionTitle,
                     policy: policy,
                     rateType: policy,
                     isEvent: policy.startsWith('event')
@@ -1074,6 +1192,8 @@ export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoo
                 channexRoomId,
                 ratePlanTitle,
                 channel: 'DEF',
+                channelId: null,
+                connectionTitle: null,
                 policy: 'non-ref',
                 rateType: 'non-ref',
                 isEvent: false
@@ -1081,7 +1201,22 @@ export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoo
             window.channexRateMap.push(mapping);
         }
 
-        mapping[field] = value;
+        if (field === 'channel') {
+            if (value.includes('::')) {
+                const [code, connId] = value.split('::');
+                const conn = (getConnectedChannelsByCode().get(code) || []).find(c => c.id === connId);
+                mapping.channel = code;
+                mapping.channelId = connId;
+                mapping.connectionTitle = conn?.title || null;
+            } else {
+                mapping.channel = value;
+                mapping.channelId = null;
+                mapping.connectionTitle = null;
+            }
+        } else {
+            mapping[field] = value;
+        }
+
         if (field === 'policy') {
             mapping.rateType = value;
             mapping.isEvent = value.startsWith('event');
