@@ -850,7 +850,8 @@ export function renderRateMatrix() {
                 const dateStr = getLocalYMD(cur);
                 const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
                 const rData = dayObj[room] || {};
-                const displayFmp = rData.fmp !== undefined && rData.fmp !== "" ? rData.fmp : "";
+                const rawFmp = rData.fmp !== undefined && rData.fmp !== "" ? rData.fmp : "";
+                const displayFmp = rawFmp !== "" && !isNaN(parseFloat(rawFmp)) ? Math.round(parseFloat(rawFmp)) : "";
                 const isPinnedFmp = !!rData.isOverride?.fmp;
 
                 const evtMinVal = rData.evt_min !== undefined && rData.evt_min !== ""
