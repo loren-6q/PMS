@@ -1,8 +1,9 @@
 // ==========================================================================
 // channex.js - Certified Official Channex Transmission & Outbox Engine
 // Wild & Wandering Property Management System
-// 
+//
 // ARCHITECTURE CONTRACT & CHANNEX CERTIFICATION COMPLIANCE:
+// - Single Source of Truth for ALL Channex API endpoints, pagination & schemas
 // - Paced Outbox Rate Limiter (strictly <= 18 ARI calls/min)
 // - Exponential backoff for 429 (Retry-After) and 5xx responses
 // - Contiguous Date Range Compressor (single 'date' vs 'date_from'/'date_to')
@@ -77,11 +78,13 @@ export const ChannexClient = {
         return `https://${this.getHost(isStaging)}/api/v1`;
     },
 
-    async request(endpoint, options = {}, apiKey, isStaging = false, retries = 4, backoffMs = 1000) {
+    async request(endpoint, options = {}, apiKey, isStaging = undefined, retries = 4, backoffMs = 1000) {
         const key = apiKey || window.channexConfig?.apiKey || localStorage.getItem('cm_master_channex_api_key');
         if (!key) throw new Error("Channex API key is required.");
 
-        const staging = isStaging !== undefined ? isStaging : !!(window.channexConfig?.isStaging || window.channexConfig?.env === 'staging');
+        const staging = typeof isStaging === 'boolean'
+            ? isStaging
+            : !!(window.channexConfig?.isStaging || window.channexConfig?.env === 'staging');
         const url = `${this.getBaseUrl(staging)}${endpoint}`;
         const headers = {
             "user-api-key": key,
@@ -128,7 +131,7 @@ export const ChannexClient = {
     },
 
     // --- PAGINATED COLLECTION FETCHER (ALL PAGES) ---
-    async requestAll(endpoint, options = {}, apiKey, isStaging = false, limit = 100) {
+    async requestAll(endpoint, options = {}, apiKey, isStaging = undefined, limit = 100) {
         let page = 1;
         const allItems = [];
         while (page <= 25) {
@@ -149,8 +152,74 @@ export const ChannexClient = {
         return allItems;
     },
 
+    // --- PROPERTY INVENTORY & SETUP DATA FETCHERS ---
+    async fetchPropertySetupData(propId, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+
+        const rooms = await this.requestAll(`/room_types?filter[property_id]=${propId}`, {}, apiKey, isStaging);
+        const allPlans = await this.requestAll(`/rate_plans?filter[property_id]=${propId}`, {}, apiKey, isStaging);
+
+        let policies = [];
+        try {
+            policies = await this.requestAll(`/cancellation_policies?filter[property_id]=${propId}`, {}, apiKey, isStaging);
+        } catch (err) {
+            console.warn("[Channex] Could not fetch cancellation policies:", err);
+        }
+
+        let channels = [];
+        try {
+            channels = await this.requestAll(`/channels?filter[property_id]=${propId}`, {}, apiKey, isStaging);
+        } catch (err) {
+            console.warn("[Channex] Could not fetch connected channels:", err);
+        }
+
+        // Primary base plans only (scoped strictly to active property)
+        const ratePlans = allPlans.filter(p => {
+            const attr = p.attributes || {};
+            const rel = p.relationships || {};
+            const planPropId = attr.property_id || rel.property?.data?.id;
+            if (planPropId && planPropId !== propId) return false;
+            const hasChannel = !!(rel.channel?.data?.id || attr.channel_id);
+            const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
+            return !hasChannel && !hasParent && !attr.ui_read_only && !attr.is_derived;
+        });
+
+        return { rooms, ratePlans, policies, channels };
+    },
+
+    async fetchCancellationPolicies(propId, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+        return this.requestAll(`/cancellation_policies?filter[property_id]=${propId}`, {}, apiKey, isStaging);
+    },
+
+    async createRoomType(propId, roomTypeFields, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+        return this.request('/room_types', {
+            method: 'POST',
+            body: JSON.stringify({
+                room_type: {
+                    property_id: propId,
+                    ...roomTypeFields
+                }
+            })
+        }, apiKey, isStaging);
+    },
+
+    async createRatePlan(propId, ratePlanFields, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+        return this.request('/rate_plans', {
+            method: 'POST',
+            body: JSON.stringify({
+                rate_plan: {
+                    property_id: propId,
+                    ...ratePlanFields
+                }
+            })
+        }, apiKey, isStaging);
+    },
+
     // --- REVISION ACKNOWLEDGEMENT (TEST 11) ---
-    async acknowledgeRevision(revisionId, apiKey, isStaging = false) {
+    async acknowledgeRevision(revisionId, apiKey, isStaging = undefined) {
         if (!revisionId) throw new Error("Revision ID is required.");
         return this.request(`/booking_revisions/${revisionId}/ack`, {
             method: "POST",
@@ -159,7 +228,7 @@ export const ChannexClient = {
     },
 
     // --- FULL DATA SYNC (TEST 1: EXACTLY 2 API CALLS FOR 500 DAYS) ---
-    async executeFullSync(propId, apiKey, availValues, restrValues, isStaging = false) {
+    async executeFullSync(propId, apiKey, availValues, restrValues, isStaging = undefined) {
         let availabilityTaskId = null;
         let restrictionsTaskId = null;
 
