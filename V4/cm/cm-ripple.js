@@ -282,26 +282,13 @@ export function evaluatePromoStack(dateStr, chanCode, room, asOfDateStr = null) 
     };
 }
 
-// --- Copy Restriction Field During Ripple ---
-function copyRestrictionField(src, dst, key, force) {
-    if (!force && dst.isOverride?.[key]) return;
-    if (src[key] !== undefined && src[key] !== "" && src[key] !== false) {
-        dst[key] = src[key];
-    } else {
-        delete dst[key];
-    }
-}
-
-// --- Propagate Anchor Rate & Restriction Changes Across Linked Rooms ---
-export function rippleDay(dateStr, startRoom, forceRipple = false, scope = 'both') {
+// --- Propagate Anchor Rate Changes Across Linked Rooms (Rates Only — Restrictions Never Ripple) ---
+export function rippleDay(dateStr, startRoom, forceRipple = false) {
     window.masterPricing = window.masterPricing || { timeline: {}, relationships: [] };
     window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
     const dMs = parseYMD(dateStr);
     const minDiff = getNearestEvent(dMs);
     const isPeak = (minDiff === 0);
-
-    const doRates = scope === 'rates' || scope === 'both';
-    const doRestrictions = scope === 'restrictions' || scope === 'both';
 
     const allRooms = window.roomTypes || [];
     const canonicalStart = resolveRoomCategory(startRoom, allRooms);
@@ -343,7 +330,7 @@ export function rippleDay(dateStr, startRoom, forceRipple = false, scope = 'both
             const nextVals = window.masterPricing.timeline[dateStr][edge.to];
             nextVals.isOverride = nextVals.isOverride || {};
 
-            if (doRates && (forceRipple || !nextVals.isOverride.std)) {
+            if (forceRipple || !nextVals.isOverride.std) {
                 if (isPeak) {
                     const basePrice = (curVals.std !== undefined && curVals.std !== "") ? curVals.std : curVals.fmp;
                     if (basePrice !== undefined && basePrice !== "") {
@@ -361,10 +348,7 @@ export function rippleDay(dateStr, startRoom, forceRipple = false, scope = 'both
                 }
             }
 
-            if (doRestrictions) {
-                ['min', 'min_arr', 'max', 'cta', 'ctd', 'stop', 'evt_min', 'evt_min_arr', 'evt_max', 'evt_cta', 'evt_ctd', 'evt_stop']
-                    .forEach(k => copyRestrictionField(curVals, nextVals, k, forceRipple));
-            }
+        
 
             queue.push(edge.to);
             window.dirtyDates = window.dirtyDates || new Set();
