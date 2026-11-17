@@ -863,7 +863,22 @@ export function renderRateMatrix() {
                 const evtStopped = rData.evt_stop !== undefined ? !!(rData.evt_stop || rData.evt_stopSell) : !!dayObj.evtRestrictions?.stop;
                 const evtPillHtml = getUnifiedRestrictionBadgeHtml(evtCta, evtCtd, evtStopped);
 
-                trEvt += `<td class="p-0 border-r border-pink-200 text-center relative ${evtStopped ? 'rate-cell-stopped' : (isPinnedFmp ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;">
+                const isDirtyEvt = isCellDirty(dateStr, room);
+                const isSyncedEvt = isCellJustSynced(dateStr, room);
+                const isBrokenRippleEvt = isLinkedTargetRoom && isPinnedFmp;
+
+                let evtStateBgClass = '';
+                if (evtStopped) evtStateBgClass = 'rate-cell-stopped';
+                else if (isDirtyEvt) evtStateBgClass = '!bg-amber-100 ring-1 ring-inset ring-amber-400';
+                else if (isSyncedEvt) evtStateBgClass = '!bg-emerald-50 ring-1 ring-inset ring-emerald-300';
+                else if (isPinnedFmp) evtStateBgClass = 'rate-cell-pinned';
+
+                const evtPinCornerHtml = isBrokenRippleEvt
+                    ? `<span class="pointer-events-none absolute top-0 right-0 w-0 h-0 border-t-[7px] border-r-[7px] border-t-indigo-600 border-r-transparent z-10" title="Pinned Event Override"></span>`
+                    : '';
+
+                trEvt += `<td class="p-0 border-r border-pink-200 text-center relative ${evtStateBgClass}" style="width: 42px; min-width: 42px; max-width: 42px;">
+                    ${evtPinCornerHtml}
                     ${showTopEvt ? `
                     <div class="flex items-center w-full h-[15px] border-b ${evtStopped ? 'border-rose-700 bg-transparent' : 'border-pink-200 bg-white/60'} overflow-hidden leading-none">
                         <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-pink-800 outline-none p-0" value="${evtMinVal}" placeholder="Min" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value, true)">
@@ -871,7 +886,7 @@ export function renderRateMatrix() {
                     </div>` : ''}
 
                     <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
-                        <input type="number" data-fill-room="${room}" data-fill-field="fmp" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-pink-800 px-0" value="${displayFmp}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${room}', 'fmp')" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp', this.value, true)">
+                        <input type="number" data-fill-room="${room}" data-fill-field="fmp" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] ${isDirtyEvt && !evtStopped ? '!text-amber-950' : 'text-pink-800'} px-0" value="${displayFmp}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${room}', 'fmp')" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp', this.value, true)">
                     </div>
 
                     ${showBottomEvt ? `
