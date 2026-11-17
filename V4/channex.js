@@ -237,112 +237,66 @@ export function compressDateEntries(entries) {
 }
 
 // --------------------------------------------------------------------------
-// 3. PMS INVENTORY DEDUCTION (THE STRICT OCCUPANCY LAW)
+// 3. PMS INVENTORY DEDUCTION (2-STEP BED + UNASSIGNED COUNTER)
 // --------------------------------------------------------------------------
 
 export function getPeakCategoryCapacity(pmsCat) {
-    const activePhysical = (window.hotelRooms || []).filter(
+    const activeBeds = (window.hotelRooms || []).filter(
         r => !r.inactive && (r.type === pmsCat || r.category === pmsCat)
-    ).length;
-    if (activePhysical > 0) return activePhysical;
-
-    let maxSeen = 0;
-    if (window.liveInventory) {
-        Object.values(window.liveInventory).forEach(dayObj => {
-            if (dayObj && typeof dayObj[pmsCat] === 'number' && dayObj[pmsCat] > maxSeen) {
-                maxSeen = dayObj[pmsCat];
-            }
-        });
-    }
-    if (maxSeen > 0) return maxSeen;
-
-    return 1;
-}
-
-function bookingMatchesCategory(booking, pmsCat, allCategories) {
-    const rawCandidates = [];
-    if (Array.isArray(booking.bookedTypes) && booking.bookedTypes.length > 0) {
-        rawCandidates.push(...booking.bookedTypes);
-    }
-    if (booking.bookedType) rawCandidates.push(booking.bookedType);
-    if (booking.category) rawCandidates.push(booking.category);
-    if (booking.roomType) rawCandidates.push(booking.roomType);
-
-    const pmsLower = pmsCat.toLowerCase();
-    for (const raw of rawCandidates) {
-        if (!raw) continue;
-        const resolved = resolveRoomCategory(raw, allCategories);
-        if (resolved === pmsCat) return true;
-        const rawLower = String(raw).toLowerCase();
-        if (rawLower === pmsLower || rawLower.includes(pmsLower) || pmsLower.includes(rawLower)) {
-            return true;
-        }
-    }
-    return false;
+    );
+    return activeBeds.length > 0 ? activeBeds.length : 1;
 }
 
 export function getNetAvailabilityForDate(pmsCat, dStr, peakCap) {
     const staffList = window.staff || window.bookings || [];
     const hotelRooms = (window.hotelRooms || []).filter(r => !r.inactive);
-
-    if (!Array.isArray(staffList) || staffList.length === 0) {
-        if (window.liveInventory && window.liveInventory[dStr] && typeof window.liveInventory[dStr][pmsCat] === 'number') {
-            return window.liveInventory[dStr][pmsCat];
-        }
-        return peakCap;
-    }
-
-    const allCategories = window.roomTypes || Array.from(new Set(hotelRooms.map(r => r.type || r.category).filter(Boolean)));
-    const roomCatById = new Map();
-    hotelRooms.forEach(r => {
-        if (r.id) roomCatById.set(String(r.id).trim().toUpperCase(), r.type || r.category || '');
-    });
-
-    const isDormCat = hotelRooms.some(r =>
-        (r.type === pmsCat || r.category === pmsCat) &&
-        !r.isPrivate &&
-        (r.isDorm === true || (r.rule && r.rule !== 'private') || pmsCat.toLowerCase().includes('dorm') || pmsCat.toLowerCase().includes('bed'))
-    ) || pmsCat.toLowerCase().includes('dorm') || pmsCat.toLowerCase().includes('bed');
-
     const curProp = toCanonicalPropId(window.currentPropertyId || '');
-    let occupied = 0;
+
+    // 1. All physical beds/rooms mapped to this category
+    const categoryBedIds = new Set(
+        hotelRooms
+            .filter(r => (r.type === pmsCat || r.category === pmsCat) && r.id)
+            .map(r => String(r.id).trim().toUpperCase())
+    );
+
+    const isDorm = pmsCat.toLowerCase().includes('dorm') || pmsCat.toLowerCase().includes('bed');
+    const pmsCatUpper = pmsCat.toUpperCase().trim();
+    const occupiedBedIds = new Set();
+    let unassignedCount = 0;
 
     for (let i = 0; i < staffList.length; i++) {
         const s = staffList[i];
         if (!s || s.isMockTest) continue;
-
-        const sProp = toCanonicalPropId(s.property);
-        if (sProp && curProp && sProp !== curProp) continue;
+        if (curProp && toCanonicalPropId(s.property) !== curProp) continue;
 
         const cIn = s.checkIn || s.start;
         const cOut = s.checkOut || s.end;
         if (!cIn || !cOut || dStr < cIn || dStr >= cOut) continue;
 
-        const rawRooms = Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []);
-        const assignedRooms = rawRooms.map(r => String(r || '').trim()).filter(Boolean);
-        const hasAssignedRoom = assignedRooms.length > 0;
+        const assignedRooms = (Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []))
+            .map(r => String(r || '').trim().toUpperCase())
+            .filter(Boolean);
 
-        if (!isOccupyingBooking(s.status, hasAssignedRoom)) continue;
+        if (!isOccupyingBooking(s.status, assignedRooms.length > 0)) continue;
 
-        if (hasAssignedRoom) {
-            const assignedInCat = assignedRooms.filter(rid => {
-                const mappedCat = roomCatById.get(rid.toUpperCase());
-                return mappedCat === pmsCat;
-            }).length;
-
-            if (assignedInCat > 0) {
-                occupied += assignedInCat;
-            }
-        } else if (bookingMatchesCategory(s, pmsCat, allCategories)) {
-            if (isDormCat) {
-                occupied += Math.max(1, parseInt(s.pax || s.bedCount || s.unitCount || 1, 10) || 1);
-            } else {
-                occupied += Math.max(1, parseInt(s.unitCount || 1, 10) || 1);
+        if (assignedRooms.length > 0) {
+            // Step 1: Mark any physical bed belonging to this category as occupied
+            assignedRooms.forEach(rid => {
+                if (categoryBedIds.has(rid)) occupiedBedIds.add(rid);
+            });
+        } else {
+            // Step 2: Count unassigned bookings belonging to this category
+            const bType = String(s.bookedType || s.category || '').toUpperCase().trim();
+            if (bType === pmsCatUpper || bType.includes(pmsCatUpper) || pmsCatUpper.includes(bType)) {
+                unassignedCount += isDorm
+                    ? (parseInt(s.pax || s.unitCount || 1, 10) || 1)
+                    : (parseInt(s.unitCount || 1, 10) || 1);
             }
         }
     }
 
-    return Math.max(0, peakCap - occupied);
+    const totalBeds = categoryBedIds.size > 0 ? categoryBedIds.size : peakCap;
+    return Math.max(0, totalBeds - (occupiedBedIds.size + unassignedCount));
 }
 
 // --------------------------------------------------------------------------
