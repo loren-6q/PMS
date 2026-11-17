@@ -16,7 +16,7 @@
 
 import { isOccupyingBooking } from './core/occupancy.js';
 import { parseYMD, getLocalYMD } from './core/dates.js';
-import { toCanonicalPropId } from './core/properties.js';
+import { toCanonicalPropId, resolveRoomCategory } from './core/properties.js';
 import { customAlert } from './core/ui-dialogs.js';
 
 const CHANNEX_STAGING_HOST = "staging.channex.io";
@@ -167,8 +167,6 @@ export const ChannexClient = {
 // 2. CONTIGUOUS RANGE COMPRESSION (CHANNEX BEST PRACTICES)
 // --------------------------------------------------------------------------
 
-// Merges contiguous dates with identical attributes.
-// Normalizes 1-day entries to 'date' and multi-day spans to 'date_from'/'date_to'.
 export function compressDateEntries(entries) {
     if (!entries || entries.length === 0) return [];
     const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
@@ -199,7 +197,6 @@ export function compressDateEntries(entries) {
         if (isContiguous && isSameAttributes) {
             currentRange.date_to = date;
         } else {
-            // Commit previous range
             if (currentRange.date_from === currentRange.date_to) {
                 compressed.push({
                     date: currentRange.date_from,
@@ -244,6 +241,11 @@ export function compressDateEntries(entries) {
 // --------------------------------------------------------------------------
 
 export function getPeakCategoryCapacity(pmsCat) {
+    const activePhysical = (window.hotelRooms || []).filter(
+        r => !r.inactive && (r.type === pmsCat || r.category === pmsCat)
+    ).length;
+    if (activePhysical > 0) return activePhysical;
+
     let maxSeen = 0;
     if (window.liveInventory) {
         Object.values(window.liveInventory).forEach(dayObj => {
@@ -254,51 +256,92 @@ export function getPeakCategoryCapacity(pmsCat) {
     }
     if (maxSeen > 0) return maxSeen;
 
-    const physicalCount = (window.hotelRooms || []).filter(r => (r.type === pmsCat || r.category === pmsCat)).length;
-    if (physicalCount > 0) return physicalCount;
-
     return 1;
 }
 
+function bookingMatchesCategory(booking, pmsCat, allCategories) {
+    const rawCandidates = [];
+    if (Array.isArray(booking.bookedTypes) && booking.bookedTypes.length > 0) {
+        rawCandidates.push(...booking.bookedTypes);
+    }
+    if (booking.bookedType) rawCandidates.push(booking.bookedType);
+    if (booking.category) rawCandidates.push(booking.category);
+    if (booking.roomType) rawCandidates.push(booking.roomType);
+
+    const pmsLower = pmsCat.toLowerCase();
+    for (const raw of rawCandidates) {
+        if (!raw) continue;
+        const resolved = resolveRoomCategory(raw, allCategories);
+        if (resolved === pmsCat) return true;
+        const rawLower = String(raw).toLowerCase();
+        if (rawLower === pmsLower || rawLower.includes(pmsLower) || pmsLower.includes(rawLower)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 export function getNetAvailabilityForDate(pmsCat, dStr, peakCap) {
-    if (window.liveInventory && window.liveInventory[dStr] && typeof window.liveInventory[dStr][pmsCat] === 'number') {
-        return window.liveInventory[dStr][pmsCat];
+    const staffList = window.staff || window.bookings || [];
+    const hotelRooms = (window.hotelRooms || []).filter(r => !r.inactive);
+
+    if (!Array.isArray(staffList) || staffList.length === 0) {
+        if (window.liveInventory && window.liveInventory[dStr] && typeof window.liveInventory[dStr][pmsCat] === 'number') {
+            return window.liveInventory[dStr][pmsCat];
+        }
+        return peakCap;
     }
 
-    const staffList = window.staff || window.bookings || [];
+    const allCategories = window.roomTypes || Array.from(new Set(hotelRooms.map(r => r.type || r.category).filter(Boolean)));
+    const roomCatById = new Map();
+    hotelRooms.forEach(r => {
+        if (r.id) roomCatById.set(String(r.id).trim().toUpperCase(), r.type || r.category || '');
+    });
+
+    const isDormCat = hotelRooms.some(r =>
+        (r.type === pmsCat || r.category === pmsCat) &&
+        !r.isPrivate &&
+        (r.isDorm === true || (r.rule && r.rule !== 'private') || pmsCat.toLowerCase().includes('dorm') || pmsCat.toLowerCase().includes('bed'))
+    ) || pmsCat.toLowerCase().includes('dorm') || pmsCat.toLowerCase().includes('bed');
+
+    const curProp = toCanonicalPropId(window.currentPropertyId || '');
     let occupied = 0;
-    const curProp = window.currentPropertyId;
 
-    if (Array.isArray(staffList)) {
-        for (let i = 0; i < staffList.length; i++) {
-            const s = staffList[i];
-            if (!s) continue;
-            const sProp = toCanonicalPropId(s.property);
-            if (sProp && curProp && sProp !== curProp) continue;
+    for (let i = 0; i < staffList.length; i++) {
+        const s = staffList[i];
+        if (!s || s.isMockTest) continue;
 
-            const rList = Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []);
-            const hasAssignedRoom = rList.length > 0 && rList[0] !== "";
+        const sProp = toCanonicalPropId(s.property);
+        if (sProp && curProp && sProp !== curProp) continue;
 
-            // The Strict Occupancy Law
-            if (!isOccupyingBooking(s.status, hasAssignedRoom)) continue;
+        const cIn = s.checkIn || s.start;
+        const cOut = s.checkOut || s.end;
+        if (!cIn || !cOut || dStr < cIn || dStr >= cOut) continue;
 
-            const catMatch = (s.bookedType && (s.bookedType === pmsCat || s.bookedType.includes(pmsCat) || pmsCat.includes(s.bookedType)))
-                || (s.category === pmsCat || s.roomType === pmsCat);
+        const rawRooms = Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []);
+        const assignedRooms = rawRooms.map(r => String(r || '').trim()).filter(Boolean);
+        const hasAssignedRoom = assignedRooms.length > 0;
 
-            if (!catMatch && !hasAssignedRoom) continue;
+        if (!isOccupyingBooking(s.status, hasAssignedRoom)) continue;
 
-            const cIn = s.checkIn || s.start;
-            const cOut = s.checkOut || s.end;
+        if (hasAssignedRoom) {
+            const assignedInCat = assignedRooms.filter(rid => {
+                const mappedCat = roomCatById.get(rid.toUpperCase());
+                return mappedCat === pmsCat;
+            }).length;
 
-            if (cIn && cOut && dStr >= cIn && dStr < cOut) {
-                if (pmsCat.toLowerCase().includes('dorm') || pmsCat.toLowerCase().includes('bed')) {
-                    occupied += parseInt(s.pax || s.bedCount || 1, 10);
-                } else {
-                    occupied += Math.max(1, rList.length);
-                }
+            if (assignedInCat > 0) {
+                occupied += assignedInCat;
+            }
+        } else if (bookingMatchesCategory(s, pmsCat, allCategories)) {
+            if (isDormCat) {
+                occupied += Math.max(1, parseInt(s.pax || s.bedCount || s.unitCount || 1, 10) || 1);
+            } else {
+                occupied += Math.max(1, parseInt(s.unitCount || 1, 10) || 1);
             }
         }
     }
+
     return Math.max(0, peakCap - occupied);
 }
 
@@ -306,7 +349,6 @@ export function getNetAvailabilityForDate(pmsCat, dStr, peakCap) {
 // 4. GRANULAR DISPATCHERS: ISOLATED RATES, RESTRICTIONS & AVAILABILITY
 // --------------------------------------------------------------------------
 
-// Format rates per Channex API spec: decimal string or integer cents
 function formatChannexRate(amount) {
     if (amount === null || amount === undefined || isNaN(amount) || amount <= 0) return null;
     const mult = Number(window.channexConfig?.rateMultiplier) || 1;
@@ -322,7 +364,6 @@ export async function sendRestrictionsUpdate(valuesList, apiKey, isStaging) {
     const propId = window.channexConfig?.propId;
     if (!propId) throw new Error("Property ID not configured in Channex settings.");
 
-    // Group by rate_plan_id, compress contiguous dates, and prepare values payload
     const byPlan = {};
     valuesList.forEach(v => {
         const pid = v.rate_plan_id;
@@ -377,7 +418,6 @@ export async function sendAvailabilityUpdate(valuesList, apiKey, isStaging) {
 // 5. PMS REAL-TIME RESERVATION SYNC (TEST 9 & 10 HOOK)
 // --------------------------------------------------------------------------
 
-// Invoked automatically when bookings are created, split, shortened (early checkout), or cancelled
 export async function triggerAutoSync(checkIn, checkOut, affectedCategories = []) {
     const propId = window.channexConfig?.propId;
     if (!propId || !window.channexMap || window.channexMap.length === 0) {
@@ -393,7 +433,6 @@ export async function triggerAutoSync(checkIn, checkOut, affectedCategories = []
         dates.push(getLocalYMD(new Date(sU + (i * 86400000))));
     }
 
-    // Resolve room type IDs
     const targets = window.channexMap.filter(m => {
         if (!m.channexId || !m.pmsCategory) return false;
         if (affectedCategories.length === 0) return true;
@@ -464,7 +503,6 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             }
         }
 
-        // Granular Delta Filters (so rate edits never push availability, and single-plan edits only push that plan)
         const hasGranularAvail = window.dirtyAvailKeys instanceof Set && window.dirtyAvailKeys.size > 0;
         const hasGranularPlans = window.dirtyPlanKeys instanceof Set && window.dirtyPlanKeys.size > 0;
         const useGranular = (mode === 'delta') && (hasGranularAvail || hasGranularPlans);
@@ -610,7 +648,7 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             restrPayload.push(...compressDateEntries(planEntries));
         });
 
-        // 3. Execute Calls (Test 1: Exactly 2 calls; Tests 2-10: Single batched API call per endpoint)
+        // 3. Execute Calls
         const recordedTaskIds = [];
 
         if (mode === 'full') {
