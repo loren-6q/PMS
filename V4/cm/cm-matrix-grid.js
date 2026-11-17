@@ -240,7 +240,7 @@ export function toggleMinStayMode(dateStr, room) {
         return;
     }
 
-   window.dirtyDates = window.dirtyDates || new Set();
+    window.dirtyDates = window.dirtyDates || new Set();
     window.dirtyDates.add(dateStr);
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
@@ -349,7 +349,6 @@ export function handleCellEdit(dateStr, room, field, val, isEvt = false) {
         }
     }
 
-
     markCellDirty(dateStr, room);
     window.dirtyDates.add(dateStr);
     window.syncedDates.delete(dateStr);
@@ -440,7 +439,7 @@ export function cycleUnifiedRestriction(dateStr, room, ratePlanId = null, isEvt 
             rData[`${pfx}cta`] = false; rData[`${pfx}ctd`] = false; rData[`${pfx}stop`] = false;
             delete rData.isOverride[`${pfx}cta`]; delete rData.isOverride[`${pfx}ctd`]; delete rData.isOverride[`${pfx}stop`];
         }
-
+    }
 
     markCellDirty(dateStr, ratePlanId ? `${room}|${ratePlanId}` : room);
     window.dirtyDates.add(dateStr);
@@ -490,8 +489,8 @@ export function unlockCellOverride(dateStr, room, ratePlanId = null) {
                 delete rData.std;
             }
             if (window.rippleDay) {
-                const anchors = new Set((window.masterPricing.relationships || []).map(r => r.anchor));
-                anchors.forEach(a => { if (a && a !== 'unlinked') rippleDay(dateStr, a, true); });
+                const anchors = new Set((window.masterPricing.relationships || []).map(r => r.anchor || r.source || r.from));
+                anchors.forEach(a => { if (a && a !== 'unlinked') rippleDay(dateStr, a, true, 'rates'); });
             }
         }
     }
@@ -540,7 +539,7 @@ export function setViewDensity(density) {
     window.viewDensity = density;
     ['avail', 'price', 'compact', 'minmax', 'full'].forEach(d => {
         const btn = document.getElementById(`density-${d}`);
-        if (btn) btn.className = d === density 
+        if (btn) btn.className = d === density
             ? "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black"
             : "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
     });
@@ -673,7 +672,7 @@ export function renderRateMatrix() {
         const displayName = window.displayAbbrev?.[room] || room;
         const isLinkedTargetRoom = linkedTargetSet.has(room.trim().toLowerCase());
         const allMappedRates = (window.channexRateMap || []).filter(m => m.pmsCategory === room);
-        
+
         const isRoomManuallyExpanded = expandedRooms.has(room);
         const effectiveRateLevel = isRoomManuallyExpanded && rateLevel === 'min' ? 'all' : rateLevel;
 
@@ -813,8 +812,8 @@ export function renderRateMatrix() {
                 ${pinCornerHtml}
                 ${showTop ? `
                 <div class="flex items-center w-full h-[15px] border-b ${isStopped ? 'border-rose-700 bg-transparent' : 'border-slate-200 bg-slate-50/70'} overflow-hidden leading-none">
-                    <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black ${isGlobalMin && !isStopped ? 'text-indigo-600/80' : 'text-slate-700'} outline-none p-0" value="${minVal}" placeholder="Min" title="Min Stay (e.g. 3 or 3▸ for Arrival; double-click to toggle)" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', '${room}')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)">
-                    <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none ${isGlobalMax && !isStopped ? 'text-indigo-500/80' : 'text-slate-500'} outline-none p-0 border-l ${isStopped ? 'border-rose-700' : 'border-slate-200'}" value="${maxVal}" placeholder="Max" title="Max Stay" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)">
+                    <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black ${isGlobalMin && !isStopped ? 'text-indigo-600/80' : 'text-slate-700'} outline-none p-0" value="${minVal}" placeholder="Min" title="Min Stay (e.g. 3 or 3▸ for Arrival; double-click to toggle)" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', '${safeRoom}')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'min_hybrid', this.value)">
+                    <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none ${isGlobalMax && !isStopped ? 'text-indigo-500/80' : 'text-slate-500'} outline-none p-0 border-l ${isStopped ? 'border-rose-700' : 'border-slate-200'}" value="${maxVal}" placeholder="Max" title="Max Stay" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'max', this.value)">
                 </div>` : ''}
 
                 <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
@@ -823,7 +822,7 @@ export function renderRateMatrix() {
 
                 ${showBottom ? `
                 <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${isStopped ? 'border-rose-700' : 'border-slate-100'}">
-                    <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${room}')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle: Open → CTA → CTD → CTB → STOP">
+                    <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${safeRoom}')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle: Open → CTA → CTD → CTB → STOP">
                         ${pillHtml}
                     </button>
                 </div>` : ''}
@@ -881,17 +880,17 @@ export function renderRateMatrix() {
                     ${evtPinCornerHtml}
                     ${showTopEvt ? `
                     <div class="flex items-center w-full h-[15px] border-b ${evtStopped ? 'border-rose-700 bg-transparent' : 'border-pink-200 bg-white/60'} overflow-hidden leading-none">
-                        <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-pink-800 outline-none p-0" value="${evtMinVal}" placeholder="Min" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value, true)">
-                        <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-pink-500 outline-none p-0 border-l ${evtStopped ? 'border-rose-700' : 'border-pink-200'}" value="${evtMaxVal}" placeholder="Max" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value, true)">
+                        <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-pink-800 outline-none p-0" value="${evtMinVal}" placeholder="Min" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'min_hybrid', this.value, true)">
+                        <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-pink-500 outline-none p-0 border-l ${evtStopped ? 'border-rose-700' : 'border-pink-200'}" value="${evtMaxVal}" placeholder="Max" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'max', this.value, true)">
                     </div>` : ''}
 
                     <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
-                        <input type="number" data-fill-room="${room}" data-fill-field="fmp" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] ${isDirtyEvt && !evtStopped ? '!text-amber-950' : 'text-pink-800'} px-0" value="${displayFmp}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${room}', 'fmp')" onchange="window.handleCellEdit('${dateStr}', '${room}', 'fmp', this.value, true)">
+                        <input type="number" data-fill-room="${room}" data-fill-field="fmp" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] ${isDirtyEvt && !evtStopped ? '!text-amber-950' : 'text-pink-800'} px-0" value="${displayFmp}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${safeRoom}', 'fmp')" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'fmp', this.value, true)">
                     </div>
 
                     ${showBottomEvt ? `
                     <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${evtStopped ? 'border-rose-700' : 'border-pink-200/70'}">
-                        <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${room}', null, true)" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle Event restrictions">
+                        <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${safeRoom}', null, true)" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle Event restrictions">
                             ${evtPillHtml}
                         </button>
                     </div>` : ''}
@@ -944,21 +943,21 @@ export function renderRateMatrix() {
                     ? !!(rData.dir_stop || rData.dir_stopSell)
                     : ((rData.stop !== undefined || rData.stopSell !== undefined) ? !!(rData.stop || rData.stopSell) : !!(gData.stop || gData.stopSell));
                 const dirPillHtml = getUnifiedRestrictionBadgeHtml(dirCta, dirCtd, dirStopped);
-                
+
                 trDir += `<td class="p-0 border-r border-emerald-200 text-center relative ${dirStopped ? 'rate-cell-stopped' : (isPinnedDir ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;">
                     ${showTopDir ? `
                     <div class="flex items-center w-full h-[15px] border-b ${dirStopped ? 'border-rose-700 bg-transparent' : 'border-emerald-200 bg-white/70'} overflow-hidden leading-none">
-                        <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-emerald-800 outline-none p-0" value="${dirMinVal}" placeholder="Min" onchange="window.handleDirectEdit('${dateStr}', '${room}', 'min', this.value)">
-                        <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-emerald-600 outline-none p-0 border-l ${dirStopped ? 'border-rose-700' : 'border-emerald-200'}" value="${dirMaxVal}" placeholder="Max" onchange="window.handleDirectEdit('${dateStr}', '${room}', 'max', this.value)">
+                        <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-emerald-800 outline-none p-0" value="${dirMinVal}" placeholder="Min" onchange="window.handleDirectEdit('${dateStr}', '${safeRoom}', 'min', this.value)">
+                        <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-emerald-600 outline-none p-0 border-l ${dirStopped ? 'border-rose-700' : 'border-emerald-200'}" value="${dirMaxVal}" placeholder="Max" onchange="window.handleDirectEdit('${dateStr}', '${safeRoom}', 'max', this.value)">
                     </div>` : ''}
 
                     <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
-                        <input type="number" data-fill-room="${room}" data-fill-field="dir_std" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-emerald-900 px-0" value="${displayDir}" onfocus="this.select()" onchange="window.handleDirectEdit('${dateStr}', '${room}', 'rate', this.value)">
+                        <input type="number" data-fill-room="${room}" data-fill-field="dir_std" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-emerald-900 px-0" value="${displayDir}" onfocus="this.select()" onchange="window.handleDirectEdit('${dateStr}', '${safeRoom}', 'rate', this.value)">
                     </div>
 
                     ${showBottomDir ? `
                     <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${dirStopped ? 'border-rose-700' : 'border-emerald-200/70'}">
-                        <button type="button" onclick="event.stopPropagation(); window.cycleDirectRestriction('${dateStr}', '${room}')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Direct booking restriction (independent of OTAs)">
+                        <button type="button" onclick="event.stopPropagation(); window.cycleDirectRestriction('${dateStr}', '${safeRoom}')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Direct booking restriction (independent of OTAs)">
                             ${dirPillHtml}
                         </button>
                     </div>` : ''}
@@ -978,7 +977,7 @@ export function renderRateMatrix() {
 
                 let trOta = `<tr class="bg-indigo-50/40 border-b border-indigo-100">
                     <td class="frozen-col !p-0 z-20 border-r-2 border-slate-400 !bg-[#eef2ff]">
-                    <div class="w-[140px] flex items-center justify-between gap-1 px-1.5 h-full text-left truncate" title="${rate.ratePlanTitle}">
+                        <div class="w-[140px] flex items-center justify-between gap-1 px-1.5 h-full text-left truncate" title="${rate.ratePlanTitle}">
                             <div class="flex items-center gap-1 min-w-0">
                                 ${badgeHtml}
                                 <span class="text-[9px] font-black text-indigo-950 truncate">${rate.ratePlanTitle}</span>
@@ -990,7 +989,7 @@ export function renderRateMatrix() {
                     const cur = new Date(dObj);
                     cur.setUTCDate(cur.getUTCDate() + i);
                     const dateStr = getLocalYMD(cur);
-                   const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
+                    const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
                     const rData = dayObj[room] || {};
                     const gData = dayObj.GLOBAL || {};
                     const otaOverride = dayObj.otaOverrides?.[rate.ratePlanId];
@@ -1021,19 +1020,19 @@ export function renderRateMatrix() {
                     const otaCta = rawOtaCta !== undefined ? !!rawOtaCta : (rData.cta !== undefined ? !!rData.cta : !!gData.cta);
                     const otaCtd = rawOtaCtd !== undefined ? !!rawOtaCtd : (rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd);
                     const otaPillHtml = getUnifiedRestrictionBadgeHtml(otaCta, otaCtd, otaStop);
-                    
-                    trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaStop ? 'rate-cell-stopped' : (otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}', '${rate.ratePlanId}')">
+
+                    trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaStop ? 'rate-cell-stopped' : (otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}', '${rate.ratePlanId}')">
                         ${showTop ? `
                         <div class="flex items-center w-full h-[15px] border-b ${otaStop ? 'border-rose-700 bg-transparent' : 'border-indigo-100 bg-white/60'} overflow-hidden leading-none">
-                            <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-bold text-indigo-700 outline-none p-0" value="${otaMin}" placeholder="Min" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'min', this.value)">
-                            <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-indigo-400 outline-none p-0 border-l ${otaStop ? 'border-rose-700' : 'border-indigo-100'}" value="${otaMax}" placeholder="Max" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'max', this.value)">
+                            <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-bold text-indigo-700 outline-none p-0" value="${otaMin}" placeholder="Min" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'min', this.value)">
+                            <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-indigo-400 outline-none p-0 border-l ${otaStop ? 'border-rose-700' : 'border-indigo-100'}" value="${otaMax}" placeholder="Max" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'max', this.value)">
                         </div>` : ''}
                         <div class="${(density === 'compact' || density === 'price') ? 'h-[22px]' : 'h-[18px]'} flex items-center justify-center">
-                            <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined && !otaStop ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${computed}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${room}', '=', 0, 'rate', this.value)">
+                            <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined && !otaStop ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${computed}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'rate', this.value)">
                         </div>
                         ${showBottom ? `
                         <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${otaStop ? 'border-rose-700' : 'border-indigo-100/70'}">
-                            <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${room}', '${rate.ratePlanId}')" class="cursor-pointer w-full h-full flex items-center justify-center">
+                            <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${safeRoom}', '${rate.ratePlanId}')" class="cursor-pointer w-full h-full flex items-center justify-center">
                                 ${otaPillHtml}
                             </button>
                         </div>` : ''}
@@ -1092,136 +1091,136 @@ export function renderRateMatrix() {
 }
 
 export function handleDirectEdit(dateStr, room, field, val) {
-        window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-        const dObj = window.masterPricing.timeline[dateStr];
-        dObj[room] = dObj[room] || { isOverride: {} };
-        const rData = dObj[room];
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+    dObj[room] = dObj[room] || { isOverride: {} };
+    const rData = dObj[room];
 
-        if (field === 'rate') {
-            if (val === "" || isNaN(parseFloat(val))) delete rData.dir_std;
-            else rData.dir_std = roundCurrency(parseFloat(val));
-        } else if (field === 'min') {
-            const clean = String(val).trim();
-            if (!clean || clean === '-') { delete rData.dir_min; delete rData.dir_min_arr; }
-            else if (/(\d+)\s*(a|>|▸)/i.test(clean)) { rData.dir_min_arr = parseInt(clean.match(/(\d+)/)[1], 10); delete rData.dir_min; }
-            else { rData.dir_min = parseInt(clean.match(/(\d+)/)[1], 10); delete rData.dir_min_arr; }
-        } else if (field === 'max') {
-            if (!val || val === '-') delete rData.dir_max;
-            else rData.dir_max = parseInt(val, 10);
-        }
-        if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
-        renderRateMatrix();
+    if (field === 'rate') {
+        if (val === "" || isNaN(parseFloat(val))) delete rData.dir_std;
+        else rData.dir_std = roundCurrency(parseFloat(val));
+    } else if (field === 'min') {
+        const clean = String(val).trim();
+        if (!clean || clean === '-') { delete rData.dir_min; delete rData.dir_min_arr; }
+        else if (/(\d+)\s*(a|>|▸)/i.test(clean)) { rData.dir_min_arr = parseInt(clean.match(/(\d+)/)[1], 10); delete rData.dir_min; }
+        else { rData.dir_min = parseInt(clean.match(/(\d+)/)[1], 10); delete rData.dir_min_arr; }
+    } else if (field === 'max') {
+        if (!val || val === '-') delete rData.dir_max;
+        else rData.dir_max = parseInt(val, 10);
     }
+    if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
+    renderRateMatrix();
+}
 
-    export function cycleDirectRestriction(dateStr, room) {
-        window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
-        const dObj = window.masterPricing.timeline[dateStr];
-        dObj[room] = dObj[room] || { isOverride: {} };
-        const rData = dObj[room];
+export function cycleDirectRestriction(dateStr, room) {
+    window.masterPricing.timeline[dateStr] = window.masterPricing.timeline[dateStr] || {};
+    const dObj = window.masterPricing.timeline[dateStr];
+    dObj[room] = dObj[room] || { isOverride: {} };
+    const rData = dObj[room];
 
-        const cta = !!rData.dir_cta;
-        const ctd = !!rData.dir_ctd;
-        const stop = !!(rData.dir_stop || rData.dir_stopSell);
+    const cta = !!rData.dir_cta;
+    const ctd = !!rData.dir_ctd;
+    const stop = !!(rData.dir_stop || rData.dir_stopSell);
 
-        if (!cta && !ctd && !stop) { rData.dir_cta = true; rData.dir_ctd = false; rData.dir_stop = false; }
-        else if (cta && !ctd && !stop) { rData.dir_cta = false; rData.dir_ctd = true; rData.dir_stop = false; }
-        else if (!cta && ctd && !stop) { rData.dir_cta = true; rData.dir_ctd = true; rData.dir_stop = false; }
-        else if (cta && ctd && !stop) { rData.dir_cta = false; rData.dir_ctd = false; rData.dir_stop = true; }
-        else { rData.dir_cta = false; rData.dir_ctd = false; rData.dir_stop = false; }
+    if (!cta && !ctd && !stop) { rData.dir_cta = true; rData.dir_ctd = false; rData.dir_stop = false; }
+    else if (cta && !ctd && !stop) { rData.dir_cta = false; rData.dir_ctd = true; rData.dir_stop = false; }
+    else if (!cta && ctd && !stop) { rData.dir_cta = true; rData.dir_ctd = true; rData.dir_stop = false; }
+    else if (cta && ctd && !stop) { rData.dir_cta = false; rData.dir_ctd = false; rData.dir_stop = true; }
+    else { rData.dir_cta = false; rData.dir_ctd = false; rData.dir_stop = false; }
 
-        if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
-        renderRateMatrix();
-    }
+    if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
+    renderRateMatrix();
+}
 
-    // Progressive Multi-Tap Ctrl + RightArrow Fill-Right + Horizontal Tab Navigation
-    let lastFillKey = '';
-    let lastFillTime = 0;
-    let fillTapStage = 0;
+// Progressive Multi-Tap Ctrl + RightArrow Fill-Right + Horizontal Tab Navigation
+let lastFillKey = '';
+let lastFillTime = 0;
+let fillTapStage = 0;
 
-    if (typeof document !== 'undefined') {
-        document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowRight') {
-                const target = document.activeElement;
-                if (!target || target.tagName !== 'INPUT') return;
-                const room = target.dataset.fillRoom;
-                const field = target.dataset.fillField;
-                const startDate = target.dataset.fillDate;
-                if (!room || !field || !startDate) return;
+if (typeof document !== 'undefined') {
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowRight') {
+            const target = document.activeElement;
+            if (!target || target.tagName !== 'INPUT') return;
+            const room = target.dataset.fillRoom;
+            const field = target.dataset.fillField;
+            const startDate = target.dataset.fillDate;
+            if (!room || !field || !startDate) return;
 
-                e.preventDefault();
-                const now = Date.now();
-                const key = `${room}|${field}|${startDate}`;
-                const baseStep = parseInt(window.pricingRules?.fillRightDays, 10) || 7;
-                const steps = Array.from(new Set([baseStep, 14, 30, 90])).sort((a, b) => a - b);
+            e.preventDefault();
+            const now = Date.now();
+            const key = `${room}|${field}|${startDate}`;
+            const baseStep = parseInt(window.pricingRules?.fillRightDays, 10) || 7;
+            const steps = Array.from(new Set([baseStep, 14, 30, 90])).sort((a, b) => a - b);
 
-                if (key === lastFillKey && (now - lastFillTime) < 1800) {
-                    fillTapStage = (fillTapStage + 1) % steps.length;
+            if (key === lastFillKey && (now - lastFillTime) < 1800) {
+                fillTapStage = (fillTapStage + 1) % steps.length;
+            } else {
+                fillTapStage = 0;
+            }
+            lastFillKey = key;
+            lastFillTime = now;
+
+            const daysForward = steps[fillTapStage];
+            const rawVal = target.value;
+            const numVal = rawVal !== '' && !isNaN(parseFloat(rawVal)) ? roundCurrency(parseFloat(rawVal)) : '';
+            const startMs = parseYMD(startDate);
+
+            for (let i = 0; i <= daysForward; i++) {
+                const dStr = getLocalYMD(new Date(startMs + (i * 86400000)));
+                window.masterPricing.timeline[dStr] = window.masterPricing.timeline[dStr] || {};
+                window.masterPricing.timeline[dStr][room] = window.masterPricing.timeline[dStr][room] || { isOverride: {} };
+                const cell = window.masterPricing.timeline[dStr][room];
+                cell.isOverride = cell.isOverride || {};
+
+                if (numVal === '') {
+                    delete cell[field];
+                    delete cell.isOverride[field];
                 } else {
-                    fillTapStage = 0;
-                }
-                lastFillKey = key;
-                lastFillTime = now;
-
-                const daysForward = steps[fillTapStage];
-                const rawVal = target.value;
-                const numVal = rawVal !== '' && !isNaN(parseFloat(rawVal)) ? roundCurrency(parseFloat(rawVal)) : '';
-                const startMs = parseYMD(startDate);
-
-                for (let i = 0; i <= daysForward; i++) {
-                    const dStr = getLocalYMD(new Date(startMs + (i * 86400000)));
-                    window.masterPricing.timeline[dStr] = window.masterPricing.timeline[dStr] || {};
-                    window.masterPricing.timeline[dStr][room] = window.masterPricing.timeline[dStr][room] || { isOverride: {} };
-                    const cell = window.masterPricing.timeline[dStr][room];
-                    cell.isOverride = cell.isOverride || {};
-
-                    if (numVal === '') {
-                        delete cell[field];
-                        delete cell.isOverride[field];
-                    } else {
-                        cell[field] = numVal;
-                        cell.isOverride[field] = true;
-                        if (window.editMode === 'ripple' && (field === 'std' || field === 'fmp')) {
-                            rippleDay(dStr, room, true);
-                        }
-                    }
-                    if (typeof window.markCmDirty === 'function' && field !== 'dir_std') {
-                        window.markCmDirty(dStr, 'rate', window.editMode === 'ripple' ? '*' : `ROOM:${room}`);
+                    cell[field] = numVal;
+                    cell.isOverride[field] = true;
+                    if (window.editMode === 'ripple' && (field === 'std' || field === 'fmp')) {
+                        rippleDay(dStr, room, true, 'rates');
                     }
                 }
-
-                const tbody = document.getElementById('grid-body');
-                const tr = target.closest('tr');
-                const td = target.closest('td');
-                if (tbody && tr && td) {
-                    window._pendingGridFocus = {
-                        id: target.id || null,
-                        selector: '.cell-price-text',
-                        rowIdx: Array.from(tbody.children).indexOf(tr),
-                        colIdx: Array.from(tr.children).indexOf(td)
-                    };
+                if (typeof window.markCmDirty === 'function' && field !== 'dir_std') {
+                    window.markCmDirty(dStr, 'rate', window.editMode === 'ripple' ? '*' : `ROOM:${room}`);
                 }
-
-                if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
-                renderRateMatrix();
-
-                const nextStep = steps[(fillTapStage + 1) % steps.length];
-                const tt = document.getElementById('cm-tooltip');
-                if (tt) {
-                    tt.innerText = `Filled forward +${daysForward} days (Press Ctrl+→ again for +${nextStep}d)`;
-                    tt.classList.remove('hidden');
-                    tt.style.left = '50%';
-                    tt.style.top = '54px';
-                    tt.style.transform = 'translateX(-50%)';
-                    clearTimeout(window._fillToastTimer);
-                    window._fillToastTimer = setTimeout(() => {
-                        tt.classList.add('hidden');
-                        tt.style.transform = '';
-                    }, 2200);
-                }
-                return;
             }
 
-            if (e.key !== 'Tab') return;
+            const tbody = document.getElementById('grid-body');
+            const tr = target.closest('tr');
+            const td = target.closest('td');
+            if (tbody && tr && td) {
+                window._pendingGridFocus = {
+                    id: target.id || null,
+                    selector: '.cell-price-text',
+                    rowIdx: Array.from(tbody.children).indexOf(tr),
+                    colIdx: Array.from(tr.children).indexOf(td)
+                };
+            }
+
+            if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
+            renderRateMatrix();
+
+            const nextStep = steps[(fillTapStage + 1) % steps.length];
+            const tt = document.getElementById('cm-tooltip');
+            if (tt) {
+                tt.innerText = `Filled forward +${daysForward} days (Press Ctrl+→ again for +${nextStep}d)`;
+                tt.classList.remove('hidden');
+                tt.style.left = '50%';
+                tt.style.top = '54px';
+                tt.style.transform = 'translateX(-50%)';
+                clearTimeout(window._fillToastTimer);
+                window._fillToastTimer = setTimeout(() => {
+                    tt.classList.add('hidden');
+                    tt.style.transform = '';
+                }, 2200);
+            }
+            return;
+        }
+
+        if (e.key !== 'Tab') return;
         const target = e.target;
         if (!target || target.tagName !== 'INPUT') return;
 
@@ -1289,6 +1288,7 @@ if (typeof window !== 'undefined') {
     window.toggleMinStayMode = toggleMinStayMode;
     window.handleCellPriceChange = handleCellPriceChange;
     window.handleCellEdit = handleCellEdit;
+    window.handleOtaEdit = handleOtaEdit;
     window.cycleUnifiedRestriction = cycleUnifiedRestriction;
     window.unlockCellOverride = unlockCellOverride;
     window.setRoomLevel = setRoomLevel;
