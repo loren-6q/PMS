@@ -1,6 +1,11 @@
 // ==========================================================================
 // setup/setup-mapping.js - Channex Room Type & Rate Plan Mapping
 // Wild & Wandering Property Management System
+//
+// ARCHITECTURE CONTRACT:
+// - Pure Step 3 UI & Mapping Binder
+// - Zero raw Channex API URLs, pagination, or JSON:API payload wrappers
+// - Delegates all Channex API communication strictly to ChannexClient
 // ==========================================================================
 
 import { customAlert } from '../core/ui-dialogs.js';
@@ -18,36 +23,12 @@ export async function fetchChannexData() {
     try {
         customAlert("Connecting...", "Fetching room types, rate plans, and connected channels from Channex...");
 
-        window.channexRooms = await ChannexClient.requestAll(`/room_types?filter[property_id]=${propId}`, {}, apiKey);
+        const { rooms, ratePlans, policies, channels } = await ChannexClient.fetchPropertySetupData(propId, apiKey);
 
-        const allPlans = await ChannexClient.requestAll(`/rate_plans?filter[property_id]=${propId}`, {}, apiKey);
-
-        // Fetch cancellation policies
-        try {
-            window.channexPolicies = await ChannexClient.requestAll(`/cancellation_policies?filter[property_id]=${propId}`, {}, apiKey);
-        } catch (cpErr) {
-            console.warn("[Channex] Could not fetch cancellation policies:", cpErr);
-            window.channexPolicies = window.channexPolicies || [];
-        }
-
-        // Fetch active channels connected to this property in Channex
-        try {
-            window.channexConnectedChannels = await ChannexClient.requestAll(`/channels?filter[property_id]=${propId}`, {}, apiKey);
-        } catch (cErr) {
-            console.warn("[Channex] Could not fetch connected channels:", cErr);
-            window.channexConnectedChannels = window.channexConnectedChannels || [];
-        }
-
-        // Primary base plans only (scoped to active property)
-        window.channexRatePlans = allPlans.filter(p => {
-            const attr = p.attributes || {};
-            const rel = p.relationships || {};
-            const planPropId = attr.property_id || rel.property?.data?.id;
-            if (planPropId && planPropId !== propId) return false;
-            const hasChannel = !!(rel.channel?.data?.id || attr.channel_id);
-            const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
-            return !hasChannel && !hasParent && !attr.ui_read_only && !attr.is_derived;
-        });
+        window.channexRooms = rooms;
+        window.channexRatePlans = ratePlans;
+        window.channexPolicies = policies.length ? policies : (window.channexPolicies || []);
+        window.channexConnectedChannels = channels.length ? channels : (window.channexConnectedChannels || []);
 
         renderStep3UnifiedMapping();
         customAlert("Fetched", `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} rate plans, and ${window.channexConnectedChannels.length} connected channels.`);
@@ -625,7 +606,7 @@ export function toggleBatchPresetPlans(checked) {
 async function resolveChannexPolicyId(targetPolicyType, propId, apiKey) {
     if (!window.channexPolicies || window.channexPolicies.length === 0) {
         try {
-            window.channexPolicies = await ChannexClient.requestAll(`/cancellation_policies?filter[property_id]=${propId}`, {}, apiKey);
+            window.channexPolicies = await ChannexClient.fetchCancellationPolicies(propId, apiKey);
         } catch (e) {
             console.warn("[Channex] Policy fetch fallback failed:", e);
         }
@@ -680,23 +661,15 @@ export async function executeCreateAndPushRoomTypes() {
             const countOfRooms = isDorm ? totalBeds : Math.max(1, sameCat.length);
             const bedCapacity = Math.max(1, parseInt(sameCat[0]?.beds || 1, 10));
 
-            const payload = {
-                room_type: {
-                    property_id: propId,
-                    title: cat,
-                    count_of_rooms: countOfRooms,
-                    occ_adults: occAdults,
-                    occ_children: 0,
-                    occ_infants: 0,
-                    default_occupancy: occAdults,
-                    room_kind: isDorm ? 'dorm' : 'room',
-                    ...(isDorm ? { capacity: bedCapacity } : {})
-                }
-            };
-
-            const res = await ChannexClient.request('/room_types', {
-                method: 'POST',
-                body: JSON.stringify(payload)
+            const res = await ChannexClient.createRoomType(propId, {
+                title: cat,
+                count_of_rooms: countOfRooms,
+                occ_adults: occAdults,
+                occ_children: 0,
+                occ_infants: 0,
+                default_occupancy: occAdults,
+                room_kind: isDorm ? 'dorm' : 'room',
+                ...(isDorm ? { capacity: bedCapacity } : {})
             }, apiKey);
 
             if (res?.data) {
@@ -817,22 +790,14 @@ export async function executeCloneRatePlans() {
                 const matchedPolicyId = sourcePolicyId || await resolveChannexPolicyId(spMap.policy || 'non-ref', propId, apiKey);
                 const sourceSellMode = sp.attributes?.sell_mode || 'per_room';
 
-                const payload = {
-                    rate_plan: {
-                        title: newTitle,
-                        property_id: propId,
-                        room_type_id: tgtMap.channexId,
-                        currency: currency,
-                        sell_mode: sourceSellMode,
-                        meal_type: sp.attributes?.meal_type || 'none',
-                        ...(matchedPolicyId ? { cancellation_policy_id: matchedPolicyId } : {}),
-                        options: sp.attributes?.options || [{ occupancy: 1, is_primary: true, rate: 0 }]
-                    }
-                };
-
-                const res = await ChannexClient.request('/rate_plans', {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
+                const res = await ChannexClient.createRatePlan(propId, {
+                    title: newTitle,
+                    room_type_id: tgtMap.channexId,
+                    currency: currency,
+                    sell_mode: sourceSellMode,
+                    meal_type: sp.attributes?.meal_type || 'none',
+                    ...(matchedPolicyId ? { cancellation_policy_id: matchedPolicyId } : {}),
+                    options: sp.attributes?.options || [{ occupancy: 1, is_primary: true, rate: 0 }]
                 }, apiKey);
 
                 if (res?.data) {
@@ -862,7 +827,8 @@ export async function executeCloneRatePlans() {
 
         closeCreateRatePlanModal();
         renderStep3UnifiedMapping();
-        customAlert("Success", `Cloned ${createdCount} missing rate plan(s) from "${sourceCat}"${skippedCount ? ` (${skippedCount} existing skipped)` : ''}.`);    } catch (err) {
+        customAlert("Success", `Cloned ${createdCount} missing rate plan(s) from "${sourceCat}"${skippedCount ? ` (${skippedCount} existing skipped)` : ''}.`);
+    } catch (err) {
         console.error("[Clone Rate Plans Error]:", err);
         customAlert("Cloning Failed", err.message);
     }
@@ -898,35 +864,51 @@ export async function executeBatchCreateRatePlans() {
     const totalOps = targetCats.length * selectedTemplates.length;
 
     try {
-        customAlert("Pushing Suite...", `Creating ${totalOps} rate plan(s) across ${targetCats.length} category(ies)...`);
+        customAlert("Pushing Suite...", `Checking & pushing up to ${totalOps} rate plan(s) across ${targetCats.length} category(ies)...`);
         let createdCount = 0;
+        let skippedCount = 0;
 
         for (const tgtCat of targetCats) {
             const tgtMap = window.channexMap.find(m => m.pmsCategory === tgtCat);
             const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
             const sameCat = defs.filter(r => r.category === tgtCat);
             const isDorm = sameCat.some(r => r.rule !== 'private');
+            const existingMapped = (window.channexRateMap || []).filter(r => r.pmsCategory === tgtCat);
+            const existingChannexPlans = (window.channexRatePlans || []).filter(
+                p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === tgtMap.channexId
+            );
 
             for (const tpl of selectedTemplates) {
                 const finalTitle = tpl.titleTpl.replace(/{CAT}/g, tgtCat).trim();
+                const tplChan = tpl.channel || 'DEF';
+                const tplChanId = tpl.channelId || '';
+                const tplPol = tpl.policy || 'non-ref';
+
+                const alreadyExists =
+                    existingMapped.some(r =>
+                        (r.channel || 'DEF') === tplChan &&
+                        (r.channelId || '') === tplChanId &&
+                        (r.policy || 'non-ref') === tplPol
+                    ) ||
+                    existingChannexPlans.some(p =>
+                        (p.attributes?.title || '').trim().toLowerCase() === finalTitle.toLowerCase()
+                    );
+
+                if (alreadyExists) {
+                    skippedCount++;
+                    continue;
+                }
+
                 const matchedPolicyId = await resolveChannexPolicyId(tpl.policy, propId, apiKey);
 
-                const payload = {
-                    rate_plan: {
-                        title: finalTitle,
-                        property_id: propId,
-                        room_type_id: tgtMap.channexId,
-                        currency: currency,
-                        sell_mode: isDorm ? 'per_person' : 'per_room',
-                        meal_type: 'none',
-                        ...(matchedPolicyId ? { cancellation_policy_id: matchedPolicyId } : {}),
-                        options: [{ occupancy: 1, is_primary: true, rate: 0 }]
-                    }
-                };
-
-                const res = await ChannexClient.request('/rate_plans', {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
+                const res = await ChannexClient.createRatePlan(propId, {
+                    title: finalTitle,
+                    room_type_id: tgtMap.channexId,
+                    currency: currency,
+                    sell_mode: isDorm ? 'per_person' : 'per_room',
+                    meal_type: 'none',
+                    ...(matchedPolicyId ? { cancellation_policy_id: matchedPolicyId } : {}),
+                    options: [{ occupancy: 1, is_primary: true, rate: 0 }]
                 }, apiKey);
 
                 if (res?.data) {
@@ -958,7 +940,7 @@ export async function executeBatchCreateRatePlans() {
 
         closeCreateRatePlanModal();
         renderStep3UnifiedMapping();
-        customAlert("Success", `Created and mapped ${createdCount} rate plan(s) across selected categories.`);
+        customAlert("Success", `Created ${createdCount} missing rate plan(s)${skippedCount ? ` (${skippedCount} existing skipped)` : ''}.`);
     } catch (err) {
         console.error("[Batch Create Rate Plans Error]:", err);
         customAlert("Creation Failed", err.message);
@@ -1144,22 +1126,14 @@ export async function executeCreateAndPushRatePlan() {
             const sameCat = defs.filter(r => r.category === cat);
             const isDorm = sameCat.some(r => r.rule !== 'private');
 
-            const payload = {
-                rate_plan: {
-                    title: finalTitle,
-                    property_id: propId,
-                    room_type_id: currentMap.channexId,
-                    currency: currency,
-                    sell_mode: isDorm ? 'per_person' : 'per_room',
-                    meal_type: 'none',
-                    ...(matchedPolicyId ? { cancellation_policy_id: matchedPolicyId } : {}),
-                    options: [{ occupancy: 1, is_primary: true, rate: 0 }]
-                }
-            };
-
-            const res = await ChannexClient.request('/rate_plans', {
-                method: 'POST',
-                body: JSON.stringify(payload)
+            const res = await ChannexClient.createRatePlan(propId, {
+                title: finalTitle,
+                room_type_id: currentMap.channexId,
+                currency: currency,
+                sell_mode: isDorm ? 'per_person' : 'per_room',
+                meal_type: 'none',
+                ...(matchedPolicyId ? { cancellation_policy_id: matchedPolicyId } : {}),
+                options: [{ occupancy: 1, is_primary: true, rate: 0 }]
             }, apiKey);
 
             if (res?.data) {
