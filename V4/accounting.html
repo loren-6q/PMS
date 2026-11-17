@@ -97,11 +97,11 @@
 
                 <!-- Column Visibility Picker -->
                 <div class="relative">
-                    <button type="button" onclick="window.toggleAccDropdown('acc-columns-dropdown')" class="px-2 py-0.5 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-black text-[10px] uppercase flex items-center gap-1 cursor-pointer">
+                    <button type="button" onclick="window.toggleAccDropdown('acc-columns-dropdown', this)" class="px-2 py-0.5 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-black text-[10px] uppercase flex items-center gap-1 cursor-pointer">
                         <i data-lucide="columns-3" class="!w-3 !h-3 text-indigo-600"></i>
                         <span>Columns ▾</span>
                     </button>
-                    <div id="acc-columns-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-48 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-72 overflow-y-auto p-1.5 text-left"></div>
+                    <div id="acc-columns-dropdown" class="acc-multi-drop hidden fixed w-48 bg-slate-900 text-white border border-slate-600 rounded shadow-2xl z-[9999] max-h-72 overflow-y-auto p-1.5 text-left"></div>
                 </div>
             </div>
 
@@ -117,7 +117,7 @@
         <main id="view-ledger" class="flex-1 flex flex-col min-h-0 bg-white border border-slate-300 sm:rounded-b-lg shadow overflow-hidden">
             <div class="flex-1 overflow-auto bg-white">
                 <table class="w-full text-left border-collapse whitespace-nowrap text-xs tabular-nums" id="acc-table">
-                    <thead class="sticky top-0 z-20 bg-slate-900 text-white select-none">
+                    <thead class="sticky top-0 z-30 bg-slate-900 text-white select-none">
                         <tr id="acc-header-row" class="text-[10px] font-black uppercase tracking-wider border-b border-slate-700"></tr>
                         <tr id="acc-filter-row" class="bg-slate-800 text-[10px] font-bold"></tr>
                     </thead>
@@ -125,7 +125,7 @@
                     <tbody id="acc-ledger-body" class="divide-y divide-slate-200 bg-white font-semibold text-xs"></tbody>
 
                     <!-- Sticky Totals Footer -->
-                    <tfoot id="acc-ledger-foot" class="sticky bottom-0 z-20 bg-slate-900 text-white font-black text-xs border-t-2 border-slate-600 shadow-inner"></tfoot>
+                    <tfoot id="acc-ledger-foot" class="sticky bottom-0 z-10 bg-slate-900 text-white font-black text-xs border-t-2 border-slate-600 shadow-inner"></tfoot>
                 </table>
             </div>
         </main>
@@ -158,7 +158,7 @@
 
             <div class="flex-1 overflow-auto">
                 <table class="w-full text-left border-collapse whitespace-nowrap text-xs tabular-nums">
-                    <thead id="rollup-table-head" class="sticky top-0 z-10 bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider"></thead>
+                    <thead id="rollup-table-head" class="sticky top-0 z-20 bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider"></thead>
                     <tbody id="rollup-table-body" class="divide-y divide-slate-200 bg-white font-semibold"></tbody>
                     <tfoot id="rollup-table-foot" class="sticky bottom-0 z-10 bg-slate-900 text-white font-black border-t-2 border-slate-600"></tfoot>
                 </table>
@@ -440,6 +440,7 @@
             'direct', 'booking.com', 'agoda', 'hostelworld', 'airbnb', 'expedia', 'ctrip', 'walk-in', 'other'
         ];
 
+        // --- Date & Money Helpers ---
         function addDaysToYmd(ymd, days) {
             const ms = parseYMD(ymd);
             if (!ms) return ymd;
@@ -487,10 +488,25 @@
         // 2. COLUMN HEADERS, COLUMN PICKER & MULTI-SELECT FILTER DROPDOWNS
         // ------------------------------------------------------------------
 
+        function renderBulkSelectBar(dropdownId, onAllFnName) {
+            return `
+                <div class="flex items-center gap-1 pb-1 mb-1 border-b border-slate-700 sticky top-0 bg-slate-900 z-10">
+                    <button type="button" onclick="window.${onAllFnName}('${dropdownId}', true)" class="flex-1 py-0.5 bg-slate-800 hover:bg-indigo-600 text-white rounded text-[9px] font-black uppercase cursor-pointer">All</button>
+                    <button type="button" onclick="window.${onAllFnName}('${dropdownId}', false)" class="flex-1 py-0.5 bg-slate-800 hover:bg-rose-600 text-white rounded text-[9px] font-black uppercase cursor-pointer">None</button>
+                </div>
+            `;
+        }
+
         function renderTableHeaders() {
             const headerRow = document.getElementById('acc-header-row');
             const filterRow = document.getElementById('acc-filter-row');
             if (!headerRow || !filterRow) return;
+
+            // Remove any previously portaled dropdowns before rebuilding headers
+            ['acc-status-dropdown', 'acc-source-dropdown', 'acc-net-dropdown'].forEach(id => {
+                const old = document.getElementById(id);
+                if (old && old.parentNode === document.body) old.remove();
+            });
 
             const visibleCols = COLUMNS.filter(c => c.visible);
 
@@ -509,30 +525,30 @@
                 if (c.key === 'status') {
                     return `
                         <th class="p-1 border-r border-slate-700 relative">
-                            <button type="button" onclick="window.toggleAccDropdown('acc-status-dropdown')" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
+                            <button type="button" onclick="window.toggleAccDropdown('acc-status-dropdown', this)" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
                                 <span id="acc-status-label" class="truncate">All</span><span>▾</span>
                             </button>
-                            <div id="acc-status-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-44 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-60 overflow-y-auto p-1 text-left"></div>
+                            <div id="acc-status-dropdown" class="acc-multi-drop hidden fixed w-44 bg-slate-900 text-white border border-slate-600 rounded shadow-2xl z-[9999] max-h-64 overflow-y-auto p-1 text-left"></div>
                         </th>
                     `;
                 }
                 if (c.key === 'source') {
                     return `
                         <th class="p-1 border-r border-slate-700 relative">
-                            <button type="button" onclick="window.toggleAccDropdown('acc-source-dropdown')" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
+                            <button type="button" onclick="window.toggleAccDropdown('acc-source-dropdown', this)" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
                                 <span id="acc-source-label" class="truncate">All</span><span>▾</span>
                             </button>
-                            <div id="acc-source-dropdown" class="acc-multi-drop hidden absolute left-0 top-full mt-1 w-40 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-60 overflow-y-auto p-1 text-left"></div>
+                            <div id="acc-source-dropdown" class="acc-multi-drop hidden fixed w-40 bg-slate-900 text-white border border-slate-600 rounded shadow-2xl z-[9999] max-h-64 overflow-y-auto p-1 text-left"></div>
                         </th>
                     `;
                 }
                 if (c.key === 'net') {
                     return `
                         <th class="p-1 border-r border-slate-700 relative">
-                            <button type="button" onclick="window.toggleAccDropdown('acc-net-dropdown')" class="w-full bg-slate-900 text-emerald-300 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
+                            <button type="button" onclick="window.toggleAccDropdown('acc-net-dropdown', this)" class="w-full bg-slate-900 text-emerald-300 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] uppercase flex items-center justify-between cursor-pointer">
                                 <span id="acc-net-label" class="truncate">Filter</span><span>▾</span>
                             </button>
-                            <div id="acc-net-dropdown" class="acc-multi-drop hidden absolute right-0 top-full mt-1 w-44 bg-slate-900 text-white border border-slate-600 rounded shadow-xl z-50 max-h-64 overflow-y-auto p-1 text-left"></div>
+                            <div id="acc-net-dropdown" class="acc-multi-drop hidden fixed w-44 bg-slate-900 text-white border border-slate-600 rounded shadow-2xl z-[9999] max-h-64 overflow-y-auto p-1 text-left"></div>
                         </th>
                     `;
                 }
@@ -545,17 +561,16 @@
         function initColumnPicker() {
             const drop = document.getElementById('acc-columns-dropdown');
             if (!drop) return;
-            drop.innerHTML = COLUMNS.map((c, idx) => `
-                <label class="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
-                    <input type="checkbox" ${c.visible ? 'checked' : ''} onchange="window.toggleColumnVisibility(${idx}, this.checked)">
-                    <span>${c.label}</span>
-                </label>
-            `).join('');
+            drop.innerHTML = renderBulkSelectBar('acc-columns-dropdown', 'setAllColumnsVisibility') +
+                COLUMNS.map((c, idx) => `
+                    <label class="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
+                        <input type="checkbox" ${c.visible ? 'checked' : ''} onchange="window.toggleColumnVisibility(${idx}, this.checked)">
+                        <span>${c.label}</span>
+                    </label>
+                `).join('');
         }
 
-        window.toggleColumnVisibility = (idx, isVisible) => {
-            if (!COLUMNS[idx]) return;
-            COLUMNS[idx].visible = isVisible;
+        function rebuildColumnsAndPreserveFilters() {
             const prevStatus = getCheckedSet('acc-status-dropdown');
             const prevSource = getCheckedSet('acc-source-dropdown');
             const prevNet = getCheckedSet('acc-net-dropdown');
@@ -571,6 +586,18 @@
             restoreCheckedSet('acc-net-dropdown', prevNet);
             updateMultiLabels();
             window.renderAccounting();
+        }
+
+        window.toggleColumnVisibility = (idx, isVisible) => {
+            if (!COLUMNS[idx]) return;
+            COLUMNS[idx].visible = isVisible;
+            rebuildColumnsAndPreserveFilters();
+        };
+
+        window.setAllColumnsVisibility = (_dropdownId, isVisible) => {
+            COLUMNS.forEach(c => { c.visible = isVisible; });
+            initColumnPicker();
+            rebuildColumnsAndPreserveFilters();
         };
 
         function restoreCheckedSet(dropdownId, set) {
@@ -582,43 +609,72 @@
         function initMultiDropdowns() {
             const statusDrop = document.getElementById('acc-status-dropdown');
             if (statusDrop) {
-                statusDrop.innerHTML = STATUS_CYCLE.map(s => `
-                    <label class="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
-                        <input type="checkbox" value="${s.val}" onchange="window.onMultiFilterChange()">
-                        <span class="w-2 h-2 rounded-full shrink-0" style="background:${s.bg}; border:1px solid ${s.border};"></span>
-                        <span>${s.label}</span>
-                    </label>
-                `).join('');
+                statusDrop.innerHTML = renderBulkSelectBar('acc-status-dropdown', 'setAllFilterCheckboxes') +
+                    STATUS_CYCLE.map(s => `
+                        <label class="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
+                            <input type="checkbox" value="${s.val}" onchange="window.onMultiFilterChange()">
+                            <span class="w-2 h-2 rounded-full shrink-0" style="background:${s.bg}; border:1px solid ${s.border};"></span>
+                            <span>${s.label}</span>
+                        </label>
+                    `).join('');
             }
 
             const sourceDrop = document.getElementById('acc-source-dropdown');
             if (sourceDrop) {
-                sourceDrop.innerHTML = SOURCE_LIST.map(src => `
-                    <label class="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
-                        <input type="checkbox" value="${src}" onchange="window.onMultiFilterChange()">
-                        <span>${src}</span>
-                    </label>
-                `).join('');
+                sourceDrop.innerHTML = renderBulkSelectBar('acc-source-dropdown', 'setAllFilterCheckboxes') +
+                    SOURCE_LIST.map(src => `
+                        <label class="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
+                            <input type="checkbox" value="${src}" onchange="window.onMultiFilterChange()">
+                            <span>${src}</span>
+                        </label>
+                    `).join('');
             }
 
             const netDrop = document.getElementById('acc-net-dropdown');
             if (netDrop) {
-                netDrop.innerHTML = NET_FILTER_OPTIONS.map(opt => `
-                    <label class="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
-                        <input type="checkbox" value="${opt.key}" onchange="window.onNetFilterChange()">
-                        <span>${opt.label}</span>
-                    </label>
-                `).join('');
+                netDrop.innerHTML = renderBulkSelectBar('acc-net-dropdown', 'setAllFilterCheckboxes') +
+                    NET_FILTER_OPTIONS.map(opt => `
+                        <label class="flex items-center gap-1.5 px-1.5 py-1 hover:bg-slate-800 rounded cursor-pointer text-[10px] font-bold uppercase">
+                            <input type="checkbox" value="${opt.key}" onchange="window.onNetFilterChange()">
+                            <span>${opt.label}</span>
+                        </label>
+                    `).join('');
             }
         }
 
-        window.toggleAccDropdown = (id) => {
+        window.setAllFilterCheckboxes = (dropdownId, checkedState) => {
+            const drop = document.getElementById(dropdownId);
+            if (!drop) return;
+            drop.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = checkedState;
+            });
+            if (dropdownId === 'acc-net-dropdown') {
+                window.onNetFilterChange();
+            } else {
+                window.onMultiFilterChange();
+            }
+        };
+
+        window.toggleAccDropdown = (id, triggerBtn) => {
             if (window.event) window.event.stopPropagation();
             const target = document.getElementById(id);
             if (!target) return;
             const willOpen = target.classList.contains('hidden');
             document.querySelectorAll('.acc-multi-drop').forEach(el => el.classList.add('hidden'));
-            if (willOpen) target.classList.remove('hidden');
+
+            if (willOpen) {
+                if (target.parentNode !== document.body) {
+                    document.body.appendChild(target);
+                }
+                target.classList.remove('hidden');
+                if (triggerBtn) {
+                    const rect = triggerBtn.getBoundingClientRect();
+                    const dropW = target.offsetWidth || 176;
+                    const clampedLeft = Math.max(8, Math.min(rect.left, window.innerWidth - dropW - 8));
+                    target.style.top = `${rect.bottom + 4}px`;
+                    target.style.left = `${clampedLeft}px`;
+                }
+            }
         };
 
         document.addEventListener('click', (e) => {
@@ -1062,6 +1118,12 @@
             const tbody = document.getElementById('acc-ledger-body');
             const tfoot = document.getElementById('acc-ledger-foot');
             if (!tbody || !tfoot) return;
+
+            if (visibleCols.length === 0) {
+                tbody.innerHTML = `<tr><td class="text-center py-12 text-slate-400 font-black uppercase tracking-widest">No columns selected &mdash; choose columns from Columns &blacktriangledown;</td></tr>`;
+                tfoot.innerHTML = '';
+                return;
+            }
 
             if (rows.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="${visibleCols.length}" class="text-center py-12 text-slate-400 font-black uppercase tracking-widest">No reservations match the current filters.</td></tr>`;
