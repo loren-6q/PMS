@@ -240,11 +240,7 @@ export function toggleMinStayMode(dateStr, room) {
         return;
     }
 
-   if (window.editMode === 'ripple' && room !== 'GLOBAL') {
-        rippleDay(dateStr, room, true, 'restrictions');
-    }
-
-    window.dirtyDates = window.dirtyDates || new Set();
+   window.dirtyDates = window.dirtyDates || new Set();
     window.dirtyDates.add(dateStr);
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
@@ -353,9 +349,6 @@ export function handleCellEdit(dateStr, room, field, val, isEvt = false) {
         }
     }
 
-    if (window.editMode === 'ripple' && room !== 'GLOBAL' && (field === 'min_hybrid' || field === 'min' || field === 'max')) {
-        rippleDay(dateStr, room, true, 'restrictions');
-    }
 
     markCellDirty(dateStr, room);
     window.dirtyDates.add(dateStr);
@@ -448,10 +441,6 @@ export function cycleUnifiedRestriction(dateStr, room, ratePlanId = null, isEvt 
             delete rData.isOverride[`${pfx}cta`]; delete rData.isOverride[`${pfx}ctd`]; delete rData.isOverride[`${pfx}stop`];
         }
 
-        if (window.editMode === 'ripple' && room !== 'GLOBAL') {
-            rippleDay(dateStr, room, true, 'restrictions');
-        }
-    }
 
     markCellDirty(dateStr, ratePlanId ? `${room}|${ratePlanId}` : room);
     window.dirtyDates.add(dateStr);
