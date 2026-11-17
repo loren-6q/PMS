@@ -356,7 +356,7 @@ export function rippleDay(dateStr, startRoom, forceRipple = false, scope = 'both
                         nextVals.std = applyMath(curVals.std, edge.type, edge.val, edge.isReverse);
                     }
                     if (curVals.fmp !== undefined && curVals.fmp !== "") {
-                        nextVals.fmp = applyMath(curVals.fmp, edge.typeFmp, edge.valFmp, edge.isReverse);
+                        nextVals.fmp = applyMath(curVals.fmp, edge.type, edge.val, edge.isReverse);
                     }
                 }
             }
