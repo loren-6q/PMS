@@ -40,11 +40,18 @@ function getTargetRoomsForBulkRow(rt) {
     while (queue.length > 0) {
         const cur = queue.shift();
         rels.forEach(rel => {
-            const src = findCanonicalRoom(rel.source) || rel.source;
-            const tgt = findCanonicalRoom(rel.target) || rel.target;
-            if (src === cur && tgt && !targets.has(tgt)) {
-                targets.add(tgt);
-                queue.push(tgt);
+            const rawA = rel.anchor || rel.source || rel.from || rel.roomA;
+            const rawB = rel.target || rel.to || rel.roomB;
+            if (!rawA || rawA === 'unlinked' || !rawB) return;
+            const roomA = findCanonicalRoom(rawA) || rawA;
+            const roomB = findCanonicalRoom(rawB) || rawB;
+            if (roomA === cur && roomB && !targets.has(roomB)) {
+                targets.add(roomB);
+                queue.push(roomB);
+            }
+            if (roomB === cur && roomA && !targets.has(roomA)) {
+                targets.add(roomA);
+                queue.push(roomA);
             }
         });
     }
@@ -488,24 +495,23 @@ export function applyBulkGrid(isClear = false) {
 
     const applyRestrictionPayload = (dObj, dateStr, targetRoom, r) => {
         const targetRooms = getTargetRoomsForBulkRow(targetRoom);
-        const primaryData = dObj[targetRoom] || (dObj[targetRoom] = { isOverride: {} });
-        primaryData.isOverride = primaryData.isOverride || {};
 
         if (isAllRatesSelected || bulkSelectedRateKeys.has('DEF::BASE')) {
-            if (r.min !== undefined) { primaryData.min = r.min; delete primaryData.min_arr; primaryData.isOverride.min = true; }
-            if (r.min_arr !== undefined) { primaryData.min_arr = r.min_arr; delete primaryData.min; primaryData.isOverride.min_arr = true; }
-            if (r.max !== undefined) { primaryData.max = r.max; primaryData.isOverride.max = true; }
-            if (r.pillState !== 'open') {
-                primaryData.cta = r.cta;
-                primaryData.ctd = r.ctd;
-                primaryData.stop = r.stop;
-                primaryData.isOverride.cta = true;
-                primaryData.isOverride.ctd = true;
-                primaryData.isOverride.stop = true;
-            }
-            if (bulkScopeMode === 'anchors') {
-                rippleDay(dateStr, targetRoom, true, 'restrictions');
-            }
+            targetRooms.forEach(rm => {
+                const rmData = dObj[rm] || (dObj[rm] = { isOverride: {} });
+                rmData.isOverride = rmData.isOverride || {};
+                if (r.min !== undefined) { rmData.min = r.min; delete rmData.min_arr; rmData.isOverride.min = true; }
+                if (r.min_arr !== undefined) { rmData.min_arr = r.min_arr; delete rmData.min; rmData.isOverride.min_arr = true; }
+                if (r.max !== undefined) { rmData.max = r.max; rmData.isOverride.max = true; }
+                if (r.pillState !== 'open') {
+                    rmData.cta = r.cta;
+                    rmData.ctd = r.ctd;
+                    rmData.stop = r.stop;
+                    rmData.isOverride.cta = true;
+                    rmData.isOverride.ctd = true;
+                    rmData.isOverride.stop = true;
+                }
+            });
         }
 
         if (isAllRatesSelected || bulkSelectedRateKeys.has('DIR::BASE')) {
