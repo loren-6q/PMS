@@ -478,6 +478,8 @@ export function applyBulkGrid(isClear = false) {
     window.masterPricing.timeline = window.masterPricing.timeline || {};
     window.dirtyDates = window.dirtyDates || new Set();
     window.syncedDates = window.syncedDates || new Set();
+    window.dirtyCellKeys = window.dirtyCellKeys || new Set();
+    window.justSyncedCellKeys = window.justSyncedCellKeys || new Set();
 
     const sU = parseYMD(s);
     const eU = parseYMD(e);
@@ -511,6 +513,8 @@ export function applyBulkGrid(isClear = false) {
                     rmData.isOverride.ctd = true;
                     rmData.isOverride.stop = true;
                 }
+                window.dirtyCellKeys.add(`${dateStr}|${rm}`);
+                window.justSyncedCellKeys.delete(`${dateStr}|${rm}`);
             });
         }
 
@@ -661,6 +665,8 @@ export function applyBulkGrid(isClear = false) {
                     delete dObj[targetRm].stop;
                     delete dObj[targetRm].stopSell;
                     dObj[targetRm].isOverride = {};
+                    window.dirtyCellKeys.add(`${dateStr}|${targetRm}`);
+                    window.justSyncedCellKeys.delete(`${dateStr}|${targetRm}`);
                 });
             } else {
                 const hasRateChange = r.rate !== undefined && !isNaN(r.rate);
@@ -669,7 +675,9 @@ export function applyBulkGrid(isClear = false) {
                 if (hasRateChange) {
                     rData.std = roundCurrency(r.rate);
                     rData.isOverride.std = true;
-                    rippleDay(dateStr, rt, true, 'rates');
+                    window.dirtyCellKeys.add(`${dateStr}|${rt}`);
+                    window.justSyncedCellKeys.delete(`${dateStr}|${rt}`);
+                    rippleDay(dateStr, rt, true);
                 }
                 if (hasRestrChange) {
                     applyRestrictionPayload(dObj, dateStr, rt, r);
