@@ -1127,6 +1127,14 @@ export function applyCurveTuner() {
             });
         }
 
+        window.dirtyCellKeys = window.dirtyCellKeys || new Set();
+        window.justSyncedCellKeys = window.justSyncedCellKeys || new Set();
+        [anchorP, anchorD].filter(Boolean).forEach(anc => {
+            window.dirtyCellKeys.add(`${dStr}|${anc}`);
+            window.justSyncedCellKeys.delete(`${dStr}|${anc}`);
+        });
+        if (typeof window.markCmDirty === 'function') window.markCmDirty(dStr, 'rate', '*');
+
         window.dirtyDates.add(dStr);
         window.syncedDates.delete(dStr);
     }
