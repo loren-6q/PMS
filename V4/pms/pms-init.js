@@ -472,7 +472,6 @@ export const init = async () => {
             const rList = getRooms(s).map(dbToUiRoom);
             s.room = rList[0] || "";
             s.rooms = rList;
-            if (window.healHostelworldDeposit) window.healHostelworldDeposit(s, db, appId);
             return s;
         });
         window.staff = staff;
