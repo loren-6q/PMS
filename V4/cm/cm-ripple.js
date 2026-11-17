@@ -330,25 +330,21 @@ export function rippleDay(dateStr, startRoom, forceRipple = false) {
             const nextVals = window.masterPricing.timeline[dateStr][edge.to];
             nextVals.isOverride = nextVals.isOverride || {};
 
-            if (forceRipple || !nextVals.isOverride.std) {
-                if (isPeak) {
-                    const basePrice = (curVals.std !== undefined && curVals.std !== "") ? curVals.std : curVals.fmp;
-                    if (basePrice !== undefined && basePrice !== "") {
-                        const target = applyMath(basePrice, edge.typeFmp, edge.valFmp, edge.isReverse);
-                        nextVals.std = target;
-                        nextVals.fmp = target;
-                    }
-                } else {
-                    if (curVals.std !== undefined && curVals.std !== "") {
-                        nextVals.std = applyMath(curVals.std, edge.type, edge.val, edge.isReverse);
-                    }
-                    if (curVals.fmp !== undefined && curVals.fmp !== "") {
-                        nextVals.fmp = applyMath(curVals.fmp, edge.type, edge.val, edge.isReverse);
-                    }
+            if (isPeak) {
+                const basePrice = (curVals.std !== undefined && curVals.std !== "") ? curVals.std : curVals.fmp;
+                if (basePrice !== undefined && basePrice !== "") {
+                    const target = applyMath(basePrice, edge.typeFmp, edge.valFmp, edge.isReverse);
+                    if (forceRipple || !nextVals.isOverride.std) nextVals.std = target;
+                    if (forceRipple || !nextVals.isOverride.fmp) nextVals.fmp = target;
+                }
+            } else {
+                if ((forceRipple || !nextVals.isOverride.std) && curVals.std !== undefined && curVals.std !== "") {
+                    nextVals.std = applyMath(curVals.std, edge.type, edge.val, edge.isReverse);
+                }
+                if ((forceRipple || !nextVals.isOverride.fmp) && curVals.fmp !== undefined && curVals.fmp !== "") {
+                    nextVals.fmp = applyMath(curVals.fmp, edge.type, edge.val, edge.isReverse);
                 }
             }
-
-        
 
             queue.push(edge.to);
             window.dirtyDates = window.dirtyDates || new Set();
