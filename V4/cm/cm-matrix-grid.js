@@ -218,6 +218,8 @@ export function toggleMinStayMode(dateStr, room) {
     const rData = dObj[room];
     rData.isOverride = rData.isOverride || {};
 
+    const gData = (room !== 'GLOBAL') ? (dObj.GLOBAL || {}) : {};
+
     if (rData.min !== undefined && rData.min !== "") {
         rData.min_arr = rData.min;
         delete rData.min;
@@ -228,6 +230,12 @@ export function toggleMinStayMode(dateStr, room) {
         delete rData.min_arr;
         rData.isOverride.min = true;
         delete rData.isOverride.min_arr;
+    } else if (gData.min !== undefined && gData.min !== "") {
+        rData.min_arr = gData.min;
+        rData.isOverride.min_arr = true;
+    } else if (gData.min_arr !== undefined && gData.min_arr !== "") {
+        rData.min = gData.min_arr;
+        rData.isOverride.min = true;
     } else {
         return;
     }
@@ -766,18 +774,31 @@ export function renderRateMatrix() {
             const cur = new Date(dObj);
             cur.setUTCDate(cur.getUTCDate() + i);
             const dateStr = getLocalYMD(cur);
-            const rData = window.masterPricing?.timeline?.[dateStr]?.[room] || {};
+            const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
+            const rData = dayObj[room] || {};
+            const gData = dayObj.GLOBAL || {};
             const isPinned = !!rData.isOverride?.std;
             const rawStd = rData.std !== undefined && rData.std !== "" ? rData.std : "";
             const displayPrice = rawStd !== "" && !isNaN(parseFloat(rawStd)) ? Math.round(parseFloat(rawStd)) : "";
-            
-            const minVal = rData.min !== undefined && rData.min !== "" ? rData.min : (rData.min_arr ? `${rData.min_arr}▸` : "");
-            const maxVal = rData.max !== undefined && rData.max !== "" ? rData.max : "";
+
+            const hasRoomMin = (rData.min !== undefined && rData.min !== "") || (rData.min_arr !== undefined && rData.min_arr !== "");
+            const minVal = hasRoomMin
+                ? (rData.min !== undefined && rData.min !== "" ? rData.min : `${rData.min_arr}▸`)
+                : (gData.min !== undefined && gData.min !== "" ? gData.min : (gData.min_arr ? `${gData.min_arr}▸` : ""));
+            const isGlobalMin = !hasRoomMin && minVal !== "";
+
+            const hasRoomMax = rData.max !== undefined && rData.max !== "";
+            const maxVal = hasRoomMax ? rData.max : (gData.max !== undefined && gData.max !== "" ? gData.max : "");
+            const isGlobalMax = !hasRoomMax && maxVal !== "";
 
             const showTop = density === 'minmax' || density === 'full';
             const showBottom = density === 'full';
-            const isStopped = !!(rData.stop || rData.stopSell);
-            const pillHtml = getUnifiedRestrictionBadgeHtml(rData.cta, rData.ctd, isStopped);
+            const effCta = rData.cta !== undefined ? !!rData.cta : !!gData.cta;
+            const effCtd = rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd;
+            const isStopped = (rData.stop !== undefined || rData.stopSell !== undefined)
+                ? !!(rData.stop || rData.stopSell)
+                : !!(gData.stop || gData.stopSell);
+            const pillHtml = getUnifiedRestrictionBadgeHtml(effCta, effCtd, isStopped);
 
             const isDirty = isCellDirty(dateStr, room);
             const isSynced = isCellJustSynced(dateStr, room);
@@ -796,13 +817,15 @@ export function renderRateMatrix() {
                 : '';
             const stateNote = isDirty ? ' • Unsaved' : (isSynced ? ' • Just Synced' : '');
             const pinNote = isBrokenRipple ? ' • Pinned (Double-click to re-link)' : '';
+            const minTip = minVal ? `${minVal}${isGlobalMin ? ' (Global)' : ''}` : '--';
+            const maxTip = maxVal ? `${maxVal}${isGlobalMax ? ' (Global)' : ''}` : '--';
 
-            trRate += `<td class="${cellClass}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nDEF Non-Ref: ฿${displayPrice || '--'}${stateNote}${pinNote}\\nMin: ${minVal || '--'}, Max: ${maxVal || '--'}')" onmouseleave="window.hideCmTooltip()">
+            trRate += `<td class="${cellClass}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nDEF Non-Ref: ฿${displayPrice || '--'}${stateNote}${pinNote}\\nMin: ${minTip}, Max: ${maxTip}')" onmouseleave="window.hideCmTooltip()">
                 ${pinCornerHtml}
                 ${showTop ? `
                 <div class="flex items-center w-full h-[15px] border-b ${isStopped ? 'border-rose-700 bg-transparent' : 'border-slate-200 bg-slate-50/70'} overflow-hidden leading-none">
-                    <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-slate-700 outline-none p-0" value="${minVal}" placeholder="Min" title="Min Stay (e.g. 3 or 3▸ for Arrival; double-click to toggle)" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', '${room}')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)">
-                    <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-slate-500 outline-none p-0 border-l ${isStopped ? 'border-rose-700' : 'border-slate-200'}" value="${maxVal}" placeholder="Max" title="Max Stay" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)">
+                    <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black ${isGlobalMin && !isStopped ? 'text-indigo-600/80' : 'text-slate-700'} outline-none p-0" value="${minVal}" placeholder="Min" title="Min Stay (e.g. 3 or 3▸ for Arrival; double-click to toggle)" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', '${room}')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${room}', 'min_hybrid', this.value)">
+                    <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none ${isGlobalMax && !isStopped ? 'text-indigo-500/80' : 'text-slate-500'} outline-none p-0 border-l ${isStopped ? 'border-rose-700' : 'border-slate-200'}" value="${maxVal}" placeholder="Max" title="Max Stay" onchange="window.handleCellEdit('${dateStr}', '${room}', 'max', this.value)">
                 </div>` : ''}
 
                 <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
@@ -891,19 +914,33 @@ export function renderRateMatrix() {
                 const cur = new Date(dObj);
                 cur.setUTCDate(cur.getUTCDate() + i);
                 const dateStr = getLocalYMD(cur);
-                const rData = window.masterPricing?.timeline?.[dateStr]?.[room] || {};
+                const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
+                const rData = dayObj[room] || {};
+                const gData = dayObj.GLOBAL || {};
                 const isPinnedDir = rData.dir_std !== undefined && rData.dir_std !== "";
                 const computedDir = computeDynamicPlanRate
                     ? computeDynamicPlanRate(dateStr, room, { channel: 'WEB', policy: 'non-ref', product: 'std' })
                     : null;
                 const rawDir = isPinnedDir ? rData.dir_std : (computedDir ?? rData.std ?? "");
                 const displayDir = rawDir !== "" && rawDir !== null && !isNaN(parseFloat(rawDir)) ? Math.round(parseFloat(rawDir)) : "";
-                
-                const dirMinVal = rData.dir_min !== undefined && rData.dir_min !== "" ? rData.dir_min : (rData.dir_min_arr ? `${rData.dir_min_arr}▸` : "");
-                const dirMaxVal = rData.dir_max !== undefined && rData.dir_max !== "" ? rData.dir_max : "";
-                const dirStopped = !!(rData.dir_stop || rData.dir_stopSell);
-                const dirPillHtml = getUnifiedRestrictionBadgeHtml(rData.dir_cta, rData.dir_ctd, dirStopped);
 
+                const hasDirMin = (rData.dir_min !== undefined && rData.dir_min !== "") || (rData.dir_min_arr !== undefined && rData.dir_min_arr !== "");
+                const hasRoomMin = (rData.min !== undefined && rData.min !== "") || (rData.min_arr !== undefined && rData.min_arr !== "");
+                const dirMinVal = hasDirMin
+                    ? (rData.dir_min !== undefined && rData.dir_min !== "" ? rData.dir_min : `${rData.dir_min_arr}▸`)
+                    : (hasRoomMin
+                        ? (rData.min !== undefined && rData.min !== "" ? rData.min : `${rData.min_arr}▸`)
+                        : (gData.min !== undefined && gData.min !== "" ? gData.min : (gData.min_arr ? `${gData.min_arr}▸` : "")));
+                const dirMaxVal = (rData.dir_max !== undefined && rData.dir_max !== "")
+                    ? rData.dir_max
+                    : ((rData.max !== undefined && rData.max !== "") ? rData.max : (gData.max || ""));
+                const dirCta = rData.dir_cta !== undefined ? !!rData.dir_cta : (rData.cta !== undefined ? !!rData.cta : !!gData.cta);
+                const dirCtd = rData.dir_ctd !== undefined ? !!rData.dir_ctd : (rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd);
+                const dirStopped = (rData.dir_stop !== undefined || rData.dir_stopSell !== undefined)
+                    ? !!(rData.dir_stop || rData.dir_stopSell)
+                    : ((rData.stop !== undefined || rData.stopSell !== undefined) ? !!(rData.stop || rData.stopSell) : !!(gData.stop || gData.stopSell));
+                const dirPillHtml = getUnifiedRestrictionBadgeHtml(dirCta, dirCtd, dirStopped);
+                
                 trDir += `<td class="p-0 border-r border-emerald-200 text-center relative ${dirStopped ? 'rate-cell-stopped' : (isPinnedDir ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;">
                     ${showTopDir ? `
                     <div class="flex items-center w-full h-[15px] border-b ${dirStopped ? 'border-rose-700 bg-transparent' : 'border-emerald-200 bg-white/70'} overflow-hidden leading-none">
@@ -949,18 +986,38 @@ export function renderRateMatrix() {
                     const cur = new Date(dObj);
                     cur.setUTCDate(cur.getUTCDate() + i);
                     const dateStr = getLocalYMD(cur);
-                    const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
+                   const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
+                    const rData = dayObj[room] || {};
+                    const gData = dayObj.GLOBAL || {};
                     const otaOverride = dayObj.otaOverrides?.[rate.ratePlanId];
                     const rawComputed = otaOverride !== undefined ? otaOverride : (computeDynamicPlanRate ? computeDynamicPlanRate(dateStr, room, rate) : "");
                     const computed = rawComputed !== "" && rawComputed !== null && !isNaN(parseFloat(rawComputed)) ? Math.round(parseFloat(rawComputed)) : "";
-                    
-                    const otaMin = dayObj.otaOverrides?.[`${rate.ratePlanId}_min`] || '';
-                    const otaMax = dayObj.otaOverrides?.[`${rate.ratePlanId}_max`] || '';
-                    const otaStop = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_stop`];
-                    const otaCta = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_cta`];
-                    const otaCtd = !!dayObj.otaOverrides?.[`${rate.ratePlanId}_ctd`];
-                    const otaPillHtml = getUnifiedRestrictionBadgeHtml(otaCta, otaCtd, otaStop);
 
+                    const rawOtaMin = dayObj.otaOverrides?.[`${rate.ratePlanId}_min`];
+                    const rawOtaMinArr = dayObj.otaOverrides?.[`${rate.ratePlanId}_min_arr`];
+                    const hasOtaMin = (rawOtaMin !== undefined && rawOtaMin !== "") || (rawOtaMinArr !== undefined && rawOtaMinArr !== "");
+                    const hasRoomMin = (rData.min !== undefined && rData.min !== "") || (rData.min_arr !== undefined && rData.min_arr !== "");
+                    const otaMin = hasOtaMin
+                        ? (rawOtaMin !== undefined && rawOtaMin !== "" ? rawOtaMin : `${rawOtaMinArr}▸`)
+                        : (hasRoomMin
+                            ? (rData.min !== undefined && rData.min !== "" ? rData.min : `${rData.min_arr}▸`)
+                            : (gData.min !== undefined && gData.min !== "" ? gData.min : (gData.min_arr ? `${gData.min_arr}▸` : "")));
+
+                    const rawOtaMax = dayObj.otaOverrides?.[`${rate.ratePlanId}_max`];
+                    const otaMax = (rawOtaMax !== undefined && rawOtaMax !== "")
+                        ? rawOtaMax
+                        : ((rData.max !== undefined && rData.max !== "") ? rData.max : (gData.max || ""));
+
+                    const rawOtaStop = dayObj.otaOverrides?.[`${rate.ratePlanId}_stop`];
+                    const rawOtaCta = dayObj.otaOverrides?.[`${rate.ratePlanId}_cta`];
+                    const rawOtaCtd = dayObj.otaOverrides?.[`${rate.ratePlanId}_ctd`];
+                    const otaStop = rawOtaStop !== undefined
+                        ? !!rawOtaStop
+                        : ((rData.stop !== undefined || rData.stopSell !== undefined) ? !!(rData.stop || rData.stopSell) : !!(gData.stop || gData.stopSell));
+                    const otaCta = rawOtaCta !== undefined ? !!rawOtaCta : (rData.cta !== undefined ? !!rData.cta : !!gData.cta);
+                    const otaCtd = rawOtaCtd !== undefined ? !!rawOtaCtd : (rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd);
+                    const otaPillHtml = getUnifiedRestrictionBadgeHtml(otaCta, otaCtd, otaStop);
+                    
                     trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaStop ? 'rate-cell-stopped' : (otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${room}', '${rate.ratePlanId}')">
                         ${showTop ? `
                         <div class="flex items-center w-full h-[15px] border-b ${otaStop ? 'border-rose-700 bg-transparent' : 'border-indigo-100 bg-white/60'} overflow-hidden leading-none">
