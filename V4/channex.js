@@ -127,6 +127,28 @@ export const ChannexClient = {
         return limiter.enqueue(executeCall);
     },
 
+    // --- PAGINATED COLLECTION FETCHER (ALL PAGES) ---
+    async requestAll(endpoint, options = {}, apiKey, isStaging = false, limit = 100) {
+        let page = 1;
+        const allItems = [];
+        while (page <= 25) {
+            const sep = endpoint.includes('?') ? '&' : '?';
+            const pagedEndpoint = `${endpoint}${sep}pagination[page]=${page}&pagination[limit]=${limit}`;
+            const json = await this.request(pagedEndpoint, options, apiKey, isStaging);
+            const items = Array.isArray(json?.data) ? json.data : [];
+            allItems.push(...items);
+
+            const total = Number(json?.meta?.total);
+            if (Number.isFinite(total) && total > 0) {
+                if (allItems.length >= total || items.length === 0) break;
+            } else if (items.length < limit) {
+                break;
+            }
+            page++;
+        }
+        return allItems;
+    },
+
     // --- REVISION ACKNOWLEDGEMENT (TEST 11) ---
     async acknowledgeRevision(revisionId, apiKey, isStaging = false) {
         if (!revisionId) throw new Error("Revision ID is required.");
