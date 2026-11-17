@@ -25,6 +25,13 @@ function getCleanPlanLabel(rp) {
     return title || rp.ratePlanId;
 }
 
+function getPlanSignature(rp) {
+    const ch = resolveChannelCode(rp.channel || '');
+    const connId = rp.channelId || '';
+    const cleanLabel = getCleanPlanLabel(rp).toLowerCase();
+    return `${ch}::${connId}::${cleanLabel}`;
+}
+
 function getTargetRoomsForBulkRow(rt) {
     if (bulkScopeMode !== 'anchors') return [rt];
     const targets = new Set([rt]);
@@ -51,23 +58,37 @@ function buildBulkRatesTree() {
     const defLeaves = [{ key: 'DEF::BASE', label: 'DEF Non-Ref (Master)', planSig: null }];
     const dirLeaves = [{ key: 'DIR::BASE', label: 'Direct Rate (Master)', planSig: null }];
     const evtLeaves = [];
-    const otaByChannel = new Map();
+    const otaByBucket = new Map();
     const otherLeaves = [];
 
     if (window.enableEventRates || rateMap.some(r => r.product === 'evt' || r.rateSource === 'evt' || r.isEvent)) {
         evtLeaves.push({ key: 'EVT::BASE', label: 'DEF Event Rate', planSig: null });
     }
 
+    // Count distinct connection IDs per channel code so multi-connection OTAs get distinct subgroups
+    const connIdsByCode = new Map();
+    rateMap.forEach(rp => {
+        if (!rp || !rp.ratePlanId) return;
+        const ch = resolveChannelCode(rp.channel || '');
+        if (!connIdsByCode.has(ch)) connIdsByCode.set(ch, new Set());
+        connIdsByCode.get(ch).add(rp.channelId || 'default');
+    });
+
     rateMap.forEach(rp => {
         if (!rp || !rp.ratePlanId) return;
         const ch = resolveChannelCode(rp.channel || '');
         const cleanLabel = getCleanPlanLabel(rp);
-        const planSig = `${ch}::${cleanLabel.toLowerCase()}`;
+        const planSig = getPlanSignature(rp);
         if (seenPlanKeys.has(planSig)) return;
         seenPlanKeys.add(planSig);
 
+        const isMultiConn = (connIdsByCode.get(ch)?.size || 0) > 1 && rp.channelId;
+        const leafLabel = (isMultiConn && rp.connectionTitle)
+            ? `${cleanLabel} (${rp.connectionTitle})`
+            : cleanLabel;
+
         const isEvt = (rp.product === 'evt') || (rp.rateSource === 'evt') || (rp.isEvent === true) || /\b(evt|fmp|event|pkg)\b/i.test(cleanLabel);
-        const leaf = { key: `PLAN::${planSig}`, label: cleanLabel, planSig };
+        const leaf = { key: `PLAN::${planSig}`, label: leafLabel, planSig };
 
         if (isEvt) {
             evtLeaves.push(leaf);
@@ -78,8 +99,18 @@ function buildBulkRatesTree() {
         } else if (ch && ch !== 'OTH') {
             const isStandardPolicy = rp.policy === 'ref' || rp.policy === 'non-ref' || /\b(non-?ref|refundable|standard)\b/i.test(cleanLabel);
             if (isStandardPolicy) {
-                if (!otaByChannel.has(ch)) otaByChannel.set(ch, []);
-                otaByChannel.get(ch).push(leaf);
+                const bucketKey = isMultiConn ? `${ch}::${rp.channelId}` : ch;
+                const bucketLabel = isMultiConn
+                    ? `${ch} — ${rp.connectionTitle || rp.channelId.slice(-6)}`
+                    : `${ch} (${getChannelByCode(ch).name})`;
+                const bucketShort = isMultiConn
+                    ? `${ch} (${rp.connectionTitle || rp.channelId.slice(-6)})`
+                    : `${ch} Rates`;
+
+                if (!otaByBucket.has(bucketKey)) {
+                    otaByBucket.set(bucketKey, { id: `ota-${bucketKey.replace(/[^a-zA-Z0-9_-]/g, '_')}`, label: bucketLabel, shortLabel: bucketShort, leaves: [] });
+                }
+                otaByBucket.get(bucketKey).leaves.push(leaf);
             } else {
                 otherLeaves.push(leaf);
             }
@@ -93,14 +124,8 @@ function buildBulkRatesTree() {
         { id: 'grp-dir', label: 'DIRECT RATES (DIR)', shortLabel: 'Direct Rates', leaves: dirLeaves, subgroups: [] }
     ];
 
-    if (otaByChannel.size > 0) {
-        const subgroups = Array.from(otaByChannel.entries()).map(([ch, leaves]) => ({
-            id: `ota-${ch}`,
-            label: `${ch} (${getChannelByCode(ch).name})`,
-            shortLabel: `${ch} Rates`,
-            leaves
-        }));
-        groups.push({ id: 'grp-ota', label: 'OTA RATES', shortLabel: 'OTA Rates', leaves: [], subgroups });
+    if (otaByBucket.size > 0) {
+        groups.push({ id: 'grp-ota', label: 'OTA RATES', shortLabel: 'OTA Rates', leaves: [], subgroups: Array.from(otaByBucket.values()) });
     }
 
     if (evtLeaves.length > 0) {
@@ -416,6 +441,26 @@ export function renderBulkGrid() {
     qbBody.innerHTML = html;
 }
 
+function clearRoomRestrictionFields(rmData, rule) {
+    if (!rmData) return;
+    if (rule.min !== undefined || rule.min_arr !== undefined) {
+        delete rmData.min;
+        delete rmData.min_arr;
+        if (rmData.isOverride) { delete rmData.isOverride.min; delete rmData.isOverride.min_arr; }
+    }
+    if (rule.max !== undefined) {
+        delete rmData.max;
+        if (rmData.isOverride) delete rmData.isOverride.max;
+    }
+    if (rule.pillState !== 'open') {
+        delete rmData.cta;
+        delete rmData.ctd;
+        delete rmData.stop;
+        delete rmData.stopSell;
+        if (rmData.isOverride) { delete rmData.isOverride.cta; delete rmData.isOverride.ctd; delete rmData.isOverride.stop; }
+    }
+}
+
 export function applyBulkGrid(isClear = false) {
     const s = document.getElementById('qb-start')?.value;
     const e = document.getElementById('qb-end')?.value;
@@ -494,8 +539,7 @@ export function applyBulkGrid(isClear = false) {
             (window.channexRateMap || []).forEach(rp => {
                 const mappedCat = findCanonicalRoom(rp.pmsCategory) || rp.pmsCategory;
                 if (!targetRooms.includes(mappedCat)) return;
-                const ch = resolveChannelCode(rp.channel || '');
-                const planSig = `${ch}::${getCleanPlanLabel(rp).toLowerCase()}`;
+                const planSig = getPlanSignature(rp);
                 if (!isAllRatesSelected && !selectedPlanSigs.has(planSig)) return;
 
                 if (r.min !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_min`] = r.min; delete dObj.otaOverrides[`${rp.ratePlanId}_min_arr`]; }
@@ -584,6 +628,8 @@ export function applyBulkGrid(isClear = false) {
                         dObj['GLOBAL'].isOverride.ctd = true;
                         dObj['GLOBAL'].isOverride.stop = true;
                     }
+                    // Clear stale room-level overrides for the modified fields so every room inherits GLOBAL
+                    (window.roomTypes || []).forEach(rt => clearRoomRestrictionFields(dObj[rt], globalRule));
                 } else {
                     (window.roomTypes || []).forEach(rt => applyRestrictionPayload(dObj, dateStr, rt, globalRule));
                 }
@@ -598,14 +644,18 @@ export function applyBulkGrid(isClear = false) {
             rData.isOverride = rData.isOverride || {};
 
             if (isClear) {
-                delete rData.std;
-                delete rData.min;
-                delete rData.max;
-                delete rData.min_arr;
-                delete rData.cta;
-                delete rData.ctd;
-                delete rData.stop;
-                rData.isOverride = {};
+                getTargetRoomsForBulkRow(rt).forEach(targetRm => {
+                    if (!dObj[targetRm]) return;
+                    delete dObj[targetRm].std;
+                    delete dObj[targetRm].min;
+                    delete dObj[targetRm].max;
+                    delete dObj[targetRm].min_arr;
+                    delete dObj[targetRm].cta;
+                    delete dObj[targetRm].ctd;
+                    delete dObj[targetRm].stop;
+                    delete dObj[targetRm].stopSell;
+                    dObj[targetRm].isOverride = {};
+                });
             } else {
                 const hasRateChange = r.rate !== undefined && !isNaN(r.rate);
                 const hasRestrChange = r.min !== undefined || r.min_arr !== undefined || r.max !== undefined || r.pillState !== 'open';
@@ -652,20 +702,27 @@ export function runRippleRecovery(mode = 'blanks') {
         if (!dObj) continue;
 
         if (mode === 'blanks') {
-            const preserved = {};
+            const preservedRates = {};
             allRooms.forEach(rt => {
                 const cur = dObj[rt];
-                if (cur && cur.std !== undefined && cur.std !== "") preserved[rt] = { ...cur };
+                if (cur && cur.std !== undefined && cur.std !== "") {
+                    preservedRates[rt] = { std: cur.std, fmp: cur.fmp, isStdOvr: !!cur.isOverride?.std, isFmpOvr: !!cur.isOverride?.fmp };
+                }
             });
 
-            const seeds = Array.from(new Set([anchorP, anchorD, ...Object.keys(preserved)].filter(Boolean)));
+            const seeds = Array.from(new Set([anchorP, anchorD, ...Object.keys(preservedRates)].filter(Boolean)));
             seeds.forEach(seed => {
-                if (preserved[seed]) rippleDay(dateStr, seed, true);
+                if (preservedRates[seed]) rippleDay(dateStr, seed, true);
             });
 
             allRooms.forEach(rt => {
-                if (preserved[rt]) {
-                    dObj[rt] = preserved[rt];
+                if (preservedRates[rt]) {
+                    dObj[rt] = dObj[rt] || { isOverride: {} };
+                    dObj[rt].std = preservedRates[rt].std;
+                    if (preservedRates[rt].fmp !== undefined) dObj[rt].fmp = preservedRates[rt].fmp;
+                    dObj[rt].isOverride = dObj[rt].isOverride || {};
+                    if (preservedRates[rt].isStdOvr) dObj[rt].isOverride.std = true;
+                    if (preservedRates[rt].isFmpOvr) dObj[rt].isOverride.fmp = true;
                 } else if (dObj[rt] && dObj[rt].std !== undefined && dObj[rt].std !== "") {
                     updatedCount++;
                     if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', `ROOM:${rt}`);
@@ -770,7 +827,7 @@ export function initCurveTuner(targetDateStr = null) {
     }
 
     const todayStr = getLocalYMD(new Date());
-    let selectedDate = targetDateStr || events.find(d => d >= todayStr) || events[events.length - 1];
+    const selectedDate = targetDateStr || events.find(d => d >= todayStr) || events[events.length - 1];
 
     select.innerHTML = events.map(dStr => {
         const dObj = new Date(dStr + "T12:00:00Z");
