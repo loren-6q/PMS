@@ -28,26 +28,40 @@ function saveGridPrefs() {
 }
 
 function ensurePinnedLegendBadge() {
-    if (typeof document === 'undefined' || document.getElementById('legend-pinned-chip')) return;
-    // Locate the toolbar legend strip containing existing status pills (e.g., Stop Sell / Unsaved / Synced)
-    const candidates = Array.from(document.querySelectorAll('div, span')).filter(el => {
+    if (typeof document === 'undefined') return;
+    const candidates = Array.from(document.querySelectorAll('div, span, footer')).filter(el => {
         const txt = (el.textContent || '').trim();
-        return el.children.length >= 2 && el.children.length <= 10 && /stop\s*sell/i.test(txt) && /synced|unsaved|gap/i.test(txt);
+        return el.children.length >= 2 && el.children.length <= 14 && /stop\s*sell/i.test(txt) && /synced|unsaved|gap/i.test(txt);
     });
     const legendContainer = candidates.sort((a, b) => a.textContent.length - b.textContent.length)[0];
     if (!legendContainer) return;
 
-    const item = document.createElement('span');
-    item.id = 'legend-pinned-chip';
-    item.className = 'inline-flex items-center gap-1 text-[10px] font-bold text-slate-600';
-    item.title = 'Pinned override breaks Anchor ripple (double-click cell to re-link)';
-    item.innerHTML = `
-        <span class="relative inline-block w-3 h-3 bg-white border border-slate-300 rounded-2xs overflow-hidden shrink-0">
-            <span class="absolute top-0 right-0 w-0 h-0 border-t-[6px] border-l-[6px] border-t-orange-500 border-l-transparent"></span>
-        </span>
-        <span>Pinned (No Ripple)</span>
-    `;
-    legendContainer.appendChild(item);
+    // Expand legend across full footer width so all status badges fit on one horizontal line
+    legendContainer.classList.remove('max-w-xs', 'max-w-sm', 'max-w-md', 'max-w-lg', 'max-w-xl', 'max-w-2xl', 'w-1/2', 'w-auto', 'flex-col', 'grid', 'grid-cols-2', 'grid-cols-3');
+    legendContainer.classList.add('flex', 'flex-wrap', 'items-center', 'gap-x-3.5', 'gap-y-1', 'flex-1', 'w-full', 'min-w-0');
+
+    if (legendContainer.parentElement) {
+        legendContainer.parentElement.classList.remove('flex-col', 'grid', 'grid-cols-2', 'grid-cols-3', 'w-1/2', 'max-w-md', 'max-w-lg', 'max-w-xl', 'max-w-2xl');
+        legendContainer.parentElement.classList.add('flex', 'flex-wrap', 'items-center', 'justify-between', 'w-full', 'gap-x-4', 'gap-y-1');
+    }
+
+    Array.from(legendContainer.children).forEach(child => {
+        child.classList.add('inline-flex', 'items-center', 'gap-1', 'whitespace-nowrap', 'shrink-0');
+    });
+
+    if (!document.getElementById('legend-pinned-chip')) {
+        const item = document.createElement('span');
+        item.id = 'legend-pinned-chip';
+        item.className = 'inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 whitespace-nowrap shrink-0';
+        item.title = 'Pinned override breaks Anchor ripple (double-click cell to re-link)';
+        item.innerHTML = `
+            <span class="relative inline-block w-3 h-3 bg-white border border-slate-300 rounded-2xs overflow-hidden shrink-0">
+                <span class="absolute top-0 right-0 w-0 h-0 border-t-[6px] border-l-[6px] border-t-orange-500 border-l-transparent"></span>
+            </span>
+            <span>Pinned (No Ripple)</span>
+        `;
+        legendContainer.appendChild(item);
+    }
 }
 
 export function initGridUI() {
@@ -252,10 +266,14 @@ export function handleCellPriceLive(input, dateStr, room, field = 'std') {
     }
 
     markCellDirty(dateStr, room);
-    window.dirtyDates = window.dirtyDates || new Set();
-    window.syncedDates = window.syncedDates || new Set();
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
+    if (typeof window.markCmDirty === 'function') {
+        window.markCmDirty(dateStr, 'rate', window.editMode === 'ripple' ? '*' : `ROOM:${room}`);
+    } else {
+        window.dirtyDates = window.dirtyDates || new Set();
+        window.syncedDates = window.syncedDates || new Set();
+        window.dirtyDates.add(dateStr);
+        window.syncedDates.delete(dateStr);
+    }
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
 }
 
@@ -290,8 +308,12 @@ export function toggleMinStayMode(dateStr, room) {
         return;
     }
 
-    window.dirtyDates = window.dirtyDates || new Set();
-    window.dirtyDates.add(dateStr);
+    if (typeof window.markCmDirty === 'function') {
+        window.markCmDirty(dateStr, 'rate', room === 'GLOBAL' ? '*' : `ROOM:${room}`);
+    } else {
+        window.dirtyDates = window.dirtyDates || new Set();
+        window.dirtyDates.add(dateStr);
+    }
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
 }
@@ -400,8 +422,13 @@ export function handleCellEdit(dateStr, room, field, val, isEvt = false) {
     }
 
     markCellDirty(dateStr, room);
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
+    if (typeof window.markCmDirty === 'function') {
+        const isRippledFmp = field === 'fmp' && window.editMode === 'ripple';
+        window.markCmDirty(dateStr, 'rate', (room === 'GLOBAL' || isRippledFmp) ? '*' : `ROOM:${room}`);
+    } else {
+        window.dirtyDates.add(dateStr);
+        window.syncedDates.delete(dateStr);
+    }
     window.markUnsavedChanges();
     renderRateMatrix();
 }
@@ -437,8 +464,12 @@ export function handleOtaEdit(dateStr, ratePlanId, room, ruleType, ruleVal, fiel
         else overrides[`${ratePlanId}_max`] = parseInt(val, 10);
     }
 
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
+    if (typeof window.markCmDirty === 'function') {
+        window.markCmDirty(dateStr, 'rate', `PLAN:${ratePlanId}`);
+    } else {
+        window.dirtyDates.add(dateStr);
+        window.syncedDates.delete(dateStr);
+    }
     window.markUnsavedChanges();
     renderRateMatrix();
 }
@@ -499,12 +530,33 @@ export function cycleUnifiedRestriction(dateStr, room, ratePlanId = null, isEvt 
         } else {
             rData[`${pfx}cta`] = false; rData[`${pfx}ctd`] = false; rData[`${pfx}stop`] = false;
             delete rData.isOverride[`${pfx}cta`]; delete rData.isOverride[`${pfx}ctd`]; delete rData.isOverride[`${pfx}stop`];
+
+            // Reopening a room clears any lingering event/direct/OTA stop flags on that room
+            if (!isEvt && room !== 'GLOBAL') {
+                delete rData.evt_stop;
+                delete rData.evt_stopSell;
+                delete rData.dir_stop;
+                delete rData.dir_stopSell;
+                if (dObj.otaOverrides) {
+                    const roomLower = room.trim().toLowerCase();
+                    (window.channexRateMap || []).forEach(rp => {
+                        if (String(rp.pmsCategory || '').trim().toLowerCase() === roomLower) {
+                            delete dObj.otaOverrides[`${rp.ratePlanId}_stop`];
+                        }
+                    });
+                }
+            }
         }
     }
 
     markCellDirty(dateStr, ratePlanId ? `${room}|${ratePlanId}` : room);
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
+    if (typeof window.markCmDirty === 'function') {
+        const target = ratePlanId ? `PLAN:${ratePlanId}` : (room === 'GLOBAL' ? '*' : `ROOM:${room}`);
+        window.markCmDirty(dateStr, 'rate', target);
+    } else {
+        window.dirtyDates.add(dateStr);
+        window.syncedDates.delete(dateStr);
+    }
     window.markUnsavedChanges();
     renderRateMatrix();
 }
@@ -531,6 +583,7 @@ export function unlockCellOverride(dateStr, room, ratePlanId = null) {
         if (window.masterPricing.timeline[dateStr]?.otaOverrides) {
             delete window.masterPricing.timeline[dateStr].otaOverrides[ratePlanId];
             delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_min`];
+            delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_min_arr`];
             delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_max`];
             delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_cta`];
             delete window.masterPricing.timeline[dateStr].otaOverrides[`${ratePlanId}_ctd`];
@@ -556,8 +609,12 @@ export function unlockCellOverride(dateStr, room, ratePlanId = null) {
         }
     }
     markCellDirty(dateStr, ratePlanId ? `${room}|${ratePlanId}` : room);
-    window.dirtyDates.add(dateStr);
-    window.syncedDates.delete(dateStr);
+    if (typeof window.markCmDirty === 'function') {
+        window.markCmDirty(dateStr, 'rate', ratePlanId ? `PLAN:${ratePlanId}` : '*');
+    } else {
+        window.dirtyDates.add(dateStr);
+        window.syncedDates.delete(dateStr);
+    }
     window.markUnsavedChanges();
     renderRateMatrix();
 }
@@ -743,8 +800,9 @@ export function renderRateMatrix() {
     targetRooms.forEach((room, idx) => {
         const groupClass = idx % 2 === 0 ? 'room-group-even' : 'room-group-odd';
         const displayName = window.displayAbbrev?.[room] || room;
-        const isLinkedTargetRoom = linkedTargetSet.has(room.trim().toLowerCase());
-        const allMappedRates = (window.channexRateMap || []).filter(m => m.pmsCategory === room);
+        const roomLower = room.trim().toLowerCase();
+        const isLinkedTargetRoom = linkedTargetSet.has(roomLower);
+        const allMappedRates = (window.channexRateMap || []).filter(m => String(m.pmsCategory || '').trim().toLowerCase() === roomLower);
 
         const isRoomManuallyExpanded = expandedRooms.has(room);
         const effectiveRateLevel = isRoomManuallyExpanded && rateLevel === 'min' ? 'all' : rateLevel;
@@ -1105,7 +1163,7 @@ export function renderRateMatrix() {
         }
     });
 
-    // 3. GLOBAL Restrictions Row (Thick 4px top divider + distinct high-contrast styling so it never blends with rooms)
+    // 3. GLOBAL Restrictions Row (Thick 4px top divider + distinct high-contrast styling)
     if (density === 'minmax' || density === 'full') {
         let globalTr = `<tr class="bg-slate-200/90 text-slate-900 border-t-[4px] border-slate-900 border-b-2 border-slate-900">
             <td class="frozen-col !p-0 z-20 !bg-slate-900 text-white border-r-2 border-slate-700 px-1.5 py-1.5">
@@ -1169,6 +1227,7 @@ export function handleDirectEdit(dateStr, room, field, val) {
         if (!val || val === '-') delete rData.dir_max;
         else rData.dir_max = parseInt(val, 10);
     }
+    if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', `ROOM:${room}`);
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
 }
@@ -1189,6 +1248,7 @@ export function cycleDirectRestriction(dateStr, room) {
     else if (cta && ctd && !stop) { rData.dir_cta = false; rData.dir_ctd = false; rData.dir_stop = true; }
     else { rData.dir_cta = false; rData.dir_ctd = false; rData.dir_stop = false; }
 
+    if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', `ROOM:${room}`);
     if (typeof window.markUnsavedChanges === 'function') window.markUnsavedChanges();
     renderRateMatrix();
 }
