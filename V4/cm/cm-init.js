@@ -5,10 +5,10 @@
 
 import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { doc, getDoc, setDoc, collection, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { doc, getDoc, setDoc, collection, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { loadPropertiesCatalog, toCanonicalPropId } from '../core/properties.js';
 import { normalizeChannelRules, resolveChannelCode, getChannelByCode } from '../core/channels.js';
-import { getLocalYMD } from '../core/dates.js';
+import { getLocalYMD, parseYMD } from '../core/dates.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
 import { loadPropertyBaseline, checkMissing, renderManualGrid } from './cm-auditor.js';
@@ -19,6 +19,45 @@ import { pushToChannexAPI, saveAndSync } from '../channex.js';
 
 export let hasUnsavedChanges = false;
 export let hasLoadedPricingFromCloud = false;
+
+function compactTimelineForCloud(rawTimeline = {}) {
+    const todayMs = parseYMD(getLocalYMD(new Date()));
+    const cutoffStr = getLocalYMD(new Date(todayMs - (14 * 86400000)));
+    const compacted = {};
+
+    Object.entries(rawTimeline || {}).forEach(([dateStr, dayObj]) => {
+        if (!dateStr || dateStr < cutoffStr || !dayObj || typeof dayObj !== 'object') return;
+        const cleanDay = {};
+
+        Object.entries(dayObj).forEach(([key, val]) => {
+            if (!val || typeof val !== 'object') return;
+            const cleanNode = {};
+
+            Object.entries(val).forEach(([field, fVal]) => {
+                if (field === '_syncedStd' || fVal === undefined || fVal === "") return;
+                if (field === 'isOverride' && typeof fVal === 'object') {
+                    const cleanOvr = {};
+                    Object.entries(fVal).forEach(([ok, ov]) => {
+                        if (ov) cleanOvr[ok] = true;
+                    });
+                    if (Object.keys(cleanOvr).length > 0) cleanNode.isOverride = cleanOvr;
+                    return;
+                }
+                cleanNode[field] = fVal;
+            });
+
+            if (Object.keys(cleanNode).length > 0) {
+                cleanDay[key] = cleanNode;
+            }
+        });
+
+        if (Object.keys(cleanDay).length > 0) {
+            compacted[dateStr] = cleanDay;
+        }
+    });
+
+    return compacted;
+}
 
 export function markCmDirty(dateStr, kind = 'rate', target = '*') {
     if (!dateStr) return;
@@ -71,8 +110,8 @@ export async function initCm() {
         });
 
         window.eventDates = activeProp?.events || [];
-        window.enableEventRates = activeProp?.enableEventRates !== undefined 
-            ? !!activeProp.enableEventRates 
+        window.enableEventRates = activeProp?.enableEventRates !== undefined
+            ? !!activeProp.enableEventRates
             : ((window.eventDates || []).length > 0);
 
         window.channexConfig = activeProp?.channex || {};
@@ -82,7 +121,7 @@ export async function initCm() {
             channel: resolveChannelCode(rm.channel || rm.ratePlanTitle)
         }));
         window.promoRules = activeProp?.promoRules || [];
-       window.dirtyDates = new Set();
+        window.dirtyDates = new Set();
         window.syncedDates = new Set();
         window.dirtyAvailKeys = new Set();
         window.dirtyPlanKeys = new Set();
@@ -90,7 +129,6 @@ export async function initCm() {
         window.justSyncedCellKeys = new Set();
         window.editMode = 'ripple';
 
-        // Load Pricing Matrix from Firestore (safely parse if stored as JSON string)
         const parseIfJson = (val, fallback) => {
             if (typeof val === 'string') {
                 try { return JSON.parse(val); } catch (e) { return fallback; }
@@ -102,12 +140,27 @@ export async function initCm() {
         const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`));
         const pData = pricingSnap.exists() ? pricingSnap.data() : {};
 
-        const parsedTimeline = parseIfJson(pData.timeline, {});
+        // Merge legacy inline timeline + monthly shards (master_{canonId}_YYYY-MM)
+        const mergedTimeline = { ...parseIfJson(pData.timeline, {}) };
+        const shardMonths = Array.isArray(pData.shardMonths) ? pData.shardMonths : [];
+        if (shardMonths.length > 0) {
+            const shardSnaps = await Promise.all(
+                shardMonths.map(ym => getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${ym}`)))
+            );
+            shardSnaps.forEach(snap => {
+                if (!snap.exists()) return;
+                const shardData = parseIfJson(snap.data()?.timeline, {});
+                if (shardData && typeof shardData === 'object') {
+                    Object.assign(mergedTimeline, shardData);
+                }
+            });
+        }
+
         const parsedPropRels = parseIfJson(activeProp?.masterPricing?.relationships, []);
         const parsedDocRels = parseIfJson(pData.relationships, []);
 
         window.masterPricing = {
-            timeline: (parsedTimeline && typeof parsedTimeline === 'object') ? parsedTimeline : {},
+            timeline: mergedTimeline,
             relationships: (Array.isArray(parsedPropRels) && parsedPropRels.length ? parsedPropRels : parsedDocRels) || [],
             baseRates: parseIfJson(pData.baseRates, {})
         };
@@ -176,8 +229,8 @@ export function populateChannelPreviewFilter() {
 }
 
 export function isEventPricingEnabled() {
-    return window.enableEventRates !== undefined 
-        ? !!window.enableEventRates 
+    return window.enableEventRates !== undefined
+        ? !!window.enableEventRates
         : ((window.eventDates || []).length > 0);
 }
 
@@ -201,10 +254,10 @@ export function updateEventPricingToggleUI() {
     const btn = document.getElementById('prop-event-pricing-btn');
     const isEn = isEventPricingEnabled();
     if (btn) {
-        btn.className = isEn 
+        btn.className = isEn
             ? "px-2 py-1 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer bg-pink-100 text-pink-800 border border-pink-300 hover:bg-pink-200"
             : "px-2 py-1 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200";
-        btn.innerHTML = isEn 
+        btn.innerHTML = isEn
             ? `<i data-lucide="calendar-heart" size="13" class="text-pink-600"></i> <span>EVENTS: ON</span>`
             : `<i data-lucide="calendar-off" size="13" class="text-slate-400"></i> <span>EVENTS: OFF</span>`;
     }
@@ -276,8 +329,8 @@ export async function savePricingToCloud(silent = false) {
         return customAlert("Save Blocked", "Safety Guard: The pricing matrix has not finished loading. Overwrite blocked.");
     }
 
-    const dateCount = Object.keys(window.masterPricing?.timeline || {}).length;
-    if (dateCount === 0) {
+    const rawDates = Object.keys(window.masterPricing?.timeline || {});
+    if (rawDates.length === 0) {
         console.error("[Save Blocked]: Attempted to save an empty pricing matrix.");
         return customAlert("Save Blocked", "Safety Guard: Matrix in memory is empty. Overwriting existing rates is blocked.");
     }
@@ -289,26 +342,52 @@ export async function savePricingToCloud(silent = false) {
 
     try {
         const canonId = toCanonicalPropId(window.currentPropertyId);
+        const compactedTimeline = compactTimelineForCloud(window.masterPricing.timeline || {});
 
-        const serializedTimeline = JSON.stringify(window.masterPricing.timeline || {});
-
-        // 1. Immutable Rolling Backup
-        const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing_backups', `${canonId}_${Date.now()}`);
-        await setDoc(backupRef, {
-            timeline: serializedTimeline,
-            createdAt: new Date().toISOString()
+        // Partition compacted timeline into monthly shards (YYYY-MM) so no Firestore doc approaches 1 MB
+        const shardsByMonth = {};
+        Object.entries(compactedTimeline).forEach(([dateStr, dayObj]) => {
+            const ym = dateStr.slice(0, 7);
+            if (!shardsByMonth[ym]) shardsByMonth[ym] = {};
+            shardsByMonth[ym][dateStr] = dayObj;
         });
 
-        // 2. Persist Master Pricing Matrix
+        const shardMonths = Object.keys(shardsByMonth).sort();
+        const updatedAt = new Date().toISOString();
+
+        // 1. Write monthly pricing shards in parallel
+        await Promise.all(
+            shardMonths.map(ym =>
+                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${ym}`), {
+                    timeline: JSON.stringify(shardsByMonth[ym]),
+                    updatedAt
+                })
+            )
+        );
+
+        // 2. Persist master metadata + shard index (and clear oversized legacy inline timeline)
         const mainRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`);
         await setDoc(mainRef, {
-            timeline: serializedTimeline,
+            shardMonths,
+            timeline: deleteField(),
             relationships: window.masterPricing.relationships || [],
             pricingRules: window.pricingRules || {},
-            updatedAt: new Date().toISOString()
+            updatedAt
         }, { merge: true });
 
+        // 3. Lightweight rolling backup (capped at next 180 days so backup never exceeds 1 MB)
         const todayStr = getLocalYMD(new Date());
+        const backupCutoffStr = getLocalYMD(new Date(parseYMD(todayStr) + (180 * 86400000)));
+        const backupSlice = {};
+        Object.entries(compactedTimeline).forEach(([dStr, dObj]) => {
+            if (dStr >= todayStr && dStr <= backupCutoffStr) backupSlice[dStr] = dObj;
+        });
+        const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing_backups', `${canonId}_${Date.now()}`);
+        await setDoc(backupRef, {
+            timeline: JSON.stringify(backupSlice),
+            createdAt: updatedAt
+        });
+
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', window.currentPropertyId), {
             lastPromoSyncDate: todayStr
         });
@@ -321,7 +400,7 @@ export async function savePricingToCloud(silent = false) {
         updateSaveIndicator();
         renderRateMatrix();
         if (!silent) customAlert("Success", "Master pricing matrix safely saved and backed up.");
-        
+
     } catch (err) {
         console.error("[Pricing Save Error]:", err);
         customAlert("Save Failed", err.message);
