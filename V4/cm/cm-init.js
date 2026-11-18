@@ -27,21 +27,40 @@ const parseIfJson = (val, fallback) => {
     return val ?? fallback;
 };
 
+function getShardKeyForDate(dateStr) {
+    const ym = dateStr.slice(0, 7);
+    const day = parseInt(dateStr.slice(8, 10), 10) || 1;
+    const bucket = day <= 10 ? 'b1' : (day <= 20 ? 'b2' : 'b3');
+    return `${ym}_${bucket}`;
+}
+
 function compactTimelineForCloud(rawTimeline = {}) {
     const todayMs = parseYMD(getLocalYMD(new Date()));
     const cutoffStr = getLocalYMD(new Date(todayMs - (14 * 86400000)));
     const compacted = {};
 
+    // Lookup ratePlanId -> { pmsCategory, isEvent } to strip redundant otaOverrides that match inherited values
+    const planMetaById = new Map();
+    (window.channexRateMap || []).forEach(rp => {
+        if (!rp || !rp.ratePlanId) return;
+        const isEvt = typeof rp.isEvent === 'boolean'
+            ? rp.isEvent
+            : (rp.policy?.startsWith('event') || rp.product === 'evt' || rp.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(rp.ratePlanTitle || ''));
+        planMetaById.set(rp.ratePlanId, { cat: rp.pmsCategory, isEvt });
+    });
+
     Object.entries(rawTimeline || {}).forEach(([dateStr, dayObj]) => {
         if (!dateStr || dateStr < cutoffStr || !dayObj || typeof dayObj !== 'object') return;
         const cleanDay = {};
+        const gObj = dayObj.GLOBAL || {};
 
         Object.entries(dayObj).forEach(([key, val]) => {
             if (!val || typeof val !== 'object') return;
             const cleanNode = {};
 
             Object.entries(val).forEach(([field, fVal]) => {
-                if (field === '_syncedStd' || fVal === undefined || fVal === "") return;
+                if (field === '_syncedStd' || fVal === undefined || fVal === null || fVal === "") return;
+
                 if (field === 'isOverride' && typeof fVal === 'object') {
                     const cleanOvr = {};
                     Object.entries(fVal).forEach(([ok, ov]) => {
@@ -50,6 +69,42 @@ function compactTimelineForCloud(rawTimeline = {}) {
                     if (Object.keys(cleanOvr).length > 0) cleanNode.isOverride = cleanOvr;
                     return;
                 }
+
+                // Strip redundant otaOverrides that simply mirror the room/global/event inherited restriction
+                if (key === 'otaOverrides') {
+                    const m = field.match(/^(.+)_(min|min_arr|max|cta|ctd|stop)$/);
+                    if (m) {
+                        const [, rpId, rField] = m;
+                        const meta = planMetaById.get(rpId);
+                        if (meta) {
+                            const rObj = dayObj[meta.cat] || {};
+                            const evtObj = dayObj.evtRestrictions || {};
+                            let inherited;
+                            if (meta.isEvt) {
+                                inherited = rObj[`evt_${rField}`] ?? evtObj[rField] ?? rObj[rField] ?? gObj[rField];
+                            } else {
+                                inherited = rObj[rField] ?? gObj[rField];
+                            }
+
+                            if (rField === 'cta' || rField === 'ctd' || rField === 'stop') {
+                                const effInherited = inherited !== undefined ? !!inherited : false;
+                                if (!!fVal === effInherited) return;
+                            } else if (rField === 'min' || rField === 'min_arr') {
+                                const hasParentMin = (rObj.min !== undefined && rObj.min !== "")
+                                    || (rObj.min_arr !== undefined && rObj.min_arr !== "")
+                                    || (gObj.min !== undefined && gObj.min !== "")
+                                    || (gObj.min_arr !== undefined && gObj.min_arr !== "")
+                                    || (meta.isEvt && ((rObj.evt_min !== undefined && rObj.evt_min !== "") || (rObj.evt_min_arr !== undefined && rObj.evt_min_arr !== "") || (evtObj.min !== undefined && evtObj.min !== "") || (evtObj.min_arr !== undefined && evtObj.min_arr !== "")));
+                                if (!hasParentMin && Number(fVal) <= 1) return;
+                                if (inherited !== undefined && inherited !== "" && Number(fVal) === Number(inherited)) return;
+                            } else if (rField === 'max') {
+                                if ((inherited === undefined || inherited === "") && Number(fVal) === 0) return;
+                                if (inherited !== undefined && inherited !== "" && Number(fVal) === Number(inherited)) return;
+                            }
+                        }
+                    }
+                }
+
                 cleanNode[field] = fVal;
             });
 
@@ -71,12 +126,16 @@ async function hydratePricingFromCloud(activeProp = null) {
     const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`));
     const pData = pricingSnap.exists() ? pricingSnap.data() : {};
 
-    // Merge legacy inline timeline + monthly shards (master_{canonId}_YYYY-MM)
+    // Merge legacy inline timeline + legacy monthly shards + 10-day sub-monthly shards
     const mergedTimeline = { ...parseIfJson(pData.timeline, {}) };
-    const shardMonths = Array.isArray(pData.shardMonths) ? pData.shardMonths : [];
-    if (shardMonths.length > 0) {
+    const allShardSuffixes = Array.from(new Set([
+        ...(Array.isArray(pData.shardMonths) ? pData.shardMonths : []),
+        ...(Array.isArray(pData.shardKeys) ? pData.shardKeys : [])
+    ]));
+
+    if (allShardSuffixes.length > 0) {
         const shardSnaps = await Promise.all(
-            shardMonths.map(ym => getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${ym}`)))
+            allShardSuffixes.map(suffix => getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${suffix}`)))
         );
         shardSnaps.forEach(snap => {
             if (!snap.exists()) return;
@@ -190,6 +249,7 @@ export async function initCm() {
 
         await hydratePricingFromCloud(activeProp);
 
+        if (typeof window.initGridUI === 'function') window.initGridUI();
         populateChannelPreviewFilter();
         hasLoadedPricingFromCloud = true;
         hasUnsavedChanges = false;
@@ -263,6 +323,10 @@ export function populateChannelPreviewFilter() {
             const meta = getChannelByCode(code);
             return `<option value="${code}">${code} - ${meta.name}</option>`;
         }).join('');
+
+    if (window.channelPreviewFilter && Array.from(sel.options).some(o => o.value === window.channelPreviewFilter)) {
+        sel.value = window.channelPreviewFilter;
+    }
 }
 
 export function isEventPricingEnabled() {
@@ -396,50 +460,59 @@ export async function savePricingToCloud(silent = false) {
     try {
         const canonId = toCanonicalPropId(window.currentPropertyId);
         const compactedTimeline = compactTimelineForCloud(window.masterPricing.timeline || {});
+        window.masterPricing.timeline = compactedTimeline;
 
-        // Partition compacted timeline into monthly shards (YYYY-MM) so no Firestore doc approaches 1 MB
-        const shardsByMonth = {};
+        // Partition into 10-day sub-monthly shards (YYYY-MM_b1/b2/b3) so every Firestore doc stays well under 100 KB
+        const shardsByKey = {};
         Object.entries(compactedTimeline).forEach(([dateStr, dayObj]) => {
-            const ym = dateStr.slice(0, 7);
-            if (!shardsByMonth[ym]) shardsByMonth[ym] = {};
-            shardsByMonth[ym][dateStr] = dayObj;
+            const sKey = getShardKeyForDate(dateStr);
+            if (!shardsByKey[sKey]) shardsByKey[sKey] = {};
+            shardsByKey[sKey][dateStr] = dayObj;
         });
 
-        const shardMonths = Object.keys(shardsByMonth).sort();
+        const shardKeys = Object.keys(shardsByKey).sort();
         const updatedAt = new Date().toISOString();
 
-        // 1. Write monthly pricing shards in parallel
+        // 1. Write 10-day pricing shards in parallel
         await Promise.all(
-            shardMonths.map(ym =>
-                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${ym}`), {
-                    timeline: JSON.stringify(shardsByMonth[ym]),
+            shardKeys.map(sKey =>
+                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${sKey}`), {
+                    timeline: JSON.stringify(shardsByKey[sKey]),
                     updatedAt
                 })
             )
         );
 
-        // 2. Persist master metadata + shard index (and clear oversized legacy inline timeline)
+        // 2. Persist master metadata + shard index (and clear legacy inline/monthly fields)
         const mainRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`);
         await setDoc(mainRef, {
-            shardMonths,
+            shardKeys,
+            shardMonths: deleteField(),
             timeline: deleteField(),
             relationships: window.masterPricing.relationships || [],
             pricingRules: window.pricingRules || {},
             updatedAt
         }, { merge: true });
 
-        // 3. Lightweight rolling backup (capped at next 180 days so backup never exceeds 1 MB)
+        // 3. Non-blocking rolling backup (capped at next 30 days and < 850 KB so it can never block save or sync)
         const todayStr = getLocalYMD(new Date());
-        const backupCutoffStr = getLocalYMD(new Date(parseYMD(todayStr) + (180 * 86400000)));
-        const backupSlice = {};
-        Object.entries(compactedTimeline).forEach(([dStr, dObj]) => {
-            if (dStr >= todayStr && dStr <= backupCutoffStr) backupSlice[dStr] = dObj;
-        });
-        const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing_backups', `${canonId}_${Date.now()}`);
-        await setDoc(backupRef, {
-            timeline: JSON.stringify(backupSlice),
-            createdAt: updatedAt
-        });
+        try {
+            const backupCutoffStr = getLocalYMD(new Date(parseYMD(todayStr) + (30 * 86400000)));
+            const backupSlice = {};
+            Object.entries(compactedTimeline).forEach(([dStr, dObj]) => {
+                if (dStr >= todayStr && dStr <= backupCutoffStr) backupSlice[dStr] = dObj;
+            });
+            const serializedBackup = JSON.stringify(backupSlice);
+            if (serializedBackup.length < 850000) {
+                const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing_backups', `${canonId}_${Date.now()}`);
+                await setDoc(backupRef, {
+                    timeline: serializedBackup,
+                    createdAt: updatedAt
+                });
+            }
+        } catch (backupErr) {
+            console.warn("[Rolling Backup Skipped]:", backupErr);
+        }
 
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', window.currentPropertyId), {
             lastPromoSyncDate: todayStr
