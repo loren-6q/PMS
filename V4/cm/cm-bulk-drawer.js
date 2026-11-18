@@ -833,17 +833,23 @@ export function initCurveTuner(targetDateStr = null) {
     const select = document.getElementById('ct-event-select');
     if (!select) return;
 
-    const events = (window.eventDates || []).slice().sort();
-    if (events.length === 0) {
-        select.innerHTML = `<option value="">No events — add a date →</option>`;
+    const todayStr = getLocalYMD(new Date());
+    const upcomingEvents = (window.eventDates || [])
+        .filter(d => d >= todayStr || (targetDateStr && d === targetDateStr))
+        .slice()
+        .sort();
+
+    if (upcomingEvents.length === 0) {
+        select.innerHTML = `<option value="">No upcoming events — add a date →</option>`;
         renderCurveRestrictionsGrid();
         return;
     }
 
-    const todayStr = getLocalYMD(new Date());
-    const selectedDate = targetDateStr || events.find(d => d >= todayStr) || events[events.length - 1];
+    const selectedDate = (targetDateStr && upcomingEvents.includes(targetDateStr))
+        ? targetDateStr
+        : upcomingEvents[0];
 
-    select.innerHTML = events.map(dStr => {
+    select.innerHTML = upcomingEvents.map(dStr => {
         const dObj = new Date(dStr + "T12:00:00Z");
         return `<option value="${dStr}" ${dStr === selectedDate ? 'selected' : ''}>${dObj.getUTCDate()} ${mNames[dObj.getUTCMonth()]} ${dObj.getUTCFullYear()} (${dStr})</option>`;
     }).join('');
