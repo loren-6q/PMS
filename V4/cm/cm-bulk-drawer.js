@@ -553,13 +553,31 @@ export function applyBulkGrid(isClear = false) {
             });
         }
 
-        if (isAllRatesSelected || selectedPlanSigs.size > 0) {
+        if (isAllRatesSelected) {
+            // Clear stale per-plan overrides for the updated fields so every OTA plan inherits the room's master value cleanly
+            if (dObj.otaOverrides) {
+                (window.channexRateMap || []).forEach(rp => {
+                    const mappedCat = findCanonicalRoom(rp.pmsCategory) || rp.pmsCategory;
+                    if (!targetRooms.includes(mappedCat)) return;
+                    if (r.min !== undefined || r.min_arr !== undefined) {
+                        delete dObj.otaOverrides[`${rp.ratePlanId}_min`];
+                        delete dObj.otaOverrides[`${rp.ratePlanId}_min_arr`];
+                    }
+                    if (r.max !== undefined) delete dObj.otaOverrides[`${rp.ratePlanId}_max`];
+                    if (r.pillState !== 'nochange') {
+                        delete dObj.otaOverrides[`${rp.ratePlanId}_cta`];
+                        delete dObj.otaOverrides[`${rp.ratePlanId}_ctd`];
+                        delete dObj.otaOverrides[`${rp.ratePlanId}_stop`];
+                    }
+                });
+            }
+        } else if (selectedPlanSigs.size > 0) {
             dObj.otaOverrides = dObj.otaOverrides || {};
             (window.channexRateMap || []).forEach(rp => {
                 const mappedCat = findCanonicalRoom(rp.pmsCategory) || rp.pmsCategory;
                 if (!targetRooms.includes(mappedCat)) return;
                 const planSig = getPlanSignature(rp);
-                if (!isAllRatesSelected && !selectedPlanSigs.has(planSig)) return;
+                if (!selectedPlanSigs.has(planSig)) return;
 
                 if (r.min !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_min`] = r.min; delete dObj.otaOverrides[`${rp.ratePlanId}_min_arr`]; }
                 if (r.min_arr !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_min_arr`] = r.min_arr; delete dObj.otaOverrides[`${rp.ratePlanId}_min`]; }
