@@ -27,6 +27,29 @@ function saveGridPrefs() {
     }));
 }
 
+function ensurePinnedLegendBadge() {
+    if (typeof document === 'undefined' || document.getElementById('legend-pinned-chip')) return;
+    // Locate the toolbar legend strip containing existing status pills (e.g., Stop Sell / Unsaved / Synced)
+    const candidates = Array.from(document.querySelectorAll('div, span')).filter(el => {
+        const txt = (el.textContent || '').trim();
+        return el.children.length >= 2 && el.children.length <= 10 && /stop\s*sell/i.test(txt) && /synced|unsaved|gap/i.test(txt);
+    });
+    const legendContainer = candidates.sort((a, b) => a.textContent.length - b.textContent.length)[0];
+    if (!legendContainer) return;
+
+    const item = document.createElement('span');
+    item.id = 'legend-pinned-chip';
+    item.className = 'inline-flex items-center gap-1 text-[10px] font-bold text-slate-600';
+    item.title = 'Pinned override breaks Anchor ripple (double-click cell to re-link)';
+    item.innerHTML = `
+        <span class="relative inline-block w-3 h-3 bg-white border border-slate-300 rounded-2xs overflow-hidden shrink-0">
+            <span class="absolute top-0 right-0 w-0 h-0 border-t-[6px] border-l-[6px] border-t-orange-500 border-l-transparent"></span>
+        </span>
+        <span>Pinned (No Ripple)</span>
+    `;
+    legendContainer.appendChild(item);
+}
+
 export function initGridUI() {
     window.roomLevel = roomLevel;
     window.rateLevel = rateLevel;
@@ -37,7 +60,8 @@ export function initGridUI() {
     setRoomLevel(roomLevel, true);
     setRateLevel(rateLevel, true);
     setViewDensity(viewDensity, true);
-    
+    ensurePinnedLegendBadge();
+
     const gapBtn = document.getElementById('btn-toggle-gaps');
     if (gapBtn) {
         gapBtn.className = highlightGaps
@@ -626,6 +650,7 @@ export function renderRateMatrix() {
     const startStr = tapeInput?.value || getLocalYMD(new Date());
 
     calculateLiveInventory();
+    ensurePinnedLegendBadge();
 
     const head = document.getElementById('grid-head');
     const body = document.getElementById('grid-body');
@@ -839,7 +864,7 @@ export function renderRateMatrix() {
 
             let cellClass = `p-0 border-r border-slate-200 text-center relative ${stateBgClass}`;
             const pinCornerHtml = isBrokenRipple
-                ? `<span class="pointer-events-none absolute top-0 right-0 w-0 h-0 border-t-[7px] border-r-[7px] border-t-indigo-600 border-r-transparent z-10" title="Pinned Override (breaks ripple — double-click to re-link)"></span>`
+                ? `<span class="pointer-events-none absolute top-0 right-0 w-0 h-0 border-t-[7px] border-l-[7px] border-t-orange-500 border-l-transparent z-10" title="Pinned Override (breaks ripple — double-click to re-link)"></span>`
                 : '';
             const stateNote = isDirty ? ' • Unsaved' : (isSynced ? ' • Just Synced' : '');
             const pinNote = isBrokenRipple ? ' • Pinned (Double-click to re-link)' : '';
@@ -911,7 +936,7 @@ export function renderRateMatrix() {
                 else if (isPinnedFmp) evtStateBgClass = 'rate-cell-pinned';
 
                 const evtPinCornerHtml = isBrokenRippleEvt
-                    ? `<span class="pointer-events-none absolute top-0 right-0 w-0 h-0 border-t-[7px] border-r-[7px] border-t-indigo-600 border-r-transparent z-10" title="Pinned Event Override"></span>`
+                    ? `<span class="pointer-events-none absolute top-0 right-0 w-0 h-0 border-t-[7px] border-l-[7px] border-t-orange-500 border-l-transparent z-10" title="Pinned Event Override (breaks ripple — double-click to re-link)"></span>`
                     : '';
 
                 trEvt += `<td class="p-0 border-r border-pink-200 text-center relative ${evtStateBgClass}" style="width: 42px; min-width: 42px; max-width: 42px;">
@@ -1080,12 +1105,13 @@ export function renderRateMatrix() {
         }
     });
 
+    // 3. GLOBAL Restrictions Row (Thick 4px top divider + distinct high-contrast styling so it never blends with rooms)
     if (density === 'minmax' || density === 'full') {
-        let globalTr = `<tr class="bg-slate-100 text-slate-800 border-t-2 border-slate-400">
-            <td class="frozen-col !p-0 z-20 bg-slate-100 border-r-2 border-slate-400 px-1.5 py-1">
+        let globalTr = `<tr class="bg-slate-200/90 text-slate-900 border-t-[4px] border-slate-900 border-b-2 border-slate-900">
+            <td class="frozen-col !p-0 z-20 !bg-slate-900 text-white border-r-2 border-slate-700 px-1.5 py-1.5">
                 <div class="w-[140px] flex items-center justify-between">
-                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-800">GLOBAL</span>
-                    <span class="text-[7px] font-black text-slate-600 uppercase bg-white border border-slate-300 px-1 py-0.2 rounded">RESTR</span>
+                    <span class="text-[10px] font-black uppercase tracking-wider text-amber-300">GLOBAL</span>
+                    <span class="text-[7px] font-black text-slate-900 uppercase bg-amber-300 px-1 py-0.5 rounded">ALL ROOMS</span>
                 </div>
             </td>`;
 
@@ -1098,13 +1124,13 @@ export function renderRateMatrix() {
             const gStopped = !!(gData.stop || gData.stopSell);
             const gPillHtml = getUnifiedRestrictionBadgeHtml(gData.cta, gData.ctd, gStopped);
 
-            globalTr += `<td class="p-0 border-r border-slate-300 text-center ${gStopped ? 'rate-cell-stopped' : 'bg-slate-50'}" style="width: 42px; min-width: 42px; max-width: 42px;">
+            globalTr += `<td class="p-0 border-r border-slate-300 text-center ${gStopped ? 'rate-cell-stopped' : 'bg-slate-200/80'}" style="width: 42px; min-width: 42px; max-width: 42px;">
                 <div class="flex items-center w-full h-[15px] leading-none overflow-hidden">
-                    <input type="text" class="cell-min-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white'} text-center font-black text-slate-800 outline-none p-0" value="${gMinVal}" placeholder="Min" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', 'GLOBAL')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min_hybrid', this.value)">
-                    <input type="text" class="cell-max-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white'} text-center font-bold text-slate-500 outline-none p-0 border-l ${gStopped ? 'border-rose-700' : 'border-slate-200'}" value="${gData.max || ''}" placeholder="Max" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'max', this.value)">
+                    <input type="text" class="cell-min-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white/90'} text-center font-black text-slate-900 outline-none p-0" value="${gMinVal}" placeholder="Min" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', 'GLOBAL')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min_hybrid', this.value)">
+                    <input type="text" class="cell-max-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white/90'} text-center font-bold text-slate-600 outline-none p-0 border-l ${gStopped ? 'border-rose-700' : 'border-slate-300'}" value="${gData.max || ''}" placeholder="Max" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'max', this.value)">
                 </div>
                 ${density === 'full' ? `
-                <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t border-slate-200">
+                <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${gStopped ? 'border-rose-700' : 'border-slate-300'}">
                     <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', 'GLOBAL')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle GLOBAL: Open → CTA → CTD → CTB → STOP">
                         ${gPillHtml}
                     </button>
