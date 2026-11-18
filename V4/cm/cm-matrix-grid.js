@@ -6,75 +6,184 @@
 import { parseYMD, getLocalYMD, mNames } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
 import { isOccupyingBooking, getRestrictionBadgeHtml } from '../core/occupancy.js';
-import { resolveChannelCode } from '../core/channels.js';
+import { CHANNELS, resolveChannelCode } from '../core/channels.js';
 import { getClassifiedRooms } from '../core/properties.js';
 import { rippleDay, applyMath, computeDynamicPlanRate, getNearestEvent } from './cm-ripple.js';
 
-// Load UI Preferences from LocalStorage
-const _prefs = JSON.parse(localStorage.getItem('cm_ui_prefs') || '{}');
-export let roomLevel = _prefs.roomLevel || 'all';      // 'anchors' | 'all' | 'dorms' | 'privates'
-export let rateLevel = _prefs.rateLevel || 'min';      // 'min' | 'direct' | 'default' | 'all'
-export let showEventRows = _prefs.showEventRows !== undefined ? _prefs.showEventRows : false;
+const ALL_RATE_KEYS = ['def', 'direct', 'event', 'los', 'ota', 'other'];
+const ALL_VIEW_KEYS = ['avail', 'price', 'minmax', 'restrictions'];
+
+const _prefs = JSON.parse(localStorage.getItem('cm_ui_prefs_v2') || '{}');
+export let roomLevel = _prefs.roomLevel || 'all';
 export let highlightGaps = _prefs.highlightGaps !== undefined ? _prefs.highlightGaps : false;
-export let viewDensity = _prefs.viewDensity || 'full';   // 'avail' | 'price' | 'compact' | 'minmax' | 'full'
 export let channelPreviewFilter = _prefs.channelPreviewFilter || 'ALL';
+export const rateFilters = new Set(Array.isArray(_prefs.rateFilters) && _prefs.rateFilters.length ? _prefs.rateFilters : ['def']);
+export const viewFields = new Set(Array.isArray(_prefs.viewFields) && _prefs.viewFields.length ? _prefs.viewFields : ALL_VIEW_KEYS);
 export const expandedRooms = new Set(JSON.parse(localStorage.getItem('cm_ui_expanded') || '[]'));
 export const daysToRender = 42;
 
 function saveGridPrefs() {
-    localStorage.setItem('cm_ui_prefs', JSON.stringify({
-        roomLevel, rateLevel, showEventRows, highlightGaps, viewDensity, channelPreviewFilter
+    localStorage.setItem('cm_ui_prefs_v2', JSON.stringify({
+        roomLevel,
+        highlightGaps,
+        channelPreviewFilter,
+        rateFilters: Array.from(rateFilters),
+        viewFields: Array.from(viewFields)
     }));
 }
 
-function ensurePinnedLegendBadge() {
-    if (typeof document === 'undefined') return;
-    const candidates = Array.from(document.querySelectorAll('div, span, footer')).filter(el => {
-        const txt = (el.textContent || '').trim();
-        return el.children.length >= 2 && el.children.length <= 14 && /stop\s*sell/i.test(txt) && /synced|unsaved|gap/i.test(txt);
-    });
-    const legendContainer = candidates.sort((a, b) => a.textContent.length - b.textContent.length)[0];
-    if (!legendContainer) return;
+function classifyRatePlanBucket(r) {
+    const title = r.ratePlanTitle || '';
+    const chanCode = resolveChannelCode(r.channel || title);
+    const isEvt = typeof r.isEvent === 'boolean'
+        ? r.isEvent
+        : (r.policy?.startsWith('event') || r.product === 'evt' || r.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(title));
+    if (isEvt) return 'event';
 
-    // Expand legend across full footer width so all status badges fit on one horizontal line
-    legendContainer.classList.remove('max-w-xs', 'max-w-sm', 'max-w-md', 'max-w-lg', 'max-w-xl', 'max-w-2xl', 'w-1/2', 'w-auto', 'flex-col', 'grid', 'grid-cols-2', 'grid-cols-3');
-    legendContainer.classList.add('flex', 'flex-wrap', 'items-center', 'gap-x-3.5', 'gap-y-1', 'flex-1', 'w-full', 'min-w-0');
+    const isLos = /\b(weekly|monthly|los|length[-_\s]?of[-_\s]?stay|\d+\s*nights?|\d+n)\b/i.test(title);
+    if (isLos) return 'los';
 
-    if (legendContainer.parentElement) {
-        legendContainer.parentElement.classList.remove('flex-col', 'grid', 'grid-cols-2', 'grid-cols-3', 'w-1/2', 'max-w-md', 'max-w-lg', 'max-w-xl', 'max-w-2xl');
-        legendContainer.parentElement.classList.add('flex', 'flex-wrap', 'items-center', 'justify-between', 'w-full', 'gap-x-4', 'gap-y-1');
+    if (chanCode === 'DEF') return 'def';
+    if (chanCode === 'WEB') return 'direct';
+    if (CHANNELS[chanCode]) return 'ota';
+    return 'other';
+}
+
+function syncRateFilterDropdownUI() {
+    const dropdown = document.getElementById('grid-rates-dropdown');
+    const labelEl = document.getElementById('grid-rates-label');
+    if (dropdown) {
+        dropdown.querySelectorAll('input[data-grid-rate]').forEach(cb => {
+            cb.checked = rateFilters.has(cb.dataset.gridRate);
+        });
     }
-
-    Array.from(legendContainer.children).forEach(child => {
-        child.classList.add('inline-flex', 'items-center', 'gap-1', 'whitespace-nowrap', 'shrink-0');
-    });
-
-    if (!document.getElementById('legend-pinned-chip')) {
-        const item = document.createElement('span');
-        item.id = 'legend-pinned-chip';
-        item.className = 'inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 whitespace-nowrap shrink-0';
-        item.title = 'Pinned override breaks Anchor ripple (double-click cell to re-link)';
-        item.innerHTML = `
-            <span class="relative inline-block w-3 h-3 bg-white border border-slate-300 rounded-2xs overflow-hidden shrink-0">
-                <span class="absolute top-0 right-0 w-0 h-0 border-t-[6px] border-l-[6px] border-t-orange-500 border-l-transparent"></span>
-            </span>
-            <span>Pinned (No Ripple)</span>
-        `;
-        legendContainer.appendChild(item);
+    if (labelEl) {
+        const names = { def: 'DEF', direct: 'Direct', event: 'Event', los: 'LOS', ota: 'OTA', other: 'Other' };
+        if (rateFilters.size === ALL_RATE_KEYS.length) {
+            labelEl.innerText = 'All Rates';
+        } else if (rateFilters.size === 1) {
+            const only = Array.from(rateFilters)[0];
+            labelEl.innerText = names[only] || only.toUpperCase();
+        } else {
+            labelEl.innerText = Array.from(rateFilters).map(k => names[k] || k).join(' + ');
+        }
     }
+}
+
+function syncViewDropdownUI() {
+    const dropdown = document.getElementById('grid-view-dropdown');
+    const labelEl = document.getElementById('grid-view-label');
+    if (dropdown) {
+        dropdown.querySelectorAll('input[data-grid-view]').forEach(cb => {
+            cb.checked = viewFields.has(cb.dataset.gridView);
+        });
+    }
+    if (labelEl) {
+        if (viewFields.size === ALL_VIEW_KEYS.length) {
+            labelEl.innerText = 'Full';
+        } else if (viewFields.size === 1 && viewFields.has('avail')) {
+            labelEl.innerText = 'Avail';
+        } else if (viewFields.size === 1 && viewFields.has('price')) {
+            labelEl.innerText = 'Price';
+        } else if (viewFields.size === 2 && viewFields.has('avail') && viewFields.has('price')) {
+            labelEl.innerText = 'Compact';
+        } else if (viewFields.size === 3 && !viewFields.has('restrictions')) {
+            labelEl.innerText = 'Min/Max';
+        } else {
+            const names = { avail: 'Avl', price: 'Price', minmax: 'Min/Max', restrictions: 'Restr' };
+            labelEl.innerText = Array.from(viewFields).map(k => names[k] || k).join(' + ');
+        }
+    }
+}
+
+export function toggleGridRatesDropdown(e) {
+    if (e) e.stopPropagation();
+    document.getElementById('grid-view-dropdown')?.classList.add('hidden');
+    const dd = document.getElementById('grid-rates-dropdown');
+    if (!dd) return;
+    syncRateFilterDropdownUI();
+    dd.classList.toggle('hidden');
+}
+
+export function toggleGridViewDropdown(e) {
+    if (e) e.stopPropagation();
+    document.getElementById('grid-rates-dropdown')?.classList.add('hidden');
+    const dd = document.getElementById('grid-view-dropdown');
+    if (!dd) return;
+    syncViewDropdownUI();
+    dd.classList.toggle('hidden');
+}
+
+export function toggleGridRateFilter(key, checked) {
+    if (checked) {
+        rateFilters.add(key);
+    } else if (rateFilters.size > 1) {
+        rateFilters.delete(key);
+    }
+    window.showEventRows = rateFilters.has('event');
+    saveGridPrefs();
+    syncRateFilterDropdownUI();
+    renderRateMatrix();
+}
+
+export function setAllGridRateFilters(selectAll) {
+    rateFilters.clear();
+    if (selectAll) {
+        ALL_RATE_KEYS.forEach(k => rateFilters.add(k));
+    } else {
+        rateFilters.add('def');
+    }
+    window.showEventRows = rateFilters.has('event');
+    saveGridPrefs();
+    syncRateFilterDropdownUI();
+    renderRateMatrix();
+}
+
+export function toggleGridViewField(key, checked) {
+    if (checked) {
+        viewFields.add(key);
+    } else if (viewFields.size > 1) {
+        viewFields.delete(key);
+    }
+    saveGridPrefs();
+    syncViewDropdownUI();
+    renderRateMatrix();
+}
+
+export function setAllGridViewFields(selectAll) {
+    viewFields.clear();
+    if (selectAll) {
+        ALL_VIEW_KEYS.forEach(k => viewFields.add(k));
+    } else {
+        viewFields.add('avail');
+        viewFields.add('price');
+    }
+    saveGridPrefs();
+    syncViewDropdownUI();
+    renderRateMatrix();
+}
+
+export function setGridViewPresetCompact() {
+    setAllGridViewFields(false);
+}
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('click', (e) => {
+        if (e.target && e.target.isConnected) {
+            if (!e.target.closest('#grid-rates-wrap')) document.getElementById('grid-rates-dropdown')?.classList.add('hidden');
+            if (!e.target.closest('#grid-view-wrap')) document.getElementById('grid-view-dropdown')?.classList.add('hidden');
+        }
+    });
 }
 
 export function initGridUI() {
     window.roomLevel = roomLevel;
-    window.rateLevel = rateLevel;
-    window.viewDensity = viewDensity;
-    window.showEventRows = showEventRows;
+    window.showEventRows = rateFilters.has('event');
     window.channelPreviewFilter = channelPreviewFilter;
 
     setRoomLevel(roomLevel, true);
-    setRateLevel(rateLevel, true);
-    setViewDensity(viewDensity, true);
-    ensurePinnedLegendBadge();
+    syncRateFilterDropdownUI();
+    syncViewDropdownUI();
 
     const gapBtn = document.getElementById('btn-toggle-gaps');
     if (gapBtn) {
@@ -531,7 +640,6 @@ export function cycleUnifiedRestriction(dateStr, room, ratePlanId = null, isEvt 
             rData[`${pfx}cta`] = false; rData[`${pfx}ctd`] = false; rData[`${pfx}stop`] = false;
             delete rData.isOverride[`${pfx}cta`]; delete rData.isOverride[`${pfx}ctd`]; delete rData.isOverride[`${pfx}stop`];
 
-            // Reopening a room clears any lingering event/direct/OTA stop flags on that room
             if (!isEvt && room !== 'GLOBAL') {
                 delete rData.evt_stop;
                 delete rData.evt_stopSell;
@@ -633,41 +741,6 @@ export function setRoomLevel(level, skipRender = false) {
     if (!skipRender) renderRateMatrix();
 }
 
-export function setRateLevel(level, skipRender = false) {
-    rateLevel = level;
-    window.rateLevel = level;
-    saveGridPrefs();
-    ['min', 'direct', 'default', 'all'].forEach(l => {
-        const btn = document.getElementById(`ratelevel-${l}`);
-        if (btn) {
-            btn.className = l === level
-                ? "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black"
-                : "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
-        }
-    });
-    if (!skipRender) renderRateMatrix();
-}
-
-export function toggleEventRows() {
-    showEventRows = !showEventRows;
-    window.showEventRows = showEventRows;
-    saveGridPrefs();
-    renderRateMatrix();
-}
-
-export function setViewDensity(density, skipRender = false) {
-    viewDensity = density;
-    window.viewDensity = density;
-    saveGridPrefs();
-    ['avail', 'price', 'compact', 'minmax', 'full'].forEach(d => {
-        const btn = document.getElementById(`density-${d}`);
-        if (btn) btn.className = d === density
-            ? "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black"
-            : "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
-    });
-    if (!skipRender) renderRateMatrix();
-}
-
 export function setChannelPreviewFilter(val, skipRender = false) {
     channelPreviewFilter = val;
     window.channelPreviewFilter = val;
@@ -706,8 +779,14 @@ export function renderRateMatrix() {
     if (tapeInput && !tapeInput.value) tapeInput.value = getLocalYMD(new Date());
     const startStr = tapeInput?.value || getLocalYMD(new Date());
 
+    // Sync if external caller (e.g. Event Curve Tuner) enabled window.showEventRows
+    if (window.showEventRows === true && !rateFilters.has('event')) {
+        rateFilters.add('event');
+        saveGridPrefs();
+        syncRateFilterDropdownUI();
+    }
+
     calculateLiveInventory();
-    ensurePinnedLegendBadge();
 
     const head = document.getElementById('grid-head');
     const body = document.getElementById('grid-body');
@@ -717,7 +796,12 @@ export function renderRateMatrix() {
 
     const dObj = new Date(startStr + "T12:00:00Z");
     const isEvents = typeof window.isEventPricingEnabled === 'function' ? window.isEventPricingEnabled() : false;
-    const density = viewDensity || 'full';
+
+    const showAvail = viewFields.has('avail');
+    const showPrice = viewFields.has('price');
+    const showTop = viewFields.has('minmax');
+    const showBottom = viewFields.has('restrictions');
+    const showAnyRateLayer = showPrice || showTop || showBottom;
 
     // 1. Header Row
     let trHead = `<tr class="sticky-header">
@@ -751,18 +835,6 @@ export function renderRateMatrix() {
     trHead += `</tr>`;
     head.innerHTML = trHead;
 
-    const evtToggleBtn = document.getElementById('btn-toggle-evt-rows');
-    const evtToggleLbl = document.getElementById('lbl-toggle-evt-rows');
-    if (evtToggleBtn) {
-        evtToggleBtn.classList.toggle('hidden', !isEvents);
-        if (isEvents) {
-            evtToggleBtn.className = showEventRows
-                ? "px-2 py-1 rounded border text-[10px] font-black uppercase cursor-pointer transition-colors flex items-center gap-1 bg-pink-600 text-white border-pink-600 shadow-2xs"
-                : "px-2 py-1 rounded border text-[10px] font-black uppercase cursor-pointer transition-colors flex items-center gap-1 bg-slate-100 text-slate-600 border-slate-300 hover:bg-pink-50";
-            if (evtToggleLbl) evtToggleLbl.innerText = showEventRows ? 'Events: On' : 'Events: Off';
-        }
-    }
-
     const { all: allRoomCats, dorms: dormCats, privates: privCats } = getClassifiedRooms();
     const hasMixedCategories = dormCats.length > 0 && privCats.length > 0;
     const dormBtn = document.getElementById('rlevel-dorms');
@@ -788,7 +860,6 @@ export function renderRateMatrix() {
     }
 
     const activePreviewFilter = window.channelPreviewFilter || channelPreviewFilter || 'ALL';
-    const renderEventsLayer = isEvents && showEventRows;
     const linkedTargetSet = new Set(
         (window.masterPricing?.relationships || [])
             .filter(rel => (rel.anchor || rel.source || rel.from) && (rel.anchor || rel.source || rel.from) !== 'unlinked')
@@ -805,30 +876,32 @@ export function renderRateMatrix() {
         const allMappedRates = (window.channexRateMap || []).filter(m => String(m.pmsCategory || '').trim().toLowerCase() === roomLower);
 
         const isRoomManuallyExpanded = expandedRooms.has(room);
-        const effectiveRateLevel = isRoomManuallyExpanded && rateLevel === 'min' ? 'all' : rateLevel;
+        const activeBuckets = isRoomManuallyExpanded ? new Set(ALL_RATE_KEYS) : rateFilters;
+
+        const showMasterDef = activeBuckets.has('def');
+        const showMasterDirect = activeBuckets.has('direct');
+        const showMasterEvent = isEvents && activeBuckets.has('event');
 
         let mappedRates = allMappedRates.filter(r => {
             const chanCode = resolveChannelCode(r.channel || r.ratePlanTitle);
-            const isEvtPlan = (r.product === 'evt') || (r.rateSource === 'evt') || /\b(evt|fmp|event|pkg)\b/i.test(r.ratePlanTitle || '');
-            const isRefPlan = (r.policy === 'ref') || (/ref|refundable/i.test(r.ratePlanTitle || '') && !/non-?ref/i.test(r.ratePlanTitle || ''));
+            const bucket = classifyRatePlanBucket(r);
+            const isRefPlan = (r.policy === 'ref' || r.policy === 'event-ref') || (/ref|refundable/i.test(r.ratePlanTitle || '') && !/non-?ref/i.test(r.ratePlanTitle || ''));
 
-            if (isEvtPlan && !renderEventsLayer) return false;
-            if (chanCode === 'DEF' && !isRefPlan) return false;
+            if (bucket === 'event' && !isEvents) return false;
+            if (chanCode === 'DEF' && bucket === 'def' && !isRefPlan) return false;
             if (activePreviewFilter !== 'ALL' && chanCode !== activePreviewFilter) return false;
-            if (effectiveRateLevel === 'min' || effectiveRateLevel === 'direct') return false;
-            if (effectiveRateLevel === 'default') return chanCode === 'DEF';
-            return true;
+            return activeBuckets.has(bucket);
         });
 
-        const hasExpandablePlans = allMappedRates.some(r => {
-            const c = resolveChannelCode(r.channel || r.ratePlanTitle);
-            const isRef = (r.policy === 'ref') || (/ref|refundable/i.test(r.ratePlanTitle || '') && !/non-?ref/i.test(r.ratePlanTitle || ''));
-            return c !== 'DEF' || isRef;
-        });
+        const hasHiddenPlans = allMappedRates.some(r => {
+            const bucket = classifyRatePlanBucket(r);
+            if (bucket === 'event' && !isEvents) return false;
+            return !rateFilters.has(bucket);
+        }) || (!rateFilters.has('direct')) || (isEvents && !rateFilters.has('event'));
 
         const safeRoom = room.replace(/'/g, "\\'");
-        const expandBtnHtml = (hasExpandablePlans && rateLevel !== 'all' && density !== 'avail')
-            ? `<button type="button" onclick="window.toggleRoomExpand('${safeRoom}')" class="text-slate-500 hover:text-indigo-700 bg-slate-100 hover:bg-indigo-50 border border-slate-300 rounded px-1 py-0.2 cursor-pointer flex items-center gap-0.5 text-[9px] font-black uppercase" title="Expand/Collapse Rate Plans">
+        const expandBtnHtml = (hasHiddenPlans && showAnyRateLayer)
+            ? `<button type="button" onclick="window.toggleRoomExpand('${safeRoom}')" class="text-slate-500 hover:text-indigo-700 bg-slate-100 hover:bg-indigo-50 border border-slate-300 rounded px-1 py-0.2 cursor-pointer flex items-center gap-0.5 text-[9px] font-black uppercase" title="Expand/Collapse all rate layers for this room">
                     <i data-lucide="${isRoomManuallyExpanded ? 'chevron-down' : 'chevron-right'}" size="11"></i>
                     <span>${isRoomManuallyExpanded ? 'Hide' : 'Rates'}</span>
                </button>`
@@ -843,7 +916,8 @@ export function renderRateMatrix() {
             </td>
         </tr>`;
 
-        if (density !== 'price') {
+        // Availability Row
+        if (showAvail) {
             let trAvail = `<tr class="${groupClass} border-b border-slate-200">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
                     <div class="w-[140px] flex items-center justify-between px-1.5 h-full font-bold text-slate-600 text-[10px]">
@@ -869,93 +943,93 @@ export function renderRateMatrix() {
             allRowsHtml += trAvail;
         }
 
-        if (density === 'avail') return;
+        if (!showAnyRateLayer) return;
 
-        let trRate = `<tr class="${groupClass} border-b border-slate-300">
-            <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                    <span class="text-[10px] font-black text-slate-700 truncate">DEF Non-Ref</span>
-                    <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200 shrink-0">DEF</span>
-                </div>
-            </td>`;
+        // Master DEF Non-Ref Row
+        if (showMasterDef) {
+            let trRate = `<tr class="${groupClass} border-b border-slate-300">
+                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
+                        <span class="text-[10px] font-black text-slate-700 truncate">DEF Non-Ref</span>
+                        <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200 shrink-0">DEF</span>
+                    </div>
+                </td>`;
 
-        for (let i = 0; i < daysToRender; i++) {
-            const cur = new Date(dObj);
-            cur.setUTCDate(cur.getUTCDate() + i);
-            const dateStr = getLocalYMD(cur);
-            const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
-            const rData = dayObj[room] || {};
-            const gData = dayObj.GLOBAL || {};
-            const isPinned = !!rData.isOverride?.std;
-            const rawStd = rData.std !== undefined && rData.std !== "" ? rData.std : "";
-            const displayPrice = rawStd !== "" && !isNaN(parseFloat(rawStd)) ? Math.round(parseFloat(rawStd)) : "";
+            for (let i = 0; i < daysToRender; i++) {
+                const cur = new Date(dObj);
+                cur.setUTCDate(cur.getUTCDate() + i);
+                const dateStr = getLocalYMD(cur);
+                const dayObj = window.masterPricing?.timeline?.[dateStr] || {};
+                const rData = dayObj[room] || {};
+                const gData = dayObj.GLOBAL || {};
+                const isPinned = !!rData.isOverride?.std;
+                const rawStd = rData.std !== undefined && rData.std !== "" ? rData.std : "";
+                const displayPrice = rawStd !== "" && !isNaN(parseFloat(rawStd)) ? Math.round(parseFloat(rawStd)) : "";
 
-            const hasRoomMin = (rData.min !== undefined && rData.min !== "") || (rData.min_arr !== undefined && rData.min_arr !== "");
-            const minVal = hasRoomMin
-                ? (rData.min !== undefined && rData.min !== "" ? rData.min : `${rData.min_arr}▸`)
-                : (gData.min !== undefined && gData.min !== "" ? gData.min : (gData.min_arr ? `${gData.min_arr}▸` : ""));
-            const isGlobalMin = !hasRoomMin && minVal !== "";
+                const hasRoomMin = (rData.min !== undefined && rData.min !== "") || (rData.min_arr !== undefined && rData.min_arr !== "");
+                const minVal = hasRoomMin
+                    ? (rData.min !== undefined && rData.min !== "" ? rData.min : `${rData.min_arr}▸`)
+                    : (gData.min !== undefined && gData.min !== "" ? gData.min : (gData.min_arr ? `${gData.min_arr}▸` : ""));
+                const isGlobalMin = !hasRoomMin && minVal !== "";
 
-            const hasRoomMax = rData.max !== undefined && rData.max !== "";
-            const maxVal = hasRoomMax ? rData.max : (gData.max !== undefined && gData.max !== "" ? gData.max : "");
-            const isGlobalMax = !hasRoomMax && maxVal !== "";
+                const hasRoomMax = rData.max !== undefined && rData.max !== "";
+                const maxVal = hasRoomMax ? rData.max : (gData.max !== undefined && gData.max !== "" ? gData.max : "");
+                const isGlobalMax = !hasRoomMax && maxVal !== "";
 
-            const showTop = density === 'minmax' || density === 'full';
-            const showBottom = density === 'full';
-            const effCta = rData.cta !== undefined ? !!rData.cta : !!gData.cta;
-            const effCtd = rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd;
-            const isStopped = (rData.stop !== undefined || rData.stopSell !== undefined)
-                ? !!(rData.stop || rData.stopSell)
-                : !!(gData.stop || gData.stopSell);
-            const pillHtml = getUnifiedRestrictionBadgeHtml(effCta, effCtd, isStopped);
+                const effCta = rData.cta !== undefined ? !!rData.cta : !!gData.cta;
+                const effCtd = rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd;
+                const isStopped = (rData.stop !== undefined || rData.stopSell !== undefined)
+                    ? !!(rData.stop || rData.stopSell)
+                    : !!(gData.stop || gData.stopSell);
+                const pillHtml = getUnifiedRestrictionBadgeHtml(effCta, effCtd, isStopped);
 
-            const isDirty = isCellDirty(dateStr, room);
-            const isSynced = isCellJustSynced(dateStr, room);
-            const isBrokenRipple = isLinkedTargetRoom && isPinned;
-            const isGap = highlightGaps && (displayPrice === "" || displayPrice === null || displayPrice === undefined);
+                const isDirty = isCellDirty(dateStr, room);
+                const isSynced = isCellJustSynced(dateStr, room);
+                const isBrokenRipple = isLinkedTargetRoom && isPinned;
+                const isGap = highlightGaps && (displayPrice === "" || displayPrice === null || displayPrice === undefined);
 
-            let stateBgClass = '';
-            if (isStopped) stateBgClass = 'rate-cell-stopped';
-            else if (isDirty) stateBgClass = '!bg-amber-100 ring-1 ring-inset ring-amber-400';
-            else if (isSynced) stateBgClass = '!bg-emerald-50 ring-1 ring-inset ring-emerald-300';
-            else if (isGap) stateBgClass = 'gap-cell-highlight';
+                let stateBgClass = '';
+                if (isStopped) stateBgClass = 'rate-cell-stopped';
+                else if (isDirty) stateBgClass = '!bg-amber-100 ring-1 ring-inset ring-amber-400';
+                else if (isSynced) stateBgClass = '!bg-emerald-50 ring-1 ring-inset ring-emerald-300';
+                else if (isGap) stateBgClass = 'gap-cell-highlight';
 
-            let cellClass = `p-0 border-r border-slate-200 text-center relative ${stateBgClass}`;
-            const pinCornerHtml = isBrokenRipple
-                ? `<span class="pointer-events-none absolute top-0 right-0 w-0 h-0 border-t-[7px] border-l-[7px] border-t-orange-500 border-l-transparent z-10" title="Pinned Override (breaks ripple — double-click to re-link)"></span>`
-                : '';
-            const stateNote = isDirty ? ' • Unsaved' : (isSynced ? ' • Just Synced' : '');
-            const pinNote = isBrokenRipple ? ' • Pinned (Double-click to re-link)' : '';
-            const minTip = minVal ? `${minVal}${isGlobalMin ? ' (Global)' : ''}` : '--';
-            const maxTip = maxVal ? `${maxVal}${isGlobalMax ? ' (Global)' : ''}` : '--';
+                let cellClass = `p-0 border-r border-slate-200 text-center relative ${stateBgClass}`;
+                const pinCornerHtml = isBrokenRipple
+                    ? `<span class="pointer-events-none absolute top-0 right-0 w-0 h-0 border-t-[7px] border-l-[7px] border-t-orange-500 border-l-transparent z-10" title="Pinned Override (breaks ripple — double-click to re-link)"></span>`
+                    : '';
+                const stateNote = isDirty ? ' • Unsaved' : (isSynced ? ' • Just Synced' : '');
+                const pinNote = isBrokenRipple ? ' • Pinned (Double-click to re-link)' : '';
+                const minTip = minVal ? `${minVal}${isGlobalMin ? ' (Global)' : ''}` : '--';
+                const maxTip = maxVal ? `${maxVal}${isGlobalMax ? ' (Global)' : ''}` : '--';
 
-            trRate += `<td class="${cellClass}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nDEF Non-Ref: ฿${displayPrice || '--'}${stateNote}${pinNote}\\nMin: ${minTip}, Max: ${maxTip}')" onmouseleave="window.hideCmTooltip()">
-                ${pinCornerHtml}
-                ${showTop ? `
-                <div class="flex items-center w-full h-[15px] border-b ${isStopped ? 'border-rose-700 bg-transparent' : 'border-slate-200 bg-slate-50/70'} overflow-hidden leading-none">
-                    <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black ${isGlobalMin && !isStopped ? 'text-indigo-600/80' : 'text-slate-700'} outline-none p-0" value="${minVal}" placeholder="Min" title="Min Stay (e.g. 3 or 3▸ for Arrival; double-click to toggle)" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', '${safeRoom}')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'min_hybrid', this.value)">
-                    <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none ${isGlobalMax && !isStopped ? 'text-indigo-500/80' : 'text-slate-500'} outline-none p-0 border-l ${isStopped ? 'border-rose-700' : 'border-slate-200'}" value="${maxVal}" placeholder="Max" title="Max Stay" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'max', this.value)">
-                </div>` : ''}
+                trRate += `<td class="${cellClass}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}')" onmouseenter="window.showCmTooltip(event, '${displayName} | ${dateStr}\\nDEF Non-Ref: ฿${displayPrice || '--'}${stateNote}${pinNote}\\nMin: ${minTip}, Max: ${maxTip}')" onmouseleave="window.hideCmTooltip()">
+                    ${pinCornerHtml}
+                    ${showTop ? `
+                    <div class="flex items-center w-full h-[15px] ${showPrice || showBottom ? 'border-b' : ''} ${isStopped ? 'border-rose-700 bg-transparent' : 'border-slate-200 bg-slate-50/70'} overflow-hidden leading-none">
+                        <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black ${isGlobalMin && !isStopped ? 'text-indigo-600/80' : 'text-slate-700'} outline-none p-0" value="${minVal}" placeholder="Min" title="Min Stay (e.g. 3 or 3▸ for Arrival; double-click to toggle)" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', '${safeRoom}')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'min_hybrid', this.value)">
+                        <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none ${isGlobalMax && !isStopped ? 'text-indigo-500/80' : 'text-slate-500'} outline-none p-0 border-l ${isStopped ? 'border-rose-700' : 'border-slate-200'}" value="${maxVal}" placeholder="Max" title="Max Stay" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'max', this.value)">
+                    </div>` : ''}
 
-                <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
-                    <input type="number" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" data-fill-room="${room}" data-fill-field="std" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] ${isDirty && !isStopped ? '!text-amber-950' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${safeRoom}', 'std')" onchange="window.handleCellPriceChange(event, '${dateStr}', '${safeRoom}')">
-                </div>
+                    ${showPrice ? `
+                    <div class="${(!showTop && !showBottom) ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
+                        <input type="number" id="inp_${dateStr}_${room.replace(/\s+/g, '')}_std" data-fill-room="${room}" data-fill-field="std" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[11px] ${isDirty && !isStopped ? '!text-amber-950' : 'text-slate-800'} px-0" value="${displayPrice}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${safeRoom}', 'std')" onchange="window.handleCellPriceChange(event, '${dateStr}', '${safeRoom}')">
+                    </div>` : ''}
 
-                ${showBottom ? `
-                <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${isStopped ? 'border-rose-700' : 'border-slate-100'}">
-                    <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${safeRoom}')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle: Open → CTA → CTD → CTB → STOP">
-                        ${pillHtml}
-                    </button>
-                </div>` : ''}
-            </td>`;
+                    ${showBottom ? `
+                    <div class="flex items-center justify-center px-0.5 text-[7px] leading-none ${(!showTop && !showPrice) ? 'h-[20px]' : 'h-[13px] border-t'} ${isStopped ? 'border-rose-700' : 'border-slate-100'}">
+                        <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${safeRoom}')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle: Open → CTA → CTD → CTB → STOP">
+                            ${pillHtml}
+                        </button>
+                    </div>` : ''}
+                </td>`;
+            }
+            trRate += `</tr>`;
+            allRowsHtml += trRate;
         }
-        trRate += `</tr>`;
-        allRowsHtml += trRate;
 
-        if (renderEventsLayer && density !== 'avail') {
-            const showTopEvt = density === 'minmax' || density === 'full';
-            const showBottomEvt = density === 'full';
-
+        // Master DEF Event Non-Ref Row
+        if (showMasterEvent) {
             let trEvt = `<tr class="${groupClass} border-b-2 border-slate-400 bg-pink-50/40">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 !bg-pink-50">
                     <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
@@ -999,18 +1073,19 @@ export function renderRateMatrix() {
 
                 trEvt += `<td class="p-0 border-r border-pink-200 text-center relative ${evtStateBgClass}" style="width: 42px; min-width: 42px; max-width: 42px;">
                     ${evtPinCornerHtml}
-                    ${showTopEvt ? `
-                    <div class="flex items-center w-full h-[15px] border-b ${evtStopped ? 'border-rose-700 bg-transparent' : 'border-pink-200 bg-white/60'} overflow-hidden leading-none">
+                    ${showTop ? `
+                    <div class="flex items-center w-full h-[15px] ${showPrice || showBottom ? 'border-b' : ''} ${evtStopped ? 'border-rose-700 bg-transparent' : 'border-pink-200 bg-white/60'} overflow-hidden leading-none">
                         <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-pink-800 outline-none p-0" value="${evtMinVal}" placeholder="Min" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'min_hybrid', this.value, true)">
                         <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-pink-500 outline-none p-0 border-l ${evtStopped ? 'border-rose-700' : 'border-pink-200'}" value="${evtMaxVal}" placeholder="Max" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'max', this.value, true)">
                     </div>` : ''}
 
-                    <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
+                    ${showPrice ? `
+                    <div class="${(!showTop && !showBottom) ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
                         <input type="number" data-fill-room="${room}" data-fill-field="fmp" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] ${isDirtyEvt && !evtStopped ? '!text-amber-950' : 'text-pink-800'} px-0" value="${displayFmp}" onfocus="this.select()" oninput="window.handleCellPriceLive(this, '${dateStr}', '${safeRoom}', 'fmp')" onchange="window.handleCellEdit('${dateStr}', '${safeRoom}', 'fmp', this.value, true)">
-                    </div>
+                    </div>` : ''}
 
-                    ${showBottomEvt ? `
-                    <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${evtStopped ? 'border-rose-700' : 'border-pink-200/70'}">
+                    ${showBottom ? `
+                    <div class="flex items-center justify-center px-0.5 text-[7px] leading-none ${(!showTop && !showPrice) ? 'h-[20px]' : 'h-[13px] border-t'} ${evtStopped ? 'border-rose-700' : 'border-pink-200/70'}">
                         <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${safeRoom}', null, true)" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle Event restrictions">
                             ${evtPillHtml}
                         </button>
@@ -1021,10 +1096,8 @@ export function renderRateMatrix() {
             allRowsHtml += trEvt;
         }
 
-        if ((effectiveRateLevel === 'direct' || effectiveRateLevel === 'default' || effectiveRateLevel === 'all') && density !== 'avail') {
-            const showTopDir = density === 'minmax' || density === 'full';
-            const showBottomDir = density === 'full';
-
+        // Master Direct Rate Row
+        if (showMasterDirect) {
             let trDir = `<tr class="bg-emerald-50/50 border-b border-emerald-200">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 !bg-emerald-50">
                     <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
@@ -1065,18 +1138,19 @@ export function renderRateMatrix() {
                 const dirPillHtml = getUnifiedRestrictionBadgeHtml(dirCta, dirCtd, dirStopped);
 
                 trDir += `<td class="p-0 border-r border-emerald-200 text-center relative ${dirStopped ? 'rate-cell-stopped' : (isPinnedDir ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;">
-                    ${showTopDir ? `
-                    <div class="flex items-center w-full h-[15px] border-b ${dirStopped ? 'border-rose-700 bg-transparent' : 'border-emerald-200 bg-white/70'} overflow-hidden leading-none">
+                    ${showTop ? `
+                    <div class="flex items-center w-full h-[15px] ${showPrice || showBottom ? 'border-b' : ''} ${dirStopped ? 'border-rose-700 bg-transparent' : 'border-emerald-200 bg-white/70'} overflow-hidden leading-none">
                         <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-black text-emerald-800 outline-none p-0" value="${dirMinVal}" placeholder="Min" onchange="window.handleDirectEdit('${dateStr}', '${safeRoom}', 'min', this.value)">
                         <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-emerald-600 outline-none p-0 border-l ${dirStopped ? 'border-rose-700' : 'border-emerald-200'}" value="${dirMaxVal}" placeholder="Max" onchange="window.handleDirectEdit('${dateStr}', '${safeRoom}', 'max', this.value)">
                     </div>` : ''}
 
-                    <div class="${(density === 'compact' || density === 'price') ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
+                    ${showPrice ? `
+                    <div class="${(!showTop && !showBottom) ? 'h-[24px]' : 'h-[19px]'} flex items-center justify-center">
                         <input type="number" data-fill-room="${room}" data-fill-field="dir_std" data-fill-date="${dateStr}" class="cell-price-text w-full text-center outline-none bg-transparent font-black text-[10px] text-emerald-900 px-0" value="${displayDir}" onfocus="this.select()" onchange="window.handleDirectEdit('${dateStr}', '${safeRoom}', 'rate', this.value)">
-                    </div>
+                    </div>` : ''}
 
-                    ${showBottomDir ? `
-                    <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${dirStopped ? 'border-rose-700' : 'border-emerald-200/70'}">
+                    ${showBottom ? `
+                    <div class="flex items-center justify-center px-0.5 text-[7px] leading-none ${(!showTop && !showPrice) ? 'h-[20px]' : 'h-[13px] border-t'} ${dirStopped ? 'border-rose-700' : 'border-emerald-200/70'}">
                         <button type="button" onclick="event.stopPropagation(); window.cycleDirectRestriction('${dateStr}', '${safeRoom}')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Direct booking restriction (independent of OTAs)">
                             ${dirPillHtml}
                         </button>
@@ -1087,12 +1161,11 @@ export function renderRateMatrix() {
             allRowsHtml += trDir;
         }
 
-        if (mappedRates.length > 0 && density !== 'avail') {
+        // Mapped Channel / LOS / Event / Other Rate Plans
+        if (mappedRates.length > 0) {
             mappedRates.forEach(rate => {
                 const chanCode = resolveChannelCode(rate.channel || rate.ratePlanTitle);
                 const badgeHtml = getCanonicalChannelBadgeHtml(chanCode);
-                const showTop = density === 'minmax' || density === 'full';
-                const showBottom = density === 'full';
 
                 let trOta = `<tr class="bg-indigo-50/40 border-b border-indigo-100">
                     <td class="frozen-col !p-0 z-20 border-r-2 border-slate-400 !bg-[#eef2ff]">
@@ -1142,15 +1215,16 @@ export function renderRateMatrix() {
 
                     trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaStop ? 'rate-cell-stopped' : (otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}', '${rate.ratePlanId}')">
                         ${showTop ? `
-                        <div class="flex items-center w-full h-[15px] border-b ${otaStop ? 'border-rose-700 bg-transparent' : 'border-indigo-100 bg-white/60'} overflow-hidden leading-none">
+                        <div class="flex items-center w-full h-[15px] ${showPrice || showBottom ? 'border-b' : ''} ${otaStop ? 'border-rose-700 bg-transparent' : 'border-indigo-100 bg-white/60'} overflow-hidden leading-none">
                             <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-bold text-indigo-700 outline-none p-0" value="${otaMin}" placeholder="Min" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'min', this.value)">
                             <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-indigo-400 outline-none p-0 border-l ${otaStop ? 'border-rose-700' : 'border-indigo-100'}" value="${otaMax}" placeholder="Max" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'max', this.value)">
                         </div>` : ''}
-                        <div class="${(density === 'compact' || density === 'price') ? 'h-[22px]' : 'h-[18px]'} flex items-center justify-center">
+                        ${showPrice ? `
+                        <div class="${(!showTop && !showBottom) ? 'h-[22px]' : 'h-[18px]'} flex items-center justify-center">
                             <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined && !otaStop ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${computed}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'rate', this.value)">
-                        </div>
+                        </div>` : ''}
                         ${showBottom ? `
-                        <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${otaStop ? 'border-rose-700' : 'border-indigo-100/70'}">
+                        <div class="flex items-center justify-center px-0.5 text-[7px] leading-none ${(!showTop && !showPrice) ? 'h-[20px]' : 'h-[13px] border-t'} ${otaStop ? 'border-rose-700' : 'border-indigo-100/70'}">
                             <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${safeRoom}', '${rate.ratePlanId}')" class="cursor-pointer w-full h-full flex items-center justify-center">
                                 ${otaPillHtml}
                             </button>
@@ -1164,7 +1238,7 @@ export function renderRateMatrix() {
     });
 
     // 3. GLOBAL Restrictions Row (Thick 4px top divider + distinct high-contrast styling)
-    if (density === 'minmax' || density === 'full') {
+    if (showTop || showBottom) {
         let globalTr = `<tr class="bg-slate-200/90 text-slate-900 border-t-[4px] border-slate-900 border-b-2 border-slate-900">
             <td class="frozen-col !p-0 z-20 !bg-slate-900 text-white border-r-2 border-slate-700 px-1.5 py-1.5">
                 <div class="w-[140px] flex items-center justify-between">
@@ -1183,12 +1257,13 @@ export function renderRateMatrix() {
             const gPillHtml = getUnifiedRestrictionBadgeHtml(gData.cta, gData.ctd, gStopped);
 
             globalTr += `<td class="p-0 border-r border-slate-300 text-center ${gStopped ? 'rate-cell-stopped' : 'bg-slate-200/80'}" style="width: 42px; min-width: 42px; max-width: 42px;">
+                ${showTop ? `
                 <div class="flex items-center w-full h-[15px] leading-none overflow-hidden">
                     <input type="text" class="cell-min-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white/90'} text-center font-black text-slate-900 outline-none p-0" value="${gMinVal}" placeholder="Min" ondblclick="event.stopPropagation(); window.toggleMinStayMode('${dateStr}', 'GLOBAL')" onblur="if(window.formatMinStayInput) this.value = window.formatMinStayInput(this.value);" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'min_hybrid', this.value)">
                     <input type="text" class="cell-max-input w-1/2 ${gStopped ? 'bg-transparent' : 'bg-white/90'} text-center font-bold text-slate-600 outline-none p-0 border-l ${gStopped ? 'border-rose-700' : 'border-slate-300'}" value="${gData.max || ''}" placeholder="Max" onchange="window.handleCellEdit('${dateStr}', 'GLOBAL', 'max', this.value)">
-                </div>
-                ${density === 'full' ? `
-                <div class="flex items-center justify-center px-0.5 text-[7px] leading-none h-[13px] border-t ${gStopped ? 'border-rose-700' : 'border-slate-300'}">
+                </div>` : ''}
+                ${showBottom ? `
+                <div class="flex items-center justify-center px-0.5 text-[7px] leading-none ${showTop ? 'h-[13px] border-t' : 'h-[20px]'} ${gStopped ? 'border-rose-700' : 'border-slate-300'}">
                     <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', 'GLOBAL')" class="cursor-pointer w-full h-full flex items-center justify-center" title="Click to cycle GLOBAL: Open → CTA → CTD → CTB → STOP">
                         ${gPillHtml}
                     </button>
@@ -1412,12 +1487,16 @@ if (typeof window !== 'undefined') {
     window.cycleUnifiedRestriction = cycleUnifiedRestriction;
     window.unlockCellOverride = unlockCellOverride;
     window.setRoomLevel = setRoomLevel;
-    window.setRateLevel = setRateLevel;
-    window.toggleEventRows = toggleEventRows;
+    window.toggleGridRatesDropdown = toggleGridRatesDropdown;
+    window.toggleGridViewDropdown = toggleGridViewDropdown;
+    window.toggleGridRateFilter = toggleGridRateFilter;
+    window.setAllGridRateFilters = setAllGridRateFilters;
+    window.toggleGridViewField = toggleGridViewField;
+    window.setAllGridViewFields = setAllGridViewFields;
+    window.setGridViewPresetCompact = setGridViewPresetCompact;
     window.toggleHighlightGaps = toggleHighlightGaps;
     window.handleDirectEdit = handleDirectEdit;
     window.cycleDirectRestriction = cycleDirectRestriction;
-    window.setViewDensity = setViewDensity;
     window.setChannelPreviewFilter = setChannelPreviewFilter;
     window.toggleRoomExpand = toggleRoomExpand;
     window.initGridUI = initGridUI;
