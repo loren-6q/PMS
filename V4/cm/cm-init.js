@@ -20,6 +20,13 @@ import { pushToChannexAPI, saveAndSync } from '../channex.js';
 export let hasUnsavedChanges = false;
 export let hasLoadedPricingFromCloud = false;
 
+const parseIfJson = (val, fallback) => {
+    if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch (e) { return fallback; }
+    }
+    return val ?? fallback;
+};
+
 function compactTimelineForCloud(rawTimeline = {}) {
     const todayMs = parseYMD(getLocalYMD(new Date()));
     const cutoffStr = getLocalYMD(new Date(todayMs - (14 * 86400000)));
@@ -57,6 +64,58 @@ function compactTimelineForCloud(rawTimeline = {}) {
     });
 
     return compacted;
+}
+
+async function hydratePricingFromCloud(activeProp = null) {
+    const canonId = toCanonicalPropId(window.currentPropertyId);
+    const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`));
+    const pData = pricingSnap.exists() ? pricingSnap.data() : {};
+
+    // Merge legacy inline timeline + monthly shards (master_{canonId}_YYYY-MM)
+    const mergedTimeline = { ...parseIfJson(pData.timeline, {}) };
+    const shardMonths = Array.isArray(pData.shardMonths) ? pData.shardMonths : [];
+    if (shardMonths.length > 0) {
+        const shardSnaps = await Promise.all(
+            shardMonths.map(ym => getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${ym}`)))
+        );
+        shardSnaps.forEach(snap => {
+            if (!snap.exists()) return;
+            const shardData = parseIfJson(snap.data()?.timeline, {});
+            if (shardData && typeof shardData === 'object') {
+                Object.assign(mergedTimeline, shardData);
+            }
+        });
+    }
+
+    const propConfig = activeProp || window.currentPropertyConfig || {};
+    const parsedPropRels = parseIfJson(propConfig?.masterPricing?.relationships, []);
+    const parsedDocRels = parseIfJson(pData.relationships, []);
+
+    window.masterPricing = {
+        timeline: mergedTimeline,
+        relationships: (Array.isArray(parsedPropRels) && parsedPropRels.length ? parsedPropRels : parsedDocRels) || [],
+        baseRates: parseIfJson(pData.baseRates, {})
+    };
+
+    const mergedRules = {
+        ...(pData.pricingRules || {}),
+        ...(propConfig?.pricingRules || {})
+    };
+    mergedRules.masterDriver = resolveChannelCode(mergedRules.masterDriver || 'WEB');
+    mergedRules.channelRules = normalizeChannelRules(mergedRules.channelRules);
+    window.pricingRules = mergedRules;
+
+    window.savedAutofillBaselines = pData.autofillBaselines || {};
+
+    Object.values(window.masterPricing.timeline).forEach(dayObj => {
+        if (dayObj && typeof dayObj === 'object') {
+            Object.values(dayObj).forEach(rData => {
+                if (rData && typeof rData === 'object' && rData.std !== undefined && rData.std !== "") {
+                    rData._syncedStd = rData.std;
+                }
+            });
+        }
+    });
 }
 
 export function markCmDirty(dateStr, kind = 'rate', target = '*') {
@@ -129,64 +188,12 @@ export async function initCm() {
         window.justSyncedCellKeys = new Set();
         window.editMode = 'ripple';
 
-        const parseIfJson = (val, fallback) => {
-            if (typeof val === 'string') {
-                try { return JSON.parse(val); } catch (e) { return fallback; }
-            }
-            return val ?? fallback;
-        };
-
-        const canonId = toCanonicalPropId(window.currentPropertyId);
-        const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`));
-        const pData = pricingSnap.exists() ? pricingSnap.data() : {};
-
-        // Merge legacy inline timeline + monthly shards (master_{canonId}_YYYY-MM)
-        const mergedTimeline = { ...parseIfJson(pData.timeline, {}) };
-        const shardMonths = Array.isArray(pData.shardMonths) ? pData.shardMonths : [];
-        if (shardMonths.length > 0) {
-            const shardSnaps = await Promise.all(
-                shardMonths.map(ym => getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${ym}`)))
-            );
-            shardSnaps.forEach(snap => {
-                if (!snap.exists()) return;
-                const shardData = parseIfJson(snap.data()?.timeline, {});
-                if (shardData && typeof shardData === 'object') {
-                    Object.assign(mergedTimeline, shardData);
-                }
-            });
-        }
-
-        const parsedPropRels = parseIfJson(activeProp?.masterPricing?.relationships, []);
-        const parsedDocRels = parseIfJson(pData.relationships, []);
-
-        window.masterPricing = {
-            timeline: mergedTimeline,
-            relationships: (Array.isArray(parsedPropRels) && parsedPropRels.length ? parsedPropRels : parsedDocRels) || [],
-            baseRates: parseIfJson(pData.baseRates, {})
-        };
-
-        const mergedRules = {
-            ...(pData.pricingRules || {}),
-            ...(activeProp?.pricingRules || {})
-        };
-        mergedRules.masterDriver = resolveChannelCode(mergedRules.masterDriver || 'WEB');
-        mergedRules.channelRules = normalizeChannelRules(mergedRules.channelRules);
-        window.pricingRules = mergedRules;
-
-        window.savedAutofillBaselines = pData.autofillBaselines || {};
-
-        Object.values(window.masterPricing.timeline).forEach(dayObj => {
-            if (dayObj && typeof dayObj === 'object') {
-                Object.values(dayObj).forEach(rData => {
-                    if (rData && typeof rData === 'object' && rData.std !== undefined && rData.std !== "") {
-                        rData._syncedStd = rData.std;
-                    }
-                });
-            }
-        });
+        await hydratePricingFromCloud(activeProp);
 
         populateChannelPreviewFilter();
         hasLoadedPricingFromCloud = true;
+        hasUnsavedChanges = false;
+        updateSaveIndicator();
         updateEventPricingToggleUI();
 
         // Realtime Staff Listener for Net Availability Calculation
@@ -205,6 +212,36 @@ export async function initCm() {
 
     } catch (err) {
         console.error("[CM Init Failed]:", err);
+        if (loader) loader.style.display = 'none';
+    }
+}
+
+export async function discardUnsavedChanges() {
+    if (!hasUnsavedChanges) return;
+    const confirmed = typeof window.customConfirm === 'function'
+        ? await window.customConfirm("Discard Changes?", "Revert all unsaved rate and restriction edits back to your last saved version?")
+        : window.confirm("Discard all unsaved rate and restriction edits and revert to your last saved version?");
+    if (!confirmed) return;
+
+    const loader = document.getElementById('loader');
+    if (loader) loader.style.display = 'flex';
+
+    try {
+        await hydratePricingFromCloud();
+        window.dirtyDates = new Set();
+        window.syncedDates = new Set();
+        window.dirtyAvailKeys = new Set();
+        window.dirtyPlanKeys = new Set();
+        window.dirtyCellKeys = new Set();
+        window.justSyncedCellKeys = new Set();
+        hasUnsavedChanges = false;
+        updateSaveIndicator();
+        renderRateMatrix();
+        customAlert("Reverted", "All unsaved edits have been discarded.");
+    } catch (err) {
+        console.error("[Discard Changes Error]:", err);
+        customAlert("Revert Failed", err.message);
+    } finally {
         if (loader) loader.style.display = 'none';
     }
 }
@@ -310,6 +347,22 @@ export function onChannexSyncComplete(syncedDates = []) {
 export function updateSaveIndicator() {
     const si = document.getElementById('save-indicator');
     const saveBtn = document.getElementById('btn-save-sync');
+
+    let discardBtn = document.getElementById('btn-discard-changes');
+    if (!discardBtn && saveBtn && saveBtn.parentElement) {
+        discardBtn = document.createElement('button');
+        discardBtn.id = 'btn-discard-changes';
+        discardBtn.type = 'button';
+        discardBtn.onclick = () => discardUnsavedChanges();
+        discardBtn.className = 'hidden px-2 py-1 rounded font-black text-[10px] uppercase tracking-wider bg-slate-200 hover:bg-rose-100 text-slate-700 hover:text-rose-700 border border-slate-300 hover:border-rose-300 transition-colors cursor-pointer mr-1.5';
+        discardBtn.innerText = 'Discard';
+        saveBtn.parentElement.insertBefore(discardBtn, saveBtn);
+    }
+
+    if (discardBtn) {
+        discardBtn.classList.toggle('hidden', !hasUnsavedChanges);
+    }
+
     if (!si) return;
     if (hasUnsavedChanges) {
         si.innerText = '● UNSAVED CHANGES';
@@ -444,6 +497,7 @@ export function shiftTape(days) {
 if (typeof window !== 'undefined') {
     window.markCmDirty = markCmDirty;
     window.markUnsavedChanges = markUnsavedChanges;
+    window.discardUnsavedChanges = discardUnsavedChanges;
     window.onChannexSyncComplete = onChannexSyncComplete;
     window.updateSaveIndicator = updateSaveIndicator;
     window.savePricingToCloud = savePricingToCloud;
