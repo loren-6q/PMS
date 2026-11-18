@@ -44,22 +44,22 @@
                 <div id="save-indicator" class="text-[9.5px] font-black uppercase tracking-widest transition-all mr-1 opacity-0 text-emerald-600">PRICING SAVED</div>
                 
                 <!-- Event Pricing Toggle -->
-                <button type="button" id="prop-event-pricing-btn" onclick="window.togglePropertyEventRates()" class="px-2 py-1 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200" title="Toggle Event Pricing (EVT) on/off">
+                <button type="button" id="prop-event-pricing-btn" onclick="window.togglePropertyEventRates()" data-tip="cm.eventsToggle" class="px-2 py-1 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200">
                     <i data-lucide="calendar-off" size="13" class="text-slate-400"></i> <span>EVENTS: OFF</span>
                 </button>
 
                 <!-- Ripple vs Override Toggle -->
-                <button type="button" id="mode-toggle-btn" onclick="window.toggleEditMode()" class="px-2 py-1 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200" title="Toggle Ripple vs Override mode">
+                <button type="button" id="mode-toggle-btn" onclick="window.toggleEditMode()" data-tip="cm.editMode" class="px-2 py-1 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200">
                     <span id="mode-icon"><i data-lucide="zap" size="13" class="text-amber-600"></i></span>
                     <span id="mode-label">RIPPLE MODE</span>
                 </button>
 
                 <!-- Save & Sync -->
-                <button type="button" id="btn-save-sync" onclick="window.saveAndSync(this, 'delta');" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 cursor-pointer">
+                <button type="button" id="btn-save-sync" onclick="window.saveAndSync(this, 'delta');" data-tip="cm.saveSync" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-xs uppercase shadow-xs flex items-center gap-1.5 cursor-pointer">
                     <i data-lucide="zap" size="13"></i> SAVE & SYNC
                 </button>
                 
-                <button type="button" onclick="window.saveAndSync(this, 'full')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-xs flex items-center gap-1 cursor-pointer">
+                <button type="button" onclick="window.saveAndSync(this, 'full')" data-tip="cm.fullSync" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-xs uppercase shadow-xs flex items-center gap-1 cursor-pointer">
                     <i data-lucide="cloud-upload" size="13"></i> FULL SYNC
                 </button>
             </div>
@@ -95,10 +95,10 @@
                         <button type="button" onclick="window.shiftTape(7)" class="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"><i data-lucide="chevron-right" size="15"></i></button>
                     </div>
 
-                    <!-- 4-Control Matrix Filters: ROOMS | RATES | EVENTS | VIEW -->
+                    <!-- Matrix Filters: ROOMS | RATES (Multi-Select) | VIEW (Multi-Select) -->
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <!-- 1. ROOM LEVELS -->
-                        <div id="room-level-group" class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
+                        <div id="room-level-group" data-tip="cm.roomsFilter" class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
                             <span class="px-1.5 text-slate-400">ROOMS:</span>
                             <button type="button" onclick="window.setRoomLevel('anchors')" id="rlevel-anchors" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Anchors</button>
                             <button type="button" onclick="window.setRoomLevel('all')" id="rlevel-all" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black">All</button>
@@ -106,51 +106,98 @@
                             <button type="button" onclick="window.setRoomLevel('privates')" id="rlevel-privates" class="hidden px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Privates</button>
                         </div>
 
-                        <!-- 2. RATE LEVELS -->
-                        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
-                            <span class="px-1.5 text-slate-400">RATES:</span>
-                            <button type="button" onclick="window.setRateLevel('min')" id="ratelevel-min" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black">Min</button>
-                            <button type="button" onclick="window.setRateLevel('direct')" id="ratelevel-direct" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Direct</button>
-                            <button type="button" onclick="window.setRateLevel('default')" id="ratelevel-default" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Default</button>
-                            <button type="button" onclick="window.setRateLevel('all')" id="ratelevel-all" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">All</button>
+                        <!-- 2. RATES MULTI-SELECT DROPDOWN -->
+                        <div id="grid-rates-wrap" class="relative" data-tip="cm.ratesFilter">
+                            <button type="button" id="grid-rates-btn" onclick="window.toggleGridRatesDropdown(event)" class="flex items-center gap-1.5 bg-slate-100 hover:bg-white rounded px-2 py-1 border border-slate-200 text-[10px] font-black uppercase text-slate-700 cursor-pointer transition-colors">
+                                <span class="text-slate-400">RATES:</span>
+                                <span id="grid-rates-label" class="text-indigo-700">DEF</span>
+                                <i data-lucide="chevron-down" size="12" class="text-slate-400"></i>
+                            </button>
+                            <div id="grid-rates-dropdown" onclick="event.stopPropagation()" class="hidden absolute left-0 mt-1 w-56 bg-white border border-slate-300 rounded-lg shadow-xl z-50 p-1.5 text-[11px] font-bold text-slate-800 space-y-1">
+                                <div class="flex items-center justify-between gap-1.5 pb-1 border-b border-slate-200">
+                                    <button type="button" onclick="window.setAllGridRateFilters(true)" class="flex-1 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] cursor-pointer">Select All</button>
+                                    <button type="button" onclick="window.setAllGridRateFilters(false)" class="flex-1 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black uppercase text-[9px] cursor-pointer">Reset (DEF)</button>
+                                </div>
+                                <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="def" onchange="window.toggleGridRateFilter('def', this.checked)" class="row-checkbox"> <span>DEF (Default)</span></span>
+                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">DEF</span>
+                                </label>
+                                <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="direct" onchange="window.toggleGridRateFilter('direct', this.checked)" class="row-checkbox"> <span>Direct (Website)</span></span>
+                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-emerald-600 text-white">DIR</span>
+                                </label>
+                                <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="event" onchange="window.toggleGridRateFilter('event', this.checked)" class="row-checkbox"> <span>Event (FMP)</span></span>
+                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-pink-100 text-pink-700 border border-pink-300">EVT</span>
+                                </label>
+                                <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="los" onchange="window.toggleGridRateFilter('los', this.checked)" class="row-checkbox"> <span>Length of Stay</span></span>
+                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-amber-100 text-amber-800 border border-amber-300">LOS</span>
+                                </label>
+                                <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="ota" onchange="window.toggleGridRateFilter('ota', this.checked)" class="row-checkbox"> <span>OTA Channels</span></span>
+                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-slate-200 text-slate-700">OTA</span>
+                                </label>
+                                <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="other" onchange="window.toggleGridRateFilter('other', this.checked)" class="row-checkbox"> <span>Other / Custom</span></span>
+                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-slate-100 text-slate-500 border border-slate-200">OTH</span>
+                                </label>
+                            </div>
                         </div>
 
-                        <!-- 3. VIEW DENSITY -->
-                        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
-                            <span class="px-1.5 text-slate-400">VIEW:</span>
-                            <button type="button" onclick="window.setViewDensity('avail')" id="density-avail" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Avail</button>
-                            <button type="button" onclick="window.setViewDensity('price')" id="density-price" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Price</button>
-                            <button type="button" onclick="window.setViewDensity('compact')" id="density-compact" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Compact</button>
-                            <button type="button" onclick="window.setViewDensity('minmax')" id="density-minmax" class="px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white">Min/Max</button>
-                            <button type="button" onclick="window.setViewDensity('full')" id="density-full" class="px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black">Full</button>
+                        <!-- 3. VIEW MULTI-SELECT DROPDOWN -->
+                        <div id="grid-view-wrap" class="relative" data-tip="cm.viewFilter">
+                            <button type="button" id="grid-view-btn" onclick="window.toggleGridViewDropdown(event)" class="flex items-center gap-1.5 bg-slate-100 hover:bg-white rounded px-2 py-1 border border-slate-200 text-[10px] font-black uppercase text-slate-700 cursor-pointer transition-colors">
+                                <span class="text-slate-400">VIEW:</span>
+                                <span id="grid-view-label" class="text-indigo-700">Full</span>
+                                <i data-lucide="chevron-down" size="12" class="text-slate-400"></i>
+                            </button>
+                            <div id="grid-view-dropdown" onclick="event.stopPropagation()" class="hidden absolute left-0 mt-1 w-52 bg-white border border-slate-300 rounded-lg shadow-xl z-50 p-1.5 text-[11px] font-bold text-slate-800 space-y-1">
+                                <div class="flex items-center justify-between gap-1.5 pb-1 border-b border-slate-200">
+                                    <button type="button" onclick="window.setAllGridViewFields(true)" class="flex-1 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] cursor-pointer">Full (All)</button>
+                                    <button type="button" onclick="window.setGridViewPresetCompact()" class="flex-1 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black uppercase text-[9px] cursor-pointer">Avl + Price</button>
+                                </div>
+                                <label class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <input type="checkbox" data-grid-view="avail" onchange="window.toggleGridViewField('avail', this.checked)" class="row-checkbox">
+                                    <span>Availability (AVL)</span>
+                                </label>
+                                <label class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <input type="checkbox" data-grid-view="price" onchange="window.toggleGridViewField('price', this.checked)" class="row-checkbox">
+                                    <span>Price</span>
+                                </label>
+                                <label class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <input type="checkbox" data-grid-view="minmax" onchange="window.toggleGridViewField('minmax', this.checked)" class="row-checkbox">
+                                    <span>Min / Max Stay</span>
+                                </label>
+                                <label class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <input type="checkbox" data-grid-view="restrictions" onchange="window.toggleGridViewField('restrictions', this.checked)" class="row-checkbox">
+                                    <span>Restrictions (CTA/CTD/STOP)</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Channel Filter, Curve, Bulk & Events Layer Toggle -->
+                    <!-- Channel Filter, Gaps, Curve & Bulk -->
                     <div class="flex items-center gap-1.5">
-                        <div class="flex items-center bg-slate-100 rounded border border-slate-200 px-1 py-0.5 text-xs">
+                        <div class="flex items-center bg-slate-100 rounded border border-slate-200 px-1 py-0.5 text-xs" data-tip="cm.channelPreview">
                             <span class="text-[9px] font-black text-slate-400 uppercase mr-1">PREVIEW:</span>
-                            <select id="channel-preview-select" onchange="window.channelPreviewFilter = this.value; window.renderRateMatrix();" class="bg-transparent font-black text-xs text-indigo-700 outline-none cursor-pointer">
+                            <select id="channel-preview-select" onchange="window.setChannelPreviewFilter(this.value);" class="bg-transparent font-black text-xs text-indigo-700 outline-none cursor-pointer">
                                 <option value="ALL">All Rates</option>
                             </select>
                         </div>
-                        <button type="button" id="btn-toggle-gaps" onclick="window.toggleHighlightGaps()" class="view-btn !bg-slate-100 text-slate-600 cursor-pointer font-black text-xs px-2 py-1 rounded border border-slate-300 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-1" title="Highlight empty rate or restriction cells">
+                        <button type="button" id="btn-toggle-gaps" onclick="window.toggleHighlightGaps()" data-tip="cm.gaps" class="view-btn !bg-slate-100 text-slate-600 cursor-pointer font-black text-xs px-2 py-1 rounded border border-slate-300 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-1">
                             <i data-lucide="scan-search" size="12"></i> GAPS
                         </button>
-                        <button type="button" id="btn-curve-tuner" onclick="window.toggleCurveTuner()" class="view-btn !bg-pink-50 text-pink-700 !border-pink-300 hover:bg-pink-100 cursor-pointer font-black text-xs px-2.5 py-1 rounded flex items-center gap-1">
+                        <button type="button" id="btn-curve-tuner" onclick="window.toggleCurveTuner()" data-tip="cm.curve" class="view-btn !bg-pink-50 text-pink-700 !border-pink-300 hover:bg-pink-100 cursor-pointer font-black text-xs px-2.5 py-1 rounded flex items-center gap-1">
                             <i data-lucide="sparkles" size="12"></i> CURVE
                         </button>
-                        <button type="button" onclick="window.toggleQuickBulk()" class="view-btn !bg-slate-100 cursor-pointer font-black text-xs px-2.5 py-1 rounded border border-slate-300 hover:bg-slate-200 flex items-center gap-1">
+                        <button type="button" onclick="window.toggleQuickBulk()" data-tip="cm.bulk" class="view-btn !bg-slate-100 cursor-pointer font-black text-xs px-2.5 py-1 rounded border border-slate-300 hover:bg-slate-200 flex items-center gap-1">
                             <i data-lucide="layers" size="12"></i> BULK
-                        </button>
-                        <button type="button" id="btn-toggle-evt-rows" onclick="window.toggleEventRows()" class="hidden px-2 py-1 rounded border text-[10px] font-black uppercase cursor-pointer transition-colors flex items-center gap-1 bg-slate-100 text-slate-600 border-slate-300 hover:bg-pink-50" title="Show/Hide Event Rate Rows">
-                            <i data-lucide="sparkles" size="11"></i>
-                            <span id="lbl-toggle-evt-rows">Events: Off</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- QUICK BULK DRAWER (Unified style.css Light Card) -->
+                <!-- QUICK BULK DRAWER -->
                 <div id="quick-bulk-panel" class="hidden bg-white border-b-2 border-slate-300 p-2.5 shrink-0 shadow-sm flex-col gap-2 z-30 text-slate-800">
                     <div class="flex items-center justify-between gap-2 flex-wrap pb-1.5 border-b border-slate-200">
                         <div class="flex items-center gap-2 flex-wrap">
@@ -162,13 +209,13 @@
                             <label class="text-[10px] font-black uppercase text-slate-500">To:</label>
                             <input type="date" id="qb-end" class="table-input !w-32">
                             
-                            <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase ml-1">
+                            <div data-tip="cm.bulkScope" class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase ml-1">
                                 <span class="px-1.5 text-slate-400">SCOPE:</span>
                                 <button type="button" onclick="window.setBulkScopeMode('anchors')" id="qb-scope-anchors" class="px-2 py-0.5 rounded cursor-pointer bg-white text-indigo-700 shadow-2xs font-black">Anchors</button>
                                 <button type="button" onclick="window.setBulkScopeMode('all')" id="qb-scope-all" class="px-2 py-0.5 rounded cursor-pointer text-slate-600 hover:bg-white">All Rooms</button>
                             </div>
 
-                            <div id="qb-rates-wrap" class="relative">
+                            <div id="qb-rates-wrap" class="relative" data-tip="cm.bulkRates">
                                 <button type="button" id="qb-rates-btn" onclick="window.toggleBulkRatesDropdown(event)" class="flex items-center gap-1.5 bg-slate-100 hover:bg-white rounded px-2 py-1 border border-slate-200 text-[10px] font-black uppercase text-slate-700 cursor-pointer transition-colors">
                                     <span class="text-slate-400">RATES:</span>
                                     <span id="qb-rates-label" class="text-indigo-700">All Rates</span>
@@ -178,7 +225,7 @@
                             </div>
 
                             <button type="button" onclick="window.applyBulkGrid(false)" class="btn-setup-continue !py-1 !px-3">Apply</button>
-                             <button type="button" onclick="window.applyBulkGrid(true)" class="btn-setup-prev !py-1 !px-2.5 !text-rose-600 hover:!bg-rose-50">Clear</button>
+                            <button type="button" onclick="window.applyBulkGrid(true)" class="btn-setup-prev !py-1 !px-2.5 !text-rose-600 hover:!bg-rose-50">Clear</button>
                             <div class="h-4 w-px bg-slate-300 mx-0.5"></div>
                             <button type="button" onclick="window.runRippleRecovery('blanks')" class="btn-setup-save !py-1 !px-2.5" title="Fill empty room prices from linked Anchors without touching existing prices">Fill Blanks</button>
                             <button type="button" onclick="window.runRippleRecovery('all')" class="btn-setup-prev !py-1 !px-2.5 !text-indigo-700 hover:!bg-indigo-50" title="Recalculate all linked room prices from Anchors across this date range">Re-Ripple All</button>
@@ -191,9 +238,9 @@
                                 <tr>
                                     <th class="p-1.5 border-r border-slate-200 w-52">Room / Scope</th>
                                     <th class="p-1.5 text-center border-r border-slate-200 w-28">DEF Non-Ref (฿)</th>
-                                    <th class="p-1.5 text-center border-r border-slate-200 w-32">Min Stay (▸ Arr)</th>
+                                    <th class="p-1.5 text-center border-r border-slate-200 w-32" data-tip="cm.minStay">Min Stay (▸ Arr)</th>
                                     <th class="p-1.5 text-center border-r border-slate-200 w-28">Max Stay</th>
-                                    <th class="p-1.5 text-center w-40">Restriction Status</th>
+                                    <th class="p-1.5 text-center w-40" data-tip="cm.restrictionPill">Restriction Status</th>
                                 </tr>
                             </thead>
                             <tbody id="qb-grid-body" class="divide-y divide-slate-200"></tbody>
@@ -201,7 +248,7 @@
                     </div>
                 </div>
 
-                <!-- QUICK EVENT CURVE & RESTRICTIONS TUNER DRAWER (Unified style.css Light Card) -->
+                <!-- QUICK EVENT CURVE & RESTRICTIONS TUNER DRAWER -->
                 <div id="quick-curve-panel" class="hidden bg-white border-b-2 border-slate-300 p-2.5 shrink-0 shadow-sm flex-col gap-2 z-30 text-slate-800 max-h-[65vh] overflow-y-auto">
                     <div class="flex items-center justify-between gap-2 flex-wrap pb-1.5 border-b border-slate-200">
                         <div class="flex items-center gap-2 flex-wrap">
@@ -268,33 +315,30 @@
                     </table>
                 </div>
 
-                <!-- CELL LEGEND FOOTER (Unified Light UI + Full Labels) -->
+                <!-- CELL LEGEND FOOTER (Single Horizontal Row) -->
                 <footer id="cm-calendar-legend" class="bg-white border-t border-slate-300 text-slate-600 px-3 py-1 flex flex-wrap items-center justify-between gap-2 text-[10px] shrink-0 select-text z-30">
                     <div class="flex items-center gap-2 flex-wrap">
                         <span class="font-black text-slate-400 uppercase tracking-widest text-[9px]">Cell Guide:</span>
                         <div class="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                            <span class="font-black text-indigo-700 text-[9px]">TOP BOXES:</span>
-                            <span class="font-bold text-slate-700">Left = Min Nights (<code>3▸</code> = Min on Arrival; double-click to toggle) | Right = Max Nights</span>
+                            <span class="font-black text-indigo-700 text-[9px]">TOP:</span>
+                            <span class="font-bold text-slate-700">Min (<code>3▸</code> Arr) | Max</span>
                         </div>
-                        <div class="flex items-center gap-1.5 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex-wrap">
-                            <span class="font-black text-indigo-700 text-[9px]">BOTTOM PILL (CLICK TO CYCLE):</span>
-                            <span class="font-bold text-slate-600">• Open</span>
+                        <div class="flex items-center gap-1.5 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            <span class="font-black text-indigo-700 text-[9px]">PILL:</span>
+                            <span class="font-bold text-slate-600">Open</span>
                             <span class="text-slate-400">|</span>
-                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900">CTA</span><span>= Closed to Arrival</span>
-                            <span class="text-slate-400">|</span>
-                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900">CTD</span><span>= Closed to Departure</span>
-                            <span class="text-slate-400">|</span>
-                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900">CTB</span><span>= Closed to Both</span>
-                            <span class="text-slate-400">|</span>
-                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white">STOP</span><span>= Stop Sell</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-200 text-amber-900">CTA</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-sky-200 text-sky-900">CTD</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-purple-200 text-purple-900">CTB</span>
+                            <span class="px-1 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white">STOP</span>
                         </div>
                     </div>
                     <div class="flex items-center gap-2 flex-wrap text-[9.5px] font-bold">
                         <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-900 px-2 py-0.5 rounded border border-amber-400">Unsaved</span>
                         <span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded border border-emerald-300">Just Synced</span>
-                        <span class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-800 px-2 py-0.5 rounded border border-indigo-200 relative overflow-hidden">
-                            <span class="w-0 h-0 border-t-[6px] border-r-[6px] border-t-indigo-600 border-r-transparent"></span>
-                            Pinned Override (Double-click to re-link)
+                        <span class="inline-flex items-center gap-1 bg-orange-50 text-orange-900 px-2 py-0.5 rounded border border-orange-300 relative overflow-hidden" title="Pinned override breaks Anchor ripple (double-click cell to re-link)">
+                            <span class="w-0 h-0 border-t-[6px] border-r-[6px] border-t-orange-500 border-r-transparent"></span>
+                            Pinned (No Ripple)
                         </span>
                     </div>
                 </footer>
@@ -443,7 +487,7 @@
                     </div>
                 </div>
 
-                <!-- 1. Bookable Period (When guest can make the booking) -->
+                <!-- 1. Bookable Period -->
                 <div class="p-2 bg-amber-50/60 border border-amber-200 rounded space-y-1">
                     <div class="flex items-center justify-between">
                         <label class="label-base mb-0 text-amber-950">1. Bookable Period (Sales Window)</label>
@@ -463,7 +507,7 @@
                     </div>
                 </div>
 
-                <!-- 2. Stay Dates (When the guest stays) -->
+                <!-- 2. Stay Dates -->
                 <div class="p-2 bg-indigo-50/50 border border-indigo-200 rounded space-y-1.5">
                     <div class="flex items-center justify-between">
                         <label class="label-base mb-0 text-indigo-950">2. Stay Dates (Applicable Nights)</label>
@@ -523,6 +567,7 @@
     </div>
 
     <!-- ENTRY POINTS -->
+    <script type="module" src="core/tooltips.js"></script>
     <script type="module" src="core/nav.js"></script>
     <script type="module" src="./cm/cm-init.js"></script>
 </body>
