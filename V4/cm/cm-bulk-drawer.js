@@ -32,6 +32,7 @@ function getPlanSignature(rp) {
     return `${ch}::${connId}::${cleanLabel}`;
 }
 
+// Anchors mode cascades to linked rooms; All Rooms mode edits ONLY the specific room row
 function getTargetRoomsForBulkRow(rt) {
     if (bulkScopeMode !== 'anchors') return [rt];
     const targets = new Set([rt]);
@@ -72,7 +73,6 @@ function buildBulkRatesTree() {
         evtLeaves.push({ key: 'EVT::BASE', label: 'DEF Event Rate', planSig: null });
     }
 
-    // Count distinct connection IDs per channel code so multi-connection OTAs get distinct subgroups
     const connIdsByCode = new Map();
     rateMap.forEach(rp => {
         if (!rp || !rp.ratePlanId) return;
@@ -360,13 +360,14 @@ export function setBulkScopeMode(mode) {
 
 export function cycleBulkRowPill(btn) {
     if (!btn) return;
-    const states = ['open', 'cta', 'ctd', 'both', 'stop'];
-    const cur = btn.dataset.state || 'open';
+    const states = ['nochange', 'open', 'cta', 'ctd', 'both', 'stop'];
+    const cur = btn.dataset.state || 'nochange';
     const next = states[(states.indexOf(cur) + 1) % states.length];
     btn.dataset.state = next;
 
     const labels = {
-        open: 'No Change / Open',
+        nochange: 'No Change',
+        open: 'OPEN (Clear Closures)',
         cta: 'CTA (Closed Arrival)',
         ctd: 'CTD (Closed Depart)',
         both: 'CTB (Closed Both)',
@@ -374,14 +375,15 @@ export function cycleBulkRowPill(btn) {
     };
 
     const classes = {
-        open: 'bg-slate-100 text-slate-600 border-slate-300',
+        nochange: 'bg-slate-100 text-slate-600 border-slate-300',
+        open: 'bg-emerald-100 text-emerald-900 border-emerald-400',
         cta: 'bg-amber-200 text-amber-900 border-amber-400',
         ctd: 'bg-sky-200 text-sky-900 border-sky-400',
         both: 'bg-purple-200 text-purple-900 border-purple-400',
         stop: 'bg-rose-600 text-white border-rose-600'
     };
 
-    btn.className = `qb-val-pill w-full sm:w-40 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-2xs ${classes[next]}`;
+    btn.className = `qb-val-pill w-full sm:w-44 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-2xs ${classes[next]}`;
     btn.innerHTML = labels[next];
 }
 
@@ -390,7 +392,7 @@ export function renderBulkGrid() {
     if (!qbBody) return;
 
     const inptCls = "table-input text-center font-black";
-    const pillBtn = `<button type="button" data-state="open" onclick="window.cycleBulkRowPill(this)" class="qb-val-pill w-full sm:w-40 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-2xs bg-slate-100 text-slate-600 border-slate-300">No Change / Open</button>`;
+    const pillBtn = `<button type="button" data-state="nochange" onclick="window.cycleBulkRowPill(this)" class="qb-val-pill w-full sm:w-44 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-2xs bg-slate-100 text-slate-600 border-slate-300">No Change</button>`;
 
     let html = `
     <tr class="bg-slate-50 font-black text-slate-800" data-type="global" data-id="GLOBAL">
@@ -459,7 +461,7 @@ function clearRoomRestrictionFields(rmData, rule) {
         delete rmData.max;
         if (rmData.isOverride) delete rmData.isOverride.max;
     }
-    if (rule.pillState !== 'open') {
+    if (rule.pillState !== 'nochange') {
         delete rmData.cta;
         delete rmData.ctd;
         delete rmData.stop;
@@ -505,10 +507,11 @@ export function applyBulkGrid(isClear = false) {
                 if (r.min !== undefined) { rmData.min = r.min; delete rmData.min_arr; rmData.isOverride.min = true; }
                 if (r.min_arr !== undefined) { rmData.min_arr = r.min_arr; delete rmData.min; rmData.isOverride.min_arr = true; }
                 if (r.max !== undefined) { rmData.max = r.max; rmData.isOverride.max = true; }
-                if (r.pillState !== 'open') {
+                if (r.pillState !== 'nochange') {
                     rmData.cta = r.cta;
                     rmData.ctd = r.ctd;
                     rmData.stop = r.stop;
+                    delete rmData.stopSell;
                     rmData.isOverride.cta = true;
                     rmData.isOverride.ctd = true;
                     rmData.isOverride.stop = true;
@@ -524,24 +527,30 @@ export function applyBulkGrid(isClear = false) {
                 if (r.min !== undefined) { rmData.dir_min = r.min; delete rmData.dir_min_arr; }
                 if (r.min_arr !== undefined) { rmData.dir_min_arr = r.min_arr; delete rmData.dir_min; }
                 if (r.max !== undefined) { rmData.dir_max = r.max; }
-                if (r.pillState !== 'open') {
+                if (r.pillState !== 'nochange') {
                     rmData.dir_cta = r.cta;
                     rmData.dir_ctd = r.ctd;
                     rmData.dir_stop = r.stop;
+                    delete rmData.dir_stopSell;
                 }
             });
         }
 
         if (isAllRatesSelected || bulkSelectedRateKeys.has('EVT::BASE')) {
-            dObj.evtRestrictions = dObj.evtRestrictions || {};
-            if (r.min !== undefined) { dObj.evtRestrictions.min = r.min; delete dObj.evtRestrictions.min_arr; }
-            if (r.min_arr !== undefined) { dObj.evtRestrictions.min_arr = r.min_arr; delete dObj.evtRestrictions.min; }
-            if (r.max !== undefined) { dObj.evtRestrictions.max = r.max; }
-            if (r.pillState !== 'open') {
-                dObj.evtRestrictions.cta = r.cta;
-                dObj.evtRestrictions.ctd = r.ctd;
-                dObj.evtRestrictions.stop = r.stop;
-            }
+            targetRooms.forEach(rm => {
+                const rmData = dObj[rm] || (dObj[rm] = { isOverride: {} });
+                if (r.min !== undefined) { rmData.evt_min = r.min; delete rmData.evt_min_arr; }
+                if (r.min_arr !== undefined) { rmData.evt_min_arr = r.min_arr; delete rmData.evt_min; }
+                if (r.max !== undefined) { rmData.evt_max = r.max; }
+                if (r.pillState !== 'nochange') {
+                    rmData.evt_cta = r.cta;
+                    rmData.evt_ctd = r.ctd;
+                    rmData.evt_stop = r.stop;
+                    delete rmData.evt_stopSell;
+                }
+                window.dirtyCellKeys.add(`${dateStr}|${rm}`);
+                window.justSyncedCellKeys.delete(`${dateStr}|${rm}`);
+            });
         }
 
         if (isAllRatesSelected || selectedPlanSigs.size > 0) {
@@ -555,7 +564,7 @@ export function applyBulkGrid(isClear = false) {
                 if (r.min !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_min`] = r.min; delete dObj.otaOverrides[`${rp.ratePlanId}_min_arr`]; }
                 if (r.min_arr !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_min_arr`] = r.min_arr; delete dObj.otaOverrides[`${rp.ratePlanId}_min`]; }
                 if (r.max !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_max`] = r.max; }
-                if (r.pillState !== 'open') {
+                if (r.pillState !== 'nochange') {
                     dObj.otaOverrides[`${rp.ratePlanId}_cta`] = r.cta;
                     dObj.otaOverrides[`${rp.ratePlanId}_ctd`] = r.ctd;
                     dObj.otaOverrides[`${rp.ratePlanId}_stop`] = r.stop;
@@ -591,10 +600,11 @@ export function applyBulkGrid(isClear = false) {
         }
 
         const max = (maxInput && maxInput.value.trim() !== "") ? parseInt(maxInput.value.trim(), 10) : undefined;
-        const pillState = pill?.dataset.state || 'open';
+        const pillState = pill?.dataset.state || 'nochange';
 
         let cta = undefined, ctd = undefined, stop = undefined;
-        if (pillState === 'cta') { cta = true; ctd = false; stop = false; }
+        if (pillState === 'open') { cta = false; ctd = false; stop = false; }
+        else if (pillState === 'cta') { cta = true; ctd = false; stop = false; }
         else if (pillState === 'ctd') { cta = false; ctd = true; stop = false; }
         else if (pillState === 'both') { cta = true; ctd = true; stop = false; }
         else if (pillState === 'stop') { cta = false; ctd = false; stop = true; }
@@ -613,7 +623,7 @@ export function applyBulkGrid(isClear = false) {
         window.syncedDates.delete(dateStr);
 
         if (globalRule) {
-            const hasGlobalRestr = globalRule.min !== undefined || globalRule.min_arr !== undefined || globalRule.max !== undefined || globalRule.pillState !== 'open';
+            const hasGlobalRestr = globalRule.min !== undefined || globalRule.min_arr !== undefined || globalRule.max !== undefined || globalRule.pillState !== 'nochange';
             dObj['GLOBAL'] = dObj['GLOBAL'] || { isOverride: {} };
             dObj['GLOBAL'].isOverride = dObj['GLOBAL'].isOverride || {};
             if (isClear) {
@@ -630,10 +640,11 @@ export function applyBulkGrid(isClear = false) {
                     if (globalRule.min !== undefined) { dObj['GLOBAL'].min = globalRule.min; delete dObj['GLOBAL'].min_arr; dObj['GLOBAL'].isOverride.min = true; }
                     if (globalRule.min_arr !== undefined) { dObj['GLOBAL'].min_arr = globalRule.min_arr; delete dObj['GLOBAL'].min; dObj['GLOBAL'].isOverride.min_arr = true; }
                     if (globalRule.max !== undefined) { dObj['GLOBAL'].max = globalRule.max; dObj['GLOBAL'].isOverride.max = true; }
-                    if (globalRule.pillState !== 'open') {
+                    if (globalRule.pillState !== 'nochange') {
                         dObj['GLOBAL'].cta = globalRule.cta;
                         dObj['GLOBAL'].ctd = globalRule.ctd;
                         dObj['GLOBAL'].stop = globalRule.stop;
+                        delete dObj['GLOBAL'].stopSell;
                         dObj['GLOBAL'].isOverride.cta = true;
                         dObj['GLOBAL'].isOverride.ctd = true;
                         dObj['GLOBAL'].isOverride.stop = true;
@@ -643,8 +654,8 @@ export function applyBulkGrid(isClear = false) {
                 } else {
                     (window.roomTypes || []).forEach(rt => applyRestrictionPayload(dObj, dateStr, rt, globalRule));
                 }
+                if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', '*');
             }
-            if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', '*');
         }
 
         roomUpdates.forEach(r => {
@@ -668,22 +679,28 @@ export function applyBulkGrid(isClear = false) {
                     window.dirtyCellKeys.add(`${dateStr}|${targetRm}`);
                     window.justSyncedCellKeys.delete(`${dateStr}|${targetRm}`);
                 });
+                if (typeof window.markCmDirty === 'function') {
+                    window.markCmDirty(dateStr, 'rate', bulkScopeMode === 'anchors' ? '*' : `ROOM:${rt}`);
+                }
             } else {
                 const hasRateChange = r.rate !== undefined && !isNaN(r.rate);
-                const hasRestrChange = r.min !== undefined || r.min_arr !== undefined || r.max !== undefined || r.pillState !== 'open';
+                const hasRestrChange = r.min !== undefined || r.min_arr !== undefined || r.max !== undefined || r.pillState !== 'nochange';
 
                 if (hasRateChange) {
                     rData.std = roundCurrency(r.rate);
                     rData.isOverride.std = true;
                     window.dirtyCellKeys.add(`${dateStr}|${rt}`);
                     window.justSyncedCellKeys.delete(`${dateStr}|${rt}`);
-                    rippleDay(dateStr, rt, true);
+                    // Only ripple when Scope is 'Anchors'; in 'All Rooms' mode edit ONLY the specific room
+                    if (bulkScopeMode === 'anchors') {
+                        rippleDay(dateStr, rt, true);
+                    }
                 }
                 if (hasRestrChange) {
                     applyRestrictionPayload(dObj, dateStr, rt, r);
                 }
                 if ((hasRateChange || hasRestrChange) && typeof window.markCmDirty === 'function') {
-                    window.markCmDirty(dateStr, 'rate', '*');
+                    window.markCmDirty(dateStr, 'rate', bulkScopeMode === 'anchors' ? '*' : `ROOM:${rt}`);
                 }
             }
         });
@@ -1076,7 +1093,9 @@ export function applyCurveTuner() {
 
     const restrMap = readCurveRestrictionsFromUI();
     const evtRatePlans = (window.channexRateMap || []).filter(
-        r => (r.product === 'evt') || (r.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(r.ratePlanTitle || '')
+        r => typeof r.isEvent === 'boolean'
+            ? r.isEvent
+            : (r.policy?.startsWith('event') || r.product === 'evt' || r.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(r.ratePlanTitle || ''))
     );
 
     for (let off = -6; off <= 6; off++) {
