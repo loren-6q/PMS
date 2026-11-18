@@ -478,20 +478,24 @@ export async function triggerAutoSync(checkIn, checkOut, affectedCategories = []
         dates.push(getLocalYMD(new Date(sU + (i * 86400000))));
     }
 
+    const canonAffected = affectedCategories.map(c => resolveRoomCategory(c) || c);
+
     const targets = window.channexMap.filter(m => {
         if (!m.channexId || !m.pmsCategory) return false;
-        if (affectedCategories.length === 0) return true;
-        return affectedCategories.includes(m.pmsCategory);
+        if (canonAffected.length === 0) return true;
+        const pmsCat = resolveRoomCategory(m.pmsCategory) || m.pmsCategory;
+        return canonAffected.includes(pmsCat) || affectedCategories.includes(m.pmsCategory);
     });
 
     const rawAvail = [];
     targets.forEach(rule => {
-        const peakCap = getPeakCategoryCapacity(rule.pmsCategory);
+        const pmsCat = resolveRoomCategory(rule.pmsCategory) || rule.pmsCategory;
+        const peakCap = getPeakCategoryCapacity(pmsCat);
         dates.forEach(dStr => {
             rawAvail.push({
                 room_type_id: rule.channexId,
                 date: dStr,
-                availability: getNetAvailabilityForDate(rule.pmsCategory, dStr, peakCap)
+                availability: getNetAvailabilityForDate(pmsCat, dStr, peakCap)
             });
         });
     });
@@ -512,7 +516,12 @@ export async function triggerAutoSync(checkIn, checkOut, affectedCategories = []
 // 6. MASTER BULK & FULL SYNC DISPATCHER (TEST 1 & CM DRAWER)
 // --------------------------------------------------------------------------
 
-export async function pushToChannexAPI(btn, mode = 'delta') {
+export async function pushToChannexAPI(btnOrMode, modeArg = 'delta') {
+    const btn = (btnOrMode && typeof btnOrMode === 'object' && 'innerHTML' in btnOrMode) ? btnOrMode : null;
+    const mode = typeof btnOrMode === 'boolean'
+        ? (btnOrMode ? 'full' : 'delta')
+        : (typeof btnOrMode === 'string' ? btnOrMode : (modeArg || 'delta'));
+
     const apiKey = window.channexConfig?.apiKey || localStorage.getItem('cm_master_channex_api_key');
     const propId = window.channexConfig?.propId;
     const isStaging = !!(window.channexConfig?.isStaging || window.channexConfig?.env === 'staging');
@@ -552,17 +561,20 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
         const hasGranularPlans = window.dirtyPlanKeys instanceof Set && window.dirtyPlanKeys.size > 0;
         const useGranular = (mode === 'delta') && (hasGranularAvail || hasGranularPlans);
 
-        const shouldPushAvail = (dStr, pmsCat) => {
+        const shouldPushAvail = (dStr, pmsCat, rawCat) => {
             if (mode === 'full' || !useGranular) return true;
             if (!hasGranularAvail) return false;
-            return window.dirtyAvailKeys.has(`${dStr}|*`) || window.dirtyAvailKeys.has(`${dStr}|ROOM:${pmsCat}`);
+            return window.dirtyAvailKeys.has(`${dStr}|*`)
+                || window.dirtyAvailKeys.has(`${dStr}|ROOM:${pmsCat}`)
+                || (rawCat && window.dirtyAvailKeys.has(`${dStr}|ROOM:${rawCat}`));
         };
 
-        const shouldPushPlan = (dStr, pmsCat, ratePlanId) => {
+        const shouldPushPlan = (dStr, pmsCat, rawCat, ratePlanId) => {
             if (mode === 'full' || !useGranular) return true;
             if (!hasGranularPlans) return false;
             return window.dirtyPlanKeys.has(`${dStr}|*`)
                 || window.dirtyPlanKeys.has(`${dStr}|ROOM:${pmsCat}`)
+                || (rawCat && window.dirtyPlanKeys.has(`${dStr}|ROOM:${rawCat}`))
                 || window.dirtyPlanKeys.has(`${dStr}|PLAN:${ratePlanId}`);
         };
 
@@ -570,13 +582,15 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
         const rawAvailEntries = [];
         window.channexMap.forEach(rule => {
             if (!rule.channexId || !rule.pmsCategory) return;
-            const pmsCat = rule.pmsCategory;
+            const rawCat = rule.pmsCategory;
+            const pmsCat = resolveRoomCategory(rawCat) || rawCat;
             const roomTypeId = rule.channexId;
             const peakCap = getPeakCategoryCapacity(pmsCat);
 
             datesToProcess.forEach(dStr => {
-                if (!shouldPushAvail(dStr, pmsCat)) return;
-                const otaAvail = window.masterPricing?.timeline?.[dStr]?.otaOverrides?.[`${pmsCat}_avail`];
+                if (!shouldPushAvail(dStr, pmsCat, rawCat)) return;
+                const overrides = window.masterPricing?.timeline?.[dStr]?.otaOverrides;
+                const otaAvail = overrides?.[`${pmsCat}_avail`] ?? overrides?.[`${rawCat}_avail`];
                 const live = getNetAvailabilityForDate(pmsCat, dStr, peakCap);
                 const availToday = otaAvail !== undefined ? otaAvail : live;
 
@@ -605,30 +619,28 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
         const isEventsActive = typeof window.isEventPricingEnabled === 'function' ? window.isEventPricingEnabled() : false;
 
         validRatePlans.forEach(plan => {
-            const pmsCat = plan.pmsCategory;
+            const rawCat = plan.pmsCategory;
+            const pmsCat = resolveRoomCategory(rawCat) || rawCat;
             const ratePlanId = plan.ratePlanId;
-            const isEvtRate = isEventsActive && ((plan.product === 'evt') || (plan.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(plan.ratePlanTitle || ''));
+            const planIsEvent = typeof plan.isEvent === 'boolean'
+                ? plan.isEvent
+                : (plan.policy?.startsWith('event') || plan.product === 'evt' || plan.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(plan.ratePlanTitle || ''));
+            const isEvtRate = isEventsActive && planIsEvent;
 
             datesToProcess.forEach(dStr => {
-                if (!shouldPushPlan(dStr, pmsCat, ratePlanId)) return;
+                if (!shouldPushPlan(dStr, pmsCat, rawCat, ratePlanId)) return;
                 const dayObj = window.masterPricing?.timeline?.[dStr] || {};
-                const roomObj = dayObj[pmsCat] || {};
+                const roomObj = dayObj[pmsCat] || dayObj[rawCat] || {};
                 const globObj = dayObj['GLOBAL'] || {};
 
                 let computedPrice = null;
                 const otaPriceOverride = dayObj.otaOverrides?.[ratePlanId];
-                const isBlankEvtWindow = isEvtRate
-                    && (roomObj.fmp === undefined || roomObj.fmp === "")
-                    && (otaPriceOverride === undefined || otaPriceOverride === "");
-
-                if (!isBlankEvtWindow) {
-                    if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
-                        computedPrice = Number(otaPriceOverride);
-                    } else if (typeof window.computeDynamicPlanRate === 'function') {
-                        computedPrice = window.computeDynamicPlanRate(dStr, pmsCat, plan);
-                    } else {
-                        computedPrice = roomObj.std || 100;
-                    }
+                if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
+                    computedPrice = Number(otaPriceOverride);
+                } else if (typeof window.computeDynamicPlanRate === 'function') {
+                    computedPrice = window.computeDynamicPlanRate(dStr, pmsCat, plan);
+                } else if (roomObj.std !== undefined && roomObj.std !== "") {
+                    computedPrice = Number(roomObj.std);
                 }
 
                 const item = {
@@ -654,30 +666,24 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
                     return null;
                 };
 
+                // Explicitly send defaults (1 / 0 / false) when cleared so Channex never retains stale restrictions
                 const minS = getRestrVal('min');
                 const minArr = getRestrVal('min_arr');
-                if (minArr !== null && minArr !== "") {
-                    item.min_stay_arrival = parseInt(String(minArr), 10) || 1;
-                }
-                if (minS !== null && minS !== "") {
-                    item.min_stay_through = parseInt(String(minS), 10) || 1;
-                }
+                item.min_stay_arrival = (minArr !== null && minArr !== "") ? (parseInt(String(minArr), 10) || 1) : 1;
+                item.min_stay_through = (minS !== null && minS !== "") ? (parseInt(String(minS), 10) || 1) : 1;
 
                 const maxS = getRestrVal('max');
-                if (maxS !== null && maxS !== "") item.max_stay = parseInt(String(maxS), 10) || 0;
+                item.max_stay = (maxS !== null && maxS !== "") ? (parseInt(String(maxS), 10) || 0) : 0;
 
                 const cta = getRestrVal('cta');
-                if (cta !== null) item.closed_to_arrival = !!cta;
+                item.closed_to_arrival = cta !== null ? !!cta : false;
 
                 const ctd = getRestrVal('ctd');
-                if (ctd !== null) item.closed_to_departure = !!ctd;
+                item.closed_to_departure = ctd !== null ? !!ctd : false;
 
-                const stop = getRestrVal('stop') || getRestrVal('stopSell');
-                if (isBlankEvtWindow) {
-                    item.stop_sell = true;
-                } else if (stop !== null) {
-                    item.stop_sell = !!stop;
-                }
+                // Strictly obey user stop_sell state — never override automatically
+                const stop = getRestrVal('stop') ?? getRestrVal('stopSell');
+                item.stop_sell = stop !== null ? !!stop : false;
 
                 rawRestrEntries.push(item);
             });
