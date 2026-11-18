@@ -6,7 +6,7 @@
 import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, getDoc, setDoc, collection, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { loadPropertiesCatalog, toCanonicalPropId } from '../core/properties.js';
+import { loadPropertiesCatalog, toCanonicalPropId, resolveRoomCategory } from '../core/properties.js';
 import { normalizeChannelRules, resolveChannelCode, getChannelByCode } from '../core/channels.js';
 import { getLocalYMD, parseYMD } from '../core/dates.js';
 import { customAlert } from '../core/ui-dialogs.js';
@@ -39,14 +39,15 @@ function compactTimelineForCloud(rawTimeline = {}) {
     const cutoffStr = getLocalYMD(new Date(todayMs - (14 * 86400000)));
     const compacted = {};
 
-    // Lookup ratePlanId -> { pmsCategory, isEvent } to strip redundant otaOverrides that match inherited values
+    // Lookup ratePlanId -> { cat, isEvt } using canonical room category (non-mutating)
     const planMetaById = new Map();
     (window.channexRateMap || []).forEach(rp => {
         if (!rp || !rp.ratePlanId) return;
+        const canonCat = resolveRoomCategory(rp.pmsCategory) || rp.pmsCategory;
         const isEvt = typeof rp.isEvent === 'boolean'
             ? rp.isEvent
             : (rp.policy?.startsWith('event') || rp.product === 'evt' || rp.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(rp.ratePlanTitle || ''));
-        planMetaById.set(rp.ratePlanId, { cat: rp.pmsCategory, isEvt });
+        planMetaById.set(rp.ratePlanId, { cat: canonCat, isEvt });
     });
 
     Object.entries(rawTimeline || {}).forEach(([dateStr, dayObj]) => {
