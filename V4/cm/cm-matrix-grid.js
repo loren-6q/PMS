@@ -10,17 +10,45 @@ import { resolveChannelCode } from '../core/channels.js';
 import { getClassifiedRooms } from '../core/properties.js';
 import { rippleDay, applyMath, computeDynamicPlanRate, getNearestEvent } from './cm-ripple.js';
 
-export let roomLevel = 'all';      // 'anchors' | 'all' | 'dorms' | 'privates'
-export let rateLevel = 'min';      // 'min' | 'direct' | 'default' | 'all'
-export let showEventRows = false;  // defaults to OFF; toggled via EVENTS button when Setup enables event rates
-export let highlightGaps = false;  // toggled via GAPS button in toolbar
-export let viewDensity = 'full';   // 'avail' | 'price' | 'compact' | 'minmax' | 'full'
-export let channelPreviewFilter = 'ALL';
-export const expandedRooms = new Set();
+// Load UI Preferences from LocalStorage
+const _prefs = JSON.parse(localStorage.getItem('cm_ui_prefs') || '{}');
+export let roomLevel = _prefs.roomLevel || 'all';      // 'anchors' | 'all' | 'dorms' | 'privates'
+export let rateLevel = _prefs.rateLevel || 'min';      // 'min' | 'direct' | 'default' | 'all'
+export let showEventRows = _prefs.showEventRows !== undefined ? _prefs.showEventRows : false;
+export let highlightGaps = _prefs.highlightGaps !== undefined ? _prefs.highlightGaps : false;
+export let viewDensity = _prefs.viewDensity || 'full';   // 'avail' | 'price' | 'compact' | 'minmax' | 'full'
+export let channelPreviewFilter = _prefs.channelPreviewFilter || 'ALL';
+export const expandedRooms = new Set(JSON.parse(localStorage.getItem('cm_ui_expanded') || '[]'));
 export const daysToRender = 42;
+
+function saveGridPrefs() {
+    localStorage.setItem('cm_ui_prefs', JSON.stringify({
+        roomLevel, rateLevel, showEventRows, highlightGaps, viewDensity, channelPreviewFilter
+    }));
+}
+
+export function initGridUI() {
+    window.roomLevel = roomLevel;
+    window.rateLevel = rateLevel;
+    window.viewDensity = viewDensity;
+    window.showEventRows = showEventRows;
+    window.channelPreviewFilter = channelPreviewFilter;
+
+    setRoomLevel(roomLevel, true);
+    setRateLevel(rateLevel, true);
+    setViewDensity(viewDensity, true);
+    
+    const gapBtn = document.getElementById('btn-toggle-gaps');
+    if (gapBtn) {
+        gapBtn.className = highlightGaps
+            ? "view-btn !bg-rose-600 !text-white !border-rose-600 cursor-pointer font-black text-xs px-2 py-1 rounded flex items-center gap-1 shadow-2xs"
+            : "view-btn !bg-slate-100 text-slate-600 cursor-pointer font-black text-xs px-2 py-1 rounded border border-slate-300 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-1";
+    }
+}
 
 export function toggleHighlightGaps() {
     highlightGaps = !highlightGaps;
+    saveGridPrefs();
     const btn = document.getElementById('btn-toggle-gaps');
     if (btn) {
         btn.className = highlightGaps
@@ -114,7 +142,6 @@ export function calculateLiveInventory() {
                 const cOut = s.checkOut;
 
                 if (cIn && cOut && dStr >= cIn && dStr < cOut) {
-                    // Deduct 1 unit per assigned room/bed in its own category
                     assignedSlots.forEach(rId => {
                         const up = String(rId).trim().toUpperCase();
                         const cat = roomLookup.get(up) || roomLookup.get(cleanBedId(up)) || s.bookedType || s.category || s.roomType;
@@ -126,7 +153,6 @@ export function calculateLiveInventory() {
                         }
                     });
 
-                    // Deduct any remaining unassigned slots
                     const unassignedCount = Math.max(0, rawSlots.length - assignedSlots.length);
                     if (unassignedCount > 0) {
                         const fallbackCat = s.bookedType || s.category || s.roomType;
@@ -368,9 +394,20 @@ export function handleOtaEdit(dateStr, ratePlanId, room, ruleType, ruleVal, fiel
         } else {
             overrides[ratePlanId] = roundCurrency(parseFloat(val));
         }
-    } else if (field === 'min') {
-        if (val === "" || val === "-") delete overrides[`${ratePlanId}_min`];
-        else overrides[`${ratePlanId}_min`] = parseInt(val, 10);
+    } else if (field === 'min' || field === 'min_hybrid') {
+        const clean = String(val).trim();
+        if (!clean || clean === "-" || clean === "0") {
+            delete overrides[`${ratePlanId}_min`];
+            delete overrides[`${ratePlanId}_min_arr`];
+        } else if (/(\d+)\s*(a|>|▸)/i.test(clean)) {
+            const match = clean.match(/(\d+)/);
+            overrides[`${ratePlanId}_min_arr`] = match ? parseInt(match[1], 10) : 1;
+            delete overrides[`${ratePlanId}_min`];
+        } else {
+            const match = clean.match(/(\d+)/);
+            overrides[`${ratePlanId}_min`] = match ? parseInt(match[1], 10) : 1;
+            delete overrides[`${ratePlanId}_min_arr`];
+        }
     } else if (field === 'max') {
         if (val === "" || val === "-") delete overrides[`${ratePlanId}_max`];
         else overrides[`${ratePlanId}_max`] = parseInt(val, 10);
@@ -501,9 +538,10 @@ export function unlockCellOverride(dateStr, room, ratePlanId = null) {
     renderRateMatrix();
 }
 
-export function setRoomLevel(level) {
+export function setRoomLevel(level, skipRender = false) {
     roomLevel = level;
     window.roomLevel = level;
+    saveGridPrefs();
     ['anchors', 'all', 'dorms', 'privates'].forEach(l => {
         const btn = document.getElementById(`rlevel-${l}`);
         if (btn) {
@@ -511,12 +549,13 @@ export function setRoomLevel(level) {
             btn.className = `${isHidden ? 'hidden ' : ''}px-2 py-0.5 rounded cursor-pointer transition-colors ${l === level ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}`;
         }
     });
-    renderRateMatrix();
+    if (!skipRender) renderRateMatrix();
 }
 
-export function setRateLevel(level) {
+export function setRateLevel(level, skipRender = false) {
     rateLevel = level;
     window.rateLevel = level;
+    saveGridPrefs();
     ['min', 'direct', 'default', 'all'].forEach(l => {
         const btn = document.getElementById(`ratelevel-${l}`);
         if (btn) {
@@ -525,30 +564,40 @@ export function setRateLevel(level) {
                 : "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
         }
     });
-    renderRateMatrix();
+    if (!skipRender) renderRateMatrix();
 }
 
 export function toggleEventRows() {
     showEventRows = !showEventRows;
     window.showEventRows = showEventRows;
+    saveGridPrefs();
     renderRateMatrix();
 }
 
-export function setViewDensity(density) {
+export function setViewDensity(density, skipRender = false) {
     viewDensity = density;
     window.viewDensity = density;
+    saveGridPrefs();
     ['avail', 'price', 'compact', 'minmax', 'full'].forEach(d => {
         const btn = document.getElementById(`density-${d}`);
         if (btn) btn.className = d === density
             ? "px-2 py-0.5 rounded cursor-pointer transition-colors bg-white text-indigo-700 shadow-2xs font-black"
             : "px-2 py-0.5 rounded cursor-pointer transition-colors text-slate-600 hover:bg-white";
     });
-    renderRateMatrix();
+    if (!skipRender) renderRateMatrix();
+}
+
+export function setChannelPreviewFilter(val, skipRender = false) {
+    channelPreviewFilter = val;
+    window.channelPreviewFilter = val;
+    saveGridPrefs();
+    if (!skipRender) renderRateMatrix();
 }
 
 export function toggleRoomExpand(room) {
     if (expandedRooms.has(room)) expandedRooms.delete(room);
     else expandedRooms.add(room);
+    localStorage.setItem('cm_ui_expanded', JSON.stringify(Array.from(expandedRooms)));
     renderRateMatrix();
 }
 
@@ -620,7 +669,6 @@ export function renderRateMatrix() {
     trHead += `</tr>`;
     head.innerHTML = trHead;
 
-    // Sync conditional EVENTS toggle & dynamic Dorms/Privates room buttons
     const evtToggleBtn = document.getElementById('btn-toggle-evt-rows');
     const evtToggleLbl = document.getElementById('lbl-toggle-evt-rows');
     if (evtToggleBtn) {
@@ -681,16 +729,9 @@ export function renderRateMatrix() {
             const isEvtPlan = (r.product === 'evt') || (r.rateSource === 'evt') || /\b(evt|fmp|event|pkg)\b/i.test(r.ratePlanTitle || '');
             const isRefPlan = (r.policy === 'ref') || (/ref|refundable/i.test(r.ratePlanTitle || '') && !/non-?ref/i.test(r.ratePlanTitle || ''));
 
-            // Hide all event plans when Events layer is OFF
             if (isEvtPlan && !renderEventsLayer) return false;
-
-            // Suppress duplicate DEF Non-Ref & DEF Event Non-Ref plans (already rendered as the master rows)
             if (chanCode === 'DEF' && !isRefPlan) return false;
-
-            // Channel preview filter
             if (activePreviewFilter !== 'ALL' && chanCode !== activePreviewFilter) return false;
-
-            // Rate level filter
             if (effectiveRateLevel === 'min' || effectiveRateLevel === 'direct') return false;
             if (effectiveRateLevel === 'default') return chanCode === 'DEF';
             return true;
@@ -710,7 +751,6 @@ export function renderRateMatrix() {
                </button>`
             : '';
 
-        // 0. Room Group Header Row (Flush-left sticky label + thick black top border)
         allRowsHtml += `<tr class="bg-white border-t-[3px] border-slate-900 border-b border-slate-300">
             <td colspan="${daysToRender + 1}" class="!text-left p-0 bg-white" style="text-align: left;">
                 <div class="sticky left-0 z-20 inline-flex items-center gap-2 px-2 py-1 bg-white text-left" style="left: 0;">
@@ -720,7 +760,6 @@ export function renderRateMatrix() {
             </td>
         </tr>`;
 
-        // A. Availability Row (Hidden in PRICE view so there is no blank row)
         if (density !== 'price') {
             let trAvail = `<tr class="${groupClass} border-b border-slate-200">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
@@ -749,7 +788,6 @@ export function renderRateMatrix() {
 
         if (density === 'avail') return;
 
-        // B. DEF Non-Ref Row
         let trRate = `<tr class="${groupClass} border-b border-slate-300">
             <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
                 <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
@@ -831,7 +869,6 @@ export function renderRateMatrix() {
         trRate += `</tr>`;
         allRowsHtml += trRate;
 
-        // C. DEF Event Non-Ref Row (Matches all VIEW density filters: Avail / Price / Compact / MinMax / Full)
         if (renderEventsLayer && density !== 'avail') {
             const showTopEvt = density === 'minmax' || density === 'full';
             const showBottomEvt = density === 'full';
@@ -901,7 +938,6 @@ export function renderRateMatrix() {
             allRowsHtml += trEvt;
         }
 
-        // C2. Direct (WEB) Row (Shown when RATES is Direct, Default, or All)
         if ((effectiveRateLevel === 'direct' || effectiveRateLevel === 'default' || effectiveRateLevel === 'all') && density !== 'avail') {
             const showTopDir = density === 'minmax' || density === 'full';
             const showBottomDir = density === 'full';
@@ -968,7 +1004,6 @@ export function renderRateMatrix() {
             allRowsHtml += trDir;
         }
 
-        // D. Mapped Rate Plans (Filtered by RATES level & EVENTS toggle)
         if (mappedRates.length > 0 && density !== 'avail') {
             mappedRates.forEach(rate => {
                 const chanCode = resolveChannelCode(rate.channel || rate.ratePlanTitle);
@@ -1045,7 +1080,6 @@ export function renderRateMatrix() {
         }
     });
 
-    // 3. GLOBAL Restrictions Row
     if (density === 'minmax' || density === 'full') {
         let globalTr = `<tr class="bg-slate-100 text-slate-800 border-t-2 border-slate-400">
             <td class="frozen-col !p-0 z-20 bg-slate-100 border-r-2 border-slate-400 px-1.5 py-1">
@@ -1133,7 +1167,6 @@ export function cycleDirectRestriction(dateStr, room) {
     renderRateMatrix();
 }
 
-// Progressive Multi-Tap Ctrl + RightArrow Fill-Right + Horizontal Tab Navigation
 let lastFillKey = '';
 let lastFillTime = 0;
 let fillTapStage = 0;
@@ -1299,5 +1332,7 @@ if (typeof window !== 'undefined') {
     window.handleDirectEdit = handleDirectEdit;
     window.cycleDirectRestriction = cycleDirectRestriction;
     window.setViewDensity = setViewDensity;
+    window.setChannelPreviewFilter = setChannelPreviewFilter;
     window.toggleRoomExpand = toggleRoomExpand;
+    window.initGridUI = initGridUI;
 }
