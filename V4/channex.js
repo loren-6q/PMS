@@ -681,9 +681,9 @@ export async function pushToChannexAPI(btnOrMode, modeArg = 'delta') {
                 const ctd = getRestrVal('ctd');
                 item.closed_to_departure = ctd !== null ? !!ctd : false;
 
-                // Strictly obey user stop_sell state — never override automatically
+                // Obey user stop_sell state on priced dates; close unpriced dates so Channex never publishes fallback default_rate
                 const stop = getRestrVal('stop') ?? getRestrVal('stopSell');
-                item.stop_sell = stop !== null ? !!stop : false;
+                item.stop_sell = fRate === null ? true : (stop !== null ? !!stop : false);
 
                 rawRestrEntries.push(item);
             });
