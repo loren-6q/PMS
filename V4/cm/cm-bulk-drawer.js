@@ -16,12 +16,46 @@ import { rippleDay } from './cm-ripple.js';
 export let bulkScopeMode = 'anchors'; // 'anchors' | 'all'
 export let bulkSelectedRateKeys = null; // Set of selected leaf keys (null = all selected)
 
+// Normalize a Channex rate plan title into a general rate type (stripping room names/abbreviations)
 function getCleanPlanLabel(rp) {
     let title = (rp.ratePlanTitle || rp.title || '').trim();
-    const cat = (rp.pmsCategory || '').trim();
-    if (cat && title.toLowerCase().startsWith(cat.toLowerCase())) {
-        title = title.slice(cat.length).replace(/^[\s\-–—:|]+/, '').trim();
+    const roomCandidates = new Set([
+        rp.pmsCategory,
+        ...(window.roomTypes || []),
+        ...Object.values(window.displayAbbrev || {})
+    ].filter(Boolean));
+
+    // 1. Strip any exact room category / abbreviation match anywhere in the title
+    Array.from(roomCandidates)
+        .sort((a, b) => b.length - a.length)
+        .forEach(cat => {
+            const escaped = String(cat).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (!escaped) return;
+            title = title.replace(new RegExp(`(^|[\\s\\-–—:|(])${escaped}($|[\\s\\-–—:|)])`, 'ig'), ' ');
+        });
+
+    title = title.replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/g, '').replace(/\s{2,}/g, ' ').trim();
+
+    // 2. Collapse trailing room-specific words after standard policy names (e.g. "BDC Non-Refundable Triple K+T" -> "BDC Non-Refundable")
+    const policySuffixMatch = title.match(/^((?:[A-Z]{2,4}\s+)?(?:Event\s+)?(?:Non-?Refundable|Refundable|Standard|Flexible|Package|Promo))(?:\s+(.+))?$/i);
+    if (policySuffixMatch) {
+        const baseType = policySuffixMatch[1].trim();
+        const trailing = (policySuffixMatch[2] || '').trim();
+        if (trailing) {
+            const catWords = new Set(
+                String(rp.pmsCategory || '')
+                    .toLowerCase()
+                    .split(/[^a-z0-9+]+/)
+                    .filter(w => w.length >= 2)
+            );
+            const roomWords = new Set(['triple', 'twin', 'king', 'queen', 'double', 'single', 'dorm', 'bed', 'beds', 'mixed', 'female', 'male', 'private', 'deluxe', 'superior', 'oceanview', 'ocean', 'partial', 'garden', 'suite', 'bunk', 'pod', 'room', 'villa', 'bungalow']);
+            const trailingTokens = trailing.toLowerCase().split(/[^a-z0-9+]+/).filter(Boolean);
+            if (trailingTokens.some(tok => catWords.has(tok) || roomWords.has(tok) || /\+/.test(tok) || /^\d+$/.test(tok))) {
+                title = baseType;
+            }
+        }
     }
+
     return title || rp.ratePlanId;
 }
 
@@ -60,9 +94,14 @@ function getTargetRoomsForBulkRow(rt) {
 }
 
 function buildBulkRatesTree() {
-    const rateMap = window.channexRateMap || [];
-    const seenPlanKeys = new Set();
+    const activeRoomsLower = new Set((window.roomTypes || []).map(r => r.toLowerCase()));
+    const rateMap = (window.channexRateMap || []).filter(rp => {
+        if (!rp || !rp.ratePlanId) return false;
+        const canonCat = (findCanonicalRoom(rp.pmsCategory) || rp.pmsCategory || '').toLowerCase();
+        return activeRoomsLower.size === 0 || activeRoomsLower.has(canonCat);
+    });
 
+    const seenPlanKeys = new Set();
     const defLeaves = [{ key: 'DEF::BASE', label: 'DEF Non-Ref (Master)', planSig: null }];
     const dirLeaves = [{ key: 'DIR::BASE', label: 'Direct Rate (Master)', planSig: null }];
     const evtLeaves = [];
@@ -75,14 +114,12 @@ function buildBulkRatesTree() {
 
     const connIdsByCode = new Map();
     rateMap.forEach(rp => {
-        if (!rp || !rp.ratePlanId) return;
         const ch = resolveChannelCode(rp.channel || '');
         if (!connIdsByCode.has(ch)) connIdsByCode.set(ch, new Set());
         connIdsByCode.get(ch).add(rp.channelId || 'default');
     });
 
     rateMap.forEach(rp => {
-        if (!rp || !rp.ratePlanId) return;
         const ch = resolveChannelCode(rp.channel || '');
         const cleanLabel = getCleanPlanLabel(rp);
         const planSig = getPlanSignature(rp);
@@ -94,7 +131,9 @@ function buildBulkRatesTree() {
             ? `${cleanLabel} (${rp.connectionTitle})`
             : cleanLabel;
 
-        const isEvt = (rp.product === 'evt') || (rp.rateSource === 'evt') || (rp.isEvent === true) || /\b(evt|fmp|event|pkg)\b/i.test(cleanLabel);
+        const isEvt = typeof rp.isEvent === 'boolean'
+            ? rp.isEvent
+            : ((rp.policy?.startsWith('event')) || (rp.product === 'evt') || (rp.rateSource === 'evt') || /\b(evt|fmp|event|pkg)\b/i.test(cleanLabel));
         const leaf = { key: `PLAN::${planSig}`, label: leafLabel, planSig };
 
         if (isEvt) {
@@ -134,11 +173,9 @@ function buildBulkRatesTree() {
     if (otaByBucket.size > 0) {
         groups.push({ id: 'grp-ota', label: 'OTA RATES', shortLabel: 'OTA Rates', leaves: [], subgroups: Array.from(otaByBucket.values()) });
     }
-
     if (evtLeaves.length > 0) {
         groups.push({ id: 'grp-evt', label: 'EVENT RATES (EVT)', shortLabel: 'Event Rates', leaves: evtLeaves, subgroups: [] });
     }
-
     if (otherLeaves.length > 0) {
         groups.push({ id: 'grp-other', label: 'OTHER RATES', shortLabel: 'Other Rates', leaves: otherLeaves, subgroups: [] });
     }
@@ -153,93 +190,41 @@ function buildBulkRatesTree() {
     return { groups, allLeafKeys, leafMap };
 }
 
-export function renderBulkRatesDropdown() {
+function syncBulkRatesDropdownState(groups, allLeafKeys, leafMap) {
     const dropdown = document.getElementById('qb-rates-dropdown');
     const labelEl = document.getElementById('qb-rates-label');
     if (!dropdown) return;
 
-    const { groups, allLeafKeys, leafMap } = buildBulkRatesTree();
-    if (!bulkSelectedRateKeys) {
-        bulkSelectedRateKeys = new Set(allLeafKeys);
-    } else {
-        const valid = new Set(allLeafKeys.filter(k => bulkSelectedRateKeys.has(k)));
-        bulkSelectedRateKeys = valid.size > 0 ? valid : new Set(allLeafKeys);
-    }
-
     const totalCount = allLeafKeys.length;
     const selectedCount = bulkSelectedRateKeys.size;
-    const allChecked = selectedCount === totalCount;
 
-    let html = `
-        <label class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-indigo-50 cursor-pointer border-b border-slate-200 mb-1 font-black text-indigo-800 uppercase text-[10px]">
-            <input type="checkbox" id="qb-rate-cb-all" ${allChecked ? 'checked' : ''} onchange="window.toggleBulkRateNode('all', 'ALL', this.checked)" class="row-checkbox">
-            <span>All Rates (${totalCount})</span>
-        </label>
-    `;
-
-    groups.forEach(g => {
-        const groupLeaves = [...g.leaves, ...g.subgroups.flatMap(sg => sg.leaves)];
-        const gSel = groupLeaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
-        const gChecked = gSel === groupLeaves.length && groupLeaves.length > 0;
-
-        html += `
-            <div class="mt-1">
-                <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 cursor-pointer font-black text-[10px] uppercase text-slate-700">
-                    <input type="checkbox" id="qb-rate-cb-${g.id}" ${gChecked ? 'checked' : ''} onchange="window.toggleBulkRateNode('group', '${g.id}', this.checked)" class="row-checkbox">
-                    <span>${g.label}</span>
-                </label>
-                <div class="pl-3 space-y-0.5 mt-0.5">
-                    ${g.leaves.map(l => `
-                        <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-700">
-                            <input type="checkbox" ${bulkSelectedRateKeys.has(l.key) ? 'checked' : ''} onchange="window.toggleBulkRateNode('leaf', '${l.key.replace(/'/g, "\\'")}', this.checked)" class="row-checkbox">
-                            <span class="truncate">${l.label}</span>
-                        </label>
-                    `).join('')}
-                    ${g.subgroups.map(sg => {
-                        const sgSel = sg.leaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
-                        const sgChecked = sgSel === sg.leaves.length && sg.leaves.length > 0;
-                        return `
-                            <div class="mt-0.5">
-                                <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-100 cursor-pointer font-black text-[10px] uppercase text-slate-700">
-                                    <input type="checkbox" id="qb-rate-cb-${sg.id}" ${sgChecked ? 'checked' : ''} onchange="window.toggleBulkRateNode('subgroup', '${sg.id}', this.checked)" class="row-checkbox">
-                                    <span>${sg.label}</span>
-                                </label>
-                                <div class="pl-4 space-y-0.5">
-                                    ${sg.leaves.map(l => `
-                                        <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-600">
-                                            <input type="checkbox" ${bulkSelectedRateKeys.has(l.key) ? 'checked' : ''} onchange="window.toggleBulkRateNode('leaf', '${l.key.replace(/'/g, "\\'")}', this.checked)" class="row-checkbox">
-                                            <span class="truncate">${l.label}</span>
-                                        </label>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-        `;
+    dropdown.querySelectorAll('input[data-leaf-key]').forEach(cb => {
+        cb.checked = bulkSelectedRateKeys.has(cb.dataset.leafKey);
     });
-
-    dropdown.innerHTML = html;
-
-    const allCb = document.getElementById('qb-rate-cb-all');
-    if (allCb) allCb.indeterminate = selectedCount > 0 && selectedCount < totalCount;
 
     groups.forEach(g => {
         const groupLeaves = [...g.leaves, ...g.subgroups.flatMap(sg => sg.leaves)];
         const gSel = groupLeaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
         const gCb = document.getElementById(`qb-rate-cb-${g.id}`);
-        if (gCb) gCb.indeterminate = gSel > 0 && gSel < groupLeaves.length;
+        if (gCb) {
+            gCb.checked = gSel === groupLeaves.length && groupLeaves.length > 0;
+            gCb.indeterminate = gSel > 0 && gSel < groupLeaves.length;
+        }
 
         g.subgroups.forEach(sg => {
             const sgSel = sg.leaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
             const sgCb = document.getElementById(`qb-rate-cb-${sg.id}`);
-            if (sgCb) sgCb.indeterminate = sgSel > 0 && sgSel < sg.leaves.length;
+            if (sgCb) {
+                sgCb.checked = sgSel === sg.leaves.length && sg.leaves.length > 0;
+                sgCb.indeterminate = sgSel > 0 && sgSel < sg.leaves.length;
+            }
         });
     });
 
     if (labelEl) {
-        if (selectedCount === totalCount) {
+        if (selectedCount === 0) {
+            labelEl.innerText = 'None Selected';
+        } else if (selectedCount === totalCount) {
             labelEl.innerText = 'All Rates';
         } else if (selectedCount === 1) {
             const onlyKey = Array.from(bulkSelectedRateKeys)[0];
@@ -259,6 +244,63 @@ export function renderBulkRatesDropdown() {
     }
 }
 
+export function renderBulkRatesDropdown() {
+    const dropdown = document.getElementById('qb-rates-dropdown');
+    if (!dropdown) return;
+
+    const { groups, allLeafKeys, leafMap } = buildBulkRatesTree();
+    if (!bulkSelectedRateKeys) {
+        bulkSelectedRateKeys = new Set(allLeafKeys);
+    } else {
+        bulkSelectedRateKeys = new Set(allLeafKeys.filter(k => bulkSelectedRateKeys.has(k)));
+    }
+
+    let html = `
+        <div class="flex items-center justify-between gap-2 px-1.5 py-1 rounded bg-slate-100 border-b border-slate-200 mb-1 sticky top-0 z-10">
+            <button type="button" onclick="event.stopPropagation(); window.toggleBulkRateNode('all', 'ALL', true)" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9.5px] cursor-pointer">Select All (${allLeafKeys.length})</button>
+            <button type="button" onclick="event.stopPropagation(); window.toggleBulkRateNode('none', 'NONE', true)" class="px-2 py-0.5 rounded bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 font-black uppercase text-[9.5px] cursor-pointer">Clear All</button>
+        </div>
+    `;
+
+    groups.forEach(g => {
+        html += `
+            <div class="mt-1">
+                <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 cursor-pointer font-black text-[10px] uppercase text-slate-700">
+                    <input type="checkbox" id="qb-rate-cb-${g.id}" onchange="window.toggleBulkRateNode('group', '${g.id}', this.checked)" class="row-checkbox">
+                    <span>${g.label}</span>
+                </label>
+                <div class="pl-3 space-y-0.5 mt-0.5">
+                    ${g.leaves.map(l => `
+                        <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-700">
+                            <input type="checkbox" data-leaf-key="${l.key.replace(/"/g, '&quot;')}" onchange="window.toggleBulkRateNode('leaf', '${l.key.replace(/'/g, "\\'")}', this.checked)" class="row-checkbox">
+                            <span class="truncate">${l.label}</span>
+                        </label>
+                    `).join('')}
+                    ${g.subgroups.map(sg => `
+                        <div class="mt-0.5">
+                            <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-100 cursor-pointer font-black text-[10px] uppercase text-slate-700">
+                                <input type="checkbox" id="qb-rate-cb-${sg.id}" onchange="window.toggleBulkRateNode('subgroup', '${sg.id}', this.checked)" class="row-checkbox">
+                                <span>${sg.label}</span>
+                            </label>
+                            <div class="pl-4 space-y-0.5">
+                                ${sg.leaves.map(l => `
+                                    <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-600">
+                                        <input type="checkbox" data-leaf-key="${l.key.replace(/"/g, '&quot;')}" onchange="window.toggleBulkRateNode('leaf', '${l.key.replace(/'/g, "\\'")}', this.checked)" class="row-checkbox">
+                                        <span class="truncate">${l.label}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    dropdown.innerHTML = html;
+    syncBulkRatesDropdownState(groups, allLeafKeys, leafMap);
+}
+
 export function toggleBulkRatesDropdown(e) {
     if (e) e.stopPropagation();
     const dropdown = document.getElementById('qb-rates-dropdown');
@@ -273,8 +315,14 @@ export function toggleBulkRatesDropdown(e) {
 }
 
 export function toggleBulkRateNode(nodeType, nodeId, checked) {
-    const { groups, allLeafKeys } = buildBulkRatesTree();
+    const { groups, allLeafKeys, leafMap } = buildBulkRatesTree();
     if (!bulkSelectedRateKeys) bulkSelectedRateKeys = new Set(allLeafKeys);
+
+    if (nodeType === 'none') {
+        bulkSelectedRateKeys.clear();
+        syncBulkRatesDropdownState(groups, allLeafKeys, leafMap);
+        return;
+    }
 
     let targetKeys = [];
     if (nodeType === 'all') {
@@ -294,16 +342,12 @@ export function toggleBulkRateNode(nodeType, nodeId, checked) {
         else bulkSelectedRateKeys.delete(k);
     });
 
-    if (bulkSelectedRateKeys.size === 0) {
-        bulkSelectedRateKeys = new Set(allLeafKeys);
-    }
-
-    renderBulkRatesDropdown();
+    syncBulkRatesDropdownState(groups, allLeafKeys, leafMap);
 }
 
 if (typeof document !== 'undefined') {
     document.addEventListener('click', e => {
-        if (!e.target.closest('#qb-rates-wrap')) {
+        if (e.target && e.target.isConnected && !e.target.closest('#qb-rates-wrap')) {
             document.getElementById('qb-rates-dropdown')?.classList.add('hidden');
         }
     });
@@ -466,6 +510,10 @@ function clearRoomRestrictionFields(rmData, rule) {
         delete rmData.ctd;
         delete rmData.stop;
         delete rmData.stopSell;
+        delete rmData.evt_stop;
+        delete rmData.evt_stopSell;
+        delete rmData.dir_stop;
+        delete rmData.dir_stopSell;
         if (rmData.isOverride) { delete rmData.isOverride.cta; delete rmData.isOverride.ctd; delete rmData.isOverride.stop; }
     }
 }
@@ -475,6 +523,12 @@ export function applyBulkGrid(isClear = false) {
     const e = document.getElementById('qb-end')?.value;
     if (!s || !e) return customAlert("Validation Error", "Please choose a valid Start and End date range.");
     if (s > e) return customAlert("Validation Error", "End date must be on or after Start date.");
+
+    const { allLeafKeys, leafMap } = buildBulkRatesTree();
+    if (!bulkSelectedRateKeys) bulkSelectedRateKeys = new Set(allLeafKeys);
+    if (!isClear && bulkSelectedRateKeys.size === 0) {
+        return customAlert("No Rates Selected", "Select at least one rate plan in the Rates dropdown before applying.");
+    }
 
     window.masterPricing = window.masterPricing || { timeline: {}, relationships: [] };
     window.masterPricing.timeline = window.masterPricing.timeline || {};
@@ -486,9 +540,6 @@ export function applyBulkGrid(isClear = false) {
     const sU = parseYMD(s);
     const eU = parseYMD(e);
     const rows = document.querySelectorAll('#qb-grid-body tr');
-
-    const { allLeafKeys, leafMap } = buildBulkRatesTree();
-    if (!bulkSelectedRateKeys) bulkSelectedRateKeys = new Set(allLeafKeys);
     const isAllRatesSelected = bulkSelectedRateKeys.size === allLeafKeys.length;
 
     const selectedPlanSigs = new Set();
@@ -554,7 +605,6 @@ export function applyBulkGrid(isClear = false) {
         }
 
         if (isAllRatesSelected) {
-            // Clear stale per-plan overrides for the updated fields so every OTA plan inherits the room's master value cleanly
             if (dObj.otaOverrides) {
                 (window.channexRateMap || []).forEach(rp => {
                     const mappedCat = findCanonicalRoom(rp.pmsCategory) || rp.pmsCategory;
@@ -667,7 +717,6 @@ export function applyBulkGrid(isClear = false) {
                         dObj['GLOBAL'].isOverride.ctd = true;
                         dObj['GLOBAL'].isOverride.stop = true;
                     }
-                    // Clear stale room-level overrides for the modified fields so every room inherits GLOBAL
                     (window.roomTypes || []).forEach(rt => clearRoomRestrictionFields(dObj[rt], globalRule));
                 } else {
                     (window.roomTypes || []).forEach(rt => applyRestrictionPayload(dObj, dateStr, rt, globalRule));
@@ -693,6 +742,10 @@ export function applyBulkGrid(isClear = false) {
                     delete dObj[targetRm].ctd;
                     delete dObj[targetRm].stop;
                     delete dObj[targetRm].stopSell;
+                    delete dObj[targetRm].evt_stop;
+                    delete dObj[targetRm].evt_stopSell;
+                    delete dObj[targetRm].dir_stop;
+                    delete dObj[targetRm].dir_stopSell;
                     dObj[targetRm].isOverride = {};
                     window.dirtyCellKeys.add(`${dateStr}|${targetRm}`);
                     window.justSyncedCellKeys.delete(`${dateStr}|${targetRm}`);
@@ -709,7 +762,6 @@ export function applyBulkGrid(isClear = false) {
                     rData.isOverride.std = true;
                     window.dirtyCellKeys.add(`${dateStr}|${rt}`);
                     window.justSyncedCellKeys.delete(`${dateStr}|${rt}`);
-                    // Only ripple when Scope is 'Anchors'; in 'All Rooms' mode edit ONLY the specific room
                     if (bulkScopeMode === 'anchors') {
                         rippleDay(dateStr, rt, true);
                     }
