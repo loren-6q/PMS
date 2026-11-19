@@ -245,10 +245,10 @@ export function mountNav() {
     const rightSlot = document.getElementById('nav-right-slot');
 
     const header = document.createElement('header');
-    header.className = "bg-white px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex items-center justify-between gap-1.5 shrink-0 z-50 unselectable w-full";
+    header.className = "bg-white px-2 py-1 sm:py-1.5 rounded-none sm:rounded-lg shadow-xs border-b sm:border border-slate-200 mb-1 flex flex-wrap md:flex-nowrap items-center justify-between gap-1.5 shrink-0 z-50 unselectable w-full";
 
     const leftDiv = document.createElement('div');
-    leftDiv.className = "flex items-center gap-2 shrink-0 min-w-0";
+    leftDiv.className = "flex items-center gap-2 shrink-0 min-w-0 order-1";
     leftDiv.innerHTML = `
         <div class="relative min-w-0">
             <button type="button" onclick="window.togglePropertyPicker()" data-tip="nav.switchProp" class="flex items-center hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-none p-0">
@@ -265,10 +265,13 @@ export function mountNav() {
     `;
     header.appendChild(leftDiv);
 
-    if (centerSlot) header.appendChild(centerSlot);
+    if (centerSlot) {
+        centerSlot.classList.add('order-3', 'md:order-2', 'w-full', 'md:w-auto', 'justify-between', 'md:justify-start', 'border-t', 'border-slate-100', 'md:border-0', 'pt-1', 'md:pt-0');
+        header.appendChild(centerSlot);
+    }
 
     const rightWrapper = document.createElement('div');
-    rightWrapper.className = "flex items-center gap-1 sm:gap-1.5 shrink-0 ml-auto";
+    rightWrapper.className = "flex flex-wrap md:flex-nowrap items-center justify-end gap-1 sm:gap-1.5 ml-auto order-2 md:order-3 min-w-0";
 
     const navLinks = document.createElement('nav');
     navLinks.className = "flex items-center gap-0.5";
