@@ -24,8 +24,8 @@ export const TOOLTIPS = Object.freeze({
     "cm.restrictionPill": "Click to cycle restriction status:\n• Open: Bookable\n• CTA: Closed to Arrival\n• CTD: Closed to Departure\n• CTB: Closed to Both Arrival & Departure\n• STOP: Stop Sell (completely closed)",
 
     // --- Setup Step 3 & Ghost Rooms ---
-    "setup.ghostRoom": "Ghost Room (Mirror Room Type in Channex):\nCreates a mirror FMP room type in Channex linked to your existing PMS room category—without adding a duplicate room to your PMS grid.\n• Shares exact physical availability with the real room.\n• Receives Event (FMP) prices & pyramid restrictions.\n• Map ONLY to Hostelworld's duplicate FMP listing (since Hostelworld does not support custom Event rate plans).",
-    "setup.derivedLos": "Derived Weekly / Monthly Rate Plan:\nInherits Price (-15% / -25%), Stop Sell, CTA, CTD, and Max Stay from the parent plan in Channex, while enforcing a fixed 7-night or 28-night Min Stay."
+    "setup.ghostRoom": "Ghost Room (Mirror Room Type in Channex):\nCreates a secondary mirror room type in Channex linked to an existing PMS room category—without adding extra rows to your PMS calendar.\n• Shares live physical availability with the primary room category.\n• Lets you map separate OTA listings that require isolated pricing or stay restrictions.",
+    "setup.derivedLos": "Derived Length-of-Stay Rate Plan:\nInherits Price (with a % discount), Stop Sell, CTA, CTD, and Max Stay from a parent plan in Channex, while enforcing its own fixed Min Stay (e.g. 7 or 28 nights)."
 });
 
 export function getTip(key) {
@@ -47,12 +47,18 @@ function initGlobalTooltips() {
         return el;
     };
 
-    document.addEventListener('mouseover', (e) => {
-        const host = e.target?.closest?.('[data-tip]');
+   document.addEventListener('mouseover', (e) => {
+        const host = e.target?.closest?.('[data-tip], [title]');
         if (!host) return;
+        if (host.hasAttribute('title')) {
+            const nativeTitle = host.getAttribute('title');
+            if (nativeTitle && !host.getAttribute('data-tip')) {
+                host.setAttribute('data-tip', nativeTitle);
+            }
+            host.removeAttribute('title');
+        }
         const text = getTip(host.getAttribute('data-tip'));
         if (!text) return;
-
         const tt = getTooltipEl();
         tt.innerText = text;
         tt.classList.remove('hidden');
