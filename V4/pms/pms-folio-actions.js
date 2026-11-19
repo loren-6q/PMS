@@ -45,7 +45,15 @@ export const saveBooking = async (keepOpen = false) => {
 
         const bId = $('booking-id')?.value.trim() || '';
         const curProp = getPropId();
-        const linkCodeVal = $('link-code')?.value.trim().toUpperCase() || '';
+        const rawRooms = Array.from($$('.assigned-room-select') || []).map(sel => sel.value.trim());
+        const rL = rawRooms.length > 0 ? rawRooms : [""];
+        const assignedRooms = rL.filter(Boolean);
+        const lastNameVal = $('last-name')?.value.trim().toUpperCase() || '';
+        const rawLinkCode = $('link-code')?.value.trim().toUpperCase() || '';
+        const linkCodeVal = rawLinkCode || ((rL.length > 1 || assignedRooms.length > 1) ? (lastNameVal || bId.toUpperCase() || id.toUpperCase()) : '');
+        if (linkCodeVal && $('link-code') && !$('link-code').value) {
+            $('link-code').value = linkCodeVal;
+        }
 
         if (bId) {
             const dupe = getStaff().find(s => {
@@ -65,10 +73,6 @@ export const saveBooking = async (keepOpen = false) => {
                 return;
             }
         }
-
-        const rawRooms = Array.from($$('.assigned-room-select') || []).map(sel => sel.value.trim());
-        const rL = rawRooms.length > 0 ? rawRooms : [""];
-        const assignedRooms = rL.filter(Boolean);
         const rawStat = $('guest-status-hidden')?.value || 'future';
         const stat = rawStat === 'noshow' ? 'no-show' : rawStat;
 
