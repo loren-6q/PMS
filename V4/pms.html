@@ -24,7 +24,8 @@
             });
         }, true);
     </script>
-    <!-- SINGLE MODULAR ENTRY POINT -->
+   <!-- SINGLE MODULAR ENTRY POINT -->
+    <script src="./core/tooltips.js" type="module"></script>
     <script src="./pms/pms-init.js" type="module"></script>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -66,8 +67,8 @@
 
             <!-- Right Slot: PMS Search & Quick Actions -->
             <div id="nav-right-slot" class="flex items-center gap-1">
-                <div id="search-container" class="hidden sm:flex flex-col relative shrink-0 w-24 sm:w-28">
-                    <div class="relative w-full">
+                <div id="search-container" data-tip="pms.search" class="flex flex-col relative shrink-0 w-20 sm:w-28">
+                     <div class="relative w-full">
                         <i data-lucide="search" class="absolute left-1.5 top-[5px] text-slate-400 !w-[11px] !h-[11px]"></i>
                         <input type="text" id="guest-search" placeholder="FIND..." oninput="window.handleSearch(this.value)" class="pl-5 pr-5 py-[3px] w-full bg-white border border-slate-300 rounded font-black text-[10px] uppercase outline-none focus:ring-1 focus:ring-blue-500">
                         <button type="button" onclick="window.clearSearchAndClose()" class="absolute right-1 top-[5px] text-slate-400 hover:text-slate-600 cursor-pointer"><i data-lucide="x" class="!w-3 !h-3"></i></button>
