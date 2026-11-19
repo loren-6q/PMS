@@ -5,12 +5,12 @@
 
 export const TOOLTIPS = Object.freeze({
     // --- Channel Manager Toolbar ---
-    "cm.eventsToggle": "Master Event Pricing Switch (ON/OFF).\n• ON: Enables Event (FMP) rate rows, Event Curve Tuner, and pushes Event pricing to mapped Event rate plans.\n• OFF: Treats all dates as standard non-event days.",
+    "cm.eventsToggle": "Master Event Pricing Switch (ON/OFF).\n• ON: Enables Event package rows, Event Curve Tuner, and pushes Event pricing to mapped Event rate plans.\n• OFF: Treats all dates as standard non-event days.",
     "cm.editMode": "Ripple vs Override Mode:\n• RIPPLE MODE: Editing an Anchor room automatically recalculates all linked rooms.\n• OVERRIDE MODE: Pins only the edited cell without rippling to linked rooms.",
     "cm.saveSync": "Saves changes to Firestore and pushes only modified dates/rooms to Channex (incremental delta sync).",
     "cm.fullSync": "Saves changes to Firestore and pushes a full 500-day availability, rate, and restriction refresh to Channex.",
     "cm.roomsFilter": "Filter which room categories are visible on the grid:\n• Anchors: Master driver rooms only\n• All / Dorms / Privates: Filter by room class",
-    "cm.ratesFilter": "Toggle which rate rows are displayed:\n• DEF: Master Default Non-Ref & Refundable\n• Direct: Direct Website (WEB) rates\n• Event: Event / FMP package rows\n• LOS: Weekly / Monthly length-of-stay plans\n• OTA: Channel-specific plans (BDC, HWL, AGO, etc.)\n• Other: Custom user-defined plans",
+    "cm.ratesFilter": "Toggle which rate rows are displayed:\n• DEF: Master Default Non-Ref & Refundable\n• Direct: Direct Website (WEB) rates\n• Event: Event / package rows\n• LOS: Weekly / Monthly length-of-stay plans\n• OTA: Channel-specific plans (BDC, HWL, AGO, etc.)\n• Other: Custom user-defined plans",
     "cm.viewFilter": "Customize cell density by toggling individual data layers:\n• Availability (AVL)\n• Price\n• Min / Max Stay\n• Restrictions (CTA / CTD / STOP)",
     "cm.channelPreview": "Filter OTA rate rows to preview a single channel's calculated rates and restrictions.",
     "cm.gaps": "Highlights cells with missing prices or incomplete setup so you never leave unpriced dates open.",
@@ -25,7 +25,12 @@ export const TOOLTIPS = Object.freeze({
 
     // --- Setup Step 3 & Ghost Rooms ---
     "setup.ghostRoom": "Ghost Room (Mirror Room Type in Channex):\nCreates a secondary mirror room type in Channex linked to an existing PMS room category—without adding extra rows to your PMS calendar.\n• Shares live physical availability with the primary room category.\n• Lets you map separate OTA listings that require isolated pricing or stay restrictions.",
-    "setup.derivedLos": "Derived Length-of-Stay Rate Plan:\nInherits Price (with a % discount), Stop Sell, CTA, CTD, and Max Stay from a parent plan in Channex, while enforcing its own fixed Min Stay (e.g. 7 or 28 nights)."
+    "setup.derivedLos": "Derived Length-of-Stay Rate Plan:\nInherits Price (with a % discount), Stop Sell, CTA, CTD, and Max Stay from a parent plan in Channex, while enforcing its own fixed Min Stay (e.g. 7 or 28 nights).",
+
+    // --- PMS Front Desk ---
+    "pms.search": "Search guests by name, room/bed ID, booking ID, or link code. Press the orange match badge to jump directly to the reservation bar.",
+    "pms.extract": "Paste raw reservation confirmation text from any OTA to auto-parse guest details, dates, pricing, and room assignment.",
+    "pms.linkCode": "Reservations sharing the same Link Code are visually linked on the tape chart and show a quick-jump itinerary bar inside the folio modal."
 });
 
 export function getTip(key) {
@@ -47,7 +52,7 @@ function initGlobalTooltips() {
         return el;
     };
 
-   document.addEventListener('mouseover', (e) => {
+    document.addEventListener('mouseover', (e) => {
         const host = e.target?.closest?.('[data-tip], [title]');
         if (!host) return;
         if (host.hasAttribute('title')) {
@@ -59,6 +64,7 @@ function initGlobalTooltips() {
         }
         const text = getTip(host.getAttribute('data-tip'));
         if (!text) return;
+
         const tt = getTooltipEl();
         tt.innerText = text;
         tt.classList.remove('hidden');
