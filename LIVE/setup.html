@@ -112,6 +112,10 @@
                         <label class="label-base">Phone / WhatsApp</label>
                         <input type="text" id="prop-phone" placeholder="Phone" class="table-input font-medium">
                     </div>
+                     <div>
+                     <label class="label-base">Admin Password</label>
+                     <input type="text" id="prop-admin-password" placeholder="Default: admin123" class="table-input font-mono font-bold">
+                 </div>
                 </div>
             </div>
 
@@ -818,6 +822,22 @@
                     Select your Step 2 categories to create as official <strong>Room Types</strong> in Channex. Total units and occupancy are automatically compiled from your bed architecture rules.
                 </p>
 
+                <div class="p-2.5 rounded-lg bg-indigo-50/70 border border-indigo-200 space-y-1.5" data-tip="setup.ghostRoom">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <label class="flex items-center gap-1.5 font-black uppercase text-[10.5px] text-indigo-950 cursor-pointer">
+                            <input type="checkbox" id="crp-ghost-mode" onchange="window.toggleGhostRoomMode(this.checked)" class="row-checkbox">
+                            <span>Make Ghost Room (Mirror Channex Room Type)</span>
+                        </label>
+                        <div id="crp-ghost-prefix-wrap" class="hidden flex items-center gap-1.5">
+                            <span class="text-[9.5px] font-black uppercase text-indigo-800">Title Prefix:</span>
+                            <input type="text" id="crp-ghost-prefix" value="FMP " placeholder="e.g. FMP " class="table-input !w-24 font-black text-indigo-900 bg-white">
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-600 font-semibold leading-snug">
+                        Creates a secondary mirror Room Type in Channex linked to your existing PMS room category—sharing live availability without adding extra rows to your PMS calendar.
+                    </p>
+                </div>
+
                 <div>
                     <div class="flex items-center justify-between mb-1.5">
                         <label class="label-base mb-0 font-black text-slate-800">Select Categories to Push:</label>
@@ -991,6 +1011,7 @@
     </div>
 
     <!-- ENTRY POINT -->
+    <script type="module" src="core/tooltips.js"></script>
     <script type="module" src="core/nav.js"></script>
     <script type="module" src="setup/setup-wizard.js"></script>
 </body>

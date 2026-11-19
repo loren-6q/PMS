@@ -3,25 +3,23 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
+import { db, appId } from '../core/config.js';
+import { doc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { STATUS_CYCLE, getStatusObj } from '../core/occupancy.js';
+import { getLocalYMD } from '../core/dates.js';
 import { toCanonicalPropId } from '../core/properties.js';
+import { getDue, getPaid } from '../core/money.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
 // --- State, Accessor & Config Resolvers ---
-const getStaffList = () => window.staff || (window.getStaff ? window.getStaff() : []);
-const getHotelRoomsList = () => window.hotelRooms || (window.getHotelRooms ? window.getHotelRooms() : []);
+const getStaffList = () => window.staff || [];
+const getHotelRoomsList = () => window.hotelRooms || [];
 const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
-
-const getSearchVal = () => window.getSearchTerm ? window.getSearchTerm() : (window.searchTerm || '');
-const getRoomsHelper = () => window.getRooms || (s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : [])));
-const getLocalYMD = () => window.getLocalYMD || (d => {
-    if (!d) d = new Date();
-    const o = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
-    return o.toISOString().split('T')[0];
-});
+const getSearchVal = () => window.searchTerm || '';
+const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
 // --- Table Sorting State Variables ---
 let dbSortKey = "checkIn";
@@ -31,9 +29,7 @@ let dbSortAsc = false;
 // 1. MULTI-SELECT DROPDOWN FILTER CONTROLLERS
 // --------------------------------------------------------------------------
 
-// --- Populate Filter Dropdowns (Status & Channel Source) ---
 export const initDbFilterDropdowns = () => {
-    // 1. Status Dropdown
     const statusDrop = $('db-status-dropdown');
     if (statusDrop && statusDrop.children.length === 0) {
         statusDrop.innerHTML = STATUS_CYCLE.map(s => `
@@ -45,7 +41,6 @@ export const initDbFilterDropdowns = () => {
         `).join('');
     }
 
-    // 2. Source Dropdown
     const sourceDrop = $('db-source-dropdown');
     if (sourceDrop && sourceDrop.children.length === 0) {
         const sources = ['direct', 'booking.com', 'agoda', 'hostelworld', 'airbnb', 'expedia', 'ctrip', 'walk-in', 'other'];
@@ -58,7 +53,6 @@ export const initDbFilterDropdowns = () => {
     }
 };
 
-// --- Floating Multi-Select Dropdown Toggle & Positioner ---
 export const toggleMultiSelect = (id, btn) => {
     if (window.event) window.event.stopPropagation();
     initDbFilterDropdowns();
@@ -84,7 +78,6 @@ export const toggleMultiSelect = (id, btn) => {
     }
 };
 
-// --- Multi-Select Trigger Button Label Updater ---
 export const updateMultiLabel = (dId, lId, def) => {
     const c = $$(`#${dId} input[type="checkbox"]:checked`);
     const l = $(lId);
@@ -93,10 +86,8 @@ export const updateMultiLabel = (dId, lId, def) => {
     }
 };
 
-// --- Get Array of Checked Values from Multi-Select ---
 export const getMultiValues = id => Array.from($(id)?.querySelectorAll('input[type="checkbox"]:checked') || []).map(cb => cb.value);
 
-// --- Global Click Listener to Dismiss Floating Dropdowns ---
 document.addEventListener('click', e => {
     if (!e.target.closest('.multi-select-container') && !e.target.closest('.multi-select-dropdown')) {
         $$('.multi-select-dropdown').forEach(d => {
@@ -110,41 +101,39 @@ document.addEventListener('click', e => {
 // 2. DATE FILTERING, PRESETS & FORMATTERS
 // --------------------------------------------------------------------------
 
-// --- Quick Date Range Presets (Today, Tomorrow, Weeks, Months) ---
 export const applyDbPreset = val => {
     const today = new Date();
-    const ymdFn = getLocalYMD();
     let s = '', e = '';
     if (val === 'today') {
-        s = ymdFn(today); e = s;
+        s = getLocalYMD(today); e = s;
     } else if (val === 'tomorrow') {
         const tmrw = new Date(today);
         tmrw.setDate(today.getDate() + 1);
-        s = ymdFn(tmrw); e = s;
+        s = getLocalYMD(tmrw); e = s;
     } else if (val === 'this_week') {
         const t = new Date(today);
         const day = t.getDay();
         const diff = t.getDate() - day + (day === 0 ? -6 : 1);
         const start = new Date(t.setDate(diff));
-        s = ymdFn(start);
+        s = getLocalYMD(start);
         const end = new Date(start);
         end.setDate(start.getDate() + 6);
-        e = ymdFn(end);
+        e = getLocalYMD(end);
     } else if (val === 'next_week') {
         const t = new Date(today);
         const day = t.getDay();
         const diff = t.getDate() - day + (day === 0 ? -6 : 1) + 7;
         const start = new Date(t.setDate(diff));
-        s = ymdFn(start);
+        s = getLocalYMD(start);
         const end = new Date(start);
         end.setDate(start.getDate() + 6);
-        e = ymdFn(end);
+        e = getLocalYMD(end);
     } else if (val === 'this_month') {
-        s = ymdFn(new Date(today.getFullYear(), today.getMonth(), 1));
-        e = ymdFn(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+        s = getLocalYMD(new Date(today.getFullYear(), today.getMonth(), 1));
+        e = getLocalYMD(new Date(today.getFullYear(), today.getMonth() + 1, 0));
     } else if (val === 'next_month') {
-        s = ymdFn(new Date(today.getFullYear(), today.getMonth() + 1, 1));
-        e = ymdFn(new Date(today.getFullYear(), today.getMonth() + 2, 0));
+        s = getLocalYMD(new Date(today.getFullYear(), today.getMonth() + 1, 1));
+        e = getLocalYMD(new Date(today.getFullYear(), today.getMonth() + 2, 0));
     }
 
     const startEl = $('db-filter-start');
@@ -154,12 +143,11 @@ export const applyDbPreset = val => {
     renderDatabase();
 };
 
-// --- Format Check-in / Check-out as Compact Date String ---
 export const formatDbDate = (dIn, dOut) => {
     if (!dIn || !dOut) return '';
-    let iD = new Date(dIn + "T12:00:00Z"), oD = new Date(dOut + "T12:00:00Z");
-    let iM = iD.getUTCMonth() + 1, iDay = iD.getUTCDate();
-    let oM = oD.getUTCMonth() + 1, oDay = oD.getUTCDate();
+    const iD = new Date(dIn + "T12:00:00Z"), oD = new Date(dOut + "T12:00:00Z");
+    const iM = iD.getUTCMonth() + 1, iDay = iD.getUTCDate();
+    const oM = oD.getUTCMonth() + 1, oDay = oD.getUTCDate();
     return iM === oM ? `${iM}/${iDay}-${oDay}` : `${iM}/${iDay}-${oM}/${oDay}`;
 };
 
@@ -167,7 +155,6 @@ export const formatDbDate = (dIn, dOut) => {
 // 3. RECORD FILTERING & MULTI-COLUMN SORTING ENGINE
 // --------------------------------------------------------------------------
 
-// --- Core Database Multi-Criteria Filter & Sort Engine ---
 export const getFilteredBookings = (v = 'db', sKey = dbSortKey, sAsc = dbSortAsc) => {
     const nF = ($(`${v}-filter-name`)?.value || '').trim().toUpperCase();
     const sF = getMultiValues(`${v}-source-dropdown`) || [];
@@ -183,11 +170,9 @@ export const getFilteredBookings = (v = 'db', sKey = dbSortKey, sAsc = dbSortAsc
     const curProp = getPropId();
     const hotelRooms = getHotelRoomsList();
     const searchTerm = getSearchVal();
-    const getRooms = getRoomsHelper();
 
     return staffList.filter(s => {
-        const sProp = window.toCanonicalPropId ? window.toCanonicalPropId(s.property) : s.property;
-        if (sProp !== curProp) return false;
+        if (toCanonicalPropId(s.property) !== curProp) return false;
 
         const cleanStatus = String(s.status || 'future').toLowerCase().trim();
         if (statF.length > 0 && !statF.includes(cleanStatus)) return false;
@@ -200,9 +185,10 @@ export const getFilteredBookings = (v = 'db', sKey = dbSortKey, sAsc = dbSortAsc
         if (dS && s.checkOut <= dS) return false;
         if (dE && s.checkIn >= dE) return false;
 
-        const due = window.getDue ? window.getDue(s) : 0;
-        if (dF === 'zero' && due > 0) return false;
-        if (dF === 'owes' && due <= 0) return false;
+        const due = getDue(s);
+        if (dF === 'zero' && Math.abs(due) > 0.01) return false;
+        if (dF === 'owes' && due <= 0.01) return false;
+        if (dF === 'overpaid' && due >= -0.01) return false;
 
         const tP = Number(s.totalPrice || 0);
         if (minF && tP < Number(minF)) return false;
@@ -234,12 +220,12 @@ export const getFilteredBookings = (v = 'db', sKey = dbSortKey, sAsc = dbSortAsc
             vA = Number(vA || 0); vB = Number(vB || 0);
         }
         if (sKey === 'due') {
-            vA = window.getDue ? window.getDue(a) : 0;
-            vB = window.getDue ? window.getDue(b) : 0;
+            vA = getDue(a);
+            vB = getDue(b);
         }
         if (sKey === 'paid') {
-            vA = window.getPaid ? window.getPaid(a) : 0;
-            vB = window.getPaid ? window.getPaid(b) : 0;
+            vA = getPaid(a);
+            vB = getPaid(b);
         }
         if (sKey === 'status') {
             vA = a.status || '';
@@ -249,7 +235,6 @@ export const getFilteredBookings = (v = 'db', sKey = dbSortKey, sAsc = dbSortAsc
     });
 };
 
-// --- Column Header Sorter & View Refresher ---
 export const sortDatabase = k => {
     if (dbSortKey === k) dbSortAsc = !dbSortAsc;
     else {
@@ -263,7 +248,6 @@ export const sortDatabase = k => {
 // 4. DATABASE TABLE RENDERING & BULK ACTIONS
 // --------------------------------------------------------------------------
 
-// --- Render Filtered Database Table View ---
 export const renderDatabase = () => {
     const body = $('database-body');
     if (!body) return;
@@ -271,15 +255,17 @@ export const renderDatabase = () => {
 
     initDbFilterDropdowns();
 
-    const getRooms = getRoomsHelper();
     const records = getFilteredBookings('db', dbSortKey, dbSortAsc);
 
     records.forEach(s => {
-        const due = window.getDue ? window.getDue(s) : 0;
-        const paid = window.getPaid ? window.getPaid(s) : 0;
+        const due = getDue(s);
+        const paid = getPaid(s);
         const asg = getRooms(s).filter(Boolean).join(', ') || '--';
 
         const st = getStatusObj(s.status);
+        const dueCls = due > 0.01
+            ? 'text-red-600'
+            : (due < -0.01 ? 'text-fuchsia-700 bg-fuchsia-50' : '');
 
         const tr = document.createElement('tr');
         tr.className = "border-b hover:bg-slate-50 cursor-pointer";
@@ -293,7 +279,7 @@ export const renderDatabase = () => {
             <td class="p-2 border-r border-slate-200 font-black max-w-[96px] break-words whitespace-normal leading-tight">${asg}</td>
             <td class="p-2 border-r border-slate-200 text-right font-black">฿${Number(s.totalPrice || 0).toFixed(2)}</td>
             <td class="p-2 border-r border-slate-200 text-right font-black text-green-600">฿${paid.toFixed(2)}</td>
-            <td class="p-2 border-r border-slate-200 text-right font-black ${due > 0 ? 'text-red-600' : ''} ${s.badCC ? 'underline decoration-dashed decoration-red-500' : ''}">฿${due.toFixed(2)}</td>
+            <td class="p-2 border-r border-slate-200 text-right font-black ${dueCls} ${s.badCC ? 'underline decoration-dashed decoration-red-500' : ''}">฿${due.toFixed(2)}</td>
             <td class="p-2 text-center">
                 <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-xs select-text ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border: 1px solid ${st.border};">${st.label}</span>
             </td>
@@ -304,7 +290,6 @@ export const renderDatabase = () => {
     if (window.lucide) window.lucide.createIcons();
 };
 
-// --- Bulk Delete Visible Database Records ---
 export const bulkDelete = () => {
     const rows = $$('#database-body tr');
     if (rows.length === 0) return window.showAlert ? window.showAlert("Nothing to delete.") : null;
@@ -312,10 +297,6 @@ export const bulkDelete = () => {
     window.showAlert(`PERMANENTLY DELETE ${rows.length} RECORDS?\n\nThis will wipe all visible bookings!`, true, async () => {
         const loader = $('boot-loader');
         if (loader) loader.style.display = 'flex';
-
-        const db = window.db;
-        const appId = window.appId || 'hotel-pms-v1';
-        const { doc, deleteDoc } = window.fs || {};
 
         try {
             await Promise.all(Array.from(rows).map(tr => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', tr.dataset.recordId))));

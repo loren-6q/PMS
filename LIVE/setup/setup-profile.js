@@ -3,8 +3,6 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { appId } from '../core/config.js';
-import { getActivePropertyId } from '../core/properties.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { CANONICAL_OTA_LIST, getChannelByCode, getOtaPaymentPair, resolveChannelCode } from '../core/channels.js';
 
@@ -69,16 +67,19 @@ export function normalizePaymentMethods(methods = []) {
 
     methods.forEach(item => {
         if (!item) return;
-        let obj = typeof item === 'string'
+        const obj = typeof item === 'string'
             ? { key: item.trim().toLowerCase(), label: item, type: item.endsWith('-kp') ? 'commission' : 'revenue', active: true }
             : { ...item };
 
         if (!obj.key) return;
-        obj.key = String(obj.key).trim().toLowerCase();
+        obj.key = String(obj.key).trim().toLowerCase().replace(/[\s_]+/g, '-');
 
         if (obj.key === 'qr') {
             obj.key = 'scan';
             obj.label = 'PromptPay / QR Scan';
+        }
+        if (obj.key === 'cc-fee') {
+            obj.key = 'card-kp';
         }
 
         const baseDirect = BASE_DIRECT_PAYMENTS.find(b => b.key === obj.key);
@@ -88,16 +89,15 @@ export function normalizePaymentMethods(methods = []) {
             obj.isBase = true;
             if (baseDirect.channel) obj.channel = baseDirect.channel;
             if (baseDirect.channelName) obj.channelName = baseDirect.channelName;
-        }
-
-        if (!obj.channel && (obj.key.endsWith('-pay') || obj.key.endsWith('-kp'))) {
-            const rawPrefix = obj.key.replace(/-(pay|kp)$/, '');
-            obj.channel = resolveChannelCode(rawPrefix);
-        }
-
-        if (obj.channel && !obj.channelName) {
-            const meta = getChannelByCode(obj.channel);
+        } else if (obj.key.endsWith('-pay') || obj.key.endsWith('-kp')) {
+            const suffix = obj.key.endsWith('-pay') ? '-pay' : '-kp';
+            const rawPrefix = obj.key.slice(0, -suffix.length);
+            const canonCode = resolveChannelCode(rawPrefix);
+            obj.key = `${canonCode.toLowerCase()}${suffix}`;
+            obj.channel = canonCode;
+            const meta = getChannelByCode(canonCode);
             obj.channelName = meta.name;
+            obj.type = suffix === '-kp' ? 'commission' : 'revenue';
         }
 
         if (!seenKeys.has(obj.key)) {
@@ -231,30 +231,51 @@ export function resetLogosToDefault() {
     customAlert("Logos Reset", "Restored active property brand assets.");
 }
 
-export async function handleLogoFileUpload(event, type) {
+export function handleLogoFileUpload(event, type) {
     const file = event.target?.files?.[0];
     if (!file) return;
+    event.target.value = '';
 
-    try {
-        customAlert("Uploading Image...", `Processing ${file.name}...`);
-        const { getStorage, ref, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js");
-        const storage = getStorage();
-        const propId = getActivePropertyId();
-        const fileRef = ref(storage, `artifacts/${appId}/public/branding/${propId}/${type}_${Date.now()}_${file.name}`);
-        
-        await uploadBytes(fileRef, file);
-        const downloadUrl = await getDownloadURL(fileRef);
+    const maxDim = type === 'icon' ? 192 : 512;
+    const reader = new FileReader();
 
-        const inputMap = { primary: 'prop-logo-url', banner: 'prop-banner-url', icon: 'prop-icon-url' };
-        const targetInput = document.getElementById(inputMap[type]);
-        if (targetInput) targetInput.value = downloadUrl;
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                    height = Math.round((height * maxDim) / width);
+                    width = maxDim;
+                } else {
+                    width = Math.round((width * maxDim) / height);
+                    height = maxDim;
+                }
+            }
 
-        updateLogoPreview(type, downloadUrl);
-        customAlert("Upload Complete", "Brand asset uploaded and linked.");
-    } catch (err) {
-        console.error("Upload error:", err);
-        customAlert("Upload Failed", err.message);
-    }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+            let dataUrl = canvas.toDataURL('image/png');
+            if (dataUrl.length > 140000) {
+                dataUrl = canvas.toDataURL('image/webp', 0.85);
+            }
+
+            const inputMap = { primary: 'prop-logo-url', banner: 'prop-banner-url', icon: 'prop-icon-url' };
+            const targetInput = document.getElementById(inputMap[type]);
+            if (targetInput) targetInput.value = dataUrl;
+
+            updateLogoPreview(type, dataUrl);
+            customAlert("Asset Ready", "Image optimized and linked. Click SAVE to apply.");
+        };
+        img.onerror = () => customAlert("Upload Failed", "Could not read image file.");
+        img.src = e.target.result;
+    };
+
+    reader.onerror = () => customAlert("Upload Failed", "Could not load file.");
+    reader.readAsDataURL(file);
 }
 
 export function renderPaymentMethodsTable(payments = null) {
@@ -265,7 +286,6 @@ export function renderPaymentMethodsTable(payments = null) {
 
     window.paymentMethods = normalizePaymentMethods(payments || window.paymentMethods || [...DEFAULT_PAYMENT_METHODS]);
 
-    // Dynamic Quick Toggle Pills: Core OTAs + Any currently added OTAs
     if (togglesContainer) {
         const configuredCodes = Array.from(new Set(
             window.paymentMethods
@@ -298,7 +318,6 @@ export function renderPaymentMethodsTable(payments = null) {
     const activeMethods = window.paymentMethods.filter(m => m.active !== false);
     const archivedMethods = window.paymentMethods.filter(m => m.active === false);
 
-    // Active Rows
     activeMethods.forEach((m) => {
         const actualIdx = window.paymentMethods.findIndex(x => x.key === m.key);
         const tr = document.createElement('tr');
@@ -317,7 +336,7 @@ export function renderPaymentMethodsTable(payments = null) {
                 </select>
             </td>
             <td class="text-center py-1 px-2">
-                ${m.isBase 
+                ${m.isBase
                     ? `<span class="text-[9px] text-slate-300 font-bold uppercase select-none">CORE</span>`
                     : `<button type="button" onclick="window.archivePaymentMethodRow('${m.key}')" class="text-slate-400 hover:text-amber-600 cursor-pointer text-[10px] font-bold" title="Deactivate / Archive Channel">
                             Archive
@@ -328,7 +347,6 @@ export function renderPaymentMethodsTable(payments = null) {
         tbody.appendChild(tr);
     });
 
-    // Archived Tray
     if (archivedMethods.length > 0) {
         const archHeader = document.createElement('tr');
         archHeader.className = "bg-slate-100 border-y border-slate-300 text-slate-600 cursor-pointer select-none";
@@ -338,7 +356,7 @@ export function renderPaymentMethodsTable(payments = null) {
                 <div class="flex items-center justify-between">
                     <span class="text-amber-800 flex items-center gap-1.5">
                         <i data-lucide="archive" size="12"></i> Archived / Disconnected Channels (${archivedMethods.length / 2} OTAs)
-                        <span class="text-slate-500 normal-case font-normal">(Preserved for historical booking balance & commission reporting)</span>
+                        <span class="text-slate-500 normal-case font-normal">(Preserved for historical booking balance &amp; commission reporting)</span>
                     </span>
                     <i data-lucide="chevron-down" id="archived-pay-chevron" size="12" class="transition-transform duration-200 rotate-[-90deg]"></i>
                 </div>
@@ -368,7 +386,7 @@ export function renderPaymentMethodsTable(payments = null) {
     }
 }
 
-export function toggleOtaChannel(code, name) {
+export function toggleOtaChannel(code) {
     window.paymentMethods = normalizePaymentMethods(window.paymentMethods || []);
     const canonCode = resolveChannelCode(code);
     const payKey = `${canonCode.toLowerCase()}-pay`;
@@ -430,7 +448,6 @@ export function toggleArchivedPaymentRows() {
     if (ch) ch.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
 }
 
-// IN-APP PICKER MODAL (Replaces prompt())
 export function openAddOtaPaymentModal() {
     const modal = document.getElementById('add-ota-payment-modal');
     const select = document.getElementById('add-ota-payment-select');

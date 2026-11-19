@@ -5,16 +5,16 @@
 
 import { getDayIndex } from './pms-calendar-tape.js';
 import { applyStatusStyle } from '../core/occupancy.js';
+import { parseYMD } from '../core/dates.js';
+import { getDue } from '../core/money.js';
 
 // --- DOM Selector Helpers ---
-const $ = id => document.getElementById(id);
 const $$ = s => document.querySelectorAll(s);
 
 // --------------------------------------------------------------------------
 // 1. RESERVATION BAR SVG ICONS & OCCUPANCY ASSETS
 // --------------------------------------------------------------------------
 
-// --- Reservation Bar Vector Icon Suite ---
 export const SVGS = {
     upFree: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#facc15" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
     upPaid: `<svg viewBox="0 0 24 24" class="w-full h-full" overflow="visible"><path d="M12 2L4 12h5v10h6V12h5z" fill="#4ade80" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
@@ -31,35 +31,36 @@ export const SVGS = {
 
 window.SVGS = SVGS;
 
-// --- Booking Room Accessor Helper ---
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
 // --------------------------------------------------------------------------
 // 2. RESERVATION BAR RENDERING & TOOLTIP ENGINE
 // --------------------------------------------------------------------------
 
-// --- Reservation Timeline Bar DOM Generator ---
 export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) => {
     const eS = getDayIndex(s.checkIn) + 0.3;
     const eE = getDayIndex(s.checkOut) + 0.25;
     if (eS >= dShow || eE <= 0) return null;
-    const due = window.getDue ? window.getDue(s) : 0;
-    const owes = due > 0;
-    let borderCls = 'border border-black/10';
-    if (s.badCC) borderCls = '!border-red-500 !border-dashed !border-[3px]';
-    else if (owes) borderCls = '!border-red-500 !border-[3px]';
+    const due = getDue(s);
+    const owes = due > 0.01;
+    const overpaid = due < -0.01;
+    let bSty = 'border border-black/10';
+    let isA = false;
 
-    let pulseCls = '';
     if (s.status === 'future' || s.status === 'new') {
-        if (s.checkIn === todayStr) pulseCls += ' checkin-today';
-        else if (s.checkIn <= yStr) pulseCls += ' late-checkin';
+        if (s.checkIn === todayStr) { bSty += ' checkin-today'; isA = true; }
+        else if (s.checkIn <= yStr) { bSty += ' late-checkin'; isA = true; }
     } else if (s.status === 'here') {
-        if (s.checkOut === todayStr) pulseCls += ' overdue-checkout-today';
-        else if (s.checkOut <= yStr) pulseCls += ' overdue-checkout-past';
+        if (s.checkOut === todayStr) { bSty += ' overdue-checkout-today'; isA = true; }
+        else if (s.checkOut <= yStr) { bSty += ' overdue-checkout-past'; isA = true; }
     }
 
-    if (s.status === 'new') pulseCls += ' status-new-pulse';
-    const bSty = `${borderCls}${pulseCls}`;
+    if (s.status === 'new') { bSty += ' status-new-pulse'; isA = true; }
+    if (!isA) {
+        if (s.badCC) bSty = '!border-red-500 !border-dashed !border-[3px]';
+        else if (owes) bSty = '!border-red-500 !border-[3px]';
+        else if (overpaid) bSty = '!border-fuchsia-500 !border-[3px]';
+    }
 
     const srcC = {
         'booking.com': { bg: 'bg-[#003580]', text: 'B' },
@@ -86,7 +87,7 @@ export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) =
 
     let bHtml = `<div class="bar-sticky-content gap-0.5">`;
     if (s.linkedId) bHtml += `<div class="w-4 h-4 shrink-0 mr-0.5">${SVGS.link}</div>`;
-    bHtml += `<span class="${s.refundability === 'ref' && window.parseYMD(s.checkIn) - Date.now() > 7 * 86400000 ? 'italic font-black' : 'font-bold'} truncate text-[11px]" style="letter-spacing:-0.3px;">${s.lastName}</span>`;
+    bHtml += `<span class="${s.refundability === 'ref' && parseYMD(s.checkIn) - Date.now() > 7 * 86400000 ? 'italic font-black' : 'font-bold'} truncate text-[11px]" style="letter-spacing:-0.3px;">${s.lastName}</span>`;
     if (s.pax > 1) bHtml += `<span class="text-[8px] opacity-60 leading-none self-start mt-0.5 ml-0.5">x${s.pax}</span>`;
     if (s.upgrade === 'free') bHtml += `<div class="w-3.5 h-4 shrink-0 ml-0.5">${SVGS.upFree}</div>`;
     else if (s.upgrade === 'paid') bHtml += `<div class="w-3.5 h-4 shrink-0 ml-0.5">${SVGS.upPaid}</div>`;
@@ -101,7 +102,7 @@ export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) =
     bHtml += `<div class="ml-1 ${src.bg} text-white w-[15px] h-[15px] text-[13px] font-black flex items-center justify-center shrink-0 rounded-sm leading-none pb-[1px] pt-[0.5px]">${src.text}</div><div class="w-2 shrink-0"></div></div>`;
     bar.innerHTML = bHtml;
 
-    let tags = [];
+    const tags = [];
     if (s.refundability === 'ref') tags.push('Refundable');
     if (s.upgrade === 'free') tags.push('Free Upgrade');
     if (s.upgrade === 'paid') tags.push('Paid Upgrade');
@@ -112,7 +113,11 @@ export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) =
     if (s.emailSpecial) tags.push('Special Sent');
     if (s.linkedId) tags.push(`Linked: ${s.linkedId}`);
 
-    let ttHtml = `<div class="font-black text-[15px] text-blue-300 leading-tight mb-1">${s.firstName || ''} ${s.lastName || ''}</div><div>Total: ฿${Number(s.totalPrice || 0).toFixed(2)} | <span class="${due > 0 ? 'text-red-400' : 'text-green-400'}">Due: ฿${due.toFixed(2)} ${s.badCC ? '(*BAD CC*)' : ''}</span></div><div class="text-slate-300 mt-1">${s.checkIn ? s.checkIn.substr(5) : ''} → ${s.checkOut ? s.checkOut.substr(5) : ''} (${s.pax} PAX)</div><div class="text-slate-300 mt-0.5">Rooms: ${getRooms(s).filter(Boolean).join(', ') || 'Unassigned'}</div>`;
+    const dueLabel = overpaid
+        ? `<span class="text-fuchsia-300 font-black">Overpaid: ฿${Math.abs(due).toFixed(2)}</span>`
+        : `<span class="${owes ? 'text-red-400' : 'text-green-400'}">Due: ฿${due.toFixed(2)} ${s.badCC ? '(*BAD CC*)' : ''}</span>`;
+
+    let ttHtml = `<div class="font-black text-[15px] text-blue-300 leading-tight mb-1">${s.firstName || ''} ${s.lastName || ''}</div><div>Total: ฿${Number(s.totalPrice || 0).toFixed(2)} | ${dueLabel}</div><div class="text-slate-300 mt-1">${s.checkIn ? s.checkIn.substr(5) : ''} → ${s.checkOut ? s.checkOut.substr(5) : ''} (${s.pax} PAX)</div><div class="text-slate-300 mt-0.5">Rooms: ${getRooms(s).filter(Boolean).join(', ') || 'Unassigned'}</div>`;
     if (s.bookedType) ttHtml += `<div class="text-slate-300 mt-0.5">Booked: ${s.bookedType}</div>`;
     ttHtml += `<div class="text-slate-300 mt-0.5">Src: ${(s.source || 'other').toUpperCase()}</div>`;
     if (tags.length > 0) ttHtml += `<div class="mt-1 pt-1 border-t border-slate-600 text-yellow-200 text-[10px] uppercase font-bold max-w-[200px] leading-tight">${tags.join(' • ')}</div>`;

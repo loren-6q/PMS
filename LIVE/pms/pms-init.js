@@ -5,7 +5,9 @@
 
 import { mountNav } from '../core/nav.js';
 import { parseYMD, getLocalYMD } from '../core/dates.js';
-import { toCanonicalPropId } from '../core/properties.js';
+import { toCanonicalPropId, toDisplayPropKey } from '../core/properties.js';
+import { getPaid, getDue } from '../core/money.js';
+import { normalizePaymentMethods } from '../setup/setup-profile.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -61,6 +63,10 @@ viewStart.setHours(12, 0, 0, 0);
 export let hotelRooms = [], roomTypes = [], fmpDates = [];
 window.activeExtraCharges = [];
 window.viewStart = viewStart;
+window.masterPricing = { timeline: {}, relationships: [] };
+window.pricingRules = {};
+
+let unsubsMasterPricing = null;
 
 // --------------------------------------------------------------------------
 // 2. UI, FAVICON & ROOM TOKENIZATION HELPERS
@@ -101,6 +107,10 @@ export const dbToUiRoom = rid => {
     const exactMatch = hotelRooms.find(r => r.id === nid || r.id === rid || String(r.id).toUpperCase() === nid);
     if (exactMatch) return exactMatch.id;
 
+    const cleanRid = nid.replace(/[№#\-_:\s]/g, '');
+    const cleanMatch = hotelRooms.find(r => String(r.id).toUpperCase().replace(/[№#\-_:\s]/g, '') === cleanRid);
+    if (cleanMatch) return cleanMatch.id;
+
     const targetTokens = tokenizeRoom(rid);
     if (targetTokens.length > 0) {
         const tokenMatch = hotelRooms.find(r => tokensMatch(tokenizeRoom(r.id), targetTokens));
@@ -128,9 +138,8 @@ window.dbToUiRoom = dbToUiRoom;
 window.getCurrentPropertyId = () => currentPropertyId;
 window.getHotelRooms = () => hotelRooms;
 window.getStaff = () => staff;
-
-window.getPaid = s => (s.payments || []).reduce((sum, p) => sum + Number(p.amt), 0);
-window.getDue = s => Number((Number(s.totalPrice || 0) - window.getPaid(s)).toFixed(2));
+window.getPaid = getPaid;
+window.getDue = getDue;
 
 window.closeGuestModal = () => {
     const m = $('guest-modal');
@@ -158,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.generateAuditDiff = (oldRec, newRec) => {
     if (!oldRec) return "Created new booking.";
-    let changes = [];
+    const changes = [];
     if (oldRec.status !== newRec.status) changes.push(`Status: ${oldRec.status} -> ${newRec.status}`);
     if (oldRec.checkIn !== newRec.checkIn) changes.push(`In: ${oldRec.checkIn} -> ${newRec.checkIn}`);
     if (oldRec.checkOut !== newRec.checkOut) changes.push(`Out: ${oldRec.checkOut} -> ${newRec.checkOut}`);
@@ -192,13 +201,13 @@ window.syncPropertyUrl = propId => {
     window.updateNavLinks(shortKey);
 };
 
-window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypes = null) => {
+window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypesArg = null) => {
     if (window.channexConfig && window.channexConfig.apiKey) {
         try {
             const syncFn = httpsCallable(functions, 'channexDeltaSync');
             const cIn = overrideIn || $('check-in')?.value || getLocalYMD(new Date());
             const cOut = overrideOut || $('check-out')?.value || cIn;
-            let rTypes = roomTypes;
+            let rTypes = roomTypesArg;
             if (!rTypes || rTypes.length === 0) {
                 const rL = Array.from($$('.assigned-room-select') || []).map(sel => sel.value).filter(Boolean);
                 const bType = $('booked-type')?.value;
@@ -216,7 +225,61 @@ window.triggerAutoSync = async (overrideIn = null, overrideOut = null, roomTypes
 };
 
 // --------------------------------------------------------------------------
-// 4. PROPERTY CONFIGURATION & SWITCHER CONTROLLERS
+// 4. REALTIME CM MASTER PRICING SUBSCRIPTION
+// --------------------------------------------------------------------------
+
+function subscribeToMasterPricing(propId) {
+    if (unsubsMasterPricing) {
+        unsubsMasterPricing();
+        unsubsMasterPricing = null;
+    }
+    if (!propId) return;
+
+    const pricingRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`);
+    unsubsMasterPricing = onSnapshot(pricingRef, (pSnap) => {
+        const pData = pSnap.exists() ? pSnap.data() : {};
+        let timeline = pData.timeline || window.masterPricing?.timeline || {};
+        if (typeof timeline === 'string') {
+            try { timeline = JSON.parse(timeline); } catch (e) { timeline = {}; }
+        }
+
+        window.masterPricing = {
+            ...(window.masterPricing || {}),
+            ...pData,
+            timeline: timeline || {}
+        };
+
+        if (pData.pricingRules) {
+            const parsedRules = typeof pData.pricingRules === 'string'
+                ? (() => { try { return JSON.parse(pData.pricingRules); } catch (e) { return {}; } })()
+                : pData.pricingRules;
+            window.pricingRules = { ...(window.pricingRules || {}), ...parsedRules };
+        }
+
+        const todayStr = getLocalYMD(new Date());
+        dailyRates = {};
+        if (typeof window.getCmNightRate === 'function') {
+            (window.roomTypes || []).forEach(rt => {
+                const dirRate = window.getCmNightRate(todayStr, rt, 'DIR_NON_REF');
+                if (dirRate !== null) dailyRates[rt] = dirRate;
+            });
+        }
+        window.dailyRates = dailyRates;
+
+        if ($('dashboard-view')?.style.display === 'flex' && window.renderDashboard) {
+            window.renderDashboard();
+        }
+        const guestModal = $('guest-modal');
+        if (guestModal && (guestModal.classList.contains('active') || guestModal.style.display === 'flex') && window.calcExtension) {
+            window.calcExtension();
+        }
+    }, (err) => {
+        console.warn("[PMS Master Pricing Listener Notice]:", err);
+    });
+}
+
+// --------------------------------------------------------------------------
+// 5. PROPERTY CONFIGURATION & SWITCHER CONTROLLERS
 // --------------------------------------------------------------------------
 
 export const loadPropertyConfig = async () => {
@@ -250,8 +313,8 @@ export const loadPropertyConfig = async () => {
         }
 
         if (!propsList.some(p => p.id === currentPropertyId)) {
-            const fallbackMatch = propsList.find(p => 
-                p.id.toLowerCase().includes(currentPropertyId.toLowerCase()) || 
+            const fallbackMatch = propsList.find(p =>
+                p.id.toLowerCase().includes(currentPropertyId.toLowerCase()) ||
                 currentPropertyId.toLowerCase().includes(p.id.toLowerCase())
             );
             currentPropertyId = fallbackMatch ? fallbackMatch.id : (propsList[0]?.id || toCanonicalPropId(''));
@@ -269,7 +332,9 @@ export const loadPropertyConfig = async () => {
         const propToLoad = propsList.find(p => p.id === currentPropertyId) || propsList[0];
         if (propToLoad) {
             window.currentPropertyConfig = propToLoad;
-            document.title = propToLoad.name || 'Wild & Wandering PMS';
+            window.paymentMethods = normalizePaymentMethods(propToLoad.payments || []);
+            const shortTitle = toDisplayPropKey(propToLoad.id) || propToLoad.short || '';
+            document.title = shortTitle ? `${shortTitle} | PMS` : 'Wild & Wandering PMS';
 
             const activeIcon = propToLoad.iconUrl || propToLoad.logoUrl || DEFAULT_WW_ICON;
             const logoEl = $('main-brand-logo');
@@ -286,6 +351,24 @@ export const loadPropertyConfig = async () => {
             window.fmpDates = fmpDates;
             window.propertyOtaMap = propToLoad.otaMap || [];
             window.channexConfig = propToLoad.channex || {};
+            window.enableEventRates = propToLoad.enableEventRates !== undefined
+                ? !!propToLoad.enableEventRates
+                : ((propToLoad.events || []).length > 0);
+
+            let basePricingRules = propToLoad.pricingRules || {};
+            if (typeof basePricingRules === 'string') {
+                try { basePricingRules = JSON.parse(basePricingRules); } catch (e) { basePricingRules = {}; }
+            }
+            window.pricingRules = basePricingRules;
+
+            let baseMaster = propToLoad.masterPricing || { timeline: {}, relationships: [] };
+            if (typeof baseMaster === 'string') {
+                try { baseMaster = JSON.parse(baseMaster); } catch (e) { baseMaster = { timeline: {}, relationships: [] }; }
+            }
+            if (typeof baseMaster.timeline === 'string') {
+                try { baseMaster.timeline = JSON.parse(baseMaster.timeline); } catch (e) { baseMaster.timeline = {}; }
+            }
+            window.masterPricing = baseMaster;
 
             const cxBtn = $('channex-sync-btn');
             if (cxBtn) {
@@ -297,6 +380,8 @@ export const loadPropertyConfig = async () => {
         roomTypes = [...new Set(hotelRooms.filter(r => r.type).map(r => r.type))];
         window.roomTypes = roomTypes;
 
+        subscribeToMasterPricing(currentPropertyId);
+
         if (staff && staff.length > 0) {
             staff.forEach(s => {
                 const rList = getRooms(s).map(dbToUiRoom);
@@ -305,7 +390,6 @@ export const loadPropertyConfig = async () => {
             });
         }
 
-        // Populate Database Room Categories Dropdown
         const drop = $('db-room-dropdown');
         if (drop) {
             drop.innerHTML = '';
@@ -368,18 +452,18 @@ window.switchTab = t => {
     if (t === 'dashboard' && window.renderDashboard) window.renderDashboard();
 };
 
-window.openEmailParserModal = () => { 
+window.openEmailParserModal = () => {
     const ta = $('email-textarea');
-    if (ta) ta.value = ''; 
+    if (ta) ta.value = '';
     const m = $('email-modal');
     if (m) {
-        m.style.display = 'flex'; 
-        setTimeout(() => ta?.focus(), 50); 
+        m.style.display = 'flex';
+        setTimeout(() => ta?.focus(), 50);
     }
 };
 
 // --------------------------------------------------------------------------
-// 5. CORE BOOTSTRAPPER, AUTHENTICATION & EVENT LISTENERS
+// 6. CORE BOOTSTRAPPER, AUTHENTICATION & EVENT LISTENERS
 // --------------------------------------------------------------------------
 
 export const init = async () => {
@@ -388,7 +472,6 @@ export const init = async () => {
             const rList = getRooms(s).map(dbToUiRoom);
             s.room = rList[0] || "";
             s.rooms = rList;
-            if (window.healHostelworldDeposit) window.healHostelworldDeposit(s, db, appId);
             return s;
         });
         window.staff = staff;
@@ -442,9 +525,9 @@ export const init = async () => {
         setTimeout(() => { if (window.runDiscrepancyAudit) window.runDiscrepancyAudit(); }, 200);
 
         const editId = new URLSearchParams(window.location.search).get('edit');
-        if (editId && window.editStaff) { 
-            window.editStaff(editId); 
-            try { window.history.replaceState({}, document.title, window.location.pathname); } catch (e) {} 
+        if (editId && window.editStaff) {
+            window.editStaff(editId);
+            try { window.history.replaceState({}, document.title, window.location.pathname); } catch (e) {}
         }
     };
 
@@ -472,7 +555,7 @@ export const init = async () => {
 
             if (typeof mountNav === 'function') mountNav();
 
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, () => {
                 if (window.showAlert) window.showAlert("Database Permission Denied.");
             });
         } catch (e) {
@@ -484,7 +567,7 @@ export const init = async () => {
             if (bl) bl.style.display = 'none';
         }
     };
-    
+
     if (typeof window.__initial_auth_token !== 'undefined' || !REQUIRE_LOGIN) {
         bypassLogin();
     } else {
@@ -497,7 +580,7 @@ export const init = async () => {
                 $('boot-loader').style.display = 'none';
                 await loadPropertyConfig();
                 if (typeof mountNav === 'function') mountNav();
-                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, err => {
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), processSnapshot, () => {
                     if (window.showAlert) window.showAlert("Database Permission Denied.");
                     $('boot-loader').style.display = 'none';
                 });

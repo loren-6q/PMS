@@ -4,6 +4,18 @@
 // ==========================================================================
 
 import { parseFlexibleDate } from './parser-engine.js';
+import { getOtaPaymentPair } from '../core/channels.js';
+
+function resolveOtaKeys(channelCode) {
+    const [defaultPay, defaultKp] = getOtaPaymentPair(channelCode);
+    const configured = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
+    const payEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'revenue');
+    const kpEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'commission');
+    return {
+        payKey: payEntry ? payEntry.key : defaultPay.key,
+        kpKey: kpEntry ? kpEntry.key : defaultKp.key
+    };
+}
 
 export function parseAgoda(rawText) {
     if (!rawText) return null;
@@ -107,20 +119,21 @@ export function parseAgoda(rawText) {
         refundability = 'ref';
     }
 
-    // 10. Payments: Agoda UPC (Virtual Credit Card) = agoda-pay (net) + agoda-kp (comm)
+    // 10. Payments: Agoda UPC = canonical AGO payout + commission keys
+    const { payKey, kpKey } = resolveOtaKeys('AGO');
     const payments = [];
     const isPrepaid = /upc|virtual\s*card|collect\s*from\s*agoda|prepaid/i.test(text);
     if (isPrepaid && totalPrice > 0 && checkIn) {
         payments.push({
             date: checkIn,
             amt: explicitNet !== null ? explicitNet : totalPrice,
-            method: 'agoda-pay'
+            method: payKey
         });
         if (commissionAmt > 0) {
             payments.push({
                 date: checkIn,
                 amt: commissionAmt,
-                method: 'agoda-kp'
+                method: kpKey
             });
         }
     }
@@ -172,6 +185,7 @@ export function parseAgoda(rawText) {
 
     return {
         source: 'agoda',
+        ota: 'AGO',
         bookId,
         firstName: firstName.toUpperCase(),
         lastName: lastName.toUpperCase(),

@@ -3,7 +3,10 @@
 // Wild & Wandering Property Management System
 // ==========================================================================
 
-import { parseYMD, getLocalYMD } from '../core/dates.js';
+import { parseYMD, getLocalYMD, getNearestEvent } from '../core/dates.js';
+import { roundCurrency } from '../core/money.js';
+import { resolveRoomCategory } from '../core/properties.js';
+import { getCmStayQuote } from '../cm/cm-ripple.js';
 
 // --- DOM Selector Helpers ---
 const $ = id => document.getElementById(id);
@@ -32,15 +35,21 @@ export const toggleBadCC = () => {
 export const calcFinancials = () => {
     const tot = Number($('total-price')?.value) || 0;
     let pd = 0, cD = 0;
+    const configuredMethods = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
+    const commSet = new Set(
+        configuredMethods.filter(pm => pm.type === 'commission').map(pm => String(pm.key).toLowerCase())
+    );
+
     $$('.payment-row').forEach(r => {
         const a = Number(r.querySelector('.pay-amt')?.value) || 0;
+        const m = String(r.querySelector('.pay-method')?.value || '').toLowerCase();
         pd += a;
-        if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp'].includes(r.querySelector('.pay-method')?.value)) {
+        if (m.endsWith('-kp') || m === 'cc-fee' || commSet.has(m)) {
             cD += a;
         }
     });
 
-    const due = Number((tot - pd).toFixed(2));
+    const due = roundCurrency(tot - pd);
     const dC = $('display-due');
     const tC = $('total-price')?.parentElement;
     const pax = parseInt($('pax-count')?.value, 10) || 1;
@@ -87,6 +96,37 @@ export const overrideNet = () => {
 
 let pCount = 0;
 
+function getPaymentMethodOptions(selectedMethod) {
+    const configured = Array.isArray(window.paymentMethods) && window.paymentMethods.length > 0
+        ? window.paymentMethods.map(pm => ({ key: String(pm.key), label: pm.label || String(pm.key).toUpperCase() }))
+        : [
+            { key: 'cash', label: 'Cash' },
+            { key: 'scan', label: 'PromptPay / QR Scan' },
+            { key: 'transfer', label: 'Bank Transfer' },
+            { key: 'card', label: 'Credit Card (POS)' },
+            { key: 'card-kp', label: 'Credit Card Fee' },
+            { key: 'bdc-pay', label: 'Booking.com Payout' },
+            { key: 'bdc-kp', label: 'Booking.com Commission' },
+            { key: 'hwl-pay', label: 'Hostelworld Payout' },
+            { key: 'hwl-kp', label: 'Hostelworld Commission' },
+            { key: 'ago-pay', label: 'Agoda Payout' },
+            { key: 'ago-kp', label: 'Agoda Commission' },
+            { key: 'abb-pay', label: 'Airbnb Payout' },
+            { key: 'abb-kp', label: 'Airbnb Commission' },
+            { key: 'exp-pay', label: 'Expedia Payout' },
+            { key: 'exp-kp', label: 'Expedia Commission' },
+            { key: 'trp-pay', label: 'Trip.com Payout' },
+            { key: 'trp-kp', label: 'Trip.com Commission' }
+        ];
+
+    const rawSel = String(selectedMethod || 'cash');
+    const hasMatch = configured.some(opt => opt.key.toLowerCase() === rawSel.toLowerCase());
+    if (rawSel && !hasMatch) {
+        configured.push({ key: rawSel, label: rawSel.replace(/-/g, ' ').toUpperCase() });
+    }
+    return configured;
+}
+
 export const addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
     const id = `pay-${pCount++}`;
     const div = document.createElement('div');
@@ -99,21 +139,13 @@ export const addPaymentRow = (d = '', a = '', m = 'cash', loc = false) => {
         const currentTot = Number($('total-price')?.value) || 0;
         const currentPaid = Array.from($$('.payment-row')).reduce((s, r) => s + (Number(r.querySelector('.pay-amt')?.value) || 0), 0);
         const due = currentTot - currentPaid;
-        if (due > 0) a = Number(due.toFixed(2));
+        if (due > 0) a = roundCurrency(due);
     }
 
-    const paymentOptions = [
-        'cash', 'card', 'scan', 'cc-fee',
-        'hw-kp',
-        'bdc-kp', 'bdc-pay',
-        'agoda-kp', 'agoda-pay',
-        'airbnb-kp', 'airbnb-pay',
-        'expedia-kp', 'expedia-pay',
-        'trip-kp', 'trip-pay',
-        'other'
-    ];
+    const rawMethod = String(m || 'cash');
+    const optionsList = getPaymentMethodOptions(rawMethod);
 
-    div.innerHTML = `<input type="date" class="pay-date w-24 text-xs !p-1" value="${d}" ${loc ? 'disabled' : ''}><input type="number" class="pay-amt w-16 text-xs !p-1 font-black" value="${a}" placeholder="0" oninput="window.calcFinancials()" ${loc ? 'disabled' : ''}><select class="pay-method flex-1 text-xs !p-1 uppercase" onchange="window.calcFinancials()" ${loc ? 'disabled' : ''}>${paymentOptions.map(x => `<option value="${x}" ${m === x ? 'selected' : ''}>${x.replace(/-/g, ' ').toUpperCase()}</option>`).join('')}</select>${loc ? `<button type="button" onclick="window.unlockPayment('${id}')" class="p-1 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded flex-shrink-0 border border-slate-200 cursor-pointer" title="Edit Payment"><i data-lucide="edit" size="12"></i></button>` : `<button type="button" onclick="window.removePaymentRow('${id}')" class="p-1 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded flex-shrink-0 border border-red-200 cursor-pointer" title="Delete Payment"><i data-lucide="trash-2" size="12"></i></button>`}`;
+    div.innerHTML = `<input type="date" class="pay-date w-24 text-xs !p-1" value="${d}" ${loc ? 'disabled' : ''}><input type="number" class="pay-amt w-16 text-xs !p-1 font-black" value="${a}" placeholder="0" oninput="window.calcFinancials()" ${loc ? 'disabled' : ''}><select class="pay-method flex-1 text-xs !p-1 uppercase" onchange="window.calcFinancials()" ${loc ? 'disabled' : ''}>${optionsList.map(opt => `<option value="${opt.key}" ${opt.key.toLowerCase() === rawMethod.toLowerCase() ? 'selected' : ''}>${opt.label}</option>`).join('')}</select>${loc ? `<button type="button" onclick="window.unlockPayment('${id}')" class="p-1 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded flex-shrink-0 border border-slate-200 cursor-pointer" title="Edit Payment"><i data-lucide="edit" size="12"></i></button>` : `<button type="button" onclick="window.removePaymentRow('${id}')" class="p-1 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded flex-shrink-0 border border-red-200 cursor-pointer" title="Delete Payment"><i data-lucide="trash-2" size="12"></i></button>`}`;
 
     const pList = $('payments-list');
     if (pList) pList.appendChild(div);
@@ -205,8 +237,8 @@ export const confirmAddCharge = () => {
     const chargeObj = {
         id: 'chg_' + Math.random().toString(36).substr(2, 9),
         desc: desc.toUpperCase(),
-        amt: Number(amt.toFixed(2)),
-        date: date
+        amt: roundCurrency(amt),
+        date
     };
 
     if (!Array.isArray(window.activeExtraCharges)) window.activeExtraCharges = [];
@@ -273,75 +305,118 @@ export const renderExtraCharges = () => {
 };
 
 // --------------------------------------------------------------------------
-// 4. STAY EXTENSIONS & RATE CHECK ENGINES
+// 4. STAY EXTENSIONS (DYNAMIC PRE-EVENT + EVENT RATE SPLIT ENGINE)
 // --------------------------------------------------------------------------
 
+// --- Check if Date Range [startStr, endStr) Includes an Event Peak Day ---
+function rangeHasEventPeak(startStr, endStr) {
+    const sMs = parseYMD(startStr);
+    const eMs = parseYMD(endStr);
+    if (!sMs || !eMs || eMs <= sMs) return false;
+    for (let t = sMs; t < eMs; t += 86400000) {
+        if (getNearestEvent(t) === 0) return true;
+    }
+    return false;
+}
+
+// --- Resolve Room Categories for Current Booking Units ---
+function resolveExtensionCategories() {
+    const hotelRooms = window.hotelRooms || [];
+    const allRoomTypes = window.roomTypes || [];
+    const assignedRooms = Array.from($$('.assigned-room-select')).map(sel => sel.value.trim()).filter(Boolean);
+
+    if (assignedRooms.length > 0) {
+        return assignedRooms.map(rid => {
+            const hr = hotelRooms.find(r => r.id === rid || String(r.id).toUpperCase() === rid.toUpperCase());
+            const rawCat = hr?.category || hr?.type || $('booked-type')?.value || '';
+            return resolveRoomCategory(rawCat, allRoomTypes) || rawCat || allRoomTypes[0] || '';
+        }).filter(Boolean);
+    }
+
+    const bookedRaw = $('booked-type')?.value || '';
+    const cleanBooked = bookedRaw.includes('(') ? bookedRaw.split('(')[0].trim() : bookedRaw.trim();
+    const matchedCat = resolveRoomCategory(cleanBooked, allRoomTypes)
+        || allRoomTypes.find(rt => cleanBooked && (rt.toLowerCase().includes(cleanBooked.toLowerCase()) || cleanBooked.toLowerCase().includes(rt.toLowerCase())))
+        || allRoomTypes[0]
+        || '';
+
+    if (!matchedCat) return [];
+
+    const sampleRoom = hotelRooms.find(r => (r.category || r.type) === matchedCat && !r.inactive);
+    const isDorm = sampleRoom && !sampleRoom.isPrivate && (sampleRoom.isDorm === true || (sampleRoom.rule && sampleRoom.rule !== 'private') || matchedCat.toLowerCase().includes('dorm'));
+    const unitCount = isDorm ? (parseInt($('pax-count')?.value, 10) || 1) : 1;
+
+    return Array(unitCount).fill(matchedCat);
+}
+
+// --- Auto-Calculate Extension Price Across Any Length Stay ---
 export const calcExtension = () => {
     const cI = $('check-in')?.value;
     const cO = $('check-out')?.value;
-    const ms = parseYMD(cO) - parseYMD(cI);
-    const avg = ms > 0 ? (Number($('total-price')?.value) || 0) / Math.round(ms / 86400000) : 0;
-    const days = parseInt($('ext-days')?.value, 10) || 1;
-    let xFMP = false;
-
-    const fmpList = window.fmpDates || [];
-    if (cO) {
-        const sD = parseYMD(cO);
-        const eD = sD + (days * 86400000);
-        for (let f of fmpList) {
-            const fT = parseYMD(f);
-            if ((sD <= fT && eD >= fT) || (Math.abs(sD - fT) <= 3 * 86400000) || (Math.abs(eD - fT) <= 3 * 86400000)) {
-                xFMP = true;
-                break;
-            }
-        }
-    }
+    const days = Math.max(1, parseInt($('ext-days')?.value, 10) || 1);
 
     const avgEl = $('ext-avg-rate');
     const prEl = $('ext-price');
     const bdcBtn = $('btn-check-bdc');
+    if (bdcBtn) bdcBtn.classList.add('hidden');
 
-    if (xFMP) {
-        if (avgEl) {
-            avgEl.value = 'FMP!';
-            avgEl.classList.add('text-pink-600', 'bg-pink-100');
+    if (!cI || !cO) return;
+
+    const inMs = parseYMD(cI);
+    const outMs = parseYMD(cO);
+    const origNights = Math.max(1, Math.round((outMs - inMs) / 86400000));
+    const newOutStr = new Date(outMs + (days * 86400000)).toISOString().split('T')[0];
+    const totalStayNights = origNights + days;
+
+    const extraTotal = (window.activeExtraCharges || []).reduce((sum, c) => sum + (Number(c.amt || c.amount) || 0), 0);
+    const existingRoomTotal = Math.max(0, (Number($('total-price')?.value) || 0) - extraTotal);
+
+    const origHasPeak = rangeHasEventPeak(cI, cO);
+    const newHasPeak = rangeHasEventPeak(cI, newOutStr);
+
+    const unitCategories = resolveExtensionCategories();
+    let extTotal = 0;
+    let allFound = unitCategories.length > 0;
+
+    unitCategories.forEach(cat => {
+        if (!newHasPeak) {
+            const dirQuote = getCmStayQuote({ checkIn: cO, nights: days, roomCategory: cat, planType: 'DIR_NON_REF' });
+            if (dirQuote.complete && dirQuote.total !== null) extTotal += dirQuote.total;
+            else allFound = false;
+        } else if (origHasPeak) {
+            const evtExtQuote = getCmStayQuote({ checkIn: cO, nights: days, roomCategory: cat, planType: 'DEF_EVT_NON_REF' });
+            if (evtExtQuote.complete && evtExtQuote.total !== null) extTotal += evtExtQuote.total;
+            else allFound = false;
+        } else {
+            const fullEvtQuote = getCmStayQuote({ checkIn: cI, nights: totalStayNights, roomCategory: cat, planType: 'DEF_EVT_NON_REF' });
+            if (fullEvtQuote.complete && fullEvtQuote.total !== null) extTotal += fullEvtQuote.total;
+            else allFound = false;
         }
-        if (prEl) {
-            prEl.value = '';
-            prEl.placeholder = 'CHECK RATE ->';
-        }
-        if (bdcBtn) {
-            bdcBtn.classList.replace('bg-slate-200', 'bg-pink-500');
-            bdcBtn.classList.replace('text-slate-700', 'text-white');
-            bdcBtn.classList.add('animate-pulse');
+    });
+
+    let finalExtPrice = 0;
+    if (allFound) {
+        if (newHasPeak && !origHasPeak) {
+            finalExtPrice = Math.max(0, roundCurrency(extTotal - existingRoomTotal));
+        } else {
+            finalExtPrice = roundCurrency(extTotal);
         }
     } else {
-        if (avgEl) {
-            avgEl.value = Math.round(avg);
-            avgEl.classList.remove('text-pink-600', 'bg-pink-100');
-        }
-        if (prEl) {
-            prEl.value = Math.round(avg * days);
-            prEl.placeholder = '';
-        }
-        if (bdcBtn) {
-            bdcBtn.classList.replace('bg-pink-500', 'bg-slate-200');
-            bdcBtn.classList.replace('text-white', 'text-slate-700');
-            bdcBtn.classList.remove('animate-pulse');
-        }
+        const avgFallback = existingRoomTotal / origNights;
+        finalExtPrice = roundCurrency(avgFallback * days);
     }
-};
 
-export const checkBdcPrice = () => {
-    const cO = $('check-out')?.value;
-    if (!cO) return window.customAlert ? window.customAlert("Missing Date", "Please set a check-out date first.") : null;
-    const d = new Date(cO + "T12:00:00Z");
-    d.setUTCDate(d.getUTCDate() + (parseInt($('ext-days')?.value, 10) || 1));
-    const roomCount = Array.from($$('.assigned-room-select')).filter(sel => sel.value !== "").length || 1;
-    const pax = $('pax-count')?.value || 1;
-    const curProp = window.currentPropertyConfig || {};
-    const bdcUrl = curProp.bdcUrl || curProp.website || "https://www.booking.com";
-    window.open(`${bdcUrl}?checkin=${cO}&checkout=${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}&group_adults=${pax}&group_children=0&no_rooms=${roomCount}`, '_blank');
+    const avgDaily = roundCurrency(finalExtPrice / days);
+
+    if (avgEl) {
+        avgEl.value = Math.round(avgDaily);
+        avgEl.classList.toggle('text-pink-700', newHasPeak);
+        avgEl.classList.toggle('bg-pink-50', newHasPeak);
+    }
+    if (prEl) {
+        prEl.value = Math.round(finalExtPrice);
+        prEl.placeholder = '';
+    }
 };
 
 export const confirmExtension = async () => {
@@ -352,7 +427,7 @@ export const confirmExtension = async () => {
     const days = parseInt($('ext-days')?.value, 10) || 1;
     const d = new Date(cO + "T12:00:00Z");
     d.setUTCDate(d.getUTCDate() + days);
-    const nCo = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    const nCo = d.toISOString().split('T')[0];
 
     $('check-out').value = nCo;
     const totEl = $('total-price');
@@ -377,29 +452,6 @@ export const confirmExtension = async () => {
     if (window.customAlert) window.customAlert("Extension Applied", `Booking extended by ${days} day(s).\n\nCheckout is now ${nCo}.\nAdded ฿${aP} to Total Price.`);
 };
 
-export const openPriceCheckModal = () => {
-    const d = new Date();
-    d.setHours(12, 0, 0, 0);
-    const ciEl = $('pc-checkin');
-    if (ciEl) ciEl.value = getLocalYMD(d);
-    const m = $('price-check-modal');
-    if (m) m.style.display = 'flex';
-};
-
-export const runPriceCheck = () => {
-    const cI = $('pc-checkin')?.value;
-    const n = parseInt($('pc-nights')?.value, 10) || 1;
-    const p = parseInt($('pc-pax')?.value, 10) || 1;
-    if (!cI) return;
-    const d = new Date(cI + "T12:00:00Z");
-    d.setUTCDate(d.getUTCDate() + n);
-    const cO = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-    const curProp = window.currentPropertyConfig || {};
-    const bdcUrl = curProp.bdcUrl || curProp.website || "https://www.booking.com";
-    window.open(`${bdcUrl}?checkin=${cI}&checkout=${cO}&group_adults=${p}&group_children=0&no_rooms=1`, '_blank');
-    if (window.closeModal) window.closeModal('price-check-modal');
-};
-
 // --------------------------------------------------------------------------
 // 5. GLOBAL WINDOW EXPORTS
 // --------------------------------------------------------------------------
@@ -416,7 +468,4 @@ window.confirmAddCharge = confirmAddCharge;
 window.removeCharge = removeCharge;
 window.renderExtraCharges = renderExtraCharges;
 window.calcExtension = calcExtension;
-window.checkBdcPrice = checkBdcPrice;
 window.confirmExtension = confirmExtension;
-window.openPriceCheckModal = openPriceCheckModal;
-window.runPriceCheck = runPriceCheck;

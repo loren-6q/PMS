@@ -5,10 +5,10 @@
 
 import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { doc, getDoc, setDoc, collection, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { loadPropertiesCatalog, toCanonicalPropId } from '../core/properties.js';
+import { doc, getDoc, setDoc, collection, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { loadPropertiesCatalog, toCanonicalPropId, resolveRoomCategory } from '../core/properties.js';
 import { normalizeChannelRules, resolveChannelCode, getChannelByCode } from '../core/channels.js';
-import { getLocalYMD } from '../core/dates.js';
+import { getLocalYMD, parseYMD } from '../core/dates.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
 import { loadPropertyBaseline, checkMissing, renderManualGrid } from './cm-auditor.js';
@@ -19,6 +19,164 @@ import { pushToChannexAPI, saveAndSync } from '../channex.js';
 
 export let hasUnsavedChanges = false;
 export let hasLoadedPricingFromCloud = false;
+
+const parseIfJson = (val, fallback) => {
+    if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch (e) { return fallback; }
+    }
+    return val ?? fallback;
+};
+
+function getShardKeyForDate(dateStr) {
+    const ym = dateStr.slice(0, 7);
+    const day = parseInt(dateStr.slice(8, 10), 10) || 1;
+    const bucket = day <= 10 ? 'b1' : (day <= 20 ? 'b2' : 'b3');
+    return `${ym}_${bucket}`;
+}
+
+function compactTimelineForCloud(rawTimeline = {}) {
+    const todayMs = parseYMD(getLocalYMD(new Date()));
+    const cutoffStr = getLocalYMD(new Date(todayMs - (14 * 86400000)));
+    const compacted = {};
+
+    // Lookup ratePlanId -> { cat, isEvt } using canonical room category (non-mutating)
+    const planMetaById = new Map();
+    (window.channexRateMap || []).forEach(rp => {
+        if (!rp || !rp.ratePlanId) return;
+        const canonCat = resolveRoomCategory(rp.pmsCategory) || rp.pmsCategory;
+        const isEvt = typeof rp.isEvent === 'boolean'
+            ? rp.isEvent
+            : (rp.policy?.startsWith('event') || rp.product === 'evt' || rp.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(rp.ratePlanTitle || ''));
+        planMetaById.set(rp.ratePlanId, { cat: canonCat, isEvt });
+    });
+
+    Object.entries(rawTimeline || {}).forEach(([dateStr, dayObj]) => {
+        if (!dateStr || dateStr < cutoffStr || !dayObj || typeof dayObj !== 'object') return;
+        const cleanDay = {};
+        const gObj = dayObj.GLOBAL || {};
+
+        Object.entries(dayObj).forEach(([key, val]) => {
+            if (!val || typeof val !== 'object') return;
+            const cleanNode = {};
+
+            Object.entries(val).forEach(([field, fVal]) => {
+                if (field === '_syncedStd' || fVal === undefined || fVal === null || fVal === "") return;
+
+                if (field === 'isOverride' && typeof fVal === 'object') {
+                    const cleanOvr = {};
+                    Object.entries(fVal).forEach(([ok, ov]) => {
+                        if (ov) cleanOvr[ok] = true;
+                    });
+                    if (Object.keys(cleanOvr).length > 0) cleanNode.isOverride = cleanOvr;
+                    return;
+                }
+
+                // Strip redundant otaOverrides that simply mirror the room/global/event inherited restriction
+                if (key === 'otaOverrides') {
+                    const m = field.match(/^(.+)_(min|min_arr|max|cta|ctd|stop)$/);
+                    if (m) {
+                        const [, rpId, rField] = m;
+                        const meta = planMetaById.get(rpId);
+                        if (meta) {
+                            const rObj = dayObj[meta.cat] || {};
+                            const evtObj = dayObj.evtRestrictions || {};
+                            let inherited;
+                            if (meta.isEvt) {
+                                inherited = rObj[`evt_${rField}`] ?? evtObj[rField] ?? rObj[rField] ?? gObj[rField];
+                            } else {
+                                inherited = rObj[rField] ?? gObj[rField];
+                            }
+
+                            if (rField === 'cta' || rField === 'ctd' || rField === 'stop') {
+                                const effInherited = inherited !== undefined ? !!inherited : false;
+                                if (!!fVal === effInherited) return;
+                            } else if (rField === 'min' || rField === 'min_arr') {
+                                const hasParentMin = (rObj.min !== undefined && rObj.min !== "")
+                                    || (rObj.min_arr !== undefined && rObj.min_arr !== "")
+                                    || (gObj.min !== undefined && gObj.min !== "")
+                                    || (gObj.min_arr !== undefined && gObj.min_arr !== "")
+                                    || (meta.isEvt && ((rObj.evt_min !== undefined && rObj.evt_min !== "") || (rObj.evt_min_arr !== undefined && rObj.evt_min_arr !== "") || (evtObj.min !== undefined && evtObj.min !== "") || (evtObj.min_arr !== undefined && evtObj.min_arr !== "")));
+                                if (!hasParentMin && Number(fVal) <= 1) return;
+                                if (inherited !== undefined && inherited !== "" && Number(fVal) === Number(inherited)) return;
+                            } else if (rField === 'max') {
+                                if ((inherited === undefined || inherited === "") && Number(fVal) === 0) return;
+                                if (inherited !== undefined && inherited !== "" && Number(fVal) === Number(inherited)) return;
+                            }
+                        }
+                    }
+                }
+
+                cleanNode[field] = fVal;
+            });
+
+            if (Object.keys(cleanNode).length > 0) {
+                cleanDay[key] = cleanNode;
+            }
+        });
+
+        if (Object.keys(cleanDay).length > 0) {
+            compacted[dateStr] = cleanDay;
+        }
+    });
+
+    return compacted;
+}
+
+async function hydratePricingFromCloud(activeProp = null) {
+    const canonId = toCanonicalPropId(window.currentPropertyId);
+    const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`));
+    const pData = pricingSnap.exists() ? pricingSnap.data() : {};
+
+    // Merge legacy inline timeline + legacy monthly shards + 10-day sub-monthly shards
+    const mergedTimeline = { ...parseIfJson(pData.timeline, {}) };
+    const allShardSuffixes = Array.from(new Set([
+        ...(Array.isArray(pData.shardMonths) ? pData.shardMonths : []),
+        ...(Array.isArray(pData.shardKeys) ? pData.shardKeys : [])
+    ]));
+
+    if (allShardSuffixes.length > 0) {
+        const shardSnaps = await Promise.all(
+            allShardSuffixes.map(suffix => getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${suffix}`)))
+        );
+        shardSnaps.forEach(snap => {
+            if (!snap.exists()) return;
+            const shardData = parseIfJson(snap.data()?.timeline, {});
+            if (shardData && typeof shardData === 'object') {
+                Object.assign(mergedTimeline, shardData);
+            }
+        });
+    }
+
+    const propConfig = activeProp || window.currentPropertyConfig || {};
+    const parsedPropRels = parseIfJson(propConfig?.masterPricing?.relationships, []);
+    const parsedDocRels = parseIfJson(pData.relationships, []);
+
+    window.masterPricing = {
+        timeline: mergedTimeline,
+        relationships: (Array.isArray(parsedPropRels) && parsedPropRels.length ? parsedPropRels : parsedDocRels) || [],
+        baseRates: parseIfJson(pData.baseRates, {})
+    };
+
+    const mergedRules = {
+        ...(pData.pricingRules || {}),
+        ...(propConfig?.pricingRules || {})
+    };
+    mergedRules.masterDriver = resolveChannelCode(mergedRules.masterDriver || 'WEB');
+    mergedRules.channelRules = normalizeChannelRules(mergedRules.channelRules);
+    window.pricingRules = mergedRules;
+
+    window.savedAutofillBaselines = pData.autofillBaselines || {};
+
+    Object.values(window.masterPricing.timeline).forEach(dayObj => {
+        if (dayObj && typeof dayObj === 'object') {
+            Object.values(dayObj).forEach(rData => {
+                if (rData && typeof rData === 'object' && rData.std !== undefined && rData.std !== "") {
+                    rData._syncedStd = rData.std;
+                }
+            });
+        }
+    });
+}
 
 export function markCmDirty(dateStr, kind = 'rate', target = '*') {
     if (!dateStr) return;
@@ -71,8 +229,8 @@ export async function initCm() {
         });
 
         window.eventDates = activeProp?.events || [];
-        window.enableEventRates = activeProp?.enableEventRates !== undefined 
-            ? !!activeProp.enableEventRates 
+        window.enableEventRates = activeProp?.enableEventRates !== undefined
+            ? !!activeProp.enableEventRates
             : ((window.eventDates || []).length > 0);
 
         window.channexConfig = activeProp?.channex || {};
@@ -82,7 +240,7 @@ export async function initCm() {
             channel: resolveChannelCode(rm.channel || rm.ratePlanTitle)
         }));
         window.promoRules = activeProp?.promoRules || [];
-       window.dirtyDates = new Set();
+        window.dirtyDates = new Set();
         window.syncedDates = new Set();
         window.dirtyAvailKeys = new Set();
         window.dirtyPlanKeys = new Set();
@@ -90,50 +248,13 @@ export async function initCm() {
         window.justSyncedCellKeys = new Set();
         window.editMode = 'ripple';
 
-        // Load Pricing Matrix from Firestore (safely parse if stored as JSON string)
-        const parseIfJson = (val, fallback) => {
-            if (typeof val === 'string') {
-                try { return JSON.parse(val); } catch (e) { return fallback; }
-            }
-            return val ?? fallback;
-        };
+        await hydratePricingFromCloud(activeProp);
 
-        const canonId = toCanonicalPropId(window.currentPropertyId);
-        const pricingSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`));
-        const pData = pricingSnap.exists() ? pricingSnap.data() : {};
-
-        const parsedTimeline = parseIfJson(pData.timeline, {});
-        const parsedPropRels = parseIfJson(activeProp?.masterPricing?.relationships, []);
-        const parsedDocRels = parseIfJson(pData.relationships, []);
-
-        window.masterPricing = {
-            timeline: (parsedTimeline && typeof parsedTimeline === 'object') ? parsedTimeline : {},
-            relationships: (Array.isArray(parsedPropRels) && parsedPropRels.length ? parsedPropRels : parsedDocRels) || [],
-            baseRates: parseIfJson(pData.baseRates, {})
-        };
-
-        const mergedRules = {
-            ...(pData.pricingRules || {}),
-            ...(activeProp?.pricingRules || {})
-        };
-        mergedRules.masterDriver = resolveChannelCode(mergedRules.masterDriver || 'WEB');
-        mergedRules.channelRules = normalizeChannelRules(mergedRules.channelRules);
-        window.pricingRules = mergedRules;
-
-        window.savedAutofillBaselines = pData.autofillBaselines || {};
-
-        Object.values(window.masterPricing.timeline).forEach(dayObj => {
-            if (dayObj && typeof dayObj === 'object') {
-                Object.values(dayObj).forEach(rData => {
-                    if (rData && typeof rData === 'object' && rData.std !== undefined && rData.std !== "") {
-                        rData._syncedStd = rData.std;
-                    }
-                });
-            }
-        });
-
+        if (typeof window.initGridUI === 'function') window.initGridUI();
         populateChannelPreviewFilter();
         hasLoadedPricingFromCloud = true;
+        hasUnsavedChanges = false;
+        updateSaveIndicator();
         updateEventPricingToggleUI();
 
         // Realtime Staff Listener for Net Availability Calculation
@@ -156,6 +277,36 @@ export async function initCm() {
     }
 }
 
+export async function discardUnsavedChanges() {
+    if (!hasUnsavedChanges) return;
+    const confirmed = typeof window.customConfirm === 'function'
+        ? await window.customConfirm("Discard Changes?", "Revert all unsaved rate and restriction edits back to your last saved version?")
+        : window.confirm("Discard all unsaved rate and restriction edits and revert to your last saved version?");
+    if (!confirmed) return;
+
+    const loader = document.getElementById('loader');
+    if (loader) loader.style.display = 'flex';
+
+    try {
+        await hydratePricingFromCloud();
+        window.dirtyDates = new Set();
+        window.syncedDates = new Set();
+        window.dirtyAvailKeys = new Set();
+        window.dirtyPlanKeys = new Set();
+        window.dirtyCellKeys = new Set();
+        window.justSyncedCellKeys = new Set();
+        hasUnsavedChanges = false;
+        updateSaveIndicator();
+        renderRateMatrix();
+        customAlert("Reverted", "All unsaved edits have been discarded.");
+    } catch (err) {
+        console.error("[Discard Changes Error]:", err);
+        customAlert("Revert Failed", err.message);
+    } finally {
+        if (loader) loader.style.display = 'none';
+    }
+}
+
 export function populateChannelPreviewFilter() {
     const sel = document.getElementById('channel-preview-select');
     if (!sel) return;
@@ -173,11 +324,15 @@ export function populateChannelPreviewFilter() {
             const meta = getChannelByCode(code);
             return `<option value="${code}">${code} - ${meta.name}</option>`;
         }).join('');
+
+    if (window.channelPreviewFilter && Array.from(sel.options).some(o => o.value === window.channelPreviewFilter)) {
+        sel.value = window.channelPreviewFilter;
+    }
 }
 
 export function isEventPricingEnabled() {
-    return window.enableEventRates !== undefined 
-        ? !!window.enableEventRates 
+    return window.enableEventRates !== undefined
+        ? !!window.enableEventRates
         : ((window.eventDates || []).length > 0);
 }
 
@@ -201,10 +356,10 @@ export function updateEventPricingToggleUI() {
     const btn = document.getElementById('prop-event-pricing-btn');
     const isEn = isEventPricingEnabled();
     if (btn) {
-        btn.className = isEn 
+        btn.className = isEn
             ? "px-2 py-1 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer bg-pink-100 text-pink-800 border border-pink-300 hover:bg-pink-200"
             : "px-2 py-1 rounded font-black text-[10px] sm:text-xs uppercase shadow-2xs flex items-center gap-1 transition-colors cursor-pointer bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200";
-        btn.innerHTML = isEn 
+        btn.innerHTML = isEn
             ? `<i data-lucide="calendar-heart" size="13" class="text-pink-600"></i> <span>EVENTS: ON</span>`
             : `<i data-lucide="calendar-off" size="13" class="text-slate-400"></i> <span>EVENTS: OFF</span>`;
     }
@@ -257,6 +412,22 @@ export function onChannexSyncComplete(syncedDates = []) {
 export function updateSaveIndicator() {
     const si = document.getElementById('save-indicator');
     const saveBtn = document.getElementById('btn-save-sync');
+
+    let discardBtn = document.getElementById('btn-discard-changes');
+    if (!discardBtn && saveBtn && saveBtn.parentElement) {
+        discardBtn = document.createElement('button');
+        discardBtn.id = 'btn-discard-changes';
+        discardBtn.type = 'button';
+        discardBtn.onclick = () => discardUnsavedChanges();
+        discardBtn.className = 'hidden px-2 py-1 rounded font-black text-[10px] uppercase tracking-wider bg-slate-200 hover:bg-rose-100 text-slate-700 hover:text-rose-700 border border-slate-300 hover:border-rose-300 transition-colors cursor-pointer mr-1.5';
+        discardBtn.innerText = 'Discard';
+        saveBtn.parentElement.insertBefore(discardBtn, saveBtn);
+    }
+
+    if (discardBtn) {
+        discardBtn.classList.toggle('hidden', !hasUnsavedChanges);
+    }
+
     if (!si) return;
     if (hasUnsavedChanges) {
         si.innerText = '● UNSAVED CHANGES';
@@ -276,8 +447,8 @@ export async function savePricingToCloud(silent = false) {
         return customAlert("Save Blocked", "Safety Guard: The pricing matrix has not finished loading. Overwrite blocked.");
     }
 
-    const dateCount = Object.keys(window.masterPricing?.timeline || {}).length;
-    if (dateCount === 0) {
+    const rawDates = Object.keys(window.masterPricing?.timeline || {});
+    if (rawDates.length === 0) {
         console.error("[Save Blocked]: Attempted to save an empty pricing matrix.");
         return customAlert("Save Blocked", "Safety Guard: Matrix in memory is empty. Overwriting existing rates is blocked.");
     }
@@ -289,26 +460,61 @@ export async function savePricingToCloud(silent = false) {
 
     try {
         const canonId = toCanonicalPropId(window.currentPropertyId);
+        const compactedTimeline = compactTimelineForCloud(window.masterPricing.timeline || {});
+        window.masterPricing.timeline = compactedTimeline;
 
-        const serializedTimeline = JSON.stringify(window.masterPricing.timeline || {});
-
-        // 1. Immutable Rolling Backup
-        const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing_backups', `${canonId}_${Date.now()}`);
-        await setDoc(backupRef, {
-            timeline: serializedTimeline,
-            createdAt: new Date().toISOString()
+        // Partition into 10-day sub-monthly shards (YYYY-MM_b1/b2/b3) so every Firestore doc stays well under 100 KB
+        const shardsByKey = {};
+        Object.entries(compactedTimeline).forEach(([dateStr, dayObj]) => {
+            const sKey = getShardKeyForDate(dateStr);
+            if (!shardsByKey[sKey]) shardsByKey[sKey] = {};
+            shardsByKey[sKey][dateStr] = dayObj;
         });
 
-        // 2. Persist Master Pricing Matrix
+        const shardKeys = Object.keys(shardsByKey).sort();
+        const updatedAt = new Date().toISOString();
+
+        // 1. Write 10-day pricing shards in parallel
+        await Promise.all(
+            shardKeys.map(sKey =>
+                setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${sKey}`), {
+                    timeline: JSON.stringify(shardsByKey[sKey]),
+                    updatedAt
+                })
+            )
+        );
+
+        // 2. Persist master metadata + shard index (and clear legacy inline/monthly fields)
         const mainRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`);
         await setDoc(mainRef, {
-            timeline: serializedTimeline,
+            shardKeys,
+            shardMonths: deleteField(),
+            timeline: deleteField(),
             relationships: window.masterPricing.relationships || [],
             pricingRules: window.pricingRules || {},
-            updatedAt: new Date().toISOString()
+            updatedAt
         }, { merge: true });
 
+        // 3. Non-blocking rolling backup (capped at next 30 days and < 850 KB so it can never block save or sync)
         const todayStr = getLocalYMD(new Date());
+        try {
+            const backupCutoffStr = getLocalYMD(new Date(parseYMD(todayStr) + (30 * 86400000)));
+            const backupSlice = {};
+            Object.entries(compactedTimeline).forEach(([dStr, dObj]) => {
+                if (dStr >= todayStr && dStr <= backupCutoffStr) backupSlice[dStr] = dObj;
+            });
+            const serializedBackup = JSON.stringify(backupSlice);
+            if (serializedBackup.length < 850000) {
+                const backupRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing_backups', `${canonId}_${Date.now()}`);
+                await setDoc(backupRef, {
+                    timeline: serializedBackup,
+                    createdAt: updatedAt
+                });
+            }
+        } catch (backupErr) {
+            console.warn("[Rolling Backup Skipped]:", backupErr);
+        }
+
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', window.currentPropertyId), {
             lastPromoSyncDate: todayStr
         });
@@ -321,7 +527,7 @@ export async function savePricingToCloud(silent = false) {
         updateSaveIndicator();
         renderRateMatrix();
         if (!silent) customAlert("Success", "Master pricing matrix safely saved and backed up.");
-        
+
     } catch (err) {
         console.error("[Pricing Save Error]:", err);
         customAlert("Save Failed", err.message);
@@ -365,6 +571,7 @@ export function shiftTape(days) {
 if (typeof window !== 'undefined') {
     window.markCmDirty = markCmDirty;
     window.markUnsavedChanges = markUnsavedChanges;
+    window.discardUnsavedChanges = discardUnsavedChanges;
     window.onChannexSyncComplete = onChannexSyncComplete;
     window.updateSaveIndicator = updateSaveIndicator;
     window.savePricingToCloud = savePricingToCloud;

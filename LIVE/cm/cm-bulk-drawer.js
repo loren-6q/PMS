@@ -16,15 +16,57 @@ import { rippleDay } from './cm-ripple.js';
 export let bulkScopeMode = 'anchors'; // 'anchors' | 'all'
 export let bulkSelectedRateKeys = null; // Set of selected leaf keys (null = all selected)
 
+// Normalize a Channex rate plan title into a general rate type (stripping room names/abbreviations)
 function getCleanPlanLabel(rp) {
     let title = (rp.ratePlanTitle || rp.title || '').trim();
-    const cat = (rp.pmsCategory || '').trim();
-    if (cat && title.toLowerCase().startsWith(cat.toLowerCase())) {
-        title = title.slice(cat.length).replace(/^[\s\-–—:|]+/, '').trim();
+    const roomCandidates = new Set([
+        rp.pmsCategory,
+        ...(window.roomTypes || []),
+        ...Object.values(window.displayAbbrev || {})
+    ].filter(Boolean));
+
+    // 1. Strip any exact room category / abbreviation match anywhere in the title
+    Array.from(roomCandidates)
+        .sort((a, b) => b.length - a.length)
+        .forEach(cat => {
+            const escaped = String(cat).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (!escaped) return;
+            title = title.replace(new RegExp(`(^|[\\s\\-–—:|(])${escaped}($|[\\s\\-–—:|)])`, 'ig'), ' ');
+        });
+
+    title = title.replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/g, '').replace(/\s{2,}/g, ' ').trim();
+
+    // 2. Collapse trailing room-specific words after standard policy names (e.g. "BDC Non-Refundable Triple K+T" -> "BDC Non-Refundable")
+    const policySuffixMatch = title.match(/^((?:[A-Z]{2,4}\s+)?(?:Event\s+)?(?:Non-?Refundable|Refundable|Standard|Flexible|Package|Promo))(?:\s+(.+))?$/i);
+    if (policySuffixMatch) {
+        const baseType = policySuffixMatch[1].trim();
+        const trailing = (policySuffixMatch[2] || '').trim();
+        if (trailing) {
+            const catWords = new Set(
+                String(rp.pmsCategory || '')
+                    .toLowerCase()
+                    .split(/[^a-z0-9+]+/)
+                    .filter(w => w.length >= 2)
+            );
+            const roomWords = new Set(['triple', 'twin', 'king', 'queen', 'double', 'single', 'dorm', 'bed', 'beds', 'mixed', 'female', 'male', 'private', 'deluxe', 'superior', 'oceanview', 'ocean', 'partial', 'garden', 'suite', 'bunk', 'pod', 'room', 'villa', 'bungalow']);
+            const trailingTokens = trailing.toLowerCase().split(/[^a-z0-9+]+/).filter(Boolean);
+            if (trailingTokens.some(tok => catWords.has(tok) || roomWords.has(tok) || /\+/.test(tok) || /^\d+$/.test(tok))) {
+                title = baseType;
+            }
+        }
     }
+
     return title || rp.ratePlanId;
 }
 
+function getPlanSignature(rp) {
+    const ch = resolveChannelCode(rp.channel || '');
+    const connId = rp.channelId || '';
+    const cleanLabel = getCleanPlanLabel(rp).toLowerCase();
+    return `${ch}::${connId}::${cleanLabel}`;
+}
+
+// Anchors mode cascades to linked rooms; All Rooms mode edits ONLY the specific room row
 function getTargetRoomsForBulkRow(rt) {
     if (bulkScopeMode !== 'anchors') return [rt];
     const targets = new Set([rt]);
@@ -33,11 +75,18 @@ function getTargetRoomsForBulkRow(rt) {
     while (queue.length > 0) {
         const cur = queue.shift();
         rels.forEach(rel => {
-            const src = findCanonicalRoom(rel.source) || rel.source;
-            const tgt = findCanonicalRoom(rel.target) || rel.target;
-            if (src === cur && tgt && !targets.has(tgt)) {
-                targets.add(tgt);
-                queue.push(tgt);
+            const rawA = rel.anchor || rel.source || rel.from || rel.roomA;
+            const rawB = rel.target || rel.to || rel.roomB;
+            if (!rawA || rawA === 'unlinked' || !rawB) return;
+            const roomA = findCanonicalRoom(rawA) || rawA;
+            const roomB = findCanonicalRoom(rawB) || rawB;
+            if (roomA === cur && roomB && !targets.has(roomB)) {
+                targets.add(roomB);
+                queue.push(roomB);
+            }
+            if (roomB === cur && roomA && !targets.has(roomA)) {
+                targets.add(roomA);
+                queue.push(roomA);
             }
         });
     }
@@ -45,29 +94,47 @@ function getTargetRoomsForBulkRow(rt) {
 }
 
 function buildBulkRatesTree() {
-    const rateMap = window.channexRateMap || [];
-    const seenPlanKeys = new Set();
+    const activeRoomsLower = new Set((window.roomTypes || []).map(r => r.toLowerCase()));
+    const rateMap = (window.channexRateMap || []).filter(rp => {
+        if (!rp || !rp.ratePlanId) return false;
+        const canonCat = (findCanonicalRoom(rp.pmsCategory) || rp.pmsCategory || '').toLowerCase();
+        return activeRoomsLower.size === 0 || activeRoomsLower.has(canonCat);
+    });
 
+    const seenPlanKeys = new Set();
     const defLeaves = [{ key: 'DEF::BASE', label: 'DEF Non-Ref (Master)', planSig: null }];
     const dirLeaves = [{ key: 'DIR::BASE', label: 'Direct Rate (Master)', planSig: null }];
     const evtLeaves = [];
-    const otaByChannel = new Map();
+    const otaByBucket = new Map();
     const otherLeaves = [];
 
     if (window.enableEventRates || rateMap.some(r => r.product === 'evt' || r.rateSource === 'evt' || r.isEvent)) {
         evtLeaves.push({ key: 'EVT::BASE', label: 'DEF Event Rate', planSig: null });
     }
 
+    const connIdsByCode = new Map();
     rateMap.forEach(rp => {
-        if (!rp || !rp.ratePlanId) return;
+        const ch = resolveChannelCode(rp.channel || '');
+        if (!connIdsByCode.has(ch)) connIdsByCode.set(ch, new Set());
+        connIdsByCode.get(ch).add(rp.channelId || 'default');
+    });
+
+    rateMap.forEach(rp => {
         const ch = resolveChannelCode(rp.channel || '');
         const cleanLabel = getCleanPlanLabel(rp);
-        const planSig = `${ch}::${cleanLabel.toLowerCase()}`;
+        const planSig = getPlanSignature(rp);
         if (seenPlanKeys.has(planSig)) return;
         seenPlanKeys.add(planSig);
 
-        const isEvt = (rp.product === 'evt') || (rp.rateSource === 'evt') || (rp.isEvent === true) || /\b(evt|fmp|event|pkg)\b/i.test(cleanLabel);
-        const leaf = { key: `PLAN::${planSig}`, label: cleanLabel, planSig };
+        const isMultiConn = (connIdsByCode.get(ch)?.size || 0) > 1 && rp.channelId;
+        const leafLabel = (isMultiConn && rp.connectionTitle)
+            ? `${cleanLabel} (${rp.connectionTitle})`
+            : cleanLabel;
+
+        const isEvt = typeof rp.isEvent === 'boolean'
+            ? rp.isEvent
+            : ((rp.policy?.startsWith('event')) || (rp.product === 'evt') || (rp.rateSource === 'evt') || /\b(evt|fmp|event|pkg)\b/i.test(cleanLabel));
+        const leaf = { key: `PLAN::${planSig}`, label: leafLabel, planSig };
 
         if (isEvt) {
             evtLeaves.push(leaf);
@@ -78,8 +145,18 @@ function buildBulkRatesTree() {
         } else if (ch && ch !== 'OTH') {
             const isStandardPolicy = rp.policy === 'ref' || rp.policy === 'non-ref' || /\b(non-?ref|refundable|standard)\b/i.test(cleanLabel);
             if (isStandardPolicy) {
-                if (!otaByChannel.has(ch)) otaByChannel.set(ch, []);
-                otaByChannel.get(ch).push(leaf);
+                const bucketKey = isMultiConn ? `${ch}::${rp.channelId}` : ch;
+                const bucketLabel = isMultiConn
+                    ? `${ch} — ${rp.connectionTitle || rp.channelId.slice(-6)}`
+                    : `${ch} (${getChannelByCode(ch).name})`;
+                const bucketShort = isMultiConn
+                    ? `${ch} (${rp.connectionTitle || rp.channelId.slice(-6)})`
+                    : `${ch} Rates`;
+
+                if (!otaByBucket.has(bucketKey)) {
+                    otaByBucket.set(bucketKey, { id: `ota-${bucketKey.replace(/[^a-zA-Z0-9_-]/g, '_')}`, label: bucketLabel, shortLabel: bucketShort, leaves: [] });
+                }
+                otaByBucket.get(bucketKey).leaves.push(leaf);
             } else {
                 otherLeaves.push(leaf);
             }
@@ -93,20 +170,12 @@ function buildBulkRatesTree() {
         { id: 'grp-dir', label: 'DIRECT RATES (DIR)', shortLabel: 'Direct Rates', leaves: dirLeaves, subgroups: [] }
     ];
 
-    if (otaByChannel.size > 0) {
-        const subgroups = Array.from(otaByChannel.entries()).map(([ch, leaves]) => ({
-            id: `ota-${ch}`,
-            label: `${ch} (${getChannelByCode(ch).name})`,
-            shortLabel: `${ch} Rates`,
-            leaves
-        }));
-        groups.push({ id: 'grp-ota', label: 'OTA RATES', shortLabel: 'OTA Rates', leaves: [], subgroups });
+    if (otaByBucket.size > 0) {
+        groups.push({ id: 'grp-ota', label: 'OTA RATES', shortLabel: 'OTA Rates', leaves: [], subgroups: Array.from(otaByBucket.values()) });
     }
-
     if (evtLeaves.length > 0) {
         groups.push({ id: 'grp-evt', label: 'EVENT RATES (EVT)', shortLabel: 'Event Rates', leaves: evtLeaves, subgroups: [] });
     }
-
     if (otherLeaves.length > 0) {
         groups.push({ id: 'grp-other', label: 'OTHER RATES', shortLabel: 'Other Rates', leaves: otherLeaves, subgroups: [] });
     }
@@ -121,93 +190,41 @@ function buildBulkRatesTree() {
     return { groups, allLeafKeys, leafMap };
 }
 
-export function renderBulkRatesDropdown() {
+function syncBulkRatesDropdownState(groups, allLeafKeys, leafMap) {
     const dropdown = document.getElementById('qb-rates-dropdown');
     const labelEl = document.getElementById('qb-rates-label');
     if (!dropdown) return;
 
-    const { groups, allLeafKeys, leafMap } = buildBulkRatesTree();
-    if (!bulkSelectedRateKeys) {
-        bulkSelectedRateKeys = new Set(allLeafKeys);
-    } else {
-        const valid = new Set(allLeafKeys.filter(k => bulkSelectedRateKeys.has(k)));
-        bulkSelectedRateKeys = valid.size > 0 ? valid : new Set(allLeafKeys);
-    }
-
     const totalCount = allLeafKeys.length;
     const selectedCount = bulkSelectedRateKeys.size;
-    const allChecked = selectedCount === totalCount;
 
-    let html = `
-        <label class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-indigo-50 cursor-pointer border-b border-slate-200 mb-1 font-black text-indigo-800 uppercase text-[10px]">
-            <input type="checkbox" id="qb-rate-cb-all" ${allChecked ? 'checked' : ''} onchange="window.toggleBulkRateNode('all', 'ALL', this.checked)" class="row-checkbox">
-            <span>All Rates (${totalCount})</span>
-        </label>
-    `;
-
-    groups.forEach(g => {
-        const groupLeaves = [...g.leaves, ...g.subgroups.flatMap(sg => sg.leaves)];
-        const gSel = groupLeaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
-        const gChecked = gSel === groupLeaves.length && groupLeaves.length > 0;
-
-        html += `
-            <div class="mt-1">
-                <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 cursor-pointer font-black text-[10px] uppercase text-slate-700">
-                    <input type="checkbox" id="qb-rate-cb-${g.id}" ${gChecked ? 'checked' : ''} onchange="window.toggleBulkRateNode('group', '${g.id}', this.checked)" class="row-checkbox">
-                    <span>${g.label}</span>
-                </label>
-                <div class="pl-3 space-y-0.5 mt-0.5">
-                    ${g.leaves.map(l => `
-                        <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-700">
-                            <input type="checkbox" ${bulkSelectedRateKeys.has(l.key) ? 'checked' : ''} onchange="window.toggleBulkRateNode('leaf', '${l.key.replace(/'/g, "\\'")}', this.checked)" class="row-checkbox">
-                            <span class="truncate">${l.label}</span>
-                        </label>
-                    `).join('')}
-                    ${g.subgroups.map(sg => {
-                        const sgSel = sg.leaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
-                        const sgChecked = sgSel === sg.leaves.length && sg.leaves.length > 0;
-                        return `
-                            <div class="mt-0.5">
-                                <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-100 cursor-pointer font-black text-[10px] uppercase text-slate-700">
-                                    <input type="checkbox" id="qb-rate-cb-${sg.id}" ${sgChecked ? 'checked' : ''} onchange="window.toggleBulkRateNode('subgroup', '${sg.id}', this.checked)" class="row-checkbox">
-                                    <span>${sg.label}</span>
-                                </label>
-                                <div class="pl-4 space-y-0.5">
-                                    ${sg.leaves.map(l => `
-                                        <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-600">
-                                            <input type="checkbox" ${bulkSelectedRateKeys.has(l.key) ? 'checked' : ''} onchange="window.toggleBulkRateNode('leaf', '${l.key.replace(/'/g, "\\'")}', this.checked)" class="row-checkbox">
-                                            <span class="truncate">${l.label}</span>
-                                        </label>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-        `;
+    dropdown.querySelectorAll('input[data-leaf-key]').forEach(cb => {
+        cb.checked = bulkSelectedRateKeys.has(cb.dataset.leafKey);
     });
-
-    dropdown.innerHTML = html;
-
-    const allCb = document.getElementById('qb-rate-cb-all');
-    if (allCb) allCb.indeterminate = selectedCount > 0 && selectedCount < totalCount;
 
     groups.forEach(g => {
         const groupLeaves = [...g.leaves, ...g.subgroups.flatMap(sg => sg.leaves)];
         const gSel = groupLeaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
         const gCb = document.getElementById(`qb-rate-cb-${g.id}`);
-        if (gCb) gCb.indeterminate = gSel > 0 && gSel < groupLeaves.length;
+        if (gCb) {
+            gCb.checked = gSel === groupLeaves.length && groupLeaves.length > 0;
+            gCb.indeterminate = gSel > 0 && gSel < groupLeaves.length;
+        }
 
         g.subgroups.forEach(sg => {
             const sgSel = sg.leaves.filter(l => bulkSelectedRateKeys.has(l.key)).length;
             const sgCb = document.getElementById(`qb-rate-cb-${sg.id}`);
-            if (sgCb) sgCb.indeterminate = sgSel > 0 && sgSel < sg.leaves.length;
+            if (sgCb) {
+                sgCb.checked = sgSel === sg.leaves.length && sg.leaves.length > 0;
+                sgCb.indeterminate = sgSel > 0 && sgSel < sg.leaves.length;
+            }
         });
     });
 
     if (labelEl) {
-        if (selectedCount === totalCount) {
+        if (selectedCount === 0) {
+            labelEl.innerText = 'None Selected';
+        } else if (selectedCount === totalCount) {
             labelEl.innerText = 'All Rates';
         } else if (selectedCount === 1) {
             const onlyKey = Array.from(bulkSelectedRateKeys)[0];
@@ -227,6 +244,63 @@ export function renderBulkRatesDropdown() {
     }
 }
 
+export function renderBulkRatesDropdown() {
+    const dropdown = document.getElementById('qb-rates-dropdown');
+    if (!dropdown) return;
+
+    const { groups, allLeafKeys, leafMap } = buildBulkRatesTree();
+    if (!bulkSelectedRateKeys) {
+        bulkSelectedRateKeys = new Set(allLeafKeys);
+    } else {
+        bulkSelectedRateKeys = new Set(allLeafKeys.filter(k => bulkSelectedRateKeys.has(k)));
+    }
+
+    let html = `
+        <div class="flex items-center justify-between gap-2 px-1.5 py-1 rounded bg-slate-100 border-b border-slate-200 mb-1 sticky top-0 z-10">
+            <button type="button" onclick="event.stopPropagation(); window.toggleBulkRateNode('all', 'ALL', true)" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9.5px] cursor-pointer">Select All (${allLeafKeys.length})</button>
+            <button type="button" onclick="event.stopPropagation(); window.toggleBulkRateNode('none', 'NONE', true)" class="px-2 py-0.5 rounded bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 font-black uppercase text-[9.5px] cursor-pointer">Clear All</button>
+        </div>
+    `;
+
+    groups.forEach(g => {
+        html += `
+            <div class="mt-1">
+                <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 cursor-pointer font-black text-[10px] uppercase text-slate-700">
+                    <input type="checkbox" id="qb-rate-cb-${g.id}" onchange="window.toggleBulkRateNode('group', '${g.id}', this.checked)" class="row-checkbox">
+                    <span>${g.label}</span>
+                </label>
+                <div class="pl-3 space-y-0.5 mt-0.5">
+                    ${g.leaves.map(l => `
+                        <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-700">
+                            <input type="checkbox" data-leaf-key="${l.key.replace(/"/g, '&quot;')}" onchange="window.toggleBulkRateNode('leaf', '${l.key.replace(/'/g, "\\'")}', this.checked)" class="row-checkbox">
+                            <span class="truncate">${l.label}</span>
+                        </label>
+                    `).join('')}
+                    ${g.subgroups.map(sg => `
+                        <div class="mt-0.5">
+                            <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-100 cursor-pointer font-black text-[10px] uppercase text-slate-700">
+                                <input type="checkbox" id="qb-rate-cb-${sg.id}" onchange="window.toggleBulkRateNode('subgroup', '${sg.id}', this.checked)" class="row-checkbox">
+                                <span>${sg.label}</span>
+                            </label>
+                            <div class="pl-4 space-y-0.5">
+                                ${sg.leaves.map(l => `
+                                    <label class="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-600">
+                                        <input type="checkbox" data-leaf-key="${l.key.replace(/"/g, '&quot;')}" onchange="window.toggleBulkRateNode('leaf', '${l.key.replace(/'/g, "\\'")}', this.checked)" class="row-checkbox">
+                                        <span class="truncate">${l.label}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    dropdown.innerHTML = html;
+    syncBulkRatesDropdownState(groups, allLeafKeys, leafMap);
+}
+
 export function toggleBulkRatesDropdown(e) {
     if (e) e.stopPropagation();
     const dropdown = document.getElementById('qb-rates-dropdown');
@@ -241,8 +315,14 @@ export function toggleBulkRatesDropdown(e) {
 }
 
 export function toggleBulkRateNode(nodeType, nodeId, checked) {
-    const { groups, allLeafKeys } = buildBulkRatesTree();
+    const { groups, allLeafKeys, leafMap } = buildBulkRatesTree();
     if (!bulkSelectedRateKeys) bulkSelectedRateKeys = new Set(allLeafKeys);
+
+    if (nodeType === 'none') {
+        bulkSelectedRateKeys.clear();
+        syncBulkRatesDropdownState(groups, allLeafKeys, leafMap);
+        return;
+    }
 
     let targetKeys = [];
     if (nodeType === 'all') {
@@ -262,16 +342,12 @@ export function toggleBulkRateNode(nodeType, nodeId, checked) {
         else bulkSelectedRateKeys.delete(k);
     });
 
-    if (bulkSelectedRateKeys.size === 0) {
-        bulkSelectedRateKeys = new Set(allLeafKeys);
-    }
-
-    renderBulkRatesDropdown();
+    syncBulkRatesDropdownState(groups, allLeafKeys, leafMap);
 }
 
 if (typeof document !== 'undefined') {
     document.addEventListener('click', e => {
-        if (!e.target.closest('#qb-rates-wrap')) {
+        if (e.target && e.target.isConnected && !e.target.closest('#qb-rates-wrap')) {
             document.getElementById('qb-rates-dropdown')?.classList.add('hidden');
         }
     });
@@ -328,13 +404,14 @@ export function setBulkScopeMode(mode) {
 
 export function cycleBulkRowPill(btn) {
     if (!btn) return;
-    const states = ['open', 'cta', 'ctd', 'both', 'stop'];
-    const cur = btn.dataset.state || 'open';
+    const states = ['nochange', 'open', 'cta', 'ctd', 'both', 'stop'];
+    const cur = btn.dataset.state || 'nochange';
     const next = states[(states.indexOf(cur) + 1) % states.length];
     btn.dataset.state = next;
 
     const labels = {
-        open: 'No Change / Open',
+        nochange: 'No Change',
+        open: 'OPEN (Clear Closures)',
         cta: 'CTA (Closed Arrival)',
         ctd: 'CTD (Closed Depart)',
         both: 'CTB (Closed Both)',
@@ -342,14 +419,15 @@ export function cycleBulkRowPill(btn) {
     };
 
     const classes = {
-        open: 'bg-slate-100 text-slate-600 border-slate-300',
+        nochange: 'bg-slate-100 text-slate-600 border-slate-300',
+        open: 'bg-emerald-100 text-emerald-900 border-emerald-400',
         cta: 'bg-amber-200 text-amber-900 border-amber-400',
         ctd: 'bg-sky-200 text-sky-900 border-sky-400',
         both: 'bg-purple-200 text-purple-900 border-purple-400',
         stop: 'bg-rose-600 text-white border-rose-600'
     };
 
-    btn.className = `qb-val-pill w-full sm:w-40 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-2xs ${classes[next]}`;
+    btn.className = `qb-val-pill w-full sm:w-44 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-2xs ${classes[next]}`;
     btn.innerHTML = labels[next];
 }
 
@@ -358,7 +436,7 @@ export function renderBulkGrid() {
     if (!qbBody) return;
 
     const inptCls = "table-input text-center font-black";
-    const pillBtn = `<button type="button" data-state="open" onclick="window.cycleBulkRowPill(this)" class="qb-val-pill w-full sm:w-40 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-2xs bg-slate-100 text-slate-600 border-slate-300">No Change / Open</button>`;
+    const pillBtn = `<button type="button" data-state="nochange" onclick="window.cycleBulkRowPill(this)" class="qb-val-pill w-full sm:w-44 py-1 text-center text-[10px] font-black uppercase rounded cursor-pointer transition-colors border shadow-2xs bg-slate-100 text-slate-600 border-slate-300">No Change</button>`;
 
     let html = `
     <tr class="bg-slate-50 font-black text-slate-800" data-type="global" data-id="GLOBAL">
@@ -416,23 +494,52 @@ export function renderBulkGrid() {
     qbBody.innerHTML = html;
 }
 
+function clearRoomRestrictionFields(rmData, rule) {
+    if (!rmData) return;
+    if (rule.min !== undefined || rule.min_arr !== undefined) {
+        delete rmData.min;
+        delete rmData.min_arr;
+        if (rmData.isOverride) { delete rmData.isOverride.min; delete rmData.isOverride.min_arr; }
+    }
+    if (rule.max !== undefined) {
+        delete rmData.max;
+        if (rmData.isOverride) delete rmData.isOverride.max;
+    }
+    if (rule.pillState !== 'nochange') {
+        delete rmData.cta;
+        delete rmData.ctd;
+        delete rmData.stop;
+        delete rmData.stopSell;
+        delete rmData.evt_stop;
+        delete rmData.evt_stopSell;
+        delete rmData.dir_stop;
+        delete rmData.dir_stopSell;
+        if (rmData.isOverride) { delete rmData.isOverride.cta; delete rmData.isOverride.ctd; delete rmData.isOverride.stop; }
+    }
+}
+
 export function applyBulkGrid(isClear = false) {
     const s = document.getElementById('qb-start')?.value;
     const e = document.getElementById('qb-end')?.value;
     if (!s || !e) return customAlert("Validation Error", "Please choose a valid Start and End date range.");
     if (s > e) return customAlert("Validation Error", "End date must be on or after Start date.");
 
+    const { allLeafKeys, leafMap } = buildBulkRatesTree();
+    if (!bulkSelectedRateKeys) bulkSelectedRateKeys = new Set(allLeafKeys);
+    if (!isClear && bulkSelectedRateKeys.size === 0) {
+        return customAlert("No Rates Selected", "Select at least one rate plan in the Rates dropdown before applying.");
+    }
+
     window.masterPricing = window.masterPricing || { timeline: {}, relationships: [] };
     window.masterPricing.timeline = window.masterPricing.timeline || {};
     window.dirtyDates = window.dirtyDates || new Set();
     window.syncedDates = window.syncedDates || new Set();
+    window.dirtyCellKeys = window.dirtyCellKeys || new Set();
+    window.justSyncedCellKeys = window.justSyncedCellKeys || new Set();
 
     const sU = parseYMD(s);
     const eU = parseYMD(e);
     const rows = document.querySelectorAll('#qb-grid-body tr');
-
-    const { allLeafKeys, leafMap } = buildBulkRatesTree();
-    if (!bulkSelectedRateKeys) bulkSelectedRateKeys = new Set(allLeafKeys);
     const isAllRatesSelected = bulkSelectedRateKeys.size === allLeafKeys.length;
 
     const selectedPlanSigs = new Set();
@@ -443,24 +550,26 @@ export function applyBulkGrid(isClear = false) {
 
     const applyRestrictionPayload = (dObj, dateStr, targetRoom, r) => {
         const targetRooms = getTargetRoomsForBulkRow(targetRoom);
-        const primaryData = dObj[targetRoom] || (dObj[targetRoom] = { isOverride: {} });
-        primaryData.isOverride = primaryData.isOverride || {};
 
         if (isAllRatesSelected || bulkSelectedRateKeys.has('DEF::BASE')) {
-            if (r.min !== undefined) { primaryData.min = r.min; delete primaryData.min_arr; primaryData.isOverride.min = true; }
-            if (r.min_arr !== undefined) { primaryData.min_arr = r.min_arr; delete primaryData.min; primaryData.isOverride.min_arr = true; }
-            if (r.max !== undefined) { primaryData.max = r.max; primaryData.isOverride.max = true; }
-            if (r.pillState !== 'open') {
-                primaryData.cta = r.cta;
-                primaryData.ctd = r.ctd;
-                primaryData.stop = r.stop;
-                primaryData.isOverride.cta = true;
-                primaryData.isOverride.ctd = true;
-                primaryData.isOverride.stop = true;
-            }
-            if (bulkScopeMode === 'anchors') {
-                rippleDay(dateStr, targetRoom, true, 'restrictions');
-            }
+            targetRooms.forEach(rm => {
+                const rmData = dObj[rm] || (dObj[rm] = { isOverride: {} });
+                rmData.isOverride = rmData.isOverride || {};
+                if (r.min !== undefined) { rmData.min = r.min; delete rmData.min_arr; rmData.isOverride.min = true; }
+                if (r.min_arr !== undefined) { rmData.min_arr = r.min_arr; delete rmData.min; rmData.isOverride.min_arr = true; }
+                if (r.max !== undefined) { rmData.max = r.max; rmData.isOverride.max = true; }
+                if (r.pillState !== 'nochange') {
+                    rmData.cta = r.cta;
+                    rmData.ctd = r.ctd;
+                    rmData.stop = r.stop;
+                    delete rmData.stopSell;
+                    rmData.isOverride.cta = true;
+                    rmData.isOverride.ctd = true;
+                    rmData.isOverride.stop = true;
+                }
+                window.dirtyCellKeys.add(`${dateStr}|${rm}`);
+                window.justSyncedCellKeys.delete(`${dateStr}|${rm}`);
+            });
         }
 
         if (isAllRatesSelected || bulkSelectedRateKeys.has('DIR::BASE')) {
@@ -469,39 +578,61 @@ export function applyBulkGrid(isClear = false) {
                 if (r.min !== undefined) { rmData.dir_min = r.min; delete rmData.dir_min_arr; }
                 if (r.min_arr !== undefined) { rmData.dir_min_arr = r.min_arr; delete rmData.dir_min; }
                 if (r.max !== undefined) { rmData.dir_max = r.max; }
-                if (r.pillState !== 'open') {
+                if (r.pillState !== 'nochange') {
                     rmData.dir_cta = r.cta;
                     rmData.dir_ctd = r.ctd;
                     rmData.dir_stop = r.stop;
+                    delete rmData.dir_stopSell;
                 }
             });
         }
 
         if (isAllRatesSelected || bulkSelectedRateKeys.has('EVT::BASE')) {
-            dObj.evtRestrictions = dObj.evtRestrictions || {};
-            if (r.min !== undefined) { dObj.evtRestrictions.min = r.min; delete dObj.evtRestrictions.min_arr; }
-            if (r.min_arr !== undefined) { dObj.evtRestrictions.min_arr = r.min_arr; delete dObj.evtRestrictions.min; }
-            if (r.max !== undefined) { dObj.evtRestrictions.max = r.max; }
-            if (r.pillState !== 'open') {
-                dObj.evtRestrictions.cta = r.cta;
-                dObj.evtRestrictions.ctd = r.ctd;
-                dObj.evtRestrictions.stop = r.stop;
-            }
+            targetRooms.forEach(rm => {
+                const rmData = dObj[rm] || (dObj[rm] = { isOverride: {} });
+                if (r.min !== undefined) { rmData.evt_min = r.min; delete rmData.evt_min_arr; }
+                if (r.min_arr !== undefined) { rmData.evt_min_arr = r.min_arr; delete rmData.evt_min; }
+                if (r.max !== undefined) { rmData.evt_max = r.max; }
+                if (r.pillState !== 'nochange') {
+                    rmData.evt_cta = r.cta;
+                    rmData.evt_ctd = r.ctd;
+                    rmData.evt_stop = r.stop;
+                    delete rmData.evt_stopSell;
+                }
+                window.dirtyCellKeys.add(`${dateStr}|${rm}`);
+                window.justSyncedCellKeys.delete(`${dateStr}|${rm}`);
+            });
         }
 
-        if (isAllRatesSelected || selectedPlanSigs.size > 0) {
+        if (isAllRatesSelected) {
+            if (dObj.otaOverrides) {
+                (window.channexRateMap || []).forEach(rp => {
+                    const mappedCat = findCanonicalRoom(rp.pmsCategory) || rp.pmsCategory;
+                    if (!targetRooms.includes(mappedCat)) return;
+                    if (r.min !== undefined || r.min_arr !== undefined) {
+                        delete dObj.otaOverrides[`${rp.ratePlanId}_min`];
+                        delete dObj.otaOverrides[`${rp.ratePlanId}_min_arr`];
+                    }
+                    if (r.max !== undefined) delete dObj.otaOverrides[`${rp.ratePlanId}_max`];
+                    if (r.pillState !== 'nochange') {
+                        delete dObj.otaOverrides[`${rp.ratePlanId}_cta`];
+                        delete dObj.otaOverrides[`${rp.ratePlanId}_ctd`];
+                        delete dObj.otaOverrides[`${rp.ratePlanId}_stop`];
+                    }
+                });
+            }
+        } else if (selectedPlanSigs.size > 0) {
             dObj.otaOverrides = dObj.otaOverrides || {};
             (window.channexRateMap || []).forEach(rp => {
                 const mappedCat = findCanonicalRoom(rp.pmsCategory) || rp.pmsCategory;
                 if (!targetRooms.includes(mappedCat)) return;
-                const ch = resolveChannelCode(rp.channel || '');
-                const planSig = `${ch}::${getCleanPlanLabel(rp).toLowerCase()}`;
-                if (!isAllRatesSelected && !selectedPlanSigs.has(planSig)) return;
+                const planSig = getPlanSignature(rp);
+                if (!selectedPlanSigs.has(planSig)) return;
 
                 if (r.min !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_min`] = r.min; delete dObj.otaOverrides[`${rp.ratePlanId}_min_arr`]; }
                 if (r.min_arr !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_min_arr`] = r.min_arr; delete dObj.otaOverrides[`${rp.ratePlanId}_min`]; }
                 if (r.max !== undefined) { dObj.otaOverrides[`${rp.ratePlanId}_max`] = r.max; }
-                if (r.pillState !== 'open') {
+                if (r.pillState !== 'nochange') {
                     dObj.otaOverrides[`${rp.ratePlanId}_cta`] = r.cta;
                     dObj.otaOverrides[`${rp.ratePlanId}_ctd`] = r.ctd;
                     dObj.otaOverrides[`${rp.ratePlanId}_stop`] = r.stop;
@@ -537,10 +668,11 @@ export function applyBulkGrid(isClear = false) {
         }
 
         const max = (maxInput && maxInput.value.trim() !== "") ? parseInt(maxInput.value.trim(), 10) : undefined;
-        const pillState = pill?.dataset.state || 'open';
+        const pillState = pill?.dataset.state || 'nochange';
 
         let cta = undefined, ctd = undefined, stop = undefined;
-        if (pillState === 'cta') { cta = true; ctd = false; stop = false; }
+        if (pillState === 'open') { cta = false; ctd = false; stop = false; }
+        else if (pillState === 'cta') { cta = true; ctd = false; stop = false; }
         else if (pillState === 'ctd') { cta = false; ctd = true; stop = false; }
         else if (pillState === 'both') { cta = true; ctd = true; stop = false; }
         else if (pillState === 'stop') { cta = false; ctd = false; stop = true; }
@@ -559,7 +691,7 @@ export function applyBulkGrid(isClear = false) {
         window.syncedDates.delete(dateStr);
 
         if (globalRule) {
-            const hasGlobalRestr = globalRule.min !== undefined || globalRule.min_arr !== undefined || globalRule.max !== undefined || globalRule.pillState !== 'open';
+            const hasGlobalRestr = globalRule.min !== undefined || globalRule.min_arr !== undefined || globalRule.max !== undefined || globalRule.pillState !== 'nochange';
             dObj['GLOBAL'] = dObj['GLOBAL'] || { isOverride: {} };
             dObj['GLOBAL'].isOverride = dObj['GLOBAL'].isOverride || {};
             if (isClear) {
@@ -576,19 +708,21 @@ export function applyBulkGrid(isClear = false) {
                     if (globalRule.min !== undefined) { dObj['GLOBAL'].min = globalRule.min; delete dObj['GLOBAL'].min_arr; dObj['GLOBAL'].isOverride.min = true; }
                     if (globalRule.min_arr !== undefined) { dObj['GLOBAL'].min_arr = globalRule.min_arr; delete dObj['GLOBAL'].min; dObj['GLOBAL'].isOverride.min_arr = true; }
                     if (globalRule.max !== undefined) { dObj['GLOBAL'].max = globalRule.max; dObj['GLOBAL'].isOverride.max = true; }
-                    if (globalRule.pillState !== 'open') {
+                    if (globalRule.pillState !== 'nochange') {
                         dObj['GLOBAL'].cta = globalRule.cta;
                         dObj['GLOBAL'].ctd = globalRule.ctd;
                         dObj['GLOBAL'].stop = globalRule.stop;
+                        delete dObj['GLOBAL'].stopSell;
                         dObj['GLOBAL'].isOverride.cta = true;
                         dObj['GLOBAL'].isOverride.ctd = true;
                         dObj['GLOBAL'].isOverride.stop = true;
                     }
+                    (window.roomTypes || []).forEach(rt => clearRoomRestrictionFields(dObj[rt], globalRule));
                 } else {
                     (window.roomTypes || []).forEach(rt => applyRestrictionPayload(dObj, dateStr, rt, globalRule));
                 }
+                if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', '*');
             }
-            if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', '*');
         }
 
         roomUpdates.forEach(r => {
@@ -598,28 +732,45 @@ export function applyBulkGrid(isClear = false) {
             rData.isOverride = rData.isOverride || {};
 
             if (isClear) {
-                delete rData.std;
-                delete rData.min;
-                delete rData.max;
-                delete rData.min_arr;
-                delete rData.cta;
-                delete rData.ctd;
-                delete rData.stop;
-                rData.isOverride = {};
+                getTargetRoomsForBulkRow(rt).forEach(targetRm => {
+                    if (!dObj[targetRm]) return;
+                    delete dObj[targetRm].std;
+                    delete dObj[targetRm].min;
+                    delete dObj[targetRm].max;
+                    delete dObj[targetRm].min_arr;
+                    delete dObj[targetRm].cta;
+                    delete dObj[targetRm].ctd;
+                    delete dObj[targetRm].stop;
+                    delete dObj[targetRm].stopSell;
+                    delete dObj[targetRm].evt_stop;
+                    delete dObj[targetRm].evt_stopSell;
+                    delete dObj[targetRm].dir_stop;
+                    delete dObj[targetRm].dir_stopSell;
+                    dObj[targetRm].isOverride = {};
+                    window.dirtyCellKeys.add(`${dateStr}|${targetRm}`);
+                    window.justSyncedCellKeys.delete(`${dateStr}|${targetRm}`);
+                });
+                if (typeof window.markCmDirty === 'function') {
+                    window.markCmDirty(dateStr, 'rate', bulkScopeMode === 'anchors' ? '*' : `ROOM:${rt}`);
+                }
             } else {
                 const hasRateChange = r.rate !== undefined && !isNaN(r.rate);
-                const hasRestrChange = r.min !== undefined || r.min_arr !== undefined || r.max !== undefined || r.pillState !== 'open';
+                const hasRestrChange = r.min !== undefined || r.min_arr !== undefined || r.max !== undefined || r.pillState !== 'nochange';
 
                 if (hasRateChange) {
                     rData.std = roundCurrency(r.rate);
                     rData.isOverride.std = true;
-                    rippleDay(dateStr, rt, true, 'rates');
+                    window.dirtyCellKeys.add(`${dateStr}|${rt}`);
+                    window.justSyncedCellKeys.delete(`${dateStr}|${rt}`);
+                    if (bulkScopeMode === 'anchors') {
+                        rippleDay(dateStr, rt, true);
+                    }
                 }
                 if (hasRestrChange) {
                     applyRestrictionPayload(dObj, dateStr, rt, r);
                 }
                 if ((hasRateChange || hasRestrChange) && typeof window.markCmDirty === 'function') {
-                    window.markCmDirty(dateStr, 'rate', '*');
+                    window.markCmDirty(dateStr, 'rate', bulkScopeMode === 'anchors' ? '*' : `ROOM:${rt}`);
                 }
             }
         });
@@ -652,20 +803,27 @@ export function runRippleRecovery(mode = 'blanks') {
         if (!dObj) continue;
 
         if (mode === 'blanks') {
-            const preserved = {};
+            const preservedRates = {};
             allRooms.forEach(rt => {
                 const cur = dObj[rt];
-                if (cur && cur.std !== undefined && cur.std !== "") preserved[rt] = { ...cur };
+                if (cur && cur.std !== undefined && cur.std !== "") {
+                    preservedRates[rt] = { std: cur.std, fmp: cur.fmp, isStdOvr: !!cur.isOverride?.std, isFmpOvr: !!cur.isOverride?.fmp };
+                }
             });
 
-            const seeds = Array.from(new Set([anchorP, anchorD, ...Object.keys(preserved)].filter(Boolean)));
+            const seeds = Array.from(new Set([anchorP, anchorD, ...Object.keys(preservedRates)].filter(Boolean)));
             seeds.forEach(seed => {
-                if (preserved[seed]) rippleDay(dateStr, seed, true);
+                if (preservedRates[seed]) rippleDay(dateStr, seed, true);
             });
 
             allRooms.forEach(rt => {
-                if (preserved[rt]) {
-                    dObj[rt] = preserved[rt];
+                if (preservedRates[rt]) {
+                    dObj[rt] = dObj[rt] || { isOverride: {} };
+                    dObj[rt].std = preservedRates[rt].std;
+                    if (preservedRates[rt].fmp !== undefined) dObj[rt].fmp = preservedRates[rt].fmp;
+                    dObj[rt].isOverride = dObj[rt].isOverride || {};
+                    if (preservedRates[rt].isStdOvr) dObj[rt].isOverride.std = true;
+                    if (preservedRates[rt].isFmpOvr) dObj[rt].isOverride.fmp = true;
                 } else if (dObj[rt] && dObj[rt].std !== undefined && dObj[rt].std !== "") {
                     updatedCount++;
                     if (typeof window.markCmDirty === 'function') window.markCmDirty(dateStr, 'rate', `ROOM:${rt}`);
@@ -762,17 +920,23 @@ export function initCurveTuner(targetDateStr = null) {
     const select = document.getElementById('ct-event-select');
     if (!select) return;
 
-    const events = (window.eventDates || []).slice().sort();
-    if (events.length === 0) {
-        select.innerHTML = `<option value="">No events — add a date →</option>`;
+    const todayStr = getLocalYMD(new Date());
+    const upcomingEvents = (window.eventDates || [])
+        .filter(d => d >= todayStr || (targetDateStr && d === targetDateStr))
+        .slice()
+        .sort();
+
+    if (upcomingEvents.length === 0) {
+        select.innerHTML = `<option value="">No upcoming events — add a date →</option>`;
         renderCurveRestrictionsGrid();
         return;
     }
 
-    const todayStr = getLocalYMD(new Date());
-    let selectedDate = targetDateStr || events.find(d => d >= todayStr) || events[events.length - 1];
+    const selectedDate = (targetDateStr && upcomingEvents.includes(targetDateStr))
+        ? targetDateStr
+        : upcomingEvents[0];
 
-    select.innerHTML = events.map(dStr => {
+    select.innerHTML = upcomingEvents.map(dStr => {
         const dObj = new Date(dStr + "T12:00:00Z");
         return `<option value="${dStr}" ${dStr === selectedDate ? 'selected' : ''}>${dObj.getUTCDate()} ${mNames[dObj.getUTCMonth()]} ${dObj.getUTCFullYear()} (${dStr})</option>`;
     }).join('');
@@ -999,7 +1163,9 @@ export function applyCurveTuner() {
 
     const restrMap = readCurveRestrictionsFromUI();
     const evtRatePlans = (window.channexRateMap || []).filter(
-        r => (r.product === 'evt') || (r.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(r.ratePlanTitle || '')
+        r => typeof r.isEvent === 'boolean'
+            ? r.isEvent
+            : (r.policy?.startsWith('event') || r.product === 'evt' || r.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(r.ratePlanTitle || ''))
     );
 
     for (let off = -6; off <= 6; off++) {
@@ -1063,6 +1229,14 @@ export function applyCurveTuner() {
                 dObj.otaOverrides[`${rp.ratePlanId}_ctd`] = rCtd;
             });
         }
+
+        window.dirtyCellKeys = window.dirtyCellKeys || new Set();
+        window.justSyncedCellKeys = window.justSyncedCellKeys || new Set();
+        [anchorP, anchorD].filter(Boolean).forEach(anc => {
+            window.dirtyCellKeys.add(`${dStr}|${anc}`);
+            window.justSyncedCellKeys.delete(`${dStr}|${anc}`);
+        });
+        if (typeof window.markCmDirty === 'function') window.markCmDirty(dStr, 'rate', '*');
 
         window.dirtyDates.add(dStr);
         window.syncedDates.delete(dStr);

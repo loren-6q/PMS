@@ -120,6 +120,7 @@ export async function loadPropertyData(propId) {
             setVal('prop-address', data.address);
             setVal('prop-email', data.email);
             setVal('prop-phone', data.phone);
+            setVal('prop-admin-password', data.adminPassword);
             setVal('prop-logo-url', data.logoUrl);
             setVal('prop-banner-url', data.bannerUrl);
             setVal('prop-icon-url', data.iconUrl);
@@ -199,6 +200,7 @@ export async function savePropertyToDatabase(notify = true) {
             address: document.getElementById('prop-address')?.value || '',
             email: document.getElementById('prop-email')?.value || '',
             phone: document.getElementById('prop-phone')?.value || '',
+            adminPassword: document.getElementById('prop-admin-password')?.value.trim() || '',
             logoUrl: document.getElementById('prop-logo-url')?.value || '',
             bannerUrl: document.getElementById('prop-banner-url')?.value || '',
             iconUrl: document.getElementById('prop-icon-url')?.value || '',

@@ -1,8 +1,9 @@
 // ==========================================================================
 // channex.js - Certified Official Channex Transmission & Outbox Engine
 // Wild & Wandering Property Management System
-// 
+//
 // ARCHITECTURE CONTRACT & CHANNEX CERTIFICATION COMPLIANCE:
+// - Single Source of Truth for ALL Channex API endpoints, pagination & schemas
 // - Paced Outbox Rate Limiter (strictly <= 18 ARI calls/min)
 // - Exponential backoff for 429 (Retry-After) and 5xx responses
 // - Contiguous Date Range Compressor (single 'date' vs 'date_from'/'date_to')
@@ -16,7 +17,7 @@
 
 import { isOccupyingBooking } from './core/occupancy.js';
 import { parseYMD, getLocalYMD } from './core/dates.js';
-import { toCanonicalPropId } from './core/properties.js';
+import { toCanonicalPropId, resolveRoomCategory } from './core/properties.js';
 import { customAlert } from './core/ui-dialogs.js';
 
 const CHANNEX_STAGING_HOST = "staging.channex.io";
@@ -77,11 +78,13 @@ export const ChannexClient = {
         return `https://${this.getHost(isStaging)}/api/v1`;
     },
 
-    async request(endpoint, options = {}, apiKey, isStaging = false, retries = 4, backoffMs = 1000) {
+    async request(endpoint, options = {}, apiKey, isStaging = undefined, retries = 4, backoffMs = 1000) {
         const key = apiKey || window.channexConfig?.apiKey || localStorage.getItem('cm_master_channex_api_key');
         if (!key) throw new Error("Channex API key is required.");
 
-        const staging = isStaging !== undefined ? isStaging : !!(window.channexConfig?.isStaging || window.channexConfig?.env === 'staging');
+        const staging = typeof isStaging === 'boolean'
+            ? isStaging
+            : !!(window.channexConfig?.isStaging || window.channexConfig?.env === 'staging');
         const url = `${this.getBaseUrl(staging)}${endpoint}`;
         const headers = {
             "user-api-key": key,
@@ -127,8 +130,96 @@ export const ChannexClient = {
         return limiter.enqueue(executeCall);
     },
 
+    // --- PAGINATED COLLECTION FETCHER (ALL PAGES) ---
+    async requestAll(endpoint, options = {}, apiKey, isStaging = undefined, limit = 100) {
+        let page = 1;
+        const allItems = [];
+        while (page <= 25) {
+            const sep = endpoint.includes('?') ? '&' : '?';
+            const pagedEndpoint = `${endpoint}${sep}pagination[page]=${page}&pagination[limit]=${limit}`;
+            const json = await this.request(pagedEndpoint, options, apiKey, isStaging);
+            const items = Array.isArray(json?.data) ? json.data : [];
+            allItems.push(...items);
+
+            const total = Number(json?.meta?.total);
+            if (Number.isFinite(total) && total > 0) {
+                if (allItems.length >= total || items.length === 0) break;
+            } else if (items.length < limit) {
+                break;
+            }
+            page++;
+        }
+        return allItems;
+    },
+
+    // --- PROPERTY INVENTORY & SETUP DATA FETCHERS ---
+    async fetchPropertySetupData(propId, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+
+        const rooms = await this.requestAll(`/room_types?filter[property_id]=${propId}`, {}, apiKey, isStaging);
+        const allPlans = await this.requestAll(`/rate_plans?filter[property_id]=${propId}`, {}, apiKey, isStaging);
+
+        let policies = [];
+        try {
+            policies = await this.requestAll(`/cancellation_policies?filter[property_id]=${propId}`, {}, apiKey, isStaging);
+        } catch (err) {
+            console.warn("[Channex] Could not fetch cancellation policies:", err);
+        }
+
+        let channels = [];
+        try {
+            channels = await this.requestAll(`/channels?filter[property_id]=${propId}`, {}, apiKey, isStaging);
+        } catch (err) {
+            console.warn("[Channex] Could not fetch connected channels:", err);
+        }
+
+        // Primary base plans only (scoped strictly to active property)
+        const ratePlans = allPlans.filter(p => {
+            const attr = p.attributes || {};
+            const rel = p.relationships || {};
+            const planPropId = attr.property_id || rel.property?.data?.id;
+            if (planPropId && planPropId !== propId) return false;
+            const hasChannel = !!(rel.channel?.data?.id || attr.channel_id);
+            const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
+            return !hasChannel && !hasParent && !attr.ui_read_only && !attr.is_derived;
+        });
+
+        return { rooms, ratePlans, policies, channels };
+    },
+
+    async fetchCancellationPolicies(propId, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+        return this.requestAll(`/cancellation_policies?filter[property_id]=${propId}`, {}, apiKey, isStaging);
+    },
+
+    async createRoomType(propId, roomTypeFields, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+        return this.request('/room_types', {
+            method: 'POST',
+            body: JSON.stringify({
+                room_type: {
+                    property_id: propId,
+                    ...roomTypeFields
+                }
+            })
+        }, apiKey, isStaging);
+    },
+
+    async createRatePlan(propId, ratePlanFields, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+        return this.request('/rate_plans', {
+            method: 'POST',
+            body: JSON.stringify({
+                rate_plan: {
+                    property_id: propId,
+                    ...ratePlanFields
+                }
+            })
+        }, apiKey, isStaging);
+    },
+
     // --- REVISION ACKNOWLEDGEMENT (TEST 11) ---
-    async acknowledgeRevision(revisionId, apiKey, isStaging = false) {
+    async acknowledgeRevision(revisionId, apiKey, isStaging = undefined) {
         if (!revisionId) throw new Error("Revision ID is required.");
         return this.request(`/booking_revisions/${revisionId}/ack`, {
             method: "POST",
@@ -137,7 +228,7 @@ export const ChannexClient = {
     },
 
     // --- FULL DATA SYNC (TEST 1: EXACTLY 2 API CALLS FOR 500 DAYS) ---
-    async executeFullSync(propId, apiKey, availValues, restrValues, isStaging = false) {
+    async executeFullSync(propId, apiKey, availValues, restrValues, isStaging = undefined) {
         let availabilityTaskId = null;
         let restrictionsTaskId = null;
 
@@ -167,8 +258,6 @@ export const ChannexClient = {
 // 2. CONTIGUOUS RANGE COMPRESSION (CHANNEX BEST PRACTICES)
 // --------------------------------------------------------------------------
 
-// Merges contiguous dates with identical attributes.
-// Normalizes 1-day entries to 'date' and multi-day spans to 'date_from'/'date_to'.
 export function compressDateEntries(entries) {
     if (!entries || entries.length === 0) return [];
     const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
@@ -199,7 +288,6 @@ export function compressDateEntries(entries) {
         if (isContiguous && isSameAttributes) {
             currentRange.date_to = date;
         } else {
-            // Commit previous range
             if (currentRange.date_from === currentRange.date_to) {
                 compressed.push({
                     date: currentRange.date_from,
@@ -240,73 +328,72 @@ export function compressDateEntries(entries) {
 }
 
 // --------------------------------------------------------------------------
-// 3. PMS INVENTORY DEDUCTION (THE STRICT OCCUPANCY LAW)
+// 3. PMS INVENTORY DEDUCTION (2-STEP BED + UNASSIGNED COUNTER)
 // --------------------------------------------------------------------------
 
 export function getPeakCategoryCapacity(pmsCat) {
-    let maxSeen = 0;
-    if (window.liveInventory) {
-        Object.values(window.liveInventory).forEach(dayObj => {
-            if (dayObj && typeof dayObj[pmsCat] === 'number' && dayObj[pmsCat] > maxSeen) {
-                maxSeen = dayObj[pmsCat];
-            }
-        });
-    }
-    if (maxSeen > 0) return maxSeen;
-
-    const physicalCount = (window.hotelRooms || []).filter(r => (r.type === pmsCat || r.category === pmsCat)).length;
-    if (physicalCount > 0) return physicalCount;
-
-    return 1;
+    const activeBeds = (window.hotelRooms || []).filter(
+        r => !r.inactive && (r.type === pmsCat || r.category === pmsCat)
+    );
+    return activeBeds.length > 0 ? activeBeds.length : 1;
 }
 
 export function getNetAvailabilityForDate(pmsCat, dStr, peakCap) {
-    if (window.liveInventory && window.liveInventory[dStr] && typeof window.liveInventory[dStr][pmsCat] === 'number') {
-        return window.liveInventory[dStr][pmsCat];
-    }
-
     const staffList = window.staff || window.bookings || [];
-    let occupied = 0;
-    const curProp = window.currentPropertyId;
+    const hotelRooms = (window.hotelRooms || []).filter(r => !r.inactive);
+    const curProp = toCanonicalPropId(window.currentPropertyId || '');
 
-    if (Array.isArray(staffList)) {
-        for (let i = 0; i < staffList.length; i++) {
-            const s = staffList[i];
-            if (!s) continue;
-            const sProp = toCanonicalPropId(s.property);
-            if (sProp && curProp && sProp !== curProp) continue;
+    // 1. All physical beds/rooms mapped to this category
+    const categoryBedIds = new Set(
+        hotelRooms
+            .filter(r => (r.type === pmsCat || r.category === pmsCat) && r.id)
+            .map(r => String(r.id).trim().toUpperCase())
+    );
 
-            const rList = Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []);
-            const hasAssignedRoom = rList.length > 0 && rList[0] !== "";
+    const isDorm = pmsCat.toLowerCase().includes('dorm') || pmsCat.toLowerCase().includes('bed');
+    const pmsCatUpper = pmsCat.toUpperCase().trim();
+    const occupiedBedIds = new Set();
+    let unassignedCount = 0;
 
-            // The Strict Occupancy Law
-            if (!isOccupyingBooking(s.status, hasAssignedRoom)) continue;
+    for (let i = 0; i < staffList.length; i++) {
+        const s = staffList[i];
+        if (!s || s.isMockTest) continue;
+        if (curProp && toCanonicalPropId(s.property) !== curProp) continue;
 
-            const catMatch = (s.bookedType && (s.bookedType === pmsCat || s.bookedType.includes(pmsCat) || pmsCat.includes(s.bookedType)))
-                || (s.category === pmsCat || s.roomType === pmsCat);
+        const cIn = s.checkIn || s.start;
+        const cOut = s.checkOut || s.end;
+        if (!cIn || !cOut || dStr < cIn || dStr >= cOut) continue;
 
-            if (!catMatch && !hasAssignedRoom) continue;
+        const assignedRooms = (Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []))
+            .map(r => String(r || '').trim().toUpperCase())
+            .filter(Boolean);
 
-            const cIn = s.checkIn || s.start;
-            const cOut = s.checkOut || s.end;
+        if (!isOccupyingBooking(s.status, assignedRooms.length > 0)) continue;
 
-            if (cIn && cOut && dStr >= cIn && dStr < cOut) {
-                if (pmsCat.toLowerCase().includes('dorm') || pmsCat.toLowerCase().includes('bed')) {
-                    occupied += parseInt(s.pax || s.bedCount || 1, 10);
-                } else {
-                    occupied += Math.max(1, rList.length);
-                }
+        if (assignedRooms.length > 0) {
+            // Step 1: Mark any physical bed belonging to this category as occupied
+            assignedRooms.forEach(rid => {
+                if (categoryBedIds.has(rid)) occupiedBedIds.add(rid);
+            });
+        } else {
+            // Step 2: Count unassigned bookings belonging to this category
+            const bType = String(s.bookedType || s.category || '').toUpperCase().trim();
+            if (bType === pmsCatUpper || bType.includes(pmsCatUpper) || pmsCatUpper.includes(bType)) {
+                unassignedCount += isDorm
+                    ? (parseInt(s.pax || s.unitCount || 1, 10) || 1)
+                    : (parseInt(s.unitCount || 1, 10) || 1);
             }
         }
     }
-    return Math.max(0, peakCap - occupied);
+
+    const totalBeds = categoryBedIds.size > 0 ? categoryBedIds.size : peakCap;
+    return Math.max(0, totalBeds - (occupiedBedIds.size + unassignedCount));
 }
 
 // --------------------------------------------------------------------------
 // 4. GRANULAR DISPATCHERS: ISOLATED RATES, RESTRICTIONS & AVAILABILITY
 // --------------------------------------------------------------------------
 
-// Format rates per Channex API spec: decimal string or integer cents
 function formatChannexRate(amount) {
     if (amount === null || amount === undefined || isNaN(amount) || amount <= 0) return null;
     const mult = Number(window.channexConfig?.rateMultiplier) || 1;
@@ -322,7 +409,6 @@ export async function sendRestrictionsUpdate(valuesList, apiKey, isStaging) {
     const propId = window.channexConfig?.propId;
     if (!propId) throw new Error("Property ID not configured in Channex settings.");
 
-    // Group by rate_plan_id, compress contiguous dates, and prepare values payload
     const byPlan = {};
     valuesList.forEach(v => {
         const pid = v.rate_plan_id;
@@ -377,7 +463,6 @@ export async function sendAvailabilityUpdate(valuesList, apiKey, isStaging) {
 // 5. PMS REAL-TIME RESERVATION SYNC (TEST 9 & 10 HOOK)
 // --------------------------------------------------------------------------
 
-// Invoked automatically when bookings are created, split, shortened (early checkout), or cancelled
 export async function triggerAutoSync(checkIn, checkOut, affectedCategories = []) {
     const propId = window.channexConfig?.propId;
     if (!propId || !window.channexMap || window.channexMap.length === 0) {
@@ -393,21 +478,24 @@ export async function triggerAutoSync(checkIn, checkOut, affectedCategories = []
         dates.push(getLocalYMD(new Date(sU + (i * 86400000))));
     }
 
-    // Resolve room type IDs
+    const canonAffected = affectedCategories.map(c => resolveRoomCategory(c) || c);
+
     const targets = window.channexMap.filter(m => {
         if (!m.channexId || !m.pmsCategory) return false;
-        if (affectedCategories.length === 0) return true;
-        return affectedCategories.includes(m.pmsCategory);
+        if (canonAffected.length === 0) return true;
+        const pmsCat = resolveRoomCategory(m.pmsCategory) || m.pmsCategory;
+        return canonAffected.includes(pmsCat) || affectedCategories.includes(m.pmsCategory);
     });
 
     const rawAvail = [];
     targets.forEach(rule => {
-        const peakCap = getPeakCategoryCapacity(rule.pmsCategory);
+        const pmsCat = resolveRoomCategory(rule.pmsCategory) || rule.pmsCategory;
+        const peakCap = getPeakCategoryCapacity(pmsCat);
         dates.forEach(dStr => {
             rawAvail.push({
                 room_type_id: rule.channexId,
                 date: dStr,
-                availability: getNetAvailabilityForDate(rule.pmsCategory, dStr, peakCap)
+                availability: getNetAvailabilityForDate(pmsCat, dStr, peakCap)
             });
         });
     });
@@ -428,7 +516,12 @@ export async function triggerAutoSync(checkIn, checkOut, affectedCategories = []
 // 6. MASTER BULK & FULL SYNC DISPATCHER (TEST 1 & CM DRAWER)
 // --------------------------------------------------------------------------
 
-export async function pushToChannexAPI(btn, mode = 'delta') {
+export async function pushToChannexAPI(btnOrMode, modeArg = 'delta') {
+    const btn = (btnOrMode && typeof btnOrMode === 'object' && 'innerHTML' in btnOrMode) ? btnOrMode : null;
+    const mode = typeof btnOrMode === 'boolean'
+        ? (btnOrMode ? 'full' : 'delta')
+        : (typeof btnOrMode === 'string' ? btnOrMode : (modeArg || 'delta'));
+
     const apiKey = window.channexConfig?.apiKey || localStorage.getItem('cm_master_channex_api_key');
     const propId = window.channexConfig?.propId;
     const isStaging = !!(window.channexConfig?.isStaging || window.channexConfig?.env === 'staging');
@@ -464,22 +557,24 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             }
         }
 
-        // Granular Delta Filters (so rate edits never push availability, and single-plan edits only push that plan)
         const hasGranularAvail = window.dirtyAvailKeys instanceof Set && window.dirtyAvailKeys.size > 0;
         const hasGranularPlans = window.dirtyPlanKeys instanceof Set && window.dirtyPlanKeys.size > 0;
         const useGranular = (mode === 'delta') && (hasGranularAvail || hasGranularPlans);
 
-        const shouldPushAvail = (dStr, pmsCat) => {
+        const shouldPushAvail = (dStr, pmsCat, rawCat) => {
             if (mode === 'full' || !useGranular) return true;
             if (!hasGranularAvail) return false;
-            return window.dirtyAvailKeys.has(`${dStr}|*`) || window.dirtyAvailKeys.has(`${dStr}|ROOM:${pmsCat}`);
+            return window.dirtyAvailKeys.has(`${dStr}|*`)
+                || window.dirtyAvailKeys.has(`${dStr}|ROOM:${pmsCat}`)
+                || (rawCat && window.dirtyAvailKeys.has(`${dStr}|ROOM:${rawCat}`));
         };
 
-        const shouldPushPlan = (dStr, pmsCat, ratePlanId) => {
+        const shouldPushPlan = (dStr, pmsCat, rawCat, ratePlanId) => {
             if (mode === 'full' || !useGranular) return true;
             if (!hasGranularPlans) return false;
             return window.dirtyPlanKeys.has(`${dStr}|*`)
                 || window.dirtyPlanKeys.has(`${dStr}|ROOM:${pmsCat}`)
+                || (rawCat && window.dirtyPlanKeys.has(`${dStr}|ROOM:${rawCat}`))
                 || window.dirtyPlanKeys.has(`${dStr}|PLAN:${ratePlanId}`);
         };
 
@@ -487,13 +582,15 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
         const rawAvailEntries = [];
         window.channexMap.forEach(rule => {
             if (!rule.channexId || !rule.pmsCategory) return;
-            const pmsCat = rule.pmsCategory;
+            const rawCat = rule.pmsCategory;
+            const pmsCat = resolveRoomCategory(rawCat) || rawCat;
             const roomTypeId = rule.channexId;
             const peakCap = getPeakCategoryCapacity(pmsCat);
 
             datesToProcess.forEach(dStr => {
-                if (!shouldPushAvail(dStr, pmsCat)) return;
-                const otaAvail = window.masterPricing?.timeline?.[dStr]?.otaOverrides?.[`${pmsCat}_avail`];
+                if (!shouldPushAvail(dStr, pmsCat, rawCat)) return;
+                const overrides = window.masterPricing?.timeline?.[dStr]?.otaOverrides;
+                const otaAvail = overrides?.[`${pmsCat}_avail`] ?? overrides?.[`${rawCat}_avail`];
                 const live = getNetAvailabilityForDate(pmsCat, dStr, peakCap);
                 const availToday = otaAvail !== undefined ? otaAvail : live;
 
@@ -522,30 +619,28 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
         const isEventsActive = typeof window.isEventPricingEnabled === 'function' ? window.isEventPricingEnabled() : false;
 
         validRatePlans.forEach(plan => {
-            const pmsCat = plan.pmsCategory;
+            const rawCat = plan.pmsCategory;
+            const pmsCat = resolveRoomCategory(rawCat) || rawCat;
             const ratePlanId = plan.ratePlanId;
-            const isEvtRate = isEventsActive && ((plan.product === 'evt') || (plan.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(plan.ratePlanTitle || ''));
+            const planIsEvent = typeof plan.isEvent === 'boolean'
+                ? plan.isEvent
+                : (plan.policy?.startsWith('event') || plan.product === 'evt' || plan.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(plan.ratePlanTitle || ''));
+            const isEvtRate = isEventsActive && planIsEvent;
 
             datesToProcess.forEach(dStr => {
-                if (!shouldPushPlan(dStr, pmsCat, ratePlanId)) return;
+                if (!shouldPushPlan(dStr, pmsCat, rawCat, ratePlanId)) return;
                 const dayObj = window.masterPricing?.timeline?.[dStr] || {};
-                const roomObj = dayObj[pmsCat] || {};
+                const roomObj = dayObj[pmsCat] || dayObj[rawCat] || {};
                 const globObj = dayObj['GLOBAL'] || {};
 
                 let computedPrice = null;
                 const otaPriceOverride = dayObj.otaOverrides?.[ratePlanId];
-                const isBlankEvtWindow = isEvtRate
-                    && (roomObj.fmp === undefined || roomObj.fmp === "")
-                    && (otaPriceOverride === undefined || otaPriceOverride === "");
-
-                if (!isBlankEvtWindow) {
-                    if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
-                        computedPrice = Number(otaPriceOverride);
-                    } else if (typeof window.computeDynamicPlanRate === 'function') {
-                        computedPrice = window.computeDynamicPlanRate(dStr, pmsCat, plan);
-                    } else {
-                        computedPrice = roomObj.std || 100;
-                    }
+                if (otaPriceOverride !== undefined && otaPriceOverride !== "") {
+                    computedPrice = Number(otaPriceOverride);
+                } else if (typeof window.computeDynamicPlanRate === 'function') {
+                    computedPrice = window.computeDynamicPlanRate(dStr, pmsCat, plan);
+                } else if (roomObj.std !== undefined && roomObj.std !== "") {
+                    computedPrice = Number(roomObj.std);
                 }
 
                 const item = {
@@ -571,30 +666,24 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
                     return null;
                 };
 
+                // Explicitly send defaults (1 / 0 / false) when cleared so Channex never retains stale restrictions
                 const minS = getRestrVal('min');
                 const minArr = getRestrVal('min_arr');
-                if (minArr !== null && minArr !== "") {
-                    item.min_stay_arrival = parseInt(String(minArr), 10) || 1;
-                }
-                if (minS !== null && minS !== "") {
-                    item.min_stay_through = parseInt(String(minS), 10) || 1;
-                }
+                item.min_stay_arrival = (minArr !== null && minArr !== "") ? (parseInt(String(minArr), 10) || 1) : 1;
+                item.min_stay_through = (minS !== null && minS !== "") ? (parseInt(String(minS), 10) || 1) : 1;
 
                 const maxS = getRestrVal('max');
-                if (maxS !== null && maxS !== "") item.max_stay = parseInt(String(maxS), 10) || 0;
+                item.max_stay = (maxS !== null && maxS !== "") ? (parseInt(String(maxS), 10) || 0) : 0;
 
                 const cta = getRestrVal('cta');
-                if (cta !== null) item.closed_to_arrival = !!cta;
+                item.closed_to_arrival = cta !== null ? !!cta : false;
 
                 const ctd = getRestrVal('ctd');
-                if (ctd !== null) item.closed_to_departure = !!ctd;
+                item.closed_to_departure = ctd !== null ? !!ctd : false;
 
-                const stop = getRestrVal('stop') || getRestrVal('stopSell');
-                if (isBlankEvtWindow) {
-                    item.stop_sell = true;
-                } else if (stop !== null) {
-                    item.stop_sell = !!stop;
-                }
+                // Obey user stop_sell state on priced dates; close unpriced dates so Channex never publishes fallback default_rate
+                const stop = getRestrVal('stop') ?? getRestrVal('stopSell');
+                item.stop_sell = fRate === null ? true : (stop !== null ? !!stop : false);
 
                 rawRestrEntries.push(item);
             });
@@ -610,7 +699,7 @@ export async function pushToChannexAPI(btn, mode = 'delta') {
             restrPayload.push(...compressDateEntries(planEntries));
         });
 
-        // 3. Execute Calls (Test 1: Exactly 2 calls; Tests 2-10: Single batched API call per endpoint)
+        // 3. Execute Calls
         const recordedTaskIds = [];
 
         if (mode === 'full') {

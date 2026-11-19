@@ -4,6 +4,18 @@
 // ==========================================================================
 
 import { parseFlexibleDate } from './parser-engine.js';
+import { getOtaPaymentPair } from '../core/channels.js';
+
+function resolveOtaKeys(channelCode) {
+    const [defaultPay, defaultKp] = getOtaPaymentPair(channelCode);
+    const configured = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
+    const payEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'revenue');
+    const kpEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'commission');
+    return {
+        payKey: payEntry ? payEntry.key : defaultPay.key,
+        kpKey: kpEntry ? kpEntry.key : defaultKp.key
+    };
+}
 
 // --- ISO-2 Country Code Dictionary (TM30 Standard) ---
 const COUNTRY_ISO_MAP = {
@@ -32,7 +44,7 @@ const COUNTRY_ISO_MAP = {
     'UY': 'URUGUAY', 'UZ': 'UZBEKISTAN', 'VN': 'VIETNAM', 'ZW': 'ZIMBABWE'
 };
 
-// --- Helper: Expand Room Number Hints e.g. "(305, 307-10)" -> ['305','307','308','309','310'] ---
+// --- Expand Room Number Hints e.g. "(305, 307-10)" -> ['305','307','308','309','310'] ---
 function expandRoomHints(raw) {
     if (!raw) return [];
     const matches = raw.match(/\(([^()]+)\)/g);
@@ -63,7 +75,7 @@ function expandRoomHints(raw) {
     return expanded;
 }
 
-// --- Helper: Extract Exact PMS Room Category & Room Hints from Parentheses ---
+// --- Extract Exact PMS Room Category & Room Hints from Parentheses ---
 function parseRoomLineItem(raw) {
     if (!raw) return { category: '', roomHints: [] };
     const str = raw.replace(/^[-•]\s*(?:\d+\s+)?/, '').trim();
@@ -86,6 +98,9 @@ export function parseBookingCom(rawText) {
     const isBdc = lines.some(l => /Booking\.com/i.test(l) || /Booking number/i.test(l) || /Reservation details/i.test(l));
     if (!isBdc) return null;
 
+    // Detect Agoda bookings routed through Booking.com affiliate network
+    const isAgodaAffiliate = /\bagoda\b/i.test(rawText);
+
     let checkIn = '';
     let checkOut = '';
     let pax = 1;
@@ -107,7 +122,7 @@ export function parseBookingCom(rawText) {
     let isPrepaid = false;
     let specialRequests = '';
 
-    // --- EXACT LINE-BY-LINE STATE MACHINE ---
+    // --- Line-by-Line State Machine ---
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
 
@@ -176,13 +191,11 @@ export function parseBookingCom(rawText) {
             isPrepaid = true;
         }
 
-        // Target A: Every room header directly above "Cancellation"
         if (i + 1 < lines.length && /^Cancellation$/i.test(lines[i + 1])) {
             const parsedItem = parseRoomLineItem(line);
             if (parsedItem.category) policyItems.push(parsedItem);
         }
 
-        // Target B: Per-Unit Room Categories under payment details
         if (/^[-•]\s*(.+)/.test(line)) {
             const raw = line.replace(/^[-•]\s*/, '').trim();
             const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
@@ -244,18 +257,20 @@ export function parseBookingCom(rawText) {
         }
     }
 
+    // Payments: Always BDC payout + commission keys because Booking.com settles the payout
+    const { payKey, kpKey } = resolveOtaKeys('BDC');
     const payments = [];
     if (isPrepaid && totalPrice > 0 && checkIn) {
         payments.push({
             date: checkIn,
             amt: explicitNet !== null ? explicitNet : totalPrice,
-            method: 'bdc-pay'
+            method: payKey
         });
         if (commissionAmt > 0) {
             payments.push({
                 date: checkIn,
                 amt: commissionAmt,
-                method: 'bdc-kp'
+                method: kpKey
             });
         }
     }
@@ -269,7 +284,7 @@ export function parseBookingCom(rawText) {
 
     const noteLines = [
         `--- ORIGINAL OTA BOOKING ---`,
-        `Source: BOOKING.COM`,
+        `Source: ${isAgodaAffiliate ? 'AGODA (via Booking.com)' : 'BOOKING.COM'}`,
         `Book ID: ${bookId}`,
         `Dates: ${checkIn || '--'} to ${checkOut || '--'} (${nights} Night${nights > 1 ? 's' : ''})`,
         `Booked: ${bookedType || '--'}`,
@@ -284,8 +299,8 @@ export function parseBookingCom(rawText) {
     if (specialRequests) noteLines.push(`• Special Request: ${specialRequests}`);
 
     return {
-        source: 'booking.com',
-        ota: 'BDC',
+        source: isAgodaAffiliate ? 'agoda' : 'booking.com',
+        ota: isAgodaAffiliate ? 'AGO' : 'BDC',
         bookId,
         firstName: firstName.toUpperCase(),
         lastName: lastName.toUpperCase(),

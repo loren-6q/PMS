@@ -4,6 +4,18 @@
 // ==========================================================================
 
 import { parseFlexibleDate } from './parser-engine.js';
+import { getOtaPaymentPair } from '../core/channels.js';
+
+function resolveOtaKeys(channelCode) {
+    const [defaultPay, defaultKp] = getOtaPaymentPair(channelCode);
+    const configured = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
+    const payEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'revenue');
+    const kpEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'commission');
+    return {
+        payKey: payEntry ? payEntry.key : defaultPay.key,
+        kpKey: kpEntry ? kpEntry.key : defaultKp.key
+    };
+}
 
 export function parseAirbnb(rawText) {
     if (!rawText) return null;
@@ -12,7 +24,7 @@ export function parseAirbnb(rawText) {
     const isAirbnb = /airbnb/i.test(text) || /hm[a-z0-9]{8}/i.test(text) || /reservation\s*code/i.test(text);
     if (!isAirbnb) return null;
 
-    // 1. Reservation Code (e.g. HM12345678 or 10-char alphanumeric)
+    // 1. Reservation Code
     const codeMatch = text.match(/(?:confirmation\s*code|reservation\s*code)[\s:#]*([A-Z0-9]{8,12})/i) ||
                       text.match(/\b(HM[A-Z0-9]{8,10})\b/i);
     const bookId = codeMatch ? codeMatch[1].trim().toUpperCase() : '';
@@ -54,7 +66,7 @@ export function parseAirbnb(rawText) {
 
     // 6. Units & Headcount (Pax)
     let pax = 1;
-    let unitCount = 1;
+    const unitCount = 1;
     const adultMatch = text.match(/(\d+)\s*adults?\b/i);
     const childMatch = text.match(/(\d+)\s*child(?:ren)?\b/i);
     const paxMatch = text.match(/(\d+)\s*guests?\b/i) ||
@@ -105,24 +117,25 @@ export function parseAirbnb(rawText) {
         refundability = 'ref';
     }
 
-    // 10. Payments: Airbnb is 100% prepaid (airbnb-pay for payout + airbnb-kp for fee)
+    // 10. Payments: Airbnb = canonical ABB payout + commission keys
+    const { payKey, kpKey } = resolveOtaKeys('ABB');
     const payments = [];
     if (totalPrice > 0 && checkIn) {
         payments.push({
             date: checkIn,
             amt: explicitNet !== null ? explicitNet : totalPrice,
-            method: 'airbnb-pay'
+            method: payKey
         });
         if (commissionAmt > 0) {
             payments.push({
                 date: checkIn,
                 amt: commissionAmt,
-                method: 'airbnb-kp'
+                method: kpKey
             });
         }
     }
 
-    // 11. Contact Details (Airbnb masks direct contact before booking)
+    // 11. Contact Details
     let phone = '';
     const phoneMatch = text.match(/(\+\d[\d\s\-\(\)]{7,20})/);
     if (phoneMatch) phone = phoneMatch[1].trim();
@@ -165,6 +178,7 @@ export function parseAirbnb(rawText) {
 
     return {
         source: 'airbnb',
+        ota: 'ABB',
         bookId,
         firstName: firstName.toUpperCase(),
         lastName: lastName.toUpperCase(),
