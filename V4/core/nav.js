@@ -251,8 +251,8 @@ export function mountNav() {
     leftDiv.className = "flex items-center gap-2 shrink-0 min-w-0";
     leftDiv.innerHTML = `
         <div class="relative min-w-0">
-            <button type="button" onclick="window.togglePropertyPicker()" class="flex items-center hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-none p-0" title="Switch Property">
-                <img id="main-brand-logo" src="${DEFAULT_BRAND_LOGO}" alt="Property Logo" class="h-8 sm:h-9 object-contain">
+            <button type="button" onclick="window.togglePropertyPicker()" data-tip="nav.switchProp" class="flex items-center hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-none p-0">
+                <img id="main-brand-logo" src="${DEFAULT_BRAND_LOGO}" alt="Property Logo" class="h-7 sm:h-9 object-contain">
             </button>
             <div id="property-picker-dropdown" class="absolute left-0 top-full mt-2 w-64 bg-white border-2 border-slate-800 rounded-xl shadow-2xl z-[150] hidden overflow-hidden">
                 <div class="bg-slate-900 text-white text-[10px] font-black uppercase px-3 py-2 flex justify-between items-center">
@@ -271,23 +271,23 @@ export function mountNav() {
     rightWrapper.className = "flex items-center gap-1 sm:gap-1.5 shrink-0 ml-auto";
 
     const navLinks = document.createElement('nav');
-    navLinks.className = "hidden md:flex items-center gap-0.5";
+    navLinks.className = "flex items-center gap-0.5";
 
     const isPms = currentApp === 'pms';
     navLinks.innerHTML = `
-        <a href="pms.html?p=${curProp}" onclick="window.navigateToApp('pms', event)" class="px-2 py-1 rounded text-[11px] font-black uppercase flex items-center gap-1 transition-colors ${isPms ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs' : 'text-slate-600 hover:bg-slate-100 border border-transparent'}">
-            <i data-lucide="layout-grid" class="!w-3 !h-3"></i> PMS
+        <a href="pms.html?p=${curProp}" onclick="window.navigateToApp('pms', event)" data-tip="nav.pms" class="px-1.5 sm:px-2 py-1 rounded text-[11px] font-black uppercase flex items-center gap-1 transition-colors ${isPms ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs' : 'text-slate-600 hover:bg-slate-100 border border-transparent'}">
+            <i data-lucide="layout-grid" class="!w-3 !h-3"></i><span class="hidden sm:inline">PMS</span>
         </a>
         <div class="flex items-center bg-slate-100 rounded border border-slate-200 p-0.5 mx-0.5">
-            <a href="scan.html?p=${curProp}" onclick="window.navigateToApp('scan', event)" class="px-1.5 py-0.5 rounded text-[11px] font-black uppercase flex items-center text-slate-600 hover:text-slate-900 hover:bg-white transition-colors" title="Passport Scanner">
+            <a href="scan.html?p=${curProp}" onclick="window.navigateToApp('scan', event)" data-tip="nav.scan" class="px-1 sm:px-1.5 py-0.5 rounded text-[11px] font-black uppercase flex items-center text-slate-600 hover:text-slate-900 hover:bg-white transition-colors">
                 <i data-lucide="camera" class="!w-3.5 !h-3.5"></i>
             </a>
             <div class="w-[1px] h-3 bg-slate-300 mx-0.5"></div>
-            <a href="tm30.html?p=${curProp}" onclick="window.navigateToApp('tm30', event)" class="px-1.5 py-0.5 rounded text-[10px] font-black uppercase text-slate-600 hover:text-slate-900 hover:bg-white transition-colors" title="TM30 Immigration">
+            <a href="tm30.html?p=${curProp}" onclick="window.navigateToApp('tm30', event)" data-tip="nav.tm30" class="px-1 sm:px-1.5 py-0.5 rounded text-[9.5px] sm:text-[10px] font-black uppercase text-slate-600 hover:text-slate-900 hover:bg-white transition-colors">
                 TM30
             </a>
         </div>
-        <div id="nav-admin-wrapper" class="relative"></div>
+        <div id="nav-admin-wrapper" data-tip="nav.admin" class="relative"></div>
     `;
 
     rightWrapper.appendChild(navLinks);
