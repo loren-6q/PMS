@@ -20,6 +20,7 @@
 │   ├── properties.js           (Canonical property IDs, display keys, switcher state)
 │   ├── nav.js                  (Universal self-mounting top navigation & property switcher)
 │   ├── ui-dialogs.js           (Unified customAlert, showToast, confirmModal)
+│   ├── tooltips.js             (Central external tooltip & feature help dictionary)
 │   ├── audit-rooms.js          (Inventory integrity, room structure validation, orphaned booking reconciliation)
 │   └── health-audit.js         (Shared Setup & CM configuration auditor for links, mappings, anchors & promos)
 │
