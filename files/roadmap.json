@@ -89,6 +89,13 @@
           "runSystemHealthAudit()",
           "renderHealthAuditBanner(containerId, context)"
         ]
+      },
+      "core/tooltips.js": {
+        "responsibility": "Central tooltip and feature help registry: stores all UI explanations in one external dictionary and upgrades [data-tip] and [title] elements site-wide.",
+        "functions": [
+          "getTip(key)"
+        ],
+        "constants": ["TOOLTIPS"]
       }
     },
     "channex": {
