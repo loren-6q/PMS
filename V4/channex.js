@@ -173,18 +173,32 @@ export const ChannexClient = {
             console.warn("[Channex] Could not fetch connected channels:", err);
         }
 
-        // Primary base plans only (scoped strictly to active property)
-        const ratePlans = allPlans.filter(p => {
+        const propPlans = allPlans.filter(p => {
             const attr = p.attributes || {};
             const rel = p.relationships || {};
             const planPropId = attr.property_id || rel.property?.data?.id;
             if (planPropId && planPropId !== propId) return false;
             const hasChannel = !!(rel.channel?.data?.id || attr.channel_id);
-            const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
-            return !hasChannel && !hasParent && !attr.ui_read_only && !attr.is_derived;
+            return !hasChannel && !attr.ui_read_only;
         });
 
-        return { rooms, ratePlans, policies, channels };
+        // Primary base plans only (excludes derived LOS plans so the main matrix stays clean)
+        const ratePlans = propPlans.filter(p => {
+            const attr = p.attributes || {};
+            const rel = p.relationships || {};
+            const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
+            return !hasParent && !attr.is_derived;
+        });
+
+        // Derived plans (e.g. Weekly / Monthly LOS plans) managed separately
+        const derivedRatePlans = propPlans.filter(p => {
+            const attr = p.attributes || {};
+            const rel = p.relationships || {};
+            const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
+            return hasParent || !!attr.is_derived;
+        });
+
+        return { rooms, ratePlans, derivedRatePlans, policies, channels };
     },
 
     async fetchCancellationPolicies(propId, apiKey, isStaging = undefined) {
@@ -203,6 +217,49 @@ export const ChannexClient = {
                 }
             })
         }, apiKey, isStaging);
+    },
+
+    async createRatePlan(propId, ratePlanFields, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+        return this.request('/rate_plans', {
+            method: 'POST',
+            body: JSON.stringify({
+                rate_plan: {
+                    property_id: propId,
+                    ...ratePlanFields
+                }
+            })
+        }, apiKey, isStaging);
+    },
+
+    async updateRatePlan(ratePlanId, ratePlanFields, apiKey, isStaging = undefined) {
+        if (!ratePlanId) throw new Error("Rate Plan ID is required.");
+        return this.request(`/rate_plans/${ratePlanId}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                rate_plan: ratePlanFields
+            })
+        }, apiKey, isStaging);
+    },
+
+    async getEmbeddedChannelMappingUrl(propId, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+        const res = await this.request('/auth/one_time_token', {
+            method: 'POST',
+            body: JSON.stringify({
+                one_time_token: {
+                    property_id: propId
+                }
+            })
+        }, apiKey, isStaging);
+        const token = res?.data?.attributes?.token || res?.data?.token || res?.token;
+        if (!token) throw new Error("Could not obtain Channex one-time session token.");
+        const host = this.getHost(
+            typeof isStaging === 'boolean'
+                ? isStaging
+                : !!(window.channexConfig?.isStaging || window.channexConfig?.env === 'staging')
+        );
+        return `https://${host}/auth/exchange?oauth_session_key=${encodeURIComponent(token)}&app_mode=headless&redirect_to=/channels&property_id=${encodeURIComponent(propId)}`;
     },
 
     async createRatePlan(propId, ratePlanFields, apiKey, isStaging = undefined) {
