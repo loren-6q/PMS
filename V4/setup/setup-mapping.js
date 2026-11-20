@@ -232,11 +232,26 @@ export function closeChannexMappingIframe() {
 function extractDerivedDiscountPct(plan) {
     const attr = plan?.attributes || {};
     const opt0 = Array.isArray(attr.options) ? attr.options[0] : null;
-    const rawVal = opt0?.derive_by?.rate?.value
-        ?? attr.rate_modifiers?.[0]?.value
-        ?? attr.derive_by?.rate?.value
-        ?? 0;
+    const rateRules = opt0?.derived_option?.rate || attr.derived_option?.rate || [];
+    if (Array.isArray(rateRules) && rateRules.length > 0 && Array.isArray(rateRules[0])) {
+        return Math.abs(parseFloat(rateRules[0][1]) || 0);
+    }
+    const rawVal = opt0?.derive_by?.rate?.value ?? attr.rate_modifiers?.[0]?.value ?? 0;
     return Math.abs(parseFloat(rawVal) || 0);
+}
+
+function buildDerivedOptionsPayload(baseOptions, discountPct) {
+    const pct = Math.max(0, Math.min(99, Number(discountPct) || 0));
+    const derivedRule = pct > 0
+        ? { rate: [["decrease_by_percent", String(pct)]] }
+        : {};
+
+    return baseOptions.map((opt, idx) => ({
+        occupancy: opt.occupancy || 1,
+        is_primary: opt.is_primary !== undefined ? !!opt.is_primary : idx === 0,
+        rate: opt.rate ?? 0,
+        derived_option: derivedRule
+    }));
 }
 
 function buildDerivedLosCardHtml() {
@@ -382,23 +397,15 @@ export async function createDerivedLosPlansForAllRooms() {
                 ? parentPlan.attributes.options
                 : [{ occupancy: 1, is_primary: true, rate: 0 }];
 
-            const derivedOptions = baseOptions.map(opt => ({
-                occupancy: opt.occupancy || 1,
-                is_primary: !!opt.is_primary,
-                rate: opt.rate || 0,
-                derive_by: {
-                    rate: {
-                        operation: 'decrease_by_percent',
-                        value: String(discountPct)
-                    }
-                }
-            }));
+            const derivedOptions = buildDerivedOptionsPayload(baseOptions, discountPct);
+            const rateMode = derivedOptions.length > 1 ? 'cascade' : 'derived';
 
             const title = `[${targetChannel}] ${tierLabel} (${minNights}+ Nts) ${pm.pmsCategory}`;
             const res = await ChannexClient.createRatePlan(propId, {
                 title,
                 room_type_id: pm.channexRoomId,
                 parent_rate_plan_id: pm.ratePlanId,
+                rate_mode: rateMode,
                 currency,
                 sell_mode: parentPlan?.attributes?.sell_mode || 'per_room',
                 meal_type: parentPlan?.attributes?.meal_type || 'none',
@@ -440,18 +447,12 @@ export async function updateDerivedLosPlan(ratePlanId) {
         ? existing.attributes.options
         : [{ occupancy: 1, is_primary: true, rate: 0 }];
 
-    const updatedOptions = baseOptions.map(opt => ({
-        ...opt,
-        derive_by: {
-            rate: {
-                operation: 'decrease_by_percent',
-                value: String(discountPct)
-            }
-        }
-    }));
+    const updatedOptions = buildDerivedOptionsPayload(baseOptions, discountPct);
+    const rateMode = updatedOptions.length > 1 ? 'cascade' : 'derived';
 
     try {
         const res = await ChannexClient.updateRatePlan(ratePlanId, {
+            rate_mode: rateMode,
             inherit_rate: true,
             inherit_closed_to_arrival: true,
             inherit_closed_to_departure: true,
@@ -629,6 +630,7 @@ export function renderStep3UnifiedMapping() {
         })
         .filter(rp => rp.pmsCategory && activeCatSet.has(rp.pmsCategory.trim().toLowerCase()));
 
+    const ghostRoomIds = new Set((window.channexMap || []).filter(m => m.isGhost).map(m => m.channexId));
     const mappedCount = pmsCategories.filter(cat => !!findChannexMapForCategory(cat, catToId.get(cat))).length;
 
     const toolbar = document.createElement('div');
@@ -675,7 +677,8 @@ export function renderStep3UnifiedMapping() {
         }
         roomsList.forEach(cr => {
             const isSel = currentMap?.channexId === cr.id ? 'selected' : '';
-            selectOptions += `<option value="${cr.id}" ${isSel}>${cr.attributes?.title || cr.id}</option>`;
+            const ghostPrefix = ghostRoomIds.has(cr.id) ? '[GHOST] ' : '';
+            selectOptions += `<option value="${cr.id}" ${isSel}>${ghostPrefix}${cr.attributes?.title || cr.id}</option>`;
         });
 
         const matchingPlans = isMapped
@@ -906,6 +909,42 @@ export function toggleGhostRoomMode(isGhost) {
     });
 }
 
+function getAllRateTargetEntries() {
+    const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
+    const categories = Array.from(new Set(defs.map(r => (r.category || '').trim()).filter(Boolean)));
+    const entries = [];
+
+    categories.forEach(cat => {
+        const catId = defs.find(r => normalizeCatName(r.category) === normalizeCatName(cat))?.catId || null;
+        const primaryMap = findChannexMapForCategory(cat, catId);
+        entries.push({
+            key: `PRIMARY::${cat}`,
+            pmsCategory: cat,
+            catId,
+            channexId: primaryMap?.channexId || null,
+            label: cat,
+            titleLabel: cat,
+            isGhost: false
+        });
+
+        const ghosts = findGhostMapsForCategory(cat, catId);
+        ghosts.forEach(gm => {
+            const gTitle = gm.channexTitle || `Ghost ${cat}`;
+            entries.push({
+                key: `GHOST::${gm.channexId}`,
+                pmsCategory: cat,
+                catId,
+                channexId: gm.channexId,
+                label: `${gTitle} (Ghost)`,
+                titleLabel: gTitle,
+                isGhost: true
+            });
+        });
+    });
+
+    return entries;
+}
+
 export function openCreateRatePlanModal(initialTab = 'rooms') {
     const modal = document.getElementById('create-rate-plan-modal');
     if (!modal) return;
@@ -953,30 +992,27 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
         }).join('');
     }
 
+    const rateTargets = getAllRateTargetEntries();
     const rateChecklist = document.getElementById('crp-room-checklist');
     if (rateChecklist) {
-        rateChecklist.innerHTML = categories.map(c => `
-            <label class="flex items-center gap-1.5 font-bold cursor-pointer text-xs p-1 hover:bg-slate-100 rounded">
-                <input type="checkbox" class="crp-cat-chk" value="${c}" checked>
-                <span>${c}</span>
+        rateChecklist.innerHTML = rateTargets.map(t => `
+            <label class="flex items-center gap-1.5 font-bold cursor-pointer text-xs p-1 hover:bg-slate-100 rounded ${t.isGhost ? 'text-indigo-800' : ''}">
+                <input type="checkbox" class="crp-cat-chk" value="${t.key}" ${!t.isGhost ? 'checked' : ''}>
+                <span>${t.label}</span>
             </label>
         `).join('');
     }
 
     const cloneSourceSelect = document.getElementById('crp-clone-source');
     if (cloneSourceSelect) {
-        const sourceCats = categories.filter(cat => {
-            const catId = defs.find(r => normalizeCatName(r.category) === normalizeCatName(cat))?.catId || null;
-            const m = findChannexMapForCategory(cat, catId);
-            if (!m || !m.channexId) return false;
-            return allPlans.some(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === m.channexId);
+        const sourceTargets = rateTargets.filter(t => {
+            if (!t.channexId) return false;
+            return allPlans.some(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === t.channexId);
         });
 
-        cloneSourceSelect.innerHTML = `<option value="">-- Select Source Category --</option>` + sourceCats.map(cat => {
-            const catId = defs.find(r => normalizeCatName(r.category) === normalizeCatName(cat))?.catId || null;
-            const m = findChannexMapForCategory(cat, catId);
-            const count = allPlans.filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === m.channexId).length;
-            return `<option value="${cat}">${cat} (${count} Plans)</option>`;
+        cloneSourceSelect.innerHTML = `<option value="">-- Select Source Room --</option>` + sourceTargets.map(t => {
+            const count = allPlans.filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === t.channexId).length;
+            return `<option value="${t.key}">${t.label} (${count} Plans)</option>`;
         }).join('');
     }
 
@@ -1164,11 +1200,11 @@ export async function executeCreateAndPushRoomTypes() {
 }
 
 export async function executeCloneRatePlans() {
-    const sourceCat = document.getElementById('crp-clone-source')?.value;
-    if (!sourceCat) return customAlert("Input Required", "Please select a source category to clone plans from.");
+    const sourceKey = document.getElementById('crp-clone-source')?.value;
+    if (!sourceKey) return customAlert("Input Required", "Please select a source room to clone plans from.");
 
-    const targetCats = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
-    if (targetCats.length === 0) return customAlert("Input Required", "Select at least one target room category.");
+    const targetKeys = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
+    if (targetKeys.length === 0) return customAlert("Input Required", "Select at least one target room.");
 
     const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
     const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
@@ -1178,41 +1214,36 @@ export async function executeCloneRatePlans() {
         return customAlert("Credentials Required", "Enter both Channex API Key and Property UUID.");
     }
 
-    const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
-    const srcCatId = defs.find(r => normalizeCatName(r.category) === normalizeCatName(sourceCat))?.catId || null;
-    const srcMap = findChannexMapForCategory(sourceCat, srcCatId);
-    if (!srcMap?.channexId) {
-        return customAlert("Error", `Source category "${sourceCat}" is not mapped to a Channex Room Type.`);
+    const targetLookup = new Map(getAllRateTargetEntries().map(t => [t.key, t]));
+    const srcTarget = targetLookup.get(sourceKey) || targetLookup.get(`PRIMARY::${sourceKey}`);
+    if (!srcTarget?.channexId) {
+        return customAlert("Error", `Source "${sourceKey}" is not mapped to a Channex Room Type.`);
     }
 
     const allPlans = window.channexRatePlans || [];
-    const sourcePlans = allPlans.filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === srcMap.channexId);
+    const sourcePlans = allPlans.filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === srcTarget.channexId);
 
     if (sourcePlans.length === 0) {
-        return customAlert("No Plans", `No primary rate plans found under source category "${sourceCat}".`);
+        return customAlert("No Plans", `No primary rate plans found under "${srcTarget.label}".`);
     }
 
-    const unmappedTargets = targetCats.filter(cat => {
-        const cId = defs.find(r => normalizeCatName(r.category) === normalizeCatName(cat))?.catId || null;
-        return !findChannexMapForCategory(cat, cId);
-    });
+    const resolvedTargets = targetKeys.map(k => targetLookup.get(k) || targetLookup.get(`PRIMARY::${k}`)).filter(Boolean);
+    const unmappedTargets = resolvedTargets.filter(t => !t.channexId);
 
     if (unmappedTargets.length > 0) {
-        return customAlert("Target Not Mapped", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmappedTargets.join('\n• ')}`);
+        return customAlert("Target Not Mapped", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmappedTargets.map(u => u.label).join('\n• ')}`);
     }
 
     try {
-        const totalOps = targetCats.length * sourcePlans.length;
+        const totalOps = resolvedTargets.length * sourcePlans.length;
         customAlert("Cloning...", `Checking & pushing up to ${totalOps} rate plan(s) to Channex...`);
         let createdCount = 0;
         let skippedCount = 0;
 
-        for (const tgtCat of targetCats) {
-            const tgtCatId = defs.find(r => normalizeCatName(r.category) === normalizeCatName(tgtCat))?.catId || null;
-            const tgtMap = findChannexMapForCategory(tgtCat, tgtCatId);
-            const existingMapped = (window.channexRateMap || []).filter(r => normalizeCatName(r.pmsCategory) === normalizeCatName(tgtCat));
+        for (const tgt of resolvedTargets) {
+            const existingMapped = (window.channexRateMap || []).filter(r => r.channexRoomId === tgt.channexId);
             const existingChannexPlans = (window.channexRatePlans || []).filter(
-                p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === tgtMap.channexId
+                p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === tgt.channexId
             );
 
             for (const sp of sourcePlans) {
@@ -1221,11 +1252,11 @@ export async function executeCloneRatePlans() {
                 const spMap = (window.channexRateMap || []).find(r => r.ratePlanId === sp.id) || spDetected;
 
                 let newTitle = spTitle;
-                const escSource = sourceCat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const escSource = srcTarget.titleLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 if (new RegExp(escSource, 'i').test(newTitle)) {
-                    newTitle = newTitle.replace(new RegExp(escSource, 'gi'), tgtCat);
+                    newTitle = newTitle.replace(new RegExp(escSource, 'gi'), tgt.titleLabel);
                 } else {
-                    newTitle = `${newTitle} ${tgtCat}`;
+                    newTitle = `${newTitle} ${tgt.titleLabel}`;
                 }
 
                 newTitle = newTitle.replace(/\s+Rate\b/gi, '').trim();
@@ -1255,7 +1286,7 @@ export async function executeCloneRatePlans() {
 
                 const res = await ChannexClient.createRatePlan(propId, {
                     title: newTitle,
-                    room_type_id: tgtMap.channexId,
+                    room_type_id: tgt.channexId,
                     currency: currency,
                     sell_mode: sourceSellMode,
                     meal_type: sp.attributes?.meal_type || 'none',
@@ -1268,9 +1299,9 @@ export async function executeCloneRatePlans() {
                     window.channexRateMap = window.channexRateMap || [];
                     window.channexRateMap.push({
                         ratePlanId: res.data.id,
-                        pmsCategory: tgtCat,
-                        catId: tgtCatId,
-                        channexRoomId: tgtMap.channexId,
+                        pmsCategory: tgt.pmsCategory,
+                        catId: tgt.catId,
+                        channexRoomId: tgt.channexId,
                         ratePlanTitle: newTitle,
                         channel: spMap.channel || 'DEF',
                         channelId: spMap.channelId || null,
@@ -1291,7 +1322,7 @@ export async function executeCloneRatePlans() {
 
         closeCreateRatePlanModal();
         renderStep3UnifiedMapping();
-        customAlert("Success", `Cloned ${createdCount} missing rate plan(s) from "${sourceCat}"${skippedCount ? ` (${skippedCount} existing skipped)` : ''}.`);
+        customAlert("Success", `Cloned ${createdCount} missing rate plan(s) from "${srcTarget.label}"${skippedCount ? ` (${skippedCount} existing skipped)` : ''}.`);
     } catch (err) {
         console.error("[Clone Rate Plans Error]:", err);
         customAlert("Cloning Failed", err.message);
@@ -1299,8 +1330,8 @@ export async function executeCloneRatePlans() {
 }
 
 export async function executeBatchCreateRatePlans() {
-    const targetCats = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
-    if (targetCats.length === 0) return customAlert("Input Required", "Select at least one target room category.");
+    const targetKeys = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
+    if (targetKeys.length === 0) return customAlert("Input Required", "Select at least one target room.");
 
     const chkIndices = Array.from(document.querySelectorAll('.crp-batch-tpl-chk:checked')).map(c => parseInt(c.dataset.idx, 10));
     if (chkIndices.length === 0) return customAlert("Input Required", "Select at least one rate plan template to create.");
@@ -1314,36 +1345,33 @@ export async function executeBatchCreateRatePlans() {
     }
 
     const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
-    const unmappedTargets = targetCats.filter(cat => {
-        const cId = defs.find(r => normalizeCatName(r.category) === normalizeCatName(cat))?.catId || null;
-        return !findChannexMapForCategory(cat, cId);
-    });
+    const targetLookup = new Map(getAllRateTargetEntries().map(t => [t.key, t]));
+    const resolvedTargets = targetKeys.map(k => targetLookup.get(k) || targetLookup.get(`PRIMARY::${k}`)).filter(Boolean);
+    const unmappedTargets = resolvedTargets.filter(t => !t.channexId);
 
     if (unmappedTargets.length > 0) {
-        return customAlert("Target Not Mapped", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmappedTargets.join('\n• ')}\n\nUse the 'Room Types' tab to push them first.`);
+        return customAlert("Target Not Mapped", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmappedTargets.map(u => u.label).join('\n• ')}\n\nUse the 'Room Types' tab to push them first.`);
     }
 
     const templates = window.currentBatchTemplates || getDynamicBatchRateTemplates();
     const selectedTemplates = chkIndices.map(i => templates[i]);
-    const totalOps = targetCats.length * selectedTemplates.length;
+    const totalOps = resolvedTargets.length * selectedTemplates.length;
 
     try {
-        customAlert("Pushing Suite...", `Checking & pushing up to ${totalOps} rate plan(s) across ${targetCats.length} category(ies)...`);
+        customAlert("Pushing Suite...", `Checking & pushing up to ${totalOps} rate plan(s) across ${resolvedTargets.length} room(s)...`);
         let createdCount = 0;
         let skippedCount = 0;
 
-        for (const tgtCat of targetCats) {
-            const sameCat = defs.filter(r => normalizeCatName(r.category) === normalizeCatName(tgtCat));
-            const tgtCatId = sameCat[0]?.catId || null;
-            const tgtMap = findChannexMapForCategory(tgtCat, tgtCatId);
+        for (const tgt of resolvedTargets) {
+            const sameCat = defs.filter(r => normalizeCatName(r.category) === normalizeCatName(tgt.pmsCategory));
             const isDorm = sameCat.some(r => r.rule !== 'private');
-            const existingMapped = (window.channexRateMap || []).filter(r => normalizeCatName(r.pmsCategory) === normalizeCatName(tgtCat));
+            const existingMapped = (window.channexRateMap || []).filter(r => r.channexRoomId === tgt.channexId);
             const existingChannexPlans = (window.channexRatePlans || []).filter(
-                p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === tgtMap.channexId
+                p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === tgt.channexId
             );
 
             for (const tpl of selectedTemplates) {
-                const finalTitle = tpl.titleTpl.replace(/{CAT}/g, tgtCat).trim();
+                const finalTitle = tpl.titleTpl.replace(/{CAT}/g, tgt.titleLabel).trim();
                 const tplChan = tpl.channel || 'DEF';
                 const tplChanId = tpl.channelId || '';
                 const tplPol = tpl.policy || 'non-ref';
@@ -1367,7 +1395,7 @@ export async function executeBatchCreateRatePlans() {
 
                 const res = await ChannexClient.createRatePlan(propId, {
                     title: finalTitle,
-                    room_type_id: tgtMap.channexId,
+                    room_type_id: tgt.channexId,
                     currency: currency,
                     sell_mode: isDorm ? 'per_person' : 'per_room',
                     meal_type: 'none',
@@ -1382,9 +1410,9 @@ export async function executeBatchCreateRatePlans() {
                     window.channexRateMap = window.channexRateMap || [];
                     window.channexRateMap.push({
                         ratePlanId: res.data.id,
-                        pmsCategory: tgtCat,
-                        catId: tgtCatId,
-                        channexRoomId: tgtMap.channexId,
+                        pmsCategory: tgt.pmsCategory,
+                        catId: tgt.catId,
+                        channexRoomId: tgt.channexId,
                         ratePlanTitle: finalTitle,
                         channel: tpl.channel,
                         channelId: tpl.channelId || null,
@@ -1548,8 +1576,8 @@ export function updateOptionCPreview() {
 }
 
 export async function executeCreateAndPushRatePlan() {
-    const chks = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
-    if (chks.length === 0) return customAlert("Input Required", "Select at least one room category.");
+    const targetKeys = Array.from(document.querySelectorAll('.crp-cat-chk:checked')).map(c => c.value);
+    if (targetKeys.length === 0) return customAlert("Input Required", "Select at least one target room.");
 
     const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
     const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
@@ -1560,13 +1588,12 @@ export async function executeCreateAndPushRatePlan() {
     }
 
     const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
-    const unmapped = chks.filter(cat => {
-        const cId = defs.find(r => normalizeCatName(r.category) === normalizeCatName(cat))?.catId || null;
-        return !findChannexMapForCategory(cat, cId);
-    });
+    const targetLookup = new Map(getAllRateTargetEntries().map(t => [t.key, t]));
+    const resolvedTargets = targetKeys.map(k => targetLookup.get(k) || targetLookup.get(`PRIMARY::${k}`)).filter(Boolean);
+    const unmapped = resolvedTargets.filter(t => !t.channexId);
 
     if (unmapped.length > 0) {
-        return customAlert("Mapping Required", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmapped.join('\n• ')}\n\nUse the 'Room Types' tab to create them first.`);
+        return customAlert("Mapping Required", `Cannot push rate plans. The following categories are not yet paired to a Channex Room Type:\n• ${unmapped.map(u => u.label).join('\n• ')}\n\nUse the 'Room Types' tab to create them first.`);
     }
 
     const channel = window.crpCustomChannel || 'DEF';
@@ -1580,19 +1607,17 @@ export async function executeCreateAndPushRatePlan() {
     const matchedPolicyId = await resolveChannexPolicyId(policy, propId, apiKey);
 
     try {
-        customAlert("Pushing to Channex...", `Creating ${chks.length} rate plan(s) in Channex...`);
+        customAlert("Pushing to Channex...", `Creating ${resolvedTargets.length} rate plan(s) in Channex...`);
         let createdCount = 0;
 
-        for (const cat of chks) {
-            const sameCat = defs.filter(r => normalizeCatName(r.category) === normalizeCatName(cat));
-            const catId = sameCat[0]?.catId || null;
-            const currentMap = findChannexMapForCategory(cat, catId);
-            const finalTitle = [prefix, policyLabel, customSuffix, cat].filter(Boolean).join(' ').trim();
+        for (const tgt of resolvedTargets) {
+            const sameCat = defs.filter(r => normalizeCatName(r.category) === normalizeCatName(tgt.pmsCategory));
+            const finalTitle = [prefix, policyLabel, customSuffix, tgt.titleLabel].filter(Boolean).join(' ').trim();
             const isDorm = sameCat.some(r => r.rule !== 'private');
 
             const res = await ChannexClient.createRatePlan(propId, {
                 title: finalTitle,
-                room_type_id: currentMap.channexId,
+                room_type_id: tgt.channexId,
                 currency: currency,
                 sell_mode: isDorm ? 'per_person' : 'per_room',
                 meal_type: 'none',
@@ -1607,9 +1632,9 @@ export async function executeCreateAndPushRatePlan() {
                 window.channexRateMap = window.channexRateMap || [];
                 window.channexRateMap.push({
                     ratePlanId: res.data.id,
-                    pmsCategory: cat,
-                    catId,
-                    channexRoomId: currentMap.channexId,
+                    pmsCategory: tgt.pmsCategory,
+                    catId: tgt.catId,
+                    channexRoomId: tgt.channexId,
                     ratePlanTitle: finalTitle,
                     channel: channel,
                     channelId: channelId,
