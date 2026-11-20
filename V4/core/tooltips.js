@@ -33,6 +33,7 @@ export const TOOLTIPS = Object.freeze({
     "cm.pinnedOverride": "Pinned override breaks Anchor ripple (double-click cell to re-link).",
 
     // --- Setup Wizard ---
+    "setup.reorderCats": "Reorder Room Categories to set the exact display order used across the PMS Tape Chart, Channel Manager Matrix, and Dashboard.",
     "setup.ghostRoom": "Ghost Room (Mirror Room Type in Channex):\nCreates a secondary mirror room type in Channex linked to an existing PMS room category—without adding extra rows to your PMS calendar.\n• Shares live physical availability with the primary room category.\n• Lets you map separate OTA listings that require isolated pricing or stay restrictions.",
     "setup.derivedLos": "Derived Length-of-Stay Rate Plan:\nInherits Price (with a % discount), Stop Sell, CTA, CTD, and Max Stay from a parent plan in Channex, while enforcing its own fixed Min Stay (e.g. 7 or 28 nights).",
 
