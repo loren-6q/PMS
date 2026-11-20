@@ -73,8 +73,8 @@ export const renderDashboard = () => {
             newBookingsRaw.push({
                 sortKey: createdSort,
                 html: `
-                    <div class="flex items-center justify-between py-1.5 px-1 border-b border-sky-100 last:border-0 hover:bg-sky-100/60 rounded transition-colors gap-1.5">
-                        <div class="flex-1 min-w-0 cursor-pointer" onclick="window.editStaff('${s.id}')">
+                    <div onclick="window.openNewBookingForReview('${s.id}')" class="flex items-center justify-between py-1.5 px-1.5 border-b border-sky-100 last:border-0 hover:bg-sky-100/70 rounded transition-colors gap-1.5 cursor-pointer">
+                        <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-1">
                                 ${getChannelBadgeHtml(s.source)}
                                 <span class="font-black text-xs text-slate-800 truncate">${name}</span>
@@ -85,9 +85,9 @@ export const renderDashboard = () => {
                                 <span class="text-indigo-700 font-black">฿${(Number(s.totalPrice) || 0).toLocaleString()}</span>
                             </div>
                         </div>
-                        <button type="button" onclick="event.stopPropagation(); window.acknowledgeNewBooking('${s.id}')" data-tip="dash.ackFuture" class="px-2 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded font-black text-[9px] uppercase shadow-2xs cursor-pointer shrink-0">
-                            ✓ Future
-                        </button>
+                        <span class="px-1.5 py-0.5 bg-white text-sky-700 border border-sky-300 rounded font-black text-[9px] uppercase shrink-0 flex items-center gap-0.5">
+                            Review <i data-lucide="arrow-up-right" size="11"></i>
+                        </span>
                     </div>
                 `
             });
@@ -283,31 +283,43 @@ export const runDashPriceCheck = () => {
     }).join('');
 };
 
-export const acknowledgeNewBooking = async id => {
-    try {
-        const staff = window.staff || [];
-        const s = staff.find(x => x.id === id);
-        const now = new Date().toISOString();
-        const user = (window.currentUserEmail || 'admin').toUpperCase();
-        const nextLog = Array.isArray(s?.auditLog) ? [...s.auditLog, { ts: now, user, msg: 'Acknowledged new booking -> FUTURE' }] : [{ ts: now, user, msg: 'Acknowledged new booking -> FUTURE' }];
+export const openNewBookingForReview = id => {
+    const s = (window.staff || []).find(x => x.id === id);
+    window._reviewingNewBookingId = id;
 
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
-            status: 'future',
-            lastEditedAt: now,
-            lastEditedBy: user,
-            auditLog: nextLog
-        });
+    if (!window._dashCloseHooked && typeof window.closeGuestModal === 'function') {
+        const origClose = window.closeGuestModal;
+        window.closeGuestModal = (...args) => {
+            const reviewId = window._reviewingNewBookingId;
+            origClose(...args);
+            if (reviewId) {
+                const updated = (window.staff || []).find(x => x.id === reviewId);
+                const hiddenStatus = document.getElementById('guest-status-hidden')?.value;
+                if ((updated && updated.status !== 'new') || (hiddenStatus && hiddenStatus !== 'new')) {
+                    window._reviewingNewBookingId = null;
+                    if (typeof window.switchTab === 'function') {
+                        window.switchTab('dashboard');
+                    }
+                }
+            }
+        };
+        window._dashCloseHooked = true;
+    }
 
-        if (s) {
-            s.status = 'future';
-            s.lastEditedAt = now;
-            s.lastEditedBy = user;
-            s.auditLog = nextLog;
+    if (s?.checkIn) {
+        const targetMs = parseYMD(s.checkIn) - (2 * 86400000);
+        if (window.viewStart instanceof Date) {
+            window.viewStart.setTime(targetMs);
+        } else {
+            window.viewStart = new Date(targetMs);
         }
-        renderDashboard();
-        if (window.render) window.render();
-    } catch (e) {
-        console.error("Failed to acknowledge new booking:", e);
+    }
+
+    if (typeof window.switchTab === 'function') {
+        window.switchTab('calendar');
+    }
+    if (typeof window.editStaff === 'function') {
+        window.editStaff(id);
     }
 };
 
@@ -325,5 +337,5 @@ export const dismissAlert = async id => {
 
 window.renderDashboard = renderDashboard;
 window.runDashPriceCheck = runDashPriceCheck;
-window.acknowledgeNewBooking = acknowledgeNewBooking;
+window.openNewBookingForReview = openNewBookingForReview;
 window.dismissAlert = dismissAlert;
