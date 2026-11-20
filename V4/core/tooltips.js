@@ -79,6 +79,24 @@ export const TOOLTIPS = Object.freeze({
     "legend.mailSpec": "Special arrival instructions email sent."
 });
 
+export function isTrainingTipsEnabled() {
+    try {
+        return localStorage.getItem('ww_training_tips') !== 'false';
+    } catch (e) {
+        return true;
+    }
+}
+
+export function setTrainingTipsEnabled(enabled) {
+    try {
+        localStorage.setItem('ww_training_tips', enabled ? 'true' : 'false');
+    } catch (e) {}
+    if (!enabled) {
+        const tt = document.getElementById('cm-tooltip');
+        if (tt) tt.classList.add('hidden');
+    }
+}
+
 export function getTip(key) {
     return TOOLTIPS[key] || key || '';
 }
@@ -108,6 +126,10 @@ function initGlobalTooltips() {
             }
             host.removeAttribute('title');
         }
+        // Training tips (buttons/controls) respect the toggle; data tips (data-tip-type="data") are always active
+        const tipType = host.getAttribute('data-tip-type') || 'training';
+        if (tipType === 'training' && !isTrainingTipsEnabled()) return;
+
         const text = getTip(host.getAttribute('data-tip'));
         if (!text) return;
 
@@ -137,6 +159,8 @@ function initGlobalTooltips() {
 if (typeof window !== 'undefined') {
     window.TOOLTIPS = TOOLTIPS;
     window.getTip = getTip;
+    window.isTrainingTipsEnabled = isTrainingTipsEnabled;
+    window.setTrainingTipsEnabled = setTrainingTipsEnabled;
 }
 
 if (typeof document !== 'undefined') {
