@@ -9,9 +9,26 @@ import { parseYMD, getLocalYMD } from '../core/dates.js';
 import { toCanonicalPropId } from '../core/properties.js';
 import { getStatusObj } from '../core/occupancy.js';
 import { getDue } from '../core/money.js';
+import { resolveChannelCode } from '../core/channels.js';
 import { getCmStayQuote } from '../cm/cm-ripple.js';
 
 const $ = id => document.getElementById(id);
+
+function getChannelBadgeHtml(source) {
+    const code = resolveChannelCode(source || 'WEB');
+    const styles = {
+        BDC: 'bg-[#003580] text-white',
+        HWL: 'bg-[#F15A24] text-white',
+        AGO: 'bg-[#87B2D6] text-white',
+        EXP: 'bg-[#facc15] text-[#003580]',
+        ABB: 'bg-[#FF5A5F] text-white',
+        TRP: 'bg-[#3b82f6] text-white',
+        WEB: 'bg-emerald-600 text-white',
+        WLK: 'bg-slate-600 text-white'
+    };
+    const cls = styles[code] || 'bg-slate-700 text-white';
+    return `<span class="${cls} px-1 py-0.2 rounded text-[8.5px] font-black uppercase shrink-0">${code}</span>`;
+}
 
 export const renderDashboard = () => {
     const todayStr = getLocalYMD(new Date());
@@ -19,7 +36,8 @@ export const renderDashboard = () => {
     if (dateEl) dateEl.innerText = todayStr;
 
     const arr = [], dep = [], stay = [];
-    const actRaw = []; // Store raw action items with their trigger date for sorting
+    const newBookingsRaw = [];
+    const actRaw = [];
 
     const staff = window.staff || [];
     const curProp = toCanonicalPropId(window.currentPropertyId || '');
@@ -46,19 +64,48 @@ export const renderDashboard = () => {
         const dueBadge = due > 0 ? `<span class="text-red-500 font-black">฿${due.toFixed(2)}</span>` : `<span class="text-green-500">฿0</span>`;
         const item = `<div class="flex items-center py-1 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm w-[72px] text-slate-700 shrink-0">${assigned}</span><div class="flex-1 truncate leading-tight"><span class="font-black text-xs text-slate-700">${name}</span> <span class="ml-1">${sBadge}</span></div><div class="shrink-0 ml-1">${dueBadge}</div></div>`;
 
+        // Collect all NEW bookings (regardless of how far in the future check-in is)
+        if (s.status === 'new') {
+            const nights = (cIn && cOut) ? Math.max(1, Math.round((parseYMD(cOut) - parseYMD(cIn)) / 86400000)) : 1;
+            const createdSort = typeof s.createdAt === 'string'
+                ? s.createdAt
+                : (s.createdAt?.toDate ? s.createdAt.toDate().toISOString() : (s.bookDate || cIn || ''));
+            newBookingsRaw.push({
+                sortKey: createdSort,
+                html: `
+                    <div class="flex items-center justify-between py-1.5 px-1 border-b border-sky-100 last:border-0 hover:bg-sky-100/60 rounded transition-colors gap-1.5">
+                        <div class="flex-1 min-w-0 cursor-pointer" onclick="window.editStaff('${s.id}')">
+                            <div class="flex items-center gap-1">
+                                ${getChannelBadgeHtml(s.source)}
+                                <span class="font-black text-xs text-slate-800 truncate">${name}</span>
+                            </div>
+                            <div class="text-[9.5px] font-bold text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                <span>${cIn || '--'} → ${cOut || '--'} (${nights}n)</span>
+                                <span class="px-1 py-0.2 rounded ${assigned === 'Unassigned' ? 'bg-amber-100 text-amber-800' : 'bg-white text-slate-700 border border-slate-200'} font-black">${assigned}</span>
+                                <span class="text-indigo-700 font-black">฿${(Number(s.totalPrice) || 0).toLocaleString()}</span>
+                            </div>
+                        </div>
+                        <button type="button" onclick="event.stopPropagation(); window.acknowledgeNewBooking('${s.id}')" data-tip="dash.ackFuture" class="px-2 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded font-black text-[9px] uppercase shadow-2xs cursor-pointer shrink-0">
+                            ✓ Future
+                        </button>
+                    </div>
+                `
+            });
+        }
+
         if (cIn === todayStr && s.status !== 'unconfirmed' && s.status !== 'new') arr.push(item);
         if (cOut === todayStr && s.status !== 'unconfirmed' && s.status !== 'new') {
             dep.push(item);
             if (due > 0.05 && s.status !== 'charged' && !s.alertDismissed) {
-                actRaw.push({ date: cOut, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">Out: ${cOut}</span> <span class="text-[10px] text-red-600 font-bold uppercase ml-1">OWES ฿${due.toFixed(2)}</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0" title="Dismiss"><i data-lucide="check" size="14"></i></button></div>` });
+                actRaw.push({ date: cOut, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">Out: ${cOut}</span> <span class="text-[10px] text-red-600 font-bold uppercase ml-1">OWES ฿${due.toFixed(2)}</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" data-tip="dash.dismissAlert" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0"><i data-lucide="check" size="14"></i></button></div>` });
             }
         }
         if (cIn < todayStr && cOut > todayStr && s.status !== 'unconfirmed' && s.status !== 'new') stay.push(item);
-        if ((s.status === 'unconfirmed' || s.status === 'new') && !s.alertDismissed) {
-            actRaw.push({ date: cIn, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">In: ${cIn}</span> <span class="ml-1">${sBadge}</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0" title="Dismiss"><i data-lucide="check" size="14"></i></button></div>` });
+        if (s.status === 'unconfirmed' && !s.alertDismissed) {
+            actRaw.push({ date: cIn, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">In: ${cIn}</span> <span class="ml-1">${sBadge}</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" data-tip="dash.dismissAlert" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0"><i data-lucide="check" size="14"></i></button></div>` });
         }
         if (s.badCC && !s.alertDismissed && s.status !== 'left') {
-            actRaw.push({ date: cIn, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">In: ${cIn}</span> <span class="text-[10px] bg-red-500 text-white px-1 rounded uppercase font-bold ml-1">BAD CC</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0" title="Dismiss"><i data-lucide="check" size="14"></i></button></div>` });
+            actRaw.push({ date: cIn, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">In: ${cIn}</span> <span class="text-[10px] bg-red-500 text-white px-1 rounded uppercase font-bold ml-1">BAD CC</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" data-tip="dash.dismissAlert" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0"><i data-lucide="check" size="14"></i></button></div>` });
         }
     });
 
@@ -69,6 +116,30 @@ export const renderDashboard = () => {
     if ($('dash-stay-count')) $('dash-stay-count').innerText = stay.length;
     if ($('dash-stay-list')) $('dash-stay-list').innerHTML = stay.length ? stay.join('') : '<div class="text-slate-400 italic text-center py-2">No stay-overs</div>';
 
+    // Sort NEW bookings newest-first and mount dedicated New Bookings card
+    newBookingsRaw.sort((a, b) => String(b.sortKey).localeCompare(String(a.sortKey)));
+    const ratesCard = $('dash-rates-list')?.parentElement;
+    const rightCol = ratesCard?.parentElement;
+    if (rightCol) {
+        let newCard = $('dash-new-bookings-card');
+        if (!newCard) {
+            newCard = document.createElement('div');
+            newCard.id = 'dash-new-bookings-card';
+            newCard.className = 'dash-card border-sky-300 bg-sky-50/40';
+            newCard.setAttribute('data-tip', 'dash.newBookings');
+            rightCol.insertBefore(newCard, ratesCard);
+        }
+        newCard.innerHTML = `
+            <div class="dash-title flex justify-between items-center text-sky-800 border-sky-200">
+                <span><i data-lucide="sparkles" size="12" class="inline mb-0.5 text-sky-600"></i> New Bookings</span>
+                <span class="bg-sky-600 text-white px-1.5 py-0.2 rounded text-[10px] font-black">${newBookingsRaw.length}</span>
+            </div>
+            <div class="space-y-0.5 text-xs max-h-[210px] overflow-y-auto no-scrollbar">
+                ${newBookingsRaw.length ? newBookingsRaw.map(x => x.html).join('') : '<div class="text-slate-400 italic text-center py-2">No unacknowledged new bookings</div>'}
+            </div>
+        `;
+    }
+
     // Sort action items strictly by trigger date (Past -> Future)
     actRaw.sort((a, b) => a.date.localeCompare(b.date));
     const actHtml = actRaw.map(x => x.html).join('');
@@ -78,9 +149,9 @@ export const renderDashboard = () => {
     let dashPcIn = $('dash-pc-in');
     let dashPcOut = $('dash-pc-out');
     let dashPcPax = $('dash-pc-pax');
-    const ratesCard = $('dash-rates-list')?.parentElement;
 
     if (ratesCard && !dashPcIn) {
+        ratesCard.setAttribute('data-tip', 'dash.liveChecker');
         ratesCard.innerHTML = `
             <div class="dash-title flex justify-between items-center text-indigo-700 border-indigo-200 pb-1 border-b">
                 <span><i data-lucide="tags" size="12" class="inline mb-0.5"></i> Live CM Checker</span>
@@ -89,7 +160,7 @@ export const renderDashboard = () => {
             <div class="flex gap-1 mt-1.5 mb-1.5 shrink-0">
                 <input type="date" id="dash-pc-in" class="w-full text-[9px] font-bold p-0.5 border border-indigo-300 rounded outline-none text-center" onchange="window.runDashPriceCheck()">
                 <input type="date" id="dash-pc-out" class="w-full text-[9px] font-bold p-0.5 border border-indigo-300 rounded outline-none text-center" onchange="window.runDashPriceCheck()">
-                <input type="number" id="dash-pc-pax" value="1" min="1" class="w-8 text-[9px] font-bold p-0.5 text-center border border-indigo-300 rounded outline-none" title="PAX" oninput="window.runDashPriceCheck()">
+                <input type="number" id="dash-pc-pax" value="1" min="1" data-tip="pms.pax" class="w-8 text-[9px] font-bold p-0.5 text-center border border-indigo-300 rounded outline-none" oninput="window.runDashPriceCheck()">
             </div>
             <div id="dash-rates-list" class="text-[11px] font-black space-y-0.5 text-indigo-900 flex-1 overflow-y-auto min-h-[60px] no-scrollbar"></div>
         `;
@@ -97,7 +168,6 @@ export const renderDashboard = () => {
         dashPcOut = $('dash-pc-out');
         dashPcPax = $('dash-pc-pax');
 
-        // Set defaults to Today -> Tomorrow
         if (dashPcIn && dashPcOut) {
             dashPcIn.value = todayStr;
             const tmrw = new Date();
@@ -109,6 +179,37 @@ export const renderDashboard = () => {
     runDashPriceCheck();
     if (window.lucide) window.lucide.createIcons();
 };
+
+function resolveLinkedFallbackQuote(cat, checkIn, nights) {
+    const rels = window.masterPricing?.relationships || [];
+    const catLower = String(cat || '').trim().toLowerCase();
+    const rel = rels.find(r => {
+        const tgt = String(r.target || r.to || r.roomB || '').trim().toLowerCase();
+        const anc = String(r.anchor || r.source || r.from || r.roomA || '').trim();
+        return tgt === catLower && anc && anc !== 'unlinked';
+    });
+    if (!rel) return null;
+
+    const anchorCat = rel.anchor || rel.source || rel.from || rel.roomA;
+    const anchorQuote = getCmStayQuote({ checkIn, nights, roomCategory: anchorCat, planType: 'DEF_NON_REF' });
+    if (!anchorQuote || !anchorQuote.complete || anchorQuote.total === null) return null;
+
+    const op = rel.op || '+';
+    const val = parseFloat(rel.val) || 0;
+    let derivedTotal = anchorQuote.total;
+
+    if (op === '+' || op === '+$') derivedTotal = anchorQuote.total + (val * nights);
+    else if (op === '-' || op === '-$') derivedTotal = Math.max(0, anchorQuote.total - (val * nights));
+    else if (op === '+%') derivedTotal = Math.round(anchorQuote.total * (1 + val / 100));
+    else if (op === '-%') derivedTotal = Math.round(anchorQuote.total * (1 - val / 100));
+    else if (op === '=') derivedTotal = val * nights;
+
+    return {
+        complete: true,
+        total: Math.round(derivedTotal),
+        restrictions: anchorQuote.restrictions
+    };
+}
 
 export const runDashPriceCheck = () => {
     const cI = $('dash-pc-in')?.value;
@@ -132,7 +233,21 @@ export const runDashPriceCheck = () => {
     }
 
     resultsEl.innerHTML = roomTypes.map(cat => {
-        const quote = getCmStayQuote({ checkIn: cI, nights: n, roomCategory: cat, planType: 'DEF_NON_REF' });
+        let quote = getCmStayQuote({ checkIn: cI, nights: n, roomCategory: cat, planType: 'DEF_NON_REF' });
+        if (!quote.complete || quote.total === null) {
+            const linkedQuote = resolveLinkedFallbackQuote(cat, cI, n);
+            if (linkedQuote) {
+                quote = {
+                    ...linkedQuote,
+                    restrictions: {
+                        stop: quote.restrictions?.stop || linkedQuote.restrictions?.stop || false,
+                        cta: quote.restrictions?.cta || linkedQuote.restrictions?.cta || false,
+                        maxMinStay: Math.max(quote.restrictions?.maxMinStay || 1, linkedQuote.restrictions?.maxMinStay || 1)
+                    }
+                };
+            }
+        }
+
         const catUnits = hotelRooms.filter(r => (r.category || r.type) === cat);
         const isDorm = catUnits.some(r => !r.isPrivate && (r.isDorm === true || (r.rule && r.rule !== 'private') || cat.toLowerCase().includes('dorm')));
         const maxPaxPerUnit = isDorm ? 1 : (parseInt(catUnits[0]?.maxOccupancy || catUnits[0]?.occAdults || 2, 10) || 2);
@@ -168,6 +283,34 @@ export const runDashPriceCheck = () => {
     }).join('');
 };
 
+export const acknowledgeNewBooking = async id => {
+    try {
+        const staff = window.staff || [];
+        const s = staff.find(x => x.id === id);
+        const now = new Date().toISOString();
+        const user = (window.currentUserEmail || 'admin').toUpperCase();
+        const nextLog = Array.isArray(s?.auditLog) ? [...s.auditLog, { ts: now, user, msg: 'Acknowledged new booking -> FUTURE' }] : [{ ts: now, user, msg: 'Acknowledged new booking -> FUTURE' }];
+
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), {
+            status: 'future',
+            lastEditedAt: now,
+            lastEditedBy: user,
+            auditLog: nextLog
+        });
+
+        if (s) {
+            s.status = 'future';
+            s.lastEditedAt = now;
+            s.lastEditedBy = user;
+            s.auditLog = nextLog;
+        }
+        renderDashboard();
+        if (window.render) window.render();
+    } catch (e) {
+        console.error("Failed to acknowledge new booking:", e);
+    }
+};
+
 export const dismissAlert = async id => {
     try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), { alertDismissed: true });
@@ -182,4 +325,5 @@ export const dismissAlert = async id => {
 
 window.renderDashboard = renderDashboard;
 window.runDashPriceCheck = runDashPriceCheck;
+window.acknowledgeNewBooking = acknowledgeNewBooking;
 window.dismissAlert = dismissAlert;
