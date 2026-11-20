@@ -57,6 +57,10 @@ export const TOOLTIPS = Object.freeze({
     "pms.toolDuplicate": "Clone this reservation as a new booking.",
     "pms.toolHistory": "View full audit trail of edits made to this reservation.",
     "pms.toolInvoice": "Generate and print an itemized guest folio invoice.",
+    "dash.newBookings": "Incoming bookings with status NEW (including far-future arrivals).\nOpen each booking to verify room assignment, notes, and payments, then set status to FUTURE to acknowledge.",
+    "dash.ackFuture": "Acknowledge this new booking and move its status from NEW to FUTURE.",
+    "dash.dismissAlert": "Dismiss this alert from Today's Action Items.",
+    "dash.liveChecker": "Live Channel Manager rate and stay-restriction quote for the selected dates and PAX.",
 
     // --- PMS Calendar Legend ---
     "legend.owes": "Owes Balance (solid red border).",
