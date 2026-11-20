@@ -114,8 +114,9 @@ export const ChannexClient = {
 
                 const json = await response.json().catch(() => ({}));
                 if (!response.ok) {
-                    const errMsg = json?.errors?.title || json?.message || response.statusText;
-                    throw new Error(`Channex Error (${response.status}): ${errMsg}`);
+                    const errTitle = json?.errors?.title || json?.message || response.statusText;
+                    const errDetails = json?.errors?.details ? ` — ${JSON.stringify(json.errors.details)}` : '';
+                    throw new Error(`Channex Error (${response.status}): ${errTitle}${errDetails}`);
                 }
                 return json;
             } catch (err) {
