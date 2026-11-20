@@ -47,15 +47,19 @@ export async function fetchChannexData() {
     try {
         customAlert("Connecting...", "Fetching room types, rate plans, and connected channels from Channex...");
 
-        const { rooms, ratePlans, policies, channels } = await ChannexClient.fetchPropertySetupData(propId, apiKey);
+        const { rooms, ratePlans, derivedRatePlans, policies, channels } = await ChannexClient.fetchPropertySetupData(propId, apiKey);
 
         window.channexRooms = rooms;
         window.channexRatePlans = ratePlans;
+        window.channexDerivedPlans = derivedRatePlans || [];
         window.channexPolicies = policies.length ? policies : (window.channexPolicies || []);
         window.channexConnectedChannels = channels.length ? channels : (window.channexConnectedChannels || []);
 
         renderStep3UnifiedMapping();
-        customAlert("Fetched", `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} rate plans, and ${window.channexConnectedChannels.length} connected channels.`);
+        customAlert(
+            "Fetched",
+            `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} base plans, ${window.channexDerivedPlans.length} derived LOS plans, and ${window.channexConnectedChannels.length} connected channels.`
+        );
 
     } catch (err) {
         console.error("[Channex Fetch Error]:", err);
@@ -162,6 +166,317 @@ export function detectRatePlanClassification(title, plan = null) {
         isEvent: policy.startsWith('event')
     };
 }
+
+// --------------------------------------------------------------------------
+// WHITE-LABEL EMBEDDED CHANNEL MAPPING IFRAME
+// --------------------------------------------------------------------------
+
+export async function openChannexMappingIframe() {
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
+
+    if (!apiKey || !propId) {
+        return customAlert("Credentials Required", "Enter both Channex API Key and Property UUID first.");
+    }
+
+    try {
+        customAlert("Opening Channel Mapping...", "Generating secure Channex session...");
+        const iframeUrl = await ChannexClient.getEmbeddedChannelMappingUrl(propId, apiKey);
+        document.getElementById('custom-alert')?.classList.add('hidden');
+
+        let modal = document.getElementById('channex-iframe-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'channex-iframe-modal';
+            modal.className = 'fixed inset-0 z-[9500] bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4';
+            document.body.appendChild(modal);
+        }
+
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden border-2 border-slate-800">
+                <div class="bg-slate-900 text-white px-3 py-2 flex items-center justify-between shrink-0 text-xs">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="globe" size="14" class="text-indigo-400"></i>
+                        <span class="font-black uppercase tracking-wider">OTA Channel Connections & Mapping</span>
+                        <span class="text-[10px] text-slate-400 font-semibold hidden sm:inline">Map OTA room types, Ghost Rooms, and rate plans directly</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="window.fetchChannexData()" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-black text-[10px] uppercase cursor-pointer">
+                            Refresh PMS Data
+                        </button>
+                        <button type="button" onclick="window.closeChannexMappingIframe()" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded font-black text-[10px] uppercase cursor-pointer">
+                            Close
+                        </button>
+                    </div>
+                </div>
+                <iframe src="${iframeUrl}" class="flex-1 w-full h-full border-0 bg-white"></iframe>
+            </div>
+        `;
+        modal.classList.remove('hidden');
+        if (window.lucide) window.lucide.createIcons();
+    } catch (err) {
+        console.error("[Channex IFrame Error]:", err);
+        customAlert("Channel Mapping Error", err.message);
+    }
+}
+
+export function closeChannexMappingIframe() {
+    const modal = document.getElementById('channex-iframe-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// --------------------------------------------------------------------------
+// DERIVED LENGTH-OF-STAY (LOS) RATE PLAN MANAGER
+// --------------------------------------------------------------------------
+
+function extractDerivedDiscountPct(plan) {
+    const attr = plan?.attributes || {};
+    const opt0 = Array.isArray(attr.options) ? attr.options[0] : null;
+    const rawVal = opt0?.derive_by?.rate?.value
+        ?? attr.rate_modifiers?.[0]?.value
+        ?? attr.derive_by?.rate?.value
+        ?? 0;
+    return Math.abs(parseFloat(rawVal) || 0);
+}
+
+function buildDerivedLosCardHtml() {
+    const derivedPlans = window.channexDerivedPlans || [];
+    const parentLookup = new Map((window.channexRatePlans || []).map(p => [p.id, p.attributes?.title || p.id]));
+    const channelOpts = getAvailableMappingChannels()
+        .filter(c => !c.val.includes('::'))
+        .map(c => `<option value="${c.val}">${c.label}</option>`)
+        .join('');
+
+    const rowsHtml = derivedPlans.length > 0
+        ? derivedPlans.map(dp => {
+            const attr = dp.attributes || {};
+            const title = attr.title || dp.id;
+            const parentId = attr.parent_rate_plan_id || dp.relationships?.parent_rate_plan?.data?.id || '';
+            const parentTitle = parentLookup.get(parentId) || (parentId ? `...${parentId.slice(-8)}` : 'Parent Plan');
+            const discPct = extractDerivedDiscountPct(dp);
+            const minStay = attr.min_stay_through || attr.min_stay_arrival || 1;
+
+            return `
+                <tr class="hover:bg-slate-50">
+                    <td class="py-1.5 px-2 font-bold text-slate-800">
+                        <div>${title}</div>
+                        <div class="text-[9.5px] text-slate-400 font-semibold">Inherits CTA/CTD/STOP/Max from: ${parentTitle}</div>
+                    </td>
+                    <td class="py-1.5 px-2 text-center">
+                        <div class="inline-flex items-center gap-1">
+                            <input type="number" id="los-min-${dp.id}" min="1" max="365" value="${minStay}" class="table-input !w-14 text-center font-black">
+                            <span class="text-[10px] font-bold text-slate-500">nts</span>
+                        </div>
+                    </td>
+                    <td class="py-1.5 px-2 text-center">
+                        <div class="inline-flex items-center gap-1">
+                            <span class="font-black text-rose-600">-</span>
+                            <input type="number" id="los-disc-${dp.id}" min="0" max="95" step="any" value="${discPct}" class="table-input !w-16 text-center font-black text-emerald-700">
+                            <span class="text-[10px] font-bold text-slate-500">%</span>
+                        </div>
+                    </td>
+                    <td class="py-1.5 px-2 text-right">
+                        <button type="button" onclick="window.updateDerivedLosPlan('${dp.id}')" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase cursor-pointer">
+                            Update
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('')
+        : `<tr><td colspan="4" class="p-3 text-center text-[10.5px] text-slate-400 italic">No derived LOS plans fetched yet. Create Weekly / Monthly plans below or click "Fetch Channex Data".</td></tr>`;
+
+    return `
+        <div class="setup-card border-amber-200" data-tip="setup.derivedLos">
+            <div class="setup-card-header bg-amber-50/70">
+                <div>
+                    <h3 class="setup-card-title text-amber-950">
+                        <i data-lucide="percent" size="14" class="text-amber-600"></i> Derived Length-of-Stay (LOS) Rate Plans
+                    </h3>
+                    <span class="setup-card-subtitle">Inherits Price (-%), CTA, CTD, Stop Sell & Max Stay from parent plan while enforcing fixed Weekly/Monthly Min Stay.</span>
+                </div>
+            </div>
+            <div class="p-3 space-y-2.5 text-xs">
+                <div class="flex flex-wrap items-end gap-2 bg-slate-50 p-2 rounded border border-slate-200">
+                    <div>
+                        <label class="label-base">Parent Channel</label>
+                        <select id="los-new-channel" class="table-input font-bold !w-40">${channelOpts}</select>
+                    </div>
+                    <div>
+                        <label class="label-base">Parent Policy</label>
+                        <select id="los-new-policy" class="table-input font-bold !w-36">
+                            <option value="non-ref">Non-Refundable</option>
+                            <option value="ref">Refundable</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label-base">Tier Label</label>
+                        <input type="text" id="los-new-label" value="Weekly" placeholder="Weekly / Monthly" class="table-input font-bold !w-28">
+                    </div>
+                    <div>
+                        <label class="label-base">Fixed Min Stay</label>
+                        <input type="number" id="los-new-min" value="7" min="2" max="365" class="table-input font-black text-center !w-20">
+                    </div>
+                    <div>
+                        <label class="label-base">Discount (%)</label>
+                        <input type="number" id="los-new-disc" value="15" min="1" max="95" step="any" class="table-input font-black text-center text-emerald-700 !w-20">
+                    </div>
+                    <button type="button" onclick="window.createDerivedLosPlansForAllRooms()" class="btn-setup-save !py-1 !px-3">
+                        + Create Derived LOS Suite
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto border border-slate-200 rounded bg-white">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead class="bg-slate-100 text-[9px] font-black uppercase text-slate-500 border-b border-slate-200">
+                            <tr>
+                                <th class="py-1 px-2">Derived Rate Plan</th>
+                                <th class="py-1 px-2 text-center w-28">Fixed Min Stay</th>
+                                <th class="py-1 px-2 text-center w-32">Discount (%)</th>
+                                <th class="py-1 px-2 text-right w-24">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">${rowsHtml}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+export async function createDerivedLosPlansForAllRooms() {
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
+    const currency = document.getElementById('prop-currency')?.value || window.currentPropertyConfig?.currency || 'THB';
+
+    if (!apiKey || !propId) {
+        return customAlert("Credentials Required", "Enter both Channex API Key and Property UUID first.");
+    }
+
+    const targetChannel = document.getElementById('los-new-channel')?.value || 'BDC';
+    const targetPolicy = document.getElementById('los-new-policy')?.value || 'non-ref';
+    const tierLabel = (document.getElementById('los-new-label')?.value || 'Weekly').trim();
+    const minNights = Math.max(2, parseInt(document.getElementById('los-new-min')?.value, 10) || 7);
+    const discountPct = Math.max(0, Math.min(95, parseFloat(document.getElementById('los-new-disc')?.value) || 15));
+
+    const parentMappings = (window.channexRateMap || []).filter(r =>
+        (r.channel || 'DEF') === targetChannel &&
+        (r.policy || 'non-ref') === targetPolicy &&
+        !r.isEvent
+    );
+
+    if (parentMappings.length === 0) {
+        return customAlert(
+            "No Parent Plans Found",
+            `No mapped ${targetChannel} (${targetPolicy}) base rate plans were found. Create or map your base plans first.`
+        );
+    }
+
+    try {
+        customAlert("Creating Derived Plans...", `Creating ${parentMappings.length} derived ${tierLabel} plan(s) in Channex...`);
+        window.channexDerivedPlans = window.channexDerivedPlans || [];
+        let created = 0;
+
+        for (const pm of parentMappings) {
+            const parentPlan = (window.channexRatePlans || []).find(p => p.id === pm.ratePlanId);
+            const baseOptions = Array.isArray(parentPlan?.attributes?.options) && parentPlan.attributes.options.length > 0
+                ? parentPlan.attributes.options
+                : [{ occupancy: 1, is_primary: true, rate: 0 }];
+
+            const derivedOptions = baseOptions.map(opt => ({
+                occupancy: opt.occupancy || 1,
+                is_primary: !!opt.is_primary,
+                rate: opt.rate || 0,
+                derive_by: {
+                    rate: {
+                        operation: 'decrease_by_percent',
+                        value: String(discountPct)
+                    }
+                }
+            }));
+
+            const title = `[${targetChannel}] ${tierLabel} (${minNights}+ Nts) ${pm.pmsCategory}`;
+            const res = await ChannexClient.createRatePlan(propId, {
+                title,
+                room_type_id: pm.channexRoomId,
+                parent_rate_plan_id: pm.ratePlanId,
+                currency,
+                sell_mode: parentPlan?.attributes?.sell_mode || 'per_room',
+                meal_type: parentPlan?.attributes?.meal_type || 'none',
+                inherit_rate: true,
+                inherit_closed_to_arrival: true,
+                inherit_closed_to_departure: true,
+                inherit_stop_sell: true,
+                inherit_max_stay: true,
+                inherit_min_stay_arrival: false,
+                inherit_min_stay_through: false,
+                min_stay_through: minNights,
+                min_stay_arrival: 1,
+                options: derivedOptions
+            }, apiKey);
+
+            if (res?.data) {
+                window.channexDerivedPlans.push(res.data);
+                created++;
+            }
+        }
+
+        renderStep3UnifiedMapping();
+        customAlert("Success", `Created ${created} derived ${tierLabel} rate plan(s) (-${discountPct}%, Min ${minNights} nights, inheriting CTA/CTD/Stop Sell).`);
+    } catch (err) {
+        console.error("[Create Derived LOS Error]:", err);
+        customAlert("Creation Failed", err.message);
+    }
+}
+
+export async function updateDerivedLosPlan(ratePlanId) {
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    if (!apiKey) return customAlert("Credentials Required", "Enter Channex API Key first.");
+
+    const minNights = Math.max(1, parseInt(document.getElementById(`los-min-${ratePlanId}`)?.value, 10) || 7);
+    const discountPct = Math.max(0, Math.min(95, parseFloat(document.getElementById(`los-disc-${ratePlanId}`)?.value) || 0));
+
+    const existing = (window.channexDerivedPlans || []).find(p => p.id === ratePlanId);
+    const baseOptions = Array.isArray(existing?.attributes?.options) && existing.attributes.options.length > 0
+        ? existing.attributes.options
+        : [{ occupancy: 1, is_primary: true, rate: 0 }];
+
+    const updatedOptions = baseOptions.map(opt => ({
+        ...opt,
+        derive_by: {
+            rate: {
+                operation: 'decrease_by_percent',
+                value: String(discountPct)
+            }
+        }
+    }));
+
+    try {
+        const res = await ChannexClient.updateRatePlan(ratePlanId, {
+            inherit_rate: true,
+            inherit_closed_to_arrival: true,
+            inherit_closed_to_departure: true,
+            inherit_stop_sell: true,
+            inherit_max_stay: true,
+            inherit_min_stay_arrival: false,
+            inherit_min_stay_through: false,
+            min_stay_through: minNights,
+            options: updatedOptions
+        }, apiKey);
+
+        if (res?.data && existing) {
+            existing.attributes = { ...(existing.attributes || {}), ...(res.data.attributes || {}) };
+        }
+        renderStep3UnifiedMapping();
+        customAlert("Updated", `Updated derived plan to -${discountPct}% discount with ${minNights}-night minimum stay.`);
+    } catch (err) {
+        console.error("[Update Derived LOS Error]:", err);
+        customAlert("Update Failed", err.message);
+    }
+}
+
+// --------------------------------------------------------------------------
+// STEP 3 UNIFIED MAPPING RENDERER
+// --------------------------------------------------------------------------
 
 let step3ShowRates = true;
 const step3ExpandedCats = new Set();
@@ -317,21 +632,30 @@ export function renderStep3UnifiedMapping() {
     const mappedCount = pmsCategories.filter(cat => !!findChannexMapForCategory(cat, catToId.get(cat))).length;
 
     const toolbar = document.createElement('div');
-    toolbar.className = 'flex items-center justify-between gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs text-xs';
+    toolbar.className = 'flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs text-xs';
     toolbar.innerHTML = `
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
             <span class="font-black uppercase text-slate-700">Room & Rate Mapping</span>
             <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${mappedCount === pmsCategories.length ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}">
                 ${mappedCount} / ${pmsCategories.length} Rooms Mapped • ${window.channexRateMap.length} Active Plans
             </span>
         </div>
-        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
-            <span class="px-1.5 text-slate-400">DISPLAY:</span>
-            <button type="button" onclick="window.setStep3RateView(false)" class="px-2.5 py-0.5 rounded cursor-pointer transition-colors ${!step3ShowRates ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}">Rooms Only</button>
-            <button type="button" onclick="window.setStep3RateView(true)" class="px-2.5 py-0.5 rounded cursor-pointer transition-colors ${step3ShowRates ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}">All Rates</button>
+        <div class="flex items-center gap-2 flex-wrap">
+            <button type="button" onclick="window.openChannexMappingIframe()" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase cursor-pointer flex items-center gap-1 shadow-2xs">
+                <i data-lucide="globe" size="12"></i> Open OTA Channel Mapping
+            </button>
+            <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
+                <span class="px-1.5 text-slate-400">DISPLAY:</span>
+                <button type="button" onclick="window.setStep3RateView(false)" class="px-2.5 py-0.5 rounded cursor-pointer transition-colors ${!step3ShowRates ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}">Rooms Only</button>
+                <button type="button" onclick="window.setStep3RateView(true)" class="px-2.5 py-0.5 rounded cursor-pointer transition-colors ${step3ShowRates ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}">All Rates</button>
+            </div>
         </div>
     `;
     container.appendChild(toolbar);
+
+    const derivedWrapper = document.createElement('div');
+    derivedWrapper.innerHTML = buildDerivedLosCardHtml();
+    container.appendChild(derivedWrapper.firstElementChild);
 
     const availableChannels = getAvailableMappingChannels();
 
@@ -460,7 +784,6 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     const defMatch = (window.roomDefinitions || []).find(d => !d.inactive && normalizeCatName(d.category) === normalizeCatName(pmsCategory));
     const catId = defMatch?.catId || null;
 
-    // Preserve any Ghost Room mappings attached to this category; replace only the primary room mapping
     const removedPrimaryIds = new Set(
         window.channexMap
             .filter(m => !m.isGhost && (normalizeCatName(m.pmsCategory) === normalizeCatName(pmsCategory) || (catId && m.catId === catId)))
@@ -1383,6 +1706,10 @@ export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoo
 
 if (typeof window !== 'undefined') {
     window.fetchChannexData = fetchChannexData;
+    window.openChannexMappingIframe = openChannexMappingIframe;
+    window.closeChannexMappingIframe = closeChannexMappingIframe;
+    window.createDerivedLosPlansForAllRooms = createDerivedLosPlansForAllRooms;
+    window.updateDerivedLosPlan = updateDerivedLosPlan;
     window.setStep3RateView = setStep3RateView;
     window.toggleStep3CategoryRates = toggleStep3CategoryRates;
     window.renderStep3UnifiedMapping = renderStep3UnifiedMapping;
