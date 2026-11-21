@@ -112,6 +112,8 @@ function initGlobalTooltips() {
     if (typeof document === 'undefined' || window._wwTooltipsBound) return;
     window._wwTooltipsBound = true;
 
+    let hoverTimer = null;
+
     const getTooltipEl = () => {
         let el = document.getElementById('cm-tooltip');
         if (!el) {
@@ -123,9 +125,36 @@ function initGlobalTooltips() {
         return el;
     };
 
+    const hideTooltip = () => {
+        clearTimeout(hoverTimer);
+        hoverTimer = null;
+        const tt = document.getElementById('cm-tooltip');
+        if (tt) tt.classList.add('hidden');
+    };
+
+    const hasOpenMenuInside = (el) => {
+        if (!el) return false;
+        const menus = el.querySelectorAll('[id$="-dropdown"], .multi-select-dropdown, [role="menu"], [role="listbox"]');
+        for (const m of menus) {
+            if (!m.classList.contains('hidden')) return true;
+        }
+        return false;
+    };
+
+    ['mousedown', 'keydown', 'scroll', 'wheel'].forEach(evt => {
+        document.addEventListener(evt, hideTooltip, true);
+    });
+
     document.addEventListener('mouseover', (e) => {
+        // Never trigger tooltips while hovering inside an open dropdown or native <select>
+        if (e.target?.closest?.('[id$="-dropdown"], .multi-select-dropdown, select, [role="menu"], [role="listbox"]')) {
+            hideTooltip();
+            return;
+        }
+
         const host = e.target?.closest?.('[data-tip], [title]');
         if (!host) return;
+
         if (host.hasAttribute('title')) {
             const nativeTitle = host.getAttribute('title');
             if (nativeTitle && !host.getAttribute('data-tip')) {
@@ -133,33 +162,48 @@ function initGlobalTooltips() {
             }
             host.removeAttribute('title');
         }
-        // Training tips (buttons/controls) respect the toggle; data tips (data-tip-type="data") are always active
+
+        if (hasOpenMenuInside(host)) {
+            hideTooltip();
+            return;
+        }
+
         const tipType = host.getAttribute('data-tip-type') || 'training';
         if (tipType === 'training' && !isTrainingTipsEnabled()) return;
 
         const text = getTip(host.getAttribute('data-tip'));
         if (!text) return;
 
-        const tt = getTooltipEl();
-        tt.innerText = text;
-        tt.classList.remove('hidden');
+        clearTimeout(hoverTimer);
+        const delay = tipType === 'training' ? 350 : 0;
 
-        const rect = host.getBoundingClientRect();
-        const left = Math.min(window.innerWidth - 330, Math.max(10, rect.left));
-        const top = (rect.bottom + 8 + 90 > window.innerHeight)
-            ? Math.max(10, rect.top - 75)
-            : rect.bottom + 6;
+        hoverTimer = setTimeout(() => {
+            if (!host.isConnected || hasOpenMenuInside(host)) return;
+            const tt = getTooltipEl();
+            tt.innerText = text;
+            tt.classList.remove('hidden');
 
-        tt.style.left = `${left}px`;
-        tt.style.top = `${top}px`;
+            const rect = host.getBoundingClientRect();
+            const ttRect = tt.getBoundingClientRect();
+            const ttW = ttRect.width || 260;
+            const ttH = ttRect.height || 70;
+
+            const left = Math.min(window.innerWidth - ttW - 10, Math.max(10, rect.left));
+            const fitsBelow = (rect.bottom + ttH + 10) <= window.innerHeight;
+            const top = fitsBelow
+                ? (rect.bottom + 6)
+                : Math.max(10, rect.top - ttH - 6);
+
+            tt.style.left = `${left}px`;
+            tt.style.top = `${top}px`;
+        }, delay);
     });
 
     document.addEventListener('mouseout', (e) => {
         const host = e.target?.closest?.('[data-tip]');
         if (!host) return;
         if (e.relatedTarget && host.contains(e.relatedTarget)) return;
-        const tt = document.getElementById('cm-tooltip');
-        if (tt) tt.classList.add('hidden');
+        hideTooltip();
     });
 }
 
