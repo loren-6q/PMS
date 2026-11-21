@@ -306,7 +306,11 @@ export function calculateLiveInventory() {
                         if (fallbackCat) {
                             const matchedRt = roomTypes.find(rt => rt.toLowerCase() === String(fallbackCat).toLowerCase());
                             if (matchedRt) {
-                                const unitDed = matchedRt.toLowerCase().includes('dorm') ? Math.max(unassignedCount, parseInt(s.pax || 1, 10)) : unassignedCount;
+                                const isDoubleDorm = /\b(double|queen|king|couple|2\s*pax)\b/i.test(`${matchedRt} ${fallbackCat}`);
+                                const perBedCap = isDoubleDorm ? 2 : 1;
+                                const unitDed = matchedRt.toLowerCase().includes('dorm')
+                                    ? Math.max(unassignedCount, Math.ceil((parseInt(s.pax || 1, 10) || 1) / perBedCap))
+                                    : unassignedCount;
                                 occupied[matchedRt] = (occupied[matchedRt] || 0) + unitDed;
                             }
                         }
