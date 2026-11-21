@@ -452,9 +452,11 @@ export function getNetAvailabilityForDate(pmsCat, dStr, peakCap) {
             // Step 2: Count unassigned bookings belonging to this category
             const bType = String(s.bookedType || s.category || '').toUpperCase().trim();
             if (bType === pmsCatUpper || bType.includes(pmsCatUpper) || pmsCatUpper.includes(bType)) {
-                unassignedCount += isDorm
-                    ? (parseInt(s.pax || s.unitCount || 1, 10) || 1)
-                    : (parseInt(s.unitCount || 1, 10) || 1);
+                const perBedCap = (isDorm && /\b(double|queen|king|couple|2\s*pax)\b/i.test(`${pmsCatUpper} ${bType}`)) ? 2 : 1;
+                const slotUnits = (Array.isArray(s.rooms) && s.rooms.length > 1) ? s.rooms.length : (parseInt(s.unitCount, 10) || 0);
+                unassignedCount += slotUnits > 0
+                    ? slotUnits
+                    : (isDorm ? Math.max(1, Math.ceil((parseInt(s.pax, 10) || 1) / perBedCap)) : 1);
             }
         }
     }
