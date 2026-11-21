@@ -134,17 +134,25 @@ export function parseBookingCom(rawText) {
             checkOut = parseFlexibleDate(lines[i + 1]);
         }
 
-        if (/^Total\s*guests:?$/i.test(line) && i + 1 < lines.length) {
+        if (/^(?:Total\s*)?guests:?$/i.test(line) && i + 1 < lines.length) {
             const p = parseInt(lines[i + 1], 10);
             if (!isNaN(p) && p > 0) pax = p;
         }
 
-        if (/^Total\s*units:?$/i.test(line) && i + 1 < lines.length) {
+        if (/^(?:Total\s*units|Rooms(?:\s*Booked)?):?$/i.test(line) && i + 1 < lines.length) {
             const u = parseInt(lines[i + 1], 10);
-            if (!isNaN(u) && u > 0) unitCount = u;
+            if (!isNaN(u) && u > 0) {
+                unitCount = u;
+                if (i + 2 < lines.length && !/^(?:BDC|Non-Ref|Refundable|Total|Check-|Guests|Occupancy|Cancellation|Policies)/i.test(lines[i + 2])) {
+                    const parsedRoom = parseRoomLineItem(lines[i + 2]);
+                    if (parsedRoom.category && parsedRoom.category.length > 3) {
+                        unitItems.push(parsedRoom);
+                    }
+                }
+            }
         }
 
-        if (/^Total\s*price$/i.test(line) && i + 1 < lines.length) {
+        if (/^Total(?:\s*price)?:?$/i.test(line) && i + 1 < lines.length) {
             const m = lines[i + 1].match(/([0-9,]+(?:\.[0-9]{2})?)/);
             if (m) totalPrice = parseFloat(m[1].replace(/,/g, '')) || 0;
         }
@@ -173,6 +181,11 @@ export function parseBookingCom(rawText) {
             }
         }
 
+        if (/^Reservation\s*Number:\s*(.+)$/i.test(line)) {
+            const m = line.match(/^Reservation\s*Number:\s*(?:BDC-)?([A-Za-z0-9\-]+)/i);
+            if (m) bookId = m[1].trim();
+        }
+
         if (/^Booking\s*number:?$/i.test(line) && i + 1 < lines.length) {
             const m = lines[i + 1].match(/\b([0-9]{8,15})\b/);
             if (m) bookId = m[1];
@@ -187,10 +200,9 @@ export function parseBookingCom(rawText) {
             if (m) commissionAmt = parseFloat(m[1].replace(/,/g, '')) || 0;
         }
 
-        if (/Payments\s+by\s+Booking\.com/i.test(line) || /Booking\.com\s+will\s+collect/i.test(line)) {
+        if (/Payments\s+by\s+Booking\.com/i.test(line) || /Booking\.com\s+will\s+collect/i.test(line) || /^Payment\s*Collect:\s*OTA$/i.test(line)) {
             isPrepaid = true;
         }
-
         if (i + 1 < lines.length && /^Cancellation$/i.test(lines[i + 1])) {
             const parsedItem = parseRoomLineItem(line);
             if (parsedItem.category) policyItems.push(parsedItem);
