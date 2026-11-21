@@ -243,7 +243,21 @@ export const ChannexClient = {
         }, apiKey, isStaging);
     },
 
-    async getEmbeddedChannelMappingUrl(propId, apiKey, isStaging = undefined) {
+    async deleteRoomType(roomTypeId, apiKey, isStaging = undefined) {
+        if (!roomTypeId) throw new Error("Room Type ID is required.");
+        return this.request(`/room_types/${roomTypeId}`, {
+            method: 'DELETE'
+        }, apiKey, isStaging);
+    },
+
+    async deleteRatePlan(ratePlanId, apiKey, isStaging = undefined) {
+        if (!ratePlanId) throw new Error("Rate Plan ID is required.");
+        return this.request(`/rate_plans/${ratePlanId}`, {
+            method: 'DELETE'
+        }, apiKey, isStaging);
+    },
+
+    async getEmbeddedChannelMappingUrl(propId, apiKey, redirectPath = '/channels', headless = true, isStaging = undefined) {
         if (!propId) throw new Error("Property ID is required.");
         const res = await this.request('/auth/one_time_token', {
             method: 'POST',
@@ -260,7 +274,8 @@ export const ChannexClient = {
                 ? isStaging
                 : !!(window.channexConfig?.isStaging || window.channexConfig?.env === 'staging')
         );
-        return `https://${host}/auth/exchange?oauth_session_key=${encodeURIComponent(token)}&app_mode=headless&redirect_to=/channels&property_id=${encodeURIComponent(propId)}`;
+        const modeParam = headless ? '&app_mode=headless' : '';
+        return `https://${host}/auth/exchange?oauth_session_key=${encodeURIComponent(token)}${modeParam}&redirect_to=${encodeURIComponent(redirectPath)}&property_id=${encodeURIComponent(propId)}`;
     },
 
     async createRatePlan(propId, ratePlanFields, apiKey, isStaging = undefined) {
