@@ -171,8 +171,8 @@ export function renderRoomDefinitionsTable() {
                 <div class="flex items-center justify-center gap-1">
                     <span class="font-bold w-4 text-center">${rowIndex}</span>
                     <div class="flex flex-col">
-                        <button type="button" onclick="window.moveRoomWithinCategory(${idx}, -1)" class="text-slate-400 hover:text-slate-800 leading-none cursor-pointer ${isFirstInCat ? 'opacity-20 pointer-events-none' : ''}" title="Move Up">▲</button>
-                        <button type="button" onclick="window.moveRoomWithinCategory(${idx}, 1)" class="text-slate-400 hover:text-slate-800 leading-none cursor-pointer ${isLastInCat ? 'opacity-20 pointer-events-none' : ''}" title="Move Down">▼</button>
+                        <button type="button" onclick="window.moveRoomWithinCategory(${idx}, -1)" data-tip="setup.moveRoomUp" class="text-slate-400 hover:text-slate-800 leading-none cursor-pointer ${isFirstInCat ? 'opacity-20 pointer-events-none' : ''}">▲</button>
+                        <button type="button" onclick="window.moveRoomWithinCategory(${idx}, 1)" data-tip="setup.moveRoomDown" class="text-slate-400 hover:text-slate-800 leading-none cursor-pointer ${isLastInCat ? 'opacity-20 pointer-events-none' : ''}">▼</button>
                     </div>
                 </div>
             </td>
@@ -189,8 +189,8 @@ export function renderRoomDefinitionsTable() {
                 </select>
             </td>
             <td class="text-center">
-                <button type="button" onclick="window.deleteRoomDef(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5" title="Delete or Archive Room">
-                    <i data-lucide="trash-2" size="13"></i>
+                <button type="button" onclick="window.deleteRoomDef(${idx})" data-tip="setup.deleteRoom" class="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5">
+                <i data-lucide="trash-2" size="13"></i>
                 </button>
             </td>
         `;
@@ -459,7 +459,7 @@ export function closeReorderCategoriesModal() {
 }
 
 export function moveCategory(idx, dir) {
-    const categories = Array.from(new Set((window.roomDefinitions || []).map(r => r.category).filter(Boolean)));
+    const categories = Array.from(new Set((window.roomDefinitions || []).filter(r => !r.inactive).map(r => (r.category || '').trim()).filter(Boolean)));
     const targetIdx = idx + dir;
     if (targetIdx < 0 || targetIdx >= categories.length) return;
 
@@ -469,15 +469,14 @@ export function moveCategory(idx, dir) {
 
     const sortedDefs = [];
     categories.forEach(c => {
-        window.roomDefinitions.filter(r => r.category === c).forEach(r => sortedDefs.push(r));
+        window.roomDefinitions.filter(r => (r.category || '').trim() === c).forEach(r => sortedDefs.push(r));
     });
-    window.roomDefinitions.filter(r => !categories.includes(r.category)).forEach(r => sortedDefs.push(r));
+    window.roomDefinitions.filter(r => !categories.includes((r.category || '').trim())).forEach(r => sortedDefs.push(r));
 
     window.roomDefinitions = sortedDefs;
     renderRoomDefinitionsTable();
     openReorderCategoriesModal();
 }
-
 export function toggleBedPreviewDrawer() {
     const drawer = document.getElementById('bed-preview-drawer-modal');
     if (drawer && !drawer.classList.contains('hidden') && drawer.style.display !== 'none') {
