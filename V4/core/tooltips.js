@@ -61,7 +61,7 @@ export const TOOLTIPS = Object.freeze({
     "pms.toolDuplicate": "Clone this reservation as a new booking.",
     "pms.toolHistory": "View full audit trail of edits made to this reservation.",
     "pms.toolInvoice": "Generate and print an itemized guest folio invoice.",
-    "dash.newBookings": "Incoming bookings with status NEW (including far-future arrivals).\nOpen each booking to verify room assignment, notes, and payments, then set status to FUTURE to acknowledge.",
+    "dash.newBookings": "OTA Inbox: Unreviewed New bookings, Modifications, and Cancellations (including freed dorm beds/rooms).\nClick an item to jump to its dates on the Calendar and open the Folio Modal. For NEW bookings, change status to FUTURE and click SAVE; for Modifications/Cancellations, verify the calendar/folio and click SAVE to acknowledge.",
     "dash.dismissAlert": "Dismiss this alert from Today's Action Items.",
     "dash.liveChecker": "Live Channel Manager rate and stay-restriction quote for the selected dates and PAX.",
 
