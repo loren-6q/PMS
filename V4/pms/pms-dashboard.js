@@ -30,13 +30,20 @@ function getChannelBadgeHtml(source) {
     return `<span class="${cls} px-1 py-0.2 rounded text-[8.5px] font-black uppercase shrink-0">${code}</span>`;
 }
 
+function getIsoSortKey(val, fallback = '') {
+    if (!val) return fallback;
+    if (typeof val === 'string') return val;
+    if (typeof val?.toDate === 'function') return val.toDate().toISOString();
+    return fallback;
+}
+
 export const renderDashboard = () => {
     const todayStr = getLocalYMD(new Date());
     const dateEl = $('dash-date-display');
     if (dateEl) dateEl.innerText = todayStr;
 
     const arr = [], dep = [], stay = [];
-    const newBookingsRaw = [];
+    const inboxRaw = [];
     const actRaw = [];
 
     const staff = window.staff || [];
@@ -51,47 +58,76 @@ export const renderDashboard = () => {
         });
 
     sortedStaff.forEach(s => {
-        if (s.status === 'cancelled' || s.status === 'no-show') return;
-
         const cIn = s.checkIn;
         const cOut = s.checkOut;
         const due = getDue(s);
         const assigned = (window.getRooms ? window.getRooms(s) : (s.rooms || [s.room])).filter(Boolean).join(',') || 'Unassigned';
         const name = `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Unknown';
 
-        const st = getStatusObj(s.status);
-        const sBadge = `<span class="px-1.5 py-0.5 text-[8px] rounded uppercase font-black shadow-xs select-text ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border: 1px solid ${st.border};">${st.label}</span>`;
-        const dueBadge = due > 0 ? `<span class="text-red-500 font-black">฿${due.toFixed(2)}</span>` : `<span class="text-green-500">฿0</span>`;
-        const item = `<div class="flex items-center py-1 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm w-[72px] text-slate-700 shrink-0">${assigned}</span><div class="flex-1 truncate leading-tight"><span class="font-black text-xs text-slate-700">${name}</span> <span class="ml-1">${sBadge}</span></div><div class="shrink-0 ml-1">${dueBadge}</div></div>`;
+        const isNew = s.status === 'new';
+        const isModified = s.otaAlert === 'modified' && s.status !== 'cancelled';
+        const isCancelledAlert = s.status === 'cancelled' && s.otaAlert === 'cancelled';
 
-        // Collect all NEW bookings (regardless of how far in the future check-in is)
-        if (s.status === 'new') {
+        // 1. Collect New, Modified & Cancelled OTA items for the Inbox card
+        if (isNew || isModified || isCancelledAlert) {
             const nights = (cIn && cOut) ? Math.max(1, Math.round((parseYMD(cOut) - parseYMD(cIn)) / 86400000)) : 1;
-            const createdSort = typeof s.createdAt === 'string'
-                ? s.createdAt
-                : (s.createdAt?.toDate ? s.createdAt.toDate().toISOString() : (s.bookDate || cIn || ''));
-            newBookingsRaw.push({
-                sortKey: createdSort,
+            const sortKey = getIsoSortKey(
+                s.otaAlertAt,
+                getIsoSortKey(s.lastEditedAt, getIsoSortKey(s.createdAt, s.bookDate || cIn || ''))
+            );
+
+            const badges = [];
+            if (isCancelledAlert) {
+                badges.push(`<span class="px-1 py-0.2 rounded bg-rose-600 text-white text-[8px] font-black uppercase">CANCELLED</span>`);
+            } else {
+                if (isNew) badges.push(`<span class="px-1 py-0.2 rounded bg-sky-600 text-white text-[8px] font-black uppercase">NEW</span>`);
+                if (isModified) badges.push(`<span class="px-1 py-0.2 rounded bg-amber-500 text-slate-950 text-[8px] font-black uppercase">MODIFIED</span>`);
+            }
+
+            const freedList = Array.isArray(s.prevRooms) ? s.prevRooms.filter(Boolean) : [];
+            const roomTag = isCancelledAlert
+                ? `<span class="px-1 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-300 font-black">${freedList.length ? `Freed: ${freedList.join(', ')}` : 'Was Unassigned'}</span>`
+                : `<span class="px-1 py-0.2 rounded ${assigned === 'Unassigned' ? 'bg-amber-100 text-amber-800' : 'bg-white text-slate-700 border border-slate-200'} font-black">${assigned}</span>`;
+
+            const detailLine = (isModified && s.otaAlertSummary)
+                ? `<div class="text-[9px] font-bold text-amber-900 bg-amber-100/70 px-1.5 py-0.5 rounded mt-0.5 truncate">${s.otaAlertSummary}</div>`
+                : '';
+
+            const rowBg = isCancelledAlert
+                ? 'border-rose-200 bg-rose-50/50 hover:bg-rose-100/70'
+                : (isModified ? 'border-amber-200 bg-amber-50/50 hover:bg-amber-100/70' : 'border-sky-100 hover:bg-sky-100/70');
+
+            inboxRaw.push({
+                sortKey,
                 html: `
-                    <div onclick="window.openNewBookingForReview('${s.id}')" class="flex items-center justify-between py-1.5 px-1.5 border-b border-sky-100 last:border-0 hover:bg-sky-100/70 rounded transition-colors gap-1.5 cursor-pointer">
+                    <div onclick="window.openInboxBookingForReview('${s.id}')" class="flex items-center justify-between py-1.5 px-1.5 border-b ${rowBg} last:border-0 rounded transition-colors gap-1.5 cursor-pointer">
                         <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-1">
+                            <div class="flex items-center gap-1 flex-wrap">
                                 ${getChannelBadgeHtml(s.source)}
+                                ${badges.join('')}
                                 <span class="font-black text-xs text-slate-800 truncate">${name}</span>
                             </div>
                             <div class="text-[9.5px] font-bold text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
                                 <span>${cIn || '--'} → ${cOut || '--'} (${nights}n)</span>
-                                <span class="px-1 py-0.2 rounded ${assigned === 'Unassigned' ? 'bg-amber-100 text-amber-800' : 'bg-white text-slate-700 border border-slate-200'} font-black">${assigned}</span>
+                                ${roomTag}
                                 <span class="text-indigo-700 font-black">฿${(Number(s.totalPrice) || 0).toLocaleString()}</span>
                             </div>
+                            ${detailLine}
                         </div>
-                        <span class="px-1.5 py-0.5 bg-white text-sky-700 border border-sky-300 rounded font-black text-[9px] uppercase shrink-0 flex items-center gap-0.5">
+                        <span class="px-1.5 py-0.5 bg-white text-slate-700 border border-slate-300 rounded font-black text-[9px] uppercase shrink-0 flex items-center gap-0.5">
                             Review <i data-lucide="arrow-up-right" size="11"></i>
                         </span>
                     </div>
                 `
             });
         }
+
+        if (s.status === 'cancelled' || s.status === 'no-show') return;
+
+        const st = getStatusObj(s.status);
+        const sBadge = `<span class="px-1.5 py-0.5 text-[8px] rounded uppercase font-black shadow-xs select-text ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border: 1px solid ${st.border};">${st.label}</span>`;
+        const dueBadge = due > 0 ? `<span class="text-red-500 font-black">฿${due.toFixed(2)}</span>` : `<span class="text-green-500">฿0</span>`;
+        const item = `<div class="flex items-center py-1 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm w-[72px] text-slate-700 shrink-0">${assigned}</span><div class="flex-1 truncate leading-tight"><span class="font-black text-xs text-slate-700">${name}</span> <span class="ml-1">${sBadge}</span></div><div class="shrink-0 ml-1">${dueBadge}</div></div>`;
 
         if (cIn === todayStr && s.status !== 'unconfirmed' && s.status !== 'new') arr.push(item);
         if (cOut === todayStr && s.status !== 'unconfirmed' && s.status !== 'new') {
@@ -116,26 +152,25 @@ export const renderDashboard = () => {
     if ($('dash-stay-count')) $('dash-stay-count').innerText = stay.length;
     if ($('dash-stay-list')) $('dash-stay-list').innerHTML = stay.length ? stay.join('') : '<div class="text-slate-400 italic text-center py-2">No stay-overs</div>';
 
-    // Sort NEW bookings newest-first and mount dedicated New Bookings card
-    newBookingsRaw.sort((a, b) => String(b.sortKey).localeCompare(String(a.sortKey)));
-    const ratesCard = $('dash-rates-list')?.parentElement;
-    const rightCol = ratesCard?.parentElement;
-    if (rightCol) {
-        let newCard = $('dash-new-bookings-card');
-        if (!newCard) {
-            newCard = document.createElement('div');
-            newCard.id = 'dash-new-bookings-card';
-            newCard.className = 'dash-card border-sky-300 bg-sky-50/40';
-            newCard.setAttribute('data-tip', 'dash.newBookings');
-            rightCol.insertBefore(newCard, ratesCard);
-        }
-        newCard.innerHTML = `
+    // Sort OTA Inbox newest-first and ensure it sits as the FIRST card in the grid
+    inboxRaw.sort((a, b) => String(b.sortKey).localeCompare(String(a.sortKey)));
+    const gridContainer = $('dash-cards-grid') || $('dash-arr-list')?.parentElement?.parentElement;
+    let inboxCard = $('dash-new-bookings-card');
+    if (gridContainer && !inboxCard) {
+        inboxCard = document.createElement('div');
+        inboxCard.id = 'dash-new-bookings-card';
+        inboxCard.className = 'dash-card border-sky-300 bg-sky-50/40';
+        inboxCard.setAttribute('data-tip', 'dash.newBookings');
+        gridContainer.insertBefore(inboxCard, gridContainer.firstElementChild);
+    }
+    if (inboxCard) {
+        inboxCard.innerHTML = `
             <div class="dash-title flex justify-between items-center text-sky-800 border-sky-200">
-                <span><i data-lucide="sparkles" size="12" class="inline mb-0.5 text-sky-600"></i> New Bookings</span>
-                <span class="bg-sky-600 text-white px-1.5 py-0.2 rounded text-[10px] font-black">${newBookingsRaw.length}</span>
+                <span><i data-lucide="inbox" size="12" class="inline mb-0.5 text-sky-600"></i> OTA Inbox</span>
+                <span class="bg-sky-600 text-white px-1.5 py-0.2 rounded text-[10px] font-black">${inboxRaw.length}</span>
             </div>
-            <div class="space-y-0.5 text-xs max-h-[210px] overflow-y-auto no-scrollbar">
-                ${newBookingsRaw.length ? newBookingsRaw.map(x => x.html).join('') : '<div class="text-slate-400 italic text-center py-2">No unacknowledged new bookings</div>'}
+            <div class="space-y-0.5 text-xs max-h-[340px] overflow-y-auto no-scrollbar">
+                ${inboxRaw.length ? inboxRaw.map(x => x.html).join('') : '<div class="text-slate-400 italic text-center py-2">No unreviewed OTA updates</div>'}
             </div>
         `;
     }
@@ -146,9 +181,9 @@ export const renderDashboard = () => {
     if ($('dash-act-list')) $('dash-act-list').innerHTML = actRaw.length ? actHtml : '<div class="text-green-500 font-black text-center py-2"><i data-lucide="check-circle" size="14" class="inline"></i> All clear!</div>';
 
     // Mount Dynamic Rate Checker inputs if missing
+    const ratesCard = $('dash-rates-list')?.parentElement;
     let dashPcIn = $('dash-pc-in');
     let dashPcOut = $('dash-pc-out');
-    let dashPcPax = $('dash-pc-pax');
 
     if (ratesCard && !dashPcIn) {
         ratesCard.setAttribute('data-tip', 'dash.liveChecker');
@@ -166,7 +201,6 @@ export const renderDashboard = () => {
         `;
         dashPcIn = $('dash-pc-in');
         dashPcOut = $('dash-pc-out');
-        dashPcPax = $('dash-pc-pax');
 
         if (dashPcIn && dashPcOut) {
             dashPcIn.value = todayStr;
@@ -283,20 +317,22 @@ export const runDashPriceCheck = () => {
     }).join('');
 };
 
-export const openNewBookingForReview = id => {
+export const openInboxBookingForReview = id => {
     const s = (window.staff || []).find(x => x.id === id);
-    window._reviewingNewBookingId = id;
+    window._reviewingInboxBookingId = id;
 
     if (!window._dashCloseHooked && typeof window.closeGuestModal === 'function') {
         const origClose = window.closeGuestModal;
         window.closeGuestModal = (...args) => {
-            const reviewId = window._reviewingNewBookingId;
+            const reviewId = window._reviewingInboxBookingId;
             origClose(...args);
             if (reviewId) {
                 const updated = (window.staff || []).find(x => x.id === reviewId);
                 const hiddenStatus = document.getElementById('guest-status-hidden')?.value;
-                if ((updated && updated.status !== 'new') || (hiddenStatus && hiddenStatus !== 'new')) {
-                    window._reviewingNewBookingId = null;
+                const isStillNew = (updated ? updated.status === 'new' : hiddenStatus === 'new');
+                const hasOtaAlert = !!(updated && updated.otaAlert);
+                if (!isStillNew && !hasOtaAlert) {
+                    window._reviewingInboxBookingId = null;
                     if (typeof window.switchTab === 'function') {
                         window.switchTab('dashboard');
                     }
@@ -337,5 +373,6 @@ export const dismissAlert = async id => {
 
 window.renderDashboard = renderDashboard;
 window.runDashPriceCheck = runDashPriceCheck;
-window.openNewBookingForReview = openNewBookingForReview;
+window.openInboxBookingForReview = openInboxBookingForReview;
+window.openNewBookingForReview = openInboxBookingForReview;
 window.dismissAlert = dismissAlert;
