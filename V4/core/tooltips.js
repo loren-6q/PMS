@@ -113,6 +113,7 @@ function initGlobalTooltips() {
     window._wwTooltipsBound = true;
 
     let hoverTimer = null;
+    let lastClickedHost = null;
 
     const getTooltipEl = () => {
         let el = document.getElementById('cm-tooltip');
@@ -132,22 +133,35 @@ function initGlobalTooltips() {
         if (tt) tt.classList.add('hidden');
     };
 
-    const hasOpenMenuInside = (el) => {
-        if (!el) return false;
-        const menus = el.querySelectorAll('[id$="-dropdown"], .multi-select-dropdown, [role="menu"], [role="listbox"]');
-        for (const m of menus) {
-            if (!m.classList.contains('hidden')) return true;
+    const isAnyDropdownOpen = () => {
+        if (document.activeElement && document.activeElement.tagName === 'SELECT') return true;
+        const openMenus = document.querySelectorAll(
+            '[id*="dropdown"]:not(.hidden), [id*="menu"]:not(.hidden), [id*="popover"]:not(.hidden), .multi-select-dropdown:not(.hidden), .dropdown-menu:not(.hidden), [role="menu"]:not(.hidden), [role="listbox"]:not(.hidden)'
+        );
+        for (const m of openMenus) {
+            if (m.offsetParent !== null || m.getClientRects().length > 0) return true;
         }
         return false;
     };
 
-    ['mousedown', 'keydown', 'scroll', 'wheel'].forEach(evt => {
+    const handlePointerDismiss = (e) => {
+        hideTooltip();
+        const clickedHost = e.target?.closest?.('[data-tip], [title]');
+        if (clickedHost) {
+            lastClickedHost = clickedHost;
+        }
+    };
+
+    ['pointerdown', 'mousedown', 'click'].forEach(evt => {
+        document.addEventListener(evt, handlePointerDismiss, true);
+    });
+
+    ['keydown', 'scroll', 'wheel'].forEach(evt => {
         document.addEventListener(evt, hideTooltip, true);
     });
 
     document.addEventListener('mouseover', (e) => {
-        // Never trigger tooltips while hovering inside an open dropdown or native <select>
-        if (e.target?.closest?.('[id$="-dropdown"], .multi-select-dropdown, select, [role="menu"], [role="listbox"]')) {
+        if (e.target?.closest?.('select, [id*="dropdown"], [id*="menu"], [id*="popover"], .multi-select-dropdown, .dropdown-menu, [role="menu"], [role="listbox"]')) {
             hideTooltip();
             return;
         }
@@ -163,13 +177,19 @@ function initGlobalTooltips() {
             host.removeAttribute('title');
         }
 
-        if (hasOpenMenuInside(host)) {
+        // Stay suppressed on any control that was just clicked until the cursor leaves it
+        if (lastClickedHost && (host === lastClickedHost || lastClickedHost.contains(host))) {
             hideTooltip();
             return;
         }
 
         const tipType = host.getAttribute('data-tip-type') || 'training';
-        if (tipType === 'training' && !isTrainingTipsEnabled()) return;
+        if (tipType === 'training') {
+            if (!isTrainingTipsEnabled() || isAnyDropdownOpen()) {
+                hideTooltip();
+                return;
+            }
+        }
 
         const text = getTip(host.getAttribute('data-tip'));
         if (!text) return;
@@ -178,7 +198,10 @@ function initGlobalTooltips() {
         const delay = tipType === 'training' ? 350 : 0;
 
         hoverTimer = setTimeout(() => {
-            if (!host.isConnected || hasOpenMenuInside(host)) return;
+            if (!host.isConnected) return;
+            if (lastClickedHost && (host === lastClickedHost || lastClickedHost.contains(host))) return;
+            if (tipType === 'training' && (!isTrainingTipsEnabled() || isAnyDropdownOpen())) return;
+
             const tt = getTooltipEl();
             tt.innerText = text;
             tt.classList.remove('hidden');
@@ -200,6 +223,9 @@ function initGlobalTooltips() {
     });
 
     document.addEventListener('mouseout', (e) => {
+        if (lastClickedHost && (!e.relatedTarget || !lastClickedHost.contains(e.relatedTarget))) {
+            lastClickedHost = null;
+        }
         const host = e.target?.closest?.('[data-tip]');
         if (!host) return;
         if (e.relatedTarget && host.contains(e.relatedTarget)) return;
