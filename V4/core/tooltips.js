@@ -61,10 +61,10 @@ export const TOOLTIPS = Object.freeze({
     "pms.toolDuplicate": "Clone this reservation as a new booking.",
     "pms.toolHistory": "View full audit trail of edits made to this reservation.",
     "pms.toolInvoice": "Generate and print an itemized guest folio invoice.",
-    "dash.newBookings": "OTA Inbox: Unreviewed New bookings, Modifications, and Cancellations (including freed dorm beds/rooms).\nClick an item to jump to its dates on the Calendar and open the Folio Modal. For NEW bookings, change status to FUTURE and click SAVE; for Modifications/Cancellations, verify the calendar/folio and click SAVE to acknowledge.",
+    "dash.newBookings": "New Bookings, Modifications & Cancellations waiting for staff review.\nClick a booking to jump to its dates on the Calendar and open the Folio Modal. For NEW bookings, set status to FUTURE and click SAVE; for Modifications or Cancellations, verify the calendar/folio and click SAVE to clear.",
     "dash.dismissAlert": "Dismiss this alert from Today's Action Items.",
-    "dash.liveChecker": "Live Channel Manager rate and stay-restriction quote for the selected dates and PAX.",
-
+    "dash.liveChecker": "Check room prices and stay restrictions for the selected dates and guest count.",
+    
     // --- PMS Calendar Legend ---
     "legend.owes": "Owes Balance (solid red border).",
     "legend.badCc": "Bad Credit Card (dashed red border).",
