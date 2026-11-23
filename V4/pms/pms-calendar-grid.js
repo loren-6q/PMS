@@ -42,7 +42,8 @@ export const toggleGroup = (grp, stateIdx = -1) => {
     const aR = $$(`.avail-row-${grp}`);
     if (!h) return;
 
-    if (grp === 'unassigned-unconfirmed') {
+   if (grp === 'unassigned-unconfirmed') {
+        if (stateIdx !== -1) return;
         window.isUnassignedTrayOpen = !window.isUnassignedTrayOpen;
         rws.forEach(r => {
             r.style.display = window.isUnassignedTrayOpen ? 'grid' : 'none';
@@ -301,11 +302,11 @@ export const render = () => {
     });
 
     if (window.isUnassignedTrayOpen === undefined) {
-        window.isUnassignedTrayOpen = true;
+        window.isUnassignedTrayOpen = false;
     }
 
     if (uConf.length > 0) {
-        tRows.push({ isDivider: true, label: "UNASSIGNED / UNCONFIRMED", isUnconfirmedZone: true });
+        tRows.push({ isDivider: true, label: `UNASSIGNED / UNCONFIRMED (${uConf.length})`, isUnconfirmedZone: true });
         const rows = [];
         uConf.forEach(s => {
             let p = false;
