@@ -147,6 +147,8 @@ export const saveBooking = async (keepOpen = false) => {
             upgrade: parseInt($('upgrade-btn')?.dataset?.state || 0, 10) > 0 ? (parseInt($('upgrade-btn')?.dataset?.state, 10) === 1 ? 'free' : 'paid') : 'none',
             rating: parseInt($('rating-btn')?.dataset?.state || 0, 10) > 0 ? (parseInt($('rating-btn')?.dataset?.state, 10) === 1 ? 'good' : 'bad') : 'none',
             extended: parseInt($('ext-btn')?.dataset?.state || 0, 10) === 1,
+            otaAlert: null,
+            otaAlertSummary: '',
             notes: $('guest-notes')?.value || '',
             createdAt: ext?.createdAt || now,
             createdBy: ext?.createdBy || userEmail,
