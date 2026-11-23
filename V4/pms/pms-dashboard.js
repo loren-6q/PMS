@@ -68,7 +68,7 @@ export const renderDashboard = () => {
         const isModified = s.otaAlert === 'modified' && s.status !== 'cancelled';
         const isCancelledAlert = s.status === 'cancelled' && s.otaAlert === 'cancelled';
 
-        // 1. Collect New, Modified & Cancelled OTA items for the Inbox card
+        // 1. Collect New, Modified & Cancelled bookings for the New Bookings card
         if (isNew || isModified || isCancelledAlert) {
             const nights = (cIn && cOut) ? Math.max(1, Math.round((parseYMD(cOut) - parseYMD(cIn)) / 86400000)) : 1;
             const sortKey = getIsoSortKey(
@@ -127,21 +127,21 @@ export const renderDashboard = () => {
         const st = getStatusObj(s.status);
         const sBadge = `<span class="px-1.5 py-0.5 text-[8px] rounded uppercase font-black shadow-xs select-text ${st.strike ? 'line-through' : ''}" style="background:${st.bg}; color:${st.txt}; border: 1px solid ${st.border};">${st.label}</span>`;
         const dueBadge = due > 0 ? `<span class="text-red-500 font-black">฿${due.toFixed(2)}</span>` : `<span class="text-green-500">฿0</span>`;
-        const item = `<div class="flex items-center py-1 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm w-[72px] text-slate-700 shrink-0">${assigned}</span><div class="flex-1 truncate leading-tight"><span class="font-black text-xs text-slate-700">${name}</span> <span class="ml-1">${sBadge}</span></div><div class="shrink-0 ml-1">${dueBadge}</div></div>`;
+        const item = `<div class="flex items-center py-1 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 gap-1.5" onclick="window.editStaff('${s.id}')"><span class="font-black text-xs w-[76px] text-slate-700 shrink-0 truncate" title="${assigned}">${assigned}</span><div class="flex-1 min-w-0 truncate leading-tight"><span class="font-black text-xs text-slate-700">${name}</span> <span class="ml-1">${sBadge}</span></div><div class="shrink-0 ml-1">${dueBadge}</div></div>`;
 
         if (cIn === todayStr && s.status !== 'unconfirmed' && s.status !== 'new') arr.push(item);
         if (cOut === todayStr && s.status !== 'unconfirmed' && s.status !== 'new') {
             dep.push(item);
             if (due > 0.05 && s.status !== 'charged' && !s.alertDismissed) {
-                actRaw.push({ date: cOut, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">Out: ${cOut}</span> <span class="text-[10px] text-red-600 font-bold uppercase ml-1">OWES ฿${due.toFixed(2)}</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" data-tip="dash.dismissAlert" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0"><i data-lucide="check" size="14"></i></button></div>` });
+                actRaw.push({ date: cOut, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50 gap-1.5"><div class="flex items-center cursor-pointer flex-1 min-w-0 gap-1.5" onclick="window.editStaff('${s.id}')"><span class="font-black text-xs text-slate-700 w-[76px] shrink-0 truncate" title="${assigned}">${assigned}</span><div class="flex-1 min-w-0 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">Out: ${cOut}</span> <span class="text-[10px] text-red-600 font-bold uppercase ml-1">OWES ฿${due.toFixed(2)}</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" data-tip="dash.dismissAlert" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-1 cursor-pointer shrink-0"><i data-lucide="check" size="14"></i></button></div>` });
             }
         }
         if (cIn < todayStr && cOut > todayStr && s.status !== 'unconfirmed' && s.status !== 'new') stay.push(item);
         if (s.status === 'unconfirmed' && !s.alertDismissed) {
-            actRaw.push({ date: cIn, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">In: ${cIn}</span> <span class="ml-1">${sBadge}</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" data-tip="dash.dismissAlert" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0"><i data-lucide="check" size="14"></i></button></div>` });
+            actRaw.push({ date: cIn, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50 gap-1.5"><div class="flex items-center cursor-pointer flex-1 min-w-0 gap-1.5" onclick="window.editStaff('${s.id}')"><span class="font-black text-xs text-slate-700 w-[76px] shrink-0 truncate" title="${assigned}">${assigned}</span><div class="flex-1 min-w-0 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">In: ${cIn}</span> <span class="ml-1">${sBadge}</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" data-tip="dash.dismissAlert" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-1 cursor-pointer shrink-0"><i data-lucide="check" size="14"></i></button></div>` });
         }
         if (s.badCC && !s.alertDismissed && s.status !== 'left') {
-            actRaw.push({ date: cIn, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50"><div class="flex items-center cursor-pointer flex-1 min-w-0" onclick="window.editStaff('${s.id}')"><span class="font-black text-sm text-slate-700 w-[72px] shrink-0">${assigned}</span><div class="flex-1 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">In: ${cIn}</span> <span class="text-[10px] bg-red-500 text-white px-1 rounded uppercase font-bold ml-1">BAD CC</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" data-tip="dash.dismissAlert" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-2 cursor-pointer shrink-0"><i data-lucide="check" size="14"></i></button></div>` });
+            actRaw.push({ date: cIn, html: `<div class="flex items-center justify-between py-1 border-b border-orange-100 last:border-0 hover:bg-orange-50 gap-1.5"><div class="flex items-center cursor-pointer flex-1 min-w-0 gap-1.5" onclick="window.editStaff('${s.id}')"><span class="font-black text-xs text-slate-700 w-[76px] shrink-0 truncate" title="${assigned}">${assigned}</span><div class="flex-1 min-w-0 leading-tight truncate"><span class="font-black text-xs text-slate-700">${name}</span><br><span class="text-[9px] text-slate-500 font-bold">In: ${cIn}</span> <span class="text-[10px] bg-red-500 text-white px-1 rounded uppercase font-bold ml-1">BAD CC</span></div></div><button onclick="event.stopPropagation(); window.dismissAlert('${s.id}')" data-tip="dash.dismissAlert" class="p-1 text-slate-400 hover:text-slate-700 bg-white rounded border border-slate-200 shadow-sm ml-1 cursor-pointer shrink-0"><i data-lucide="check" size="14"></i></button></div>` });
         }
     });
 
@@ -152,25 +152,25 @@ export const renderDashboard = () => {
     if ($('dash-stay-count')) $('dash-stay-count').innerText = stay.length;
     if ($('dash-stay-list')) $('dash-stay-list').innerHTML = stay.length ? stay.join('') : '<div class="text-slate-400 italic text-center py-2">No stay-overs</div>';
 
-    // Sort OTA Inbox newest-first and ensure it sits as the FIRST card in the grid
+    // Sort New Bookings newest-first and ensure it sits as the FIRST card
     inboxRaw.sort((a, b) => String(b.sortKey).localeCompare(String(a.sortKey)));
     const gridContainer = $('dash-cards-grid') || $('dash-arr-list')?.parentElement?.parentElement;
     let inboxCard = $('dash-new-bookings-card');
     if (gridContainer && !inboxCard) {
         inboxCard = document.createElement('div');
         inboxCard.id = 'dash-new-bookings-card';
-        inboxCard.className = 'dash-card border-sky-300 bg-sky-50/40';
+        inboxCard.className = 'dash-card break-inside-avoid mb-2 border-sky-300 bg-sky-50/40';
         inboxCard.setAttribute('data-tip', 'dash.newBookings');
         gridContainer.insertBefore(inboxCard, gridContainer.firstElementChild);
     }
     if (inboxCard) {
         inboxCard.innerHTML = `
             <div class="dash-title flex justify-between items-center text-sky-800 border-sky-200">
-                <span><i data-lucide="inbox" size="12" class="inline mb-0.5 text-sky-600"></i> OTA Inbox</span>
+                <span><i data-lucide="sparkles" size="12" class="inline mb-0.5 text-sky-600"></i> New Bookings</span>
                 <span class="bg-sky-600 text-white px-1.5 py-0.2 rounded text-[10px] font-black">${inboxRaw.length}</span>
             </div>
             <div class="space-y-0.5 text-xs max-h-[340px] overflow-y-auto no-scrollbar">
-                ${inboxRaw.length ? inboxRaw.map(x => x.html).join('') : '<div class="text-slate-400 italic text-center py-2">No unreviewed OTA updates</div>'}
+                ${inboxRaw.length ? inboxRaw.map(x => x.html).join('') : '<div class="text-slate-400 italic text-center py-2">No unreviewed bookings</div>'}
             </div>
         `;
     }
@@ -180,7 +180,7 @@ export const renderDashboard = () => {
     const actHtml = actRaw.map(x => x.html).join('');
     if ($('dash-act-list')) $('dash-act-list').innerHTML = actRaw.length ? actHtml : '<div class="text-green-500 font-black text-center py-2"><i data-lucide="check-circle" size="14" class="inline"></i> All clear!</div>';
 
-    // Mount Dynamic Rate Checker inputs if missing
+    // Mount Price Check inputs if missing
     const ratesCard = $('dash-rates-list')?.parentElement;
     let dashPcIn = $('dash-pc-in');
     let dashPcOut = $('dash-pc-out');
@@ -189,7 +189,7 @@ export const renderDashboard = () => {
         ratesCard.setAttribute('data-tip', 'dash.liveChecker');
         ratesCard.innerHTML = `
             <div class="dash-title flex justify-between items-center text-indigo-700 border-indigo-200 pb-1 border-b">
-                <span><i data-lucide="tags" size="12" class="inline mb-0.5"></i> Live CM Checker</span>
+                <span><i data-lucide="tags" size="12" class="inline mb-0.5"></i> Price Check</span>
                 <span class="text-[9px] font-black uppercase bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200">DEF Non-Ref</span>
             </div>
             <div class="flex gap-1 mt-1.5 mb-1.5 shrink-0">
@@ -292,7 +292,7 @@ export const runDashPriceCheck = () => {
         if (quote.restrictions.cta) badges.push(`<span class="px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[8.5px] font-black uppercase">CTA</span>`);
         if (quote.restrictions.maxMinStay > n) badges.push(`<span class="px-1 py-0.2 rounded bg-indigo-100 text-indigo-700 border border-indigo-300 text-[8.5px] font-black uppercase">Min ${quote.restrictions.maxMinStay}n</span>`);
 
-        let priceHtml = `<span class="text-slate-400 font-bold text-[10px]">No CM Rate</span>`;
+        let priceHtml = `<span class="text-slate-400 font-bold text-[10px]">No Rate</span>`;
         if (quote.complete && quote.total !== null) {
             const multiUnitTotal = quote.total * unitsNeeded;
             priceHtml = `
