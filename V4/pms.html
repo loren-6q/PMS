@@ -94,18 +94,16 @@
                 </div>
             </div>
 
-            <div id="dash-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 items-start pb-4">
-                <div id="dash-new-bookings-card" data-tip="dash.newBookings" class="dash-card border-sky-300 bg-sky-50/40"><div class="dash-title flex justify-between items-center text-sky-800 border-sky-200"><span><i data-lucide="inbox" size="12" class="inline mb-0.5 text-sky-600"></i> OTA Inbox</span> <span id="dash-inbox-count" class="bg-sky-600 text-white px-1.5 rounded">0</span></div><div id="dash-inbox-list" class="space-y-1 text-xs"></div></div>
-                <div class="dash-card"><div class="dash-title flex justify-between"><span><i data-lucide="log-in" size="12" class="inline text-green-500 mb-0.5"></i> Arrivals</span> <span id="dash-arr-count" class="bg-green-100 text-green-700 px-1.5 rounded">0</span></div><div id="dash-arr-list" class="space-y-1 text-xs"></div></div>
-                 <div class="dash-card"><div class="dash-title flex justify-between"><span><i data-lucide="log-out" size="12" class="inline text-red-500 mb-0.5"></i> Departures</span> <span id="dash-dep-count" class="bg-red-100 text-red-700 px-1.5 rounded">0</span></div><div id="dash-dep-list" class="space-y-1 text-xs"></div></div>
-                <div class="dash-card"><div class="dash-title flex justify-between"><span><i data-lucide="home" size="12" class="inline text-blue-500 mb-0.5"></i> Stay-Overs</span> <span id="dash-stay-count" class="bg-blue-100 text-blue-700 px-1.5 rounded">0</span></div><div id="dash-stay-list" class="space-y-1 text-xs"></div></div>
-                <div class="flex flex-col gap-2">
-                    <div class="dash-card bg-indigo-50 border-indigo-200">
-                        <div class="dash-title flex justify-between text-indigo-700 border-indigo-200"><span><i data-lucide="tags" size="12" class="inline mb-0.5"></i> Rate Checker</span></div>
-                        <div id="dash-rates-list" class="text-[11px] font-black space-y-0.5 text-indigo-900 mt-1 flex flex-col"></div>
-                    </div>
-                    <div class="dash-card border-orange-200 bg-orange-50/30"><div class="dash-title flex justify-between text-orange-600 border-orange-200"><span><i data-lucide="alert-triangle" size="12" class="inline mb-0.5"></i> Action Items</span></div><div id="dash-act-list" class="space-y-1 text-xs max-h-[160px] overflow-y-auto no-scrollbar"></div></div>
+            <div id="dash-cards-grid" class="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 gap-2 pb-4">
+                <div id="dash-new-bookings-card" data-tip="dash.newBookings" class="dash-card break-inside-avoid mb-2 border-sky-300 bg-sky-50/40"><div class="dash-title flex justify-between items-center text-sky-800 border-sky-200"><span><i data-lucide="sparkles" size="12" class="inline mb-0.5 text-sky-600"></i> New Bookings</span> <span id="dash-inbox-count" class="bg-sky-600 text-white px-1.5 rounded">0</span></div><div id="dash-inbox-list" class="space-y-1 text-xs"></div></div>
+                <div class="dash-card break-inside-avoid mb-2"><div class="dash-title flex justify-between"><span><i data-lucide="log-in" size="12" class="inline text-green-500 mb-0.5"></i> Arrivals</span> <span id="dash-arr-count" class="bg-green-100 text-green-700 px-1.5 rounded">0</span></div><div id="dash-arr-list" class="space-y-1 text-xs"></div></div>
+                <div class="dash-card break-inside-avoid mb-2"><div class="dash-title flex justify-between"><span><i data-lucide="log-out" size="12" class="inline text-red-500 mb-0.5"></i> Departures</span> <span id="dash-dep-count" class="bg-red-100 text-red-700 px-1.5 rounded">0</span></div><div id="dash-dep-list" class="space-y-1 text-xs"></div></div>
+                <div class="dash-card break-inside-avoid mb-2"><div class="dash-title flex justify-between"><span><i data-lucide="home" size="12" class="inline text-blue-500 mb-0.5"></i> Stay-Overs</span> <span id="dash-stay-count" class="bg-blue-100 text-blue-700 px-1.5 rounded">0</span></div><div id="dash-stay-list" class="space-y-1 text-xs"></div></div>
+                <div class="dash-card break-inside-avoid mb-2 bg-indigo-50 border-indigo-200">
+                    <div class="dash-title flex justify-between text-indigo-700 border-indigo-200"><span><i data-lucide="tags" size="12" class="inline mb-0.5"></i> Price Check</span></div>
+                    <div id="dash-rates-list" class="text-[11px] font-black space-y-0.5 text-indigo-900 mt-1 flex flex-col"></div>
                 </div>
+                <div class="dash-card break-inside-avoid mb-2 border-orange-200 bg-orange-50/30"><div class="dash-title flex justify-between text-orange-600 border-orange-200"><span><i data-lucide="alert-triangle" size="12" class="inline mb-0.5"></i> Action Items</span></div><div id="dash-act-list" class="space-y-1 text-xs max-h-[220px] overflow-y-auto no-scrollbar"></div></div>
             </div>
         </div>
 
