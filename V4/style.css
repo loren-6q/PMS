@@ -487,6 +487,12 @@ body {
   color: #7c2d12 !important;
 }
 
+.overdue-checkout-today.border-owes-money {
+  animation: none !important;
+  border: 2px solid #ef4444 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
 .status-new-pulse {
   animation: magenta-pulse 1.5s infinite;
   z-index: 20 !important;
