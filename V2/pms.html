@@ -1373,9 +1373,9 @@
                     let kpM = 'other'; 
                     if (src === 'booking.com') kpM = 'bdc-kp'; 
                     if (src === 'agoda') kpM = 'agoda-kp'; 
-                    if (src === 'airbnb') kpM = 'airbnb-kp'; 
-                    if (src === 'hostelworld') kpM = 'hw-kp'; 
-                    window.addPaymentRow(cI || getLocalYMD(new Date()), comm.toFixed(2), kpM); 
+                   if (src === 'airbnb') kpM = 'airbnb-kp'; 
+                    if (src === 'hostelworld') kpM = 'hwl-kp'; 
+                    window.addPaymentRow(cI || getLocalYMD(new Date()), comm.toFixed(2), kpM);
                 }
                 if ((hBdcP || src === 'airbnb') && (tot - comm) > 0 && window.addPaymentRow) { 
                     let payM = src === 'agoda' ? 'agoda-pay' : (src === 'airbnb' ? 'airbnb-pay' : 'bdc-pay'); 
@@ -1408,7 +1408,6 @@
                     const rList = getRooms(s).map(dbToUiRoom);
                     s.room = rList[0] || "";
                     s.rooms = rList;
-                    if (window.healHostelworldDeposit) window.healHostelworldDeposit(s, db, appId);
                     return s;
                 });
                 window.staff = staff;
