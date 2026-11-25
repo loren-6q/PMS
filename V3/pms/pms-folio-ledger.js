@@ -38,7 +38,7 @@ export function calcFinancials() {
         const amt = parseFloat(row.querySelector('.pay-amt')?.value) || 0;
         const method = row.querySelector('.pay-method')?.value || '';
         paidTotal += amt;
-        if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'cc-fee'].includes(method)) {
+        if (['hwl-kp', 'hw-kp', 'abb-kp', 'airbnb-kp', 'bdc-kp', 'ago-kp', 'agoda-kp', 'exp-kp', 'expedia-kp', 'trp-kp', 'trip-kp', 'card-kp', 'cc-fee'].includes(method)) {
             commissionTotal += amt;
         }
     });
