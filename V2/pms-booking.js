@@ -1330,14 +1330,7 @@
         const phone = phoneMatch ? phoneMatch[1].trim() : '';
 
         const payments = [];
-        if (depositPaid > 0) {
-            const payKey = source === 'hostelworld' ? 'hw-kp' : (source === 'booking.com' ? 'bdc-kp' : 'agoda-kp');
-            payments.push({
-                date: window.getLocalYMD ? window.getLocalYMD(new Date()) : new Date().toISOString().split('T')[0],
-                amt: depositPaid,
-                method: payKey
-            });
-        }
+    
 
         return {
             firstName: firstName.toUpperCase(),
