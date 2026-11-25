@@ -106,7 +106,7 @@ export const generateGuestInvoice = () => {
         } else if (rawM.includes('agoda')) {
             if (!groupedOta['Agoda']) groupedOta['Agoda'] = { date, method: 'Agoda (Prepaid Online)', amt: 0 };
             groupedOta['Agoda'].amt += amt;
-        } else if (rawM.includes('hw') || rawM.includes('hostelworld')) {
+        } else if (rawM.includes('hwl') || rawM.includes('hostelworld')) {
             if (!groupedOta['Hostelworld']) groupedOta['Hostelworld'] = { date, method: 'Hostelworld Deposit (Online)', amt: 0 };
             groupedOta['Hostelworld'].amt += amt;
         } else if (rawM.includes('expedia')) {
