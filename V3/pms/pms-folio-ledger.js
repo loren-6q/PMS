@@ -126,7 +126,7 @@ export function addPaymentRow(date = '', amt = '', method = 'cash', locked = fal
 
     const paymentOptions = [
         'cash', 'card', 'scan', 'cc-fee',
-        'hw-kp',
+        'hwl-kp',
         'bdc-kp', 'bdc-pay',
         'agoda-kp', 'agoda-pay',
         'airbnb-kp', 'airbnb-pay',
