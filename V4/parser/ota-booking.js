@@ -4,18 +4,6 @@
 // ==========================================================================
 
 import { parseFlexibleDate } from './parser-engine.js';
-import { getOtaPaymentPair } from '../core/channels.js';
-
-function resolveOtaKeys(channelCode) {
-    const [defaultPay, defaultKp] = getOtaPaymentPair(channelCode);
-    const configured = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
-    const payEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'revenue');
-    const kpEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'commission');
-    return {
-        payKey: payEntry ? payEntry.key : defaultPay.key,
-        kpKey: kpEntry ? kpEntry.key : defaultKp.key
-    };
-}
 
 // --- ISO-2 Country Code Dictionary (TM30 Standard) ---
 const COUNTRY_ISO_MAP = {
@@ -269,23 +257,8 @@ export function parseBookingCom(rawText) {
         }
     }
 
-    // Payments: Always BDC payout + commission keys because Booking.com settles the payout
-    const { payKey, kpKey } = resolveOtaKeys('BDC');
+    // Payments: never auto-generate payment lines
     const payments = [];
-    if (isPrepaid && totalPrice > 0 && checkIn) {
-        payments.push({
-            date: checkIn,
-            amt: explicitNet !== null ? explicitNet : totalPrice,
-            method: payKey
-        });
-        if (commissionAmt > 0) {
-            payments.push({
-                date: checkIn,
-                amt: commissionAmt,
-                method: kpKey
-            });
-        }
-    }
 
     let nights = 1;
     if (checkIn && checkOut) {
