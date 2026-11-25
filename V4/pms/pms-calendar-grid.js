@@ -414,7 +414,9 @@ export const render = () => {
 
     tRows.forEach(rD => {
         if (rD.isDivider) {
-            cGrp = (rD.label || 'UNKNOWN').replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+            cGrp = rD.isUnconfirmedZone
+                ? 'unassigned-unconfirmed'
+                : (rD.label || 'UNKNOWN').replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
             const hRow = document.createElement('div');
             hRow.className = `timeline-grid ${rD.isUnconfirmedZone ? 'mt-4' : ''} cursor-pointer transition-colors unselectable group-header`;
             hRow.dataset.group = cGrp;
