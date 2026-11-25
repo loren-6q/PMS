@@ -13,7 +13,7 @@ export const CHANNELS = Object.freeze({
 
     // Global Major OTAs (Official Channex 3-Letter Shortcodes)
     BDC: { code: "BDC", name: "Booking.com", label: "Booking.com", sub: "BDC Channel", isBase: false },
-    HWL: { code: "HWL", name: "Hostelworld", label: "Hostelworld", sub: "HW Channel", isBase: false },
+    HWL: { code: "HWL", name: "Hostelworld", label: "Hostelworld", sub: "HWL Channel", isBase: false },
     AGO: { code: "AGO", name: "Agoda", label: "Agoda", sub: "Agoda Channel", isBase: false },
     EXP: { code: "EXP", name: "Expedia", label: "Expedia", sub: "Expedia Channel", isBase: false },
     ABB: { code: "ABB", name: "Airbnb", label: "Airbnb", sub: "Airbnb Channel", isBase: false },
@@ -81,7 +81,7 @@ export function resolveChannelCode(rawString) {
     // PRECEDENCE 3: Known brand rules and Channex adapter identifiers (including BookingCom)
     const BRAND_RULES = [
         [/\b(BDC|BOOKING(COM|\.COM)?)\b/i, "BDC"],
-        [/\b(HWL|HOSTELWORLD|HW)\b/i, "HWL"],
+        [/\b(HWL|HOSTELWORLD)\b/i, "HWL"],
         [/\b(AGO|AGODA|YCS)\b/i, "AGO"],
         [/\b(EXP|EXPEDIA|EPC)\b/i, "EXP"],
         [/\b(ABB|AIRBNB|ABNB)\b/i, "ABB"],
