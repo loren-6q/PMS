@@ -77,7 +77,7 @@ export function getDue(booking, currency = 'THB') {
 export function getComm(booking) {
     if (!booking || !Array.isArray(booking.payments)) return 0;
     // Commission methods withheld at source across OTAs
-    const commMethods = ['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp', 'cc-fee'];
+    const commMethods = ['hwl-kp', 'abb-kp', 'bdc-kp', 'ago-kp', 'exp-kp', 'trp-kp', 'card-kp'];
     return booking.payments
         .filter(p => commMethods.includes(p.method))
         .reduce((sum, p) => sum + (Number(p.amt) || 0), 0);
