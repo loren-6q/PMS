@@ -344,7 +344,7 @@
         $$('.payment-row').forEach(r => {
             const a = Number(r.querySelector('.pay-amt')?.value) || 0;
             pd += a;
-            if (['hw-kp', 'airbnb-kp', 'bdc-kp', 'agoda-kp', 'expedia-kp', 'trip-kp'].includes(r.querySelector('.pay-method')?.value)) {
+            if (['hwl-kp', 'hw-kp', 'abb-kp', 'airbnb-kp', 'bdc-kp', 'ago-kp', 'agoda-kp', 'exp-kp', 'expedia-kp', 'trp-kp', 'trip-kp'].includes(r.querySelector('.pay-method')?.value)) {
                 cD += a;
             }
         });
@@ -409,7 +409,7 @@
 
         const paymentOptions = [
             'cash', 'card', 'scan', 'cc-fee',
-            'hw-kp',
+            'hwl-kp',
             'bdc-kp', 'bdc-pay',
             'agoda-kp', 'agoda-pay',
             'airbnb-kp', 'airbnb-pay',
