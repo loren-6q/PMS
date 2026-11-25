@@ -4,18 +4,6 @@
 // ==========================================================================
 
 import { parseFlexibleDate } from './parser-engine.js';
-import { getOtaPaymentPair } from '../core/channels.js';
-
-function resolveOtaKeys(channelCode) {
-    const [defaultPay, defaultKp] = getOtaPaymentPair(channelCode);
-    const configured = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
-    const payEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'revenue');
-    const kpEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'commission');
-    return {
-        payKey: payEntry ? payEntry.key : defaultPay.key,
-        kpKey: kpEntry ? kpEntry.key : defaultKp.key
-    };
-}
 
 const HW_MONTHS = {
     jan: '01', january: '01',
@@ -300,16 +288,8 @@ export function parseHostelworld(rawText) {
 
     const explicitNet = balanceDue > 0 ? balanceDue : Number((totalPrice - depositPaid).toFixed(2));
 
-    // 9. Payments: Hostelworld Deposit = canonical HWL commission key
-    const { kpKey } = resolveOtaKeys('HWL');
+    // 9. Payments: never auto-generate payment lines
     const payments = [];
-    if (depositPaid > 0 && checkIn) {
-        payments.push({
-            date: checkIn,
-            amt: depositPaid,
-            method: kpKey
-        });
-    }
 
     // 10. Special Requests
     let specialRequests = '';
@@ -335,7 +315,7 @@ export function parseHostelworld(rawText) {
         `• Policy: ${refundability.toUpperCase()}`
     ];
     if (country) noteLines.push(`• Nationality: ${country}`);
-    if (depositPaid > 0) noteLines.push(`• Deposit Paid (${kpKey.toUpperCase()}): ฿${depositPaid.toFixed(2)}`);
+    if (depositPaid > 0) noteLines.push(`• Deposit Paid (HWL-KP): ฿${depositPaid.toFixed(2)}`);
     if (balanceDue > 0) noteLines.push(`• Arrival Due: ฿${balanceDue.toFixed(2)}`);
     if (specialRequests) noteLines.push(`• Special Request: ${specialRequests}`);
 
