@@ -140,7 +140,7 @@
         ]
       },
       "parser/ota-hostelworld.js": {
-        "responsibility": "Hostelworld parser: reference IDs, guest nationality, unit/bed count, deposit (HW-KP), and arrival balance due.",
+        "responsibility": "Hostelworld parser: reference IDs, guest nationality, unit/bed count, deposit, and arrival balance due.",
         "functions": [
           "parseHostelworld(rawText)"
         ]
