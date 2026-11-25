@@ -92,14 +92,7 @@ export function parseHostelworld(rawText) {
 
     // 10. Payment Entries (Hostelworld logs deposit as hw-kp)
     const payments = [];
-    if (depositAmt > 0 && checkIn) {
-        payments.push({
-            date: checkIn,
-            amt: depositAmt,
-            method: 'hw-kp'
-        });
-    }
-
+    
     // 11. Contact Details
     let phone = '';
     let email = '';
