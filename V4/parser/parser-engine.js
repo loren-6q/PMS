@@ -107,13 +107,7 @@ export function parseOtaClipboardText(rawText) {
             }
         }
 
-        if (result.netPrice !== null && Array.isArray(result.payments)) {
-            result.payments.forEach(p => {
-                if (String(p.method || '').toLowerCase().endsWith('-pay')) {
-                    p.amt = result.netPrice;
-                }
-            });
-        }
+        result.payments = [];
 
         if (!result.bookDate) {
             result.bookDate = getLocalYMD(new Date());
