@@ -193,7 +193,7 @@ window.extractBookingData = (raw) => {
         let depIdx = lines.findIndex(l => l.includes('Hostelworld Deposit') || l.includes('Deposit'));
         if (depIdx > -1 && lines.length > depIdx + 1) {
             let depositAmt = parseFloat((lines[depIdx + 1] || lines[depIdx]).replace(/[^\d.]/g, ''));
-            if (!isNaN(depositAmt)) s.payments.push({ date: s.checkIn || safeGetLocalYMD(), amt: depositAmt, method: 'hw-kp' });
+            if (!isNaN(depositAmt)) s.depositAmt = depositAmt;
         }
 
     // ---------------------------------------------------------
