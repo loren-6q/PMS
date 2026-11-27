@@ -74,7 +74,7 @@ function cleanChannexGuestNotes(rawNotes) {
         /^OTA Commission\s*:/i,
         /^Room Occupants\s*:/i,
         /^Category\s*:/i,
-        /^There is no meal option with this room\.?$/i,
+        /^There is no meal option with this room\.?$/,
         /^Non-Smoking$/i
     ];
     const seen = new Set();
@@ -248,7 +248,7 @@ exports.telegramBotWebhook = onRequest({
     }
 });
 
-// 2. V2 TASK QUEUE (Paced 1-by-1 with Exponential Backoff & Delay)
+// 2. V2 TASK QUEUE
 exports.processPassportTask = onTaskDispatched({
     secrets: [telegramToken, geminiApiKey],
     region: "asia-southeast1",
@@ -381,7 +381,6 @@ exports.processPassportTask = onTaskDispatched({
         const summaryText = `✅ *Passport Processed!*\n*Name:* ${guestData.firstName || ""} ${guestData.lastName || ""}\n*Nat:* ${rawNat || "MISSING"}\n*Passport No:* \`${cleanPassport || "N/A"}\`${roomDisplayFinal}\n⚙ *Pushed to Web Dashboard.*`;
 
         await sendTelegramText(chatId, summaryText, botToken);
-
         await new Promise(r => setTimeout(r, 2000));
 
         try {
@@ -404,7 +403,6 @@ exports.channexWebhook = onRequest({
 }, async (req, res) => {
     try {
         const body = req.body || {};
-
         const chanPropId = body.property_id || body.payload?.property_id || body.raw_message?.property_id || body.booking?.property_id;
         const revId = body.revision_id || body.booking_revision_id || body.payload?.revision_id || body.payload?.booking_revision_id || body.id;
         const channexBookingId = body.booking_id || body.payload?.booking_id || body.booking?.id;
@@ -621,7 +619,6 @@ exports.channexWebhook = onRequest({
             source = 'ctrip';
         }
 
-        // Build payments strictly from Channex payment_collect & exact amounts (zero property hardcoding)
         const payments = [];
         const payPrefix = SOURCE_TO_3LETTER[source] || null;
         const payDate = checkIn !== "9999-99-99"
@@ -887,7 +884,7 @@ exports.channexWebhook = onRequest({
     }
 });
 
-// 4. CHANNEX DELTA SYNC (2-STEP BED + UNASSIGNED AVAILABILITY COUNTER)
+// 4. CHANNEX DELTA SYNC
 exports.channexDeltaSync = onCall({
     region: "asia-southeast1",
     memory: "256MiB"
@@ -982,7 +979,6 @@ exports.channexDeltaSync = onCall({
 
             let rangeStart = null;
             let currentAvail = -1;
-
             const processDates = [...sortedDates, 'CLOSE_RANGE'];
 
             processDates.forEach((dStr, idx) => {
