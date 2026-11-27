@@ -313,11 +313,7 @@
         let sortDesc = true;
         let listenersStarted = false;
 
-        const DEFAULT_TM30_CREDENTIALS = [
-            { id: 'wet_pool', name: 'Wet Pool Party', color: 'text-emerald-600', user: 'pontip031217@gmail.com', pass: 'Pontip@chongkonphuet03' },
-            { id: 'swims_resort', name: 'Swims Resort', color: 'text-blue-600', user: 'maxfriendlyresort@gmail.com', pass: 'Max0838888341!' },
-            { id: 'loud_samui', name: 'LOUD Samui', color: 'text-purple-600', user: 'umairch018@gmail.com', pass: 'Samui123!' }
-        ];
+        const DEFAULT_TM30_CREDENTIALS = [];
 
         function renderCredentialsModal(props) {
             const container = document.getElementById('credentials-list');
@@ -337,6 +333,11 @@
                     merged.push({ id: p.id, name: p.name || p.short, color: 'text-indigo-600', user: u || '', pass: pw || '' });
                 }
             });
+
+            if (merged.length === 0) {
+                container.innerHTML = `<div class="text-xs text-slate-500 text-center py-4 font-semibold">No TM30 credentials configured in Property Setup.</div>`;
+                return;
+            }
 
             container.innerHTML = merged.map(c => `
                 <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 shadow-sm">

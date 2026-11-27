@@ -6,7 +6,7 @@
 import { parseYMD, getLocalYMD, mNames } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
 import { isOccupyingBooking, getRestrictionBadgeHtml } from '../core/occupancy.js';
-import { CHANNELS, resolveChannelCode } from '../core/channels.js';
+import { CHANNELS, resolveChannelCode, isEventRatePlan } from '../core/channels.js';
 import { getClassifiedRooms } from '../core/properties.js';
 import { rippleDay, applyMath, computeDynamicPlanRate, getNearestEvent } from './cm-ripple.js';
 
@@ -35,10 +35,7 @@ function saveGridPrefs() {
 function classifyRatePlanBucket(r) {
     const title = r.ratePlanTitle || '';
     const chanCode = resolveChannelCode(r.channel || title);
-    const isEvt = typeof r.isEvent === 'boolean'
-        ? r.isEvent
-        : (r.policy?.startsWith('event') || r.product === 'evt' || r.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(title));
-    if (isEvt) return 'event';
+    if (isEventRatePlan(r)) return 'event';
 
     const isLos = /\b(weekly|monthly|los|length[-_\s]?of[-_\s]?stay|\d+\s*nights?|\d+n)\b/i.test(title);
     if (isLos) return 'los';
@@ -178,6 +175,12 @@ if (typeof document !== 'undefined') {
 
 export function initGridUI() {
     window.roomLevel = roomLevel;
+    const hasSavedRateFilters = Array.isArray(_prefs.rateFilters) && _prefs.rateFilters.length > 0;
+    const isEventsEnabled = typeof window.isEventPricingEnabled === 'function' ? window.isEventPricingEnabled() : !!window.enableEventRates;
+    if (!hasSavedRateFilters && isEventsEnabled && !rateFilters.has('event')) {
+        rateFilters.add('event');
+        saveGridPrefs();
+    }
     window.showEventRows = rateFilters.has('event');
     window.channelPreviewFilter = channelPreviewFilter;
 
@@ -904,6 +907,24 @@ export function renderRateMatrix() {
         }) || (!rateFilters.has('direct')) || (isEvents && !rateFilters.has('event'));
 
         const safeRoom = room.replace(/'/g, "\\'");
+        const categoryGhosts = (window.channexMap || []).filter(m =>
+            m && m.isGhost && m.channexId && String(m.pmsCategory || '').trim().toLowerCase() === roomLower
+        );
+        const ghostRoomLookup = new Map(
+            (window.channexMap || [])
+                .filter(m => m && m.isGhost && m.channexId)
+                .map(m => [m.channexId, m])
+        );
+        mappedRates.sort((a, b) => {
+            const aGhost = (a.isGhost || ghostRoomLookup.has(a.channexRoomId)) ? 1 : 0;
+            const bGhost = (b.isGhost || ghostRoomLookup.has(b.channexRoomId)) ? 1 : 0;
+            return aGhost - bGhost;
+        });
+
+        const ghostHeaderBadgeHtml = categoryGhosts.length > 0
+            ? `<span class="px-1.5 py-0.2 rounded bg-violet-100 text-violet-800 border border-violet-300 text-[8.5px] font-black uppercase" title="Linked Ghost Room(s): ${categoryGhosts.map(g => g.channexTitle || g.channexId).join(', ').replace(/"/g, '&quot;')}">+${categoryGhosts.length} Ghost</span>`
+            : '';
+
         const expandBtnHtml = (hasHiddenPlans && showAnyRateLayer)
             ? `<button type="button" onclick="window.toggleRoomExpand('${safeRoom}')" class="text-slate-500 hover:text-indigo-700 bg-slate-100 hover:bg-indigo-50 border border-slate-300 rounded px-1 py-0.2 cursor-pointer flex items-center gap-0.5 text-[9px] font-black uppercase" title="Expand/Collapse all rate layers for this room">
                     <i data-lucide="${isRoomManuallyExpanded ? 'chevron-down' : 'chevron-right'}" size="11"></i>
@@ -915,6 +936,7 @@ export function renderRateMatrix() {
             <td colspan="${daysToRender + 1}" class="!text-left p-0 bg-white" style="text-align: left;">
                 <div class="sticky left-0 z-20 inline-flex items-center gap-2 px-2 py-1 bg-white text-left" style="left: 0;">
                     <span class="font-black text-xs uppercase tracking-wide text-slate-950 whitespace-nowrap">${room}</span>
+                    ${ghostHeaderBadgeHtml}
                     ${expandBtnHtml}
                 </div>
             </td>
@@ -1036,8 +1058,8 @@ export function renderRateMatrix() {
         if (showMasterEvent) {
             let trEvt = `<tr class="${groupClass} border-b-2 border-slate-400 bg-pink-50/40">
                 <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 !bg-pink-50">
-                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                        <span class="text-[10px] font-black text-pink-800 truncate">DEF Event Non-Ref</span>
+                    <div class="w-[140px] flex items-center justify-between gap-1 px-1.5 py-0.5 h-full text-left">
+                        <span class="text-[10px] font-black text-pink-800 leading-[1.15] whitespace-normal break-words">DEF Event Non-Ref</span>
                         <span class="text-[7px] font-black uppercase text-pink-700 bg-pink-100 px-1 py-0.5 rounded border border-pink-300 shrink-0">DEF EVT</span>
                     </div>
                 </td>`;
@@ -1170,14 +1192,24 @@ export function renderRateMatrix() {
             mappedRates.forEach(rate => {
                 const chanCode = resolveChannelCode(rate.channel || rate.ratePlanTitle);
                 const badgeHtml = getCanonicalChannelBadgeHtml(chanCode);
+                const ghostRoomMeta = ghostRoomLookup.get(rate.channexRoomId);
+                const isGhostRate = !!rate.isGhost || !!ghostRoomMeta;
+                const ghostTitle = ghostRoomMeta?.channexTitle || 'Ghost Room';
+                const ghostBadgeHtml = isGhostRate
+                    ? `<span class="px-1 py-0.2 rounded bg-violet-600 text-white text-[7px] font-black uppercase shrink-0">GHOST</span>`
+                    : '';
+                const rowBgCls = isGhostRate ? 'bg-violet-50/40 border-b border-violet-200 border-dashed' : 'bg-indigo-50/40 border-b border-indigo-100';
+                const frozenBgCls = isGhostRate ? '!bg-violet-50 border-l-[3px] border-l-violet-500' : '!bg-[#eef2ff]';
+                const rowTitleAttr = (isGhostRate ? `[GHOST: ${ghostTitle}] ${rate.ratePlanTitle || ''}` : (rate.ratePlanTitle || '')).replace(/"/g, '&quot;');
 
-                let trOta = `<tr class="bg-indigo-50/40 border-b border-indigo-100">
-                    <td class="frozen-col !p-0 z-20 border-r-2 border-slate-400 !bg-[#eef2ff]">
-                        <div class="w-[140px] flex items-center justify-between gap-1 px-1.5 h-full text-left truncate" title="${rate.ratePlanTitle}">
-                            <div class="flex items-center gap-1 min-w-0">
+                let trOta = `<tr class="${rowBgCls}">
+                    <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${frozenBgCls}">
+                        <div class="w-[140px] flex flex-col justify-center gap-0.5 px-1.5 py-1 text-left" title="${rowTitleAttr}">
+                            <div class="flex flex-wrap items-center gap-1">
                                 ${badgeHtml}
-                                <span class="text-[9px] font-black text-indigo-950 truncate">${rate.ratePlanTitle}</span>
+                                ${ghostBadgeHtml}
                             </div>
+                            <div class="text-[9px] font-black leading-[1.15] ${isGhostRate ? 'text-violet-950' : 'text-indigo-950'} whitespace-normal break-words">${rate.ratePlanTitle}</div>
                         </div>
                     </td>`;
 
@@ -1192,29 +1224,59 @@ export function renderRateMatrix() {
                     const rawComputed = otaOverride !== undefined ? otaOverride : (computeDynamicPlanRate ? computeDynamicPlanRate(dateStr, room, rate) : "");
                     const computed = rawComputed !== "" && rawComputed !== null && !isNaN(parseFloat(rawComputed)) ? Math.round(parseFloat(rawComputed)) : "";
 
+                    const isEvtMappedRate = isEvents && isEventRatePlan(rate);
+                    const hasNonEmpty = v => v !== undefined && v !== null && v !== "";
+
                     const rawOtaMin = dayObj.otaOverrides?.[`${rate.ratePlanId}_min`];
                     const rawOtaMinArr = dayObj.otaOverrides?.[`${rate.ratePlanId}_min_arr`];
-                    const hasOtaMin = (rawOtaMin !== undefined && rawOtaMin !== "") || (rawOtaMinArr !== undefined && rawOtaMinArr !== "");
-                    const hasRoomMin = (rData.min !== undefined && rData.min !== "") || (rData.min_arr !== undefined && rData.min_arr !== "");
+                    const hasOtaMin = hasNonEmpty(rawOtaMin) || hasNonEmpty(rawOtaMinArr);
+                    const hasEvtRoomMin = isEvtMappedRate && (hasNonEmpty(rData.evt_min) || hasNonEmpty(rData.evt_min_arr));
+                    const hasEvtDayMin = isEvtMappedRate && (hasNonEmpty(dayObj.evtRestrictions?.min) || hasNonEmpty(dayObj.evtRestrictions?.min_arr));
+                    const hasRoomMin = hasNonEmpty(rData.min) || hasNonEmpty(rData.min_arr);
+
                     const otaMin = hasOtaMin
-                        ? (rawOtaMin !== undefined && rawOtaMin !== "" ? rawOtaMin : `${rawOtaMinArr}▸`)
-                        : (hasRoomMin
-                            ? (rData.min !== undefined && rData.min !== "" ? rData.min : `${rData.min_arr}▸`)
-                            : (gData.min !== undefined && gData.min !== "" ? gData.min : (gData.min_arr ? `${gData.min_arr}▸` : "")));
+                        ? (hasNonEmpty(rawOtaMin) ? rawOtaMin : `${rawOtaMinArr}▸`)
+                        : (hasEvtRoomMin
+                            ? (hasNonEmpty(rData.evt_min) ? rData.evt_min : `${rData.evt_min_arr}▸`)
+                            : (hasEvtDayMin
+                                ? (hasNonEmpty(dayObj.evtRestrictions?.min) ? dayObj.evtRestrictions.min : `${dayObj.evtRestrictions.min_arr}▸`)
+                                : (hasRoomMin
+                                    ? (hasNonEmpty(rData.min) ? rData.min : `${rData.min_arr}▸`)
+                                    : (hasNonEmpty(gData.min) ? gData.min : (hasNonEmpty(gData.min_arr) ? `${gData.min_arr}▸` : "")))));
 
                     const rawOtaMax = dayObj.otaOverrides?.[`${rate.ratePlanId}_max`];
-                    const otaMax = (rawOtaMax !== undefined && rawOtaMax !== "")
+                    const otaMax = hasNonEmpty(rawOtaMax)
                         ? rawOtaMax
-                        : ((rData.max !== undefined && rData.max !== "") ? rData.max : (gData.max || ""));
+                        : (isEvtMappedRate && hasNonEmpty(rData.evt_max)
+                            ? rData.evt_max
+                            : (isEvtMappedRate && hasNonEmpty(dayObj.evtRestrictions?.max)
+                                ? dayObj.evtRestrictions.max
+                                : (hasNonEmpty(rData.max) ? rData.max : (gData.max || ""))));
 
                     const rawOtaStop = dayObj.otaOverrides?.[`${rate.ratePlanId}_stop`];
                     const rawOtaCta = dayObj.otaOverrides?.[`${rate.ratePlanId}_cta`];
                     const rawOtaCtd = dayObj.otaOverrides?.[`${rate.ratePlanId}_ctd`];
                     const otaStop = rawOtaStop !== undefined
                         ? !!rawOtaStop
-                        : ((rData.stop !== undefined || rData.stopSell !== undefined) ? !!(rData.stop || rData.stopSell) : !!(gData.stop || gData.stopSell));
-                    const otaCta = rawOtaCta !== undefined ? !!rawOtaCta : (rData.cta !== undefined ? !!rData.cta : !!gData.cta);
-                    const otaCtd = rawOtaCtd !== undefined ? !!rawOtaCtd : (rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd);
+                        : (isEvtMappedRate && (rData.evt_stop !== undefined || rData.evt_stopSell !== undefined)
+                            ? !!(rData.evt_stop || rData.evt_stopSell)
+                            : (isEvtMappedRate && dayObj.evtRestrictions?.stop !== undefined
+                                ? !!dayObj.evtRestrictions.stop
+                                : ((rData.stop !== undefined || rData.stopSell !== undefined) ? !!(rData.stop || rData.stopSell) : !!(gData.stop || gData.stopSell))));
+                    const otaCta = rawOtaCta !== undefined
+                        ? !!rawOtaCta
+                        : (isEvtMappedRate && rData.evt_cta !== undefined
+                            ? !!rData.evt_cta
+                            : (isEvtMappedRate && dayObj.evtRestrictions?.cta !== undefined
+                                ? !!dayObj.evtRestrictions.cta
+                                : (rData.cta !== undefined ? !!rData.cta : !!gData.cta)));
+                    const otaCtd = rawOtaCtd !== undefined
+                        ? !!rawOtaCtd
+                        : (isEvtMappedRate && rData.evt_ctd !== undefined
+                            ? !!rData.evt_ctd
+                            : (isEvtMappedRate && dayObj.evtRestrictions?.ctd !== undefined
+                                ? !!dayObj.evtRestrictions.ctd
+                                : (rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd)));
                     const otaPillHtml = getUnifiedRestrictionBadgeHtml(otaCta, otaCtd, otaStop);
 
                     trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaStop ? 'rate-cell-stopped' : (otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}', '${rate.ratePlanId}')">

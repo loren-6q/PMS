@@ -833,7 +833,7 @@
                         </label>
                         <div id="crp-ghost-prefix-wrap" class="hidden flex items-center gap-1.5">
                             <span class="text-[9.5px] font-black uppercase text-indigo-800">Title Prefix:</span>
-                            <input type="text" id="crp-ghost-prefix" value="FMP " placeholder="e.g. FMP " class="table-input !w-24 font-black text-indigo-900 bg-white">
+                            <input type="text" id="crp-ghost-prefix" value="Ghost " placeholder="e.g. Ghost " class="table-input !w-24 font-black text-indigo-900 bg-white">
                         </div>
                     </div>
                     <p class="text-[10px] text-slate-600 font-semibold leading-snug">
@@ -871,9 +871,13 @@
                 <!-- Target Room Categories Checklist -->
                 <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
                     <div class="flex items-center justify-between mb-1">
-                        <label class="label-base mb-0 text-slate-900 font-black">Target Room Categories:</label>
+                        <label class="label-base mb-0 text-slate-900 font-black">Target Rooms (Primary &amp; Ghost):</label>
                         <div class="flex gap-1.5 text-[9.5px] font-black uppercase text-indigo-700">
                             <button type="button" onclick="window.toggleAllTargetRooms(true)" class="hover:underline cursor-pointer">All</button>
+                            <span>•</span>
+                            <button type="button" onclick="window.toggleAllTargetRooms('primary')" class="hover:underline cursor-pointer">Primary</button>
+                            <span>•</span>
+                            <button type="button" onclick="window.toggleAllTargetRooms('ghosts')" class="hover:underline cursor-pointer">Ghosts</button>
                             <span>•</span>
                             <button type="button" onclick="window.toggleAllTargetRooms(false)" class="hover:underline cursor-pointer">None</button>
                         </div>
@@ -893,7 +897,7 @@
                     </p>
                     <div class="flex items-center gap-2">
                         <select id="crp-clone-source" class="table-input font-bold text-xs flex-1">
-                            <option value="">-- Select Source Category --</option>
+                            <option value="">-- Select Source Room --</option>
                         </select>
                         <button type="button" onclick="window.executeCloneRatePlans()" class="btn-setup-continue !py-1 !text-[10px]">
                             <i data-lucide="copy-plus" size="12"></i>

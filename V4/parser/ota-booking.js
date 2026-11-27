@@ -276,6 +276,7 @@ export function parseBookingCom(rawText) {
         `Units (Rooms/Beds): ${unitCount}`,
         `Pax: ${pax}`,
         `Total: ฿${totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        `Commission: ฿${commissionAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         `Avg Nightly: ฿${parseFloat(avgNightly).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         `----------------------------`,
         `• Policy: ${refundability.toUpperCase()}`

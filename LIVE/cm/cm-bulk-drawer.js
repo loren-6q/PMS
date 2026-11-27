@@ -9,7 +9,7 @@ import { customAlert } from '../core/ui-dialogs.js';
 import { db, appId } from '../core/config.js';
 import { doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { resolveRoomCategory as findCanonicalRoom, getResolvedAnchors } from '../core/properties.js';
-import { resolveChannelCode, getChannelByCode } from '../core/channels.js';
+import { resolveChannelCode, getChannelByCode, isEventRatePlan } from '../core/channels.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
 import { rippleDay } from './cm-ripple.js';
 
@@ -108,7 +108,7 @@ function buildBulkRatesTree() {
     const otaByBucket = new Map();
     const otherLeaves = [];
 
-    if (window.enableEventRates || rateMap.some(r => r.product === 'evt' || r.rateSource === 'evt' || r.isEvent)) {
+    if (window.enableEventRates || rateMap.some(r => isEventRatePlan(r))) {
         evtLeaves.push({ key: 'EVT::BASE', label: 'DEF Event Rate', planSig: null });
     }
 
@@ -131,9 +131,7 @@ function buildBulkRatesTree() {
             ? `${cleanLabel} (${rp.connectionTitle})`
             : cleanLabel;
 
-        const isEvt = typeof rp.isEvent === 'boolean'
-            ? rp.isEvent
-            : ((rp.policy?.startsWith('event')) || (rp.product === 'evt') || (rp.rateSource === 'evt') || /\b(evt|fmp|event|pkg)\b/i.test(cleanLabel));
+        const isEvt = isEventRatePlan(rp);
         const leaf = { key: `PLAN::${planSig}`, label: leafLabel, planSig };
 
         if (isEvt) {
@@ -944,14 +942,29 @@ export function initCurveTuner(targetDateStr = null) {
     handleCurveEventSelect(selectedDate);
 }
 
-export function renderCurveRestrictionsGrid() {
+export function renderCurveRestrictionsGrid(selectedDateStr = null, forceBaselines = false) {
     const rThead = document.getElementById('ct-restr-thead');
     const rTbody = document.getElementById('ct-restr-tbody');
     if (!rThead || !rTbody) return;
 
     const b = window.savedAutofillBaselines || {};
+    const timeline = window.masterPricing?.timeline || {};
+    const evtDate = selectedDateStr || document.getElementById('ct-event-select')?.value || null;
+    const peakMs = evtDate ? parseYMD(evtDate) : 0;
     const offsets = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
     const tagOf = off => (off < 0 ? `m${Math.abs(off)}` : (off === 0 ? '0' : `p${off}`));
+
+    const getRestrFieldVal = (off, evtField, bPrefix, isBool = false) => {
+        const tag = tagOf(off);
+        if (!forceBaselines && peakMs) {
+            const dStr = getLocalYMD(new Date(peakMs + (off * 86400000)));
+            const evtObj = timeline[dStr]?.evtRestrictions;
+            if (evtObj && typeof evtObj === 'object') {
+                return isBool ? !!evtObj[evtField] : (evtObj[evtField] ?? '');
+            }
+        }
+        return isBool ? !!b[`${bPrefix}_${tag}`] : (b[`${bPrefix}_${tag}`] ?? '');
+    };
 
     rThead.innerHTML = `<tr>
         <th class="p-1.5 text-left border-r border-slate-200">
@@ -964,21 +977,21 @@ export function renderCurveRestrictionsGrid() {
     </tr>`;
 
     const numRows = [
-        { idPrefix: 'ct-r-min', bPrefix: 'r_min', label: 'Min Stay (Through)', cls: 'text-slate-800' },
-        { idPrefix: 'ct-r-minarr', bPrefix: 'r_minarr', label: 'Min on Arrival', cls: 'text-indigo-700' },
-        { idPrefix: 'ct-r-max', bPrefix: 'r_max', label: 'Max Stay', cls: 'text-slate-600' }
+        { idPrefix: 'ct-r-min', evtField: 'min', bPrefix: 'r_min', label: 'Min Stay (Through)', cls: 'text-slate-800' },
+        { idPrefix: 'ct-r-minarr', evtField: 'min_arr', bPrefix: 'r_minarr', label: 'Min on Arrival', cls: 'text-indigo-700' },
+        { idPrefix: 'ct-r-max', evtField: 'max', bPrefix: 'r_max', label: 'Max Stay', cls: 'text-slate-600' }
     ];
 
     const boolRows = [
-        { idPrefix: 'ct-r-cta', bPrefix: 'r_cta', label: 'Closed to Arrival (CTA)' },
-        { idPrefix: 'ct-r-ctd', bPrefix: 'r_ctd', label: 'Closed to Departure (CTD)' }
+        { idPrefix: 'ct-r-cta', evtField: 'cta', bPrefix: 'r_cta', label: 'Closed to Arrival (CTA)' },
+        { idPrefix: 'ct-r-ctd', evtField: 'ctd', bPrefix: 'r_ctd', label: 'Closed to Departure (CTD)' }
     ];
 
     let html = numRows.map(r => `<tr>
         <td class="p-1 text-left border-r border-slate-200 text-slate-700 font-bold">${r.label}</td>
         ${offsets.map(off => {
             const tag = tagOf(off);
-            const val = b[`${r.bPrefix}_${tag}`] ?? '';
+            const val = getRestrFieldVal(off, r.evtField, r.bPrefix, false);
             return `<td class="p-0.5 border-r border-slate-200 ${off === 0 ? 'bg-indigo-50/40' : ''}">
                 <input type="number" min="1" id="${r.idPrefix}-${tag}" class="table-input !w-9 text-center font-black ${r.cls}" value="${val}" placeholder="-">
             </td>`;
@@ -989,7 +1002,7 @@ export function renderCurveRestrictionsGrid() {
         <td class="p-1 text-left border-r border-slate-200 text-slate-700 font-bold">${r.label}</td>
         ${offsets.map(off => {
             const tag = tagOf(off);
-            const checked = !!b[`${r.bPrefix}_${tag}`];
+            const checked = getRestrFieldVal(off, r.evtField, r.bPrefix, true);
             return `<td class="p-0.5 border-r border-slate-200 ${off === 0 ? 'bg-indigo-50/40' : ''}">
                 <input type="checkbox" id="${r.idPrefix}-${tag}" class="row-checkbox cursor-pointer" ${checked ? 'checked' : ''}>
             </td>`;
@@ -1010,11 +1023,12 @@ export function applyCmPyramidPreset() {
         b[`r_cta_${tag}`] = off > 0;
         b[`r_ctd_${tag}`] = false;
     }
-    renderCurveRestrictionsGrid();
+    const evtDate = document.getElementById('ct-event-select')?.value || null;
+    renderCurveRestrictionsGrid(evtDate, true);
 }
 
 export function handleCurveEventSelect(selectedDateStr) {
-    renderCurveRestrictionsGrid();
+    renderCurveRestrictionsGrid(selectedDateStr, false);
     if (!selectedDateStr) return;
     const body = document.getElementById('ct-grid-body');
     if (!body) return;
@@ -1162,11 +1176,7 @@ export function applyCurveTuner() {
     }
 
     const restrMap = readCurveRestrictionsFromUI();
-    const evtRatePlans = (window.channexRateMap || []).filter(
-        r => typeof r.isEvent === 'boolean'
-            ? r.isEvent
-            : (r.policy?.startsWith('event') || r.product === 'evt' || r.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(r.ratePlanTitle || ''))
-    );
+    const evtRatePlans = (window.channexRateMap || []).filter(isEventRatePlan);
 
     for (let off = -6; off <= 6; off++) {
         const dStr = getLocalYMD(new Date(peakMs + (off * 86400000)));
@@ -1213,6 +1223,24 @@ export function applyCurveTuner() {
             ctd: rCtd
         };
 
+        // Clear any stale per-room event restriction overrides so Curve Tuner drives every room's event rows
+        (window.roomTypes || []).forEach(rt => {
+            const rm = dObj[rt];
+            if (!rm) return;
+            delete rm.evt_min;
+            delete rm.evt_min_arr;
+            delete rm.evt_max;
+            delete rm.evt_cta;
+            delete rm.evt_ctd;
+            if (rm.isOverride) {
+                delete rm.isOverride.evt_min;
+                delete rm.isOverride.evt_min_arr;
+                delete rm.isOverride.evt_max;
+                delete rm.isOverride.evt_cta;
+                delete rm.isOverride.evt_ctd;
+            }
+        });
+
         if (evtRatePlans.length > 0) {
             dObj.otaOverrides = dObj.otaOverrides || {};
             evtRatePlans.forEach(rp => {
@@ -1232,9 +1260,10 @@ export function applyCurveTuner() {
 
         window.dirtyCellKeys = window.dirtyCellKeys || new Set();
         window.justSyncedCellKeys = window.justSyncedCellKeys || new Set();
-        [anchorP, anchorD].filter(Boolean).forEach(anc => {
-            window.dirtyCellKeys.add(`${dStr}|${anc}`);
-            window.justSyncedCellKeys.delete(`${dStr}|${anc}`);
+        const dirtyRooms = Array.from(new Set([...(window.roomTypes || []), anchorP, anchorD].filter(Boolean)));
+        dirtyRooms.forEach(rm => {
+            window.dirtyCellKeys.add(`${dStr}|${rm}`);
+            window.justSyncedCellKeys.delete(`${dStr}|${rm}`);
         });
         if (typeof window.markCmDirty === 'function') window.markCmDirty(dStr, 'rate', '*');
 

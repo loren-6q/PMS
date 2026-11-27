@@ -87,7 +87,7 @@ export function getActivePropertyId() {
 }
 
 /**
- * Returns the short display code (e.g. 'SWIMS', 'LOUD') from Firestore metadata.
+ * Returns the short display code (e.g. 'PROP1', 'PROP2') from Firestore metadata.
  */
 export function toDisplayPropKey(propId) {
     const props = window.availableProperties || [];

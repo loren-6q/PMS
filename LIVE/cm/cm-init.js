@@ -7,7 +7,7 @@ import { auth, db, appId } from '../core/config.js';
 import { signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, getDoc, setDoc, collection, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { loadPropertiesCatalog, toCanonicalPropId, resolveRoomCategory } from '../core/properties.js';
-import { normalizeChannelRules, resolveChannelCode, getChannelByCode } from '../core/channels.js';
+import { normalizeChannelRules, resolveChannelCode, getChannelByCode, isEventRatePlan } from '../core/channels.js';
 import { getLocalYMD, parseYMD } from '../core/dates.js';
 import { customAlert } from '../core/ui-dialogs.js';
 import { renderRateMatrix } from './cm-matrix-grid.js';
@@ -44,9 +44,7 @@ function compactTimelineForCloud(rawTimeline = {}) {
     (window.channexRateMap || []).forEach(rp => {
         if (!rp || !rp.ratePlanId) return;
         const canonCat = resolveRoomCategory(rp.pmsCategory) || rp.pmsCategory;
-        const isEvt = typeof rp.isEvent === 'boolean'
-            ? rp.isEvent
-            : (rp.policy?.startsWith('event') || rp.product === 'evt' || rp.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(rp.ratePlanTitle || ''));
+        const isEvt = isEventRatePlan(rp);
         planMetaById.set(rp.ratePlanId, { cat: canonCat, isEvt });
     });
 
@@ -80,27 +78,32 @@ function compactTimelineForCloud(rawTimeline = {}) {
                         if (meta) {
                             const rObj = dayObj[meta.cat] || {};
                             const evtObj = dayObj.evtRestrictions || {};
-                            let inherited;
-                            if (meta.isEvt) {
-                                inherited = rObj[`evt_${rField}`] ?? evtObj[rField] ?? rObj[rField] ?? gObj[rField];
-                            } else {
-                                inherited = rObj[rField] ?? gObj[rField];
-                            }
+                            const hasNonEmpty = v => v !== undefined && v !== null && v !== "";
 
                             if (rField === 'cta' || rField === 'ctd' || rField === 'stop') {
+                                const inherited = meta.isEvt
+                                    ? (rObj[`evt_${rField}`] ?? evtObj[rField] ?? rObj[rField] ?? gObj[rField])
+                                    : (rObj[rField] ?? gObj[rField]);
                                 const effInherited = inherited !== undefined ? !!inherited : false;
                                 if (!!fVal === effInherited) return;
                             } else if (rField === 'min' || rField === 'min_arr') {
-                                const hasParentMin = (rObj.min !== undefined && rObj.min !== "")
-                                    || (rObj.min_arr !== undefined && rObj.min_arr !== "")
-                                    || (gObj.min !== undefined && gObj.min !== "")
-                                    || (gObj.min_arr !== undefined && gObj.min_arr !== "")
-                                    || (meta.isEvt && ((rObj.evt_min !== undefined && rObj.evt_min !== "") || (rObj.evt_min_arr !== undefined && rObj.evt_min_arr !== "") || (evtObj.min !== undefined && evtObj.min !== "") || (evtObj.min_arr !== undefined && evtObj.min_arr !== "")));
+                                const minTier = (meta.isEvt && (hasNonEmpty(rObj.evt_min) || hasNonEmpty(rObj.evt_min_arr)))
+                                    ? { min: rObj.evt_min, min_arr: rObj.evt_min_arr }
+                                    : ((meta.isEvt && (hasNonEmpty(evtObj.min) || hasNonEmpty(evtObj.min_arr)))
+                                        ? { min: evtObj.min, min_arr: evtObj.min_arr }
+                                        : ((hasNonEmpty(rObj.min) || hasNonEmpty(rObj.min_arr))
+                                            ? { min: rObj.min, min_arr: rObj.min_arr }
+                                            : { min: gObj.min, min_arr: gObj.min_arr }));
+                                const hasParentMin = hasNonEmpty(minTier.min) || hasNonEmpty(minTier.min_arr);
+                                const inherited = minTier[rField];
                                 if (!hasParentMin && Number(fVal) <= 1) return;
-                                if (inherited !== undefined && inherited !== "" && Number(fVal) === Number(inherited)) return;
+                                if (hasNonEmpty(inherited) && Number(fVal) === Number(inherited)) return;
                             } else if (rField === 'max') {
-                                if ((inherited === undefined || inherited === "") && Number(fVal) === 0) return;
-                                if (inherited !== undefined && inherited !== "" && Number(fVal) === Number(inherited)) return;
+                                const inherited = meta.isEvt
+                                    ? (hasNonEmpty(rObj.evt_max) ? rObj.evt_max : (hasNonEmpty(evtObj.max) ? evtObj.max : (hasNonEmpty(rObj.max) ? rObj.max : gObj.max)))
+                                    : (hasNonEmpty(rObj.max) ? rObj.max : gObj.max);
+                                if (!hasNonEmpty(inherited) && Number(fVal) === 0) return;
+                                if (hasNonEmpty(inherited) && Number(fVal) === Number(inherited)) return;
                             }
                         }
                     }

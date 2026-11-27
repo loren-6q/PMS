@@ -18,6 +18,7 @@
 import { isOccupyingBooking } from './core/occupancy.js';
 import { parseYMD, getLocalYMD } from './core/dates.js';
 import { toCanonicalPropId, resolveRoomCategory } from './core/properties.js';
+import { isEventRatePlan } from './core/channels.js';
 import { customAlert } from './core/ui-dialogs.js';
 
 const CHANNEX_STAGING_HOST = "staging.channex.io";
@@ -622,9 +623,7 @@ export async function pushToChannexAPI(btnOrMode, modeArg = 'delta') {
             const rawCat = plan.pmsCategory;
             const pmsCat = resolveRoomCategory(rawCat) || rawCat;
             const ratePlanId = plan.ratePlanId;
-            const planIsEvent = typeof plan.isEvent === 'boolean'
-                ? plan.isEvent
-                : (plan.policy?.startsWith('event') || plan.product === 'evt' || plan.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(plan.ratePlanTitle || ''));
+            const planIsEvent = isEventRatePlan(plan);
             const isEvtRate = isEventsActive && planIsEvent;
 
             datesToProcess.forEach(dStr => {
@@ -654,21 +653,45 @@ export async function pushToChannexAPI(btnOrMode, modeArg = 'delta') {
                     item.rate = fRate;
                 }
 
+                const hasNonEmpty = v => v !== undefined && v !== null && v !== "";
                 const getRestrVal = (field) => {
                     const otaVal = dayObj.otaOverrides?.[`${ratePlanId}_${field}`];
-                    if (otaVal !== undefined && otaVal !== "") return otaVal;
+                    if (hasNonEmpty(otaVal)) return otaVal;
                     if (isEvtRate) {
-                        if (roomObj[`evt_${field}`] !== undefined && roomObj[`evt_${field}`] !== "") return roomObj[`evt_${field}`];
-                        if (dayObj.evtRestrictions?.[field] !== undefined && dayObj.evtRestrictions[field] !== "") return dayObj.evtRestrictions[field];
+                        if (hasNonEmpty(roomObj[`evt_${field}`])) return roomObj[`evt_${field}`];
+                        if (hasNonEmpty(dayObj.evtRestrictions?.[field])) return dayObj.evtRestrictions[field];
                     }
-                    if (roomObj[field] !== undefined && roomObj[field] !== "") return roomObj[field];
-                    if (globObj[field] !== undefined && globObj[field] !== "") return globObj[field];
+                    if (hasNonEmpty(roomObj[field])) return roomObj[field];
+                    if (hasNonEmpty(globObj[field])) return globObj[field];
                     return null;
                 };
 
+                const resolveMinPair = () => {
+                    const ovrMin = dayObj.otaOverrides?.[`${ratePlanId}_min`];
+                    const ovrMinArr = dayObj.otaOverrides?.[`${ratePlanId}_min_arr`];
+                    if (hasNonEmpty(ovrMin) || hasNonEmpty(ovrMinArr)) {
+                        return { min: ovrMin ?? null, min_arr: ovrMinArr ?? null };
+                    }
+                    if (isEvtRate) {
+                        if (hasNonEmpty(roomObj.evt_min) || hasNonEmpty(roomObj.evt_min_arr)) {
+                            return { min: roomObj.evt_min ?? null, min_arr: roomObj.evt_min_arr ?? null };
+                        }
+                        const evtR = dayObj.evtRestrictions;
+                        if (evtR && (hasNonEmpty(evtR.min) || hasNonEmpty(evtR.min_arr))) {
+                            return { min: evtR.min ?? null, min_arr: evtR.min_arr ?? null };
+                        }
+                    }
+                    if (hasNonEmpty(roomObj.min) || hasNonEmpty(roomObj.min_arr)) {
+                        return { min: roomObj.min ?? null, min_arr: roomObj.min_arr ?? null };
+                    }
+                    if (hasNonEmpty(globObj.min) || hasNonEmpty(globObj.min_arr)) {
+                        return { min: globObj.min ?? null, min_arr: globObj.min_arr ?? null };
+                    }
+                    return { min: null, min_arr: null };
+                };
+
                 // Explicitly send defaults (1 / 0 / false) when cleared so Channex never retains stale restrictions
-                const minS = getRestrVal('min');
-                const minArr = getRestrVal('min_arr');
+                const { min: minS, min_arr: minArr } = resolveMinPair();
                 item.min_stay_arrival = (minArr !== null && minArr !== "") ? (parseInt(String(minArr), 10) || 1) : 1;
                 item.min_stay_through = (minS !== null && minS !== "") ? (parseInt(String(minS), 10) || 1) : 1;
 

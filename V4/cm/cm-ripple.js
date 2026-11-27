@@ -5,7 +5,7 @@
 
 import { parseYMD, getLocalYMD, getNearestEvent } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
-import { resolveChannelCode } from '../core/channels.js';
+import { resolveChannelCode, isEventRatePlan } from '../core/channels.js';
 import { resolveRoomCategory } from '../core/properties.js';
 
 // --- Apply Arithmetic Operator to Base Rate ---
@@ -148,7 +148,7 @@ export function computeDynamicPlanRate(dateStr, room, ratePlan) {
     const roomObj = dayObj[room] || {};
     const isEvents = typeof window.isEventPricingEnabled === 'function' ? window.isEventPricingEnabled() : false;
 
-    const isEvtProduct = (ratePlan.product === 'evt') || (ratePlan.rateSource === 'evt') || /evt|fmp|event|pkg/i.test(ratePlan.ratePlanTitle || '');
+    const isEvtProduct = isEventRatePlan(ratePlan);
     const isRefPolicy = (ratePlan.policy === 'ref') || (/ref|refundable/i.test(ratePlan.ratePlanTitle || '') && !/non-?ref/i.test(ratePlan.ratePlanTitle || ''));
 
     const basePrice = (isEvtProduct && isEvents && roomObj.fmp !== undefined && roomObj.fmp !== "")

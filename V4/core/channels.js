@@ -213,3 +213,15 @@ export function normalizeChannelRules(rawRules = []) {
 
     return result;
 }
+
+export function isEventRatePlan(rp) {
+    if (!rp || typeof rp !== 'object') return false;
+    const pol = String(rp.policy || rp.rateType || '').toLowerCase();
+    if (pol === 'ignore') return false;
+    if (pol.startsWith('event') || rp.product === 'evt' || rp.rateSource === 'evt') return true;
+    if (rp.isEvent === true) return true;
+    if ((pol === 'non-ref' || pol === 'ref') && rp.isEvent === false) return false;
+    const title = String(rp.ratePlanTitle || rp.title || '');
+    return /\b(evt|fmp|event|pkg|package|full[-_\s]?moon|peak|nye)\b/i.test(title);
+}
+

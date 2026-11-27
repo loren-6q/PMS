@@ -1,0 +1,1097 @@
+const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onTaskDispatched } = require("firebase-functions/v2/tasks");
+const { defineSecret } = require("firebase-functions/params");
+const { getFunctions } = require("firebase-admin/functions");
+const admin = require("firebase-admin");
+const axios = require("axios");
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
+
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
+const db = admin.firestore();
+
+const telegramToken = defineSecret("TELEGRAM_BOT_TOKEN");
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
+const stripeSecret = defineSecret("STRIPE_SECRET_KEY");
+
+function toCanonicalProp(raw) {
+    if (!raw) return "";
+    return String(raw).trim().toLowerCase();
+}
+
+const SOURCE_TO_3LETTER = {
+    "booking.com": "bdc",
+    hostelworld: "hwl",
+    agoda: "ago",
+    airbnb: "abb",
+    expedia: "exp",
+    ctrip: "trp",
+    "trip.com": "trp"
+};
+
+function sanitizeSecret(secret) {
+    return secret ? secret.trim() : "";
+}
+
+function sanitizeName(name) {
+    if (!name) return "";
+    return name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z\s]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase();
+}
+
+function cleanMaskedPii(val) {
+    if (val === null || val === undefined) return "";
+    const str = String(val).trim();
+    if (!str || str === "***") return "";
+    return str;
+}
+
+function formatPaymentsSummary(pays = []) {
+    if (!Array.isArray(pays) || pays.length === 0) return "None";
+    return pays
+        .map(p => `${String(p.method || "unknown").toUpperCase()} ${Number(p.amt || 0).toFixed(2)} (${p.date || "--"})`)
+        .join(", ");
+}
+
+function buildOriginalSnapshotBlock({
+    src,
+    refId,
+    inDate,
+    outDate,
+    roomType,
+    guestPax,
+    grossAmt,
+    netAmt,
+    origPayments
+}) {
+    const nightsCount = (inDate && outDate && inDate < outDate)
+        ? Math.max(1, Math.round((new Date(outDate + "T12:00:00Z") - new Date(inDate + "T12:00:00Z")) / 86400000))
+        : 1;
+    return [
+        "--- ORIGINAL BOOKING SNAPSHOT ---",
+        `Source: ${String(src || "other").toUpperCase()}`,
+        `Book ID: ${refId || "--"}`,
+        `Original Dates: ${inDate || "--"} -> ${outDate || "--"} (${nightsCount} nt${nightsCount > 1 ? "s" : ""})`,
+        `Original Room Type: ${roomType || "Standard"} | Pax: ${guestPax || 1}`,
+        `Original Total: ${Number(grossAmt || 0).toFixed(2)} | Original Net: ${Number(netAmt || 0).toFixed(2)}`,
+        `Original Payments: ${formatPaymentsSummary(origPayments)}`,
+        "--------------------------------"
+    ].join("\n");
+}
+
+function upsertSnapshotOnce(existingNotes, snapshotBlock) {
+    const base = String(existingNotes || "").trim();
+    if (base.includes("--- ORIGINAL BOOKING SNAPSHOT ---")) return base;
+    return base ? `${snapshotBlock}\n\n${base}` : snapshotBlock;
+}
+
+async function sendTelegramText(chatId, text, token) {
+    try {
+        await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+            chat_id: chatId,
+            text: text,
+            parse_mode: "Markdown"
+        });
+    } catch (e) {
+        console.error("Failed to send Telegram message:", e.message);
+    }
+}
+
+// 0. LIVE STRIPE FUNCTION
+exports.createSetupIntent = onCall({ secrets: [stripeSecret] }, async (request) => {
+    try {
+        const stripe = require("stripe")(sanitizeSecret(stripeSecret.value()));
+        const setupIntent = await stripe.setupIntents.create({
+            payment_method_types: ['card'],
+        });
+        return { clientSecret: setupIntent.client_secret };
+    } catch (error) {
+        console.error("Stripe Error:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
+
+// 1. LIGHTNING FAST WEBHOOK
+exports.telegramBotWebhook = onRequest({
+    secrets: [telegramToken, geminiApiKey],
+    region: "asia-southeast1",
+    memory: "256MiB",
+    timeoutSeconds: 60
+}, async (req, res) => {
+    try {
+        const payload = req.body;
+        if (!payload || !payload.message) return res.status(200).send({ ok: true });
+
+        const message = payload.message;
+        const chatId = message.chat.id;
+        const messageId = message.message_id.toString();
+        const botToken = sanitizeSecret(telegramToken.value());
+
+        const dedupeRef = db.collection("system").doc("telegram_cache").collection("processed").doc(messageId);
+        const dedupeSnap = await dedupeRef.get();
+        if (dedupeSnap.exists) return res.status(200).send({ ok: true });
+        await dedupeRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp() });
+
+        if (message.text && message.text.startsWith("/setproperty")) {
+            const propertyName = message.text.split(" ")[1];
+            if (!propertyName) {
+                await sendTelegramText(chatId, "⚠️ Please specify a property.\n\nExample: `/setproperty PROP`", botToken);
+                return res.status(200).send({ ok: true });
+            }
+            await db.collection("system").doc("chat_mappings").collection("chats").doc(chatId.toString()).set({ property: propertyName.toUpperCase() });
+            await sendTelegramText(chatId, `✅ Success! This group chat is now linked to: *${propertyName.toUpperCase()}*`, botToken);
+            return res.status(200).send({ ok: true });
+        }
+
+        if (message.photo) {
+            let captionText = message.caption || "";
+            let mediaGroupId = message.media_group_id || null;
+            let roomNumber = "";
+
+            if (mediaGroupId) {
+                const mgRef = db.collection("system").doc("media_groups").collection("groups").doc(mediaGroupId);
+                if (captionText) {
+                    roomNumber = captionText.trim();
+                    await mgRef.set({ roomNumber: roomNumber, timestamp: admin.firestore.FieldValue.serverTimestamp() });
+                } else {
+                    await new Promise(r => setTimeout(r, 1000));
+                    const mgSnap = await mgRef.get();
+                    if (mgSnap.exists) roomNumber = mgSnap.data().roomNumber;
+                }
+            } else if (captionText) {
+                roomNumber = captionText.trim();
+            }
+
+            const roomDisplay = roomNumber ? `\n🏷️ *Room Tag:* ${roomNumber}` : "";
+
+            const trackerRef = db.collection("system").doc("passport_queue_tracker");
+            const delaySeconds = await db.runTransaction(async (transaction) => {
+                const docSnap = await transaction.get(trackerRef);
+                const nowSec = Math.floor(Date.now() / 1000);
+                let nextRun = nowSec;
+                if (docSnap.exists) {
+                    const lastScheduled = docSnap.data().lastScheduled || 0;
+                    if (lastScheduled >= nowSec) {
+                        nextRun = lastScheduled + 6;
+                    }
+                }
+                transaction.set(trackerRef, { lastScheduled: nextRun }, { merge: true });
+                return Math.max(0, nextRun - nowSec);
+            });
+
+            const queueText = delaySeconds > 0 ? ` (in queue, ~${delaySeconds}s delay)` : "";
+            await sendTelegramText(chatId, `📥 Passport queued for processing...${roomDisplay}${queueText}`, botToken);
+
+            const queue = getFunctions().taskQueue("locations/asia-southeast1/functions/processPassportTask");
+            await queue.enqueue({
+                message: message,
+                chatId: chatId,
+                roomNumber: roomNumber
+            }, {
+                scheduleDelaySeconds: delaySeconds
+            });
+
+            return res.status(200).send({ ok: true });
+        }
+
+        return res.status(200).send({ ok: true });
+    } catch (error) {
+        console.error("Webhook Global Error:", error);
+        return res.status(200).send({ ok: true });
+    }
+});
+
+// 2. V2 TASK QUEUE (Paced 1-by-1 with Exponential Backoff & Delay)
+exports.processPassportTask = onTaskDispatched({
+    secrets: [telegramToken, geminiApiKey],
+    region: "asia-southeast1",
+    memory: "1GiB",
+    timeoutSeconds: 300,
+    rateLimits: {
+        maxConcurrentDispatches: 1,
+        maxDispatchesPerSecond: 0.2
+    }
+}, async (req) => {
+    const { message, chatId, roomNumber } = req.data;
+    const botToken = sanitizeSecret(telegramToken.value());
+    const geminiKey = sanitizeSecret(geminiApiKey.value());
+
+    try {
+        const photoArray = message.photo;
+        const targetPhoto = photoArray.find(p => p.width >= 1000 && p.width <= 1600) || photoArray[photoArray.length - 1];
+
+        const infoResponse = await axios.get(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetPhoto.file_id}`);
+        const filePath = infoResponse.data.result.file_path;
+        const fileUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+
+        const downloadResponse = await axios.get(fileUrl, { responseType: "arraybuffer" });
+        const imageBase64 = Buffer.from(downloadResponse.data).toString("base64");
+
+        const genAI = new GoogleGenerativeAI(geminiKey);
+
+        const prompt = `Analyze this passport biographical page. Extract the fields and return them strictly inside a valid flat JSON block containing: 
+        firstName (First name only), 
+        middleName (Any remaining words in the "Given Names" field. If none, leave blank),
+        lastName (The "Surname" field),
+        gender (Look at the "Sex" field. Output exactly "M" or "F"),
+        passportNumber (The document number),
+        nationality (Look at the 'Nationality' field. Extract ONLY the 3-letter country code),
+        dobDay (Strictly 2-digit day of birth),
+        dobMonth (Strictly 2-digit month of birth),
+        dobYear (4-digit year of birth).
+        Do not include Markdown formatting. Output only RAW JSON.`;
+
+        const CANDIDATE_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"];
+        let result = null;
+        let lastError = null;
+
+        for (const modelName of CANDIDATE_MODELS) {
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    const model = genAI.getGenerativeModel({
+                        model: modelName,
+                        generationConfig: { responseMimeType: "application/json" },
+                        safetySettings: [
+                            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+                        ]
+                    });
+
+                    result = await model.generateContent([prompt, { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }]);
+                    if (result && result.response) {
+                        console.log(`[OCR SUCCESS] Extracted passport using ${modelName}`);
+                        break;
+                    }
+                } catch (apiError) {
+                    lastError = apiError;
+                    console.warn(`[OCR ATTEMPT FAILED] (${modelName} attempt ${attempt + 1}): ${apiError.message}`);
+
+                    if (apiError.message.includes("GenerateRequestsPerDay") || apiError.message.includes("quotaValue") || apiError.message.includes("429")) {
+                        console.log(`[QUOTA SHIFT] Model ${modelName} exceeded quota. Moving to fallback model...`);
+                        break;
+                    }
+
+                    const delayMatch = apiError.message.match(/retry in (\d+(?:\.\d+)?)s/i);
+                    const waitMs = delayMatch ? Math.ceil(parseFloat(delayMatch[1]) * 1000) + 1000 : 3000;
+                    if (attempt < 1) await new Promise(r => setTimeout(r, waitMs));
+                }
+            }
+            if (result) break;
+        }
+
+        if (!result) {
+            await sendTelegramText(chatId, `⚠️ *AI Extraction Failed:*\n\n${lastError ? lastError.message : "Service Unavailable"}\n\nPlease wait a moment and send the image again.`, botToken);
+            return;
+        }
+
+        let outputText = result.response.text();
+        outputText = outputText.replace(/`{3}[a-zA-Z]*\n?/gi, '').replace(/`{3}\n?/g, '').trim();
+        const guestData = JSON.parse(outputText);
+
+        const appId = 'hotel-pms-v1';
+        const cleanPassport = (guestData.passportNumber || "").toUpperCase().replace(/\s/g, '');
+
+        if (cleanPassport && cleanPassport.length > 3) {
+            const submissionsRef = db.collection("artifacts").doc(appId).collection("public").doc("data").collection("submissions");
+            const dupQuery = await submissionsRef.where("passportNumber", "==", cleanPassport).get();
+            let isDuplicate = false;
+            dupQuery.forEach(docSnap => { if (docSnap.data().status !== 'completed' && docSnap.data().status !== 'failed') isDuplicate = true; });
+            if (isDuplicate) {
+                await sendTelegramText(chatId, `⚠️ *Duplicate Blocked:* ${guestData.firstName} is already waiting in the Dashboard!`, botToken);
+                return;
+            }
+        }
+
+        let chatProperty = "UNASSIGNED";
+        const mappingSnap = await db.collection("system").doc("chat_mappings").collection("chats").doc(chatId.toString()).get();
+        if (mappingSnap.exists) chatProperty = mappingSnap.data().property;
+
+        let rawNat = "";
+        if (guestData.nationality) rawNat = String(guestData.nationality).toUpperCase().trim();
+
+        const docRef = await db.collection("artifacts").doc(appId).collection("public").doc("data").collection("submissions").add({
+            property: chatProperty,
+            roomNumber: roomNumber,
+            firstName: sanitizeName(guestData.firstName),
+            middleName: sanitizeName(guestData.middleName),
+            lastName: sanitizeName(guestData.lastName),
+            passportNumber: cleanPassport,
+            nationality: rawNat,
+            dobDay: guestData.dobDay || "",
+            dobMonth: guestData.dobMonth || "",
+            dobYear: guestData.dobYear || "",
+            gender: (guestData.gender || "M").toUpperCase().charAt(0),
+            checkoutDate: "",
+            phoneNo: "",
+            status: "processing",
+            chatId: chatId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        const roomDisplayFinal = roomNumber ? `\n*Room Tag:* ${roomNumber}` : "";
+        const summaryText = `✅ *Passport Processed!*\n*Name:* ${guestData.firstName || ""} ${guestData.lastName || ""}\n*Nat:* ${rawNat || "MISSING"}\n*Passport No:* \`${cleanPassport || "N/A"}\`${roomDisplayFinal}\n⚙ *Pushed to Web Dashboard.*`;
+
+        await sendTelegramText(chatId, summaryText, botToken);
+
+        await new Promise(r => setTimeout(r, 2000));
+
+        try {
+            const scraperModule = require("./scraper");
+            await scraperModule.executeTM30Submission(appId, docRef.id);
+        } catch (err) {
+            console.error("Scraper logic error:", err);
+        }
+    } catch (err) {
+        console.error("Worker Execution Error:", err);
+        await sendTelegramText(chatId, `❌ *Critical Error:* ${err.message}`, botToken);
+    }
+});
+
+// 3. CHANNEX.IO 2-WAY WEBHOOK
+exports.channexWebhook = onRequest({
+    region: "asia-southeast1",
+    memory: "256MiB",
+    cors: true
+}, async (req, res) => {
+    try {
+        const body = req.body || {};
+
+        const chanPropId = body.property_id || body.payload?.property_id || body.raw_message?.property_id || body.booking?.property_id;
+        const revId = body.revision_id || body.booking_revision_id || body.payload?.revision_id || body.payload?.booking_revision_id || body.id;
+        const channexBookingId = body.booking_id || body.payload?.booking_id || body.booking?.id;
+
+        if (revId) {
+            await db.collection("raw_channex_webhooks").doc(String(revId)).set({
+                receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+                payload: body
+            }, { merge: true });
+        }
+
+        const appId = 'hotel-pms-v1';
+        const propsRef = db.collection("artifacts").doc(appId).collection("public").doc("data").collection("properties");
+        const propsSnap = await propsRef.get();
+
+        let targetProperty = null;
+        let targetPropId = null;
+
+        propsSnap.forEach(docSnap => {
+            const data = docSnap.data();
+            if (data.channex && data.channex.apiKey) {
+                if (!chanPropId || data.channex.propId === chanPropId) {
+                    targetProperty = data;
+                    targetPropId = docSnap.id;
+                }
+            }
+        });
+
+        if (!targetProperty || !targetProperty.channex?.apiKey) {
+            console.error("Unmapped Channex Property ID:", chanPropId);
+            return res.status(200).send({ ok: true, msg: "Property not mapped in PMS" });
+        }
+
+        const apiKey = targetProperty.channex.apiKey;
+        const channexHost = (targetProperty.channex.env === 'staging' || targetProperty.channex.isStaging)
+            ? "staging.channex.io"
+            : "app.channex.io";
+
+        const ackRevision = async () => {
+            if (revId && revId !== channexBookingId) {
+                try {
+                    await axios.post(`https://${channexHost}/api/v1/booking_revisions/${revId}/ack`, {}, {
+                        headers: { "user-api-key": apiKey }
+                    });
+                    console.log(`[CHANNEX] Successfully acknowledged revision ${revId} on ${channexHost}`);
+                } catch (ackErr) {
+                    console.warn(`[CHANNEX] Ack notice for ${revId}:`, ackErr.response?.data || ackErr.message);
+                }
+            }
+        };
+
+        let booking = body.raw_message || body.booking || body.payload?.booking || body.data?.attributes;
+        if (!booking || !booking.rooms) {
+            if (revId) {
+                try {
+                    const revRes = await axios.get(`https://${channexHost}/api/v1/booking_revisions/${revId}`, {
+                        headers: { "user-api-key": apiKey }
+                    });
+                    booking = revRes.data?.data?.attributes || booking || body;
+                } catch (fetchErr) {
+                    console.warn(`[CHANNEX] Could not fetch revision ${revId}, checking direct booking...`);
+                }
+            }
+
+            if ((!booking || !booking.rooms) && channexBookingId) {
+                try {
+                    const bRes = await axios.get(`https://${channexHost}/api/v1/bookings/${channexBookingId}`, {
+                        headers: { "user-api-key": apiKey }
+                    });
+                    booking = bRes.data?.data?.attributes || booking || body;
+                } catch (bErr) {
+                    console.warn(`[CHANNEX] Direct booking fetch notice:`, bErr.message);
+                }
+            }
+        }
+
+        if (!booking) {
+            await ackRevision();
+            return res.status(200).send({ ok: true, msg: "Acknowledged ping (no booking payload)" });
+        }
+
+        const bookId = booking.ota_reservation_code || booking.channel_reservation_code || booking.ota_booking_id || booking.channel_booking_id || channexBookingId || revId;
+        const staffRef = db.collection("artifacts").doc(appId).collection("public").doc("data").collection("staff");
+        const batch = db.batch();
+
+        if (booking.status === 'cancelled' || booking.status === 'canceled' || body.event === 'booking_cancelled') {
+            const existingBookings = await staffRef.where("bookId", "==", bookId).where("property", "==", targetPropId).get();
+            existingBookings.forEach(docSnap => {
+                const cur = docSnap.data();
+                const freedRooms = (Array.isArray(cur.rooms) && cur.rooms.length ? cur.rooms : (cur.room ? [cur.room] : [])).filter(Boolean);
+                const freedText = freedRooms.length > 0 ? `Freed: ${freedRooms.join(', ')}` : 'Was unassigned';
+                batch.update(docSnap.ref, {
+                    status: 'cancelled',
+                    prevRooms: freedRooms,
+                    rooms: [],
+                    room: "",
+                    otaAlert: 'cancelled',
+                    otaAlertSummary: freedText,
+                    otaAlertAt: new Date().toISOString(),
+                    notes: (cur.notes || "") + `\n\n[CANCELLED VIA CHANNEX (${freedText}) - ${new Date().toISOString()}]`,
+                    lastEditedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    lastEditedBy: "CHANNEX_BOT"
+                });
+            });
+            await batch.commit();
+            await ackRevision();
+            return res.status(200).send({ ok: true, msg: "Booking Cancelled and Acknowledged" });
+        }
+
+        const currency = (booking.currency || targetProperty.currency || "THB").toUpperCase();
+        const isDecimalCurrency = ['USD', 'EUR', 'GBP', 'AUD', 'SGD', 'CAD', 'CHF'].includes(currency);
+
+        const parseMoney = (val) => {
+            const num = parseFloat(val || 0);
+            if (num === 0) return 0;
+            if (isDecimalCurrency && !val.toString().includes('.') && num > 100) {
+                return num / 100;
+            }
+            return num;
+        };
+
+        const rooms = booking.rooms || [];
+        let checkIn = booking.arrival_date || booking.checkin_date || "9999-99-99";
+        let checkOut = booking.departure_date || booking.checkout_date || "0000-00-00";
+        let pax = parseInt(booking.occupancy?.adults || booking.occ_adults || 0, 10) +
+                  parseInt(booking.occupancy?.children || booking.occ_children || 0, 10);
+        if (pax === 0) pax = 1;
+
+        const channexMap = targetProperty.channexMap || [];
+        const channexRateMap = targetProperty.channexRateMap || [];
+        const roomCategories = [];
+        const allOccupants = [];
+        let calculatedRoomTotal = 0;
+        let calculatedServiceTotal = 0;
+        let detectedRefundability = "unknown";
+
+        rooms.forEach(r => {
+            if (r.checkin_date && r.checkin_date < checkIn) checkIn = r.checkin_date;
+            if (r.checkout_date && r.checkout_date > checkOut) checkOut = r.checkout_date;
+
+            let mappedCat = null;
+            const rRule = channexMap.find(m => m.channexId === r.room_type_id);
+            if (rRule) mappedCat = rRule.pmsCategory;
+
+            let matchedRateTitle = "";
+            if (r.rate_plan_id) {
+                const rateRule = channexRateMap.find(m => m.ratePlanId === r.rate_plan_id);
+                if (rateRule) {
+                    if (!mappedCat) mappedCat = rateRule.pmsCategory;
+                    matchedRateTitle = rateRule.ratePlanTitle || "";
+                }
+            }
+            if (!mappedCat && (r.title || r.room_type_title)) {
+                mappedCat = r.title || r.room_type_title;
+            }
+            roomCategories.push(mappedCat || "Standard");
+
+            const testPolicyStr = `${matchedRateTitle} ${r.title || ''} ${booking.cancellation_policy || ''} ${booking.notes || ''}`.toLowerCase();
+            if (testPolicyStr.includes('non-ref') || testPolicyStr.includes('non refundable') || testPolicyStr.includes('non_refundable')) {
+                detectedRefundability = 'non-ref';
+            } else if (testPolicyStr.includes('refundable') || testPolicyStr.includes('flexible') || testPolicyStr.includes('standard')) {
+                if (detectedRefundability !== 'non-ref') detectedRefundability = 'ref';
+            }
+
+            let rAmt = parseMoney(r.amount);
+            if (rAmt === 0 && r.days) {
+                Object.values(r.days).forEach(dayPrice => {
+                    rAmt += parseMoney(dayPrice);
+                });
+            }
+            calculatedRoomTotal += rAmt;
+
+            if (Array.isArray(r.services)) {
+                r.services.forEach(srv => {
+                    calculatedServiceTotal += parseMoney(srv.total_price);
+                });
+            }
+
+            if (Array.isArray(r.guests)) {
+                r.guests.forEach(g => {
+                    if (g.name || g.surname) allOccupants.push(`${g.name || ''} ${g.surname || ''}`.trim());
+                });
+            }
+        });
+
+        if (Array.isArray(booking.services)) {
+            booking.services.forEach(srv => {
+                calculatedServiceTotal += parseMoney(srv.total_price);
+            });
+        }
+
+        let totalPrice = parseMoney(booking.amount || booking.total_price);
+        if (totalPrice === 0) {
+            totalPrice = calculatedRoomTotal + calculatedServiceTotal;
+        }
+
+        const otaCommission = parseMoney(booking.ota_commission || booking.commission);
+
+        const rawOta = (booking.ota_name || booking.primary_ota || booking.channel_name || booking.channel_id || 'other').toLowerCase();
+        const notesLower = String(booking.notes || '').toLowerCase();
+        let source = 'other';
+
+        if (rawOta.includes('booking')) {
+            source = notesLower.includes('agoda') ? 'agoda' : 'booking.com';
+        } else if (rawOta.includes('hostelworld')) {
+            source = 'hostelworld';
+        } else if (rawOta.includes('agoda')) {
+            source = 'agoda';
+        } else if (rawOta.includes('airbnb')) {
+            source = 'airbnb';
+        } else if (rawOta.includes('expedia')) {
+            source = 'expedia';
+        } else if (rawOta.includes('ctrip') || rawOta.includes('trip.com')) {
+            source = 'ctrip';
+        }
+
+        // Build payments strictly from Channex payment_collect & exact amounts (zero property hardcoding)
+        const payments = [];
+        const payPrefix = SOURCE_TO_3LETTER[source] || null;
+        const payDate = checkIn !== "9999-99-99"
+            ? checkIn
+            : (booking.inserted_at || new Date().toISOString()).split('T')[0];
+        const paymentCollect = String(booking.payment_collect || "").toLowerCase().trim();
+
+        if (paymentCollect === "ota" && totalPrice > 0 && payPrefix) {
+            const commFixed = otaCommission > 0 ? Number(otaCommission.toFixed(2)) : 0;
+            const netPayoutFixed = Number(Math.max(0, totalPrice - commFixed).toFixed(2));
+
+            if (netPayoutFixed > 0) {
+                payments.push({
+                    date: payDate,
+                    amt: netPayoutFixed,
+                    method: `${payPrefix}-pay`
+                });
+            }
+            if (commFixed > 0) {
+                payments.push({
+                    date: payDate,
+                    amt: commFixed,
+                    method: `${payPrefix}-kp`
+                });
+            }
+        } else if (source === "hostelworld" && otaCommission > 0 && payPrefix) {
+            payments.push({
+                date: payDate,
+                amt: Number(otaCommission.toFixed(2)),
+                method: `${payPrefix}-kp`
+            });
+        }
+
+        const cleanNotes = cleanMaskedPii(booking.notes);
+        let detailNotes = `[CHANNEX - ${source.toUpperCase()}]`;
+        if (booking.arrival_hour) detailNotes += `\nETA: ${booking.arrival_hour}`;
+        if (cleanNotes) detailNotes += `\nGuest Notes: ${cleanNotes}`;
+        if (allOccupants.length > 0) detailNotes += `\nRoom Occupants: ${allOccupants.join(', ')}`;
+
+        const allServices = [
+            ...(Array.isArray(booking.services) ? booking.services : []),
+            ...rooms.flatMap(r => Array.isArray(r.services) ? r.services : [])
+        ];
+        if (allServices.length > 0) {
+            detailNotes += `\nAdd-on Services: ` + allServices.map(s => `${s.name} (${parseMoney(s.total_price)})`).join(', ');
+        }
+        detailNotes += `\nCategory: ${roomCategories.join(', ')}`;
+
+        const customer = booking.customer || body.raw_message?.customer || {};
+        const firstName = sanitizeName(customer.name || customer.first_name || "CHANNEX");
+        const lastName = sanitizeName(customer.surname || customer.last_name || "GUEST");
+        const bookedTypeStr = [...new Set(roomCategories.filter(Boolean))].join(', ') || "Standard";
+
+        const rawEmail = cleanMaskedPii(customer.mail || customer.email);
+        const rawPhone = cleanMaskedPii(customer.phone || customer.telephone || customer.mobile || customer.address?.phone);
+        const rawCountry = cleanMaskedPii(customer.country || customer.country_code || customer.address?.country || customer.address?.country_code).toUpperCase();
+
+        const COUNTRY_CANONICAL = {
+            'US': 'United States', 'USA': 'United States', 'GB': 'United Kingdom', 'UK': 'United Kingdom',
+            'FR': 'France', 'DE': 'Germany', 'IL': 'Israel', 'AU': 'Australia', 'TH': 'Thailand',
+            'ES': 'Spain', 'IT': 'Italy', 'CA': 'Canada', 'NL': 'Netherlands', 'CH': 'Switzerland',
+            'SE': 'Sweden', 'DK': 'Denmark', 'NO': 'Norway', 'FI': 'Finland', 'BE': 'Belgium',
+            'AT': 'Austria', 'IE': 'Ireland', 'RU': 'Russia', 'KR': 'South Korea', 'JP': 'Japan',
+            'CN': 'China', 'HK': 'Hong Kong', 'TW': 'Taiwan', 'IN': 'India', 'BR': 'Brazil',
+            'AR': 'Argentina', 'MX': 'Mexico', 'NZ': 'New Zealand', 'ZA': 'South Africa', 'SG': 'Singapore'
+        };
+        const resolvedCountry = COUNTRY_CANONICAL[rawCountry] || rawCountry;
+
+        const targetRooms = (targetProperty.rooms || []).filter(r => !r.inactive);
+        const existingStaffDocs = await staffRef.where("property", "==", targetPropId).get();
+        const activeBookings = [];
+        existingStaffDocs.forEach(d => {
+            const b = d.data();
+            if (!['cancelled', 'no-show', 'noshow', 'unconfirmed'].includes(b.status)) activeBookings.push(b);
+        });
+
+        const occupiedRooms = new Set();
+        activeBookings.forEach(b => {
+            if (b.checkIn < checkOut && b.checkOut > checkIn) {
+                const bRooms = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : (b.room ? [b.room] : []);
+                bRooms.forEach(rid => { if (rid) occupiedRooms.add(rid.toUpperCase().trim()); });
+            }
+        });
+
+        const isDormBooking = bookedTypeStr.toLowerCase().includes('dorm');
+        const matchedSampleRoom = targetRooms.find(r => {
+            const rType = (r.type || r.category || "").toUpperCase().trim();
+            return rType === bookedTypeStr.toUpperCase() || bookedTypeStr.toUpperCase().includes(rType);
+        });
+        const isDoubleDormBed = isDormBooking && (
+            /\b(double|queen|king|couple|2\s*pax)\b/i.test(bookedTypeStr) ||
+            (parseInt(matchedSampleRoom?.capacity, 10) || 1) >= 2
+        );
+        const perBedPaxCap = isDoubleDormBed ? Math.max(2, parseInt(matchedSampleRoom?.capacity, 10) || 2) : 1;
+        const unitsNeeded = isDormBooking
+            ? Math.max(1, rooms.length, Math.ceil(pax / perBedPaxCap))
+            : Math.max(1, rooms.length);
+
+        const assignedRooms = [];
+        for (let i = 0; i < unitsNeeded; i++) {
+            const freeRoom = targetRooms.find(r => {
+                const rType = (r.type || r.category || "").toUpperCase().trim();
+                const matches = rType === bookedTypeStr.toUpperCase() || bookedTypeStr.toUpperCase().includes(rType);
+                const rId = (r.id || "").toUpperCase().trim();
+                return matches && !occupiedRooms.has(rId) && !assignedRooms.includes(r.id);
+            });
+            if (freeRoom) {
+                assignedRooms.push(freeRoom.id);
+                occupiedRooms.add(freeRoom.id.toUpperCase().trim());
+            } else {
+                assignedRooms.push("");
+            }
+        }
+        const primaryRoom = assignedRooms.find(r => r !== "") || "";
+        const autoLinkedId = assignedRooms.length > 1 ? (lastName || String(bookId || "")) : "";
+
+        const existingBookings = await staffRef.where("bookId", "==", bookId).where("property", "==", targetPropId).get();
+
+        if (!existingBookings.empty) {
+            existingBookings.forEach(docSnap => {
+                const currentData = docSnap.data();
+                const curPayments = Array.isArray(currentData.payments) ? [...currentData.payments] : [];
+                const hwEffectiveCommission = otaCommission > 0 ? otaCommission : 0;
+                const newTotalFixed = Number(totalPrice.toFixed(2));
+                const newNetFixed = Number((totalPrice - hwEffectiveCommission).toFixed(2));
+
+                const modChanges = [];
+                if (currentData.checkIn !== checkIn || currentData.checkOut !== checkOut) {
+                    modChanges.push(`Dates: ${currentData.checkIn} -> ${currentData.checkOut} => ${checkIn} -> ${checkOut}`);
+                }
+                if ((Number(currentData.pax) || 1) !== pax) {
+                    modChanges.push(`Pax: ${currentData.pax || 1} => ${pax}`);
+                }
+                if (Math.abs((Number(currentData.totalPrice) || 0) - newTotalFixed) > 0.01) {
+                    modChanges.push(`Total: ${currentData.totalPrice || 0} => ${newTotalFixed}`);
+                }
+                if ((currentData.bookedType || '') !== bookedTypeStr) {
+                    modChanges.push(`Type: ${currentData.bookedType || ''} => ${bookedTypeStr}`);
+                }
+                const modSummary = modChanges.length > 0 ? modChanges.join(' • ') : 'Reservation details updated';
+
+                const snapshotBlock = buildOriginalSnapshotBlock({
+                    src: currentData.source || source,
+                    refId: currentData.bookId || bookId,
+                    inDate: currentData.checkIn || checkIn,
+                    outDate: currentData.checkOut || checkOut,
+                    roomType: currentData.bookedType || bookedTypeStr,
+                    guestPax: currentData.pax || pax,
+                    grossAmt: currentData.totalPrice ?? newTotalFixed,
+                    netAmt: currentData.netPrice ?? newNetFixed,
+                    origPayments: curPayments
+                });
+
+                const notesWithSnapshot = upsertSnapshotOnce(currentData.notes || detailNotes, snapshotBlock);
+                const finalNotes = `${notesWithSnapshot}\n\n[MODIFIED VIA CHANNEX (${modSummary}) - ${new Date().toISOString()}]`.trim();
+
+                batch.update(docSnap.ref, {
+                    checkIn,
+                    checkOut,
+                    pax,
+                    email: rawEmail || cleanMaskedPii(currentData.email) || "",
+                    phone: rawPhone || cleanMaskedPii(currentData.phone) || "",
+                    country: resolvedCountry || cleanMaskedPii(currentData.country) || "",
+                    refundability: detectedRefundability !== 'unknown' ? detectedRefundability : (currentData.refundability || 'unknown'),
+                    totalPrice: newTotalFixed,
+                    netPrice: newNetFixed,
+                    bookedType: bookedTypeStr,
+                    room: currentData.room || primaryRoom,
+                    rooms: (currentData.rooms && currentData.rooms[0]) ? currentData.rooms : assignedRooms,
+                    otaAlert: 'modified',
+                    otaAlertSummary: modSummary,
+                    otaAlertAt: new Date().toISOString(),
+                    notes: finalNotes,
+                    lastEditedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    lastEditedBy: "CHANNEX_BOT"
+                });
+            });
+        } else {
+            const recordId = "CX" + Math.random().toString(36).substr(2, 9);
+            const newDocRef = staffRef.doc(recordId);
+            const hwEffectiveCommission = otaCommission > 0 ? otaCommission : 0;
+            const grossFixed = Number(totalPrice.toFixed(2));
+            const netFixed = Number((totalPrice - hwEffectiveCommission).toFixed(2));
+
+            const snapshotBlock = buildOriginalSnapshotBlock({
+                src: source,
+                refId: bookId,
+                inDate: checkIn,
+                outDate: checkOut,
+                roomType: bookedTypeStr,
+                guestPax: pax,
+                grossAmt: grossFixed,
+                netAmt: netFixed,
+                origPayments: payments
+            });
+
+            batch.set(newDocRef, {
+                id: recordId,
+                property: targetPropId,
+                firstName,
+                lastName,
+                phone: rawPhone,
+                email: rawEmail,
+                country: resolvedCountry,
+                checkIn,
+                checkOut,
+                bookedType: bookedTypeStr,
+                room: primaryRoom,
+                rooms: assignedRooms,
+                pax,
+                source,
+                bookDate: (booking.inserted_at || new Date().toISOString()).split('T')[0],
+                bookId,
+                linkedId: autoLinkedId,
+                totalPrice: grossFixed,
+                netPrice: netFixed,
+                netOverride: false,
+                badCC: false,
+                payments,
+                refundability: detectedRefundability,
+                status: 'new',
+                notes: `${snapshotBlock}\n\n${detailNotes}`.trim(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                createdBy: "CHANNEX_BOT",
+                lastEditedAt: admin.firestore.FieldValue.serverTimestamp(),
+                lastEditedBy: "CHANNEX_BOT",
+                auditLog: [{ ts: new Date().toISOString(), user: "CHANNEX_BOT", msg: `Ingested from ${source} (Auto-assigned: ${primaryRoom || 'Unassigned'})` }]
+            });
+        }
+
+        await batch.commit();
+        console.log(`[CHANNEX] Successfully parsed and saved booking ${bookId} for ${firstName} ${lastName}`);
+        await ackRevision();
+
+        return res.status(200).send({ ok: true, msg: "Booking successfully processed" });
+
+    } catch (error) {
+        console.error("Channex Webhook Error:", error);
+        return res.status(200).send({ ok: true, error: error.message });
+    }
+});
+
+// 4. CHANNEX DELTA SYNC (2-STEP BED + UNASSIGNED AVAILABILITY COUNTER)
+exports.channexDeltaSync = onCall({
+    region: "asia-southeast1",
+    memory: "256MiB"
+}, async (request) => {
+    const data = request.data;
+    const canonPropId = toCanonicalProp(data.propId);
+    const startStr = data.checkIn;
+    const endStr = data.checkOut;
+
+    if (!canonPropId) return { ok: false, msg: "Missing Property ID" };
+    if (!startStr || !endStr) return { ok: false, msg: "Missing Date Range" };
+
+    try {
+        const propRef = db.collection("artifacts").doc("hotel-pms-v1").collection("public").doc("data").collection("properties").doc(canonPropId);
+        const propSnap = await propRef.get();
+        if (!propSnap.exists) return { ok: false };
+
+        const propData = propSnap.data();
+        if (!propData.channex || !propData.channex.apiKey || !propData.channexMap || propData.channexMap.length === 0) {
+            return { ok: false, msg: "Property not configured for Channex" };
+        }
+
+        const pricingSnap = await db.collection("artifacts").doc("hotel-pms-v1").collection("public").doc("data").collection("pricing").doc(`master_${canonPropId}`).get();
+        const rawPricing = pricingSnap.exists ? (pricingSnap.data() || {}) : {};
+        const masterPricing = {
+            ...rawPricing,
+            timeline: (rawPricing.timeline && typeof rawPricing.timeline === 'object') ? rawPricing.timeline : {}
+        };
+
+        const activeRooms = (propData.rooms || []).filter(r => !r.inactive && r.id);
+        const bedsByCategory = new Map();
+        activeRooms.forEach(r => {
+            const catUpper = String(r.type || r.category || "").toUpperCase().trim();
+            if (!catUpper) return;
+            if (!bedsByCategory.has(catUpper)) bedsByCategory.set(catUpper, new Set());
+            bedsByCategory.get(catUpper).add(String(r.id).trim().toUpperCase());
+        });
+
+        const affectedDates = new Set();
+        const curr = new Date(startStr + "T12:00:00Z");
+        const endD = new Date(endStr + "T12:00:00Z");
+
+        if (startStr === endStr) {
+            affectedDates.add(startStr);
+        } else {
+            while (curr < endD) {
+                affectedDates.add(curr.toISOString().split('T')[0]);
+                curr.setUTCDate(curr.getUTCDate() + 1);
+            }
+        }
+        if (affectedDates.size === 0) affectedDates.add(startStr);
+
+        const sortedDates = Array.from(affectedDates).sort();
+        const minDate = sortedDates[0];
+        const maxDate = sortedDates[sortedDates.length - 1];
+
+        const staffSnap = await db.collection("artifacts").doc("hotel-pms-v1").collection("public").doc("data").collection("staff").get();
+        const NON_OCCUPYING = new Set(['cancelled', 'no-show', 'noshow', 'unconfirmed', 'vol']);
+
+        const activeBookings = staffSnap.docs
+            .map(d => d.data())
+            .filter(s => {
+                if (toCanonicalProp(s.property) !== canonPropId) return false;
+                if (s.isMockTest) return false;
+                const st = String(s.status || 'future').toLowerCase().trim();
+                if (NON_OCCUPYING.has(st)) return false;
+                if (!s.checkIn || !s.checkOut) return false;
+                return s.checkOut > minDate && s.checkIn <= maxDate;
+            });
+
+        const rawTargetRooms = data.roomTypes || (data.roomType ? [data.roomType] : []);
+        const targetRooms = Array.isArray(rawTargetRooms)
+            ? rawTargetRooms.map(r => (r || "").toUpperCase().trim()).filter(Boolean)
+            : [];
+
+        const mapRulesToProcess = targetRooms.length > 0
+            ? propData.channexMap.filter(m => {
+                const pCat = (m.pmsCategory || "").toUpperCase().trim();
+                return targetRooms.some(tr => tr === pCat || pCat.includes(tr) || tr.includes(pCat));
+            })
+            : propData.channexMap;
+
+        const payloadValues = [];
+
+        mapRulesToProcess.forEach(mapRule => {
+            const pmsCat = (mapRule.pmsCategory || "").toUpperCase().trim();
+            const chanId = mapRule.channexId;
+            if (!pmsCat || !chanId) return;
+
+            const isDorm = pmsCat.includes("DORM") || pmsCat.includes("BED");
+            const categoryBedIds = bedsByCategory.get(pmsCat) || new Set();
+
+            let rangeStart = null;
+            let currentAvail = -1;
+
+            const processDates = [...sortedDates, 'CLOSE_RANGE'];
+
+            processDates.forEach((dStr, idx) => {
+                if (dStr === 'CLOSE_RANGE') {
+                    if (rangeStart !== null) {
+                        const prevDStr = sortedDates[idx - 1];
+                        payloadValues.push({ property_id: propData.channex.propId, room_type_id: chanId, date_from: rangeStart, date_to: prevDStr, availability: currentAvail });
+                    }
+                    return;
+                }
+
+                const dMs = new Date(dStr + "T12:00:00Z").getTime();
+                const occupiedBedIds = new Set();
+                let unassignedCount = 0;
+
+                activeBookings.forEach(s => {
+                    const sIn = new Date(s.checkIn + "T12:00:00Z").getTime();
+                    const sOut = new Date(s.checkOut + "T12:00:00Z").getTime();
+                    if (dMs < sIn || dMs >= sOut) return;
+
+                    const assignedRooms = (Array.isArray(s.rooms) && s.rooms.length ? s.rooms : (s.room ? [s.room] : []))
+                        .map(r => String(r || '').trim().toUpperCase())
+                        .filter(Boolean);
+
+                    if (assignedRooms.length > 0) {
+                        assignedRooms.forEach(rid => {
+                            if (categoryBedIds.has(rid)) occupiedBedIds.add(rid);
+                        });
+                    } else {
+                        if (String(s.status || '').toLowerCase().trim() === 'special') return;
+                        const bType = String(s.bookedType || s.category || '').toUpperCase().trim();
+                        if (bType === pmsCat || bType.includes(pmsCat) || pmsCat.includes(bType)) {
+                            const perBedCap = (isDorm && /\b(double|queen|king|couple|2\s*pax)\b/i.test(`${pmsCat} ${bType}`)) ? 2 : 1;
+                            const slotUnits = (Array.isArray(s.rooms) && s.rooms.length > 1) ? s.rooms.length : (parseInt(s.unitCount, 10) || 0);
+                            unassignedCount += slotUnits > 0
+                                ? slotUnits
+                                : (isDorm ? Math.max(1, Math.ceil((parseInt(s.pax, 10) || 1) / perBedCap)) : 1);
+                        }
+                    }
+                });
+
+                const occupiedCount = occupiedBedIds.size + unassignedCount;
+                const dayData = masterPricing.timeline[dStr] || {};
+                const otaCap = dayData.otaOverrides?.[`${mapRule.pmsCategory}_cap`] ?? dayData.otaOverrides?.[`${pmsCat}_cap`];
+                const otaAvail = dayData.otaOverrides?.[`${mapRule.pmsCategory}_avail`] ?? dayData.otaOverrides?.[`${pmsCat}_avail`];
+
+                let maxCap = categoryBedIds.size;
+                if (otaCap !== undefined) {
+                    maxCap = parseInt(otaCap, 10);
+                } else if (otaAvail !== undefined) {
+                    maxCap = parseInt(otaAvail, 10) + occupiedCount;
+                }
+
+                const availToday = Math.max(0, maxCap - occupiedCount);
+
+                if (availToday !== currentAvail) {
+                    if (rangeStart !== null) {
+                        const prevDStr = sortedDates[idx - 1];
+                        payloadValues.push({ property_id: propData.channex.propId, room_type_id: chanId, date_from: rangeStart, date_to: prevDStr, availability: currentAvail });
+                    }
+                    rangeStart = dStr;
+                    currentAvail = availToday;
+                }
+            });
+        });
+
+        const channexHost = (propData.channex.env === 'staging' || propData.channex.isStaging)
+            ? "staging.channex.io"
+            : "app.channex.io";
+
+        if (payloadValues.length > 0) {
+            const response = await axios.post(`https://${channexHost}/api/v1/availability`, { values: payloadValues }, { headers: { "user-api-key": propData.channex.apiKey, "Content-Type": "application/json" } });
+            console.log(`Delta Sync Pushed for ${canonPropId}. Updates: ${payloadValues.length}, Target rooms: ${targetRooms.join(',') || 'ALL'}`);
+
+            const taskId = response.data?.data?.[0]?.id || null;
+            return { ok: true, taskId: taskId, count: payloadValues.length };
+        }
+
+        return { ok: true, msg: "No changes needed" };
+
+    } catch (err) {
+        console.error("Delta Sync Error:", err.message);
+        throw new HttpsError('internal', err.message);
+    }
+});
+
+// 5. DIRECT MOBILE PASSPORT SCANNER OCR CALLABLE
+exports.parsePassportScan = onCall({
+    secrets: [geminiApiKey],
+    region: "asia-southeast1",
+    memory: "512MiB",
+    timeoutSeconds: 60,
+    cors: true
+}, async (request) => {
+    const data = request.data || {};
+    const imageBase64 = data.imageBase64;
+
+    if (!imageBase64) {
+        throw new HttpsError('invalid-argument', 'Missing image base64 data');
+    }
+
+    const geminiKey = sanitizeSecret(geminiApiKey.value());
+    const genAI = new GoogleGenerativeAI(geminiKey);
+
+    const prompt = `Analyze this passport biographical page. Extract the fields and return them strictly inside a valid flat JSON block containing: 
+    firstName (First name only), 
+    middleName (Any remaining words in the "Given Names" field. If none, leave blank),
+    lastName (The "Surname" field),
+    gender (Look at the "Sex" field. Output exactly 'M' or 'F'),
+    passportNumber (The document number),
+    nationality (Look at Nationality. Extract ONLY the 3-letter country code),
+    dobDay (Strictly 2-digit day of birth),
+    dobMonth (Strictly 2-digit month of birth),
+    dobYear (4-digit year of birth).
+    Do not include Markdown formatting. Output only RAW JSON.`;
+
+    const CANDIDATE_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"];
+    let result = null;
+    let lastError = null;
+
+    for (const modelName of CANDIDATE_MODELS) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const model = genAI.getGenerativeModel({
+                    model: modelName,
+                    generationConfig: { responseMimeType: "application/json" },
+                    safetySettings: [
+                        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+                    ]
+                });
+
+                result = await model.generateContent([
+                    prompt,
+                    { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
+                ]);
+
+                if (result && result.response) {
+                    console.log(`[Mobile OCR SUCCESS] Parsed with ${modelName}`);
+                    break;
+                }
+            } catch (err) {
+                lastError = err;
+                console.warn(`[Mobile OCR] ${modelName} Attempt ${attempt + 1} Failed: ${err.message}`);
+
+                if (err.message.includes("GenerateRequestsPerDay") || err.message.includes("quotaValue") || err.message.includes("429")) {
+                    console.log(`[QUOTA SHIFT] Model ${modelName} hit quota. Moving to fallback model...`);
+                    break;
+                }
+
+                const delayMatch = err.message.match(/retry in (\d+(?:\.\d+)?)s/i);
+                const waitMs = delayMatch ? Math.ceil(parseFloat(delayMatch[1]) * 1000) + 1000 : 2500;
+                if (attempt < 1) {
+                    await new Promise(r => setTimeout(r, waitMs));
+                }
+            }
+        }
+        if (result) break;
+    }
+
+    if (!result) {
+        throw new HttpsError('resource-exhausted', lastError ? lastError.message : 'AI model quota exceeded');
+    }
+
+    try {
+        let outputText = result.response.text();
+        outputText = outputText.replace(/`{3}[a-zA-Z]*\n?/gi, '').replace(/`{3}\n?/g, '').trim();
+        const parsed = JSON.parse(outputText);
+        return { ok: true, data: parsed };
+    } catch (parseErr) {
+        console.error("JSON parse error:", parseErr);
+        throw new HttpsError('internal', 'Failed to parse AI extraction output');
+    }
+});

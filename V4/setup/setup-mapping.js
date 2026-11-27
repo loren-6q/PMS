@@ -382,6 +382,46 @@ function buildDerivedOptionsPayload(baseOptions, discountPct) {
     }));
 }
 
+function extractDerivedMinStay(plan) {
+    const attr = plan?.attributes || {};
+    const opt0 = Array.isArray(attr.options) ? attr.options[0] : null;
+    const candidates = [
+        attr.min_stay_through,
+        attr.min_stay_arrival,
+        opt0?.min_stay_through,
+        opt0?.min_stay_arrival
+    ];
+
+    for (const raw of candidates) {
+        if (Array.isArray(raw)) {
+            const nums = raw.map(n => parseInt(n, 10)).filter(n => Number.isFinite(n) && n > 0);
+            const nonOne = nums.find(n => n > 1);
+            if (nonOne) return nonOne;
+        } else if (raw !== undefined && raw !== null && raw !== '') {
+            const n = parseInt(raw, 10);
+            if (Number.isFinite(n) && n > 1) return n;
+        }
+    }
+
+    const titleMatch = String(attr.title || '').match(/\((\d+)\+?\s*Nts?\)/i);
+    if (titleMatch) {
+        const parsed = parseInt(titleMatch[1], 10);
+        if (Number.isFinite(parsed) && parsed > 1) return parsed;
+    }
+
+    for (const raw of candidates) {
+        if (Array.isArray(raw)) {
+            const n = raw.map(x => parseInt(x, 10)).find(x => Number.isFinite(x) && x >= 1);
+            if (n) return n;
+        } else if (raw !== undefined && raw !== null && raw !== '') {
+            const n = parseInt(raw, 10);
+            if (Number.isFinite(n) && n >= 1) return n;
+        }
+    }
+
+    return 1;
+}
+
 function buildDerivedLosCardHtml() {
     const derivedPlans = window.channexDerivedPlans || [];
     const parentLookup = new Map((window.channexRatePlans || []).map(p => [p.id, p.attributes?.title || p.id]));
@@ -398,7 +438,7 @@ function buildDerivedLosCardHtml() {
             const parentId = attr.parent_rate_plan_id || dp.relationships?.parent_rate_plan?.data?.id || '';
             const parentTitle = parentLookup.get(parentId) || (parentId ? `...${parentId.slice(-8)}` : 'Parent Plan');
             const discPct = extractDerivedDiscountPct(dp);
-            const minStay = attr.min_stay_through || attr.min_stay_arrival || 1;
+            const minStay = extractDerivedMinStay(dp);
 
             return `
                 <tr class="hover:bg-slate-50">
@@ -654,6 +694,7 @@ function buildPlanTableRowsHtml(plans, cat, catId, channexRoomId, availableChann
         } else {
             mapping.pmsCategory = cat;
             if (catId) mapping.catId = catId;
+            if (!mapping.channexRoomId && channexRoomId) mapping.channexRoomId = channexRoomId;
             if (!mapping.channel || mapping.channel === "DEF" || mapping.channel === "DEFAULT") {
                 if (detected.channel !== "DEF") {
                     mapping.channel = detected.channel;
@@ -769,6 +810,8 @@ export function renderStep3UnifiedMapping() {
         .filter(rp => rp.pmsCategory && activeCatSet.has(rp.pmsCategory.trim().toLowerCase()));
 
     const ghostRoomIds = new Set((window.channexMap || []).filter(m => m.isGhost).map(m => m.channexId));
+    const mappedChannexIds = new Set((window.channexMap || []).map(m => m.channexId).filter(Boolean));
+    const unmappedChannexRooms = (window.channexRooms || []).filter(cr => cr?.id && !mappedChannexIds.has(cr.id));
     const mappedCount = pmsCategories.filter(cat => !!findChannexMapForCategory(cat, catToId.get(cat))).length;
 
     const toolbar = document.createElement('div');
@@ -811,6 +854,8 @@ export function renderStep3UnifiedMapping() {
         const currentMap = findChannexMapForCategory(cat, catId);
         const ghostMaps = findGhostMapsForCategory(cat, catId);
         const isMapped = !!(currentMap && currentMap.channexId);
+        const hasAnyMappedRoom = isMapped || ghostMaps.length > 0;
+        const safeCatAttr = cat.replace(/'/g, "\\'");
 
         const card = document.createElement('div');
         card.className = isMapped ? 'mapping-card-mapped' : 'mapping-card-unmapped';
@@ -838,27 +883,45 @@ export function renderStep3UnifiedMapping() {
         const totalPlanCount = matchingPlans.length + ghostPlanEntries.length;
         const isCardPlansVisible = step3ShowRates || step3ExpandedCats.has(cat);
 
-        const ghostStripHtml = ghostMaps.length > 0
+        const linkGhostSelectHtml = unmappedChannexRooms.length > 0
+            ? `<select class="table-input !w-auto max-w-[200px] text-[10px] font-bold bg-white text-indigo-900 py-0.5" onchange="if(this.value){ window.addGhostRoomMapping('${safeCatAttr}', this.value); this.value=''; }" title="Link an existing unmapped Channex room type as a Ghost Room">
+                <option value="">+ Link Existing Ghost Room...</option>
+                ${unmappedChannexRooms.map(cr => `<option value="${cr.id}">${cr.attributes?.title || cr.id}</option>`).join('')}
+               </select>`
+            : '';
+
+        const ghostStripHtml = (ghostMaps.length > 0 || unmappedChannexRooms.length > 0)
             ? `<div class="px-3 py-1.5 bg-indigo-50/80 border-b border-indigo-200 flex flex-wrap items-center justify-between gap-2 text-[10.5px]">
                 <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="px-1.5 py-0.5 rounded bg-indigo-600 text-white font-black uppercase text-[8.5px]" data-tip="setup.ghostRoom">GHOST ROOMS</span>
-                    ${ghostMaps.map(gm => `
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-indigo-300 font-bold text-indigo-950">
-                            <span>${gm.channexTitle || gm.channexId}</span>
-                            <button type="button" onclick="window.removeGhostRoomMapping('${gm.channexId}')" class="text-slate-400 hover:text-rose-600 font-black cursor-pointer leading-none ml-0.5" title="Unlink this Ghost Room mapping">&times;</button>
-                        </span>
-                    `).join('')}
+                    ${ghostMaps.length > 0 ? ghostMaps.map(gm => {
+                        const gPlanCount = (window.channexRatePlans || []).filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === gm.channexId).length;
+                        const countCls = gPlanCount === 0
+                            ? 'bg-amber-100 text-amber-900 border-amber-300'
+                            : 'bg-indigo-100 text-indigo-800 border-indigo-200';
+                        return `
+                            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-white border border-indigo-300 font-bold text-indigo-950">
+                                <span>${gm.channexTitle || gm.channexId}</span>
+                                <span class="px-1 py-0.2 rounded border text-[8.5px] font-black uppercase ${countCls}">${gPlanCount} plan${gPlanCount === 1 ? '' : 's'}</span>
+                                <button type="button" onclick="window.openCreateRatePlanModal('rates', 'GHOST::${gm.channexId}')" class="px-1.5 py-0.2 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[8.5px] cursor-pointer" title="Create or clone rate plans for this Ghost Room">+ Add Rates</button>
+                                <button type="button" onclick="window.removeGhostRoomMapping('${gm.channexId}')" class="text-slate-400 hover:text-rose-600 font-black cursor-pointer leading-none ml-0.5" title="Unlink this Ghost Room mapping">&times;</button>
+                            </span>
+                        `;
+                    }).join('') : `<span class="text-[10px] text-slate-500 font-semibold">None linked</span>`}
                 </div>
+                ${linkGhostSelectHtml}
                </div>`
             : '';
 
         let ratePlansHtml = '';
-        if (isMapped && isCardPlansVisible) {
+        if (hasAnyMappedRoom && isCardPlansVisible) {
             if (totalPlanCount > 0) {
-                const primaryRows = buildPlanTableRowsHtml(matchingPlans, cat, catId, currentMap.channexId, availableChannels);
+                const primaryRows = isMapped
+                    ? buildPlanTableRowsHtml(matchingPlans, cat, catId, currentMap.channexId, availableChannels)
+                    : '';
                 const ghostRows = ghostMaps.map(gm => {
                     const gPlans = (window.channexRatePlans || []).filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === gm.channexId);
-                    const tag = `<span class="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 border border-indigo-300 text-[8px] font-black uppercase">GHOST: ${gm.channexTitle || 'Mirror'}</span>`;
+                    const tag = `<span class="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 border border-indigo-300 text-[8px] font-black uppercase" title="${(gm.channexTitle || 'Ghost Room').replace(/"/g, '&quot;')}">GHOST</span>`;
                     return buildPlanTableRowsHtml(gPlans, cat, catId, gm.channexId, availableChannels, tag);
                 }).join('');
 
@@ -881,16 +944,17 @@ export function renderStep3UnifiedMapping() {
                     </div>
                 `;
             } else {
+                const defaultTargetKey = isMapped ? `PRIMARY::${safeCatAttr}` : `GHOST::${ghostMaps[0].channexId}`;
                 ratePlansHtml = `
-                    <div class="p-3 bg-white text-[10px] text-slate-400 italic">
-                        No primary rate plans attached to this room type in Channex. Click "Fetch Channex Data" above to refresh.
+                    <div class="p-3 bg-white flex flex-wrap items-center justify-between gap-2 text-[10.5px] text-slate-500">
+                        <span class="italic">No rate plans attached in Channex yet. Add rate plans or click "Fetch Channex Data" to refresh.</span>
+                        <button type="button" onclick="window.openCreateRatePlanModal('rates', '${defaultTargetKey}')" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9.5px] cursor-pointer">+ Add Rate Plans</button>
                     </div>
                 `;
             }
         }
 
-        const safeCatAttr = cat.replace(/'/g, "\\'");
-        const plansToggleBadge = (isMapped && !step3ShowRates)
+        const plansToggleBadge = (hasAnyMappedRoom && !step3ShowRates)
             ? `<button type="button" onclick="window.toggleStep3CategoryRates('${safeCatAttr}')" class="px-2 py-0.5 rounded bg-white/90 hover:bg-white text-emerald-900 border border-emerald-300 text-[9.5px] font-black uppercase cursor-pointer">
                 ${totalPlanCount} Plan${totalPlanCount === 1 ? '' : 's'} ${isCardPlansVisible ? '▴' : '▸'}
                </button>`
@@ -917,6 +981,47 @@ export function renderStep3UnifiedMapping() {
     });
 
     if (window.lucide) window.lucide.createIcons();
+}
+
+export function addGhostRoomMapping(pmsCategory, channexId) {
+    if (!pmsCategory || !channexId) return;
+    window.channexMap = window.channexMap || [];
+    window.channexRateMap = window.channexRateMap || [];
+
+    const defMatch = (window.roomDefinitions || []).find(d => !d.inactive && normalizeCatName(d.category) === normalizeCatName(pmsCategory));
+    const catId = defMatch?.catId || null;
+    const cRoom = (window.channexRooms || []).find(r => r.id === channexId);
+    const title = cRoom?.attributes?.title || channexId;
+
+    window.channexMap = window.channexMap.filter(m => m.channexId !== channexId);
+    window.channexMap.push({ pmsCategory, catId, channexId, channexTitle: title, isGhost: true });
+
+    const matchingPlans = (window.channexRatePlans || []).filter(p => {
+        const rId = p.attributes?.room_type_id || p.relationships?.room_type?.data?.id;
+        return rId === channexId;
+    });
+
+    matchingPlans.forEach(plan => {
+        const planTitle = plan.attributes?.title || plan.id;
+        const detected = detectRatePlanClassification(planTitle, plan);
+        window.channexRateMap = window.channexRateMap.filter(r => r.ratePlanId !== plan.id);
+        window.channexRateMap.push({
+            pmsCategory,
+            catId,
+            channexRoomId: channexId,
+            ratePlanId: plan.id,
+            ratePlanTitle: planTitle,
+            channel: detected.channel,
+            channelId: detected.channelId,
+            connectionTitle: detected.connectionTitle,
+            policy: detected.policy,
+            rateType: detected.policy,
+            isEvent: detected.isEvent,
+            isGhost: true
+        });
+    });
+
+    renderStep3UnifiedMapping();
 }
 
 export function removeGhostRoomMapping(channexId) {
@@ -1081,7 +1186,7 @@ function getAllRateTargetEntries() {
                 pmsCategory: cat,
                 catId,
                 channexId: gm.channexId,
-                label: `${gTitle} (Ghost)`,
+                label: gTitle,
                 titleLabel: gTitle,
                 isGhost: true
             });
@@ -1091,14 +1196,16 @@ function getAllRateTargetEntries() {
     return entries;
 }
 
-export function openCreateRatePlanModal(initialTab = 'rooms') {
+export function openCreateRatePlanModal(initialTab = 'rooms', preselectedTargetKey = null) {
     const modal = document.getElementById('create-rate-plan-modal');
     if (!modal) return;
 
     const ghostChk = document.getElementById('crp-ghost-mode');
     const ghostPrefixWrap = document.getElementById('crp-ghost-prefix-wrap');
+    const ghostPrefixInput = document.getElementById('crp-ghost-prefix');
     if (ghostChk) ghostChk.checked = false;
     if (ghostPrefixWrap) ghostPrefixWrap.classList.add('hidden');
+    if (ghostPrefixInput) ghostPrefixInput.value = 'Ghost ';
 
     const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
     const categories = Array.from(new Set(defs.map(r => (r.category || '').trim()).filter(Boolean)));
@@ -1141,12 +1248,17 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
     const rateTargets = getAllRateTargetEntries();
     const rateChecklist = document.getElementById('crp-room-checklist');
     if (rateChecklist) {
-        rateChecklist.innerHTML = rateTargets.map(t => `
-            <label class="flex items-center gap-1.5 font-bold cursor-pointer text-xs p-1 hover:bg-slate-100 rounded ${t.isGhost ? 'text-indigo-800' : ''}">
-                <input type="checkbox" class="crp-cat-chk" value="${t.key}" ${!t.isGhost ? 'checked' : ''}>
-                <span>${t.label}</span>
-            </label>
-        `).join('');
+        rateChecklist.innerHTML = rateTargets.map(t => {
+            const isChecked = preselectedTargetKey ? t.key === preselectedTargetKey : !t.isGhost;
+            return `
+                <label class="flex items-center gap-1.5 font-bold cursor-pointer text-xs p-1 hover:bg-slate-100 rounded ${t.isGhost ? 'text-indigo-800' : ''}">
+                    <input type="checkbox" class="crp-cat-chk" value="${t.key}" data-ghost="${t.isGhost ? 'true' : 'false'}" ${isChecked ? 'checked' : ''}>
+                    <span>${t.label}</span>
+                    ${t.isGhost ? `<span class="px-1 py-0.2 rounded bg-indigo-100 text-indigo-800 border border-indigo-200 text-[8px] font-black uppercase">GHOST</span>` : ''}
+                    ${!t.channexId ? `<span class="text-[8.5px] font-bold text-amber-600">(Unmapped)</span>` : ''}
+                </label>
+            `;
+        }).join('');
     }
 
     const cloneSourceSelect = document.getElementById('crp-clone-source');
@@ -1158,7 +1270,7 @@ export function openCreateRatePlanModal(initialTab = 'rooms') {
 
         cloneSourceSelect.innerHTML = `<option value="">-- Select Source Room --</option>` + sourceTargets.map(t => {
             const count = allPlans.filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === t.channexId).length;
-            return `<option value="${t.key}">${t.label} (${count} Plans)</option>`;
+            return `<option value="${t.key}">${t.isGhost ? '[GHOST] ' : ''}${t.label} (${count} Plans)</option>`;
         }).join('');
     }
 
@@ -1211,8 +1323,12 @@ export function toggleAllTargetRoomTypes(mode = 'all') {
     });
 }
 
-export function toggleAllTargetRooms(checked) {
-    document.querySelectorAll('.crp-cat-chk').forEach(chk => chk.checked = checked);
+export function toggleAllTargetRooms(mode) {
+    document.querySelectorAll('.crp-cat-chk').forEach(chk => {
+        if (mode === 'ghosts') chk.checked = chk.dataset.ghost === 'true';
+        else if (mode === 'primary') chk.checked = chk.dataset.ghost !== 'true';
+        else chk.checked = !!mode;
+    });
 }
 
 export function toggleBatchPresetPlans(checked) {
@@ -1262,8 +1378,8 @@ export async function executeCreateAndPushRoomTypes() {
     }
 
     const isGhost = !!document.getElementById('crp-ghost-mode')?.checked;
-    const rawPrefix = document.getElementById('crp-ghost-prefix')?.value || 'FMP ';
-    const ghostPrefix = isGhost ? (rawPrefix.trim() ? `${rawPrefix.trim()} ` : 'Mirror ') : '';
+    const rawPrefix = document.getElementById('crp-ghost-prefix')?.value ?? 'Ghost ';
+    const ghostPrefix = isGhost ? (rawPrefix.trim() ? `${rawPrefix.trim()} ` : 'Ghost ') : '';
 
     const defs = (window.roomDefinitions || []).filter(r => !r.inactive);
     window.channexRooms = window.channexRooms || [];
@@ -1387,7 +1503,11 @@ export async function executeCloneRatePlans() {
         let skippedCount = 0;
 
         for (const tgt of resolvedTargets) {
-            const existingMapped = (window.channexRateMap || []).filter(r => r.channexRoomId === tgt.channexId);
+            const existingMapped = (window.channexRateMap || []).filter(r =>
+                r.channexRoomId
+                    ? r.channexRoomId === tgt.channexId
+                    : (!tgt.isGhost && normalizeCatName(r.pmsCategory) === normalizeCatName(tgt.pmsCategory))
+            );
             const existingChannexPlans = (window.channexRatePlans || []).filter(
                 p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === tgt.channexId
             );
@@ -1454,7 +1574,8 @@ export async function executeCloneRatePlans() {
                         connectionTitle: spMap.connectionTitle || null,
                         policy: spMap.policy || 'non-ref',
                         rateType: spMap.rateType || spMap.policy || 'non-ref',
-                        isEvent: !!spMap.isEvent
+                        isEvent: !!spMap.isEvent,
+                        isGhost: !!tgt.isGhost
                     });
 
                     createdCount++;
@@ -1511,7 +1632,11 @@ export async function executeBatchCreateRatePlans() {
         for (const tgt of resolvedTargets) {
             const sameCat = defs.filter(r => normalizeCatName(r.category) === normalizeCatName(tgt.pmsCategory));
             const isDorm = sameCat.some(r => r.rule !== 'private');
-            const existingMapped = (window.channexRateMap || []).filter(r => r.channexRoomId === tgt.channexId);
+            const existingMapped = (window.channexRateMap || []).filter(r =>
+                r.channexRoomId
+                    ? r.channexRoomId === tgt.channexId
+                    : (!tgt.isGhost && normalizeCatName(r.pmsCategory) === normalizeCatName(tgt.pmsCategory))
+            );
             const existingChannexPlans = (window.channexRatePlans || []).filter(
                 p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === tgt.channexId
             );
@@ -1565,7 +1690,8 @@ export async function executeBatchCreateRatePlans() {
                         connectionTitle: tpl.connectionTitle || null,
                         policy: tpl.policy,
                         rateType: tpl.policy,
-                        isEvent: tpl.isEvent
+                        isEvent: tpl.isEvent,
+                        isGhost: !!tgt.isGhost
                     });
 
                     createdCount++;
@@ -1787,7 +1913,8 @@ export async function executeCreateAndPushRatePlan() {
                     connectionTitle: connectionTitle,
                     policy: policy,
                     rateType: policy,
-                    isEvent: policy.startsWith('event')
+                    isEvent: policy.startsWith('event'),
+                    isGhost: !!tgt.isGhost
                 });
 
                 createdCount++;
@@ -1888,6 +2015,7 @@ if (typeof window !== 'undefined') {
     window.toggleStep3CategoryRates = toggleStep3CategoryRates;
     window.renderStep3UnifiedMapping = renderStep3UnifiedMapping;
     window.updateRoomTypeMapping = updateRoomTypeMapping;
+    window.addGhostRoomMapping = addGhostRoomMapping;
     window.removeGhostRoomMapping = removeGhostRoomMapping;
     window.updateRatePlanClassification = updateRatePlanClassification;
     window.switchCreateModalTab = switchCreateModalTab;

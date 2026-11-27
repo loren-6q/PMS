@@ -108,11 +108,6 @@ export async function loadPropertyBaseline() {
         const curProp = getPropId();
         let baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', getBaselineDocId()));
 
-        // Backward compatibility fallback for SWIMS
-        if (!baselineSnap.exists() && curProp === 'swims_resort') {
-            baselineSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ota_sync', 'baseline'));
-        }
-
         loadLocalExcludedRooms();
 
         if (baselineSnap.exists()) {
@@ -221,7 +216,7 @@ function findPmsBooking(id, extraPredicate = null) {
     const curProp = getPropId();
 
     return (window.staff || []).find(s => {
-        const sProp = typeof toCanonicalPropId === 'function' ? toCanonicalPropId(s.property) : (s.property || 'swims_resort');
+        const sProp = typeof toCanonicalPropId === 'function' ? toCanonicalPropId(s.property) : (s.property || '');
         if (sProp !== curProp) return false;
 
         if (cleanId) {

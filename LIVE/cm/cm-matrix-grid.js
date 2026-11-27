@@ -6,7 +6,7 @@
 import { parseYMD, getLocalYMD, mNames } from '../core/dates.js';
 import { roundCurrency } from '../core/money.js';
 import { isOccupyingBooking, getRestrictionBadgeHtml } from '../core/occupancy.js';
-import { CHANNELS, resolveChannelCode } from '../core/channels.js';
+import { CHANNELS, resolveChannelCode, isEventRatePlan } from '../core/channels.js';
 import { getClassifiedRooms } from '../core/properties.js';
 import { rippleDay, applyMath, computeDynamicPlanRate, getNearestEvent } from './cm-ripple.js';
 
@@ -35,10 +35,7 @@ function saveGridPrefs() {
 function classifyRatePlanBucket(r) {
     const title = r.ratePlanTitle || '';
     const chanCode = resolveChannelCode(r.channel || title);
-    const isEvt = typeof r.isEvent === 'boolean'
-        ? r.isEvent
-        : (r.policy?.startsWith('event') || r.product === 'evt' || r.rateSource === 'evt' || /\b(evt|fmp|event|pkg)\b/i.test(title));
-    if (isEvt) return 'event';
+    if (isEventRatePlan(r)) return 'event';
 
     const isLos = /\b(weekly|monthly|los|length[-_\s]?of[-_\s]?stay|\d+\s*nights?|\d+n)\b/i.test(title);
     if (isLos) return 'los';
@@ -1188,29 +1185,59 @@ export function renderRateMatrix() {
                     const rawComputed = otaOverride !== undefined ? otaOverride : (computeDynamicPlanRate ? computeDynamicPlanRate(dateStr, room, rate) : "");
                     const computed = rawComputed !== "" && rawComputed !== null && !isNaN(parseFloat(rawComputed)) ? Math.round(parseFloat(rawComputed)) : "";
 
+                    const isEvtMappedRate = isEvents && isEventRatePlan(rate);
+                    const hasNonEmpty = v => v !== undefined && v !== null && v !== "";
+
                     const rawOtaMin = dayObj.otaOverrides?.[`${rate.ratePlanId}_min`];
                     const rawOtaMinArr = dayObj.otaOverrides?.[`${rate.ratePlanId}_min_arr`];
-                    const hasOtaMin = (rawOtaMin !== undefined && rawOtaMin !== "") || (rawOtaMinArr !== undefined && rawOtaMinArr !== "");
-                    const hasRoomMin = (rData.min !== undefined && rData.min !== "") || (rData.min_arr !== undefined && rData.min_arr !== "");
+                    const hasOtaMin = hasNonEmpty(rawOtaMin) || hasNonEmpty(rawOtaMinArr);
+                    const hasEvtRoomMin = isEvtMappedRate && (hasNonEmpty(rData.evt_min) || hasNonEmpty(rData.evt_min_arr));
+                    const hasEvtDayMin = isEvtMappedRate && (hasNonEmpty(dayObj.evtRestrictions?.min) || hasNonEmpty(dayObj.evtRestrictions?.min_arr));
+                    const hasRoomMin = hasNonEmpty(rData.min) || hasNonEmpty(rData.min_arr);
+
                     const otaMin = hasOtaMin
-                        ? (rawOtaMin !== undefined && rawOtaMin !== "" ? rawOtaMin : `${rawOtaMinArr}▸`)
-                        : (hasRoomMin
-                            ? (rData.min !== undefined && rData.min !== "" ? rData.min : `${rData.min_arr}▸`)
-                            : (gData.min !== undefined && gData.min !== "" ? gData.min : (gData.min_arr ? `${gData.min_arr}▸` : "")));
+                        ? (hasNonEmpty(rawOtaMin) ? rawOtaMin : `${rawOtaMinArr}▸`)
+                        : (hasEvtRoomMin
+                            ? (hasNonEmpty(rData.evt_min) ? rData.evt_min : `${rData.evt_min_arr}▸`)
+                            : (hasEvtDayMin
+                                ? (hasNonEmpty(dayObj.evtRestrictions?.min) ? dayObj.evtRestrictions.min : `${dayObj.evtRestrictions.min_arr}▸`)
+                                : (hasRoomMin
+                                    ? (hasNonEmpty(rData.min) ? rData.min : `${rData.min_arr}▸`)
+                                    : (hasNonEmpty(gData.min) ? gData.min : (hasNonEmpty(gData.min_arr) ? `${gData.min_arr}▸` : "")))));
 
                     const rawOtaMax = dayObj.otaOverrides?.[`${rate.ratePlanId}_max`];
-                    const otaMax = (rawOtaMax !== undefined && rawOtaMax !== "")
+                    const otaMax = hasNonEmpty(rawOtaMax)
                         ? rawOtaMax
-                        : ((rData.max !== undefined && rData.max !== "") ? rData.max : (gData.max || ""));
+                        : (isEvtMappedRate && hasNonEmpty(rData.evt_max)
+                            ? rData.evt_max
+                            : (isEvtMappedRate && hasNonEmpty(dayObj.evtRestrictions?.max)
+                                ? dayObj.evtRestrictions.max
+                                : (hasNonEmpty(rData.max) ? rData.max : (gData.max || ""))));
 
                     const rawOtaStop = dayObj.otaOverrides?.[`${rate.ratePlanId}_stop`];
                     const rawOtaCta = dayObj.otaOverrides?.[`${rate.ratePlanId}_cta`];
                     const rawOtaCtd = dayObj.otaOverrides?.[`${rate.ratePlanId}_ctd`];
                     const otaStop = rawOtaStop !== undefined
                         ? !!rawOtaStop
-                        : ((rData.stop !== undefined || rData.stopSell !== undefined) ? !!(rData.stop || rData.stopSell) : !!(gData.stop || gData.stopSell));
-                    const otaCta = rawOtaCta !== undefined ? !!rawOtaCta : (rData.cta !== undefined ? !!rData.cta : !!gData.cta);
-                    const otaCtd = rawOtaCtd !== undefined ? !!rawOtaCtd : (rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd);
+                        : (isEvtMappedRate && (rData.evt_stop !== undefined || rData.evt_stopSell !== undefined)
+                            ? !!(rData.evt_stop || rData.evt_stopSell)
+                            : (isEvtMappedRate && dayObj.evtRestrictions?.stop !== undefined
+                                ? !!dayObj.evtRestrictions.stop
+                                : ((rData.stop !== undefined || rData.stopSell !== undefined) ? !!(rData.stop || rData.stopSell) : !!(gData.stop || gData.stopSell))));
+                    const otaCta = rawOtaCta !== undefined
+                        ? !!rawOtaCta
+                        : (isEvtMappedRate && rData.evt_cta !== undefined
+                            ? !!rData.evt_cta
+                            : (isEvtMappedRate && dayObj.evtRestrictions?.cta !== undefined
+                                ? !!dayObj.evtRestrictions.cta
+                                : (rData.cta !== undefined ? !!rData.cta : !!gData.cta)));
+                    const otaCtd = rawOtaCtd !== undefined
+                        ? !!rawOtaCtd
+                        : (isEvtMappedRate && rData.evt_ctd !== undefined
+                            ? !!rData.evt_ctd
+                            : (isEvtMappedRate && dayObj.evtRestrictions?.ctd !== undefined
+                                ? !!dayObj.evtRestrictions.ctd
+                                : (rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd)));
                     const otaPillHtml = getUnifiedRestrictionBadgeHtml(otaCta, otaCtd, otaStop);
 
                     trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaStop ? 'rate-cell-stopped' : (otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}', '${rate.ratePlanId}')">

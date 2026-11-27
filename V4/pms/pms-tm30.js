@@ -15,7 +15,7 @@ const $$ = s => document.querySelectorAll(s);
 
 // --- State, Store & Context Resolvers ---
 const getStaffList = () => window.staff || [];
-const getPropId = () => toCanonicalPropId(window.currentPropertyId || 'swims_resort');
+const getPropId = () => toCanonicalPropId(window.currentPropertyId || '');
 const getRoomsHelper = () => window.getRooms || (s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : [])));
 
 // --------------------------------------------------------------------------
@@ -31,7 +31,7 @@ export const globalPassportSync = async () => {
     }
 
     const curProp = getPropId();
-    const displayKey = toDisplayPropKey(curProp) || 'SWIMS';
+    const displayKey = toDisplayPropKey(curProp) || 'PMS';
     const staffList = getStaffList();
     const getRooms = getRoomsHelper();
 
