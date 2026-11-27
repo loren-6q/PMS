@@ -115,8 +115,9 @@ export const ChannexClient = {
 
                 const json = await response.json().catch(() => ({}));
                 if (!response.ok) {
-                    const errMsg = json?.errors?.title || json?.message || response.statusText;
-                    throw new Error(`Channex Error (${response.status}): ${errMsg}`);
+                    const errTitle = json?.errors?.title || json?.message || response.statusText;
+                    const errDetails = json?.errors?.details ? ` — ${JSON.stringify(json.errors.details)}` : '';
+                    throw new Error(`Channex Error (${response.status}): ${errTitle}${errDetails}`);
                 }
                 return json;
             } catch (err) {
@@ -174,18 +175,32 @@ export const ChannexClient = {
             console.warn("[Channex] Could not fetch connected channels:", err);
         }
 
-        // Primary base plans only (scoped strictly to active property)
-        const ratePlans = allPlans.filter(p => {
+        const propPlans = allPlans.filter(p => {
             const attr = p.attributes || {};
             const rel = p.relationships || {};
             const planPropId = attr.property_id || rel.property?.data?.id;
             if (planPropId && planPropId !== propId) return false;
             const hasChannel = !!(rel.channel?.data?.id || attr.channel_id);
-            const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
-            return !hasChannel && !hasParent && !attr.ui_read_only && !attr.is_derived;
+            return !hasChannel && !attr.ui_read_only;
         });
 
-        return { rooms, ratePlans, policies, channels };
+        // Primary base plans only (excludes derived LOS plans so the main matrix stays clean)
+        const ratePlans = propPlans.filter(p => {
+            const attr = p.attributes || {};
+            const rel = p.relationships || {};
+            const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
+            return !hasParent && !attr.is_derived;
+        });
+
+        // Derived plans (e.g. Weekly / Monthly LOS plans) managed separately
+        const derivedRatePlans = propPlans.filter(p => {
+            const attr = p.attributes || {};
+            const rel = p.relationships || {};
+            const hasParent = !!(rel.parent_rate_plan?.data?.id || attr.parent_rate_plan_id);
+            return hasParent || !!attr.is_derived;
+        });
+
+        return { rooms, ratePlans, derivedRatePlans, policies, channels };
     },
 
     async fetchCancellationPolicies(propId, apiKey, isStaging = undefined) {
@@ -204,6 +219,64 @@ export const ChannexClient = {
                 }
             })
         }, apiKey, isStaging);
+    },
+
+    async createRatePlan(propId, ratePlanFields, apiKey, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+        return this.request('/rate_plans', {
+            method: 'POST',
+            body: JSON.stringify({
+                rate_plan: {
+                    property_id: propId,
+                    ...ratePlanFields
+                }
+            })
+        }, apiKey, isStaging);
+    },
+
+    async updateRatePlan(ratePlanId, ratePlanFields, apiKey, isStaging = undefined) {
+        if (!ratePlanId) throw new Error("Rate Plan ID is required.");
+        return this.request(`/rate_plans/${ratePlanId}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                rate_plan: ratePlanFields
+            })
+        }, apiKey, isStaging);
+    },
+
+    async deleteRoomType(roomTypeId, apiKey, isStaging = undefined) {
+        if (!roomTypeId) throw new Error("Room Type ID is required.");
+        return this.request(`/room_types/${roomTypeId}`, {
+            method: 'DELETE'
+        }, apiKey, isStaging);
+    },
+
+    async deleteRatePlan(ratePlanId, apiKey, isStaging = undefined) {
+        if (!ratePlanId) throw new Error("Rate Plan ID is required.");
+        return this.request(`/rate_plans/${ratePlanId}`, {
+            method: 'DELETE'
+        }, apiKey, isStaging);
+    },
+
+    async getEmbeddedChannelMappingUrl(propId, apiKey, redirectPath = '/channels', headless = true, isStaging = undefined) {
+        if (!propId) throw new Error("Property ID is required.");
+        const res = await this.request('/auth/one_time_token', {
+            method: 'POST',
+            body: JSON.stringify({
+                one_time_token: {
+                    property_id: propId
+                }
+            })
+        }, apiKey, isStaging);
+        const token = res?.data?.attributes?.token || res?.data?.token || res?.token;
+        if (!token) throw new Error("Could not obtain Channex one-time session token.");
+        const host = this.getHost(
+            typeof isStaging === 'boolean'
+                ? isStaging
+                : !!(window.channexConfig?.isStaging || window.channexConfig?.env === 'staging')
+        );
+        const modeParam = headless ? '&app_mode=headless' : '';
+        return `https://${host}/auth/exchange?oauth_session_key=${encodeURIComponent(token)}${modeParam}&redirect_to=${encodeURIComponent(redirectPath)}&property_id=${encodeURIComponent(propId)}`;
     },
 
     async createRatePlan(propId, ratePlanFields, apiKey, isStaging = undefined) {
@@ -380,9 +453,11 @@ export function getNetAvailabilityForDate(pmsCat, dStr, peakCap) {
             // Step 2: Count unassigned bookings belonging to this category
             const bType = String(s.bookedType || s.category || '').toUpperCase().trim();
             if (bType === pmsCatUpper || bType.includes(pmsCatUpper) || pmsCatUpper.includes(bType)) {
-                unassignedCount += isDorm
-                    ? (parseInt(s.pax || s.unitCount || 1, 10) || 1)
-                    : (parseInt(s.unitCount || 1, 10) || 1);
+                const perBedCap = (isDorm && /\b(double|queen|king|couple|2\s*pax)\b/i.test(`${pmsCatUpper} ${bType}`)) ? 2 : 1;
+                const slotUnits = (Array.isArray(s.rooms) && s.rooms.length > 1) ? s.rooms.length : (parseInt(s.unitCount, 10) || 0);
+                unassignedCount += slotUnits > 0
+                    ? slotUnits
+                    : (isDorm ? Math.max(1, Math.ceil((parseInt(s.pax, 10) || 1) / perBedCap)) : 1);
             }
         }
     }

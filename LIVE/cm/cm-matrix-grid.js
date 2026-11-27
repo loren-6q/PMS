@@ -10,14 +10,31 @@ import { CHANNELS, resolveChannelCode, isEventRatePlan } from '../core/channels.
 import { getClassifiedRooms } from '../core/properties.js';
 import { rippleDay, applyMath, computeDynamicPlanRate, getNearestEvent } from './cm-ripple.js';
 
-const ALL_RATE_KEYS = ['def', 'direct', 'event', 'los', 'ota', 'other'];
+const SOURCE_RATE_KEYS = ['def', 'direct', 'ota', 'ghost'];
+const TIER_RATE_KEYS = ['std', 'event'];
+const ALL_RATE_KEYS = [...SOURCE_RATE_KEYS, ...TIER_RATE_KEYS];
 const ALL_VIEW_KEYS = ['avail', 'price', 'minmax', 'restrictions'];
 
 const _prefs = JSON.parse(localStorage.getItem('cm_ui_prefs_v2') || '{}');
 export let roomLevel = _prefs.roomLevel || 'all';
 export let highlightGaps = _prefs.highlightGaps !== undefined ? _prefs.highlightGaps : false;
 export let channelPreviewFilter = _prefs.channelPreviewFilter || 'ALL';
-export const rateFilters = new Set(Array.isArray(_prefs.rateFilters) && _prefs.rateFilters.length ? _prefs.rateFilters : ['def']);
+
+function normalizeSavedRateFilters(rawList) {
+    const valid = new Set(ALL_RATE_KEYS);
+    const out = new Set();
+    if (Array.isArray(rawList) && rawList.length) {
+        rawList.forEach(k => {
+            if (k === 'other') out.add('ota');
+            else if (valid.has(k)) out.add(k);
+        });
+    }
+    if (!SOURCE_RATE_KEYS.some(k => out.has(k))) out.add('def');
+    if (!TIER_RATE_KEYS.some(k => out.has(k))) out.add('std');
+    return out;
+}
+
+export const rateFilters = normalizeSavedRateFilters(_prefs.rateFilters);
 export const viewFields = new Set(Array.isArray(_prefs.viewFields) && _prefs.viewFields.length ? _prefs.viewFields : ALL_VIEW_KEYS);
 export const expandedRooms = new Set(JSON.parse(localStorage.getItem('cm_ui_expanded') || '[]'));
 export const daysToRender = 42;
@@ -32,18 +49,29 @@ function saveGridPrefs() {
     }));
 }
 
-function classifyRatePlanBucket(r) {
-    const title = r.ratePlanTitle || '';
-    const chanCode = resolveChannelCode(r.channel || title);
-    if (isEventRatePlan(r)) return 'event';
-
-    const isLos = /\b(weekly|monthly|los|length[-_\s]?of[-_\s]?stay|\d+\s*nights?|\d+n)\b/i.test(title);
-    if (isLos) return 'los';
-
+function classifyRatePlanSource(r, ghostRoomLookup = null) {
+    if (r?.isGhost || (ghostRoomLookup && ghostRoomLookup.has(r?.channexRoomId))) return 'ghost';
+    const chanCode = resolveChannelCode(r?.channel || r?.ratePlanTitle);
     if (chanCode === 'DEF') return 'def';
     if (chanCode === 'WEB') return 'direct';
-    if (CHANNELS[chanCode]) return 'ota';
-    return 'other';
+    return 'ota';
+}
+
+function isRefundableRatePlan(r) {
+    const pol = String(r?.policy || r?.rateType || '').toLowerCase();
+    if (pol === 'ref' || pol === 'event-ref') return true;
+    if (pol === 'non-ref' || pol === 'event' || pol === 'event-non-ref') return false;
+    const title = String(r?.ratePlanTitle || '');
+    return /\bref(undable)?\b/i.test(title) && !/\bnon[-\s]?ref(undable)?\b/i.test(title);
+}
+
+function formatCmRateDisplayTitle(rawTitle) {
+    return String(rawTitle || '')
+        .replace(/\bnon[-\s]?refundable\b/gi, 'Non-Ref')
+        .replace(/\brefundable\b/gi, 'Ref')
+        .replace(/\s+rooms?$/i, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
 }
 
 function syncRateFilterDropdownUI() {
@@ -55,14 +83,18 @@ function syncRateFilterDropdownUI() {
         });
     }
     if (labelEl) {
-        const names = { def: 'DEF', direct: 'Direct', event: 'Event', los: 'LOS', ota: 'OTA', other: 'Other' };
-        if (rateFilters.size === ALL_RATE_KEYS.length) {
+        const srcNames = { def: 'DEF', direct: 'DIR', ota: 'OTA', ghost: 'GHOST' };
+        const activeSources = SOURCE_RATE_KEYS.filter(k => rateFilters.has(k));
+        const hasStd = rateFilters.has('std');
+        const hasEvt = rateFilters.has('event');
+
+        if (activeSources.length === SOURCE_RATE_KEYS.length && hasStd && hasEvt) {
             labelEl.innerText = 'All Rates';
-        } else if (rateFilters.size === 1) {
-            const only = Array.from(rateFilters)[0];
-            labelEl.innerText = names[only] || only.toUpperCase();
         } else {
-            labelEl.innerText = Array.from(rateFilters).map(k => names[k] || k).join(' + ');
+            const parts = activeSources.map(k => srcNames[k] || k.toUpperCase());
+            if (hasEvt && hasStd) parts.push('EVT');
+            else if (hasEvt && !hasStd) parts.push('EVT ONLY');
+            labelEl.innerText = parts.join(' + ') || 'DEF';
         }
     }
 }
@@ -112,10 +144,15 @@ export function toggleGridViewDropdown(e) {
 }
 
 export function toggleGridRateFilter(key, checked) {
+    if (!ALL_RATE_KEYS.includes(key)) return;
     if (checked) {
         rateFilters.add(key);
-    } else if (rateFilters.size > 1) {
-        rateFilters.delete(key);
+    } else {
+        const group = SOURCE_RATE_KEYS.includes(key) ? SOURCE_RATE_KEYS : TIER_RATE_KEYS;
+        const activeInGroup = group.filter(k => rateFilters.has(k));
+        if (activeInGroup.length > 1) {
+            rateFilters.delete(key);
+        }
     }
     window.showEventRows = rateFilters.has('event');
     saveGridPrefs();
@@ -129,6 +166,7 @@ export function setAllGridRateFilters(selectAll) {
         ALL_RATE_KEYS.forEach(k => rateFilters.add(k));
     } else {
         rateFilters.add('def');
+        rateFilters.add('std');
     }
     window.showEventRows = rateFilters.has('event');
     saveGridPrefs();
@@ -175,6 +213,12 @@ if (typeof document !== 'undefined') {
 
 export function initGridUI() {
     window.roomLevel = roomLevel;
+    const hasSavedRateFilters = Array.isArray(_prefs.rateFilters) && _prefs.rateFilters.length > 0;
+    const isEventsEnabled = typeof window.isEventPricingEnabled === 'function' ? window.isEventPricingEnabled() : !!window.enableEventRates;
+    if (!hasSavedRateFilters && isEventsEnabled && !rateFilters.has('event')) {
+        rateFilters.add('event');
+        saveGridPrefs();
+    }
     window.showEventRows = rateFilters.has('event');
     window.channelPreviewFilter = channelPreviewFilter;
 
@@ -303,7 +347,11 @@ export function calculateLiveInventory() {
                         if (fallbackCat) {
                             const matchedRt = roomTypes.find(rt => rt.toLowerCase() === String(fallbackCat).toLowerCase());
                             if (matchedRt) {
-                                const unitDed = matchedRt.toLowerCase().includes('dorm') ? Math.max(unassignedCount, parseInt(s.pax || 1, 10)) : unassignedCount;
+                                const isDoubleDorm = /\b(double|queen|king|couple|2\s*pax)\b/i.test(`${matchedRt} ${fallbackCat}`);
+                                const perBedCap = isDoubleDorm ? 2 : 1;
+                                const unitDed = matchedRt.toLowerCase().includes('dorm')
+                                    ? Math.max(unassignedCount, Math.ceil((parseInt(s.pax || 1, 10) || 1) / perBedCap))
+                                    : unassignedCount;
                                 occupied[matchedRt] = (occupied[matchedRt] || 0) + unitDed;
                             }
                         }
@@ -799,6 +847,8 @@ export function renderRateMatrix() {
     const showTop = viewFields.has('minmax');
     const showBottom = viewFields.has('restrictions');
     const showAnyRateLayer = showPrice || showTop || showBottom;
+    const bandCount = (showTop ? 1 : 0) + (showPrice ? 1 : 0) + (showBottom ? 1 : 0);
+    const isSingleBandRow = bandCount <= 1;
 
     // 1. Header Row
     let trHead = `<tr class="sticky-header">
@@ -875,28 +925,56 @@ export function renderRateMatrix() {
         const isRoomManuallyExpanded = expandedRooms.has(room);
         const activeBuckets = isRoomManuallyExpanded ? new Set(ALL_RATE_KEYS) : rateFilters;
 
-        const showMasterDef = activeBuckets.has('def');
-        const showMasterDirect = activeBuckets.has('direct');
-        const showMasterEvent = isEvents && activeBuckets.has('event');
+        const showMasterDef = activeBuckets.has('def') && activeBuckets.has('std');
+        const showMasterDirect = activeBuckets.has('direct') && activeBuckets.has('std');
+        const showMasterEvent = isEvents && activeBuckets.has('def') && activeBuckets.has('event');
+
+        const ghostRoomLookup = new Map(
+            (window.channexMap || [])
+                .filter(m => m && m.isGhost && m.channexId)
+                .map(m => [m.channexId, m])
+        );
 
         let mappedRates = allMappedRates.filter(r => {
             const chanCode = resolveChannelCode(r.channel || r.ratePlanTitle);
-            const bucket = classifyRatePlanBucket(r);
-            const isRefPlan = (r.policy === 'ref' || r.policy === 'event-ref') || (/ref|refundable/i.test(r.ratePlanTitle || '') && !/non-?ref/i.test(r.ratePlanTitle || ''));
+            const srcBucket = classifyRatePlanSource(r, ghostRoomLookup);
+            const isEvt = isEventRatePlan(r);
+            const isRefPlan = isRefundableRatePlan(r);
 
-            if (bucket === 'event' && !isEvents) return false;
-            if (chanCode === 'DEF' && bucket === 'def' && !isRefPlan) return false;
+            if (isEvt && !isEvents) return false;
+            if (srcBucket === 'def' && !isEvt && !isRefPlan) return false;
             if (activePreviewFilter !== 'ALL' && chanCode !== activePreviewFilter) return false;
-            return activeBuckets.has(bucket);
+
+            const matchesTier = isEvt ? activeBuckets.has('event') : activeBuckets.has('std');
+            return activeBuckets.has(srcBucket) && matchesTier;
         });
 
         const hasHiddenPlans = allMappedRates.some(r => {
-            const bucket = classifyRatePlanBucket(r);
-            if (bucket === 'event' && !isEvents) return false;
-            return !rateFilters.has(bucket);
-        }) || (!rateFilters.has('direct')) || (isEvents && !rateFilters.has('event'));
+            const srcBucket = classifyRatePlanSource(r, ghostRoomLookup);
+            const isEvt = isEventRatePlan(r);
+            if (isEvt && !isEvents) return false;
+            const matchesTier = isEvt ? rateFilters.has('event') : rateFilters.has('std');
+            return !(rateFilters.has(srcBucket) && matchesTier);
+        }) || !rateFilters.has('direct') || (isEvents && (!rateFilters.has('def') || !rateFilters.has('event')));
 
         const safeRoom = room.replace(/'/g, "\\'");
+        const sourceRank = { def: 0, direct: 1, ota: 2, ghost: 3 };
+        mappedRates.sort((a, b) => {
+            const srcA = classifyRatePlanSource(a, ghostRoomLookup);
+            const srcB = classifyRatePlanSource(b, ghostRoomLookup);
+            if (sourceRank[srcA] !== sourceRank[srcB]) return sourceRank[srcA] - sourceRank[srcB];
+            const chanA = resolveChannelCode(a.channel || a.ratePlanTitle);
+            const chanB = resolveChannelCode(b.channel || b.ratePlanTitle);
+            if (chanA !== chanB) return chanA.localeCompare(chanB);
+            const evtA = isEventRatePlan(a) ? 1 : 0;
+            const evtB = isEventRatePlan(b) ? 1 : 0;
+            if (evtA !== evtB) return evtA - evtB;
+            const refA = isRefundableRatePlan(a) ? 1 : 0;
+            const refB = isRefundableRatePlan(b) ? 1 : 0;
+            if (refA !== refB) return refA - refB;
+            return String(a.ratePlanTitle || '').localeCompare(String(b.ratePlanTitle || ''));
+        });
+
         const expandBtnHtml = (hasHiddenPlans && showAnyRateLayer)
             ? `<button type="button" onclick="window.toggleRoomExpand('${safeRoom}')" class="text-slate-500 hover:text-indigo-700 bg-slate-100 hover:bg-indigo-50 border border-slate-300 rounded px-1 py-0.2 cursor-pointer flex items-center gap-0.5 text-[9px] font-black uppercase" title="Expand/Collapse all rate layers for this room">
                     <i data-lucide="${isRoomManuallyExpanded ? 'chevron-down' : 'chevron-right'}" size="11"></i>
@@ -945,10 +1023,10 @@ export function renderRateMatrix() {
         // Master DEF Non-Ref Row
         if (showMasterDef) {
             let trRate = `<tr class="${groupClass} border-b border-slate-300">
-                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
-                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                        <span class="text-[10px] font-black text-slate-700 truncate">DEF Non-Ref</span>
-                        <span class="text-[7px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200 shrink-0">DEF</span>
+                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 border-l-[3px] border-l-slate-500 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100'}">
+                    <div class="w-[140px] ${isSingleBandRow ? 'h-[22px]' : 'py-1'} flex items-center justify-between gap-1 px-1.5 text-left">
+                        <span class="text-[10px] font-black text-slate-800 truncate">DEF Non-Ref</span>
+                        <span class="text-[7px] font-black uppercase text-slate-700 bg-slate-200/80 px-1 py-0.5 rounded border border-slate-300 shrink-0">DEF</span>
                     </div>
                 </td>`;
 
@@ -1027,11 +1105,11 @@ export function renderRateMatrix() {
 
         // Master DEF Event Non-Ref Row
         if (showMasterEvent) {
-            let trEvt = `<tr class="${groupClass} border-b-2 border-slate-400 bg-pink-50/40">
-                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 !bg-pink-50">
-                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
-                        <span class="text-[10px] font-black text-pink-800 truncate">DEF Event Non-Ref</span>
-                        <span class="text-[7px] font-black uppercase text-pink-700 bg-pink-100 px-1 py-0.5 rounded border border-pink-300 shrink-0">DEF EVT</span>
+            let trEvt = `<tr class="${groupClass} border-b-2 border-pink-300 bg-pink-50/40">
+                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 border-l-[3px] border-l-pink-500 !bg-pink-50">
+                    <div class="w-[140px] ${isSingleBandRow ? 'h-[22px]' : 'py-1'} flex items-center justify-between gap-1 px-1.5 text-left" title="DEF Event Non-Ref">
+                        <span class="text-[10px] font-black text-pink-900 ${isSingleBandRow ? 'truncate min-w-0' : 'leading-[1.15] whitespace-normal break-words'}">DEF Event Non-Ref</span>
+                        <span class="text-[7px] font-black uppercase text-white bg-pink-600 px-1 py-0.2 rounded shrink-0">EVT</span>
                     </div>
                 </td>`;
 
@@ -1058,11 +1136,11 @@ export function renderRateMatrix() {
                 const isSyncedEvt = isCellJustSynced(dateStr, room);
                 const isBrokenRippleEvt = isLinkedTargetRoom && isPinnedFmp;
 
-                let evtStateBgClass = '';
+                let evtStateBgClass = '!bg-pink-50/40';
                 if (evtStopped) evtStateBgClass = 'rate-cell-stopped';
                 else if (isDirtyEvt) evtStateBgClass = '!bg-amber-100 ring-1 ring-inset ring-amber-400';
                 else if (isSyncedEvt) evtStateBgClass = '!bg-emerald-50 ring-1 ring-inset ring-emerald-300';
-                else if (isPinnedFmp) evtStateBgClass = 'rate-cell-pinned';
+                else if (isPinnedFmp) evtStateBgClass = 'rate-cell-pinned !bg-amber-50';
 
                 const evtPinCornerHtml = isBrokenRippleEvt
                     ? `<span class="pointer-events-none absolute top-0 right-0 w-0 h-0 border-t-[7px] border-l-[7px] border-t-orange-500 border-l-transparent z-10" title="Pinned Event Override (breaks ripple — double-click to re-link)"></span>`
@@ -1096,8 +1174,8 @@ export function renderRateMatrix() {
         // Master Direct Rate Row
         if (showMasterDirect) {
             let trDir = `<tr class="bg-emerald-50/50 border-b border-emerald-200">
-                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 !bg-emerald-50">
-                    <div class="w-[140px] flex items-center justify-between px-1.5 h-full text-left">
+                <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 border-l-[3px] border-l-emerald-500 !bg-emerald-50">
+                    <div class="w-[140px] ${isSingleBandRow ? 'h-[22px]' : 'py-1'} flex items-center justify-between px-1.5 text-left">
                         <span class="text-[10px] font-black text-emerald-900 truncate">Direct Rate</span>
                         <span class="text-[7px] font-black uppercase text-white bg-emerald-600 px-1 py-0.5 rounded shrink-0">DIR</span>
                     </div>
@@ -1158,20 +1236,80 @@ export function renderRateMatrix() {
             allRowsHtml += trDir;
         }
 
-        // Mapped Channel / LOS / Event / Other Rate Plans
+        // Mapped Channel / Event / Ref / Ghost Rate Plans
         if (mappedRates.length > 0) {
             mappedRates.forEach(rate => {
                 const chanCode = resolveChannelCode(rate.channel || rate.ratePlanTitle);
                 const badgeHtml = getCanonicalChannelBadgeHtml(chanCode);
+                const ghostRoomMeta = ghostRoomLookup.get(rate.channexRoomId);
+                const isGhostRate = !!rate.isGhost || !!ghostRoomMeta;
+                const isEvtMappedRate = isEvents && isEventRatePlan(rate);
+                const isRefMappedRate = isRefundableRatePlan(rate);
+                const ghostTitle = ghostRoomMeta?.channexTitle || 'Ghost Room';
+                const displayRateTitle = formatCmRateDisplayTitle(rate.ratePlanTitle);
 
-                let trOta = `<tr class="bg-indigo-50/40 border-b border-indigo-100">
-                    <td class="frozen-col !p-0 z-20 border-r-2 border-slate-400 !bg-[#eef2ff]">
-                        <div class="w-[140px] flex items-center justify-between gap-1 px-1.5 h-full text-left truncate" title="${rate.ratePlanTitle}">
-                            <div class="flex items-center gap-1 min-w-0">
-                                ${badgeHtml}
-                                <span class="text-[9px] font-black text-indigo-950 truncate">${rate.ratePlanTitle}</span>
-                            </div>
-                        </div>
+                const ghostBadgeHtml = isGhostRate
+                    ? `<span class="px-1 py-0.2 rounded bg-violet-600 text-white text-[7px] font-black uppercase shrink-0">GHOST</span>`
+                    : '';
+                const evtBadgeHtml = isEvtMappedRate
+                    ? `<span class="px-1 py-0.2 rounded bg-pink-600 text-white text-[7px] font-black uppercase shrink-0">EVT</span>`
+                    : '';
+                const policyBadgeHtml = isRefMappedRate
+                    ? `<span class="px-1 py-0.2 rounded bg-sky-100 text-sky-800 border border-sky-300 text-[7px] font-black uppercase shrink-0">REF</span>`
+                    : '';
+
+                let rowBorderCls = 'border-b border-slate-200';
+                let frozenBgCls = '!bg-slate-50 border-l-[3px] border-l-indigo-400';
+                let labelTextCls = 'text-slate-800';
+                let defaultCellTintCls = '!bg-indigo-50/15';
+                let cellBorderCls = 'border-indigo-100';
+
+                if (isGhostRate) {
+                    rowBorderCls = 'border-b border-violet-200 border-dashed';
+                    frozenBgCls = '!bg-violet-50 border-l-[3px] border-l-violet-500';
+                    labelTextCls = 'text-violet-950';
+                    defaultCellTintCls = '!bg-violet-50/30';
+                    cellBorderCls = 'border-violet-200';
+                } else if (isEvtMappedRate && isRefMappedRate) {
+                    rowBorderCls = 'border-b border-fuchsia-200';
+                    frozenBgCls = '!bg-fuchsia-50 border-l-[3px] border-l-fuchsia-500';
+                    labelTextCls = 'text-fuchsia-950';
+                    defaultCellTintCls = '!bg-fuchsia-50/35';
+                    cellBorderCls = 'border-fuchsia-200';
+                } else if (isEvtMappedRate) {
+                    rowBorderCls = 'border-b border-pink-200';
+                    frozenBgCls = '!bg-pink-50 border-l-[3px] border-l-pink-500';
+                    labelTextCls = 'text-pink-950';
+                    defaultCellTintCls = '!bg-pink-50/35';
+                    cellBorderCls = 'border-pink-200';
+                } else if (isRefMappedRate) {
+                    rowBorderCls = 'border-b border-sky-200';
+                    frozenBgCls = '!bg-sky-50 border-l-[3px] border-l-sky-500';
+                    labelTextCls = 'text-sky-950';
+                    defaultCellTintCls = '!bg-sky-50/35';
+                    cellBorderCls = 'border-sky-200';
+                } else if (chanCode === 'WEB') {
+                    rowBorderCls = 'border-b border-emerald-200';
+                    frozenBgCls = '!bg-emerald-50 border-l-[3px] border-l-emerald-500';
+                    labelTextCls = 'text-emerald-950';
+                    defaultCellTintCls = '!bg-emerald-50/30';
+                    cellBorderCls = 'border-emerald-200';
+                }
+
+                const rowTitleAttr = (isGhostRate ? `[GHOST: ${ghostTitle}] ${rate.ratePlanTitle || ''}` : (rate.ratePlanTitle || '')).replace(/"/g, '&quot;');
+                const frozenInnerHtml = isSingleBandRow
+                    ? `<div class="w-[140px] h-[22px] flex items-center gap-1 px-1.5 text-left overflow-hidden" title="${rowTitleAttr}">
+                            <div class="flex items-center gap-0.5 shrink-0">${badgeHtml}${ghostBadgeHtml}${evtBadgeHtml}${policyBadgeHtml}</div>
+                            <span class="text-[9px] font-black leading-none truncate min-w-0 ${labelTextCls}">${displayRateTitle}</span>
+                       </div>`
+                    : `<div class="w-[140px] flex flex-col justify-center gap-0.5 px-1.5 py-1 text-left" title="${rowTitleAttr}">
+                            <div class="flex flex-wrap items-center gap-1">${badgeHtml}${ghostBadgeHtml}${evtBadgeHtml}${policyBadgeHtml}</div>
+                            <div class="text-[9px] font-black leading-[1.15] whitespace-normal break-words ${labelTextCls}">${displayRateTitle}</div>
+                       </div>`;
+
+                let trOta = `<tr class="${rowBorderCls}">
+                    <td class="frozen-col !p-0 z-20 align-middle border-r-2 border-slate-400 ${frozenBgCls}">
+                        ${frozenInnerHtml}
                     </td>`;
 
                 for (let i = 0; i < daysToRender; i++) {
@@ -1185,7 +1323,6 @@ export function renderRateMatrix() {
                     const rawComputed = otaOverride !== undefined ? otaOverride : (computeDynamicPlanRate ? computeDynamicPlanRate(dateStr, room, rate) : "");
                     const computed = rawComputed !== "" && rawComputed !== null && !isNaN(parseFloat(rawComputed)) ? Math.round(parseFloat(rawComputed)) : "";
 
-                    const isEvtMappedRate = isEvents && isEventRatePlan(rate);
                     const hasNonEmpty = v => v !== undefined && v !== null && v !== "";
 
                     const rawOtaMin = dayObj.otaOverrides?.[`${rate.ratePlanId}_min`];
@@ -1240,18 +1377,22 @@ export function renderRateMatrix() {
                                 : (rData.ctd !== undefined ? !!rData.ctd : !!gData.ctd)));
                     const otaPillHtml = getUnifiedRestrictionBadgeHtml(otaCta, otaCtd, otaStop);
 
-                    trOta += `<td class="p-0 border-r border-indigo-100 text-center relative ${otaStop ? 'rate-cell-stopped' : (otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : '')}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}', '${rate.ratePlanId}')">
+                    const cellStateCls = otaStop
+                        ? 'rate-cell-stopped'
+                        : (otaOverride !== undefined ? 'rate-cell-pinned !bg-amber-100' : defaultCellTintCls);
+
+                    trOta += `<td class="p-0 border-r ${cellBorderCls} text-center relative ${cellStateCls}" style="width: 42px; min-width: 42px; max-width: 42px;" ondblclick="window.unlockCellOverride('${dateStr}', '${safeRoom}', '${rate.ratePlanId}')">
                         ${showTop ? `
-                        <div class="flex items-center w-full h-[15px] ${showPrice || showBottom ? 'border-b' : ''} ${otaStop ? 'border-rose-700 bg-transparent' : 'border-indigo-100 bg-white/60'} overflow-hidden leading-none">
+                        <div class="flex items-center w-full h-[15px] ${showPrice || showBottom ? 'border-b' : ''} ${otaStop ? 'border-rose-700 bg-transparent' : `${cellBorderCls} bg-white/60`} overflow-hidden leading-none">
                             <input type="text" class="cell-min-input w-1/2 text-center bg-transparent border-none font-bold text-indigo-700 outline-none p-0" value="${otaMin}" placeholder="Min" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'min', this.value)">
-                            <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-indigo-400 outline-none p-0 border-l ${otaStop ? 'border-rose-700' : 'border-indigo-100'}" value="${otaMax}" placeholder="Max" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'max', this.value)">
+                            <input type="text" class="cell-max-input w-1/2 text-center bg-transparent border-none text-indigo-400 outline-none p-0 border-l ${otaStop ? 'border-rose-700' : cellBorderCls}" value="${otaMax}" placeholder="Max" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'max', this.value)">
                         </div>` : ''}
                         ${showPrice ? `
                         <div class="${(!showTop && !showBottom) ? 'h-[22px]' : 'h-[18px]'} flex items-center justify-center">
-                            <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined && !otaStop ? '!text-pink-600 font-black' : 'text-indigo-900'} px-0" value="${computed}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'rate', this.value)">
+                            <input type="number" class="cell-price-text w-full text-center outline-none bg-transparent font-bold text-[10px] ${otaOverride !== undefined && !otaStop ? '!text-pink-600 font-black' : labelTextCls} px-0" value="${computed}" onfocus="this.select()" onchange="window.handleOtaEdit('${dateStr}', '${rate.ratePlanId}', '${safeRoom}', '=', 0, 'rate', this.value)">
                         </div>` : ''}
                         ${showBottom ? `
-                        <div class="flex items-center justify-center px-0.5 text-[7px] leading-none ${(!showTop && !showPrice) ? 'h-[20px]' : 'h-[13px] border-t'} ${otaStop ? 'border-rose-700' : 'border-indigo-100/70'}">
+                        <div class="flex items-center justify-center px-0.5 text-[7px] leading-none ${(!showTop && !showPrice) ? 'h-[20px]' : 'h-[13px] border-t'} ${otaStop ? 'border-rose-700' : cellBorderCls}">
                             <button type="button" onclick="event.stopPropagation(); window.cycleUnifiedRestriction('${dateStr}', '${safeRoom}', '${rate.ratePlanId}')" class="cursor-pointer w-full h-full flex items-center justify-center">
                                 ${otaPillHtml}
                             </button>

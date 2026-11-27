@@ -1160,6 +1160,13 @@ export function applyCurveTuner() {
 
     window.enableEventRates = true;
     window.showEventRows = true;
+    if (window.currentPropertyConfig) window.currentPropertyConfig.enableEventRates = true;
+    if (typeof window.updateEventPricingToggleUI === 'function') window.updateEventPricingToggleUI();
+    if (window.currentPropertyId) {
+        updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', window.currentPropertyId), {
+            enableEventRates: true
+        }).catch(err => console.warn("[Curve Tuner] Could not persist enableEventRates:", err));
+    }
 
     const peakMs = parseYMD(evtStr);
     const getVal = id => parseFloat(document.getElementById(id)?.value) || 0;

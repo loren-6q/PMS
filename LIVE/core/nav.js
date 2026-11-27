@@ -75,23 +75,103 @@ function isAdminUnlocked() {
     }
 }
 
-// --- Toggle Admin Menu or Prompt for Password ---
+// --- Self-Mounted In-Page Admin Password Modal (Safe inside sandboxed iframes) ---
+function closeAdminLoginModal() {
+    const modal = document.getElementById('ww-admin-login-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
+}
+
+function openAdminLoginModal(activeCfg) {
+    let modal = document.getElementById('ww-admin-login-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ww-admin-login-modal';
+        modal.className = 'hidden fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4';
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl max-w-xs w-full overflow-hidden border border-slate-300 text-xs">
+                <div class="bg-slate-900 text-white px-3.5 py-2.5 font-black uppercase flex justify-between items-center">
+                    <span class="flex items-center gap-1.5 tracking-wide"><i data-lucide="shield" class="!w-3.5 !h-3.5 text-indigo-400"></i> Admin Access</span>
+                    <button type="button" id="ww-admin-close-btn" class="text-slate-400 hover:text-white text-base leading-none cursor-pointer">&times;</button>
+                </div>
+                <form id="ww-admin-login-form" class="p-4 space-y-3">
+                    <div>
+                        <label for="ww-admin-pass-input" class="block text-[10px] font-black uppercase text-slate-500 mb-1">Admin Password</label>
+                        <input id="ww-admin-pass-input" type="password" autocomplete="current-password" placeholder="Enter password" class="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" required />
+                        <p id="ww-admin-pass-hint" class="hidden mt-1 text-[10px] font-semibold text-slate-400">Default password: admin123</p>
+                        <p id="ww-admin-login-error" class="hidden mt-1.5 text-[11px] font-bold text-rose-600">Incorrect password. Please try again.</p>
+                    </div>
+                    <div class="pt-2 border-t border-slate-100 flex justify-end gap-2">
+                        <button type="button" id="ww-admin-cancel-btn" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold uppercase rounded cursor-pointer text-[10px]">Cancel</button>
+                        <button type="submit" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase rounded shadow-xs cursor-pointer text-[10px]">Unlock</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeAdminLoginModal();
+            e.stopPropagation();
+        });
+        document.getElementById('ww-admin-close-btn')?.addEventListener('click', closeAdminLoginModal);
+        document.getElementById('ww-admin-cancel-btn')?.addEventListener('click', closeAdminLoginModal);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                closeAdminLoginModal();
+            }
+        });
+    }
+
+    const hintEl = document.getElementById('ww-admin-pass-hint');
+    const errEl = document.getElementById('ww-admin-login-error');
+    const inputEl = document.getElementById('ww-admin-pass-input');
+    const formEl = document.getElementById('ww-admin-login-form');
+
+    if (hintEl) hintEl.classList.toggle('hidden', Boolean(activeCfg?.adminPassword));
+    if (errEl) errEl.classList.add('hidden');
+    if (inputEl) inputEl.value = '';
+
+    if (formEl) {
+        formEl.onsubmit = (e) => {
+            e.preventDefault();
+            const props = window.availableProperties || [];
+            const curProp = getActivePropertyId();
+            const latestCfg = window.currentPropertyConfig || props.find(p => p.id.toLowerCase() === curProp.toLowerCase()) || activeCfg || {};
+            const validPass = latestCfg.adminPassword || 'admin123';
+            const entered = inputEl ? inputEl.value : '';
+
+            if (entered === validPass) {
+                try { localStorage.setItem('ww_admin_unlocked', 'true'); } catch (err) {}
+                closeAdminLoginModal();
+                renderAdminMenu();
+                const menu = document.getElementById('admin-dropdown-menu');
+                if (menu) menu.classList.remove('hidden');
+            } else {
+                if (errEl) errEl.classList.remove('hidden');
+                if (inputEl) {
+                    inputEl.focus();
+                    inputEl.select();
+                }
+            }
+        };
+    }
+
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
+    setTimeout(() => inputEl?.focus(), 10);
+}
+
+// --- Toggle Admin Menu or Open Unlock Modal ---
 export function toggleAdminMenu() {
     if (!isAdminUnlocked()) {
         const props = window.availableProperties || [];
         const curProp = getActivePropertyId();
         const activeCfg = window.currentPropertyConfig || props.find(p => p.id.toLowerCase() === curProp.toLowerCase()) || {};
-        const validPass = activeCfg.adminPassword || 'admin123';
-
-        const pass = prompt(`Enter Admin Password${activeCfg.adminPassword ? '' : ' (default: admin123)'}:`);
-        if (pass === validPass) {
-            try { localStorage.setItem('ww_admin_unlocked', 'true'); } catch (e) {}
-            renderAdminMenu();
-            const menu = document.getElementById('admin-dropdown-menu');
-            if (menu) menu.classList.remove('hidden');
-        } else if (pass !== null) {
-            alert("Incorrect password.");
-        }
+        openAdminLoginModal(activeCfg);
         return;
     }
     const menu = document.getElementById('admin-dropdown-menu');
@@ -168,16 +248,18 @@ function renderAdminMenu() {
     if (!container) return;
     const curProp = getActivePropertyId();
 
-    if (isAdminUnlocked()) {
+   if (isAdminUnlocked()) {
+        const tipsOn = typeof window.isTrainingTipsEnabled === 'function' ? window.isTrainingTipsEnabled() : (localStorage.getItem('ww_training_tips') !== 'false');
         container.innerHTML = `
             <button type="button" onclick="window.toggleAdminMenu()" class="px-2 py-1 rounded text-[11px] font-black uppercase flex items-center gap-1 transition-colors bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs cursor-pointer">
                 <i data-lucide="shield-check" class="!w-3 !h-3"></i> Admin ▾
             </button>
-            <div id="admin-dropdown-menu" class="absolute right-0 top-full mt-1.5 w-44 bg-white border-2 border-slate-800 rounded-lg shadow-xl z-[150] hidden overflow-hidden flex flex-col">
+            <div id="admin-dropdown-menu" class="absolute right-0 top-full mt-1.5 w-48 bg-white border-2 border-slate-800 rounded-lg shadow-xl z-[150] hidden overflow-hidden flex flex-col">
                 <a href="cm.html?p=${curProp}" class="px-3 py-2 text-xs font-black uppercase text-slate-700 hover:bg-slate-100 border-b border-slate-100 flex items-center gap-2"><i data-lucide="calendar" class="!w-3.5 !h-3.5 text-indigo-600"></i> Chan. Mgr</a>
                 <a href="accounting.html?p=${curProp}" class="px-3 py-2 text-xs font-black uppercase text-slate-700 hover:bg-slate-100 border-b border-slate-100 flex items-center gap-2"><i data-lucide="bar-chart-3" class="!w-3.5 !h-3.5 text-emerald-600"></i> Accounting</a>
                 <a href="setup.html?p=${curProp}" class="px-3 py-2 text-xs font-black uppercase text-slate-700 hover:bg-slate-100 border-b border-slate-100 flex items-center gap-2"><i data-lucide="settings" class="!w-3.5 !h-3.5 text-slate-600"></i> Setup</a>
                 <button type="button" onclick="window.openSplitScreen('cm', 'pms')" class="px-3 py-2 text-xs font-black uppercase text-indigo-700 hover:bg-indigo-50 border-b border-slate-100 text-left flex items-center gap-2 cursor-pointer"><i data-lucide="columns-2" class="!w-3.5 !h-3.5"></i> Split Screen</button>
+                <button type="button" onclick="window.setTrainingTipsEnabled?.(${!tipsOn}); this.querySelector('span').innerText = 'Tips: ${!tipsOn ? 'ON' : 'OFF'}';" class="px-3 py-2 text-xs font-black uppercase text-amber-800 hover:bg-amber-50 border-b border-slate-100 text-left flex items-center gap-2 cursor-pointer"><i data-lucide="help-circle" class="!w-3.5 !h-3.5 text-amber-600"></i> <span>Tips: ${tipsOn ? 'ON' : 'OFF'}</span></button>
                 <button type="button" onclick="window.lockAdmin()" class="px-3 py-2 text-xs font-black uppercase text-rose-600 hover:bg-rose-50 text-left flex items-center gap-2 cursor-pointer"><i data-lucide="lock" class="!w-3.5 !h-3.5"></i> Lock</button>
             </div>
         `;

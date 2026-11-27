@@ -45,22 +45,19 @@ export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) =
     const owes = due > 0.01;
     const overpaid = due < -0.01;
     let bSty = 'border border-black/10';
-    let isA = false;
+    if (s.badCC) bSty = '!border-red-500 !border-dashed !border-[3px]';
+    else if (owes) bSty = '!border-red-500 !border-[3px]';
+    else if (overpaid) bSty = '!border-fuchsia-500 !border-[3px]';
 
     if (s.status === 'future' || s.status === 'new') {
-        if (s.checkIn === todayStr) { bSty += ' checkin-today'; isA = true; }
-        else if (s.checkIn <= yStr) { bSty += ' late-checkin'; isA = true; }
+        if (s.checkIn === todayStr) bSty += ' checkin-today';
+        else if (s.checkIn <= yStr) bSty += ' late-checkin';
     } else if (s.status === 'here') {
-        if (s.checkOut === todayStr) { bSty += ' overdue-checkout-today'; isA = true; }
-        else if (s.checkOut <= yStr) { bSty += ' overdue-checkout-past'; isA = true; }
+        if (s.checkOut === todayStr) bSty += ' overdue-checkout-today';
+        else if (s.checkOut <= yStr) bSty += ' overdue-checkout-past';
     }
 
-    if (s.status === 'new') { bSty += ' status-new-pulse'; isA = true; }
-    if (!isA) {
-        if (s.badCC) bSty = '!border-red-500 !border-dashed !border-[3px]';
-        else if (owes) bSty = '!border-red-500 !border-[3px]';
-        else if (overpaid) bSty = '!border-fuchsia-500 !border-[3px]';
-    }
+    if (s.status === 'new') bSty += ' status-new-pulse';
 
     const srcC = {
         'booking.com': { bg: 'bg-[#003580]', text: 'B' },

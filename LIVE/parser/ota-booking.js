@@ -4,18 +4,6 @@
 // ==========================================================================
 
 import { parseFlexibleDate } from './parser-engine.js';
-import { getOtaPaymentPair } from '../core/channels.js';
-
-function resolveOtaKeys(channelCode) {
-    const [defaultPay, defaultKp] = getOtaPaymentPair(channelCode);
-    const configured = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
-    const payEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'revenue');
-    const kpEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'commission');
-    return {
-        payKey: payEntry ? payEntry.key : defaultPay.key,
-        kpKey: kpEntry ? kpEntry.key : defaultKp.key
-    };
-}
 
 // --- ISO-2 Country Code Dictionary (TM30 Standard) ---
 const COUNTRY_ISO_MAP = {
@@ -134,17 +122,25 @@ export function parseBookingCom(rawText) {
             checkOut = parseFlexibleDate(lines[i + 1]);
         }
 
-        if (/^Total\s*guests:?$/i.test(line) && i + 1 < lines.length) {
+        if (/^(?:Total\s*)?guests:?$/i.test(line) && i + 1 < lines.length) {
             const p = parseInt(lines[i + 1], 10);
             if (!isNaN(p) && p > 0) pax = p;
         }
 
-        if (/^Total\s*units:?$/i.test(line) && i + 1 < lines.length) {
+        if (/^(?:Total\s*units|Rooms(?:\s*Booked)?):?$/i.test(line) && i + 1 < lines.length) {
             const u = parseInt(lines[i + 1], 10);
-            if (!isNaN(u) && u > 0) unitCount = u;
+            if (!isNaN(u) && u > 0) {
+                unitCount = u;
+                if (i + 2 < lines.length && !/^(?:BDC|Non-Ref|Refundable|Total|Check-|Guests|Occupancy|Cancellation|Policies)/i.test(lines[i + 2])) {
+                    const parsedRoom = parseRoomLineItem(lines[i + 2]);
+                    if (parsedRoom.category && parsedRoom.category.length > 3) {
+                        unitItems.push(parsedRoom);
+                    }
+                }
+            }
         }
 
-        if (/^Total\s*price$/i.test(line) && i + 1 < lines.length) {
+        if (/^Total(?:\s*price)?:?$/i.test(line) && i + 1 < lines.length) {
             const m = lines[i + 1].match(/([0-9,]+(?:\.[0-9]{2})?)/);
             if (m) totalPrice = parseFloat(m[1].replace(/,/g, '')) || 0;
         }
@@ -173,6 +169,11 @@ export function parseBookingCom(rawText) {
             }
         }
 
+        if (/^Reservation\s*Number:\s*(.+)$/i.test(line)) {
+            const m = line.match(/^Reservation\s*Number:\s*(?:BDC-)?([A-Za-z0-9\-]+)/i);
+            if (m) bookId = m[1].trim();
+        }
+
         if (/^Booking\s*number:?$/i.test(line) && i + 1 < lines.length) {
             const m = lines[i + 1].match(/\b([0-9]{8,15})\b/);
             if (m) bookId = m[1];
@@ -187,10 +188,9 @@ export function parseBookingCom(rawText) {
             if (m) commissionAmt = parseFloat(m[1].replace(/,/g, '')) || 0;
         }
 
-        if (/Payments\s+by\s+Booking\.com/i.test(line) || /Booking\.com\s+will\s+collect/i.test(line)) {
+        if (/Payments\s+by\s+Booking\.com/i.test(line) || /Booking\.com\s+will\s+collect/i.test(line) || /^Payment\s*Collect:\s*OTA$/i.test(line)) {
             isPrepaid = true;
         }
-
         if (i + 1 < lines.length && /^Cancellation$/i.test(lines[i + 1])) {
             const parsedItem = parseRoomLineItem(line);
             if (parsedItem.category) policyItems.push(parsedItem);
@@ -257,23 +257,8 @@ export function parseBookingCom(rawText) {
         }
     }
 
-    // Payments: Always BDC payout + commission keys because Booking.com settles the payout
-    const { payKey, kpKey } = resolveOtaKeys('BDC');
+    // Payments: never auto-generate payment lines
     const payments = [];
-    if (isPrepaid && totalPrice > 0 && checkIn) {
-        payments.push({
-            date: checkIn,
-            amt: explicitNet !== null ? explicitNet : totalPrice,
-            method: payKey
-        });
-        if (commissionAmt > 0) {
-            payments.push({
-                date: checkIn,
-                amt: commissionAmt,
-                method: kpKey
-            });
-        }
-    }
 
     let nights = 1;
     if (checkIn && checkOut) {
@@ -291,6 +276,7 @@ export function parseBookingCom(rawText) {
         `Units (Rooms/Beds): ${unitCount}`,
         `Pax: ${pax}`,
         `Total: ฿${totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        `Commission: ฿${commissionAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         `Avg Nightly: ฿${parseFloat(avgNightly).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         `----------------------------`,
         `• Policy: ${refundability.toUpperCase()}`

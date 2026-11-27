@@ -33,6 +33,10 @@ export const TOOLTIPS = Object.freeze({
     "cm.pinnedOverride": "Pinned override breaks Anchor ripple (double-click cell to re-link).",
 
     // --- Setup Wizard ---
+    "setup.reorderCats": "Reorder Room Categories to set the exact display order used across the PMS Tape Chart, Channel Manager Matrix, and Dashboard.",
+    "setup.moveRoomUp": "Move room up within this category.",
+    "setup.moveRoomDown": "Move room down within this category.",
+    "setup.deleteRoom": "Delete room (or archive if historical bookings exist).",
     "setup.ghostRoom": "Ghost Room (Mirror Room Type in Channex):\nCreates a secondary mirror room type in Channex linked to an existing PMS room category—without adding extra rows to your PMS calendar.\n• Shares live physical availability with the primary room category.\n• Lets you map separate OTA listings that require isolated pricing or stay restrictions.",
     "setup.derivedLos": "Derived Length-of-Stay Rate Plan:\nInherits Price (with a % discount), Stop Sell, CTA, CTD, and Max Stay from a parent plan in Channex, while enforcing its own fixed Min Stay (e.g. 7 or 28 nights).",
 
@@ -57,7 +61,10 @@ export const TOOLTIPS = Object.freeze({
     "pms.toolDuplicate": "Clone this reservation as a new booking.",
     "pms.toolHistory": "View full audit trail of edits made to this reservation.",
     "pms.toolInvoice": "Generate and print an itemized guest folio invoice.",
-
+    "dash.newBookings": "New Bookings, Modifications & Cancellations waiting for staff review.\nClick a booking to jump to its dates on the Calendar and open the Folio Modal. For NEW bookings, set status to FUTURE and click SAVE; for Modifications or Cancellations, verify the calendar/folio and click SAVE to clear.",
+    "dash.dismissAlert": "Dismiss this alert from Today's Action Items.",
+    "dash.liveChecker": "Check room prices and stay restrictions for the selected dates and guest count.",
+    
     // --- PMS Calendar Legend ---
     "legend.owes": "Owes Balance (solid red border).",
     "legend.badCc": "Bad Credit Card (dashed red border).",
@@ -79,6 +86,24 @@ export const TOOLTIPS = Object.freeze({
     "legend.mailSpec": "Special arrival instructions email sent."
 });
 
+export function isTrainingTipsEnabled() {
+    try {
+        return localStorage.getItem('ww_training_tips') !== 'false';
+    } catch (e) {
+        return true;
+    }
+}
+
+export function setTrainingTipsEnabled(enabled) {
+    try {
+        localStorage.setItem('ww_training_tips', enabled ? 'true' : 'false');
+    } catch (e) {}
+    if (!enabled) {
+        const tt = document.getElementById('cm-tooltip');
+        if (tt) tt.classList.add('hidden');
+    }
+}
+
 export function getTip(key) {
     return TOOLTIPS[key] || key || '';
 }
@@ -86,6 +111,9 @@ export function getTip(key) {
 function initGlobalTooltips() {
     if (typeof document === 'undefined' || window._wwTooltipsBound) return;
     window._wwTooltipsBound = true;
+
+    let hoverTimer = null;
+    let lastClickedHost = null;
 
     const getTooltipEl = () => {
         let el = document.getElementById('cm-tooltip');
@@ -98,9 +126,49 @@ function initGlobalTooltips() {
         return el;
     };
 
+    const hideTooltip = () => {
+        clearTimeout(hoverTimer);
+        hoverTimer = null;
+        const tt = document.getElementById('cm-tooltip');
+        if (tt) tt.classList.add('hidden');
+    };
+
+    const isAnyDropdownOpen = () => {
+        if (document.activeElement && document.activeElement.tagName === 'SELECT') return true;
+        const openMenus = document.querySelectorAll(
+            '[id*="dropdown"]:not(.hidden), [id*="menu"]:not(.hidden), [id*="popover"]:not(.hidden), .multi-select-dropdown:not(.hidden), .dropdown-menu:not(.hidden), [role="menu"]:not(.hidden), [role="listbox"]:not(.hidden)'
+        );
+        for (const m of openMenus) {
+            if (m.offsetParent !== null || m.getClientRects().length > 0) return true;
+        }
+        return false;
+    };
+
+    const handlePointerDismiss = (e) => {
+        hideTooltip();
+        const clickedHost = e.target?.closest?.('[data-tip], [title]');
+        if (clickedHost) {
+            lastClickedHost = clickedHost;
+        }
+    };
+
+    ['pointerdown', 'mousedown', 'click'].forEach(evt => {
+        document.addEventListener(evt, handlePointerDismiss, true);
+    });
+
+    ['keydown', 'scroll', 'wheel'].forEach(evt => {
+        document.addEventListener(evt, hideTooltip, true);
+    });
+
     document.addEventListener('mouseover', (e) => {
+        if (e.target?.closest?.('select, [id*="dropdown"], [id*="menu"], [id*="popover"], .multi-select-dropdown, .dropdown-menu, [role="menu"], [role="listbox"]')) {
+            hideTooltip();
+            return;
+        }
+
         const host = e.target?.closest?.('[data-tip], [title]');
         if (!host) return;
+
         if (host.hasAttribute('title')) {
             const nativeTitle = host.getAttribute('title');
             if (nativeTitle && !host.getAttribute('data-tip')) {
@@ -108,35 +176,68 @@ function initGlobalTooltips() {
             }
             host.removeAttribute('title');
         }
+
+        // Stay suppressed on any control that was just clicked until the cursor leaves it
+        if (lastClickedHost && (host === lastClickedHost || lastClickedHost.contains(host))) {
+            hideTooltip();
+            return;
+        }
+
+        const tipType = host.getAttribute('data-tip-type') || 'training';
+        if (tipType === 'training') {
+            if (!isTrainingTipsEnabled() || isAnyDropdownOpen()) {
+                hideTooltip();
+                return;
+            }
+        }
+
         const text = getTip(host.getAttribute('data-tip'));
         if (!text) return;
 
-        const tt = getTooltipEl();
-        tt.innerText = text;
-        tt.classList.remove('hidden');
+        clearTimeout(hoverTimer);
+        const delay = tipType === 'training' ? 350 : 0;
 
-        const rect = host.getBoundingClientRect();
-        const left = Math.min(window.innerWidth - 330, Math.max(10, rect.left));
-        const top = (rect.bottom + 8 + 90 > window.innerHeight)
-            ? Math.max(10, rect.top - 75)
-            : rect.bottom + 6;
+        hoverTimer = setTimeout(() => {
+            if (!host.isConnected) return;
+            if (lastClickedHost && (host === lastClickedHost || lastClickedHost.contains(host))) return;
+            if (tipType === 'training' && (!isTrainingTipsEnabled() || isAnyDropdownOpen())) return;
 
-        tt.style.left = `${left}px`;
-        tt.style.top = `${top}px`;
+            const tt = getTooltipEl();
+            tt.innerText = text;
+            tt.classList.remove('hidden');
+
+            const rect = host.getBoundingClientRect();
+            const ttRect = tt.getBoundingClientRect();
+            const ttW = ttRect.width || 260;
+            const ttH = ttRect.height || 70;
+
+            const left = Math.min(window.innerWidth - ttW - 10, Math.max(10, rect.left));
+            const fitsBelow = (rect.bottom + ttH + 10) <= window.innerHeight;
+            const top = fitsBelow
+                ? (rect.bottom + 6)
+                : Math.max(10, rect.top - ttH - 6);
+
+            tt.style.left = `${left}px`;
+            tt.style.top = `${top}px`;
+        }, delay);
     });
 
     document.addEventListener('mouseout', (e) => {
+        if (lastClickedHost && (!e.relatedTarget || !lastClickedHost.contains(e.relatedTarget))) {
+            lastClickedHost = null;
+        }
         const host = e.target?.closest?.('[data-tip]');
         if (!host) return;
         if (e.relatedTarget && host.contains(e.relatedTarget)) return;
-        const tt = document.getElementById('cm-tooltip');
-        if (tt) tt.classList.add('hidden');
+        hideTooltip();
     });
 }
 
 if (typeof window !== 'undefined') {
     window.TOOLTIPS = TOOLTIPS;
     window.getTip = getTip;
+    window.isTrainingTipsEnabled = isTrainingTipsEnabled;
+    window.setTrainingTipsEnabled = setTrainingTipsEnabled;
 }
 
 if (typeof document !== 'undefined') {

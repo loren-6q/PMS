@@ -10,7 +10,7 @@ import { getPaid, getDue } from '../core/money.js';
 import { normalizePaymentMethods } from '../setup/setup-profile.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, collection, doc, getDoc, onSnapshot, setDoc, deleteDoc, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 
 // --- Load All PMS Domain Modules into Browser Context ---
@@ -235,18 +235,47 @@ function subscribeToMasterPricing(propId) {
     }
     if (!propId) return;
 
-    const pricingRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${propId}`);
-    unsubsMasterPricing = onSnapshot(pricingRef, (pSnap) => {
+    const canonId = toCanonicalPropId(propId);
+    const pricingRef = doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}`);
+    unsubsMasterPricing = onSnapshot(pricingRef, async (pSnap) => {
         const pData = pSnap.exists() ? pSnap.data() : {};
-        let timeline = pData.timeline || window.masterPricing?.timeline || {};
-        if (typeof timeline === 'string') {
-            try { timeline = JSON.parse(timeline); } catch (e) { timeline = {}; }
+        let baseTimeline = pData.timeline || {};
+        if (typeof baseTimeline === 'string') {
+            try { baseTimeline = JSON.parse(baseTimeline); } catch (e) { baseTimeline = {}; }
+        }
+
+        const mergedTimeline = { ...(baseTimeline && typeof baseTimeline === 'object' ? baseTimeline : {}) };
+        const shardSuffixes = Array.from(new Set([
+            ...(Array.isArray(pData.shardKeys) ? pData.shardKeys : []),
+            ...(Array.isArray(pData.shardMonths) ? pData.shardMonths : [])
+        ]));
+
+        if (shardSuffixes.length > 0) {
+            try {
+                const shardSnaps = await Promise.all(
+                    shardSuffixes.map(suffix =>
+                        getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pricing', `master_${canonId}_${suffix}`))
+                    )
+                );
+                shardSnaps.forEach(sSnap => {
+                    if (!sSnap.exists()) return;
+                    let sTimeline = sSnap.data()?.timeline || {};
+                    if (typeof sTimeline === 'string') {
+                        try { sTimeline = JSON.parse(sTimeline); } catch (e) { sTimeline = {}; }
+                    }
+                    if (sTimeline && typeof sTimeline === 'object') {
+                        Object.assign(mergedTimeline, sTimeline);
+                    }
+                });
+            } catch (shardErr) {
+                console.warn("[PMS Pricing Shard Load Notice]:", shardErr);
+            }
         }
 
         window.masterPricing = {
             ...(window.masterPricing || {}),
             ...pData,
-            timeline: timeline || {}
+            timeline: mergedTimeline
         };
 
         if (pData.pricingRules) {
@@ -644,3 +673,4 @@ if (document.readyState === 'loading') {
 } else {
     init();
 }
+

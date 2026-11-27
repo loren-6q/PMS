@@ -435,6 +435,13 @@ export function renderPromoStackSimulator() {
     `;
 }
 
+let showPastPromos = false;
+
+export function toggleShowPastPromos() {
+    showPastPromos = !showPastPromos;
+    renderPromoRulesTable();
+}
+
 export function renderPromoRulesTable() {
     const tbody = document.getElementById('promo-table-body');
     if (!tbody) return;
@@ -443,13 +450,7 @@ export function renderPromoRulesTable() {
     const rules = window.promoRules || [];
     const today = getLocalYMD(new Date());
 
-    if (rules.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-slate-400 font-bold uppercase text-xs">No active OTA promo rules configured.</td></tr>`;
-        renderPromoStackSimulator();
-        return;
-    }
-
-    rules.forEach((r, idx) => {
+    const decorated = rules.map((r, origIdx) => {
         const hasBookBounds = !!(r.bookStart || r.bookEnd);
         const bookAlw = r.bookAlways !== undefined ? !!r.bookAlways : !hasBookBounds;
         const stayAlw = r.stayAlways !== undefined ? !!r.stayAlways : !!r.isAlways;
@@ -459,7 +460,94 @@ export function renderPromoRulesTable() {
         const isNotStartedYet = !bookAlw && r.bookStart && today < r.bookStart;
         const isBookingEnded = !bookAlw && r.bookEnd && today > r.bookEnd;
         const isStayExpired = !stayAlw && sEnd && sEnd < today;
-        const isCurrentlyLive = r.active && !isNotStartedYet && !isBookingEnded && !isStayExpired;
+        const isExpired = !!(isBookingEnded || isStayExpired);
+        const isCurrentlyLive = !!r.active && !isNotStartedYet && !isExpired;
+
+        // Sort priority: 0 = Live, 1 = Upcoming, 2 = Paused (non-expired), 3 = Past / Expired
+        let rank = 2;
+        if (isExpired) rank = 3;
+        else if (isCurrentlyLive) rank = 0;
+        else if (r.active && isNotStartedYet) rank = 1;
+
+        const effectiveStart = (!bookAlw && r.bookStart)
+            ? r.bookStart
+            : ((!stayAlw && sStart) ? sStart : '9999-12-31');
+        const effectiveEnd = (!bookAlw && r.bookEnd)
+            ? r.bookEnd
+            : ((!stayAlw && sEnd) ? sEnd : '9999-12-31');
+
+        return {
+            r,
+            origIdx,
+            bookAlw,
+            stayAlw,
+            sStart,
+            sEnd,
+            isNotStartedYet,
+            isBookingEnded,
+            isStayExpired,
+            isExpired,
+            isCurrentlyLive,
+            rank,
+            effectiveStart,
+            effectiveEnd
+        };
+    });
+
+    const pastCount = decorated.filter(d => d.isExpired).length;
+    const toggleBtn = document.getElementById('btn-toggle-past-promos');
+    if (toggleBtn) {
+        toggleBtn.className = showPastPromos
+            ? "px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-white border border-slate-800 rounded font-black text-xs uppercase cursor-pointer"
+            : "px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-black text-xs uppercase cursor-pointer";
+        toggleBtn.innerHTML = showPastPromos
+            ? `Hide Past (<span id="past-promos-count">${pastCount}</span>)`
+            : `Show Past (<span id="past-promos-count">${pastCount}</span>)`;
+    }
+
+    if (rules.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-slate-400 font-bold uppercase text-xs">No active OTA promo rules configured.</td></tr>`;
+        renderPromoStackSimulator();
+        return;
+    }
+
+    decorated.sort((a, b) => {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        if (a.rank === 3) {
+            // Most recently ended first among past promos
+            const cmpEnd = b.effectiveEnd.localeCompare(a.effectiveEnd);
+            if (cmpEnd !== 0) return cmpEnd;
+            return (a.r.name || '').localeCompare(b.r.name || '');
+        }
+        const cmpStart = a.effectiveStart.localeCompare(b.effectiveStart);
+        if (cmpStart !== 0) return cmpStart;
+        const cmpEnd = a.effectiveEnd.localeCompare(b.effectiveEnd);
+        if (cmpEnd !== 0) return cmpEnd;
+        return (a.r.name || '').localeCompare(b.r.name || '');
+    });
+
+    const visibleItems = showPastPromos ? decorated : decorated.filter(d => !d.isExpired);
+
+    if (visibleItems.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-slate-500 font-bold text-xs">No active or upcoming promos (${pastCount} past promo${pastCount === 1 ? '' : 's'} hidden). Click "Show Past" above to view.</td></tr>`;
+        renderPromoStackSimulator();
+        return;
+    }
+
+    let renderedPastHeader = false;
+    visibleItems.forEach(item => {
+        const {
+            r, origIdx, bookAlw, stayAlw, sStart, sEnd,
+            isNotStartedYet, isBookingEnded, isStayExpired, isExpired, isCurrentlyLive
+        } = item;
+
+        if (showPastPromos && isExpired && !renderedPastHeader) {
+            renderedPastHeader = true;
+            const sepTr = document.createElement('tr');
+            sepTr.className = 'bg-slate-100 border-y border-slate-300';
+            sepTr.innerHTML = `<td colspan="10" class="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Past / Expired Promotions (${pastCount})</td>`;
+            tbody.appendChild(sepTr);
+        }
 
         const markup = ((1 / (1 - (r.discountPct / 100))) - 1) * 100;
         const chanLabel = `${resolveChannelCode(r.channel)} - ${getChannelByCode(r.channel).name}`;
@@ -516,13 +604,13 @@ export function renderPromoRulesTable() {
             <td class="p-2 text-center">${statusBadge}</td>
             <td class="p-2 text-center">
                 <div class="flex items-center justify-center gap-1.5">
-                    <button type="button" onclick="window.editPromoRule(${idx})" class="text-slate-500 hover:text-indigo-600 cursor-pointer p-1" title="Edit Promo">
+                    <button type="button" onclick="window.editPromoRule(${origIdx})" class="text-slate-500 hover:text-indigo-600 cursor-pointer p-1" title="Edit Promo">
                         <i data-lucide="pencil" size="13"></i>
                     </button>
-                    <button type="button" onclick="window.togglePromoRuleActive(${idx})" class="text-slate-500 hover:text-emerald-600 cursor-pointer p-1" title="${r.active ? 'Pause Promo' : 'Activate Promo'}">
+                    <button type="button" onclick="window.togglePromoRuleActive(${origIdx})" class="text-slate-500 hover:text-emerald-600 cursor-pointer p-1" title="${r.active ? 'Pause Promo' : 'Activate Promo'}">
                         <i data-lucide="${r.active ? 'power' : 'power-off'}" size="13"></i>
                     </button>
-                    <button type="button" onclick="window.deletePromoRule(${idx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-1" title="Delete Promo">
+                    <button type="button" onclick="window.deletePromoRule(${origIdx})" class="text-slate-400 hover:text-rose-600 cursor-pointer p-1" title="Delete Promo">
                         <i data-lucide="trash-2" size="13"></i>
                     </button>
                 </div>
@@ -571,5 +659,6 @@ if (typeof window !== 'undefined') {
     window.savePromoRule = savePromoRule;
     window.togglePromoRuleActive = togglePromoRuleActive;
     window.renderPromoRulesTable = renderPromoRulesTable;
+    window.toggleShowPastPromos = toggleShowPastPromos;
     window.deletePromoRule = deletePromoRule;
 }

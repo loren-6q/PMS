@@ -4,18 +4,6 @@
 // ==========================================================================
 
 import { parseFlexibleDate } from './parser-engine.js';
-import { getOtaPaymentPair } from '../core/channels.js';
-
-function resolveOtaKeys(channelCode) {
-    const [defaultPay, defaultKp] = getOtaPaymentPair(channelCode);
-    const configured = Array.isArray(window.paymentMethods) ? window.paymentMethods : [];
-    const payEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'revenue');
-    const kpEntry = configured.find(pm => pm.channel === channelCode && pm.type === 'commission');
-    return {
-        payKey: payEntry ? payEntry.key : defaultPay.key,
-        kpKey: kpEntry ? kpEntry.key : defaultKp.key
-    };
-}
 
 export function parseAirbnb(rawText) {
     if (!rawText) return null;
@@ -117,23 +105,8 @@ export function parseAirbnb(rawText) {
         refundability = 'ref';
     }
 
-    // 10. Payments: Airbnb = canonical ABB payout + commission keys
-    const { payKey, kpKey } = resolveOtaKeys('ABB');
+    // 10. Payments: never auto-generate payment lines
     const payments = [];
-    if (totalPrice > 0 && checkIn) {
-        payments.push({
-            date: checkIn,
-            amt: explicitNet !== null ? explicitNet : totalPrice,
-            method: payKey
-        });
-        if (commissionAmt > 0) {
-            payments.push({
-                date: checkIn,
-                amt: commissionAmt,
-                method: kpKey
-            });
-        }
-    }
 
     // 11. Contact Details
     let phone = '';

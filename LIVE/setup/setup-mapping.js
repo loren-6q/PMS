@@ -47,15 +47,19 @@ export async function fetchChannexData() {
     try {
         customAlert("Connecting...", "Fetching room types, rate plans, and connected channels from Channex...");
 
-        const { rooms, ratePlans, policies, channels } = await ChannexClient.fetchPropertySetupData(propId, apiKey);
+        const { rooms, ratePlans, derivedRatePlans, policies, channels } = await ChannexClient.fetchPropertySetupData(propId, apiKey);
 
         window.channexRooms = rooms;
         window.channexRatePlans = ratePlans;
+        window.channexDerivedPlans = derivedRatePlans || [];
         window.channexPolicies = policies.length ? policies : (window.channexPolicies || []);
         window.channexConnectedChannels = channels.length ? channels : (window.channexConnectedChannels || []);
 
         renderStep3UnifiedMapping();
-        customAlert("Fetched", `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} rate plans, and ${window.channexConnectedChannels.length} connected channels.`);
+        customAlert(
+            "Fetched",
+            `Loaded ${window.channexRooms.length} rooms, ${window.channexRatePlans.length} base plans, ${window.channexDerivedPlans.length} derived LOS plans, and ${window.channexConnectedChannels.length} connected channels.`
+        );
 
     } catch (err) {
         console.error("[Channex Fetch Error]:", err);
@@ -163,6 +167,490 @@ export function detectRatePlanClassification(title, plan = null) {
     };
 }
 
+// --------------------------------------------------------------------------
+// WHITE-LABEL EMBEDDED CHANNEX WORKSPACE IFRAME
+// --------------------------------------------------------------------------
+
+export async function openChannexMappingIframe(routePath = '/channels', headless = true) {
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
+
+    if (!apiKey || !propId) {
+        return customAlert("Credentials Required", "Enter both Channex API Key and Property UUID first.");
+    }
+
+    try {
+        customAlert("Opening Channex...", "Generating secure Channex session...");
+        const iframeUrl = await ChannexClient.getEmbeddedChannelMappingUrl(propId, apiKey, routePath, headless);
+        document.getElementById('custom-alert')?.classList.add('hidden');
+
+        let modal = document.getElementById('channex-iframe-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'channex-iframe-modal';
+            modal.className = 'fixed inset-0 z-[9500] bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4';
+            document.body.appendChild(modal);
+        }
+
+        const isChannels = routePath === '/channels' && headless;
+        const isRooms = routePath === '/rooms' && headless;
+        const isFull = !headless;
+
+        const tabBtnClass = (active) => active
+            ? 'px-2.5 py-1 rounded bg-white text-slate-900 font-black text-[10px] uppercase cursor-pointer shadow-2xs'
+            : 'px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[10px] uppercase cursor-pointer';
+
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden border-2 border-slate-800">
+                <div class="bg-slate-900 text-white px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 text-xs">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <i data-lucide="globe" size="14" class="text-indigo-400"></i>
+                        <span class="font-black uppercase tracking-wider mr-1">Channex:</span>
+                        <div class="flex items-center gap-1 bg-slate-950 p-0.5 rounded border border-slate-700">
+                            <button type="button" onclick="window.openChannexMappingIframe('/channels', true)" class="${tabBtnClass(isChannels)}">
+                                Channel Mapping
+                            </button>
+                            <button type="button" onclick="window.openChannexMappingIframe('/rooms', true)" class="${tabBtnClass(isRooms)}">
+                                Rooms & Rates
+                            </button>
+                            <button type="button" onclick="window.openChannexMappingIframe('/rooms', false)" class="${tabBtnClass(isFull)}">
+                                Full Channex UI
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="window.fetchChannexData()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-black text-[10px] uppercase cursor-pointer">
+                            Refresh PMS Data
+                        </button>
+                        <button type="button" onclick="window.closeChannexMappingIframe()" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded font-black text-[10px] uppercase cursor-pointer">
+                            Close
+                        </button>
+                    </div>
+                </div>
+                <iframe src="${iframeUrl}" class="flex-1 w-full h-full border-0 bg-white"></iframe>
+            </div>
+        `;
+        modal.classList.remove('hidden');
+        if (window.lucide) window.lucide.createIcons();
+    } catch (err) {
+        console.error("[Channex IFrame Error]:", err);
+        customAlert("Channex Error", err.message);
+    }
+}
+
+export function closeChannexMappingIframe() {
+    const modal = document.getElementById('channex-iframe-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// --------------------------------------------------------------------------
+// NATIVE CHANNEX ROOM / RATE PLAN CLEANUP (DELETE UNUSED / DUPLICATES)
+// --------------------------------------------------------------------------
+
+export async function deleteChannexRoomTypeById(roomTypeId, title = '') {
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    if (!apiKey) return customAlert("Credentials Required", "Enter Channex API Key first.");
+
+    customAlert(
+        "Delete Channex Room Type",
+        `Permanently delete "${title || roomTypeId}" from Channex? (Any attached rate plans inside Channex will also be removed.)`,
+        true,
+        async () => {
+            try {
+                await ChannexClient.deleteRoomType(roomTypeId, apiKey);
+                window.channexRooms = (window.channexRooms || []).filter(r => r.id !== roomTypeId);
+                window.channexRatePlans = (window.channexRatePlans || []).filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) !== roomTypeId);
+                window.channexDerivedPlans = (window.channexDerivedPlans || []).filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) !== roomTypeId);
+                window.channexMap = (window.channexMap || []).filter(m => m.channexId !== roomTypeId);
+                window.channexRateMap = (window.channexRateMap || []).filter(r => r.channexRoomId !== roomTypeId);
+                if (typeof window.savePropertyToDatabase === 'function') {
+                    await window.savePropertyToDatabase(false);
+                }
+                renderStep3UnifiedMapping();
+                customAlert("Deleted", `Removed "${title || roomTypeId}" from Channex.`);
+            } catch (err) {
+                console.error("[Delete Channex Room Type Error]:", err);
+                customAlert("Delete Failed", err.message);
+            }
+        }
+    );
+}
+
+export async function deleteChannexRatePlanById(ratePlanId, title = '') {
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    if (!apiKey) return customAlert("Credentials Required", "Enter Channex API Key first.");
+
+    customAlert(
+        "Delete Channex Rate Plan",
+        `Permanently delete rate plan "${title || ratePlanId}" from Channex?`,
+        true,
+        async () => {
+            try {
+                await ChannexClient.deleteRatePlan(ratePlanId, apiKey);
+                window.channexRatePlans = (window.channexRatePlans || []).filter(p => p.id !== ratePlanId);
+                window.channexDerivedPlans = (window.channexDerivedPlans || []).filter(p => p.id !== ratePlanId);
+                window.channexRateMap = (window.channexRateMap || []).filter(r => r.ratePlanId !== ratePlanId);
+                if (typeof window.savePropertyToDatabase === 'function') {
+                    await window.savePropertyToDatabase(false);
+                }
+                renderStep3UnifiedMapping();
+                customAlert("Deleted", `Removed rate plan "${title || ratePlanId}" from Channex.`);
+            } catch (err) {
+                console.error("[Delete Channex Rate Plan Error]:", err);
+                customAlert("Delete Failed", err.message);
+            }
+        }
+    );
+}
+
+let showChannexCleanupDrawer = false;
+
+export function toggleChannexCleanupDrawer() {
+    showChannexCleanupDrawer = !showChannexCleanupDrawer;
+    renderStep3UnifiedMapping();
+}
+
+function buildChannexCleanupCardHtml() {
+    const rooms = window.channexRooms || [];
+    if (rooms.length === 0) return '';
+
+    const mappedIds = new Set((window.channexMap || []).map(m => m.channexId).filter(Boolean));
+    const unmappedRooms = rooms.filter(r => !mappedIds.has(r.id));
+
+    return `
+        <div class="setup-card border-slate-300">
+            <div class="setup-card-header cursor-pointer bg-slate-50" onclick="window.toggleChannexCleanupDrawer()">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="trash-2" size="14" class="text-rose-600"></i>
+                    <span class="setup-card-title text-slate-800">Channex Room Types Manager (${rooms.length} Total${unmappedRooms.length ? ` • ${unmappedRooms.length} Unmapped` : ''})</span>
+                </div>
+                <span class="text-[10px] font-black uppercase text-indigo-700">${showChannexCleanupDrawer ? 'Hide ▴' : 'Manage / Delete ▾'}</span>
+            </div>
+            ${showChannexCleanupDrawer ? `
+                <div class="p-2.5 bg-white border-t border-slate-200 space-y-1 text-xs max-h-60 overflow-y-auto">
+                    ${rooms.map(r => {
+                        const title = r.attributes?.title || r.id;
+                        const isMapped = mappedIds.has(r.id);
+                        const planCount = (window.channexRatePlans || []).filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === r.id).length;
+                        const safeTitle = title.replace(/'/g, "\\'");
+                        return `
+                            <div class="flex items-center justify-between py-1 px-2 rounded border ${isMapped ? 'border-slate-200 bg-slate-50/50' : 'border-amber-300 bg-amber-50/40'}">
+                                <div class="flex items-center gap-2 truncate">
+                                    <span class="font-bold text-slate-800 truncate">${title}</span>
+                                    <span class="text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${isMapped ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-200 text-amber-900'}">
+                                        ${isMapped ? 'Mapped' : 'Unmapped'} • ${planCount} plan${planCount === 1 ? '' : 's'}
+                                    </span>
+                                </div>
+                                <button type="button" onclick="window.deleteChannexRoomTypeById('${r.id}', '${safeTitle}')" class="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 font-black text-[9.5px] uppercase cursor-pointer transition-colors shrink-0">
+                                    Delete in Channex
+                                </button>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// --------------------------------------------------------------------------
+// DERIVED LENGTH-OF-STAY (LOS) RATE PLAN MANAGER
+// --------------------------------------------------------------------------
+
+function extractDerivedDiscountPct(plan) {
+    const attr = plan?.attributes || {};
+    const opt0 = Array.isArray(attr.options) ? attr.options[0] : null;
+    const rateRules = opt0?.derived_option?.rate || attr.derived_option?.rate || [];
+    if (Array.isArray(rateRules) && rateRules.length > 0 && Array.isArray(rateRules[0])) {
+        return Math.abs(parseFloat(rateRules[0][1]) || 0);
+    }
+    const rawVal = opt0?.derive_by?.rate?.value ?? attr.rate_modifiers?.[0]?.value ?? 0;
+    return Math.abs(parseFloat(rawVal) || 0);
+}
+
+function buildDerivedOptionsPayload(baseOptions, discountPct) {
+    const pct = Math.max(0, Math.min(99, Number(discountPct) || 0));
+    const derivedRule = pct > 0
+        ? { rate: [["decrease_by_percent", String(pct)]] }
+        : {};
+
+    return baseOptions.map((opt, idx) => ({
+        occupancy: opt.occupancy || 1,
+        is_primary: opt.is_primary !== undefined ? !!opt.is_primary : idx === 0,
+        rate: opt.rate ?? 0,
+        derived_option: derivedRule
+    }));
+}
+
+function extractDerivedMinStay(plan) {
+    const attr = plan?.attributes || {};
+    const opt0 = Array.isArray(attr.options) ? attr.options[0] : null;
+    const candidates = [
+        attr.min_stay_through,
+        attr.min_stay_arrival,
+        opt0?.min_stay_through,
+        opt0?.min_stay_arrival
+    ];
+
+    for (const raw of candidates) {
+        if (Array.isArray(raw)) {
+            const nums = raw.map(n => parseInt(n, 10)).filter(n => Number.isFinite(n) && n > 0);
+            const nonOne = nums.find(n => n > 1);
+            if (nonOne) return nonOne;
+        } else if (raw !== undefined && raw !== null && raw !== '') {
+            const n = parseInt(raw, 10);
+            if (Number.isFinite(n) && n > 1) return n;
+        }
+    }
+
+    const titleMatch = String(attr.title || '').match(/\((\d+)\+?\s*Nts?\)/i);
+    if (titleMatch) {
+        const parsed = parseInt(titleMatch[1], 10);
+        if (Number.isFinite(parsed) && parsed > 1) return parsed;
+    }
+
+    for (const raw of candidates) {
+        if (Array.isArray(raw)) {
+            const n = raw.map(x => parseInt(x, 10)).find(x => Number.isFinite(x) && x >= 1);
+            if (n) return n;
+        } else if (raw !== undefined && raw !== null && raw !== '') {
+            const n = parseInt(raw, 10);
+            if (Number.isFinite(n) && n >= 1) return n;
+        }
+    }
+
+    return 1;
+}
+
+function buildDerivedLosCardHtml() {
+    const derivedPlans = window.channexDerivedPlans || [];
+    const parentLookup = new Map((window.channexRatePlans || []).map(p => [p.id, p.attributes?.title || p.id]));
+    const channelOpts = getAvailableMappingChannels()
+        .filter(c => !c.val.includes('::'))
+        .map(c => `<option value="${c.val}">${c.label}</option>`)
+        .join('');
+
+    const rowsHtml = derivedPlans.length > 0
+        ? derivedPlans.map(dp => {
+            const attr = dp.attributes || {};
+            const title = attr.title || dp.id;
+            const safeTitle = title.replace(/'/g, "\\'");
+            const parentId = attr.parent_rate_plan_id || dp.relationships?.parent_rate_plan?.data?.id || '';
+            const parentTitle = parentLookup.get(parentId) || (parentId ? `...${parentId.slice(-8)}` : 'Parent Plan');
+            const discPct = extractDerivedDiscountPct(dp);
+            const minStay = extractDerivedMinStay(dp);
+
+            return `
+                <tr class="hover:bg-slate-50">
+                    <td class="py-1.5 px-2 font-bold text-slate-800">
+                        <div>${title}</div>
+                        <div class="text-[9.5px] text-slate-400 font-semibold">Inherits CTA/CTD/STOP/Max from: ${parentTitle}</div>
+                    </td>
+                    <td class="py-1.5 px-2 text-center">
+                        <div class="inline-flex items-center gap-1">
+                            <input type="number" id="los-min-${dp.id}" min="1" max="365" value="${minStay}" class="table-input !w-14 text-center font-black">
+                            <span class="text-[10px] font-bold text-slate-500">nts</span>
+                        </div>
+                    </td>
+                    <td class="py-1.5 px-2 text-center">
+                        <div class="inline-flex items-center gap-1">
+                            <span class="font-black text-rose-600">-</span>
+                            <input type="number" id="los-disc-${dp.id}" min="0" max="95" step="any" value="${discPct}" class="table-input !w-16 text-center font-black text-emerald-700">
+                            <span class="text-[10px] font-bold text-slate-500">%</span>
+                        </div>
+                    </td>
+                    <td class="py-1.5 px-2 text-right space-x-1">
+                        <button type="button" onclick="window.updateDerivedLosPlan('${dp.id}')" class="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9.5px] uppercase cursor-pointer">
+                            Update
+                        </button>
+                        <button type="button" onclick="window.deleteChannexRatePlanById('${dp.id}', '${safeTitle}')" class="px-1.5 py-1 rounded bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 font-black text-[9.5px] uppercase cursor-pointer">
+                            Del
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('')
+        : `<tr><td colspan="4" class="p-3 text-center text-[10.5px] text-slate-400 italic">No derived LOS plans fetched yet. Create Weekly / Monthly plans below or click "Fetch Channex Data".</td></tr>`;
+
+    return `
+        <div class="setup-card border-amber-200" data-tip="setup.derivedLos">
+            <div class="setup-card-header bg-amber-50/70">
+                <div>
+                    <h3 class="setup-card-title text-amber-950">
+                        <i data-lucide="percent" size="14" class="text-amber-600"></i> Derived Length-of-Stay (LOS) Rate Plans
+                    </h3>
+                    <span class="setup-card-subtitle">Inherits Price (-%), CTA, CTD, Stop Sell & Max Stay from parent plan while enforcing fixed Weekly/Monthly Min Stay.</span>
+                </div>
+            </div>
+            <div class="p-3 space-y-2.5 text-xs">
+                <div class="flex flex-wrap items-end gap-2 bg-slate-50 p-2 rounded border border-slate-200">
+                    <div>
+                        <label class="label-base">Parent Channel</label>
+                        <select id="los-new-channel" class="table-input font-bold !w-40">${channelOpts}</select>
+                    </div>
+                    <div>
+                        <label class="label-base">Parent Policy</label>
+                        <select id="los-new-policy" class="table-input font-bold !w-36">
+                            <option value="non-ref">Non-Refundable</option>
+                            <option value="ref">Refundable</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label-base">Tier Label</label>
+                        <input type="text" id="los-new-label" value="Weekly" placeholder="Weekly / Monthly" class="table-input font-bold !w-28">
+                    </div>
+                    <div>
+                        <label class="label-base">Fixed Min Stay</label>
+                        <input type="number" id="los-new-min" value="7" min="2" max="365" class="table-input font-black text-center !w-20">
+                    </div>
+                    <div>
+                        <label class="label-base">Discount (%)</label>
+                        <input type="number" id="los-new-disc" value="15" min="1" max="95" step="any" class="table-input font-black text-center text-emerald-700 !w-20">
+                    </div>
+                    <button type="button" onclick="window.createDerivedLosPlansForAllRooms()" class="btn-setup-save !py-1 !px-3">
+                        + Create Derived LOS Suite
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto border border-slate-200 rounded bg-white">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead class="bg-slate-100 text-[9px] font-black uppercase text-slate-500 border-b border-slate-200">
+                            <tr>
+                                <th class="py-1 px-2">Derived Rate Plan</th>
+                                <th class="py-1 px-2 text-center w-28">Fixed Min Stay</th>
+                                <th class="py-1 px-2 text-center w-32">Discount (%)</th>
+                                <th class="py-1 px-2 text-right w-28">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">${rowsHtml}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+export async function createDerivedLosPlansForAllRooms() {
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    const propId = document.getElementById('chan-prop-id')?.value.trim() || window.channexConfig?.propId;
+    const currency = document.getElementById('prop-currency')?.value || window.currentPropertyConfig?.currency || 'THB';
+
+    if (!apiKey || !propId) {
+        return customAlert("Credentials Required", "Enter both Channex API Key and Property UUID first.");
+    }
+
+    const targetChannel = document.getElementById('los-new-channel')?.value || 'BDC';
+    const targetPolicy = document.getElementById('los-new-policy')?.value || 'non-ref';
+    const tierLabel = (document.getElementById('los-new-label')?.value || 'Weekly').trim();
+    const minNights = Math.max(2, parseInt(document.getElementById('los-new-min')?.value, 10) || 7);
+    const discountPct = Math.max(0, Math.min(95, parseFloat(document.getElementById('los-new-disc')?.value) || 15));
+
+    const parentMappings = (window.channexRateMap || []).filter(r =>
+        (r.channel || 'DEF') === targetChannel &&
+        (r.policy || 'non-ref') === targetPolicy &&
+        !r.isEvent
+    );
+
+    if (parentMappings.length === 0) {
+        return customAlert(
+            "No Parent Plans Found",
+            `No mapped ${targetChannel} (${targetPolicy}) base rate plans were found. Create or map your base plans first.`
+        );
+    }
+
+    try {
+        customAlert("Creating Derived Plans...", `Creating ${parentMappings.length} derived ${tierLabel} plan(s) in Channex...`);
+        window.channexDerivedPlans = window.channexDerivedPlans || [];
+        let created = 0;
+
+        for (const pm of parentMappings) {
+            const parentPlan = (window.channexRatePlans || []).find(p => p.id === pm.ratePlanId);
+            const baseOptions = Array.isArray(parentPlan?.attributes?.options) && parentPlan.attributes.options.length > 0
+                ? parentPlan.attributes.options
+                : [{ occupancy: 1, is_primary: true, rate: 0 }];
+
+            const derivedOptions = buildDerivedOptionsPayload(baseOptions, discountPct);
+            const rateMode = derivedOptions.length > 1 ? 'cascade' : 'derived';
+
+            const title = `[${targetChannel}] ${tierLabel} (${minNights}+ Nts) ${pm.pmsCategory}`;
+            const res = await ChannexClient.createRatePlan(propId, {
+                title,
+                room_type_id: pm.channexRoomId,
+                parent_rate_plan_id: pm.ratePlanId,
+                rate_mode: rateMode,
+                currency,
+                sell_mode: parentPlan?.attributes?.sell_mode || 'per_room',
+                meal_type: parentPlan?.attributes?.meal_type || 'none',
+                inherit_rate: true,
+                inherit_closed_to_arrival: true,
+                inherit_closed_to_departure: true,
+                inherit_stop_sell: true,
+                inherit_max_stay: true,
+                inherit_min_stay_arrival: false,
+                inherit_min_stay_through: false,
+                min_stay_through: minNights,
+                min_stay_arrival: 1,
+                options: derivedOptions
+            }, apiKey);
+
+            if (res?.data) {
+                window.channexDerivedPlans.push(res.data);
+                created++;
+            }
+        }
+
+        renderStep3UnifiedMapping();
+        customAlert("Success", `Created ${created} derived ${tierLabel} rate plan(s) (-${discountPct}%, Min ${minNights} nights, inheriting CTA/CTD/Stop Sell).`);
+    } catch (err) {
+        console.error("[Create Derived LOS Error]:", err);
+        customAlert("Creation Failed", err.message);
+    }
+}
+
+export async function updateDerivedLosPlan(ratePlanId) {
+    const apiKey = document.getElementById('chan-api-key')?.value.trim() || window.channexConfig?.apiKey;
+    if (!apiKey) return customAlert("Credentials Required", "Enter Channex API Key first.");
+
+    const minNights = Math.max(1, parseInt(document.getElementById(`los-min-${ratePlanId}`)?.value, 10) || 7);
+    const discountPct = Math.max(0, Math.min(95, parseFloat(document.getElementById(`los-disc-${ratePlanId}`)?.value) || 0));
+
+    const existing = (window.channexDerivedPlans || []).find(p => p.id === ratePlanId);
+    const baseOptions = Array.isArray(existing?.attributes?.options) && existing.attributes.options.length > 0
+        ? existing.attributes.options
+        : [{ occupancy: 1, is_primary: true, rate: 0 }];
+
+    const updatedOptions = buildDerivedOptionsPayload(baseOptions, discountPct);
+    const rateMode = updatedOptions.length > 1 ? 'cascade' : 'derived';
+
+    try {
+        const res = await ChannexClient.updateRatePlan(ratePlanId, {
+            rate_mode: rateMode,
+            inherit_rate: true,
+            inherit_closed_to_arrival: true,
+            inherit_closed_to_departure: true,
+            inherit_stop_sell: true,
+            inherit_max_stay: true,
+            inherit_min_stay_arrival: false,
+            inherit_min_stay_through: false,
+            min_stay_through: minNights,
+            options: updatedOptions
+        }, apiKey);
+
+        if (res?.data && existing) {
+            existing.attributes = { ...(existing.attributes || {}), ...(res.data.attributes || {}) };
+        }
+        renderStep3UnifiedMapping();
+        customAlert("Updated", `Updated derived plan to -${discountPct}% discount with ${minNights}-night minimum stay.`);
+    } catch (err) {
+        console.error("[Update Derived LOS Error]:", err);
+        customAlert("Update Failed", err.message);
+    }
+}
+
+// --------------------------------------------------------------------------
+// STEP 3 UNIFIED MAPPING RENDERER
+// --------------------------------------------------------------------------
+
 let step3ShowRates = true;
 const step3ExpandedCats = new Set();
 
@@ -183,6 +671,7 @@ function buildPlanTableRowsHtml(plans, cat, catId, channexRoomId, availableChann
     const safeCat = cat.replace(/'/g, "\\'");
     return plans.map(plan => {
         const title = plan.attributes?.title || plan.id;
+        const safeTitle = title.replace(/'/g, "\\'");
         let mapping = window.channexRateMap.find(r => r.ratePlanId === plan.id);
         const detected = detectRatePlanClassification(title, plan);
 
@@ -250,16 +739,21 @@ function buildPlanTableRowsHtml(plans, cat, catId, channexRoomId, availableChann
                     <div class="font-mono text-[9.5px] text-slate-400 mt-0.5">ID: ...${plan.id.slice(-8)}</div>
                 </td>
                 <td class="py-1.5 px-2">
-                    <select tabindex="0" class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${safeCat}', '${channexRoomId}', '${title.replace(/'/g, "\\'")}', 'channel', this.value, this)">
+                    <select tabindex="0" class="table-input font-bold text-xs cursor-pointer" onchange="window.updateRatePlanClassification('${plan.id}', '${safeCat}', '${channexRoomId}', '${safeTitle}', 'channel', this.value, this)">
                         ${channelOptsHtml}
                     </select>
                 </td>
                 <td class="py-1.5 px-2">
-                    <select tabindex="0" class="${policySelectClass}" onchange="window.updateRatePlanClassification('${plan.id}', '${safeCat}', '${channexRoomId}', '${title.replace(/'/g, "\\'")}', 'policy', this.value, this)">
+                    <select tabindex="0" class="${policySelectClass}" onchange="window.updateRatePlanClassification('${plan.id}', '${safeCat}', '${channexRoomId}', '${safeTitle}', 'policy', this.value, this)">
                         ${AVAILABLE_POLICIES.map(pol => `
                             <option value="${pol.val}" ${mapping.policy === pol.val ? 'selected' : ''}>${pol.label}</option>
                         `).join('')}
                     </select>
+                </td>
+                <td class="py-1.5 px-2 text-center w-12">
+                    <button type="button" onclick="window.deleteChannexRatePlanById('${plan.id}', '${safeTitle}')" class="text-slate-400 hover:text-rose-600 cursor-pointer p-1" title="Delete rate plan in Channex">
+                        <i data-lucide="trash-2" size="13"></i>
+                    </button>
                 </td>
             </tr>
         `;
@@ -321,21 +815,37 @@ export function renderStep3UnifiedMapping() {
     const mappedCount = pmsCategories.filter(cat => !!findChannexMapForCategory(cat, catToId.get(cat))).length;
 
     const toolbar = document.createElement('div');
-    toolbar.className = 'flex items-center justify-between gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs text-xs';
+    toolbar.className = 'flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs text-xs';
     toolbar.innerHTML = `
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
             <span class="font-black uppercase text-slate-700">Room & Rate Mapping</span>
             <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${mappedCount === pmsCategories.length ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}">
                 ${mappedCount} / ${pmsCategories.length} Rooms Mapped • ${window.channexRateMap.length} Active Plans
             </span>
         </div>
-        <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
-            <span class="px-1.5 text-slate-400">DISPLAY:</span>
-            <button type="button" onclick="window.setStep3RateView(false)" class="px-2.5 py-0.5 rounded cursor-pointer transition-colors ${!step3ShowRates ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}">Rooms Only</button>
-            <button type="button" onclick="window.setStep3RateView(true)" class="px-2.5 py-0.5 rounded cursor-pointer transition-colors ${step3ShowRates ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}">All Rates</button>
+        <div class="flex items-center gap-2 flex-wrap">
+            <button type="button" onclick="window.openChannexMappingIframe('/channels', true)" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase cursor-pointer flex items-center gap-1 shadow-2xs">
+                <i data-lucide="globe" size="12"></i> Open Channex Workspace
+            </button>
+            <div class="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-[10px] font-black uppercase">
+                <span class="px-1.5 text-slate-400">DISPLAY:</span>
+                <button type="button" onclick="window.setStep3RateView(false)" class="px-2.5 py-0.5 rounded cursor-pointer transition-colors ${!step3ShowRates ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}">Rooms Only</button>
+                <button type="button" onclick="window.setStep3RateView(true)" class="px-2.5 py-0.5 rounded cursor-pointer transition-colors ${step3ShowRates ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:bg-white'}">All Rates</button>
+            </div>
         </div>
     `;
     container.appendChild(toolbar);
+
+    const cleanupHtml = buildChannexCleanupCardHtml();
+    if (cleanupHtml) {
+        const cleanupWrap = document.createElement('div');
+        cleanupWrap.innerHTML = cleanupHtml;
+        container.appendChild(cleanupWrap.firstElementChild);
+    }
+
+    const derivedWrapper = document.createElement('div');
+    derivedWrapper.innerHTML = buildDerivedLosCardHtml();
+    container.appendChild(derivedWrapper.firstElementChild);
 
     const availableChannels = getAvailableMappingChannels();
 
@@ -411,7 +921,7 @@ export function renderStep3UnifiedMapping() {
                     : '';
                 const ghostRows = ghostMaps.map(gm => {
                     const gPlans = (window.channexRatePlans || []).filter(p => (p.attributes?.room_type_id || p.relationships?.room_type?.data?.id) === gm.channexId);
-                    const tag = `<span class="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 border border-indigo-300 text-[8px] font-black uppercase">GHOST: ${gm.channexTitle || 'Ghost'}</span>`;
+                    const tag = `<span class="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 border border-indigo-300 text-[8px] font-black uppercase" title="${(gm.channexTitle || 'Ghost Room').replace(/"/g, '&quot;')}">GHOST</span>`;
                     return buildPlanTableRowsHtml(gPlans, cat, catId, gm.channexId, availableChannels, tag);
                 }).join('');
 
@@ -423,6 +933,7 @@ export function renderStep3UnifiedMapping() {
                                     <th class="py-1 px-2">RATE PLAN NAME</th>
                                     <th class="py-1 px-2 w-56">SALES CHANNEL</th>
                                     <th class="py-1 px-2 w-48">CANCELLATION POLICY</th>
+                                    <th class="py-1 px-2 text-center w-12">DEL</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -527,7 +1038,6 @@ export function updateRoomTypeMapping(pmsCategory, channexId) {
     const defMatch = (window.roomDefinitions || []).find(d => !d.inactive && normalizeCatName(d.category) === normalizeCatName(pmsCategory));
     const catId = defMatch?.catId || null;
 
-    // Preserve any Ghost Room mappings attached to this category; replace only the primary room mapping
     const removedPrimaryIds = new Set(
         window.channexMap
             .filter(m => !m.isGhost && (normalizeCatName(m.pmsCategory) === normalizeCatName(pmsCategory) || (catId && m.catId === catId)))
@@ -1051,7 +1561,6 @@ export async function executeCloneRatePlans() {
                 }, apiKey);
 
                 if (res?.data) {
-                    window.channexRatePlans = window.channexRatePlans || [];
                     window.channexRatePlans.push(res.data);
                     window.channexRateMap = window.channexRateMap || [];
                     window.channexRateMap.push({
@@ -1495,6 +2004,13 @@ export function updateRatePlanClassification(ratePlanId, pmsCategory, channexRoo
 
 if (typeof window !== 'undefined') {
     window.fetchChannexData = fetchChannexData;
+    window.openChannexMappingIframe = openChannexMappingIframe;
+    window.closeChannexMappingIframe = closeChannexMappingIframe;
+    window.deleteChannexRoomTypeById = deleteChannexRoomTypeById;
+    window.deleteChannexRatePlanById = deleteChannexRatePlanById;
+    window.toggleChannexCleanupDrawer = toggleChannexCleanupDrawer;
+    window.createDerivedLosPlansForAllRooms = createDerivedLosPlansForAllRooms;
+    window.updateDerivedLosPlan = updateDerivedLosPlan;
     window.setStep3RateView = setStep3RateView;
     window.toggleStep3CategoryRates = toggleStep3CategoryRates;
     window.renderStep3UnifiedMapping = renderStep3UnifiedMapping;

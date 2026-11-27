@@ -118,8 +118,9 @@
                                     <button type="button" onclick="window.setAllGridRateFilters(true)" class="flex-1 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] cursor-pointer">Select All</button>
                                     <button type="button" onclick="window.setAllGridRateFilters(false)" class="flex-1 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black uppercase text-[9px] cursor-pointer">Reset (DEF)</button>
                                 </div>
+                                <div class="px-1.5 pt-0.5 text-[9px] font-black uppercase tracking-wider text-slate-400">Channels / Layers</div>
                                 <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
-                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="def" onchange="window.toggleGridRateFilter('def', this.checked)" class="row-checkbox"> <span>DEF (Default)</span></span>
+                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="def" onchange="window.toggleGridRateFilter('def', this.checked)" class="row-checkbox"> <span>Default (DEF)</span></span>
                                     <span class="text-[8px] font-black uppercase px-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">DEF</span>
                                 </label>
                                 <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
@@ -127,20 +128,21 @@
                                     <span class="text-[8px] font-black uppercase px-1 rounded bg-emerald-600 text-white">DIR</span>
                                 </label>
                                 <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
-                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="event" onchange="window.toggleGridRateFilter('event', this.checked)" class="row-checkbox"> <span>Event (FMP)</span></span>
-                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-pink-100 text-pink-700 border border-pink-300">EVT</span>
-                                </label>
-                                <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
-                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="los" onchange="window.toggleGridRateFilter('los', this.checked)" class="row-checkbox"> <span>Length of Stay</span></span>
-                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-amber-100 text-amber-800 border border-amber-300">LOS</span>
-                                </label>
-                                <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
                                     <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="ota" onchange="window.toggleGridRateFilter('ota', this.checked)" class="row-checkbox"> <span>OTA Channels</span></span>
                                     <span class="text-[8px] font-black uppercase px-1 rounded bg-slate-200 text-slate-700">OTA</span>
                                 </label>
                                 <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
-                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="other" onchange="window.toggleGridRateFilter('other', this.checked)" class="row-checkbox"> <span>Other / Custom</span></span>
-                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-slate-100 text-slate-500 border border-slate-200">OTH</span>
+                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="ghost" onchange="window.toggleGridRateFilter('ghost', this.checked)" class="row-checkbox"> <span>Ghost Rooms</span></span>
+                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-violet-600 text-white">GHOST</span>
+                                </label>
+                                <div class="px-1.5 pt-1 mt-0.5 border-t border-slate-200 text-[9px] font-black uppercase tracking-wider text-slate-400">Rate Tiers</div>
+                                <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="std" onchange="window.toggleGridRateFilter('std', this.checked)" class="row-checkbox"> <span>Standard (NR / Ref)</span></span>
+                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-sky-100 text-sky-800 border border-sky-300">STD</span>
+                                </label>
+                                <label class="flex items-center justify-between px-1.5 py-1 rounded hover:bg-slate-50 cursor-pointer">
+                                    <span class="flex items-center gap-1.5"><input type="checkbox" data-grid-rate="event" onchange="window.toggleGridRateFilter('event', this.checked)" class="row-checkbox"> <span>Event Rates</span></span>
+                                    <span class="text-[8px] font-black uppercase px-1 rounded bg-pink-100 text-pink-700 border border-pink-300">EVT</span>
                                 </label>
                             </div>
                         </div>
@@ -369,7 +371,12 @@
                                 </h2>
                                 <span class="text-[11px] font-bold text-slate-500">Evaluates Bookable Window, Lead Time, Stay Dates & Exclusions. Highest Non-Stacking wins; Stackables compound.</span>
                             </div>
-                            <button type="button" onclick="window.openAddPromoModal()" class="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white rounded font-black text-xs uppercase cursor-pointer">+ Add Promo</button>
+                            <div class="flex items-center gap-2">
+                                <button type="button" id="btn-toggle-past-promos" onclick="window.toggleShowPastPromos()" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-black text-xs uppercase cursor-pointer">
+                                    Show Past (<span id="past-promos-count">0</span>)
+                                </button>
+                                <button type="button" onclick="window.openAddPromoModal()" class="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white rounded font-black text-xs uppercase cursor-pointer">+ Add Promo</button>
+                            </div>
                         </div>
 
                         <!-- Effective Stack Simulator -->

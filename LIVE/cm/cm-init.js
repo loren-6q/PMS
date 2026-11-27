@@ -518,9 +518,14 @@ export async function savePricingToCloud(silent = false) {
             console.warn("[Rolling Backup Skipped]:", backupErr);
         }
 
+        const eventRatesEnabled = typeof isEventPricingEnabled === 'function' ? isEventPricingEnabled() : !!window.enableEventRates;
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', window.currentPropertyId), {
-            lastPromoSyncDate: todayStr
+            lastPromoSyncDate: todayStr,
+            enableEventRates: eventRatesEnabled
         });
+        if (window.currentPropertyConfig) {
+            window.currentPropertyConfig.enableEventRates = eventRatesEnabled;
+        }
         const shiftBanner = document.getElementById('promo-shift-banner');
         if (shiftBanner) shiftBanner.classList.add('hidden');
 
