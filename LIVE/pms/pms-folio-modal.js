@@ -165,6 +165,14 @@ export const checkEmailProxy = val => {
     else if (v.includes('@')) el.classList.add('text-green-600', 'font-black');
 };
 
+export const updateVolSyncButtonVisibility = status => {
+    const volBtn = $('vol-sync-btn');
+    if (!volBtn) return;
+    const isVol = String(status || '').trim().toLowerCase() === 'vol';
+    volBtn.classList.toggle('hidden', !isVol);
+    volBtn.style.display = isVol ? 'inline-flex' : 'none';
+};
+
 export const cycleStatus = () => {
     const sBtn = $('status-cycle-btn');
     if (!sBtn) return;
@@ -178,6 +186,7 @@ export const cycleStatus = () => {
     sBtn.style.color = nO.txt;
     const hiddenInput = $('guest-status-hidden');
     if (hiddenInput) hiddenInput.value = nO.val;
+    updateVolSyncButtonVisibility(nO.val);
 };
 
 export const setMulti = (id, state, labels, classes) => {
@@ -545,6 +554,13 @@ export const openGuestModal = (s = {}) => {
         sBtn.style.background = sObj.bg;
         sBtn.style.color = sObj.txt;
     }
+    updateVolSyncButtonVisibility(pSt);
+
+    const gModal = $('guest-modal');
+    if (gModal) {
+        gModal.dataset.volCalId = s.volCalId || '';
+        gModal.dataset.volLedgerKey = s.volLedgerKey || '';
+    }
 
     if ($('net-price')) $('net-price').dataset.override = s.netOverride ? 'true' : 'false';
     if ($('assigned-rooms-container')) $('assigned-rooms-container').innerHTML = '';
@@ -698,3 +714,4 @@ window.renderItineraryStripe = renderItineraryStripe;
 window.openGuestModal = openGuestModal;
 window.editStaff = editStaff;
 window.quickAdd = quickAdd;
+window.updateVolSyncButtonVisibility = updateVolSyncButtonVisibility;

@@ -1,0 +1,126 @@
+/* styles.css file */
+:root{
+  --stripe-runner: #FFF6A2;
+  --stripe-sm: #C5F7C8;
+  --stripe-po: #CBE5FF;
+  --stripe-pi: #BFF7F2;
+  --stripe-pg: #B6EFE6;
+  --stripe-games:#DCCCFF;
+  --stripe-beer:#FFD6E7;
+  --stripe-bucket:#FFE1C6;
+  --stripe-floater:#EEEEEE;
+  --pink: #ff4fa3;
+  --border: #bbbbbb;
+  --bg: #fafafa;
+  --ink: #222;
+  --conf-red: #ff5151;
+  --conf-orange: #ff9b3c;
+  --conf-purple: #b78cff;
+  --conf-blue: #6fb8ff;
+  --conf-deepred: #990000;
+}
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{margin:0;background:var(--bg);font-family:"Roboto Condensed", "Arial Narrow", "Liberation Sans Narrow", sans-serif;color:var(--ink); letter-spacing:.2px;font-size:15px}
+
+.app-wrap{max-width:1140px;margin:18px auto;padding:0 12px; padding-bottom: 100px;}
+h1{font-size:24px;margin:0 0 12px;line-height:1.2}
+h2{font-size:18px;margin:14px 0;line-height:1.2}
+
+/* Controls */
+.controls{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px}
+.controls .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.tablike{display:inline-flex;gap:8px;align-items:center;padding:8px 10px;border-radius:999px;border:1px solid var(--border);background:#fff;font-size:14px}
+.staff-input{flex:0 0 150px;display:flex;flex-direction:column;gap:6px}
+.staff-input textarea{width:150px;max-width:180px;min-height:200px;border:1px solid var(--border);border-radius:6px;padding:8px;font-family:"Roboto Condensed", monospace;font-size:14px}
+
+/* Buttons & tabs */
+.btn{appearance:none;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;background:var(--pink);color:#fff;font-weight:700;border:1px solid #e64d95}
+.btn:hover{background:#e64d95}
+.btn.secondary{background:#fff;color:#111;border:1px solid var(--border);font-weight:600}
+.btn.inline{padding:4px 8px;border-radius:6px;font-size:12px}
+.btn.small{padding:6px 8px;border-radius:6px;font-size:12px}
+.btn.ghost{background:transparent;border:1px dashed var(--border);color:#444}
+.actions{display:flex;flex-direction:column;gap:8px}
+
+/* Tabs styling */
+.tabs{display:flex;gap:8px;margin:8px 0 14px;align-items:center}
+.tab{padding:8px 12px;border-radius:8px;background:#fff;border:1px solid var(--border);cursor:pointer;font-weight:700}
+.tab.active{background:var(--pink);color:#fff;border-color:#e64d95;box-shadow:0 2px 6px rgba(0,0,0,0.07)}
+.tabbar-wrap{display:flex;align-items:center;gap:12px;padding:0 4px}
+
+/* Undo/Redo */
+.undo-redo{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+/* Schedule table styles */
+.schedule-stack{display:grid;gap:12px}
+.day-block{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.day-title{padding:8px 10px;font-weight:700;border-bottom:1px solid var(--border);background:#fff}
+
+.schedule-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px}
+.schedule-table th, .schedule-table td{border:1px solid var(--border);padding:4px;text-align:center;vertical-align:middle;line-height:1.1}
+.stripe-col{width:8px}
+.task-col{width:150px;text-align:left;padding-left:8px;font-size:14px}
+.hour-col{width:calc((100% - 160px) / 11);}
+
+/* stripe column visual */
+.stripe{width:8px}
+.task-name{font-weight:700;text-align:left;padding-left:8px;font-size:14px}
+
+/* staff name in cell */
+.cell-wrap{position:relative;display:flex;flex-direction:column;gap:2px;align-items:center;min-height:22px;padding:6px}
+.staff-name{cursor:pointer;padding:2px 4px;border-radius:4px;font-size:12px;line-height:1.1}
+.staff-name:hover{color:var(--pink);font-weight:700;background:rgba(255,255,255,0.6)}
+.staff-name.selected{outline:2px solid rgba(0,0,0,0.06);}
+
+/* small popover menu */
+.person-menu{position:fixed;z-index:10001;background:#fff;border:1px solid var(--border);padding:4px;border-radius:6px;display:flex;flex-direction:column;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.08); width: 70px;}
+.person-menu button{padding:4px 6px;font-size:11px}
+
+/* conflict outlines */
+.conflict-outline{position:relative}
+.conflict-outline::after{content:"";position:absolute;inset:2px;pointer-events:none;border-radius:4px;box-sizing:border-box;}
+.outline-red::after{ border:3px solid var(--conf-red); }
+.outline-orange::after{ border:3px solid var(--conf-orange); }
+.outline-purple::after{ border:3px solid var(--conf-purple); }
+.outline-blue::after{ border:3px solid var(--conf-blue); }
+.outline-deepred::after{ border:3px solid var(--conf-deepred); }
+
+/* Individual schedules */
+.people-wrap{display:flex;flex-wrap:wrap;gap:12px}
+.person-card{background:#fff;border:2px solid #000;border-radius:6px;overflow:hidden;width:320px;min-width:320px;max-width:320px;box-sizing:border-box}
+.person-head{padding:8px 10px;font-weight:700;border-bottom:1px solid var(--border);background:#fff}
+.person-table{width:100%;border-collapse:collapse;font-size:12px}
+.person-table th, .person-table td{border:1px solid var(--border);padding:6px;text-align:center}
+
+/* Individual LIST tab compact */
+.list-wrap{display:flex;flex-wrap:wrap;gap:8px}
+.person-list{background:#fff;border:2px solid #000;border-radius:6px;overflow:hidden;padding:6px;width:215px;min-width:220px;box-shadow:0 2px 6px rgba(0,0,0,0.05);}
+.person-list .head{padding:6px 8px;font-weight:700;border-bottom:1px solid var(--border)}
+.person-list table{width:100%; border-collapse:collapse; font-size:13px;}
+.person-list th, .person-list td{border:1px solid var(--border); padding:6px;}
+
+/* Edit modal */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.22);display:flex;align-items:flex-start;justify-content:center;padding-top:48px;z-index:9999}
+.modal{background:rgba(255,255,255,0.95);max-width:220px;width:92vw;border-radius:12px;border:1px solid var(--border);overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.12);position:absolute;cursor:default;}
+.modal .modal-head{padding:8px 12px;font-weight:700;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:grab}
+.modal .modal-body{padding:10px 12px;display:grid;gap:8px}
+.hint{color:#666;padding:10px 0}
+
+/* Summary tweaks */
+.summary-median { border-top:4px solid #000; font-weight:700; }
+.staff-day-totals-row td, .staff-day-totals-row th { border-top:2px solid black !important; font-weight:700; }
+.compact-date { white-space:nowrap; font-weight:700; font-size:13px; text-align:center; }
+.compact-date small { display:block; font-weight:600; font-size:12px; color:#444 }
+
+/* Responsive */
+@media (max-width:900px){ .person-list{width:100%} }
+
+/* Print Styles */
+@media print {
+  .app-wrap, .controls, .tabbar-wrap, .undo-redo, .print-actions, .conflict-wrap { display:none !important; }
+  body > *:not(#app-content-to-print) { display:none; }
+  #app-content-to-print { display:block !important; width:100% !important; max-width:100% !important; margin:0 !important; padding:0 !important; }
+  .day-block { break-inside:avoid; page-break-inside:avoid; }
+  h1, h2 { page-break-after:avoid; }
+}

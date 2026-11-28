@@ -106,8 +106,68 @@
             </div>
 
             <!-- Live Totals Summary Pill -->
-            <div id="acc-audit-pill" class="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
-                0 Rows
+            <div class="flex items-center gap-1.5">
+                <div id="acc-audit-pill" class="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
+                    0 Rows
+                </div>
+                <button type="button" id="btn-toggle-kpi" onclick="window.toggleKpiStrip()" class="px-1.5 py-0.5 rounded border border-slate-300 bg-white hover:bg-slate-100 text-slate-600 font-black text-[10px] uppercase cursor-pointer" title="Show/Hide Overall Summary">
+                    Summary ▾
+                </button>
+            </div>
+        </div>
+
+        <!-- OVERALL PERIOD SUMMARY KPI STRIP -->
+        <div id="acc-kpi-strip" class="bg-slate-50 border-x border-t border-slate-300 px-2.5 py-2 shrink-0 unselectable">
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 tabular-nums">
+                <!-- 1. Collectible Gross -->
+                <div class="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 shadow-2xs flex flex-col justify-between">
+                    <div class="flex items-center justify-between gap-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Collectible Gross</span>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase" title="Total Gross minus Uncollectible (Cancelled/No-Show/Vol)">Excl. Cancelled</span>
+                    </div>
+                    <div id="kpi-collectible-gross" class="text-base sm:text-lg font-black text-slate-900 leading-tight mt-0.5">฿0.00</div>
+                    <div id="kpi-collectible-sub" class="text-[10px] font-bold text-slate-500 truncate mt-0.5">Raw Gross: ฿0.00</div>
+                </div>
+
+                <!-- 2. Commissions & Fees -->
+                <div class="bg-white border border-rose-200 rounded-lg px-2.5 py-1.5 shadow-2xs flex flex-col justify-between">
+                    <div class="flex items-center justify-between gap-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-rose-700">Commissions &amp; Fees</span>
+                        <span id="kpi-fees-pct" class="text-[9px] font-black text-rose-500">0.0%</span>
+                    </div>
+                    <div id="kpi-fees" class="text-base sm:text-lg font-black text-rose-600 leading-tight mt-0.5">฿0.00</div>
+                    <div id="kpi-fees-sub" class="text-[10px] font-bold text-slate-500 truncate mt-0.5">Recorded OTA &amp; card fees</div>
+                </div>
+
+                <!-- 3. Projected Total Net (Once All Is Paid) -->
+                <div class="bg-indigo-950 border border-indigo-800 rounded-lg px-2.5 py-1.5 shadow-xs flex flex-col justify-between text-white">
+                    <div class="flex items-center justify-between gap-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-indigo-200">Total Projected Net</span>
+                        <span class="text-[9px] font-black uppercase text-emerald-300">Once All Paid</span>
+                    </div>
+                    <div id="kpi-projected-net" class="text-base sm:text-lg font-black text-white leading-tight mt-0.5">฿0.00</div>
+                    <div id="kpi-projected-sub" class="text-[10px] font-bold text-indigo-200 truncate mt-0.5">0 Bookings • 0 Nights</div>
+                </div>
+
+                <!-- 4. Earned So Far (Received / Settled) -->
+                <div class="bg-emerald-50/80 border border-emerald-300 rounded-lg px-2.5 py-1.5 shadow-2xs flex flex-col justify-between">
+                    <div class="flex items-center justify-between gap-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-emerald-800">Earned So Far</span>
+                        <span id="kpi-earned-pct" class="text-[9px] font-black text-emerald-700">0% collected</span>
+                    </div>
+                    <div id="kpi-earned-sofar" class="text-base sm:text-lg font-black text-emerald-700 leading-tight mt-0.5">฿0.00</div>
+                    <div id="kpi-earned-sub" class="text-[10px] font-bold text-emerald-800/80 truncate mt-0.5">Received Cash / Bank / Card / OTA</div>
+                </div>
+
+                <!-- 5. Still To Receive (Pending + Future + Unpaid) -->
+                <div class="bg-amber-50/80 border border-amber-300 rounded-lg px-2.5 py-1.5 shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1">
+                    <div class="flex items-center justify-between gap-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-amber-900">Still To Receive</span>
+                        <span class="text-[9px] font-bold text-amber-700 uppercase">Remaining</span>
+                    </div>
+                    <div id="kpi-still-receive" class="text-base sm:text-lg font-black text-amber-800 leading-tight mt-0.5">฿0.00</div>
+                    <div id="kpi-still-sub" class="text-[10px] font-bold text-amber-900/80 truncate mt-0.5">Pending ฿0 • Future ฿0 • Unpaid ฿0</div>
+                </div>
             </div>
         </div>
 
@@ -1166,10 +1226,58 @@
                 pill.innerText = `${rows.length} Rows | Net: ฿${fmtMoney(totals.net)} | Unpaid: ฿${fmtMoney(totals.unpaid)}${overPart}${unkPart}`;
             }
 
+            updateAccountingKpiStrip(totals, rows.length);
+
             if (activeView === 'rollup') {
                 renderRollupView();
             }
         };
+
+        window.toggleKpiStrip = () => {
+            const strip = document.getElementById('acc-kpi-strip');
+            const btn = document.getElementById('btn-toggle-kpi');
+            if (!strip) return;
+            const isHidden = strip.classList.toggle('hidden');
+            if (btn) btn.innerText = isHidden ? 'Summary ▸' : 'Summary ▾';
+        };
+
+        function updateAccountingKpiStrip(totals, rowCount) {
+            const collectibleGross = roundCurrency(Math.max(0, totals.gross - totals.uncollectible));
+            const earnedSoFar = roundCurrency(totals.cash + totals.bank + totals.card + totals.otaPayouts);
+            const stillToReceive = roundCurrency(totals.pending + totals.future + totals.unpaid);
+            const projectedNet = roundCurrency(earnedSoFar + stillToReceive);
+
+            const feesPct = collectibleGross > 0 ? ((totals.fees / collectibleGross) * 100).toFixed(1) : '0.0';
+            const collectedPct = projectedNet > 0 ? Math.round((earnedSoFar / projectedNet) * 100) : 0;
+
+            const setText = (id, txt) => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = txt;
+            };
+
+            setText('kpi-collectible-gross', `฿${fmtMoney(collectibleGross)}`);
+            setText('kpi-collectible-sub', `All Gross: ฿${fmtMoney(totals.gross)}${totals.uncollectible > 0 ? ` • Uncollectible: -฿${fmtMoney(totals.uncollectible)}` : ''}`);
+
+            setText('kpi-fees', `฿${fmtMoney(totals.fees)}`);
+            setText('kpi-fees-pct', `${feesPct}%`);
+            const feeExtras = [];
+            if (totals.overpaid > 0) feeExtras.push(`Overpaid: -฿${fmtMoney(totals.overpaid)}`);
+            if (totals.unknown > 0) feeExtras.push(`Unknown: ฿${fmtMoney(totals.unknown)}`);
+            setText('kpi-fees-sub', feeExtras.length > 0 ? feeExtras.join(' • ') : 'OTA & card commissions');
+
+            setText('kpi-projected-net', `฿${fmtMoney(projectedNet)}`);
+            setText('kpi-projected-sub', `${rowCount} Booking${rowCount === 1 ? '' : 's'} • ${totals.nights} Night${totals.nights === 1 ? '' : 's'}`);
+
+            setText('kpi-earned-sofar', `฿${fmtMoney(earnedSoFar)}`);
+            setText('kpi-earned-pct', `${collectedPct}% received`);
+            setText('kpi-earned-sub', `Cash ฿${Math.round(totals.cash).toLocaleString()} • Bank ฿${Math.round(totals.bank).toLocaleString()} • Card ฿${Math.round(totals.card).toLocaleString()} • OTA ฿${Math.round(totals.otaPayouts).toLocaleString()}`);
+
+            setText('kpi-still-receive', `฿${fmtMoney(stillToReceive)}`);
+            const stillEl = document.getElementById('kpi-still-sub');
+            if (stillEl) {
+                stillEl.innerHTML = `Pending ฿${Math.round(totals.pending).toLocaleString()} • Future ฿${Math.round(totals.future).toLocaleString()}${totals.unpaid > 0 ? ` • <span class="text-orange-700 font-black">Unpaid ฿${Math.round(totals.unpaid).toLocaleString()}</span>` : ' • Unpaid ฿0'}`;
+            }
+        }
 
         // ------------------------------------------------------------------
         // 6. WEEKLY / MONTHLY / YEARLY SUMMARIES + BAR CHART

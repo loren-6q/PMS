@@ -24,6 +24,7 @@ import './pms-folio-ledger.js';
 import './pms-folio-actions.js';
 import './pms-folio-invoice.js';
 import './pms-tm30.js';
+import './pms-vol-sync.js';
 import '../parser/parser-engine.js';
 import '../parser/room-assigner.js';
 

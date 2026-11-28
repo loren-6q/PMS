@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WET Vol Calendar</title>
+    
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%232563eb%22/><text x=%2250%22 y=%2275%22 font-family=%22Arial Black, sans-serif%22 font-size=%2280%22 fill=%22white%22 text-anchor=%22middle%22>V</text></svg>">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Roboto+Condensed:wght@400;700;900&display=swap');
+        
+        body { font-family: 'Roboto Condensed', sans-serif; background: #f1f5f9; color: #1e293b; overflow-x: hidden; font-size: 1.2rem; }
+
+        /* Responsive Breakpoints for Grid */
+        :root { --sidebar-w: 75px; --days: 14; }
+        @media (min-width: 650px) { :root { --days: 21; } --sidebar-w: 85px; }
+        @media (min-width: 950px) { :root { --days: 28; } --sidebar-w: 95px; }
+        @media (min-width: 1150px) { :root { --days: 35; } --sidebar-w: 105px; }
+
+        .timeline-grid { display: grid; grid-template-columns: var(--sidebar-w) repeat(var(--days), 1fr); }
+        .day-column { border-right: 1px solid #e2e8f0; height: 100%; position: relative; cursor: cell; min-width: 25px; transition: filter 0.1s; }
+        .bed-row { height: 38px; border-bottom: 1px solid #cbd5e1; position: relative; transition: filter 0.1s; }
+        
+        /* Crosshair Highlighting */
+        .bed-row:hover, .hover-col { filter: brightness(0.94); }
+        
+        /* FMP Shading */
+        .day-fmp-dark { background-color: rgba(225, 29, 72, 0.5) !important; }
+        .day-fmp-medium { background-color: rgba(249, 115, 22, 0.35) !important; }
+        .day-fmp-light { background-color: rgba(245, 158, 11, 0.25) !important; }
+        .day-today { background-color: rgba(219, 234, 254, 0.8); }
+        
+        .staff-bar {
+            position: absolute; height: 30px; top: 4px; border-radius: 4px;
+            display: flex; align-items: center; color: white; cursor: pointer; z-index: 10;
+            font-size: 1.05rem; font-weight: 700; border: 1px solid rgba(0,0,0,0.2);
+            text-transform: uppercase; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden;
+            transition: opacity 0.2s;
+        }
+
+        .status-future { background-color: #2563eb; } .status-here { background-color: #059669; } .status-left { background-color: #475569; } .status-cancelled { background-color: #94a3b8; } .status-noshow { background-color: #000; }
+        
+        .modal-overlay, .alert-modal-overlay { display: none; position: fixed; inset: 0; backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+        .modal-overlay { background: rgba(15, 23, 42, 0.9); z-index: 100; }
+        .alert-modal-overlay { background: rgba(0,0,0,0.7); z-index: 200; backdrop-filter: blur(2px); }
+        .modal-overlay.active, .alert-modal-overlay.active { display: flex; }
+
+        .icon-font { font-family: 'Bungee', cursive; font-size: 18px; line-height: 1; transform: translateY(2px); }
+        .icon-box { width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
+        .icon-paid { background: #ef4444 !important; color: white !important; } .icon-ref { background: #22c55e !important; color: white !important; }  
+        .icon-none { background: rgba(255,255,255,0.05) !important; color: rgba(255,255,255,0.2) !important; border-color: rgba(255,255,255,0.05) !important; opacity: 0.3; }
+
+        .legend-item { display: flex; align-items: center; gap: 4px; font-size: 1rem; font-weight: 900; color: #475569; text-transform: uppercase; }
+        .bar-sticky-content { position: sticky; left: 0; display: flex; align-items: center; padding: 0 8px; width: fit-content; max-width: 100vw; white-space: nowrap; }
+        .month-divider { border-left: 3px solid white; }
+
+        input, select, textarea { font-size: 1.1rem !important; padding: 2px 6px !important; border-radius: 4px !important; border: 1px solid #cbd5e1 !important; font-weight: 700 !important; }
+        .field-label { font-size: 16px; font-weight: 900; color: #64748b; text-transform: uppercase; display: block; }
+
+        .date-input-box { position: relative; width: 100%; height: 38px; display: flex; align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; }
+        .date-input-box .display-text { font-weight: 900; color: #2563eb; margin-left: 10px; flex: 1; pointer-events: none; z-index: 5; }
+        .date-input-box input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; z-index: 2; display: block; }
+        .date-input-box .cal-icon { margin-right: 10px; color: #94a3b8; pointer-events: none; z-index: 5; }
+
+        .tab-btn { padding: 6px 16px; font-weight: 900; font-size: 0.85rem; text-transform: uppercase; border-radius: 6px; transition: all 0.2s; border: 2px solid transparent; color: #64748b; }
+        .tab-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        #database-view { display: none; }
+        
+        .loading-overlay { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Logo Styling */
+        .logo-box { width: 48px; height: 48px; position: relative; display: flex; align-items: center; justify-content: center; background: #2563eb; border-radius: 10px; overflow: hidden; }
+        .logo-v-back { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Bungee', cursive; font-size: 52px; color: rgba(255,255,255,0.18); z-index: 1; pointer-events: none; top: 50%; left: 50%; transform: translate(-50%, -48%); }
+        .logo-people-front { position: relative; z-index: 2; color: #fff; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
+
+        .unassigned-header { background: #fef3c7 !important; color: #92400e !important; font-weight: 900; }
+    </style>
+</head>
+<body class="p-1 lg:p-2">
+
+    <div id="boot-loader" class="loading-overlay"><div class="spinner"></div><div class="mt-4 font-black text-slate-800 uppercase tracking-widest text-center px-4"><span id="sync-status">Cloud Syncing...</span></div></div>
+
+    <div class="max-w-[1950px] mx-auto">
+        <div class="bg-white p-3 rounded-lg shadow-sm border border-slate-200 mb-1">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2">
+                <div class="flex items-center gap-3"><div class="logo-box"><div class="logo-v-back">V</div><i data-lucide="users" class="logo-people-front" size="34"></i></div><h1 class="text-2xl font-black text-slate-800 tracking-tighter leading-none uppercase">Vol Calendar</h1></div>
+                <div class="flex bg-slate-100 rounded-lg p-1 w-full sm:w-auto justify-between">
+                    <button id="tab-cal" onclick="window.switchTab('calendar')" class="tab-btn active w-1/2 sm:w-auto">Calendar</button>
+                    <button id="tab-db" onclick="window.switchTab('database')" class="tab-btn w-1/2 sm:w-auto">Database</button>
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                        <button onclick="window.shiftPeriod(-7)" class="p-1 hover:bg-white rounded"><i data-lucide="chevron-left" size="20"></i></button>
+                        <div class="date-input-box mx-2" style="width: 140px; height: 32px;"><span id="current-jump-display" class="display-text" style="font-size: 0.9rem">--</span><i data-lucide="calendar" class="cal-icon" size="16"></i><input type="date" id="jump-date" onchange="window.jumpToDate(this.value)"></div>
+                        <button onclick="window.shiftPeriod(7)" class="p-1 hover:bg-white rounded"><i data-lucide="chevron-right" size="20"></i></button>
+                    </div>
+                    <button onclick="window.goToday()" class="px-4 py-1.5 bg-white border border-slate-300 rounded font-bold text-xs uppercase hover:bg-slate-50">Today</button>
+                    <div class="flex gap-1 ml-1">
+                        <button onclick="window.openImportModal()" class="px-4 py-1.5 bg-indigo-600 text-white rounded shadow-lg font-black text-xs uppercase flex items-center gap-1.5 hover:bg-indigo-700 transition-all active:scale-95"><i data-lucide="clipboard-paste" size="16"></i> Import</button>
+                        <button onclick="window.openStaffModal()" class="px-5 py-1.5 bg-blue-600 text-white rounded shadow-lg font-black text-xs uppercase flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95"><i data-lucide="plus" size="16"></i> Add Staff</button>
+                    </div>
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto mt-1 xl:mt-0">
+                    <div id="search-jump-btn" onclick="window.jumpToSearchMatch()" class="hidden bg-orange-100 text-orange-700 px-3 py-1.5 rounded-lg font-black text-xs uppercase cursor-pointer hover:bg-orange-200"><span id="match-counter">Match?</span></div>
+                    <div class="flex flex-wrap sm:flex-nowrap items-center bg-slate-100 p-1 rounded-lg border border-slate-200 gap-1 w-full xl:w-auto">
+                        <select id="status-filter" onchange="window.handleSearch($('staff-search').value)" class="!bg-transparent !border-none text-xs font-black uppercase text-slate-500 cursor-pointer outline-none w-full sm:w-auto mb-1 sm:mb-0">
+                            <option value="ALL">ALL STATUS</option><option value="future">FUTURE</option><option value="here">HERE</option><option value="left">LEFT</option><option value="cancelled">CANCELLED</option><option value="noshow">NO-SHOW</option>
+                        </select>
+                        <div class="hidden sm:block h-4 w-px bg-slate-300 mx-1"></div>
+                        <div class="relative group w-full sm:w-auto">
+                            <i data-lucide="search" class="absolute left-2 top-1.5 text-slate-400" size="14"></i>
+                            <input type="text" id="staff-search" placeholder="FIND NAME..." oninput="window.handleSearch(this.value)" class="pl-7 pr-7 py-1 w-full sm:w-40 bg-white border border-slate-200 rounded-md font-black text-xs uppercase outline-none focus:ring-2 focus:ring-blue-500">
+                            <button onclick="window.clearSearch()" class="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600"><i data-lucide="x" size="14"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="calendar-view">
+            <div class="bg-white rounded shadow-md border border-slate-300 overflow-hidden">
+                <div id="month-header" class="timeline-grid bg-slate-800 text-white text-[12px] font-bold uppercase tracking-widest py-1.5"><div class="border-r border-slate-700"></div><div id="month-labels" class="contents"></div></div>
+                <div class="timeline-grid bg-slate-100 border-b border-slate-300"><div class="p-1 text-[13px] font-black text-slate-500 uppercase flex items-center justify-center border-r border-slate-300">BED</div><div id="timeline-header" class="contents"></div></div>
+                <div id="timeline-body" class="relative pb-2"></div>
+            </div>
+            <footer class="mt-2 bg-white p-3 rounded-lg border border-slate-200 flex flex-row flex-wrap items-center justify-center gap-3 text-center">
+                <div class="flex items-center justify-center gap-3 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200"><div class="legend-item"><span class="w-4 h-4 rounded-full bg-blue-600"></span> FUTURE</div><div class="legend-item"><span class="w-4 h-4 rounded-full bg-green-600"></span> HERE</div><div class="legend-item"><span class="w-4 h-4 rounded-full bg-slate-500"></span> LEFT</div></div>
+                <div id="footer-booking-icons" class="flex items-center justify-center gap-3 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200"></div>
+                <div id="footer-job-icons" class="flex items-center justify-center gap-3 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200"></div>
+                <div class="flex items-center justify-center gap-3 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200"><div class="legend-item"><span class="w-4 h-4 rounded-sm border border-slate-300" style="background-color: rgba(225, 29, 72, 0.5)"></span> FMP</div><div class="legend-item"><span class="w-4 h-4 rounded-sm border border-slate-300" style="background-color: rgba(249, 115, 22, 0.4)"></span> FMW</div><div class="legend-item"><span class="w-4 h-4 rounded-sm border border-slate-300" style="background-color: rgba(245, 158, 11, 0.35)"></span> REQ</div></div>
+            </footer>
+        </div>
+
+        <div id="database-view" class="bg-white rounded-lg shadow-md border border-slate-300 overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead><tr class="bg-slate-800 text-white text-[12px] font-black uppercase tracking-widest cursor-pointer"><th onclick="window.sortDatabase('name')" class="p-3 border-r border-slate-700 hover:bg-slate-700">Volunteer Name</th><th onclick="window.sortDatabase('country')" class="p-3 border-r border-slate-700 hover:bg-slate-700">Country</th><th class="p-3 border-r border-slate-700">Contact / Info</th><th onclick="window.sortDatabase('checkIn')" class="p-3 border-r border-slate-700 hover:bg-slate-700">Stay Dates</th><th onclick="window.sortDatabase('bed')" class="p-3 border-r border-slate-700 hover:bg-slate-700">Bed</th><th onclick="window.sortDatabase('status')" class="p-3 hover:bg-slate-700">Status</th></tr></thead>
+                <tbody id="database-body" class="text-sm font-bold text-slate-700"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="staff-modal" class="modal-overlay p-2">
+        <div class="bg-white w-full max-w-xl rounded-lg shadow-2xl overflow-hidden border-2 border-slate-800">
+            <div class="bg-slate-900 p-3 text-white flex justify-between items-center"><h3 id="modal-title" class="text-md font-bold uppercase tracking-tighter">Volunteer Record</h3><button type="button" onclick="window.closeStaffModal()"><i data-lucide="x"></i></button></div>
+            <form id="staff-form" class="p-4 pt-1 space-y-3">
+                <input type="hidden" id="staff-id">
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="flex flex-col"><label class="field-label">Name</label><input type="text" id="staff-name" required class="bg-slate-50 uppercase"></div>
+                    <div class="flex flex-col"><label class="field-label">Country</label><select id="staff-country" class="bg-slate-50 font-bold"></select></div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="flex flex-col"><label class="field-label">Room</label><input type="text" id="room-name" class="bg-slate-50 uppercase text-center" placeholder="--"></div>
+                    <div class="flex flex-col"><label class="field-label">Bed #</label><input type="number" id="bed-number" class="bg-slate-50 text-center" placeholder="--"></div>
+                    <div class="flex flex-col"><label class="field-label">Status</label><select id="staff-status" class="bg-slate-50"><option value="future">FUTURE</option><option value="here">HERE</option><option value="left">LEFT</option><option value="cancelled">CANCELLED</option><option value="noshow">NO-SHOW</option></select></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="flex flex-col"><label class="field-label">Contact Info</label><input type="text" id="staff-contact" placeholder="Email, WhatsApp..." class="bg-slate-50"></div>
+                    <div class="flex flex-col"><label class="field-label">Special Job</label><select id="staff-job" class="bg-slate-50 font-bold"><option value="none">NONE</option><option value="art">ART</option><option value="socials">SOCIALS</option><option value="bar">BAR</option></select></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="flex flex-col"><label class="field-label">In (Arrival)</label><div class="date-input-box"><span id="ov-in" class="display-text">---</span><i data-lucide="calendar" class="cal-icon" size="18"></i><input type="date" id="check-in" required onchange="window.syncLabels()"></div></div>
+                    <div class="flex flex-col"><label class="field-label">Out (Departure)</label><div class="date-input-box"><span id="ov-out" class="display-text">---</span><i data-lucide="calendar" class="cal-icon" size="18"></i><input type="date" id="check-out" required onchange="window.syncLabels()"></div></div>
+                </div>
+                <div class="bg-slate-100 p-3 pt-1 rounded border-2 border-slate-300">
+                    <div class="flex justify-between items-center mb-1 pb-1 border-b-2 border-slate-200">
+                        <label class="text-[20px] font-black text-slate-800 uppercase">DEPOSITS</label>
+                        <div class="flex gap-6"><div class="text-right"><label class="field-label">Held</label><div class="font-black text-2xl leading-none" id="display-held">฿0</div></div><div class="text-right"><label class="field-label !text-blue-500">Refund Due</label><div class="font-black text-blue-600 text-2xl leading-none" id="display-refund-due">฿0</div></div></div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-1">
+                        <div class="flex items-center gap-3 bg-blue-700 p-1.5 rounded text-white font-bold text-sm uppercase"><div class="flex items-center gap-2 w-32" id="modal-icon-d"></div><label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="paid-deposit" onchange="window.calcRefund()" class="w-4 h-4"> Paid</label><label class="flex items-center gap-1 cursor-pointer ml-auto"><input type="checkbox" id="ref-deposit" onchange="window.calcRefund()" class="w-4 h-4"> Refunded</label></div>
+                        <div class="flex items-center gap-3 bg-white p-1.5 rounded border border-slate-200 text-sm font-black uppercase"><div class="flex items-center gap-2 w-32" id="modal-icon-hw-wet"></div><input type="number" id="amt-hw-wet" step="0.01" oninput="window.calcRefund()" placeholder="0" class="w-20 p-0 border-b-2 font-bold outline-none"><label class="flex items-center gap-1 cursor-pointer ml-auto text-slate-400 font-bold"><input type="checkbox" id="ref-hw-wet" onchange="window.calcRefund()" class="w-4 h-4"> Refunded</label></div>
+                        <div class="flex items-center gap-3 bg-white p-1.5 rounded border border-slate-200 text-sm font-black uppercase"><div class="flex items-center gap-2 w-32" id="modal-icon-bdc-wet"></div><input type="number" id="amt-bdc-wet" step="0.01" oninput="window.calcRefund()" placeholder="0" class="w-20 p-0 border-b-2 font-bold outline-none"><label class="flex items-center gap-1 cursor-pointer ml-auto text-slate-400 font-bold"><input type="checkbox" id="ref-bdc-wet" onchange="window.calcRefund()" class="w-4 h-4"> Refunded</label></div>
+                        <div class="flex items-center gap-3 bg-white p-1.5 rounded border border-slate-200 text-sm font-black uppercase"><div class="flex items-center gap-2 w-32" id="modal-icon-hw-swims"></div><input type="number" id="amt-hw-swims" step="0.01" oninput="window.calcRefund()" placeholder="0" class="w-20 p-0 border-b-2 font-bold outline-none"><label class="flex items-center gap-1 cursor-pointer ml-auto text-slate-400 font-bold"><input type="checkbox" id="ref-hw-swims" onchange="window.calcRefund()" class="w-4 h-4"> Refunded</label></div>
+                        <div class="flex items-center gap-3 bg-white p-1.5 rounded border border-slate-200 text-sm font-black uppercase"><div class="flex items-center gap-2 w-32" id="modal-icon-bdc-swims"></div><input type="number" id="amt-bdc-swims" step="0.01" oninput="window.calcRefund()" placeholder="0" class="w-20 p-0 border-b-2 font-bold outline-none"><label class="flex items-center gap-1 cursor-pointer ml-auto text-slate-400 font-bold"><input type="checkbox" id="ref-bdc-swims" onchange="window.calcRefund()" class="w-4 h-4"> Refunded</label></div>
+                    </div>
+                </div>
+                <textarea id="staff-notes" rows="3" class="w-full bg-slate-50 border border-slate-300 font-bold text-xs" style="min-height: 70px" placeholder="NOTES..."></textarea>
+                <div class="flex justify-between items-center pt-0">
+                    <div class="flex items-center gap-4"><button type="button" id="delete-btn" onclick="window.requestDelete()" class="text-red-600 font-bold text-xs uppercase hover:underline">Delete Record</button><button type="button" id="split-btn" onclick="window.requestSplit()" style="display:none;" class="text-orange-600 font-bold text-xs uppercase hover:underline">Split Stay</button></div>
+                    <div class="flex gap-2 ml-auto"><button type="button" onclick="window.closeStaffModal()" class="px-4 py-1.5 bg-slate-200 rounded font-bold text-xs uppercase">Cancel</button><button type="submit" class="px-8 py-1.5 bg-blue-600 text-white rounded font-bold text-xs uppercase shadow-lg">Save Record</button></div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="alert-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div id="alert-header" class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Attention</div><div class="p-6 text-center"><p id="alert-message" class="font-black text-slate-700 leading-tight text-lg"></p><div id="alert-actions" class="mt-6 flex gap-2 justify-center"><button id="alert-cancel" onclick="window.closeAlert()" class="hidden px-6 py-2 bg-slate-200 rounded-lg font-black text-sm uppercase">Cancel</button><button id="alert-confirm" onclick="window.closeAlert()" class="px-10 py-2 bg-blue-600 text-white rounded-lg font-black text-sm uppercase">Okay</button></div></div></div></div>
+
+    <!-- Split Stay & Import Modals -->
+    <div id="split-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border-2 border-slate-800"><div class="bg-slate-900 p-3 text-white font-bold uppercase text-center text-sm">Split Stay</div><div class="p-6 text-center"><p class="font-black text-slate-700 leading-tight text-md mb-4">Select the date to split this booking. The current booking will end on this date, and a new UNASSIGNED booking will begin.</p><input type="date" id="split-date" class="w-full mb-6 bg-slate-50 border border-slate-300 font-bold text-lg p-2 rounded outline-none focus:ring-2 focus:ring-blue-500"><div class="flex gap-2 justify-center"><button onclick="$('split-modal').style.display='none'" class="px-6 py-2 bg-slate-200 rounded-lg font-black text-sm uppercase">Cancel</button><button onclick="window.confirmSplit()" class="px-10 py-2 bg-orange-600 text-white rounded-lg font-black text-sm uppercase">Split Stay</button></div></div></div></div>
+    <div id="import-modal" class="alert-modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border-2 border-slate-800 flex flex-col"><div class="bg-slate-900 p-3 text-white font-bold uppercase flex justify-between items-center text-sm"><span>Import Booking Text</span><button type="button" onclick="$('import-modal').style.display='none'"><i data-lucide="x" size="18"></i></button></div><div class="p-4 flex flex-col gap-3"><p class="text-sm font-bold text-slate-500 uppercase">Paste confirmation text from parser here:</p><textarea id="import-textarea" rows="6" class="w-full bg-slate-50 border border-slate-300 font-bold text-sm p-2 rounded outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. fabi confirmed his stay!&#10;Arrive on May/05/2026 and leave on Jun/04/2026..."></textarea><div class="flex gap-2 justify-end mt-2"><button onclick="$('import-modal').style.display='none'" class="px-6 py-2 bg-slate-200 rounded-lg font-black text-sm uppercase">Cancel</button><button onclick="window.processImport()" class="px-8 py-2 bg-indigo-600 text-white rounded-lg font-black text-sm uppercase">Parse & Save</button></div></div></div></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const $ = id => document.getElementById(id);
+
+        const personalConfig = { apiKey: "AIzaSyDd_i6as2LtvNWE1I44HFCU0LyJ4iO7KKQ", authDomain: "volcalendar1.firebaseapp.com", projectId: "volcalendar1", storageBucket: "volcalendar1.firebasestorage.app", messagingSenderId: "1081934202587", appId: "1:1081934202587:web:28b226efb37216a2442efe" };
+        const envConfig = JSON.parse(window.__firebase_config || '{}');
+        const finalConfig = personalConfig.apiKey ? personalConfig : envConfig;
+        const appId = 'vol-calendar-wet-v1';
+        const app = initializeApp(finalConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const DEPOSIT_VAL = 3000;
+        const DEP_KEYS = ['hw-wet', 'bdc-wet', 'hw-swims', 'bdc-swims'];
+        let staff = [], viewStart = new Date(), searchTerm = "", searchMatchIndex = 0, sortKey = "checkIn", sortAsc = false;
+        viewStart.setHours(12,0,0,0);
+        
+        const mNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+        const countries = ["Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia", "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic", "Denmark", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Honduras", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Korea, North", "Korea, South", "Kosovo", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Macedonia", "Norway", "Oman", "Pakistan", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"].sort();
+
+        // Icon Rendering Logic
+        const makeIcon = (char, bg, col = "white") => `<div class="icon-box" style="background:${bg}"><span class="icon-font" style="color:${col}">${char}</span></div>`;
+        const ICONS = { D: makeIcon("$", "#eab308"), HW: makeIcon("H", "#f15a24"), BW: makeIcon("B", "#003580"), HS: makeIcon("H", "#0ea5e9"), BS: makeIcon("B", "#0284c7") };
+        const getBarIcon = (char, hasVal, isRef, isDep = false, bg) => `<div class="icon-box ${!hasVal ? 'icon-none' : (isRef ? 'icon-ref' : 'icon-paid')}" style="${hasVal ? 'background:'+bg : ''}"><span class="icon-font" style="color:white">${char}</span></div>`;
+        const to15MAR = d => !d || isNaN(d.getTime()) ? "---" : `${d.getDate()}${mNames[d.getMonth()]}${d.getFullYear().toString().substr(-2)}`;
+
+        // Ultra-Fast UTC pre-computation for FMP Dates
+        const fmpDates = ["2026-01-03", "2026-02-02", "2026-03-03", "2026-04-02", "2026-05-01", "2026-06-01", "2026-06-29", "2026-07-31", "2026-08-28", "2026-09-26", "2026-10-27", "2026-11-24", "2026-12-24", "2026-12-31", "2027-01-22", "2027-02-22", "2027-03-22", "2027-04-21", "2027-05-21", "2027-06-19", "2027-07-20", "2027-08-17", "2027-09-15", "2027-10-16", "2027-11-13", "2027-12-13", "2027-12-31"];
+        const fmpUTC = fmpDates.map(d => { const [y, m, day] = d.split('-'); return Date.UTC(y, m-1, day); });
+        
+        const getFMPShade = (d) => {
+            const dUTC = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+            for (let fmp of fmpUTC) {
+                const diff = Math.round((dUTC - fmp) / 86400000);
+                if (diff === 0) return 'day-fmp-dark';
+                if (diff >= -2 && diff <= 2) return 'day-fmp-medium';
+                if (diff >= -6 && diff <= 4) return 'day-fmp-light';
+            }
+            return '';
+        };
+
+        const getDayIndex = (dateStr) => {
+            const [y, m, d] = dateStr.split('-');
+            const target = Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+            const anchor = Date.UTC(viewStart.getFullYear(), viewStart.getMonth(), viewStart.getDate());
+            return Math.round((target - anchor) / 86400000);
+        };
+
+        const calcFinancials = (s) => {
+            const L = s?.ledger || {};
+            const amt = (p, oldP) => Number(L[p]?.amt || (oldP ? L[oldP]?.amt : 0) || 0);
+            const ref = (p, oldP) => L[p]?.ref || (oldP ? L[oldP]?.ref : false) || false;
+            
+            const hwWet = amt('hw_wet', 'hostelworld'), bdcWet = amt('bdc_wet', 'booking'), hwSwims = amt('hw_swims'), bdcSwims = amt('bdc_swims'), agoda = amt('agoda');
+            const dPaid = L.deposit?.paid || false, dRef = L.deposit?.ref || false;
+            
+            const hwRef = ref('hw_wet', 'hostelworld'), bdRef = ref('bdc_wet', 'booking'), hsRef = ref('hw_swims'), bsRef = ref('bdc_swims'), agRef = ref('agoda');
+
+            const held = (dPaid ? DEPOSIT_VAL : 0) + hwWet + bdcWet + hwSwims + bdcSwims + agoda;
+            const refd = (dRef ? DEPOSIT_VAL : 0) + (hwRef ? hwWet : 0) + (bdRef ? bdcWet : 0) + (hsRef ? hwSwims : 0) + (bsRef ? bdcSwims : 0) + (agRef ? agoda : 0);
+            
+            return {
+                hwWet, bdcWet, hwSwims, bdcSwims, agoda, dPaid, dRef, hwRef, bdRef, hsRef, bsRef, agRef,
+                held, refd, due: Number((held - refd).toFixed(2))
+            };
+        };
+
+        const init = async () => {
+            try {
+                if (personalConfig.apiKey) await signInAnonymously(auth);
+                else { const t = typeof window.__initial_auth_token !== 'undefined' ? window.__initial_auth_token : null; if (t) await signInWithCustomToken(auth, t); else await signInAnonymously(auth); }
+            } catch(e) { await signInAnonymously(auth); }
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'staff'), (snap) => {
+                    staff = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    $('boot-loader').style.display = 'none'; window.render();
+                }, (err) => console.error("Snapshot error:", err));
+            });
+
+            const cSel = $('staff-country'); countries.forEach(c => { const opt = document.createElement('option'); opt.value = c; opt.innerText = c; cSel.appendChild(opt); });
+            
+            $('footer-booking-icons').innerHTML = `<div class="legend-item">${ICONS.HW} HW WET</div><div class="legend-item">${ICONS.BW} BDC WET</div><div class="legend-item">${ICONS.HS} HW SWIMS</div><div class="legend-item">${ICONS.BS} BDC SWIMS</div>`;
+            $('footer-job-icons').innerHTML = `<div class="legend-item"><i data-lucide="palette" size="16"></i> ART</div><div class="legend-item"><i data-lucide="megaphone" size="16"></i> SOCIALS</div><div class="legend-item"><i data-lucide="beer" size="16"></i> BAR</div>`;
+            $('modal-icon-d').innerHTML = `${ICONS.D} DEPOSIT`; $('modal-icon-hw-wet').innerHTML = `${ICONS.HW} HW WET`; $('modal-icon-bdc-wet').innerHTML = `${ICONS.BW} BDC WET`; $('modal-icon-hw-swims').innerHTML = `${ICONS.HS} HW SWIMS`; $('modal-icon-bdc-swims').innerHTML = `${ICONS.BS} BDC SWIMS`;
+            window.addEventListener('resize', window.render);
+        };
+
+        window.render = () => {
+            const width = window.innerWidth;
+            const daysToShow = width >= 1150 ? 35 : width >= 950 ? 28 : width >= 650 ? 21 : 14;
+            document.documentElement.style.setProperty('--days', daysToShow);
+            $('current-jump-display').innerText = to15MAR(viewStart);
+            renderTimeline(daysToShow);
+            if ($('database-view').style.display === 'block') renderDatabase();
+            lucide.createIcons();
+        };
+
+        const renderTimeline = (daysToShow) => {
+            const header = $('timeline-header'), body = $('timeline-body'), monthLabels = $('month-labels');
+            header.innerHTML = monthLabels.innerHTML = body.innerHTML = '';
+            
+            const days = Array.from({length: daysToShow}, (_, i) => new Date(viewStart.getFullYear(), viewStart.getMonth(), viewStart.getDate() + i, 12, 0, 0));
+            
+            let currentMonth = -1, currentSpan = 0;
+            days.forEach((d, i) => {
+                if (d.getMonth() !== currentMonth) {
+                    if (currentMonth !== -1) { const mDiv = document.createElement('div'); mDiv.style.gridColumn = `span ${currentSpan}`; mDiv.className = "flex items-center justify-center month-divider"; mDiv.innerText = `${mNames[currentMonth]} ${days[i-1].getFullYear()}`; monthLabels.appendChild(mDiv); }
+                    currentMonth = d.getMonth(); currentSpan = 1;
+                } else currentSpan++;
+                if (i === days.length - 1) { const mDiv = document.createElement('div'); mDiv.style.gridColumn = `span ${currentSpan}`; mDiv.className = "flex items-center justify-center month-divider"; mDiv.innerText = `${mNames[currentMonth]} ${d.getFullYear()}`; monthLabels.appendChild(mDiv); }
+            });
+
+            days.forEach(d => {
+                const isToday = d.toDateString() === new Date().toDateString();
+                const col = document.createElement('div'); col.className = `flex flex-col items-center justify-center border-r border-slate-300 ${isToday ? 'bg-blue-100' : ''}`;
+                col.innerHTML = `<div class="text-[12px] font-black text-slate-500 uppercase leading-none">${d.toLocaleDateString('en-US', {weekday:'short'})}</div><div class="text-[18px] font-black ${isToday ? 'text-blue-600' : 'text-slate-800'}">${d.getDate()}</div>`;
+                header.appendChild(col);
+            });
+
+            const activeStaff = staff.filter(s => s.status !== 'cancelled' && s.status !== 'noshow');
+            const bedGroups = {}; for(let i=1; i<=14; i++) bedGroups[`211-${i}`] = [];
+            activeStaff.forEach(s => { const k = (s.room && s.bed) ? `${s.room}-${s.bed}` : 'NONE'; if(!bedGroups[k]) bedGroups[k] = []; bedGroups[k].push(s); });
+
+            const timelineBeds = [];
+            const isOverlap = s => getDayIndex(s.checkIn) < daysToShow && getDayIndex(s.checkOut) > 0;
+
+            Object.keys(bedGroups).forEach(key => {
+                if (key === 'NONE') {
+                    const rows = [];
+                    bedGroups[key].filter(isOverlap).forEach(s => {
+                        let placed = false;
+                        for (let r of rows) { if (!r.some(ex => s.checkIn < ex.checkOut && ex.checkIn < s.checkOut)) { r.push(s); placed = true; break; } }
+                        if (!placed) rows.push([s]);
+                    });
+                    rows.forEach((r, idx) => timelineBeds.push({ label: `NONE${idx > 0 ? ' '+(idx+1) : ''}`, staff: r, isUnassigned: true, isTemp: false }));
+                } else {
+                    const isPermanent = key.startsWith('211') && parseInt(key.split('-')[1]) <= 14;
+                    if (isPermanent || bedGroups[key].filter(isOverlap).length > 0) timelineBeds.push({ label: key, staff: bedGroups[key], isUnassigned: false, isTemp: false });
+                }
+            });
+
+            while (timelineBeds.length < 15) timelineBeds.push({ label: '—', staff: [], isTemp: true, isUnassigned: false });
+            timelineBeds.sort((a,b) => { const ta = a.isUnassigned ? 2 : (a.isTemp ? 1 : 0), tb = b.isUnassigned ? 2 : (b.isTemp ? 1 : 0); return ta !== tb ? ta - tb : a.label.localeCompare(b.label, undefined, {numeric: true}); });
+
+            timelineBeds.forEach((bedObj, index) => {
+                const row = document.createElement('div'); 
+                row.className = `timeline-grid bed-row ${bedObj.isUnassigned && (index === 0 || !timelineBeds[index-1].isUnassigned) ? 'mt-4 border-t-4 border-slate-300 border-dashed' : ''}`;
+                row.innerHTML = `<div class="p-1 border-r border-slate-300 ${bedObj.isUnassigned ? 'bg-amber-100' : 'bg-slate-50'} text-[14px] font-black text-slate-500 flex items-center justify-center uppercase tracking-tighter ${bedObj.isUnassigned ? 'text-amber-900' : ''}">${bedObj.label}</div>`;
+                
+                for(let i=0; i<daysToShow; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = `day-column ${getFMPShade(days[i])} ${days[i].toDateString() === new Date().toDateString() ? 'day-today' : ''} ${bedObj.isUnassigned ? 'bg-amber-50/50' : ''}`;
+                    cell.dataset.colIndex = i;
+                    cell.onmouseenter = () => document.querySelectorAll(`[data-col-index="${i}"]`).forEach(el => el.classList.add('hover-col'));
+                    cell.onmouseleave = () => document.querySelectorAll(`[data-col-index="${i}"]`).forEach(el => el.classList.remove('hover-col'));
+                    cell.onclick = () => { const parts = bedObj.label.startsWith('NONE') || bedObj.label === '—' ? ["", ""] : bedObj.label.split('-'); window.quickAdd(parts[0], parts[1], days[i]); }; 
+                    row.appendChild(cell);
+                }
+
+                bedObj.staff.filter(isOverlap).forEach(s => {
+                    const startF = Math.max(0, getDayIndex(s.checkIn) + 0.5) / daysToShow;
+                    const widthF = (Math.min(daysToShow, getDayIndex(s.checkOut) + 0.5) - Math.max(0, getDayIndex(s.checkIn) + 0.5)) / daysToShow;
+                    
+                    const bar = document.createElement('div'); bar.className = `staff-bar status-${s.status}`; 
+                    bar.style.left = `calc(var(--sidebar-w) + (100% - var(--sidebar-w)) * ${startF})`; bar.style.width = `calc((100% - var(--sidebar-w)) * ${widthF})`;
+                    if (searchTerm && !s.name.includes(searchTerm)) bar.style.opacity = "0.15";
+                    
+                    const F = calcFinancials(s);
+                    const jobIconHtml = s.job && s.job !== 'none' ? `<i data-lucide="${{ art: 'palette', socials: 'megaphone', bar: 'beer' }[s.job]}" size="14" class="mr-1 text-white/80"></i>` : '';
+
+                    bar.innerHTML = `<div class="bar-sticky-content">${jobIconHtml}<span class="mx-1.5 truncate">${s.name}</span><div class="flex gap-1 items-center scale-90 shrink-0">${getBarIcon("$", F.dPaid, F.dRef, true, "#eab308")}${getBarIcon("H", F.hwWet>0, F.hwRef, false, "#f15a24")}${getBarIcon("B", F.bdcWet>0, F.bdRef, false, "#003580")}${getBarIcon("H", F.hwSwims>0, F.hsRef, false, "#0ea5e9")}${getBarIcon("B", F.bdcSwims>0, F.bsRef, false, "#0284c7")}${F.agoda>0 ? getBarIcon("A", true, F.agRef, false, "#888") : ''}${F.due > 0 ? `<span class="bg-black/40 px-1.5 py-0.5 rounded text-[16px] font-black ml-1">฿${F.due}</span>` : ''}</div></div>`;
+                    bar.onclick = (e) => { e.stopPropagation(); window.editStaff(s.id); }; row.appendChild(bar);
+                });
+                body.appendChild(row);
+            });
+        };
+
+        const renderDatabase = () => {
+            const body = $('database-body'); body.innerHTML = '';
+            staff.filter(s => (!searchTerm || s.name.includes(searchTerm)) && ($('status-filter').value === 'ALL' || s.status === $('status-filter').value))
+                 .sort((a, b) => { let vA = a[sortKey], vB = b[sortKey]; if (sortKey === 'bed') { vA = `${a.room || ''}-${a.bed || ''}`; vB = `${b.room || ''}-${b.bed || ''}`; } return sortAsc ? (vA > vB ? 1 : -1) : (vA < vB ? 1 : -1); })
+                 .forEach(s => {
+                    const tr = document.createElement('tr'); tr.className = "border-b hover:bg-slate-50 cursor-pointer"; tr.onclick = () => window.editStaff(s.id);
+                    tr.innerHTML = `<td class="p-3 border-r">${s.name}</td><td class="p-3 border-r">${s.country}</td><td class="p-3 border-r">${s.job && s.job !== 'none' ? `<span class="text-blue-500">[${s.job.toUpperCase()}]</span> ` : ''}${s.contact || '---'}</td><td class="p-3 border-r">${to15MAR(new Date(s.checkIn + "T12:00:00"))} - ${to15MAR(new Date(s.checkOut + "T12:00:00"))}</td><td class="p-3 border-r">${s.room || '--'}-${s.bed || '--'}</td><td class="p-3 uppercase"><span class="px-2 py-1 rounded text-[10px] text-white status-${s.status}">${s.status}</span></td>`;
+                    body.appendChild(tr);
+                 });
+        };
+
+        window.sortDatabase = (k) => { sortAsc = sortKey === k ? !sortAsc : true; sortKey = k; renderDatabase(); };
+        window.switchTab = (t) => { $('calendar-view').style.display = t === 'calendar' ? 'block' : 'none'; $('database-view').style.display = t === 'database' ? 'block' : 'none'; $('tab-cal').classList.toggle('active', t === 'calendar'); $('tab-db').classList.toggle('active', t === 'database'); if (t === 'database') renderDatabase(); };
+        window.handleSearch = (val) => { searchTerm = val.trim().toUpperCase(); searchMatchIndex = 0; const matches = staff.filter(s => s.name.includes(searchTerm)).sort((a,b) => a.checkIn.localeCompare(b.checkIn)); if (searchTerm && matches.length > 0) { $('search-jump-btn').classList.remove('hidden'); $('match-counter').innerText = `Match ${searchMatchIndex + 1} of ${matches.length}`; } else $('search-jump-btn').classList.add('hidden'); window.render(); };
+        window.clearSearch = () => { $('staff-search').value = ""; window.handleSearch(""); };
+        window.jumpToSearchMatch = () => { const matches = staff.filter(s => s.name.includes(searchTerm)).sort((a,b) => a.checkIn.localeCompare(b.checkIn)); if (matches.length > 0) { const m = matches[searchMatchIndex % matches.length]; const d = new Date(m.checkIn + "T12:00:00"); d.setDate(d.getDate() - 3); viewStart = d; searchMatchIndex++; $('match-counter').innerText = `Match ${(searchMatchIndex % matches.length) + 1} of ${matches.length}`; window.render(); } };
+        window.syncLabels = () => { $('ov-in').innerText = $('check-in').value ? to15MAR(new Date($('check-in').value + "T12:00:00")) : "---"; $('ov-out').innerText = $('check-out').value ? to15MAR(new Date($('check-out').value + "T12:00:00")) : "---"; };
+        window.shiftPeriod = (days) => { viewStart.setDate(viewStart.getDate() + days); window.render(); };
+        window.goToday = () => { viewStart = new Date(); viewStart.setHours(12,0,0,0); window.render(); };
+        window.jumpToDate = (v) => { if(v) { viewStart = new Date(v + "T12:00:00"); $('jump-date').value = ""; window.render(); } };
+
+        window.calcRefund = () => { 
+            let h = $('paid-deposit').checked ? DEPOSIT_VAL : 0, r = $('ref-deposit').checked ? DEPOSIT_VAL : 0; 
+            const ex = staff.find(x => x.id === $('staff-id').value);
+            DEP_KEYS.forEach(k => { const amt = Number($(`amt-${k}`).value) || 0; h += amt; if ($(`ref-${k}`).checked) r += amt; });
+            const legacyAgodaAmt = Number(ex?.ledger?.agoda?.amt || 0); h += legacyAgodaAmt; if (ex?.ledger?.agoda?.ref) r += legacyAgodaAmt;
+            $('display-held').innerText = `฿${h.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})}`; $('display-refund-due').innerText = `฿${(h - r).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 2})}`; 
+        };
+
+        window.openStaffModal = () => { 
+            const form = $('staff-form'); if (form) form.reset(); 
+            $('staff-id').value = ""; $('modal-title').innerText = "Add Volunteer"; $('delete-btn').style.display = 'none'; $('split-btn').style.display = 'none';
+            ['room-name', 'bed-number'].forEach(id => { $(id).disabled = true; $(id).classList.add('opacity-50', 'cursor-not-allowed'); $(id).placeholder = "LOCKED"; });
+            $('staff-modal').style.display = 'flex'; window.calcRefund(); window.syncLabels(); 
+        };
+        
+        window.closeStaffModal = () => $('staff-modal').style.display = 'none';
+        window.quickAdd = (r, b, date) => { window.openStaffModal(); $('room-name').value = ""; $('bed-number').value = ""; const dStr = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; $('check-in').value = dStr(date); const out = new Date(date); out.setDate(date.getDate() + 14); $('check-out').value = dStr(out); window.syncLabels(); };
+
+        window.editStaff = (id, justImported = false) => {
+            const s = staff.find(x => x.id === id); if (!s) return;
+            $('modal-title').innerText = "Edit Volunteer"; $('staff-id').value = s.id; $('staff-name').value = s.name; $('staff-status').value = s.status; 
+            ['room-name', 'bed-number'].forEach(id => { $(id).disabled = justImported; $(id).classList.toggle('opacity-50', justImported); $(id).classList.toggle('cursor-not-allowed', justImported); $(id).placeholder = justImported ? "LOCKED" : "--"; });
+            $('room-name').value = s.room || ""; $('bed-number').value = s.bed || ""; $('check-in').value = s.checkIn; $('check-out').value = s.checkOut; $('staff-country').value = s.country; $('staff-contact').value = s.contact || ""; $('staff-job').value = s.job || "none"; $('staff-notes').value = s.notes || ""; window.syncLabels();
+            
+            const F = calcFinancials(s);
+            $('paid-deposit').checked = F.dPaid; $('ref-deposit').checked = F.dRef;
+            $('amt-hw-wet').value = F.hwWet || ""; $('ref-hw-wet').checked = F.hwRef;
+            $('amt-bdc-wet').value = F.bdcWet || ""; $('ref-bdc-wet').checked = F.bdRef;
+            $('amt-hw-swims').value = F.hwSwims || ""; $('ref-hw-swims').checked = F.hsRef;
+            $('amt-bdc-swims').value = F.bdcSwims || ""; $('ref-bdc-swims').checked = F.bsRef;
+            
+            window.calcRefund(); $('delete-btn').style.display = 'block'; $('split-btn').style.display = 'block'; $('staff-modal').style.display = 'flex';
+        };
+
+        $('staff-form').onsubmit = async (e) => {
+            e.preventDefault(); const cin = $('check-in').value, cout = $('check-out').value;
+            if (cin >= cout) return window.showAlert("INVALID DATES:\nDeparture must be after arrival.");
+            const id = $('staff-id').value || Math.random().toString(36).substr(2, 9), ex = staff.find(x => x.id === id);
+            const entry = { id, name: $('staff-name').value.trim().toUpperCase(), status: $('staff-status').value, room: $('room-name').value.trim().toUpperCase(), bed: $('bed-number').value, checkIn: cin, checkOut: cout, country: $('staff-country').value, contact: $('staff-contact').value, job: $('staff-job').value, notes: $('staff-notes').value, ledger: { deposit: { paid: $('paid-deposit').checked, ref: $('ref-deposit').checked }, hw_wet: { amt: $('amt-hw-wet').value, ref: $('ref-hw-wet').checked }, bdc_wet: { amt: $('amt-bdc-wet').value, ref: $('ref-bdc-wet').checked }, hw_swims: { amt: $('amt-hw-swims').value, ref: $('ref-hw-swims').checked }, bdc_swims: { amt: $('amt-bdc-swims').value, ref: $('ref-bdc-swims').checked }, agoda: ex?.ledger?.agoda || { amt: "", ref: false } } };
+            const conflict = staff.find(s => s.id !== id && entry.room && entry.bed && String(s.room) === String(entry.room) && String(s.bed) === String(entry.bed) && entry.checkIn < s.checkOut && s.checkIn < entry.checkOut);
+            if (conflict) return window.showAlert(`BED OCCUPIED ERROR:\n\n${conflict.name} is using Bed ${entry.room}-${entry.bed} until ${to15MAR(new Date(conflict.checkOut + "T12:00:00"))}.`);
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), entry); window.closeStaffModal();
+        };
+
+        window.requestSplit = () => {
+            const s = staff.find(x => x.id === $('staff-id').value); if (!s) return;
+            $('split-date').value = ""; $('split-date').min = s.checkIn; $('split-date').max = s.checkOut; $('split-modal').style.display = 'flex';
+        };
+
+        window.confirmSplit = async () => {
+            const splitD = $('split-date').value, s = staff.find(x => x.id === $('staff-id').value);
+            if (!splitD || splitD <= s.checkIn || splitD >= s.checkOut) return window.showAlert("Invalid split date. Select a date strictly between the arrival and departure dates.");
+            const newId = Math.random().toString(36).substr(2, 9);
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', s.id), { ...s, checkOut: splitD });
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', newId), { ...s, id: newId, checkIn: splitD, room: "", bed: "" });
+            $('split-modal').style.display = 'none'; window.closeStaffModal();
+        };
+
+        window.openImportModal = () => { $('import-textarea').value = ''; $('import-modal').style.display = 'flex'; };
+
+        window.processImport = async () => {
+            const txt = $('import-textarea').value.trim(); if (!txt) return;
+            
+            // Immediately show loading state
+            const btn = document.querySelector('#import-modal button.bg-indigo-600');
+            const ogText = btn.innerText;
+            btn.innerText = 'SAVING...';
+            btn.disabled = true;
+
+            try {
+                // Ignore blank lines and proactively hunt for the line with the names
+                const lines = txt.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                const confirmLine = lines.find(l => / confirmed | have confirmed /i.test(l)) || lines[0];
+                const names = confirmLine.split(/ confirmed | have confirmed /i)[0].split(/ and /i).map(n => n.trim().toUpperCase());
+                
+                const dates = txt.match(/Arrive on\s*([a-zA-Z]{3}\/\d{1,2}\/\d{4})\s*and leave on\s*([a-zA-Z]{3}\/\d{1,2}\/\d{4})/i);
+                if (!dates) {
+                    btn.innerText = ogText; btn.disabled = false;
+                    return window.showAlert("Could not find arrival and departure dates in the expected format.");
+                }
+                
+                const pDate = (d) => { const [m, dy, y] = d.split('/'); return `${y}-${{"Jan":"01","Feb":"02","Mar":"03","Apr":"04","May":"05","Jun":"06","Jul":"07","Aug":"08","Sep":"09","Oct":"10","Nov":"11","Dec":"12"}[m.charAt(0).toUpperCase()+m.slice(1).toLowerCase()]}-${dy.padStart(2,'0')}`; };
+                let job = 'none'; if (/\b(art|arts|paint|painting)\b/i.test(txt)) job = 'art'; else if (/\b(social|socials|photo|photography|video)\b/i.test(txt)) job = 'socials';
+                
+                let firstId = null;
+                for (let i = 0; i < names.length; i++) {
+                    const id = Math.random().toString(36).substr(2, 9); if (i === 0) firstId = id;
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), { id, name: names[i], status: "future", room: "", bed: "", checkIn: pDate(dates[1]), checkOut: pDate(dates[2]), country: "", contact: "", job, notes: names.length === 2 ? `WITH ${i===0 ? names[1] : names[0]}` : "", ledger: { deposit: { paid: false, ref: false }, hw_wet: { amt: "", ref: false }, bdc_wet: { amt: "", ref: false }, hw_swims: { amt: "", ref: false }, bdc_swims: { amt: "", ref: false }, agoda: { amt: "", ref: false } } });
+                }
+                
+                $('import-modal').style.display = 'none';
+                btn.innerText = ogText; btn.disabled = false;
+                
+                let attempts = 0;
+                const checkSync = setInterval(() => {
+                    attempts++;
+                    if (staff.find(s => s.id === firstId)) {
+                        clearInterval(checkSync);
+                        if (names.length > 1) {
+                            window.showAlert(`Successfully imported ${names.length} bookings. Opening the first one for review...`, false, () => window.editStaff(firstId, true));
+                        } else {
+                            window.editStaff(firstId, true);
+                        }
+                    } else if (attempts > 50) {
+                        clearInterval(checkSync); // Safety timeout after 5 seconds
+                        window.showAlert("Saved to database, but auto-open timed out. Please click the record manually to edit.");
+                    }
+                }, 100);
+
+            } catch (e) { 
+                console.error(e); 
+                btn.innerText = ogText; btn.disabled = false;
+                window.showAlert("Error: " + e.message); 
+            }
+        };
+
+        window.requestDelete = () => window.showAlert(`Are you sure you want to permanently delete the record for ${$('staff-name').value}?`, true, async () => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', $('staff-id').value)); window.closeStaffModal(); });
+        window.showAlert = (msg, isC = false, onC = null) => { $('alert-message').innerText = msg; $('alert-cancel').className = isC ? 'px-6 py-2 bg-slate-200 rounded-lg font-black text-sm uppercase' : 'hidden'; $('alert-confirm').innerText = isC ? 'Yes, Delete' : 'Okay'; $('alert-confirm').className = `px-10 py-2 text-white rounded-lg font-black text-sm uppercase ${isC ? 'bg-red-600' : 'bg-blue-600'}`; $('alert-confirm').onclick = () => { if(onC) onC(); window.closeAlert(); }; $('alert-modal').style.display = 'flex'; };
+        window.closeAlert = () => $('alert-modal').style.display = 'none';
+
+        init();
+    </script>
+    <script src="https://loren-6q.github.io/WETNav/nav.js"></script>
+</body>
+</html>

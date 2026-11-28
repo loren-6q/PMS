@@ -150,6 +150,8 @@ export const saveBooking = async (keepOpen = false) => {
             otaAlert: null,
             otaAlertSummary: '',
             notes: $('guest-notes')?.value || '',
+            volCalId: $('guest-modal')?.dataset?.volCalId || ext?.volCalId || null,
+            volLedgerKey: $('guest-modal')?.dataset?.volLedgerKey || ext?.volLedgerKey || null,
             createdAt: ext?.createdAt || now,
             createdBy: ext?.createdBy || userEmail,
             lastEditedAt: now,
@@ -161,6 +163,15 @@ export const saveBooking = async (keepOpen = false) => {
         ent.auditLog.push({ ts: now, user: userEmail, msg: diff });
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff', id), ent);
+
+        if (stat === 'vol' && typeof window.syncRefundToVolunteerApp === 'function') {
+            const posPaid = ent.payments.reduce((sum, p) => sum + (p.amt > 0 ? p.amt : 0), 0);
+            const negPaid = ent.payments.reduce((sum, p) => sum + (p.amt < 0 ? Math.abs(p.amt) : 0), 0);
+            const netPaid = posPaid - negPaid;
+            if (negPaid > 0 && netPaid <= 0.01) {
+                window.syncRefundToVolunteerApp(true, ent);
+            }
+        }
 
         const hotelRooms = getHotelRooms();
         const bookingRoomTypes = Array.from(new Set([

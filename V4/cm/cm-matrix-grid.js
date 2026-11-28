@@ -942,11 +942,16 @@ export function renderRateMatrix() {
             const isRefPlan = isRefundableRatePlan(r);
 
             if (isEvt && !isEvents) return false;
-            if (srcBucket === 'def' && !isEvt && !isRefPlan) return false;
-            if (activePreviewFilter !== 'ALL' && chanCode !== activePreviewFilter) return false;
-
             const matchesTier = isEvt ? activeBuckets.has('event') : activeBuckets.has('std');
-            return activeBuckets.has(srcBucket) && matchesTier;
+            if (!matchesTier) return false;
+
+            if (activePreviewFilter !== 'ALL') {
+                if (srcBucket === 'def' && !isEvt && !isRefPlan) return false;
+                return chanCode === activePreviewFilter;
+            }
+
+            if (srcBucket === 'def' && !isEvt && !isRefPlan) return false;
+            return activeBuckets.has(srcBucket);
         });
 
         const hasHiddenPlans = allMappedRates.some(r => {

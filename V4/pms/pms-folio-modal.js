@@ -165,6 +165,14 @@ export const checkEmailProxy = val => {
     else if (v.includes('@')) el.classList.add('text-green-600', 'font-black');
 };
 
+export const updateVolSyncButtonVisibility = status => {
+    const volBtn = $('vol-sync-btn');
+    if (!volBtn) return;
+    const isVol = String(status || '').trim().toLowerCase() === 'vol';
+    volBtn.classList.toggle('hidden', !isVol);
+    volBtn.style.display = isVol ? 'inline-flex' : 'none';
+};
+
 export const cycleStatus = () => {
     const sBtn = $('status-cycle-btn');
     if (!sBtn) return;
@@ -178,6 +186,7 @@ export const cycleStatus = () => {
     sBtn.style.color = nO.txt;
     const hiddenInput = $('guest-status-hidden');
     if (hiddenInput) hiddenInput.value = nO.val;
+    updateVolSyncButtonVisibility(nO.val);
 };
 
 export const setMulti = (id, state, labels, classes) => {
@@ -513,11 +522,24 @@ export const openGuestModal = (s = {}) => {
         bcc.className = `w-3.5 h-3.5 border-2 border-slate-300 rounded mt-0.5 flex items-center justify-center ${s.badCC ? 'bg-red-500 border-red-600' : ''}`;
     }
 
+    const normalizeModalSource = raw => {
+        const v = String(raw || '').trim().toLowerCase();
+        if (!v) return 'direct';
+        if (v === 'bdc' || v.includes('booking')) return 'booking.com';
+        if (v === 'hwl' || v.includes('hostelworld')) return 'hostelworld';
+        if (v === 'ago' || v.includes('agoda')) return 'agoda';
+        if (v === 'abb' || v.includes('airbnb')) return 'airbnb';
+        if (v === 'exp' || v.includes('expedia')) return 'expedia';
+        if (v.includes('ctrip') || v.includes('trip.com')) return 'ctrip';
+        if (v.includes('walk')) return 'walk-in';
+        return v;
+    };
+
     [
         ['guest-id', s.id], ['first-name', s.firstName], ['last-name', s.lastName], ['phone', s.phone],
         ['email', s.email], ['booked-type', s.bookedType], ['check-in', s.checkIn], ['check-out', s.checkOut],
         ['booking-date', s.bookDate], ['booking-id', s.bookId], ['link-code', s.linkedId], ['guest-country', s.country],
-        ['pax-count', s.pax || 1], ['booking-source', s.source || 'direct'], ['guest-notes', s.notes],
+        ['pax-count', s.pax || 1], ['booking-source', normalizeModalSource(s.source)], ['guest-notes', s.notes],
         ['total-price', Number(s.totalPrice || 0).toFixed(2)], ['net-price', Number(s.netPrice || 0).toFixed(2)]
     ].forEach(([id, val]) => {
         const el = $(id);
@@ -544,6 +566,13 @@ export const openGuestModal = (s = {}) => {
         sBtn.innerText = sObj.label || sObj.val.toUpperCase();
         sBtn.style.background = sObj.bg;
         sBtn.style.color = sObj.txt;
+    }
+    updateVolSyncButtonVisibility(pSt);
+
+    const gModal = $('guest-modal');
+    if (gModal) {
+        gModal.dataset.volCalId = s.volCalId || '';
+        gModal.dataset.volLedgerKey = s.volLedgerKey || '';
     }
 
     if ($('net-price')) $('net-price').dataset.override = s.netOverride ? 'true' : 'false';
@@ -698,3 +727,4 @@ window.renderItineraryStripe = renderItineraryStripe;
 window.openGuestModal = openGuestModal;
 window.editStaff = editStaff;
 window.quickAdd = quickAdd;
+window.updateVolSyncButtonVisibility = updateVolSyncButtonVisibility;
