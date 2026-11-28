@@ -33,6 +33,22 @@ window.SVGS = SVGS;
 
 const getRooms = s => (s?.rooms?.length ? s.rooms : (s?.room ? [s.room] : []));
 
+function hideBarTooltip(tt) {
+    if (window._barTooltipTimer) {
+        clearTimeout(window._barTooltipTimer);
+        window._barTooltipTimer = null;
+    }
+    if (tt) tt.style.display = 'none';
+}
+
+if (typeof document !== 'undefined' && !window._barTooltipGlobalBound) {
+    window._barTooltipGlobalBound = true;
+    const clearAny = () => hideBarTooltip(document.getElementById('custom-tooltip'));
+    ['scroll', 'wheel', 'keydown', 'pointerdown'].forEach(evt => {
+        document.addEventListener(evt, clearAny, true);
+    });
+}
+
 // --------------------------------------------------------------------------
 // 2. RESERVATION BAR RENDERING & TOOLTIP ENGINE
 // --------------------------------------------------------------------------
@@ -120,22 +136,52 @@ export const renderReservationBar = (s, dShow, todayStr, yStr, searchTerm, tt) =
     if (tags.length > 0) ttHtml += `<div class="mt-1 pt-1 border-t border-slate-600 text-yellow-200 text-[10px] uppercase font-bold max-w-[200px] leading-tight">${tags.join(' • ')}</div>`;
     if (s.phone || s.email) ttHtml += `<div class="mt-1 pt-1 border-t border-slate-600 text-slate-400 text-[10px] leading-tight">${s.phone || ''}<br>${s.email || ''}</div>`;
 
-    bar.onmouseenter = () => {
+    let lastX = 0;
+    let lastY = 0;
+
+    const positionBarTooltip = (x, y) => {
+        if (!tt) return;
+        const w = tt.offsetWidth || 235;
+        const h = tt.offsetHeight || 165;
+        tt.style.left = (x + w + 25 > window.innerWidth ? Math.max(10, x - w - 18) : x + 15) + 'px';
+        tt.style.top = (y + h + 25 > window.innerHeight ? Math.max(10, y - h - 18) : y + 15) + 'px';
+    };
+
+    const scheduleBarTooltip = () => {
+        if (!tt) return;
+        if (window._barTooltipTimer) clearTimeout(window._barTooltipTimer);
+        window._barTooltipTimer = setTimeout(() => {
+            window._barTooltipTimer = null;
+            if (!bar.isConnected) return;
+            tt.innerHTML = ttHtml;
+            tt.style.display = 'block';
+            positionBarTooltip(lastX, lastY);
+        }, 320);
+    };
+
+    bar.onmouseenter = e => {
         if (s.linkedId) $$('.linked-' + s.linkedId).forEach(el => el.classList.add('link-glow'));
-        if (tt) { tt.innerHTML = ttHtml; tt.style.display = 'block'; }
+        lastX = e.clientX;
+        lastY = e.clientY;
+        scheduleBarTooltip();
     };
     bar.onmousemove = e => {
+        lastX = e.clientX;
+        lastY = e.clientY;
         if (!tt) return;
-        tt.style.left = (e.clientX + 235 > window.innerWidth ? e.clientX - 235 : e.clientX + 15) + 'px';
-        tt.style.top = (e.clientY + 165 > window.innerHeight ? e.clientY - 165 : e.clientY + 15) + 'px';
+        if (tt.style.display === 'block') {
+            positionBarTooltip(lastX, lastY);
+        } else {
+            scheduleBarTooltip();
+        }
     };
     bar.onmouseleave = () => {
         if (s.linkedId) $$('.linked-' + s.linkedId).forEach(el => el.classList.remove('link-glow'));
-        if (tt) tt.style.display = 'none';
+        hideBarTooltip(tt);
     };
     bar.onclick = e => {
         e.stopPropagation();
-        if (tt) tt.style.display = 'none';
+        hideBarTooltip(tt);
         if (window.editStaff) window.editStaff(s.id);
     };
 

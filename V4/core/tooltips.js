@@ -113,7 +113,13 @@ function initGlobalTooltips() {
     window._wwTooltipsBound = true;
 
     let hoverTimer = null;
-    let lastClickedHost = null;
+    let activeHost = null;
+    let suppressedHost = null;
+    let isTooltipVisible = false;
+    let shownX = 0;
+    let shownY = 0;
+    let lastMoveX = 0;
+    let lastMoveY = 0;
 
     const getTooltipEl = () => {
         let el = document.getElementById('cm-tooltip');
@@ -129,8 +135,11 @@ function initGlobalTooltips() {
     const hideTooltip = () => {
         clearTimeout(hoverTimer);
         hoverTimer = null;
-        const tt = document.getElementById('cm-tooltip');
-        if (tt) tt.classList.add('hidden');
+        if (isTooltipVisible) {
+            const tt = document.getElementById('cm-tooltip');
+            if (tt) tt.classList.add('hidden');
+            isTooltipVisible = false;
+        }
     };
 
     const isAnyDropdownOpen = () => {
@@ -144,51 +153,17 @@ function initGlobalTooltips() {
         return false;
     };
 
-    const handlePointerDismiss = (e) => {
-        hideTooltip();
-        const clickedHost = e.target?.closest?.('[data-tip], [title]');
-        if (clickedHost) {
-            lastClickedHost = clickedHost;
-        }
+    const isHostSuppressed = host => {
+        return !!(suppressedHost && host === suppressedHost);
     };
 
-    ['pointerdown', 'mousedown', 'click'].forEach(evt => {
-        document.addEventListener(evt, handlePointerDismiss, true);
-    });
-
-    ['keydown', 'scroll', 'wheel'].forEach(evt => {
-        document.addEventListener(evt, hideTooltip, true);
-    });
-
-    document.addEventListener('mouseover', (e) => {
-        if (e.target?.closest?.('select, [id*="dropdown"], [id*="menu"], [id*="popover"], .multi-select-dropdown, .dropdown-menu, [role="menu"], [role="listbox"]')) {
-            hideTooltip();
-            return;
-        }
-
-        const host = e.target?.closest?.('[data-tip], [title]');
-        if (!host) return;
-
-        if (host.hasAttribute('title')) {
-            const nativeTitle = host.getAttribute('title');
-            if (nativeTitle && !host.getAttribute('data-tip')) {
-                host.setAttribute('data-tip', nativeTitle);
-            }
-            host.removeAttribute('title');
-        }
-
-        // Stay suppressed on any control that was just clicked until the cursor leaves it
-        if (lastClickedHost && (host === lastClickedHost || lastClickedHost.contains(host))) {
-            hideTooltip();
-            return;
-        }
+    const scheduleTooltip = (host) => {
+        if (!host || !host.isConnected || isHostSuppressed(host)) return;
 
         const tipType = host.getAttribute('data-tip-type') || 'training';
-        if (tipType === 'training') {
-            if (!isTrainingTipsEnabled() || isAnyDropdownOpen()) {
-                hideTooltip();
-                return;
-            }
+        if (tipType === 'training' && (!isTrainingTipsEnabled() || isAnyDropdownOpen())) {
+            hideTooltip();
+            return;
         }
 
         const text = getTip(host.getAttribute('data-tip'));
@@ -198,12 +173,13 @@ function initGlobalTooltips() {
         const delay = tipType === 'training' ? 350 : 0;
 
         hoverTimer = setTimeout(() => {
-            if (!host.isConnected) return;
-            if (lastClickedHost && (host === lastClickedHost || lastClickedHost.contains(host))) return;
+            hoverTimer = null;
+            if (activeHost !== host || !host.isConnected || isHostSuppressed(host)) return;
             if (tipType === 'training' && (!isTrainingTipsEnabled() || isAnyDropdownOpen())) return;
 
             const tt = getTooltipEl();
             tt.innerText = text;
+            tt.style.transform = '';
             tt.classList.remove('hidden');
 
             const rect = host.getBoundingClientRect();
@@ -219,16 +195,98 @@ function initGlobalTooltips() {
 
             tt.style.left = `${left}px`;
             tt.style.top = `${top}px`;
+
+            isTooltipVisible = true;
+            shownX = lastMoveX;
+            shownY = lastMoveY;
         }, delay);
+    };
+
+    const handlePointerDismiss = (e) => {
+        hideTooltip();
+        const clickedHost = e.target?.closest?.('[data-tip], [title]');
+        if (clickedHost) {
+            suppressedHost = clickedHost;
+        }
+    };
+
+    ['pointerdown', 'mousedown', 'click'].forEach(evt => {
+        document.addEventListener(evt, handlePointerDismiss, true);
+    });
+
+    ['keydown', 'scroll', 'wheel'].forEach(evt => {
+        document.addEventListener(evt, hideTooltip, true);
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        lastMoveX = e.clientX;
+        lastMoveY = e.clientY;
+
+        if (isTooltipVisible) {
+            // Dismiss immediately on any intentional mouse movement (even >= 2px inside the same element)
+            if (Math.abs(e.clientX - shownX) >= 2 || Math.abs(e.clientY - shownY) >= 2) {
+                if (activeHost) suppressedHost = activeHost;
+                hideTooltip();
+            }
+            return;
+        }
+
+        if (activeHost && hoverTimer) {
+            // Reset hover delay while mouse is still actively moving across controls
+            scheduleTooltip(activeHost);
+        }
+    }, true);
+
+    document.addEventListener('mouseover', (e) => {
+        lastMoveX = e.clientX;
+        lastMoveY = e.clientY;
+
+        if (e.target?.closest?.('select, [id*="dropdown"], [id*="menu"], [id*="popover"], .multi-select-dropdown, .dropdown-menu, [role="menu"], [role="listbox"]')) {
+            activeHost = null;
+            hideTooltip();
+            return;
+        }
+
+        const host = e.target?.closest?.('[data-tip], [title]');
+        if (!host) return;
+
+        if (host.hasAttribute('title')) {
+            const nativeTitle = host.getAttribute('title');
+            if (nativeTitle && !host.getAttribute('data-tip')) {
+                host.setAttribute('data-tip', nativeTitle);
+            }
+            host.removeAttribute('title');
+        }
+
+        if (suppressedHost && suppressedHost !== host && !suppressedHost.contains(host)) {
+            suppressedHost = null;
+        }
+
+        if (isHostSuppressed(host)) {
+            activeHost = host;
+            hideTooltip();
+            return;
+        }
+
+        if (activeHost !== host) {
+            activeHost = host;
+            hideTooltip();
+            scheduleTooltip(host);
+        } else if (!isTooltipVisible && !hoverTimer) {
+            scheduleTooltip(host);
+        }
     });
 
     document.addEventListener('mouseout', (e) => {
-        if (lastClickedHost && (!e.relatedTarget || !lastClickedHost.contains(e.relatedTarget))) {
-            lastClickedHost = null;
+        if (suppressedHost && (!e.relatedTarget || !suppressedHost.contains(e.relatedTarget))) {
+            suppressedHost = null;
         }
         const host = e.target?.closest?.('[data-tip]');
         if (!host) return;
         if (e.relatedTarget && host.contains(e.relatedTarget)) return;
+        if (activeHost === host) {
+            activeHost = null;
+        }
         hideTooltip();
     });
 }
